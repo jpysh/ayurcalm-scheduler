@@ -1,0 +1,160 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Ayurvedic Therapy Center Design System
+   Optimized for accessibility and older users
+   All colors MUST be HSL. Large fonts, high contrast, touch-friendly.
+*/
+
+@layer base {
+  :root {
+    /* Base colors - warm, natural palette */
+    --background: 30 20% 98%;
+    --foreground: 0 0% 13%;
+
+    /* Card surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 13%;
+
+    /* Popover surfaces */
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 13%;
+
+    /* Primary - Ayurvedic deep green */
+    --primary: 142 52% 31%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 142 52% 25%;
+
+    /* Secondary - soft earth tone */
+    --secondary: 30 40% 92%;
+    --secondary-foreground: 0 0% 13%;
+
+    /* Muted - gentle background accents with AAA contrast */
+    --muted: 30 30% 94%;
+    --muted-foreground: 0 0% 25%;
+
+    /* Accent - warm terracotta */
+    --accent: 24 70% 58%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Destructive - clear warning red */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders and inputs */
+    --border: 30 20% 85%;
+    --input: 30 20% 85%;
+    --ring: 142 52% 31%;
+
+    /* Success state */
+    --success: 142 52% 31%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning state */
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 13%;
+
+    /* Border radius for accessibility */
+    --radius: 0.75rem;
+
+    /* Typography scale - extra large for accessibility */
+    --font-size-base: 20px;
+    --font-size-large: 24px;
+    --font-size-xlarge: 28px;
+    --font-size-heading: 32px;
+
+    /* Spacing for touch targets */
+    --touch-target-min: 44px;
+    --spacing-unit: 16px;
+
+    /* Transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .dark {
+    --background: 0 0% 13%;
+    --foreground: 30 20% 98%;
+
+    --card: 0 0% 16%;
+    --card-foreground: 30 20% 98%;
+
+    --popover: 0 0% 16%;
+    --popover-foreground: 30 20% 98%;
+
+    --primary: 142 52% 45%;
+    --primary-foreground: 0 0% 13%;
+    --primary-hover: 142 52% 35%;
+
+    --secondary: 0 0% 20%;
+    --secondary-foreground: 30 20% 98%;
+
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 85%;
+
+    --accent: 24 70% 58%;
+    --accent-foreground: 0 0% 13%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 25%;
+    --input: 0 0% 25%;
+    --ring: 142 52% 45%;
+
+    --success: 142 52% 45%;
+    --success-foreground: 0 0% 13%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 13%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-size: var(--font-size-base);
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    line-height: 1.6;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  h1 {
+    font-size: var(--font-size-heading);
+  }
+
+  h2 {
+    font-size: var(--font-size-xlarge);
+  }
+
+  h3 {
+    font-size: var(--font-size-large);
+  }
+
+  /* Ensure minimum touch target sizes */
+  button, a, input, select, textarea {
+    min-height: var(--touch-target-min);
+    min-width: var(--touch-target-min);
+  }
+
+  /* High contrast focus indicators */
+  *:focus-visible {
+    outline: 3px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}

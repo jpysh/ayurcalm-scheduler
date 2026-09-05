@@ -1,0 +1,42 @@
+name: Bug report
+description: Something is not working as expected
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Sign in as admin@example.com
+        2. Open the Schedule tab
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How are you running it?
+      options:
+        - Docker Compose (docker compose up)
+        - Local development (npm run dev)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: "Output of `docker compose logs app`, or the browser console. Remove anything sensitive."
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "main @ abc1234"

@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Non-blocking: the codebase carries ~470 pre-existing no-explicit-any
+      # errors. Reported so the count goes down over time, not up, without
+      # failing every PR until they are cleared.
+      - run: npm run lint
+        continue-on-error: true
+      - run: npm run build
+
+  server:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ayurcalm
+          POSTGRES_PASSWORD: ayurcalm
+          POSTGRES_DB: ayurcalm_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    env:
+      DATABASE_URL: postgresql://ayurcalm:ayurcalm@localhost:5432/ayurcalm_test?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+        working-directory: server
+      - run: npx prisma generate
+        working-directory: server
+      - run: npx prisma migrate deploy
+        working-directory: server
+      - run: npm run build
+        working-directory: server
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The quick start is the first thing anyone tries, so make sure the
+      # image still builds on every change.
+      - run: docker build -t ayurcalm-scheduler .

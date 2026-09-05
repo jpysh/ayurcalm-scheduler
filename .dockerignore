@@ -1,0 +1,11 @@
+node_modules
+server/node_modules
+dist
+server/dist
+.git
+backups
+test-results
+playwright-report
+run
+logs
+*.log

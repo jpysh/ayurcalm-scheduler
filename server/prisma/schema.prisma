@@ -1,0 +1,223 @@
+generator client {
+  provider = "prisma-client-js"
+  // "native" covers local development; the debian target is what the Docker
+  // image needs, and Prisma will not fall back to it at runtime.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Patient {
+  id         String   @id @default(uuid())
+  name       String
+  gender     Gender
+  phone      String?
+  email      String?
+  date_of_birth DateTime?
+  emergency_contact String?
+  emergency_phone   String?
+  medical_notes     String?
+  diet_plan         String?
+  created_at DateTime @default(now())
+  available_from DateTime?
+  available_to   DateTime?
+
+  DietPlans   DietPlan[]
+  DietPlanSegments DietPlanSegment[]
+  Appointments Appointment[]
+  Stays       PatientStay[]
+}
+
+model PatientStay {
+  id           String   @id @default(uuid())
+  patient_id   String
+  start_date   DateTime
+  end_date     DateTime
+  duration_days Int
+
+  Patient Patient @relation(fields: [patient_id], references: [id])
+}
+
+model Staff {
+  id              String   @id @default(uuid())
+  name            String
+  gender          Gender
+  specializations String[]
+  phone           String?
+  weekly_schedule Json
+  is_active       Boolean  @default(true)
+
+  Appointments Appointment[]
+}
+
+model TherapyRoom {
+  id              String   @id @default(uuid())
+  name            String
+  amenities       String[]
+  weekly_schedule Json
+  is_active       Boolean  @default(true)
+
+  Appointments Appointment[]
+}
+
+model Therapy {
+  id                   String   @id @default(uuid())
+  name                 String
+  required_amenities   String[]
+  duration_minutes     Int
+  requires_gender_match Boolean @default(false)
+  description          String?
+
+  Appointments Appointment[]
+}
+
+model Appointment {
+  id              String   @id @default(uuid())
+  patient_id      String
+  therapy_id      String
+  staff_id        String?
+  room_id         String?
+  scheduled_date  DateTime
+  start_time      String
+  duration_minutes Int
+  session_number  Int
+  total_sessions  Int
+  status          AppointmentStatus
+  assignment_type AssignmentType
+  notes           String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  Patient Patient @relation(fields: [patient_id], references: [id])
+  Therapy Therapy @relation(fields: [therapy_id], references: [id])
+  Staff   Staff?  @relation(fields: [staff_id], references: [id])
+  Room    TherapyRoom? @relation(fields: [room_id], references: [id])
+}
+
+model TimeOff {
+  id          String       @id @default(uuid())
+  entity_type TimeOffEntity
+  entity_id   String?
+  date        DateTime?
+  start_date  DateTime?
+  end_date    DateTime?
+  start_time  String?
+  end_time    String?
+  recurrence  String?
+  weekdays    String[]
+  description String?
+
+  @@map("Holiday")
+}
+
+model DietPlan {
+  id          String   @id @default(uuid())
+  patient_id  String
+  date        DateTime
+  meal_time   MealTime
+  description String
+  instructions String?
+  created_by   String
+  created_at   DateTime @default(now())
+
+  Patient Patient @relation(fields: [patient_id], references: [id])
+}
+
+model DietPlanSegment {
+  id             String   @id @default(uuid())
+  patient_id     String
+  start_date     DateTime
+  end_date       DateTime
+  template       Json?
+  template_label String?
+  therapy_ids    String[]
+  description    String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  Patient Patient @relation(fields: [patient_id], references: [id])
+}
+
+model ProgramEvent {
+  id            String   @id @default(uuid())
+  date          DateTime?
+  start_date    DateTime?
+  end_date      DateTime?
+  start_time    String
+  end_time      String
+  activity_name String
+  room_id       String?
+  staff_id      String?
+  required_amenities String[]
+  notes         String?
+  recurrence    String?
+  weekdays      String[]
+  audience      String?
+  patients_scope String?
+  patient_ids    String[]
+  staff_scope    String?
+  staff_ids      String[]
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  admin_id    String
+  action      String
+  entity_type String
+  entity_id   String
+  old_value   Json?
+  new_value   Json?
+  timestamp   DateTime @default(now())
+}
+
+enum Gender {
+  male
+  female
+  other
+}
+
+enum AppointmentStatus {
+  pending
+  confirmed
+  completed
+  cancelled
+  rescheduled
+}
+
+enum AssignmentType {
+  auto
+  manual
+}
+
+enum TimeOffEntity {
+  center
+  staff
+  room
+  therapy
+  patient
+
+  @@map("HolidayEntity")
+}
+
+enum MealTime {
+  breakfast
+  lunch
+  dinner
+  snacks
+}
+
+model User {
+  id                    String    @id @default(uuid())
+  email                 String    @unique
+  password_hash         String
+  name                  String?
+  role                  String    @default("staff")
+  is_active             Boolean   @default(true)
+  created_at            DateTime  @default(now())
+  last_login            DateTime?
+  password_reset_token  String?   @unique
+  password_reset_expiry DateTime?
+}

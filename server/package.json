@@ -1,0 +1,43 @@
+{
+  "name": "ayurcalm-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p .",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "seed": "ts-node src/seed.ts",
+    "fix:remove-dr": "tsx src/scripts/removeDoctorPrefix.ts",
+    "fix:rooms-randomize": "tsx src/scripts/renameRoomsAndRandomizeAmenities.ts",
+    "migrate:center-timeoff-dev-to-prod": "tsx src/scripts/migrateCenterTimeOffDevToProd.ts",
+    "test:smoke": "tsx src/tests/smokeHealth.test.ts",
+    "test:ui": "tsx src/tests/uiPersistence.test.ts",
+    "test:validation": "tsx src/tests/validation.test.ts",
+    "test:auto-assign": "tsx src/tests/autoAssign.test.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "jsonwebtoken": "^9.0.3",
+    "pdfkit": "^0.14.0",
+    "uuid": "^9.0.1",
+    "zod": "^3.25.8"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@types/jsonwebtoken": "^9.0.10",
+    "prisma": "^5.22.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.5"
+  }
+}
