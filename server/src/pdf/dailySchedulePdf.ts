@@ -13,7 +13,9 @@ const addHeader = (doc: any, dateStr: string) => {
   const x = doc.page.margins.left;
   const top = doc.page.margins.top;
   let y = top;
-  doc.font('Helvetica-Bold').fontSize(14).text('Bhole Baba Ayurvedic Hospital and Research Centre - Chiliyanaula, Ranikhet', x, y, { align: 'center', width: w });
+  // Your centre's name on the printed day sheet. Set CENTRE_NAME in .env.
+  const centreName = process.env.CENTRE_NAME || 'Wellness Centre';
+  doc.font('Helvetica-Bold').fontSize(14).text(centreName, x, y, { align: 'center', width: w });
   y = doc.y;
   doc.font('Helvetica-Bold').fontSize(14).text('Treatment, Consultation, Orientation Schedule', x, y, { align: 'center', width: w });
   y = doc.y;

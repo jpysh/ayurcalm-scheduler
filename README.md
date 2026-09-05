@@ -4,12 +4,20 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Self-hosted appointment and therapy scheduler for Ayurveda wellness centres.
+Self-hosted appointment and therapy scheduler for Ayurveda centres, therapy and
+massage studios, and wellness retreats.
 
-Plan a centre's day in one place: patients and their stays, therapists, treatment
+Plan a centre's day in one place: clients and their stays, therapists, treatment
 rooms, therapy definitions, recurring programme events, and the appointments that
 tie them together. An auto-assign pass fills the schedule while respecting room
 amenities, therapist availability, and time off.
+
+**Who it's for.** Built first for residential Ayurveda centres, where a guest
+stays for days and needs a coherent daily programme rather than isolated bookings.
+That shape fits any practice juggling several therapists, several treatment rooms
+and treatments of differing length — massage and therapy studios, physiotherapy
+practices, spas and wellness retreats. Nothing in the data model is specific to
+Ayurveda: therapies, rooms and their amenities are all defined by you.
 
 ![The daily schedule: therapy rooms across the top, appointments with therapy, duration and assigned therapist](docs/screenshot-dashboard.png)
 
@@ -51,6 +59,7 @@ as-is for a local trial.
 | `APP_PORT` | `8080` | Host port the app is served on |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `ayurcalm` | Database credentials |
 | `JWT_SECRET` | *(random per restart)* | Session signing secret. Set it (`openssl rand -base64 32`) so sessions survive restarts |
+| `CENTRE_NAME` | `Wellness Centre` | Printed at the top of the daily schedule PDF |
 
 ## What's inside
 
@@ -75,6 +84,22 @@ install is two containers total.
   one-off sessions
 - **Daily schedule PDF** — printable day sheet
 - **Audit log** — records changes to scheduling data
+
+## Status and roadmap
+
+Version 0.1.0 — usable, and in active development by a single maintainer. Two
+areas are known to be unfinished:
+
+- **Diet plans** (the Diet tab) are incomplete
+  ([#6](https://github.com/jpysh/ayurcalm-scheduler/issues/6))
+- **Daily schedule PDF** formatting needs work
+  ([#7](https://github.com/jpysh/ayurcalm-scheduler/issues/7))
+
+Everything else in the feature list above works. Issues and feature requests are
+welcome — see [open issues](https://github.com/jpysh/ayurcalm-scheduler/issues),
+or start a thread in
+[Discussions](https://github.com/jpysh/ayurcalm-scheduler/discussions) if you are
+not sure whether something is a bug.
 
 ## Development
 
