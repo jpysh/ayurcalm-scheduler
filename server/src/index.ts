@@ -4,7 +4,7 @@ import cors from 'cors';
 import { app } from './server.js';
 import { prisma } from './server.js';
 import { authRouter, requireAuth, warnIfDefaultAdminUnchanged } from './auth.js';
-import { settingsRouter } from './settings.js';
+import { settingsRouter, publicSettingsRouter } from './settings.js';
 import { usersRouter, accountRouter } from './users.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import path from 'path';
@@ -98,8 +98,10 @@ expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
 // requires a valid session token, reads included — appointment and patient
 // data is not public.
 expressApp.use('/api/auth', authRouter);
+expressApp.use('/api/public', publicSettingsRouter);
 expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
-  if ((req.path || '') === '/health') return next();
+  const p = req.path || '';
+  if (p === '/health' || p.startsWith('/public/')) return next();
   return requireAuth(req, res, next);
 });
 expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {

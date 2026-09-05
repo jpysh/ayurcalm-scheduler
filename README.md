@@ -62,8 +62,11 @@ Everything else is configured in the app, not in files — open **Settings**:
   These decide which time rows the schedule shows, so set them before entering
   appointments
 - **Timezone**
-- **Support WhatsApp** — optional; shows a contact button in the corner for your
-  staff. Leave it empty to hide it
+- **Support contacts** — two WhatsApp numbers, each shown as a button in the
+  corner to a different audience. *Help with this app* goes to whoever supports
+  the software and is shown to signed-in staff; *Contact for patients* is your
+  own reception and is shown on the schedule links you share. Both default to
+  the project maintainer — **change the patient one to your own number**
 - **People with access** — add logins for your staff, set roles, and reset a
   forgotten password. Administrators manage settings and users; staff run the
   schedule. Everyone can change their own password
@@ -85,6 +88,7 @@ to `.env` if you want to change any — the defaults work as-is for a local tria
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `ayurcalm` | Database credentials |
 | `JWT_SECRET` | *(random per restart)* | Session signing secret. Set it (`openssl rand -base64 32`) so sessions survive restarts |
 | `CENTRE_NAME` | `Wellness Centre` | Centre name used on first run only; after that it is edited in **Settings** |
+| `DEFAULT_SUPPORT_WHATSAPP` | maintainer's number | Support contact seeded on first run; changed in **Settings** afterwards |
 
 ## What's inside
 
@@ -158,10 +162,25 @@ npm run test:e2e          # Playwright
 cd server && npm run test:smoke
 ```
 
+## If you are locked out
+
+An administrator can set a new password for anyone from **Settings → People with
+access**. If nobody can sign in, run this on the machine hosting the app:
+
+```bash
+docker compose exec app npx tsx server/src/scripts/resetPassword.ts you@example.com
+```
+
+It prints a new password. Run it with no email to list the accounts on the
+install. Shell access to the server is the proof of ownership here, which is why
+a self-hosted install needs no password-reset email to be configured.
+
 ## Security
 
 Login is server-side: bcrypt password hashes in Postgres, JWT sessions, and every
-API route except `/api/health` and `/api/auth/login` requires a valid token.
+API route except `/api/health`, `/api/auth/login` and `/api/public/support`
+requires a valid token. The public route returns only the centre's name and the
+patient contact number — nothing about patients, staff or appointments.
 
 This is a small project maintained by one person. It has not had an external
 security audit. Do not put it on the public internet without putting your own

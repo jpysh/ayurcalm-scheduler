@@ -110,6 +110,21 @@ const Login = () => {
             <p className="mt-3 text-center text-xs text-muted-foreground">
               Demo login: <span className="font-mono">admin@example.com</span> / <span className="font-mono">demo1234</span>
             </p>
+            <details className="mt-2 text-center">
+              <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                Forgotten your password?
+              </summary>
+              <div className="mt-2 space-y-1 text-left text-xs text-muted-foreground">
+                <p>Ask an administrator to set a new one from Settings.</p>
+                <p>
+                  If you are the only administrator, run this on the machine hosting the app:
+                </p>
+                <code className="block break-all rounded bg-muted px-2 py-1 font-mono text-[11px]">
+                  docker compose exec app npx tsx server/src/scripts/resetPassword.ts your@email.com
+                </code>
+                <p>It prints a new password for you.</p>
+              </div>
+            </details>
           </CardContent>
         </Card>
       </div>

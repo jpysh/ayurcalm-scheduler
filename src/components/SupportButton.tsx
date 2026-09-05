@@ -1,33 +1,51 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { API_BASE } from "@/lib/apiBase";
 
+/** Patient and therapist links are shared by token and need no sign-in. */
+const isClientFacingPath = (pathname: string) =>
+  pathname.startsWith("/patient/") || pathname.startsWith("/staff/");
+
 /**
- * Floating WhatsApp link to whoever supports this install. Renders nothing
- * until an administrator sets a number in Settings, so a self-hosted centre
- * never sends its staff to someone else's phone.
+ * Floating WhatsApp contact. Which number it uses depends on who is looking:
  *
- * Bottom-right by convention: that is where messaging widgets live, and the
- * bottom-left corner already holds the schedule's sticky time column.
+ * - Staff and administrators inside the app get **product support** — whoever
+ *   maintains this software for them.
+ * - Patients on their own shared link get the **centre's** contact, so they
+ *   reach the people treating them rather than a software helpdesk.
+ *
+ * Renders nothing when the relevant number is empty.
  */
 export const SupportButton = () => {
+  const { pathname } = useLocation();
+  const clientFacing = isClientFacingPath(pathname);
   const [number, setNumber] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE}/settings`)
+    setNumber(null);
+    // Patients are not signed in, so their pages read the one public endpoint.
+    const url = clientFacing ? `${API_BASE}/public/support` : `${API_BASE}/settings`;
+    fetch(url)
       .then((r) => (r.ok ? r.json() : null))
-      .then((s) => setNumber(s?.support_whatsapp || null))
-      .catch(() => { /* no button if settings are unreachable */ });
-  }, []);
+      .then((s) => {
+        if (!s) return;
+        setNumber((clientFacing ? s.patient_support_whatsapp : s.support_whatsapp) || null);
+      })
+      .catch(() => { /* no button if it cannot be read */ });
+  }, [clientFacing]);
 
   if (!number) return null;
+  if (pathname === "/login" || pathname === "/setup") return null;
+
+  const label = clientFacing ? "Message the centre on WhatsApp" : "Get help with this app on WhatsApp";
 
   return (
     <a
       href={`https://wa.me/${number}`}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label="Contact support on WhatsApp"
-      title="Contact support on WhatsApp"
+      aria-label={label}
+      title={label}
       className="fixed bottom-4 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition hover:scale-105 hover:shadow-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#25D366] print:hidden"
     >
       <svg viewBox="0 0 24 24" className="h-7 w-7" fill="currentColor" aria-hidden="true">

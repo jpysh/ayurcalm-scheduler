@@ -17,7 +17,10 @@ if (typeof window !== "undefined") {
       init = { ...init, headers: { ...(init.headers || {}), Authorization: `Bearer ${token}` } };
     }
     const res = await nativeFetch(input, init);
-    if (isApiCall && res.status === 401 && window.location.pathname !== "/login") {
+    // Patient and therapist share links have no account to sign in to, so
+    // bouncing them to the login form helps nobody. See issue #16.
+    const isShareLink = /^\/(patient|staff)\//.test(window.location.pathname);
+    if (isApiCall && res.status === 401 && !isShareLink && window.location.pathname !== "/login") {
       localStorage.removeItem("authToken");
       localStorage.removeItem("authRole");
       localStorage.removeItem("authUser");

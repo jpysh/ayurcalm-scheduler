@@ -15,9 +15,12 @@ All notable changes to this project are documented here. This project follows
   asked for the centre's name, opening hours and working days, then chooses
   whether to keep or clear the seeded example data. Timezone is detected from
   the browser
-- **Support contact** — an optional WhatsApp number in Settings shows a floating
-  contact button. Empty by default, so a self-hosted install never points at
-  someone else's phone
+- **Support contacts** — two WhatsApp numbers, shown to different audiences:
+  product support for signed-in staff, and the centre's own number on the
+  patient and therapist share links. Both seeded from
+  `DEFAULT_SUPPORT_WHATSAPP` and editable in Settings
+- **Password recovery for a self-hosted install** — `resetPassword.ts` sets a new
+  password from the server's shell, and the login screen explains how
 - **Settings page** — centre name, address, logo, opening and closing time, slot
   length, working days and timezone, edited in the app rather than in files
 - **Clear demo data** — removes the seeded example centre from Settings, keeping
@@ -25,6 +28,10 @@ All notable changes to this project are documented here. This project follows
 - Administrator-only enforcement on settings writes; staff accounts get read-only
 
 ### Fixed
+- Saving settings without the support numbers no longer clears them, so the
+  setup wizard does not wipe the configured contacts
+- Patient and therapist share links no longer redirect to a login form they
+  cannot use (see #16 — those pages still need token-scoped endpoints)
 - The schedule grid was hardcoded to 09:00–18:00 in 30-minute steps, so
   appointments outside those hours were invisible. It is now built from the
   centre's configured opening hours

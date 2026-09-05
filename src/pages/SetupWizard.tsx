@@ -156,7 +156,12 @@ const SetupWizard = () => {
                 <Button onClick={() => finish(false)} disabled={busy}>
                   {busy ? "Setting up…" : "Clear it and start with my own centre"}
                 </Button>
-                <Button variant="outline" onClick={() => finish(true)} disabled={busy}>
+                <Button
+                  variant="secondary"
+                  className="border border-border bg-background hover:bg-muted text-foreground"
+                  onClick={() => finish(true)}
+                  disabled={busy}
+                >
                   Keep the example data for now
                 </Button>
               </div>

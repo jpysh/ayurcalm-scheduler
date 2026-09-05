@@ -25,6 +25,7 @@ type Settings = {
   logo: string | null;
   demo_data: boolean;
   support_whatsapp: string | null;
+  patient_support_whatsapp: string | null;
   setup_complete: boolean;
 };
 
@@ -80,6 +81,7 @@ const Settings = () => {
           working_days: settings.working_days,
           logo: settings.logo,
           support_whatsapp: settings.support_whatsapp ?? "",
+          patient_support_whatsapp: settings.patient_support_whatsapp ?? "",
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -170,18 +172,50 @@ const Settings = () => {
             </div>
             <p className="text-xs text-muted-foreground">PNG or JPG, under 500KB.</p>
           </div>
-          <div className="space-y-1 max-w-xs">
-            <Label htmlFor="support_whatsapp">Support WhatsApp</Label>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base md:text-lg">Support contacts</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Two WhatsApp numbers, shown as a button in the corner to different people.
+            International format, no plus sign or leading zero. Leave one empty to hide
+            its button.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="support_whatsapp">Help with this app — for you and your staff</Label>
             <Input
               id="support_whatsapp"
+              className="max-w-xs"
               value={settings.support_whatsapp ?? ""}
               onChange={(e) => update("support_whatsapp", e.target.value)}
               placeholder="420777558262"
               disabled={!isAdmin}
             />
             <p className="text-xs text-muted-foreground">
-              International format, no plus sign or leading zero. Shows a WhatsApp button in
-              the corner for your staff. Leave empty to hide it.
+              Whoever supports the software itself — bugs, questions, how something works.
+              Shown to signed-in administrators and staff. Set to the project maintainer by
+              default; change it if your organisation has its own IT support.
+            </p>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="patient_support_whatsapp">Contact for patients — your reception</Label>
+            <Input
+              id="patient_support_whatsapp"
+              className="max-w-xs"
+              value={settings.patient_support_whatsapp ?? ""}
+              onChange={(e) => update("patient_support_whatsapp", e.target.value)}
+              placeholder="420777558262"
+              disabled={!isAdmin}
+            />
+            <p className="text-xs text-muted-foreground">
+              Shown to patients and therapists on the schedule links you share with them.
+              <strong className="font-medium"> Change this to your own centre's number</strong> —
+              patients asking about their appointment should reach you, not the software
+              maintainer.
             </p>
           </div>
         </CardContent>
