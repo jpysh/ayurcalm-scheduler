@@ -8,13 +8,11 @@ const fmtLong = (isoDate: string) => {
   return new Intl.DateTimeFormat('en-GB', { timeZone: ADMIN_TZ, weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(d);
 };
 
-const addHeader = (doc: any, dateStr: string) => {
+const addHeader = (doc: any, dateStr: string, centreName: string) => {
   const w = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const x = doc.page.margins.left;
   const top = doc.page.margins.top;
   let y = top;
-  // Your centre's name on the printed day sheet. Set CENTRE_NAME in .env.
-  const centreName = process.env.CENTRE_NAME || 'Wellness Centre';
   doc.font('Helvetica-Bold').fontSize(14).text(centreName, x, y, { align: 'center', width: w });
   y = doc.y;
   doc.font('Helvetica-Bold').fontSize(14).text('Treatment, Consultation, Orientation Schedule', x, y, { align: 'center', width: w });
@@ -75,6 +73,9 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
 
   const dayStart = '07:00', dayEnd = '19:00';
   const day = new Date(dateISO);
+
+  const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  const centreName = settings?.centre_name || process.env.CENTRE_NAME || 'Wellness Centre';
 
   const [rooms, patients, therapies, staff, appts, eventsByDate, weeklyEvents] = await Promise.all([
     prisma.therapyRoom.findMany(),
@@ -143,7 +144,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const availableW = w - noColW - patientColW - (anyDiet ? dietColW : 0);
   const slotW = Math.max(minSlotW, Math.floor(availableW / Math.max(1, timeSlots.length)));
 
-  addHeader(doc, dateISO);
+  addHeader(doc, dateISO, centreName);
   const startY = doc.y + 2;
 
   if (displayPatients.length === 0) {
@@ -369,7 +370,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
       pageRowTops = [];
       pageRowHeights = [];
       doc.addPage();
-      addHeader(doc, dateISO);
+      addHeader(doc, dateISO, centreName);
       yy = doc.y + 2;
       rowsOnPage = 0;
       computePageLayout();

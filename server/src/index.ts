@@ -4,6 +4,7 @@ import cors from 'cors';
 import { app } from './server.js';
 import { prisma } from './server.js';
 import { authRouter, requireAuth, warnIfDefaultAdminUnchanged } from './auth.js';
+import { settingsRouter } from './settings.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import path from 'path';
 import fs from 'fs';
@@ -28,7 +29,12 @@ expressApp.use(cors({
   methods: ['GET','POST','PUT','DELETE'],
   allowedHeaders: ['Content-Type','CF-Access-JWT-Assertion','cf-connecting-ip','x-api-key'],
 }));
-expressApp.use(express.json({ limit: '100kb' }));
+// Settings carries a logo data: URI, so it gets a larger body limit than the
+// rest of the API, which stays tight at 100kb.
+expressApp.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.path.startsWith('/api/settings')) return express.json({ limit: '2mb' })(req, res, next);
+  return express.json({ limit: '100kb' })(req, res, next);
+});
 
 // Enhanced root /health endpoint with server metadata
 expressApp.get('/health', async (_req: Request, res: Response) => {
@@ -102,6 +108,7 @@ expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
   next();
 });
 expressApp.post('/api/appointments', apptPostLimiter);
+expressApp.use('/api/settings', settingsRouter);
 expressApp.use('/api', app);
 
 expressApp.get('/api/daily-schedule-pdf', async (req: Request, res: Response) => {

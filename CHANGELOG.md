@@ -3,6 +3,20 @@
 All notable changes to this project are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Settings page** — centre name, address, logo, opening and closing time, slot
+  length, working days and timezone, edited in the app rather than in files
+- **Clear demo data** — removes the seeded example centre from Settings, keeping
+  user accounts and centre settings
+- Administrator-only enforcement on settings writes; staff accounts get read-only
+
+### Fixed
+- The schedule grid was hardcoded to 09:00–18:00 in 30-minute steps, so
+  appointments outside those hours were invisible. It is now built from the
+  centre's configured opening hours
+
 ## [0.1.0] - 2026-09-05
 
 First public release.

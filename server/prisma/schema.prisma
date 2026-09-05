@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   // "native" covers local development; the debian target is what the Docker
   // image needs, and Prisma will not fall back to it at runtime.
   binaryTargets = ["native", "debian-openssl-3.0.x"]
@@ -11,31 +11,31 @@ datasource db {
 }
 
 model Patient {
-  id         String   @id @default(uuid())
-  name       String
-  gender     Gender
-  phone      String?
-  email      String?
-  date_of_birth DateTime?
+  id                String    @id @default(uuid())
+  name              String
+  gender            Gender
+  phone             String?
+  email             String?
+  date_of_birth     DateTime?
   emergency_contact String?
   emergency_phone   String?
   medical_notes     String?
   diet_plan         String?
-  created_at DateTime @default(now())
-  available_from DateTime?
-  available_to   DateTime?
+  created_at        DateTime  @default(now())
+  available_from    DateTime?
+  available_to      DateTime?
 
-  DietPlans   DietPlan[]
+  DietPlans        DietPlan[]
   DietPlanSegments DietPlanSegment[]
-  Appointments Appointment[]
-  Stays       PatientStay[]
+  Appointments     Appointment[]
+  Stays            PatientStay[]
 }
 
 model PatientStay {
-  id           String   @id @default(uuid())
-  patient_id   String
-  start_date   DateTime
-  end_date     DateTime
+  id            String   @id @default(uuid())
+  patient_id    String
+  start_date    DateTime
+  end_date      DateTime
   duration_days Int
 
   Patient Patient @relation(fields: [patient_id], references: [id])
@@ -64,41 +64,41 @@ model TherapyRoom {
 }
 
 model Therapy {
-  id                   String   @id @default(uuid())
-  name                 String
-  required_amenities   String[]
-  duration_minutes     Int
-  requires_gender_match Boolean @default(false)
-  description          String?
+  id                    String   @id @default(uuid())
+  name                  String
+  required_amenities    String[]
+  duration_minutes      Int
+  requires_gender_match Boolean  @default(false)
+  description           String?
 
   Appointments Appointment[]
 }
 
 model Appointment {
-  id              String   @id @default(uuid())
-  patient_id      String
-  therapy_id      String
-  staff_id        String?
-  room_id         String?
-  scheduled_date  DateTime
-  start_time      String
+  id               String            @id @default(uuid())
+  patient_id       String
+  therapy_id       String
+  staff_id         String?
+  room_id          String?
+  scheduled_date   DateTime
+  start_time       String
   duration_minutes Int
-  session_number  Int
-  total_sessions  Int
-  status          AppointmentStatus
-  assignment_type AssignmentType
-  notes           String?
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
+  session_number   Int
+  total_sessions   Int
+  status           AppointmentStatus
+  assignment_type  AssignmentType
+  notes            String?
+  created_at       DateTime          @default(now())
+  updated_at       DateTime          @updatedAt
 
-  Patient Patient @relation(fields: [patient_id], references: [id])
-  Therapy Therapy @relation(fields: [therapy_id], references: [id])
-  Staff   Staff?  @relation(fields: [staff_id], references: [id])
+  Patient Patient      @relation(fields: [patient_id], references: [id])
+  Therapy Therapy      @relation(fields: [therapy_id], references: [id])
+  Staff   Staff?       @relation(fields: [staff_id], references: [id])
   Room    TherapyRoom? @relation(fields: [room_id], references: [id])
 }
 
 model TimeOff {
-  id          String       @id @default(uuid())
+  id          String        @id @default(uuid())
   entity_type TimeOffEntity
   entity_id   String?
   date        DateTime?
@@ -114,11 +114,11 @@ model TimeOff {
 }
 
 model DietPlan {
-  id          String   @id @default(uuid())
-  patient_id  String
-  date        DateTime
-  meal_time   MealTime
-  description String
+  id           String   @id @default(uuid())
+  patient_id   String
+  date         DateTime
+  meal_time    MealTime
+  description  String
   instructions String?
   created_by   String
   created_at   DateTime @default(now())
@@ -142,24 +142,24 @@ model DietPlanSegment {
 }
 
 model ProgramEvent {
-  id            String   @id @default(uuid())
-  date          DateTime?
-  start_date    DateTime?
-  end_date      DateTime?
-  start_time    String
-  end_time      String
-  activity_name String
-  room_id       String?
-  staff_id      String?
+  id                 String    @id @default(uuid())
+  date               DateTime?
+  start_date         DateTime?
+  end_date           DateTime?
+  start_time         String
+  end_time           String
+  activity_name      String
+  room_id            String?
+  staff_id           String?
   required_amenities String[]
-  notes         String?
-  recurrence    String?
-  weekdays      String[]
-  audience      String?
-  patients_scope String?
-  patient_ids    String[]
-  staff_scope    String?
-  staff_ids      String[]
+  notes              String?
+  recurrence         String?
+  weekdays           String[]
+  audience           String?
+  patients_scope     String?
+  patient_ids        String[]
+  staff_scope        String?
+  staff_ids          String[]
 }
 
 model AuditLog {
@@ -220,4 +220,21 @@ model User {
   last_login            DateTime?
   password_reset_token  String?   @unique
   password_reset_expiry DateTime?
+}
+
+/// Centre-level configuration. Exactly one row, id "singleton" — this is a
+/// single-centre install by design; run a second instance for a second centre.
+model Settings {
+  id           String   @id @default("singleton")
+  centre_name  String   @default("Wellness Centre")
+  address      String?
+  timezone     String   @default("UTC")
+  opening_time String   @default("09:00")
+  closing_time String   @default("18:00")
+  slot_minutes Int      @default(30)
+  working_days String[] @default(["monday", "tuesday", "wednesday", "thursday", "friday"])
+  /// Small logo as a data: URI, shown in the header and on the PDF.
+  logo         String?
+  demo_data    Boolean  @default(false)
+  updated_at   DateTime @updatedAt
 }

@@ -280,6 +280,13 @@ async function main() {
     console.log(`Created demo admin: ${DEFAULT_ADMIN_EMAIL} / ${DEFAULT_ADMIN_PASSWORD}`);
   }
 
+  // Flags this install as carrying demo data, so Settings can offer to clear it.
+  await prisma.settings.upsert({
+    where: { id: 'singleton' },
+    update: { demo_data: true },
+    create: { id: 'singleton', demo_data: true, centre_name: process.env.CENTRE_NAME || 'Wellness Centre' },
+  });
+
   console.log('Seeded extended AyurCalm dataset successfully');
 }
 

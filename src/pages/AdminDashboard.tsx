@@ -128,12 +128,23 @@ const mockTherapies = [
 
 type UiTimeOff = { id: string; date?: string; startDate?: string; endDate?: string; startTime?: string; endTime?: string; recurrence?: 'weekly'; weekdays?: ('sunday'|'monday'|'tuesday'|'wednesday'|'thursday'|'friday'|'saturday')[]; type: "Center" | "Staff" | "Room" | "Therapy" | "Patient"; entity: string; description: string };
 
-const timeSlots = Array.from({ length: ((18 * 60 - 9 * 60) / 30) + 1 }, (_, i) => {
-  const mins = 9 * 60 + i * 30;
-  const hh = String(Math.floor(mins / 60)).padStart(2, "0");
-  const mm = String(mins % 60).padStart(2, "0");
-  return `${hh}:${mm}`;
-});
+/** Builds the schedule's time rows from the centre's opening hours. */
+const buildTimeSlots = (openingTime: string, closingTime: string, slotMinutes: number) => {
+  const toMin = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
+  };
+  const start = toMin(openingTime);
+  const end = toMin(closingTime);
+  const step = slotMinutes > 0 ? slotMinutes : 30;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+  return Array.from({ length: Math.floor((end - start) / step) + 1 }, (_, i) => {
+    const mins = start + i * step;
+    const hh = String(Math.floor(mins / 60)).padStart(2, "0");
+    const mm = String(mins % 60).padStart(2, "0");
+    return `${hh}:${mm}`;
+  });
+};
 const fetchJsonWithTimeout = async <T = unknown>(url: string, ms = 6000): Promise<T> => {
   const attempt = async () => {
     const controller = new AbortController();
@@ -234,6 +245,23 @@ type UiRoom = { id: string | number; name: string; amenities: string[]; schedule
 type UiTherapy = { id: string | number; name: string; duration: number; amenities: string[]; genderMatch: boolean };
 const AdminDashboard = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
+  // Opening hours drive the schedule's time rows. Defaults match the old
+  // hardcoded 09:00-18:00 grid so the page renders before settings arrive.
+  const [centreHours, setCentreHours] = useState({ opening_time: "09:00", closing_time: "18:00", slot_minutes: 30 });
+  const timeSlots = useMemo(
+    () => buildTimeSlots(centreHours.opening_time, centreHours.closing_time, centreHours.slot_minutes),
+    [centreHours],
+  );
+  useEffect(() => {
+    fetch(`${API_BASE}/settings`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => {
+        if (s?.opening_time && s?.closing_time) {
+          setCentreHours({ opening_time: s.opening_time, closing_time: s.closing_time, slot_minutes: s.slot_minutes ?? 30 });
+        }
+      })
+      .catch(() => { /* falls back to the defaults above */ });
+  }, []);
   const [activeTab, setActiveTab] = useState("schedule");
   const [viewType, setViewType] = useState<"day" | "week">("day");
   const [showAutoAssign, setShowAutoAssign] = useState(false);

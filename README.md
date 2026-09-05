@@ -49,17 +49,35 @@ programme. Restarts keep your data; the seed only runs against an empty database
 To stop, `docker compose down`. To start over from scratch,
 `docker compose down -v` (this deletes the database volume).
 
+## Setting up your centre
+
+Everything about your business is configured in the app, not in files — sign in
+as an administrator and open **Settings**:
+
+- **Centre details** — name, address and logo, shown in the app and on the printed
+  daily schedule
+- **Opening hours** — opening and closing time, slot length and working days.
+  These decide which time rows the schedule shows, so set them before entering
+  appointments
+- **Timezone**
+
+Staff, therapists, treatment rooms and therapies are managed in their own tabs.
+
+When you are ready to replace the seeded example centre with your own, use
+**Settings → Clear demo data**. It removes the demo patients, staff, rooms,
+therapies and appointments, and keeps your account and centre settings.
+
 ## Configuration
 
-Copy `.env.example` to `.env` if you want to change anything — the defaults work
-as-is for a local trial.
+These are install-time settings for whoever deploys the app. Copy `.env.example`
+to `.env` if you want to change any — the defaults work as-is for a local trial.
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `APP_PORT` | `8080` | Host port the app is served on |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `ayurcalm` | Database credentials |
 | `JWT_SECRET` | *(random per restart)* | Session signing secret. Set it (`openssl rand -base64 32`) so sessions survive restarts |
-| `CENTRE_NAME` | `Wellness Centre` | Printed at the top of the daily schedule PDF |
+| `CENTRE_NAME` | `Wellness Centre` | Centre name used on first run only; after that it is edited in **Settings** |
 
 ## What's inside
 
