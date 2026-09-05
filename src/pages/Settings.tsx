@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
+import { UsersSection, ChangePasswordCard } from "@/components/UsersSection";
 
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
 const SLOT_OPTIONS = [15, 20, 30, 60];
@@ -23,6 +24,8 @@ type Settings = {
   working_days: string[];
   logo: string | null;
   demo_data: boolean;
+  support_whatsapp: string | null;
+  setup_complete: boolean;
 };
 
 const Settings = () => {
@@ -76,6 +79,7 @@ const Settings = () => {
           slot_minutes: settings.slot_minutes,
           working_days: settings.working_days,
           logo: settings.logo,
+          support_whatsapp: settings.support_whatsapp ?? "",
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -166,6 +170,20 @@ const Settings = () => {
             </div>
             <p className="text-xs text-muted-foreground">PNG or JPG, under 500KB.</p>
           </div>
+          <div className="space-y-1 max-w-xs">
+            <Label htmlFor="support_whatsapp">Support WhatsApp</Label>
+            <Input
+              id="support_whatsapp"
+              value={settings.support_whatsapp ?? ""}
+              onChange={(e) => update("support_whatsapp", e.target.value)}
+              placeholder="420777558262"
+              disabled={!isAdmin}
+            />
+            <p className="text-xs text-muted-foreground">
+              International format, no plus sign or leading zero. Shows a WhatsApp button in
+              the corner for your staff. Leave empty to hide it.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -252,6 +270,10 @@ const Settings = () => {
           </Button>
         </div>
       )}
+
+      <ChangePasswordCard />
+
+      {isAdmin && <UsersSection />}
 
       {settings.demo_data && isAdmin && (
         <Card className="border-destructive/40">

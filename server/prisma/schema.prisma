@@ -225,16 +225,21 @@ model User {
 /// Centre-level configuration. Exactly one row, id "singleton" — this is a
 /// single-centre install by design; run a second instance for a second centre.
 model Settings {
-  id           String   @id @default("singleton")
-  centre_name  String   @default("Wellness Centre")
-  address      String?
-  timezone     String   @default("UTC")
-  opening_time String   @default("09:00")
-  closing_time String   @default("18:00")
-  slot_minutes Int      @default(30)
-  working_days String[] @default(["monday", "tuesday", "wednesday", "thursday", "friday"])
+  id               String   @id @default("singleton")
+  centre_name      String   @default("Wellness Centre")
+  address          String?
+  timezone         String   @default("UTC")
+  opening_time     String   @default("09:00")
+  closing_time     String   @default("18:00")
+  slot_minutes     Int      @default(30)
+  working_days     String[] @default(["monday", "tuesday", "wednesday", "thursday", "friday"])
   /// Small logo as a data: URI, shown in the header and on the PDF.
-  logo         String?
-  demo_data    Boolean  @default(false)
-  updated_at   DateTime @updatedAt
+  logo             String?
+  demo_data        Boolean  @default(false)
+  /// Support contact shown as a floating WhatsApp button. International format,
+  /// no plus sign or leading zero (e.g. 420777558262). Empty hides the button.
+  support_whatsapp String?
+  /// False until the first-run wizard has been completed or skipped.
+  setup_complete   Boolean  @default(false)
+  updated_at       DateTime @updatedAt
 }

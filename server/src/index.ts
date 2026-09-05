@@ -5,6 +5,7 @@ import { app } from './server.js';
 import { prisma } from './server.js';
 import { authRouter, requireAuth, warnIfDefaultAdminUnchanged } from './auth.js';
 import { settingsRouter } from './settings.js';
+import { usersRouter, accountRouter } from './users.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import path from 'path';
 import fs from 'fs';
@@ -109,6 +110,8 @@ expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
 });
 expressApp.post('/api/appointments', apptPostLimiter);
 expressApp.use('/api/settings', settingsRouter);
+expressApp.use('/api/users', usersRouter);
+expressApp.use('/api/account', accountRouter);
 expressApp.use('/api', app);
 
 expressApp.get('/api/daily-schedule-pdf', async (req: Request, res: Response) => {

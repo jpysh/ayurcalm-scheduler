@@ -6,6 +6,18 @@ All notable changes to this project are documented here. This project follows
 ## [Unreleased]
 
 ### Added
+- **User accounts** — administrators can add, edit, deactivate and delete logins,
+  and set a password for someone who has lost theirs. The last active
+  administrator cannot be demoted, deactivated or deleted, and nobody can delete
+  their own account
+- **Change your own password** — available to every signed-in user, including staff
+- **First-run setup wizard** — an administrator signing in to a new install is
+  asked for the centre's name, opening hours and working days, then chooses
+  whether to keep or clear the seeded example data. Timezone is detected from
+  the browser
+- **Support contact** — an optional WhatsApp number in Settings shows a floating
+  contact button. Empty by default, so a self-hosted install never points at
+  someone else's phone
 - **Settings page** — centre name, address, logo, opening and closing time, slot
   length, working days and timezone, edited in the app rather than in files
 - **Clear demo data** — removes the seeded example centre from Settings, keeping

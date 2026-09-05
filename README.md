@@ -51,8 +51,10 @@ To stop, `docker compose down`. To start over from scratch,
 
 ## Setting up your centre
 
-Everything about your business is configured in the app, not in files — sign in
-as an administrator and open **Settings**:
+On first sign-in as an administrator, a short setup wizard asks for your centre's
+name, opening hours and working days, and whether to keep the example data.
+
+Everything else is configured in the app, not in files — open **Settings**:
 
 - **Centre details** — name, address and logo, shown in the app and on the printed
   daily schedule
@@ -60,6 +62,11 @@ as an administrator and open **Settings**:
   These decide which time rows the schedule shows, so set them before entering
   appointments
 - **Timezone**
+- **Support WhatsApp** — optional; shows a contact button in the corner for your
+  staff. Leave it empty to hide it
+- **People with access** — add logins for your staff, set roles, and reset a
+  forgotten password. Administrators manage settings and users; staff run the
+  schedule. Everyone can change their own password
 
 Staff, therapists, treatment rooms and therapies are managed in their own tabs.
 

@@ -23,6 +23,9 @@ const settingsSchema = z.object({
     v => !v || v.startsWith('data:image/'),
     'Logo must be a data: URI for an image',
   ),
+  // Digits only: wa.me rejects a plus sign, spaces or a leading zero.
+  support_whatsapp: z.string().trim().regex(/^\d{8,15}$/, 'Use international format with no + or leading zero, e.g. 420777558262').or(z.literal('')).nullish(),
+  setup_complete: z.boolean().optional(),
 }).refine(
   v => toMinutes(v.closing_time) > toMinutes(v.opening_time),
   { message: 'Closing time must be after opening time', path: ['closing_time'] },
@@ -71,7 +74,12 @@ settingsRouter.put('/', requireAdmin, async (req: Request, res: Response) => {
   await getSettings();
   const saved = await prisma.settings.update({
     where: { id: SINGLETON_ID },
-    data: { ...parsed.data, address: parsed.data.address ?? null, logo: parsed.data.logo ?? null },
+    data: {
+      ...parsed.data,
+      address: parsed.data.address ?? null,
+      logo: parsed.data.logo ?? null,
+      support_whatsapp: parsed.data.support_whatsapp || null,
+    },
   });
   res.json(saved);
 });

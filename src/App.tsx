@@ -19,6 +19,8 @@ import PatientView from "./pages/PatientView";
 import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
 import Ailments from "./pages/Ailments";
+import SetupWizard from "./pages/SetupWizard";
+import { SupportButton } from "@/components/SupportButton";
 import { API_BASE } from "@/lib/apiBase";
 
 const queryClient = new QueryClient();
@@ -128,6 +130,7 @@ const App = () => {
               <Route path="/" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/index" element={<Index />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/setup" element={<ProtectedRoute><SetupWizard /></ProtectedRoute>} />
               <Route path="/:username/schedule" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/:username/staff" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/:username/rooms" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
@@ -143,6 +146,7 @@ const App = () => {
               <Route path="/patient/:token" element={<PatientView />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            <SupportButton />
           </BrowserRouter>
           <footer className="border-t border-border bg-muted/20">
             <div className="container mx-auto px-3 py-2 text-xs text-muted-foreground flex items-center justify-between">

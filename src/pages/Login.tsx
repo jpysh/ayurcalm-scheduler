@@ -32,6 +32,17 @@ const Login = () => {
       localStorage.setItem("authRole", data.user?.role === "admin" ? "Admin" : "Staff");
       localStorage.setItem("authUser", data.user?.email ?? username.trim());
       toast.success(`Welcome, ${data.user?.name || data.user?.email}`);
+      // An administrator lands in the setup wizard until the centre's details
+      // have been filled in once.
+      if (data.user?.role === "admin") {
+        const settings = await fetch(`${API_BASE}/settings`, {
+          headers: { Authorization: `Bearer ${data.token}` },
+        }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        if (settings && settings.setup_complete === false) {
+          navigate("/setup");
+          return;
+        }
+      }
       navigate(data.user?.role === "admin" ? "/admin/schedule" : "/staff/schedule");
     } catch {
       toast.error("Unable to reach server");
