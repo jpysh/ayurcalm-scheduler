@@ -66,3 +66,51 @@ export const toOverrides = (t: Partial<UiDietTemplate>) => ({
   pre_therapy_notes: t.preTherapyNotes || '',
   post_therapy_notes: t.postTherapyNotes || '',
 });
+
+const toTemplateBody = (t: Partial<UiDietTemplate>) => ({
+  name: (t.name || '').trim(),
+  description: t.description || '',
+  therapy_breakfast: t.breakfast || '',
+  therapy_lunch: t.lunch || '',
+  therapy_dinner: t.dinner || '',
+  therapy_snacks: t.snacks || '',
+  // The tab still edits one set of meals, so a plan authored here reads the same
+  // on a rest day. Editing the two sides apart is the rest of #18.
+  rest_breakfast: t.breakfast || '',
+  rest_lunch: t.lunch || '',
+  rest_dinner: t.dinner || '',
+  rest_snacks: t.snacks || '',
+  medication: t.medication || '',
+  pre_therapy_notes: t.preTherapyNotes || '',
+  post_therapy_notes: t.postTherapyNotes || '',
+});
+
+/**
+ * Save a plan and return it with the id the server gave it. A plan kept only in
+ * component state cannot be assigned — the id it invents is not one the server
+ * knows — and does not survive a refresh.
+ */
+export async function saveTemplate(
+  apiBase: string,
+  draft: Partial<UiDietTemplate>,
+  existingId?: string,
+): Promise<UiDietTemplate> {
+  const isStored = !!existingId && !existingId.startsWith('tpl-');
+  const res = await fetch(`${apiBase}/diet-templates${isStored ? `/${existingId}` : ''}`, {
+    method: isStored ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(toTemplateBody(draft)),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || (res.status === 403 ? 'Only an administrator can change plans' : 'Could not save the plan'));
+  }
+  return fromServerTemplate(await res.json());
+}
+
+export async function loadTemplates(apiBase: string): Promise<UiDietTemplate[]> {
+  const res = await fetch(`${apiBase}/diet-templates`);
+  if (!res.ok) return [];
+  const rows: ServerDietTemplate[] = await res.json();
+  return rows.filter((t) => t.is_active).map(fromServerTemplate);
+}

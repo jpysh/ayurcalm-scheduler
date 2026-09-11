@@ -32,7 +32,9 @@ import ScheduleTab from "./tabs/ScheduleTab";
 import Ailments from "./Ailments";
 import Settings from "./Settings";
 import { API_BASE } from "@/lib/apiBase";
-import { fromServerTemplate, type ServerDietTemplate } from "@/lib/dietPlan";
+import { loadTemplates, saveTemplate } from "@/lib/dietPlan";
+
+type ApiSegment = { patient_id: string; start_date: string; end_date: string; template_id?: string | null; template_label?: string | null; therapy_ids?: (string | number)[] };
 
 // Mock data
 const mockAppointments = [
@@ -435,10 +437,27 @@ const AdminDashboard = () => {
   // list could not survive a refresh, let alone a second computer.
   const [dietTemplates, setDietTemplates] = useState<DietPlanTemplate[]>([]);
   useEffect(() => {
-    fetch(`${API_BASE}/diet-templates`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows: ServerDietTemplate[]) => setDietTemplates(rows.filter((t) => t.is_active).map(fromServerTemplate)))
+    loadTemplates(API_BASE)
+      .then(setDietTemplates)
       .catch(() => { /* the tab shows an empty list rather than mock plans */ });
+    // Assignments were only ever held in memory, so the Diet tab forgot every
+    // plan on reload and showed a dash where a patient had one.
+    fetch(`${API_BASE}/dietplans/segments`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: ApiSegment[]) => {
+        const byPatient: Record<string, { start: string; end: string; templateId: string; therapyIds: string[]; label?: string }[]> = {};
+        for (const row of rows) {
+          (byPatient[row.patient_id] ??= []).push({
+            start: (row.start_date || '').slice(0, 10),
+            end: (row.end_date || '').slice(0, 10),
+            templateId: row.template_id || '',
+            therapyIds: (row.therapy_ids || []).map(String),
+            label: row.template_label || undefined,
+          });
+        }
+        setDietSchedules(byPatient);
+      })
+      .catch(() => { /* the tab still works, it just starts empty */ });
   }, []);
   const [selectedDietTemplateId, setSelectedDietTemplateId] = useState<string>('');
   const [dietDraft, setDietDraft] = useState<DietPlanTemplate>(() => ({
@@ -465,7 +484,7 @@ const AdminDashboard = () => {
   const [assignmentTemplateId, setAssignmentTemplateId] = useState<string>('tpl-std');
   const [assignmentTherapyIds, setAssignmentTherapyIds] = useState<string[]>([]);
   const [showTemplatesDialog, setShowTemplatesDialog] = useState(false);
-  const [dietSchedules, setDietSchedules] = useState<Record<string, { start: string; end: string; templateId: string; therapyIds: string[] }[]>>({});
+  const [dietSchedules, setDietSchedules] = useState<Record<string, { start: string; end: string; templateId: string; therapyIds: string[]; label?: string }[]>>({});
   const [assignmentSegments, setAssignmentSegments] = useState<{ start: string; end: string; templateId: string }[]>([]);
   const [addDialogPatientId, setAddDialogPatientId] = useState<string | null>(null);
   type UiDietPartial = {
@@ -559,12 +578,33 @@ const AdminDashboard = () => {
     });
     setSelectedDietTemplateId(tplId);
   };
-  const saveDietTemplate = () => {
-    const id = `tpl-${Date.now()}`;
-    const next: DietPlanTemplate = { ...dietDraft, id };
-    setDietTemplates((prev) => [next, ...prev]);
-    setSelectedDietTemplateId(id);
-    toast.success('Diet template saved');
+  const refreshDietTemplates = async () => setDietTemplates(await loadTemplates(API_BASE));
+  const saveDietTemplate = async () => {
+    if (!dietDraft.name.trim()) { toast.error('Give the plan a name'); return; }
+    try {
+      // Saved on the server, not in this component: a plan nobody else can see
+      // cannot be assigned, and does not survive a refresh.
+      const saved = await saveTemplate(API_BASE, dietDraft, selectedDietTemplateId);
+      await refreshDietTemplates();
+      setSelectedDietTemplateId(saved.id);
+      toast.success('Diet plan saved');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not save the plan');
+    }
+  };
+  const retireDietTemplate = async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/diet-templates/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(res.status === 403 ? 'Only an administrator can remove plans' : 'Could not remove the plan');
+      const body = await res.json();
+      await refreshDietTemplates();
+      if (selectedDietTemplateId === id) setSelectedDietTemplateId('');
+      toast.success(body.retired
+        ? `Retired — ${body.patients} patient(s) are on this plan, so their sheets still print`
+        : 'Plan removed');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not remove the plan');
+    }
   };
   const assignDietToPatients = () => {
     if (dietSelectedPatientIds.length === 0) { toast.error('Select patients to assign'); return; }
@@ -1940,6 +1980,7 @@ const AdminDashboard = () => {
                       <div className="flex items-center gap-1">
                         <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={(e) => { e.stopPropagation(); applyTemplateToDraft(tpl.id); setShowAddDietDialog(true); }}>Edit</Button>
                         <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={(e) => { e.stopPropagation(); setAssignmentTemplateId(tpl.id); setAssignmentTherapyIds(tpl.therapyIds || []); }}>Select</Button>
+                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={(e) => { e.stopPropagation(); void retireDietTemplate(tpl.id); }}>Retire</Button>
                       </div>
                     </div>
                   </CardContent>

@@ -16,7 +16,8 @@
     "test:smoke": "tsx src/tests/smokeHealth.test.ts",
     "test:ui": "tsx src/tests/uiPersistence.test.ts",
     "test:validation": "tsx src/tests/validation.test.ts",
-    "test:auto-assign": "tsx src/tests/autoAssign.test.ts"
+    "test:auto-assign": "tsx src/tests/autoAssign.test.ts",
+    "test:diet": "tsx src/tests/dietResolution.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

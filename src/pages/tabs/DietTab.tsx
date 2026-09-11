@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
-import { toOverrides } from "@/lib/dietPlan";
+import { toOverrides, saveTemplate, loadTemplates } from "@/lib/dietPlan";
 
 type Patient = { id: string; name: string; phone?: string; gender?: string; dietPlan?: string; actualStart?: string; actualEnd?: string };
 type DietPlanTemplate = {
@@ -28,7 +28,7 @@ type DietPlanTemplate = {
   therapyIds: string[];
   applicability: string;
 };
-type DietScheduleSegment = { start: string; end: string; templateId: string; therapyIds: string[] };
+type DietScheduleSegment = { start: string; end: string; templateId: string; therapyIds: string[]; label?: string };
 type AddDialogSegment = { start: string; end: string; templateId: string; therapyIds: string[]; expanded?: boolean; locked?: boolean; saveAsTemplate?: boolean; customTemplate?: Partial<DietPlanTemplate>; done?: boolean };
 type SegmentDatePickerOpen = { idx: number | null; field: 'start' | 'end' | null };
 type UiTherapy = { id: string | number; name: string; amenities?: string[] };
@@ -178,13 +178,15 @@ const DietTab = ({
                         const uniqueTpls = new Set(segs.map((s) => s.templateId));
                         if (uniqueTpls.size > 1) return 'Multiple plans';
                         const tpl = dietTemplates.find((t) => t.id === segs[0].templateId);
-                        return tpl?.name || '—';
+                        // A retired plan is gone from the list but still assigned,
+                        // and a bespoke segment never had one — fall back to its label.
+                        return tpl?.name || segs[0].label || 'Plan set for this patient';
                       })()}</TableCell>
                       <TableCell className="text-xs md:text-sm">
                         <div className="flex flex-wrap gap-1">
                           {(dietSchedules[p.id] || []).map((s: DietScheduleSegment, idx: number) => (
                             <Badge key={`${p.id}-${idx}`} variant="outline" className="text-[11px]">
-                              {s.start} → {s.end}: {(dietTemplates.find((t) => t.id === s.templateId)?.name) || s.templateId}
+                              {s.start} → {s.end}: {(dietTemplates.find((t) => t.id === s.templateId)?.name) || s.label || 'Custom'}
                             </Badge>
                           ))}
                         </div>
@@ -633,37 +635,28 @@ const DietTab = ({
                             <Input value={seg.customTemplate?.medication || ''} onChange={(e) => setAddDialogSegments((prev: any[]) => prev.map((s: any, i: number) => i===idx ? { ...s, customTemplate: { ...(s.customTemplate || {}), medication: e.target.value }, templateId: '' } : s))} className="h-8" />
                           </div>
                           <div className="flex items-center gap-2">
-                            <Label className="text-xs">Save as template</Label>
-                            <Checkbox size="sm" checked={!!seg.saveAsTemplate} onCheckedChange={(v) => setAddDialogSegments((prev: any[]) => prev.map((s: any, i: number) => i===idx ? { ...s, saveAsTemplate: !!v } : s))} />
+                            <Checkbox id={`save-as-template-${idx}`} size="sm" checked={!!seg.saveAsTemplate} onCheckedChange={(v) => setAddDialogSegments((prev: any[]) => prev.map((s: any, i: number) => i===idx ? { ...s, saveAsTemplate: !!v } : s))} />
+                            <Label htmlFor={`save-as-template-${idx}`} className="text-xs cursor-pointer">Save as a reusable plan</Label>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Button size="sm" className="h-8 px-2" onClick={() => {
+                            <Button size="sm" className="h-8 px-2" onClick={async () => {
                               setAddDialogSegments((prev: any[]) => prev.map((s: any, i: number) => i===idx ? { ...s, done: true, expanded: false } : s));
                               if (seg.saveAsTemplate) {
                                 const tplCandidate: any | null = seg.customTemplate ? seg.customTemplate : (seg.templateId ? (dietTemplates.find((t: any) => t.id === seg.templateId) || null) : null);
                                 const name = (tplCandidate?.name || '').trim();
                                 if (!name) { toast.error('Enter a Plan Name to save as template'); return; }
-                                const lower = name.toLowerCase();
-                                const duplicate = dietTemplates.some((t: any) => t.name.trim().toLowerCase() === lower);
-                                if (duplicate) { toast.error(`Template name "${name}" already exists`); return; }
-                                const newId = `tpl-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
-                                const newTpl: any = {
-                                  id: newId,
-                                  name,
-                                  description: tplCandidate?.description || '',
-                                  breakfast: tplCandidate?.breakfast || '',
-                                  lunch: tplCandidate?.lunch || '',
-                                  dinner: tplCandidate?.dinner || '',
-                                  snacks: tplCandidate?.snacks || '',
-                                  preTherapyNotes: tplCandidate?.preTherapyNotes || '',
-                                  postTherapyNotes: tplCandidate?.postTherapyNotes || '',
-                                  medication: tplCandidate?.medication || '',
-                                  therapyIds: Array.isArray(tplCandidate?.therapyIds) ? (tplCandidate!.therapyIds as string[]) : [],
-                                  applicability: tplCandidate?.applicability || 'daily',
-                                };
-                                setDietTemplates((prev: any[]) => [newTpl, ...prev]);
-                                setSelectedDietTemplateId(newId);
-                                toast.success('Template saved');
+                                try {
+                                  // Saved on the server, and the id it returns is
+                                  // the one an assignment can actually reference.
+                                  const saved = await saveTemplate(API_BASE, { ...tplCandidate, name });
+                                  setDietTemplates(await loadTemplates(API_BASE));
+                                  setSelectedDietTemplateId(saved.id);
+                                  setAddDialogSegments((prev: any[]) => prev.map((s: any, i: number) => i===idx ? { ...s, templateId: saved.id } : s));
+                                  toast.success('Plan saved');
+                                } catch (e) {
+                                  toast.error(e instanceof Error ? e.message : 'Could not save the plan');
+                                  return;
+                                }
                               }
                               toast.success('Segment saved');
                             }}>Save this segment</Button>
@@ -681,41 +674,37 @@ const DietTab = ({
             <Button variant="outline" size="sm" className="h-8" onClick={() => { resetAddDialog(); setShowAddDietDialog(false); }}>Cancel</Button>
             <Button size="sm" className="h-8" onClick={async () => {
               setAddDialogSegments((prev: any[]) => prev.map((s: any) => ({ ...s, done: true, expanded: false })));
-              const id = `tpl-${Date.now()}`;
-              const next = { ...dietDraft, id };
+              // A plan that was never saved has no server id, so the segment
+              // carries the meals itself rather than pointing at nothing.
+              const next = { ...dietDraft, id: '' };
               const toAddNames = new Set<string>();
-              const newTemplates: any[] = [];
-              for (const s of addDialogSegments) {
+              const savedIdByIndex = new Map<number, string>();
+              for (const [segIdx, s] of addDialogSegments.entries()) {
                 if (!s.saveAsTemplate) continue;
                 const tplCandidate: any = s.customTemplate ? s.customTemplate : (s.templateId ? (dietTemplates.find((t: any) => t.id === s.templateId) || next) : next);
                 const name = (tplCandidate?.name || '').trim();
                 if (!name) { toast.error('Enter a Plan Name to save as template'); continue; }
                 const lower = name.toLowerCase();
-                const duplicate = dietTemplates.some((t: any) => t.name.trim().toLowerCase() === lower) || toAddNames.has(lower);
-                if (duplicate) { toast.error(`Template name "${name}" already exists`); continue; }
+                if (toAddNames.has(lower)) continue;
                 toAddNames.add(lower);
-                const newId = `tpl-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
-                newTemplates.push({
-                  id: newId,
-                  name: tplCandidate.name,
-                  description: tplCandidate.description || '',
-                  breakfast: tplCandidate.breakfast || '',
-                  lunch: tplCandidate.lunch || '',
-                  dinner: tplCandidate.dinner || '',
-                  snacks: tplCandidate.snacks || '',
-                  preTherapyNotes: tplCandidate.preTherapyNotes || '',
-                  postTherapyNotes: tplCandidate.postTherapyNotes || '',
-                  medication: tplCandidate.medication || '',
-                  therapyIds: Array.isArray(tplCandidate.therapyIds) ? tplCandidate.therapyIds : [],
-                  applicability: tplCandidate.applicability || 'daily',
-                });
+                try {
+                  const saved = await saveTemplate(API_BASE, { ...tplCandidate, name });
+                  savedIdByIndex.set(segIdx, saved.id);
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : `Could not save the plan "${name}"`);
+                }
               }
-              if (newTemplates.length > 0) {
-                setDietTemplates((prev: any[]) => [...newTemplates, ...prev]);
-                setSelectedDietTemplateId(newTemplates[0].id);
+              if (savedIdByIndex.size > 0) {
+                const refreshed = await loadTemplates(API_BASE);
+                setDietTemplates(refreshed);
+                setSelectedDietTemplateId([...savedIdByIndex.values()][0]);
               }
               if (addDialogPatientId) {
-                const segs = addDialogSegments.map((s: any) => ({ ...s, templateId: (s.templateId && s.templateId.length > 0) ? s.templateId : (s.customTemplate ? '' : id) }));
+                // A plan just saved is referenced by the id the server gave it.
+                const segs = addDialogSegments.map((s: any, segIdx: number) => ({
+                  ...s,
+                  templateId: savedIdByIndex.get(segIdx) || ((s.templateId && s.templateId.length > 0) ? s.templateId : (s.customTemplate ? '' : '')),
+                }));
                 const isYMD = (iso: string) => /^\d{4}-\d{2}-\d{2}$/.test(iso || '');
                 const datedSegs = segs.filter((s: any) => isYMD(s.start) && isYMD(s.end));
                 try {

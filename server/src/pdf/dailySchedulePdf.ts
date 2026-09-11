@@ -1,5 +1,6 @@
 declare module 'pdfkit';
 import PDFDocument from 'pdfkit';
+import { resolveDiet, mealOrder, type MealKey } from '../dietResolution.js';
 import { PrismaClient } from '@prisma/client';
 
 const ADMIN_TZ = process.env.ADMIN_TZ || 'Asia/Kolkata';
@@ -133,10 +134,6 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   // DietPlan row written for this date, the template on the segment covering
   // this date, then the free-text field on the patient. Precedence is per meal,
   // so overriding breakfast leaves the rest of the plan standing.
-  type MealKey = 'breakfast' | 'lunch' | 'dinner' | 'snacks';
-  const mealOrder: MealKey[] = ['breakfast', 'lunch', 'dinner', 'snacks'];
-  const mealLabel: Record<MealKey, string> = { breakfast: 'B', lunch: 'L', dinner: 'D', snacks: 'S' };
-
   const dayMealsByPatient = new Map<string, Partial<Record<MealKey, string>>>();
   for (const d of dietDay) {
     const meals = dayMealsByPatient.get(d.patient_id) || {};
@@ -166,40 +163,15 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
 
   const dietFor = (patient: (typeof patients)[number]) => {
     const seg = segmentByPatient.get(patient.id);
-    const tpl = seg?.Template ?? null;
-    const overrides = (seg?.overrides || {}) as Record<string, string | undefined>;
-    const hasTherapyToday = (apptsByPatient.get(patient.id) || []).length > 0;
-    // A plan holds both sides: what to eat around treatment, and what to eat on
-    // a rest day. A resident eats on both.
-    const side = hasTherapyToday ? 'therapy' : 'rest';
-
-    // The doctor's own wording for this patient wins; otherwise the plan's. That
-    // is what lets a correction to the plan reach everyone still on it.
-    const field = (name: string) => (overrides[name] ?? (tpl as Record<string, any> | null)?.[name] ?? '').toString().trim();
-
-    const dayOverrides = dayMealsByPatient.get(patient.id) || {};
-    const meals: Partial<Record<MealKey, string>> = {};
-    for (const meal of mealOrder) {
-      const text = (dayOverrides[meal] || field(`${side}_${meal}`)).trim();
-      if (text) meals[meal] = text;
-    }
-
-    const noteParts: string[] = [];
-    for (const meal of mealOrder) {
-      // Keep a meal the day has no column for rather than dropping it.
-      if (meals[meal] && !mealsWithColumn.has(meal)) noteParts.push(`${mealLabel[meal]}: ${meals[meal]}`);
-    }
-    for (const name of ['medication', ...(hasTherapyToday ? ['pre_therapy_notes', 'post_therapy_notes'] : [])]) {
-      const text = field(name);
-      if (text) noteParts.push(text);
-    }
-
-    const free = (patient.diet_plan || '').trim();
-    if (free && Object.keys(meals).length === 0) noteParts.unshift(free);
-
-    const label = tpl?.name || seg?.template_label || '';
-    const notes = noteParts.join('; ');
-    return { meals, notes: label && notes ? `${label}: ${notes}` : notes || (label && Object.keys(meals).length ? label : '') };
+    return resolveDiet({
+      template: seg?.Template ?? null,
+      overrides: (seg?.overrides || null) as Record<string, string | undefined> | null,
+      dayMeals: dayMealsByPatient.get(patient.id) || {},
+      hasTherapyToday: (apptsByPatient.get(patient.id) || []).length > 0,
+      mealsWithColumn,
+      freeText: patient.diet_plan,
+      segmentLabel: seg?.template_label,
+    });
   };
 
   const dietByPatient = new Map(displayPatients.map((p) => [p.id, dietFor(p)] as const));
