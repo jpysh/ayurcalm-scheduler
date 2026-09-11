@@ -19,6 +19,8 @@ export type ServerDietTemplate = {
   pre_therapy_notes?: string | null;
   post_therapy_notes?: string | null;
   is_active: boolean;
+  /** How many patients are on this plan right now. */
+  patients?: number;
 };
 
 export type UiDietTemplate = {
@@ -38,6 +40,7 @@ export type UiDietTemplate = {
   medication?: string;
   therapyIds: string[];
   applicability: 'daily' | 'therapyDays';
+  patients?: number;
 };
 
 export const fromServerTemplate = (t: ServerDietTemplate): UiDietTemplate => ({
@@ -57,6 +60,7 @@ export const fromServerTemplate = (t: ServerDietTemplate): UiDietTemplate => ({
   medication: t.medication || '',
   therapyIds: [],
   applicability: 'daily' as const,
+  patients: t.patients ?? 0,
 });
 
 /**

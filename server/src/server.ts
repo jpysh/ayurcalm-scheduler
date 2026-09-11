@@ -353,7 +353,14 @@ app.delete('/therapies/:id', async (req: Request, res: Response) => {
 app.get('/patients', async (req: Request, res: Response) => {
   const from = req.query.from as string | undefined;
   const to = req.query.to as string | undefined;
+  const residentOn = req.query.resident_on as string | undefined;
   const where: Prisma.PatientWhereInput = {};
+  if (residentOn) {
+    // Who is actually staying at the centre on that date. The diet tab wants
+    // these and not the whole history of everyone who has ever visited.
+    const day = new Date(residentOn);
+    where.Stays = { some: { start_date: { lte: day }, end_date: { gte: day } } };
+  }
   if (from || to) {
     // intersect availability with requested window
     const fromDate = from ? new Date(from) : undefined;

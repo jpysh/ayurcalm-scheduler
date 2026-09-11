@@ -31,6 +31,7 @@ import PatientsTab from "./tabs/PatientsTab";
 import ScheduleTab from "./tabs/ScheduleTab";
 import Ailments from "./Ailments";
 import Settings from "./Settings";
+import { Fragment } from "react";
 import { API_BASE } from "@/lib/apiBase";
 import { loadTemplates, saveTemplate } from "@/lib/dietPlan";
 
@@ -427,6 +428,12 @@ const AdminDashboard = () => {
     lunch: string;
     dinner: string;
     snacks: string;
+    restBreakfast?: string;
+    restLunch?: string;
+    restDinner?: string;
+    restSnacks?: string;
+    /** How many patients are on this plan; shown before an edit reaches them. */
+    patients?: number;
     preTherapyNotes?: string;
     postTherapyNotes?: string;
     medication?: string;
@@ -440,6 +447,12 @@ const AdminDashboard = () => {
     loadTemplates(API_BASE)
       .then(setDietTemplates)
       .catch(() => { /* the tab shows an empty list rather than mock plans */ });
+    // The diet tab is about people who are here. Listing all 120 patients ever
+    // registered buried the dozen who are actually staying.
+    fetch(`${API_BASE}/patients?resident_on=${new Date().toISOString().slice(0, 10)}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: { id: string }[]) => setResidentIds(new Set(rows.map((p) => p.id))))
+      .catch(() => setResidentIds(null));
     // Assignments were only ever held in memory, so the Diet tab forgot every
     // plan on reload and showed a dash where a patient had one.
     fetch(`${API_BASE}/dietplans/segments`)
@@ -563,13 +576,18 @@ const AdminDashboard = () => {
     const tpl = dietTemplates.find((t) => t.id === tplId);
     if (!tpl) return;
     setDietDraft({
-      id: 'new',
+      id: tpl.id,
       name: tpl.name,
       description: tpl.description || '',
       breakfast: tpl.breakfast,
       lunch: tpl.lunch,
       dinner: tpl.dinner,
       snacks: tpl.snacks,
+      restBreakfast: tpl.restBreakfast || '',
+      restLunch: tpl.restLunch || '',
+      restDinner: tpl.restDinner || '',
+      restSnacks: tpl.restSnacks || '',
+      patients: tpl.patients ?? 0,
       preTherapyNotes: tpl.preTherapyNotes || '',
       postTherapyNotes: tpl.postTherapyNotes || '',
       medication: tpl.medication || '',
@@ -578,6 +596,17 @@ const AdminDashboard = () => {
     });
     setSelectedDietTemplateId(tplId);
   };
+  // null means we could not find out, and the tab shows everyone rather than
+  // pretending the centre is empty.
+  const [residentIds, setResidentIds] = useState<Set<string> | null>(null);
+  const blankDietDraft = (): DietPlanTemplate => ({
+    id: 'new', name: '', description: '',
+    breakfast: '', lunch: '', dinner: '', snacks: '',
+    restBreakfast: '', restLunch: '', restDinner: '', restSnacks: '',
+    preTherapyNotes: '', postTherapyNotes: '', medication: '',
+    therapyIds: [], applicability: 'daily',
+  });
+  const resetDietDraft = () => setDietDraft(blankDietDraft());
   const refreshDietTemplates = async () => setDietTemplates(await loadTemplates(API_BASE));
   const saveDietTemplate = async () => {
     if (!dietDraft.name.trim()) { toast.error('Give the plan a name'); return; }
@@ -1959,18 +1988,21 @@ const AdminDashboard = () => {
     <Dialog open={showTemplatesDialog} onOpenChange={setShowTemplatesDialog}>
       <DialogContent className="max-w-3xl max-h-[85vh] sm:max-h-[90vh] overflow-auto p-4">
         <DialogHeader>
-          <DialogTitle className="text-base">Templates</DialogTitle>
+          <DialogTitle className="text-base">Diet plans</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <div className="space-y-2">
-            <Input placeholder="Search templates" className="h-8" onChange={(e) => {
+            <Button size="sm" variant="outline" className="h-8 w-full" onClick={() => { setSelectedDietTemplateId(''); resetDietDraft(); }}>
+              New plan
+            </Button>
+            <Input placeholder="Search plans" className="h-8" onChange={(e) => {
               const q = e.target.value.toLowerCase();
               const first = dietTemplates.find(t => t.name.toLowerCase().includes(q));
-              if (first) setSelectedDietTemplateId(first.id);
+              if (first) applyTemplateToDraft(first.id);
             }} />
             <div className="space-y-1 max-h-[320px] overflow-auto">
               {dietTemplates.map((tpl) => (
-                <Card key={tpl.id} className={`cursor-pointer ${selectedDietTemplateId === tpl.id ? 'border-primary' : ''}`} onClick={() => setSelectedDietTemplateId(tpl.id)}>
+                <Card key={tpl.id} className={`cursor-pointer ${selectedDietTemplateId === tpl.id ? 'border-primary' : ''}`} onClick={() => applyTemplateToDraft(tpl.id)}>
                   <CardContent className="p-2">
                     <div className="flex items-center justify-between">
                       <div>
@@ -1978,7 +2010,7 @@ const AdminDashboard = () => {
                         <div className="text-xs text-muted-foreground truncate">{tpl.description || '—'}</div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={(e) => { e.stopPropagation(); applyTemplateToDraft(tpl.id); setShowAddDietDialog(true); }}>Edit</Button>
+                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={(e) => { e.stopPropagation(); applyTemplateToDraft(tpl.id); }}>Edit</Button>
                         <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={(e) => { e.stopPropagation(); setAssignmentTemplateId(tpl.id); setAssignmentTherapyIds(tpl.therapyIds || []); }}>Select</Button>
                         <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={(e) => { e.stopPropagation(); void retireDietTemplate(tpl.id); }}>Retire</Button>
                       </div>
@@ -1989,24 +2021,72 @@ const AdminDashboard = () => {
             </div>
           </div>
           <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Selected Template</div>
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium">{selectedDietTemplateId ? 'Edit plan' : 'New plan'}</div>
+              {dietDraft.patients ? (
+                <div className="text-xs text-muted-foreground">
+                  {dietDraft.patients} patient{dietDraft.patients === 1 ? '' : 's'} on this plan
+                </div>
+              ) : null}
+            </div>
             {(() => {
-              const tpl = dietTemplates.find(t => t.id === selectedDietTemplateId);
-              if (!tpl) return <div className="text-xs text-muted-foreground">None selected</div>;
+              const field = (name: keyof DietPlanTemplate, label: string, placeholder?: string) => (
+                <div>
+                  <Label className="text-xs" htmlFor={`tpl-${String(name)}`}>{label}</Label>
+                  <Input
+                    id={`tpl-${String(name)}`}
+                    className="h-8"
+                    placeholder={placeholder}
+                    value={(dietDraft[name] as string) || ''}
+                    onChange={(e) => setDietDraft((prev) => ({ ...prev, [name]: e.target.value }))}
+                  />
+                </div>
+              );
+              const meals: [keyof DietPlanTemplate, keyof DietPlanTemplate, string][] = [
+                ['breakfast', 'restBreakfast', 'Breakfast'],
+                ['lunch', 'restLunch', 'Lunch'],
+                ['dinner', 'restDinner', 'Dinner'],
+                ['snacks', 'restSnacks', 'Snacks'],
+              ];
               return (
                 <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-1 text-xs">
-                    <div><span className="font-semibold">Name:</span> {tpl.name}</div>
-                    <div><span className="font-semibold">Applicability:</span> {tpl.applicability}</div>
-                    <div className="col-span-2"><span className="font-semibold">Therapies:</span> {tpl.therapyIds.map(id => therapyNameById[id] || id).join(', ') || '—'}</div>
-                  </div>
+                  {field('name', 'Plan name')}
+                  {field('description', 'Description')}
                   <div className="grid grid-cols-2 gap-2">
-                    <Card><CardContent className="p-2"><div className="font-semibold text-xs mb-1">Breakfast</div><div className="text-xs whitespace-pre-wrap">{tpl.breakfast}</div></CardContent></Card>
-                    <Card><CardContent className="p-2"><div className="font-semibold text-xs mb-1">Lunch</div><div className="text-xs whitespace-pre-wrap">{tpl.lunch}</div></CardContent></Card>
-                    <Card><CardContent className="p-2"><div className="font-semibold text-xs mb-1">Dinner</div><div className="text-xs whitespace-pre-wrap">{tpl.dinner}</div></CardContent></Card>
-                    <Card><CardContent className="p-2"><div className="font-semibold text-xs mb-1">Snacks</div><div className="text-xs whitespace-pre-wrap">{tpl.snacks}</div></CardContent></Card>
-                    <Card className="col-span-2"><CardContent className="p-2"><div className="font-semibold text-xs mb-1">Medication</div><div className="text-xs whitespace-pre-wrap">{tpl.medication || '—'}</div></CardContent></Card>
+                    <div className="text-xs font-semibold">On a day with treatment</div>
+                    <div className="text-xs font-semibold">On a rest day</div>
+                    {meals.map(([therapyName, restName, label]) => (
+                      <Fragment key={label}>
+                        {field(therapyName, label)}
+                        {field(restName, label, (dietDraft[therapyName] as string) || 'Same as the treatment day')}
+                      </Fragment>
+                    ))}
                   </div>
+                  {field('medication', 'Medication')}
+                  <div className="grid grid-cols-2 gap-2">
+                    {field('preTherapyNotes', 'Before treatment')}
+                    {field('postTherapyNotes', 'After treatment')}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Medication prints in the patient's own row. The two treatment notes print once
+                    under the day sheet, under "Around treatment".
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button size="sm" className="h-8" onClick={() => void saveDietTemplate()}>
+                      {selectedDietTemplateId ? 'Save changes' : 'Create plan'}
+                    </Button>
+                    {selectedDietTemplateId ? (
+                      <Button size="sm" variant="outline" className="h-8" onClick={() => { setSelectedDietTemplateId(''); resetDietDraft(); }}>
+                        New plan
+                      </Button>
+                    ) : null}
+                  </div>
+                  {selectedDietTemplateId && dietDraft.patients ? (
+                    <div className="text-[11px] text-muted-foreground">
+                      Saving changes what {dietDraft.patients === 1 ? 'this patient eats' : `these ${dietDraft.patients} patients eat`} from
+                      their next sheet, except where something was written for one of them specifically.
+                    </div>
+                  ) : null}
                 </div>
               );
             })()}
@@ -2171,7 +2251,8 @@ const AdminDashboard = () => {
 
           <TabsContent value="diet" className="space-y-6" forceMount>
             <DietTab
-              patients={patients}
+              patients={residentIds ? patients.filter((p) => residentIds.has(String(p.id))) : patients}
+              openPlans={() => { setSelectedDietTemplateId(''); resetDietDraft(); setShowTemplatesDialog(true); }}
               setPatients={setPatients}
               dietTemplates={dietTemplates}
               setDietTemplates={setDietTemplates}

@@ -51,7 +51,13 @@ const createSchema = mealFields.extend({ name: z.string().trim().min(1).max(120)
 const updateSchema = createSchema.partial();
 
 dietTemplatesRouter.get('/', async (_req: Request, res: Response) => {
-  res.json(await prisma.dietTemplate.findMany({ select: publicFields, orderBy: { name: 'asc' } }));
+  // The count comes with the list because editing a plan changes what every
+  // patient on it eats, and whoever is editing should be told that first.
+  const rows = await prisma.dietTemplate.findMany({
+    select: { ...publicFields, _count: { select: { Segments: true } } },
+    orderBy: { name: 'asc' },
+  });
+  res.json(rows.map(({ _count, ...t }) => ({ ...t, patients: _count.Segments })));
 });
 
 dietTemplatesRouter.post('/', requireAdmin, async (req: Request, res: Response) => {

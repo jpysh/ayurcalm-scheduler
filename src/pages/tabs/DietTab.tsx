@@ -95,6 +95,8 @@ type DietTabProps = {
   setPatientTherapyTags: (updater: (prev: Record<string, string[]>) => Record<string, string[]>) => void;
   showAddDietDialog: boolean;
   setShowAddDietDialog: (v: boolean) => void;
+  /** Opens the plans editor, where a plan is written without assigning it. */
+  openPlans: () => void;
   addDialogSegments: AddDialogSegment[];
   setAddDialogSegments: (updater: (prev: AddDialogSegment[]) => AddDialogSegment[]) => void;
   addDialogPatientId: string | null;
@@ -144,6 +146,7 @@ const DietTab = ({
   setPatientTherapyTags,
   showAddDietDialog,
   setShowAddDietDialog,
+  openPlans,
   addDialogSegments,
   setAddDialogSegments,
   addDialogPatientId,
@@ -185,6 +188,7 @@ const DietTab = ({
           <div className="flex items-center justify-between">
             <CardTitle className="text-base md:text-xl font-semibold">Diet Management</CardTitle>
             <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" className="h-7 px-3" onClick={openPlans}>Plans</Button>
               <Button size="sm" className="h-7 px-3" onClick={() => {
                 setDietDraft({ id: 'new', name: 'Custom Plan', description: '', breakfast: '', lunch: '', dinner: '', snacks: '', preTherapyNotes: '', postTherapyNotes: '', medication: '', therapyIds: [], applicability: 'daily' });
                 setSelectedDietTemplateId('new');
