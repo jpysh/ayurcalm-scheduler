@@ -127,18 +127,27 @@ model DietPlan {
 }
 
 model DietPlanSegment {
-  id             String   @id @default(uuid())
-  patient_id     String
-  start_date     DateTime
-  end_date       DateTime
-  template       Json?
+  id         String   @id @default(uuid())
+  patient_id String
+  start_date DateTime
+  end_date   DateTime
+
+  /// The plan this segment follows. Editing that plan reaches every patient on
+  /// it who has not been given something different — which is the point of a
+  /// template, and why this is a reference rather than a copy.
+  template_id String?
+  /// Fields the doctor changed for this patient only. These win over the
+  /// template, so an edit to the template leaves them alone.
+  overrides      Json?
+  /// Names a bespoke plan that follows no template.
   template_label String?
   therapy_ids    String[]
   description    String?
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
 
-  Patient Patient @relation(fields: [patient_id], references: [id])
+  Patient  Patient       @relation(fields: [patient_id], references: [id])
+  Template DietTemplate? @relation(fields: [template_id], references: [id])
 }
 
 model ProgramEvent {
@@ -245,4 +254,46 @@ model Settings {
   /// False until the first-run wizard has been completed or skipped.
   setup_complete           Boolean  @default(false)
   updated_at               DateTime @updatedAt
+}
+
+/// Signing secret for sessions, generated on first start when JWT_SECRET is
+/// unset. Kept out of Settings because that row is returned to clients whole.
+model ServerSecret {
+  id         String   @id @default("singleton")
+  jwt_secret String
+  created_at DateTime @default(now())
+}
+
+/// A reusable diet plan. Most patients are put on one of these rather than
+/// getting something bespoke, so it is the centre's own content and belongs in
+/// the database rather than in code.
+///
+/// Meals are held twice. What a patient eats on a day they are treated differs
+/// from a rest day, and a resident eats on both, so one plan carries both sides
+/// rather than going silent half the week.
+model DietTemplate {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+
+  therapy_breakfast String @default("")
+  therapy_lunch     String @default("")
+  therapy_dinner    String @default("")
+  therapy_snacks    String @default("")
+
+  rest_breakfast String @default("")
+  rest_lunch     String @default("")
+  rest_dinner    String @default("")
+  rest_snacks    String @default("")
+
+  medication          String?
+  pre_therapy_notes   String?
+  post_therapy_notes  String?
+
+  /// Retired plans stop being offered but stay readable by the patients on them.
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  Segments DietPlanSegment[]
 }

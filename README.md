@@ -107,22 +107,32 @@ install is two containers total.
 - **Scheduling** — appointments across therapists, rooms and therapies, with
   conflict detection
 - **Auto-assign** — fills open slots against amenity requirements and availability
-- **Patients and stays** — patient records, arrival/departure windows, diet plans
+- **Patients and stays** — patient records, arrival and departure windows
+- **Diet plans** — reusable plans with separate meals for a day with treatment
+  and a rest day. Assigning one points at the plan, so correcting it reaches
+  everyone on it while anything written for one patient stays theirs
 - **Time off** — centre holidays, per-therapist leave, room and therapy blocks
 - **Programme events** — recurring daily activities (yoga, meals, meditation) and
   one-off sessions
-- **Daily schedule PDF** — printable day sheet
+- **Daily schedule PDF** — the day sheet a centre prints and pins up: every
+  resident as a row, their therapies by start time, and their own meals in the
+  breakfast, lunch and dinner columns
 - **Audit log** — records changes to scheduling data
 
 ## Status and roadmap
 
-Version 0.1.0 — usable, and in active development by a single maintainer. Two
-areas are known to be unfinished:
+Version 0.1.0 — usable, and in active development by a single maintainer. Known
+to be unfinished:
 
-- **Diet plans** (the Diet tab) are incomplete
-  ([#6](https://github.com/jpysh/ayurcalm-scheduler/issues/6))
-- **Daily schedule PDF** formatting needs work
+- **Daily schedule PDF density** — a busy day takes more pages than it should,
+  because every distinct start time earns a column
   ([#7](https://github.com/jpysh/ayurcalm-scheduler/issues/7))
+- **Diet tab polish** — the plans and the sheet are done; the tab around them
+  still has rough edges
+  ([#6](https://github.com/jpysh/ayurcalm-scheduler/issues/6))
+- **Patient schedule links** are not built. There is no way for a patient to see
+  their own day without the printed sheet
+  ([#19](https://github.com/jpysh/ayurcalm-scheduler/issues/19))
 
 Everything else in the feature list above works. Issues and feature requests are
 welcome — see [open issues](https://github.com/jpysh/ayurcalm-scheduler/issues),

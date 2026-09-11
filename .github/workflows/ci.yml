@@ -55,6 +55,10 @@ jobs:
         working-directory: server
       - run: npm run build
         working-directory: server
+      # Needs neither the database nor a running server: it is the diet
+      # resolution on its own, which is the part that fails quietly.
+      - run: npm run test:diet
+        working-directory: server
 
   docker:
     runs-on: ubuntu-latest

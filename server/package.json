@@ -16,7 +16,8 @@
     "test:smoke": "tsx src/tests/smokeHealth.test.ts",
     "test:ui": "tsx src/tests/uiPersistence.test.ts",
     "test:validation": "tsx src/tests/validation.test.ts",
-    "test:auto-assign": "tsx src/tests/autoAssign.test.ts"
+    "test:auto-assign": "tsx src/tests/autoAssign.test.ts",
+    "test:diet": "tsx src/tests/dietResolution.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -24,6 +25,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
+    "express-async-errors": "^3.1.1",
     "jsonwebtoken": "^9.0.3",
     "pdfkit": "^0.14.0",
     "uuid": "^9.0.1",

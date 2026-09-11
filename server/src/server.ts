@@ -353,7 +353,14 @@ app.delete('/therapies/:id', async (req: Request, res: Response) => {
 app.get('/patients', async (req: Request, res: Response) => {
   const from = req.query.from as string | undefined;
   const to = req.query.to as string | undefined;
+  const residentOn = req.query.resident_on as string | undefined;
   const where: Prisma.PatientWhereInput = {};
+  if (residentOn) {
+    // Who is actually staying at the centre on that date. The diet tab wants
+    // these and not the whole history of everyone who has ever visited.
+    const day = new Date(residentOn);
+    where.Stays = { some: { start_date: { lte: day }, end_date: { gte: day } } };
+  }
   if (from || to) {
     // intersect availability with requested window
     const fromDate = from ? new Date(from) : undefined;
@@ -680,7 +687,8 @@ app.post('/dietplans/segments', async (req: Request, res: Response) => {
     patient_id: z.string().uuid(),
     start_date: z.string(),
     end_date: z.string(),
-    template: z.record(z.any()).optional(),
+    template_id: z.string().uuid().optional(),
+    overrides: z.record(z.any()).optional(),
     template_label: z.string().optional(),
     therapy_ids: z.array(z.string()).default([]),
     description: z.string().optional(),
@@ -690,7 +698,8 @@ app.post('/dietplans/segments', async (req: Request, res: Response) => {
     patient_id: body.patient_id,
     start_date: new Date(body.start_date),
     end_date: new Date(body.end_date),
-    template: body.template ?? undefined,
+    template_id: body.template_id ?? undefined,
+    overrides: body.overrides ?? undefined,
     template_label: body.template_label ?? undefined,
     therapy_ids: body.therapy_ids ?? [],
     description: body.description ?? undefined,
@@ -703,7 +712,8 @@ app.put('/dietplans/segments/:id', async (req: Request, res: Response) => {
   const schema = z.object({
     start_date: z.string().optional(),
     end_date: z.string().optional(),
-    template: z.record(z.any()).optional().nullable(),
+    template_id: z.string().uuid().optional().nullable(),
+    overrides: z.record(z.any()).optional().nullable(),
     template_label: z.string().optional().nullable(),
     therapy_ids: z.array(z.string()).optional(),
     description: z.string().optional().nullable(),
@@ -714,7 +724,8 @@ app.put('/dietplans/segments/:id', async (req: Request, res: Response) => {
     patient_id: body.patient_id ?? undefined,
     start_date: body.start_date ? new Date(body.start_date) : undefined,
     end_date: body.end_date ? new Date(body.end_date) : undefined,
-    template: body.template === null ? Prisma.JsonNull : body.template ?? undefined,
+    template_id: body.template_id === null ? null : body.template_id ?? undefined,
+    overrides: body.overrides === null ? Prisma.JsonNull : body.overrides ?? undefined,
     template_label: body.template_label ?? undefined,
     therapy_ids: body.therapy_ids ?? undefined,
     description: body.description ?? undefined,

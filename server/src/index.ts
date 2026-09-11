@@ -1,12 +1,19 @@
 import 'dotenv/config';
+// Routes are async and validate with Zod. Without this, a rejected handler —
+// which a malformed request body is enough to cause — never reaches the error
+// middleware below: Express 4 leaves it unhandled and Node exits, taking every
+// session with it because JWT_SECRET is regenerated on restart.
+import 'express-async-errors';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { app } from './server.js';
 import { prisma } from './server.js';
-import { authRouter, requireAuth, warnIfDefaultAdminUnchanged } from './auth.js';
+import { authRouter, requireAuth, warnIfDefaultAdminUnchanged, loadJwtSecret } from './auth.js';
 import { settingsRouter, publicSettingsRouter } from './settings.js';
 import { usersRouter, accountRouter } from './users.js';
+import { dietTemplatesRouter } from './dietTemplates.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
+import { ZodError } from 'zod';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -114,6 +121,7 @@ expressApp.post('/api/appointments', apptPostLimiter);
 expressApp.use('/api/settings', settingsRouter);
 expressApp.use('/api/users', usersRouter);
 expressApp.use('/api/account', accountRouter);
+expressApp.use('/api/diet-templates', dietTemplatesRouter);
 expressApp.use('/api', app);
 
 expressApp.get('/api/daily-schedule-pdf', async (req: Request, res: Response) => {
@@ -150,6 +158,10 @@ if (!fs.existsSync(staticDir)) {
   });
 }
 
+// The secret is resolved before the first request, so nothing is ever signed
+// with a key that is about to be replaced.
+await loadJwtSecret();
+
 // Start server with timeouts
 const server = expressApp.listen(port, host, () => {
   console.log(`AyurCalm API listening on http://${host}:${port}`);
@@ -160,6 +172,14 @@ server.keepAliveTimeout = KEEP_ALIVE_TIMEOUT;
 server.headersTimeout = HEADERS_TIMEOUT;
 
 expressApp.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof ZodError) {
+    res.status(400).json({
+      error: 'Invalid request',
+      details: err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+    });
+    return;
+  }
+  console.error('[api] unhandled error', err);
   res.status(500).json({ error: 'Internal Server Error' });
 });
 

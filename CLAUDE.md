@@ -35,7 +35,11 @@ server/                 Express + Prisma + Zod, serves ../dist in production
   src/auth.ts           bcrypt + JWT login, requireAuth
   src/settings.ts       Centre settings, requireAdmin, public support endpoint
   src/users.ts          User management, change-password
-  src/seed.ts           Demo dataset (~120 patients, 3 months of appointments)
+  src/seed.ts           Demo dataset (~120 patients, 3 months of appointments,
+                        residents with stays and diet plans)
+  src/dietTemplateSeed.ts  The starting diet plans, seeded by name
+  src/dietResolution.ts    What one patient eats on one day — pure, and tested
+  src/dietTemplates.ts     Diet plan CRUD, admin-only writes
   src/scripts/          resetPassword.ts — lockout recovery
 ```
 
@@ -45,6 +49,29 @@ server/                 Express + Prisma + Zod, serves ../dist in production
 `/api/public` → `requireAuth` → write limiter → routes. Only `/api/health`,
 `/api/auth/login` and `/api/public/*` are unauthenticated. Adding a route that
 must be public means adding it to the skip list *and* thinking about why.
+
+**PDFKit paginates overflowing text, silently.** `doc.text()` that does not fit
+the page adds one and carries the text there; `doc.rect()` does not. That is how
+the day sheet came to print boxes with no words in them for a whole release. Any
+change to `dailySchedulePdf.ts` must break the page *before* drawing a row that
+will not fit, and must be checked by generating a PDF and looking at it — the
+code does not throw when it is wrong.
+
+**Routes are async and validate with Zod, so `express-async-errors` is load-bearing.**
+Without that import in `index.ts`, a rejected handler never reaches the error
+middleware: Express 4 leaves it unhandled, Node exits, and every session dies
+with the restart. Do not remove it while the app is on Express 4.
+
+**Diet resolution lives in `dietResolution.ts`, not in the PDF.** It decides what
+a patient may eat: what was written for that date beats their own wording, which
+beats the plan, and a treatment day uses a different side of the plan from a rest
+day. It fails quietly — a wrong precedence prints a plausible sheet that is wrong
+— so it is pure, and `npm run test:diet` covers it. CI runs that test; add to it
+rather than around it.
+
+**A diet segment points at its plan.** Editing a plan changes what everyone on it
+eats. `overrides` on the segment is what one patient was told specifically and
+must survive that edit. Never go back to copying the plan into the segment.
 
 **`ScheduleTab` renders only rows that contain appointments.** So a booking
 outside the configured opening hours is invisible, not merely awkward. The grid
@@ -96,7 +123,21 @@ TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
 ```
 
 Auth changes need a negative test as well as a positive one: an unauthenticated
-call returning 401, and a staff-role call returning 403 where it should.
+call returning 401, and a staff-role call returning 403 where it should. The
+seeded `staff@example.com` does not take `demo1234` — create a staff account
+through `/api/users` as the admin when you need one, and check the data is
+actually unchanged after the 403 rather than trusting the status code.
+
+`docker compose up -d --build` reuses the running container when the image has
+not changed, so it will not pick up anything you patched inside the container
+while debugging. Use `--force-recreate` before believing a clean result.
+
+Looking at the PDF is part of the check:
+
+```bash
+pdftotext -layout day.pdf - | head -40      # is the text there at all
+pdftoppm -png -r 75 -f 1 -l 1 day.pdf page  # is it where it should be
+```
 
 ## Conventions
 

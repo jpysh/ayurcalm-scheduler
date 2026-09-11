@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { ensureStarterDietTemplates } from './dietTemplateSeed.js';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD } from './auth.js';
@@ -111,6 +112,8 @@ const indianHolidays2026 = [
 function randomOf<T>(arr: T[]) { return arr[Math.floor(Math.random() * arr.length)]; }
 function toMinutes(t: string) { const [h, m] = t.split(':').map(Number); return h * 60 + m; }
 function overlaps(aS: number, aE: number, bS: number, bE: number) { return Math.max(aS, bS) < Math.min(aE, bE); }
+
+
 
 async function main() {
   const existingCounts = await Promise.all([
@@ -278,6 +281,70 @@ async function main() {
       },
     });
     console.log(`Created demo admin: ${DEFAULT_ADMIN_EMAIL} / ${DEFAULT_ADMIN_PASSWORD}`);
+  }
+
+  // Diet plans are the centre's own content, so these are a starting set rather
+  // than demo data: a fresh install has something to assign on day one, and the
+  // centre edits them in the Diet tab. Upserted by name, so re-seeding does not
+  // overwrite a plan someone has since changed.
+  await ensureStarterDietTemplates(prisma);
+
+  // Residents. Without these the demo has nobody actually staying at the centre,
+  // so the day sheet shows neither meals nor the rest-day rows — two features
+  // that would look missing rather than unseeded.
+  const today = new Date(new Date().toISOString().slice(0, 10));
+  const windowStart = new Date(today); windowStart.setDate(windowStart.getDate() - 5);
+  const windowEnd = new Date(today); windowEnd.setDate(windowEnd.getDate() + 9);
+
+  const treatedToday = await prisma.appointment.findMany({
+    where: { scheduled_date: today },
+    select: { patient_id: true },
+    distinct: ['patient_id'],
+  });
+  // A couple of residents with no treatment today, so the sheet shows what a
+  // rest day looks like: no therapy, meals still theirs.
+  const resting = createdPatients
+    .filter((p) => !treatedToday.some((a) => a.patient_id === p.id))
+    .slice(0, 2);
+  const residents = [...treatedToday.map((a) => ({ id: a.patient_id })), ...resting];
+
+  const templates = await prisma.dietTemplate.findMany({ orderBy: { name: 'asc' } });
+  for (const [idx, resident] of residents.entries()) {
+    await prisma.patientStay.create({
+      data: {
+        patient_id: resident.id,
+        start_date: windowStart,
+        end_date: windowEnd,
+        duration_days: 15,
+      },
+    });
+    // Not everyone: a centre always has someone whose plan has not been set yet,
+    // and the sheet should show that honestly rather than inventing one.
+    if (idx % 6 === 5 || templates.length === 0) continue;
+    await prisma.dietPlanSegment.create({
+      data: {
+        patient_id: resident.id,
+        start_date: windowStart,
+        end_date: windowEnd,
+        template_id: templates[idx % templates.length].id,
+      },
+    });
+  }
+
+  // One patient given something different for one meal today, so the override
+  // that a template edit must not overwrite is visible in the demo.
+  const overridden = residents[0];
+  if (overridden) {
+    await prisma.dietPlan.create({
+      data: {
+        patient_id: overridden.id,
+        date: today,
+        meal_time: 'lunch',
+        description: 'Rice gruel only',
+        instructions: 'post-Virechana',
+        created_by: (await prisma.user.findUnique({ where: { email: DEFAULT_ADMIN_EMAIL }, select: { id: true } }))?.id ?? 'seed',
+      },
+    });
   }
 
   // Flags this install as carrying demo data, so Settings can offer to clear it.
