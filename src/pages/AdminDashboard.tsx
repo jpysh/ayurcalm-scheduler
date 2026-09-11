@@ -32,6 +32,7 @@ import ScheduleTab from "./tabs/ScheduleTab";
 import Ailments from "./Ailments";
 import Settings from "./Settings";
 import { API_BASE } from "@/lib/apiBase";
+import { fromServerTemplate, type ServerDietTemplate } from "@/lib/dietPlan";
 
 // Mock data
 const mockAppointments = [
@@ -430,37 +431,16 @@ const AdminDashboard = () => {
     therapyIds: string[];
     applicability: 'daily' | 'therapyDays';
   };
-  const [dietTemplates, setDietTemplates] = useState<DietPlanTemplate[]>([
-    {
-      id: 'tpl-std',
-      name: 'Standard Ayurvedic Plan',
-      description: 'Sattvic baseline plan for most patients',
-      breakfast: 'Warm mung dal porridge, soaked almonds, herbal tea',
-      lunch: 'Khichdi with seasonal vegetables, ghee, cumin rice, salad',
-      dinner: 'Light vegetable soup, chapati with ghee, steamed greens',
-      snacks: 'Fresh seasonal fruit, buttermilk (chaas) mid-afternoon',
-      preTherapyNotes: '',
-      postTherapyNotes: '',
-      medication: 'As prescribed by physician; Trikatu after meals if advised',
-      therapyIds: [],
-      applicability: 'daily',
-    },
-    {
-      id: 'tpl-ghee',
-      name: 'Ghee Only Plan',
-      description: 'Mock plan for last-day ghee regimen',
-      breakfast: 'Warm ghee teaspoon, herbal tea',
-      lunch: 'Warm ghee teaspoon, warm water',
-      dinner: 'Warm ghee teaspoon, light broth',
-      snacks: 'Warm water sips as advised',
-      preTherapyNotes: 'Ensure no heavy meals prior; physician approval required',
-      postTherapyNotes: 'Rest, warm water only; monitor comfort',
-      medication: '',
-      therapyIds: [],
-      applicability: 'daily',
-    },
-  ]);
-  const [selectedDietTemplateId, setSelectedDietTemplateId] = useState<string>('tpl-std');
+  // Plans are the centre's own content and live in the database; a hardcoded
+  // list could not survive a refresh, let alone a second computer.
+  const [dietTemplates, setDietTemplates] = useState<DietPlanTemplate[]>([]);
+  useEffect(() => {
+    fetch(`${API_BASE}/diet-templates`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: ServerDietTemplate[]) => setDietTemplates(rows.filter((t) => t.is_active).map(fromServerTemplate)))
+      .catch(() => { /* the tab shows an empty list rather than mock plans */ });
+  }, []);
+  const [selectedDietTemplateId, setSelectedDietTemplateId] = useState<string>('');
   const [dietDraft, setDietDraft] = useState<DietPlanTemplate>(() => ({
     ...({} as DietPlanTemplate),
     id: 'new',

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
+import { toOverrides } from "@/lib/dietPlan";
 
 type Patient = { id: string; name: string; phone?: string; gender?: string; dietPlan?: string; actualStart?: string; actualEnd?: string };
 type DietPlanTemplate = {
@@ -732,20 +733,11 @@ const DietTab = ({
                         start_date: s.start,
                         end_date: s.end,
                         therapy_ids: s.therapyIds || [],
-                        template_label,
-                        template: tpl ? {
-                          name: (tpl as any).name,
-                          description: (tpl as any).description || '',
-                          breakfast: (tpl as any).breakfast,
-                          lunch: (tpl as any).lunch,
-                          dinner: (tpl as any).dinner,
-                          snacks: (tpl as any).snacks,
-                          preTherapyNotes: (tpl as any).preTherapyNotes || '',
-                          postTherapyNotes: (tpl as any).postTherapyNotes || '',
-                          medication: (tpl as any).medication || '',
-                          therapyIds: (tpl as any).therapyIds || [],
-                          applicability: (tpl as any).applicability,
-                        } : undefined,
+                        // Pointing at the plan rather than copying it is what
+                        // lets a correction to the plan reach this patient.
+                        ...(s.templateId
+                          ? { template_id: s.templateId }
+                          : { template_label, overrides: toOverrides(tpl as any) }),
                       };
                       const res = await fetch(`${API_BASE}/dietplans/segments`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
                       if (!res.ok) throw new Error('Save failed');

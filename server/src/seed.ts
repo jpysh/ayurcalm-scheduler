@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { ensureStarterDietTemplates } from './dietTemplateSeed.js';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD } from './auth.js';
@@ -111,6 +112,8 @@ const indianHolidays2026 = [
 function randomOf<T>(arr: T[]) { return arr[Math.floor(Math.random() * arr.length)]; }
 function toMinutes(t: string) { const [h, m] = t.split(':').map(Number); return h * 60 + m; }
 function overlaps(aS: number, aE: number, bS: number, bE: number) { return Math.max(aS, bS) < Math.min(aE, bE); }
+
+
 
 async function main() {
   const existingCounts = await Promise.all([
@@ -279,6 +282,12 @@ async function main() {
     });
     console.log(`Created demo admin: ${DEFAULT_ADMIN_EMAIL} / ${DEFAULT_ADMIN_PASSWORD}`);
   }
+
+  // Diet plans are the centre's own content, so these are a starting set rather
+  // than demo data: a fresh install has something to assign on day one, and the
+  // centre edits them in the Diet tab. Upserted by name, so re-seeding does not
+  // overwrite a plan someone has since changed.
+  await ensureStarterDietTemplates(prisma);
 
   // Flags this install as carrying demo data, so Settings can offer to clear it.
   await prisma.settings.upsert({

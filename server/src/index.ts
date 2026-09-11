@@ -11,6 +11,7 @@ import { prisma } from './server.js';
 import { authRouter, requireAuth, warnIfDefaultAdminUnchanged, loadJwtSecret } from './auth.js';
 import { settingsRouter, publicSettingsRouter } from './settings.js';
 import { usersRouter, accountRouter } from './users.js';
+import { dietTemplatesRouter } from './dietTemplates.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import { ZodError } from 'zod';
 import path from 'path';
@@ -120,6 +121,7 @@ expressApp.post('/api/appointments', apptPostLimiter);
 expressApp.use('/api/settings', settingsRouter);
 expressApp.use('/api/users', usersRouter);
 expressApp.use('/api/account', accountRouter);
+expressApp.use('/api/diet-templates', dietTemplatesRouter);
 expressApp.use('/api', app);
 
 expressApp.get('/api/daily-schedule-pdf', async (req: Request, res: Response) => {

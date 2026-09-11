@@ -82,7 +82,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     prisma.programEvent.findMany({ where: { OR: [{ date: day }, { AND: [{ start_date: { lte: day } }, { end_date: { gte: day } }] }] } }),
     prisma.programEvent.findMany({ where: { recurrence: 'weekly' } }),
     prisma.dietPlan.findMany({ where: { date: day } }),
-    prisma.dietPlanSegment.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } } }),
+    prisma.dietPlanSegment.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } }, include: { Template: true } }),
     prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } } }),
   ]);
 
@@ -166,16 +166,21 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
 
   const dietFor = (patient: (typeof patients)[number]) => {
     const seg = segmentByPatient.get(patient.id);
-    const tpl = (seg?.template || {}) as Record<string, string | undefined>;
+    const tpl = seg?.Template ?? null;
+    const overrides = (seg?.overrides || {}) as Record<string, string | undefined>;
     const hasTherapyToday = (apptsByPatient.get(patient.id) || []).length > 0;
-    // A therapy-day template describes eating around treatment, so it says
-    // nothing about a rest day.
-    const templateApplies = !!seg && (tpl.applicability !== 'therapyDays' || hasTherapyToday);
+    // A plan holds both sides: what to eat around treatment, and what to eat on
+    // a rest day. A resident eats on both.
+    const side = hasTherapyToday ? 'therapy' : 'rest';
 
-    const overrides = dayMealsByPatient.get(patient.id) || {};
+    // The doctor's own wording for this patient wins; otherwise the plan's. That
+    // is what lets a correction to the plan reach everyone still on it.
+    const field = (name: string) => (overrides[name] ?? (tpl as Record<string, any> | null)?.[name] ?? '').toString().trim();
+
+    const dayOverrides = dayMealsByPatient.get(patient.id) || {};
     const meals: Partial<Record<MealKey, string>> = {};
     for (const meal of mealOrder) {
-      const text = (overrides[meal] || (templateApplies ? tpl[meal] : undefined) || '').trim();
+      const text = (dayOverrides[meal] || field(`${side}_${meal}`)).trim();
       if (text) meals[meal] = text;
     }
 
@@ -184,15 +189,15 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
       // Keep a meal the day has no column for rather than dropping it.
       if (meals[meal] && !mealsWithColumn.has(meal)) noteParts.push(`${mealLabel[meal]}: ${meals[meal]}`);
     }
-    if (templateApplies) {
-      for (const n of [tpl.medication, hasTherapyToday ? tpl.preTherapyNotes : undefined, hasTherapyToday ? tpl.postTherapyNotes : undefined]) {
-        if (n && n.trim()) noteParts.push(n.trim());
-      }
+    for (const name of ['medication', ...(hasTherapyToday ? ['pre_therapy_notes', 'post_therapy_notes'] : [])]) {
+      const text = field(name);
+      if (text) noteParts.push(text);
     }
+
     const free = (patient.diet_plan || '').trim();
     if (free && Object.keys(meals).length === 0) noteParts.unshift(free);
 
-    const label = templateApplies ? (seg?.template_label || tpl.name || '') : '';
+    const label = tpl?.name || seg?.template_label || '';
     const notes = noteParts.join('; ');
     return { meals, notes: label && notes ? `${label}: ${notes}` : notes || (label && Object.keys(meals).length ? label : '') };
   };
@@ -273,6 +278,9 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
       return row;
     });
   const mergedRows = rawRows.map((row) => [...row]);
+  // How many rows each merged cell covers, so its text can be measured against
+  // the box it is actually painted in rather than against one row of it.
+  const spanLengths = new Map<string, number>();
   const rowCount = rawRows.length;
   const timeColStart = 2;
   const timeColEndExclusive = timeColStart + timeSlots.length;
@@ -293,6 +301,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
       for (let i = 1; i < span; i++) {
         mergedRows[r + i][col] = '';
       }
+      spanLengths.set(`${r}:${col}`, span);
       r += span;
     }
   }
@@ -442,9 +451,14 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   };
 
   const measureRow = (r: number) => {
-    const heights = pageDrawIdxs.map((k, c) =>
-      doc.heightOfString(mergedRows[r][k] || '', { width: colWidths[c] - 8 }) + 6,
-    );
+    const heights = pageDrawIdxs.map((k, c) => {
+      const text = mergedRows[r][k] || '';
+      if (!text) return 6;
+      // A cell merged down N rows is painted as one box that tall, so it only
+      // needs an Nth of its height from each row it covers.
+      const span = spanLengths.get(`${r}:${k}`) ?? 1;
+      return doc.heightOfString(text, { width: colWidths[c] - 8 }) / span + 6;
+    });
     return Math.max(18, ...heights);
   };
   const pageBottom = doc.page.height - doc.page.margins.bottom;
