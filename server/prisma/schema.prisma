@@ -246,3 +246,11 @@ model Settings {
   setup_complete           Boolean  @default(false)
   updated_at               DateTime @updatedAt
 }
+
+/// Signing secret for sessions, generated on first start when JWT_SECRET is
+/// unset. Kept out of Settings because that row is returned to clients whole.
+model ServerSecret {
+  id         String   @id @default("singleton")
+  jwt_secret String
+  created_at DateTime @default(now())
+}

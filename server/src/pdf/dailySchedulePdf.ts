@@ -296,14 +296,16 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   let i = 0;
   let pageHeaders: string[] = [];
   let pageDrawIdxs: number[] = [];
-  const computePageLayout = () => {
+  // `lastRow` is the last row this page will hold. Columns are chosen from the
+  // rows actually on the page, so a start time used only by a later page does
+  // not take width here — an empty column is a column the day did not need.
+  const computePageLayout = (lastRow: number = rowCount - 1) => {
     doc.font('Helvetica').fontSize(9);
-    // Select time columns with content among remaining rows
     const selectedTimeIdxs: number[] = [];
     for (let tIdx = 0; tIdx < timeSlots.length; tIdx++) {
       const colIdx = 2 + tIdx;
       let hasContent = false;
-      for (let r = i; r < rowCount; r++) {
+      for (let r = i; r <= lastRow; r++) {
         if ((rawRows[r][colIdx] || '').length > 0) { hasContent = true; break; }
       }
       if (hasContent) selectedTimeIdxs.push(colIdx);
@@ -319,19 +321,24 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     // longer fit the page width, the table runs past the right margin. Splitting
     // time columns across pages is the fix when a centre hits it.
     const slotMin = 38, slotMax = 110;
+    // A meal column holds a sentence rather than 'Lunch (30m)', so it needs more
+    // room than a therapy slot before words start breaking mid-syllable.
+    const mealSlotMin = 84;
+    const slotFloor = (colIdx: number) =>
+      mealByTimeSlot.has(timeSlots[colIdx - 2]) ? mealSlotMin : slotMin;
     const dietMin = 80, dietMax = 150;
     // Headers are drawn in bold 11; measuring them in regular 9 underestimates.
     doc.font('Helvetica-Bold').fontSize(11);
     const headerWidths: number[] = headers.map((h) => Math.ceil(doc.widthOfString(h)) + 8);
     doc.font('Helvetica').fontSize(9);
-    const patientW = Math.max(headerWidths[idxPatient], ...Array.from({ length: rowCount - i }, (_, r) => Math.ceil(doc.widthOfString(mergedRows[i + r][idxPatient] || '')) + 8));
+    const patientW = Math.max(headerWidths[idxPatient], ...Array.from({ length: lastRow - i + 1 }, (_, r) => Math.ceil(doc.widthOfString(mergedRows[i + r][idxPatient] || '')) + 8));
     const timeWs: number[] = selectedTimeIdxs.map((colIdx) => {
-      const maxCellW = Math.max(headerWidths[colIdx], ...Array.from({ length: rowCount - i }, (_, r) => Math.ceil(doc.widthOfString(mergedRows[i + r][colIdx] || '')) + 8));
-      return Math.max(slotMin, headerWidths[colIdx], Math.min(slotMax, maxCellW));
+      const maxCellW = Math.max(headerWidths[colIdx], ...Array.from({ length: lastRow - i + 1 }, (_, r) => Math.ceil(doc.widthOfString(mergedRows[i + r][colIdx] || '')) + 8));
+      return Math.max(slotFloor(colIdx), headerWidths[colIdx], Math.min(slotMax, maxCellW));
     });
     const hasDiet = anyDiet;
     const dietIdx = headers.length - 1;
-    const dietW = hasDiet ? Math.max(headerWidths[dietIdx], ...Array.from({ length: rowCount - i }, (_, r) => Math.ceil(doc.widthOfString(mergedRows[i + r][dietIdx] || '')) + 8)) : 0;
+    const dietW = hasDiet ? Math.max(headerWidths[dietIdx], ...Array.from({ length: lastRow - i + 1 }, (_, r) => Math.ceil(doc.widthOfString(mergedRows[i + r][dietIdx] || '')) + 8)) : 0;
 
     let pW = Math.max(patientMin, Math.min(patientMax, patientW));
     let dW = hasDiet ? Math.max(dietMin, Math.min(dietMax, dietW)) : 0;
@@ -346,7 +353,8 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
           if (idx === 0) return noColW;
           if (idx === 1) return patientMin;
           if (hasDiet && idx === widths.length - 1) return dietMin;
-          return Math.max(slotMin, headerWidths[selectedTimeIdxs[idx - 2]] ?? slotMin);
+          const colIdx = selectedTimeIdxs[idx - 2];
+          return colIdx === undefined ? slotMin : Math.max(slotFloor(colIdx), headerWidths[colIdx]);
         });
         const flexSum = flexIdxs.reduce((a, idx) => a + widths[idx], 0);
         for (const idx of flexIdxs) {
@@ -380,7 +388,6 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     pageDrawIdxs = [idxNo, idxPatient, ...selectedTimeIdxs, ...(hasDiet ? [dietIdx] : [])];
     pageHeaders = ['No', 'Patient', ...selectedTimeIdxs.map((colIdx) => headers[colIdx]), ...(hasDiet ? ['Diet notes'] : [])];
   };
-  computePageLayout();
   const drawHeaderRow = () => {
     doc.font('Helvetica-Bold').fontSize(11);
     let cx = x;
@@ -393,8 +400,6 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     }
     yy += headerH;
   };
-  drawHeaderRow();
-  doc.font('Helvetica').fontSize(9);
   let rowsOnPage = 0;
   let pageCells: { k: number; text: string; top: number; height: number }[] = [];
   let pageRowTops: number[] = [];
@@ -439,6 +444,25 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   };
   const pageBottom = doc.page.height - doc.page.margins.bottom;
 
+  // Two passes: the first sizes columns against every remaining row to learn how
+  // many fit, the second re-sizes against only those rows so the page keeps the
+  // columns it actually uses.
+  const layoutPage = () => {
+    const headerTop = yy;
+
+    // ponytail: columns are chosen from every row still to be drawn, so a start
+    // time nobody on this page uses can still take width. Choosing per page is
+    // circular — narrower columns make rows shorter, which changes which rows
+    // are on the page, which changes the columns — and needs the time bucketing
+    // in #7 to settle. Day-wide is the honest version until then.
+    computePageLayout();
+
+    yy = headerTop;
+    drawHeaderRow();
+    doc.font('Helvetica').fontSize(9);
+  };
+  layoutPage();
+
   for (; i < rowCount; i++) {
     let rowH = measureRow(i);
     // A row drawn past the bottom margin takes its cell text with it: PDFKit
@@ -450,9 +474,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
       addHeader(doc, dateISO, centreName);
       yy = doc.y + 2;
       rowsOnPage = 0;
-      computePageLayout();
-      drawHeaderRow();
-      doc.font('Helvetica').fontSize(9);
+      layoutPage();
       rowH = measureRow(i);
     }
     // no alternate row shading (B/W print)

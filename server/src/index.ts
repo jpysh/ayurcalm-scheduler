@@ -8,7 +8,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { app } from './server.js';
 import { prisma } from './server.js';
-import { authRouter, requireAuth, warnIfDefaultAdminUnchanged } from './auth.js';
+import { authRouter, requireAuth, warnIfDefaultAdminUnchanged, loadJwtSecret } from './auth.js';
 import { settingsRouter, publicSettingsRouter } from './settings.js';
 import { usersRouter, accountRouter } from './users.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
@@ -155,6 +155,10 @@ if (!fs.existsSync(staticDir)) {
     res.status(404).json({ error: 'Not Found' });
   });
 }
+
+// The secret is resolved before the first request, so nothing is ever signed
+// with a key that is about to be replaced.
+await loadJwtSecret();
 
 // Start server with timeouts
 const server = expressApp.listen(port, host, () => {
