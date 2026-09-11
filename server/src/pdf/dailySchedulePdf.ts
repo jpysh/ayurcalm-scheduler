@@ -12,12 +12,8 @@ const addHeader = (doc: any, dateStr: string, centreName: string) => {
   const w = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const x = doc.page.margins.left;
   const top = doc.page.margins.top;
-  let y = top;
-  doc.font('Helvetica-Bold').fontSize(14).text(centreName, x, y, { align: 'center', width: w });
-  y = doc.y;
-  doc.font('Helvetica-Bold').fontSize(14).text('Treatment, Consultation, Orientation Schedule', x, y, { align: 'center', width: w });
-  y = doc.y;
-  doc.font('Helvetica-Bold').fontSize(14).text(fmtLong(dateStr), x, y, { align: 'center', width: w });
+  // One line, so the table gets the rest of the page.
+  doc.font('Helvetica-Bold').fontSize(14).text(`${centreName} \u2014 ${fmtLong(dateStr)}`, x, top, { align: 'center', width: w });
   doc.moveDown(0.5);
 };
 
@@ -156,7 +152,19 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     if (!held || seg.start_date > held.start_date) segmentByPatient.set(seg.patient_id, seg);
   }
 
-  const dietTextFor = (patient: (typeof patients)[number]) => {
+  // The day already has a Breakfast, Lunch and Dinner column — those meals are
+  // programme events like any other — so each patient's own meal goes in the
+  // matching column rather than in a block of its own. Anything with no column
+  // of its own (snacks, medication, therapy notes) goes to the notes column.
+  const mealByTimeSlot = new Map<string, MealKey>();
+  for (const e of eventsWindow) {
+    const name = (e.activity_name || '').trim().toLowerCase();
+    const meal = mealOrder.find((m) => name === m || name.startsWith(`${m} `));
+    if (meal && !mealByTimeSlot.has(e.start_time)) mealByTimeSlot.set(e.start_time, meal);
+  }
+  const mealsWithColumn = new Set(mealByTimeSlot.values());
+
+  const dietFor = (patient: (typeof patients)[number]) => {
     const seg = segmentByPatient.get(patient.id);
     const tpl = (seg?.template || {}) as Record<string, string | undefined>;
     const hasTherapyToday = (apptsByPatient.get(patient.id) || []).length > 0;
@@ -165,26 +173,31 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     const templateApplies = !!seg && (tpl.applicability !== 'therapyDays' || hasTherapyToday);
 
     const overrides = dayMealsByPatient.get(patient.id) || {};
-    const parts: string[] = [];
+    const meals: Partial<Record<MealKey, string>> = {};
     for (const meal of mealOrder) {
-      const text = overrides[meal] || (templateApplies ? tpl[meal] : undefined);
-      if (text && text.trim()) parts.push(`${mealLabel[meal]}: ${text.trim()}`);
+      const text = (overrides[meal] || (templateApplies ? tpl[meal] : undefined) || '').trim();
+      if (text) meals[meal] = text;
     }
 
-    const notes = templateApplies
-      ? [tpl.medication, hasTherapyToday ? tpl.preTherapyNotes : undefined, hasTherapyToday ? tpl.postTherapyNotes : undefined]
-          .filter((n) => n && n.trim())
-          .join('; ')
-      : '';
-    if (notes) parts.push(`Notes: ${notes}`);
-
-    if (parts.length === 0) return (patient.diet_plan || '').trim();
+    const noteParts: string[] = [];
+    for (const meal of mealOrder) {
+      // Keep a meal the day has no column for rather than dropping it.
+      if (meals[meal] && !mealsWithColumn.has(meal)) noteParts.push(`${mealLabel[meal]}: ${meals[meal]}`);
+    }
+    if (templateApplies) {
+      for (const n of [tpl.medication, hasTherapyToday ? tpl.preTherapyNotes : undefined, hasTherapyToday ? tpl.postTherapyNotes : undefined]) {
+        if (n && n.trim()) noteParts.push(n.trim());
+      }
+    }
+    const free = (patient.diet_plan || '').trim();
+    if (free && Object.keys(meals).length === 0) noteParts.unshift(free);
 
     const label = templateApplies ? (seg?.template_label || tpl.name || '') : '';
-    return label ? `${label}: ${parts.join(' / ')}` : parts.join(' / ');
+    const notes = noteParts.join('; ');
+    return { meals, notes: label && notes ? `${label}: ${notes}` : notes || (label && Object.keys(meals).length ? label : '') };
   };
 
-  const dietByPatient = new Map(displayPatients.map((p) => [p.id, dietTextFor(p)] as const));
+  const dietByPatient = new Map(displayPatients.map((p) => [p.id, dietFor(p)] as const));
 
   const w = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const x = doc.page.margins.left;
@@ -192,11 +205,11 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const noColW = 24;
   doc.font('Helvetica').fontSize(9);
   const nameWidths = displayPatients.map((p) => doc.widthOfString(patientById[p.id] || p.id));
-  const dietWidths = displayPatients.map((p) => doc.widthOfString(dietByPatient.get(p.id) || ''));
+  const dietWidths = displayPatients.map((p) => doc.widthOfString(dietByPatient.get(p.id)?.notes || ''));
   const maxNameW = Math.max(0, ...nameWidths);
   const maxDietW = Math.max(0, ...dietWidths);
   const patientColW = Math.min(140, Math.max(80, Math.ceil(maxNameW + 12)));
-  const anyDiet = displayPatients.some((p) => !!(dietByPatient.get(p.id) || '').trim());
+  const anyDiet = displayPatients.some((p) => !!dietByPatient.get(p.id)?.notes);
   const dietColW = anyDiet ? Math.min(190, Math.max(120, Math.ceil(maxDietW + 12))) : 0;
   const minSlotW = 30;
   const availableW = w - noColW - patientColW - (anyDiet ? dietColW : 0);
@@ -213,7 +226,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
 
   let yy = startY;
   const maxContentHeight = doc.page.height - doc.page.margins.bottom - yy;
-  const headers = ['No', 'Patient', ...timeSlots, ...(anyDiet ? ['Diet'] : [])];
+  const headers = ['No', 'Patient', ...timeSlots, ...(anyDiet ? ['Diet notes'] : [])];
   let colWidths: number[] = [];
   const rawRows: string[][] = displayPatients.map((p, idx) => {
       const apptList = apptsByPatient.get(p.id) || [];
@@ -230,6 +243,14 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
           if (roomName) metaParts.push(`Room: ${roomName}`);
           const meta = metaParts.join(', ');
           parts.push(`${therapyName} (${dur}m)${meta ? ' [' + meta + ']' : ''}`);
+        }
+        // A meal column carries this patient's own meal; the generic event name
+        // only stands in when they have no plan of their own.
+        const mealHere = mealByTimeSlot.get(t);
+        const ownMeal = mealHere ? dietByPatient.get(p.id)?.meals[mealHere] : undefined;
+        if (ownMeal) {
+          parts.push(ownMeal);
+          return parts.join(' | ');
         }
         const evs = eventsWindow.filter((e) => e.start_time === t && eventAppliesToPatient(e, p.id));
         if (evs.length > 0) {
@@ -248,7 +269,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
         return parts.join(' | ') || '';
       });
       const row = [String(idx + 1), patientById[p.id] || p.id, ...cells];
-      if (anyDiet) row.push(dietByPatient.get(p.id) || '');
+      if (anyDiet) row.push(dietByPatient.get(p.id)?.notes || '');
       return row;
     });
   const mergedRows = rawRows.map((row) => [...row]);
@@ -292,13 +313,21 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     const idxNo = 0;
     const idxPatient = 1;
     const patientMin = 70, patientMax = 140;
-    const slotMin = 30, slotMax = 110;
-    const dietMin = 80, dietMax = 120;
+    // A column narrower than its own header wraps '07:30' onto two lines, so the
+    // floor is the header text itself.
+    // ponytail: if a day has so many distinct start times that the minimums no
+    // longer fit the page width, the table runs past the right margin. Splitting
+    // time columns across pages is the fix when a centre hits it.
+    const slotMin = 38, slotMax = 110;
+    const dietMin = 80, dietMax = 150;
+    // Headers are drawn in bold 11; measuring them in regular 9 underestimates.
+    doc.font('Helvetica-Bold').fontSize(11);
     const headerWidths: number[] = headers.map((h) => Math.ceil(doc.widthOfString(h)) + 8);
+    doc.font('Helvetica').fontSize(9);
     const patientW = Math.max(headerWidths[idxPatient], ...Array.from({ length: rowCount - i }, (_, r) => Math.ceil(doc.widthOfString(mergedRows[i + r][idxPatient] || '')) + 8));
     const timeWs: number[] = selectedTimeIdxs.map((colIdx) => {
       const maxCellW = Math.max(headerWidths[colIdx], ...Array.from({ length: rowCount - i }, (_, r) => Math.ceil(doc.widthOfString(mergedRows[i + r][colIdx] || '')) + 8));
-      return Math.max(slotMin, Math.min(slotMax, maxCellW));
+      return Math.max(slotMin, headerWidths[colIdx], Math.min(slotMax, maxCellW));
     });
     const hasDiet = anyDiet;
     const dietIdx = headers.length - 1;
@@ -317,7 +346,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
           if (idx === 0) return noColW;
           if (idx === 1) return patientMin;
           if (hasDiet && idx === widths.length - 1) return dietMin;
-          return slotMin;
+          return Math.max(slotMin, headerWidths[selectedTimeIdxs[idx - 2]] ?? slotMin);
         });
         const flexSum = flexIdxs.reduce((a, idx) => a + widths[idx], 0);
         for (const idx of flexIdxs) {
@@ -349,7 +378,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     }
     colWidths = widths;
     pageDrawIdxs = [idxNo, idxPatient, ...selectedTimeIdxs, ...(hasDiet ? [dietIdx] : [])];
-    pageHeaders = ['No', 'Patient', ...selectedTimeIdxs.map((colIdx) => headers[colIdx]), ...(hasDiet ? ['Diet'] : [])];
+    pageHeaders = ['No', 'Patient', ...selectedTimeIdxs.map((colIdx) => headers[colIdx]), ...(hasDiet ? ['Diet notes'] : [])];
   };
   computePageLayout();
   const drawHeaderRow = () => {
