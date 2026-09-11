@@ -532,6 +532,43 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   }
   flushPageCells();
 
+  // How to eat around treatment is the same for everyone on a plan, so it is
+  // printed once here rather than repeated in every patient's row.
+  const therapyNotesByPlan = new Map<string, string>();
+  for (const p of displayPatients) {
+    const diet = dietByPatient.get(p.id);
+    if (!diet?.therapyNotes) continue;
+    const plan = diet.planName || 'This plan';
+    if (!therapyNotesByPlan.has(plan)) therapyNotesByPlan.set(plan, diet.therapyNotes);
+  }
+
+  if (therapyNotesByPlan.size > 0) {
+    const entries = [...therapyNotesByPlan.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    useCellFont();
+    const noteWidth = w - 8;
+    let needed = headerH;
+    for (const [plan, note] of entries) {
+      needed += doc.heightOfString(`${plan} — ${note}`, { width: noteWidth }) + 3;
+    }
+    if (yy + needed > pageBottom) {
+      doc.addPage();
+      addHeader(doc, dateISO, centreName);
+      yy = doc.y + 2;
+    } else {
+      yy += 10;
+    }
+
+    useHeadFont();
+    doc.text('Around treatment', x + 4, yy, { width: noteWidth });
+    yy = doc.y + 2;
+    useCellFont();
+    for (const [plan, note] of entries) {
+      const line = `${plan} — ${note}`;
+      doc.text(line, x + 4, yy, { width: noteWidth });
+      yy = doc.y + 3;
+    }
+  }
+
   doc.end();
   return await done;
 }

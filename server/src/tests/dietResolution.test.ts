@@ -66,12 +66,18 @@ const cases: [string, () => void][] = [
     assert.ok(out.notes.includes('S: Buttermilk'), out.notes);
   }],
 
-  ['therapy notes appear on a treatment day and not on a rest day', () => {
+  ['therapy notes are kept out of the row and printed once under the table', () => {
     const treated = resolveDiet({ ...base, template: plan, hasTherapyToday: true });
-    assert.ok(treated.notes.includes('Nothing heavy beforehand'), treated.notes);
+    assert.ok(!treated.notes.includes('Nothing heavy beforehand'), treated.notes);
+    assert.ok(treated.therapyNotes.includes('Nothing heavy beforehand'), treated.therapyNotes);
+    assert.ok(treated.therapyNotes.includes('Warm water afterwards'), treated.therapyNotes);
+    assert.equal(treated.planName, 'Standard sattvic plan');
+  }],
+
+  ['a rest day has nothing to say about treatment', () => {
     const resting = resolveDiet({ ...base, template: plan, hasTherapyToday: false });
-    assert.ok(!resting.notes.includes('Nothing heavy beforehand'), resting.notes);
-    // medication is not tied to treatment, so it stays
+    assert.equal(resting.therapyNotes, '');
+    // medication is per patient and not tied to treatment, so it stays in the row
     assert.ok(resting.notes.includes('Trikatu after meals'), resting.notes);
   }],
 

@@ -35,3 +35,6 @@ ops/
 launchd/
 cloudflared.yml
 nginx-staging.conf
+
+# Working material that must never reach a public repo — scans, photos, notes.
+private/

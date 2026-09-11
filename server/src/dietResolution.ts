@@ -39,7 +39,16 @@ export type ResolveDietInput = {
 
 export type ResolvedDiet = {
   meals: Partial<Record<MealKey, string>>;
+  /** Goes in the patient's own row: what is specific to them. */
   notes: string;
+  /** The plan this came from, for the footnote. */
+  planName: string;
+  /**
+   * How to eat around treatment. The same sentences for everyone on a plan, so
+   * they print once under the table instead of once per patient — which is the
+   * difference between a sheet of one page and a sheet of three.
+   */
+  therapyNotes: string;
 };
 
 export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
@@ -65,10 +74,13 @@ export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
     // Keep a meal the day has no column for rather than dropping it.
     if (meals[meal] && !mealsWithColumn.has(meal)) noteParts.push(`${mealLabel[meal]}: ${meals[meal]}`);
   }
-  for (const name of ['medication', ...(hasTherapyToday ? ['pre_therapy_notes', 'post_therapy_notes'] : [])]) {
-    const text = field(name);
-    if (text) noteParts.push(text);
-  }
+  // Medication is per patient, so it stays in the row.
+  const medication = field('medication');
+  if (medication) noteParts.push(medication);
+
+  const therapyNotes = hasTherapyToday
+    ? [field('pre_therapy_notes'), field('post_therapy_notes')].filter(Boolean).join('; ')
+    : '';
 
   const free = (input.freeText || '').trim();
   if (free && Object.keys(meals).length === 0) noteParts.unshift(free);
@@ -78,5 +90,7 @@ export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
   return {
     meals,
     notes: label && notes ? `${label}: ${notes}` : notes || (label && Object.keys(meals).length ? label : ''),
+    planName: label,
+    therapyNotes,
   };
 }
