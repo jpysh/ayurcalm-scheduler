@@ -276,7 +276,12 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const rowCount = rawRows.length;
   const timeColStart = 2;
   const timeColEndExclusive = timeColStart + timeSlots.length;
-  for (let col = timeColStart; col < timeColEndExclusive; col++) {
+  // Patients on the same plan carry the same notes, so those cells merge down
+  // the column the way a repeated therapy does — one box, read once.
+  const notesColIdx = headers.length - 1;
+  const isMergedCol = (k: number) =>
+    (k >= timeColStart && k < timeColEndExclusive) || (anyDiet && k === notesColIdx);
+  for (let col = timeColStart; col < timeColEndExclusive + (anyDiet ? 1 : 0); col++) {
     let r = 0;
     while (r < rowCount) {
       const value = rawRows[r][col];
@@ -409,7 +414,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const flushPageCells = () => {
     if (pageCells.length === 0) return;
     doc.font('Helvetica').fontSize(9);
-    for (const k of pageDrawIdxs.filter((idx) => idx >= timeColStart && idx < timeColEndExclusive)) {
+    for (const k of pageDrawIdxs.filter(isMergedCol)) {
       let idx = 0;
       const colCells = pageCells.filter((c) => c.k === k);
       while (idx < colCells.length) {
@@ -482,7 +487,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     for (let c = 0; c < pageDrawIdxs.length; c++) {
       const k = pageDrawIdxs[c];
       const rawText = rawRows[i][k] || '';
-      if (k >= timeColStart && k < timeColEndExclusive && rawText) {
+      if (isMergedCol(k) && rawText) {
         pageCells.push({ k, text: rawText, top: yy, height: rowH });
       } else {
         doc.rect(cx2, yy, colWidths[c], rowH).stroke();
