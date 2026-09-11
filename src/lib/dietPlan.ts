@@ -1,8 +1,7 @@
 /**
  * A diet plan is stored twice over: what a patient eats on a day they are
- * treated, and what they eat on a rest day. The Diet tab still edits one set of
- * meals, so a bespoke plan is written to both sides — better than going silent
- * half the week. Editing the two sides separately is the next step.
+ * treated, and what they eat on a rest day. A rest-day meal left blank falls
+ * back to the treatment-day one, so a plan that does not vary is filled in once.
  */
 export type ServerDietTemplate = {
   id: string;
@@ -30,6 +29,10 @@ export type UiDietTemplate = {
   lunch: string;
   dinner: string;
   snacks: string;
+  restBreakfast?: string;
+  restLunch?: string;
+  restDinner?: string;
+  restSnacks?: string;
   preTherapyNotes?: string;
   postTherapyNotes?: string;
   medication?: string;
@@ -45,6 +48,10 @@ export const fromServerTemplate = (t: ServerDietTemplate): UiDietTemplate => ({
   lunch: t.therapy_lunch,
   dinner: t.therapy_dinner,
   snacks: t.therapy_snacks,
+  restBreakfast: t.rest_breakfast,
+  restLunch: t.rest_lunch,
+  restDinner: t.rest_dinner,
+  restSnacks: t.rest_snacks,
   preTherapyNotes: t.pre_therapy_notes || '',
   postTherapyNotes: t.post_therapy_notes || '',
   medication: t.medication || '',
@@ -52,37 +59,32 @@ export const fromServerTemplate = (t: ServerDietTemplate): UiDietTemplate => ({
   applicability: 'daily' as const,
 });
 
-/** Fields a bespoke plan carries in place of a template. */
-export const toOverrides = (t: Partial<UiDietTemplate>) => ({
+/**
+ * Both sides of a plan, as the server stores them. A rest-day meal left blank
+ * repeats the treatment-day one: a plan that does not vary is filled in once,
+ * and nobody ends up with a blank Sunday.
+ */
+const bothSides = (t: Partial<UiDietTemplate>) => ({
   therapy_breakfast: t.breakfast || '',
   therapy_lunch: t.lunch || '',
   therapy_dinner: t.dinner || '',
   therapy_snacks: t.snacks || '',
-  rest_breakfast: t.breakfast || '',
-  rest_lunch: t.lunch || '',
-  rest_dinner: t.dinner || '',
-  rest_snacks: t.snacks || '',
+  rest_breakfast: t.restBreakfast || t.breakfast || '',
+  rest_lunch: t.restLunch || t.lunch || '',
+  rest_dinner: t.restDinner || t.dinner || '',
+  rest_snacks: t.restSnacks || t.snacks || '',
   medication: t.medication || '',
   pre_therapy_notes: t.preTherapyNotes || '',
   post_therapy_notes: t.postTherapyNotes || '',
 });
 
+/** Fields a bespoke plan carries in place of a template. */
+export const toOverrides = (t: Partial<UiDietTemplate>) => bothSides(t);
+
 const toTemplateBody = (t: Partial<UiDietTemplate>) => ({
   name: (t.name || '').trim(),
   description: t.description || '',
-  therapy_breakfast: t.breakfast || '',
-  therapy_lunch: t.lunch || '',
-  therapy_dinner: t.dinner || '',
-  therapy_snacks: t.snacks || '',
-  // The tab still edits one set of meals, so a plan authored here reads the same
-  // on a rest day. Editing the two sides apart is the rest of #18.
-  rest_breakfast: t.breakfast || '',
-  rest_lunch: t.lunch || '',
-  rest_dinner: t.dinner || '',
-  rest_snacks: t.snacks || '',
-  medication: t.medication || '',
-  pre_therapy_notes: t.preTherapyNotes || '',
-  post_therapy_notes: t.postTherapyNotes || '',
+  ...bothSides(t),
 });
 
 /**
