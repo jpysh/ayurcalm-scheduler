@@ -14,8 +14,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import AdminDashboard from "./pages/AdminDashboard";
-import StaffSchedule from "./pages/StaffSchedule";
-import PatientView from "./pages/PatientView";
 import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
 import Ailments from "./pages/Ailments";
@@ -142,8 +140,6 @@ const App = () => {
               <Route path="/:username/settings" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/:username/ailments" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/admin/dashboard/*" element={<Navigate to="/admin/schedule" replace />} />
-              <Route path="/staff/:token" element={<StaffSchedule />} />
-              <Route path="/patient/:token" element={<PatientView />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <SupportButton />

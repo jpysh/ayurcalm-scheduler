@@ -212,8 +212,9 @@ const Settings = () => {
               disabled={!isAdmin}
             />
             <p className="text-xs text-muted-foreground">
-              Shown to patients and therapists on the schedule links you share with them.
-              <strong className="font-medium"> Change this to your own centre's number</strong> —
+              Kept for the patient schedule link, which is not built yet, so this number
+              is not shown anywhere today.
+              <strong className="font-medium"> Set it to your own centre's number</strong> —
               patients asking about their appointment should reach you, not the software
               maintainer.
             </p>

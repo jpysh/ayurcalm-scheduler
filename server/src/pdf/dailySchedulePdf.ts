@@ -77,7 +77,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
   const centreName = settings?.centre_name || process.env.CENTRE_NAME || 'Wellness Centre';
 
-  const [rooms, patients, therapies, staff, appts, eventsByDate, weeklyEvents] = await Promise.all([
+  const [rooms, patients, therapies, staff, appts, eventsByDate, weeklyEvents, dietDay, dietSegments, staysToday] = await Promise.all([
     prisma.therapyRoom.findMany(),
     prisma.patient.findMany(),
     prisma.therapy.findMany(),
@@ -85,6 +85,9 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     prisma.appointment.findMany({ where: { scheduled_date: day } }),
     prisma.programEvent.findMany({ where: { OR: [{ date: day }, { AND: [{ start_date: { lte: day } }, { end_date: { gte: day } }] }] } }),
     prisma.programEvent.findMany({ where: { recurrence: 'weekly' } }),
+    prisma.dietPlan.findMany({ where: { date: day } }),
+    prisma.dietPlanSegment.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } } }),
+    prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } } }),
   ]);
 
   const roomById = Object.fromEntries(rooms.map((r) => [r.id, r.name]));
@@ -120,13 +123,68 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     return true;
   };
 
-  const activePatients = patients.filter((p) => {
-    const hasAppt = (apptsByPatient.get(p.id) || []).length > 0;
-    return hasAppt;
-  });
+  // The sheet goes on a notice board, so a resident scanning for their own name
+  // must find it even on a day with no therapy — their meals are still on it.
+  const residentToday = new Set(staysToday.map((s) => s.patient_id));
+  const activePatients = patients.filter(
+    (p) => (apptsByPatient.get(p.id) || []).length > 0 || residentToday.has(p.id),
+  );
 
   activePatients.sort((a, b) => (patientById[a.id] || a.id).localeCompare(patientById[b.id] || b.id));
   const displayPatients = activePatients;
+
+  // What a patient eats today comes from three places, most specific first: a
+  // DietPlan row written for this date, the template on the segment covering
+  // this date, then the free-text field on the patient. Precedence is per meal,
+  // so overriding breakfast leaves the rest of the plan standing.
+  type MealKey = 'breakfast' | 'lunch' | 'dinner' | 'snacks';
+  const mealOrder: MealKey[] = ['breakfast', 'lunch', 'dinner', 'snacks'];
+  const mealLabel: Record<MealKey, string> = { breakfast: 'B', lunch: 'L', dinner: 'D', snacks: 'S' };
+
+  const dayMealsByPatient = new Map<string, Partial<Record<MealKey, string>>>();
+  for (const d of dietDay) {
+    const meals = dayMealsByPatient.get(d.patient_id) || {};
+    meals[d.meal_time as MealKey] = [d.description, d.instructions].filter(Boolean).join(' \u2014 ');
+    dayMealsByPatient.set(d.patient_id, meals);
+  }
+
+  const segmentByPatient = new Map<string, (typeof dietSegments)[number]>();
+  for (const seg of dietSegments) {
+    // A patient should not hold two overlapping segments, but if they do, the
+    // one that started most recently is the one set last.
+    const held = segmentByPatient.get(seg.patient_id);
+    if (!held || seg.start_date > held.start_date) segmentByPatient.set(seg.patient_id, seg);
+  }
+
+  const dietTextFor = (patient: (typeof patients)[number]) => {
+    const seg = segmentByPatient.get(patient.id);
+    const tpl = (seg?.template || {}) as Record<string, string | undefined>;
+    const hasTherapyToday = (apptsByPatient.get(patient.id) || []).length > 0;
+    // A therapy-day template describes eating around treatment, so it says
+    // nothing about a rest day.
+    const templateApplies = !!seg && (tpl.applicability !== 'therapyDays' || hasTherapyToday);
+
+    const overrides = dayMealsByPatient.get(patient.id) || {};
+    const parts: string[] = [];
+    for (const meal of mealOrder) {
+      const text = overrides[meal] || (templateApplies ? tpl[meal] : undefined);
+      if (text && text.trim()) parts.push(`${mealLabel[meal]}: ${text.trim()}`);
+    }
+
+    const notes = templateApplies
+      ? [tpl.medication, hasTherapyToday ? tpl.preTherapyNotes : undefined, hasTherapyToday ? tpl.postTherapyNotes : undefined]
+          .filter((n) => n && n.trim())
+          .join('; ')
+      : '';
+    if (notes) parts.push(`Notes: ${notes}`);
+
+    if (parts.length === 0) return (patient.diet_plan || '').trim();
+
+    const label = templateApplies ? (seg?.template_label || tpl.name || '') : '';
+    return label ? `${label}: ${parts.join(' / ')}` : parts.join(' / ');
+  };
+
+  const dietByPatient = new Map(displayPatients.map((p) => [p.id, dietTextFor(p)] as const));
 
   const w = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const x = doc.page.margins.left;
@@ -134,12 +192,12 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const noColW = 24;
   doc.font('Helvetica').fontSize(9);
   const nameWidths = displayPatients.map((p) => doc.widthOfString(patientById[p.id] || p.id));
-  const dietWidths = displayPatients.map((p) => doc.widthOfString(p.diet_plan || ''));
+  const dietWidths = displayPatients.map((p) => doc.widthOfString(dietByPatient.get(p.id) || ''));
   const maxNameW = Math.max(0, ...nameWidths);
   const maxDietW = Math.max(0, ...dietWidths);
   const patientColW = Math.min(140, Math.max(80, Math.ceil(maxNameW + 12)));
-  const anyDiet = displayPatients.some((p) => !!(p.diet_plan && p.diet_plan.trim().length > 0));
-  const dietColW = anyDiet ? Math.min(120, Math.max(90, Math.ceil(maxDietW + 12))) : 0;
+  const anyDiet = displayPatients.some((p) => !!(dietByPatient.get(p.id) || '').trim());
+  const dietColW = anyDiet ? Math.min(190, Math.max(120, Math.ceil(maxDietW + 12))) : 0;
   const minSlotW = 30;
   const availableW = w - noColW - patientColW - (anyDiet ? dietColW : 0);
   const slotW = Math.max(minSlotW, Math.floor(availableW / Math.max(1, timeSlots.length)));
@@ -190,7 +248,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
         return parts.join(' | ') || '';
       });
       const row = [String(idx + 1), patientById[p.id] || p.id, ...cells];
-      if (anyDiet) row.push(p.diet_plan || '');
+      if (anyDiet) row.push(dietByPatient.get(p.id) || '');
       return row;
     });
   const mergedRows = rawRows.map((row) => [...row]);
@@ -312,73 +370,10 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   let pageCells: { k: number; text: string; top: number; height: number }[] = [];
   let pageRowTops: number[] = [];
   let pageRowHeights: number[] = [];
-  for (; i < rowCount; i++) {
-    const heights: number[] = [];
-    for (let c = 0; c < pageDrawIdxs.length; c++) {
-      const k = pageDrawIdxs[c];
-      const text = mergedRows[i][k] || '';
-      const h = doc.heightOfString(text, { width: colWidths[c] - 8 });
-      heights.push(h + 6);
-    }
-    const rowH = Math.max(18, ...heights);
-    // no alternate row shading (B/W print)
-    let cx2 = x;
-    for (let c = 0; c < pageDrawIdxs.length; c++) {
-      const k = pageDrawIdxs[c];
-      const rawText = rawRows[i][k] || '';
-      if (k >= timeColStart && k < timeColEndExclusive && rawText) {
-        pageCells.push({ k, text: rawText, top: yy, height: rowH });
-      } else {
-        doc.rect(cx2, yy, colWidths[c], rowH).stroke();
-        const text = mergedRows[i][k] || '';
-        const th = doc.heightOfString(text, { width: colWidths[c] - 8 });
-        const ty = yy + Math.max(2, (rowH - th) / 2);
-        doc.text(text, cx2 + 4, ty, { width: colWidths[c] - 8 });
-      }
-      cx2 += colWidths[c];
-    }
-    pageRowTops.push(yy);
-    pageRowHeights.push(rowH);
-    yy += rowH;
-    rowsOnPage++;
-    const shouldBreakByBottom = yy > doc.page.height - doc.page.margins.bottom - 10 && i < rowCount - 1;
-    if (shouldBreakByBottom) {
-      doc.font('Helvetica').fontSize(9);
-      for (const k of pageDrawIdxs.filter((idx) => idx >= timeColStart && idx < timeColEndExclusive)) {
-        let idx = 0;
-        const colCells = pageCells.filter((c) => c.k === k);
-        while (idx < colCells.length) {
-          const t = colCells[idx].text;
-          if (!t) { idx++; continue; }
-          let span = 1;
-          let spanH = colCells[idx].height;
-          while (idx + span < colCells.length && colCells[idx + span].text === t) {
-            spanH += colCells[idx + span].height;
-            span++;
-          }
-          const top = colCells[idx].top;
-          const pos = pageDrawIdxs.indexOf(k);
-          const cx = x + colWidths.slice(0, pos).reduce((a, b) => a + b, 0);
-          doc.rect(cx, top, colWidths[pos], spanH).stroke();
-          const th = doc.heightOfString(t, { width: colWidths[pos] - 8 });
-          const ty = top + (spanH - th) / 2;
-          doc.text(t, cx + 4, ty, { width: colWidths[pos] - 8 });
-          idx += span;
-        }
-      }
-      pageCells = [];
-      pageRowTops = [];
-      pageRowHeights = [];
-      doc.addPage();
-      addHeader(doc, dateISO, centreName);
-      yy = doc.y + 2;
-      rowsOnPage = 0;
-      computePageLayout();
-      drawHeaderRow();
-      doc.font('Helvetica').fontSize(9);
-    }
-  }
-  if (pageCells.length > 0) {
+  // Appointment cells are collected while their rows are drawn, then painted in
+  // one pass so a therapy repeated down a column becomes a single merged box.
+  const flushPageCells = () => {
+    if (pageCells.length === 0) return;
     doc.font('Helvetica').fontSize(9);
     for (const k of pageDrawIdxs.filter((idx) => idx >= timeColStart && idx < timeColEndExclusive)) {
       let idx = 0;
@@ -402,7 +397,57 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
         idx += span;
       }
     }
+    pageCells = [];
+    pageRowTops = [];
+    pageRowHeights = [];
+  };
+
+  const measureRow = (r: number) => {
+    const heights = pageDrawIdxs.map((k, c) =>
+      doc.heightOfString(mergedRows[r][k] || '', { width: colWidths[c] - 8 }) + 6,
+    );
+    return Math.max(18, ...heights);
+  };
+  const pageBottom = doc.page.height - doc.page.margins.bottom;
+
+  for (; i < rowCount; i++) {
+    let rowH = measureRow(i);
+    // A row drawn past the bottom margin takes its cell text with it: PDFKit
+    // paginates text that overflows the page, so the boxes stay here and the
+    // therapy names silently move to the next page. Break before drawing.
+    if (rowsOnPage > 0 && yy + rowH > pageBottom) {
+      flushPageCells();
+      doc.addPage();
+      addHeader(doc, dateISO, centreName);
+      yy = doc.y + 2;
+      rowsOnPage = 0;
+      computePageLayout();
+      drawHeaderRow();
+      doc.font('Helvetica').fontSize(9);
+      rowH = measureRow(i);
+    }
+    // no alternate row shading (B/W print)
+    let cx2 = x;
+    for (let c = 0; c < pageDrawIdxs.length; c++) {
+      const k = pageDrawIdxs[c];
+      const rawText = rawRows[i][k] || '';
+      if (k >= timeColStart && k < timeColEndExclusive && rawText) {
+        pageCells.push({ k, text: rawText, top: yy, height: rowH });
+      } else {
+        doc.rect(cx2, yy, colWidths[c], rowH).stroke();
+        const text = mergedRows[i][k] || '';
+        const th = doc.heightOfString(text, { width: colWidths[c] - 8 });
+        const ty = yy + Math.max(2, (rowH - th) / 2);
+        doc.text(text, cx2 + 4, ty, { width: colWidths[c] - 8 });
+      }
+      cx2 += colWidths[c];
+    }
+    pageRowTops.push(yy);
+    pageRowHeights.push(rowH);
+    yy += rowH;
+    rowsOnPage++;
   }
+  flushPageCells();
 
   doc.end();
   return await done;

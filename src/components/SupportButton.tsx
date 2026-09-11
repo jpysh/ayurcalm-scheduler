@@ -2,42 +2,33 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { API_BASE } from "@/lib/apiBase";
 
-/** Patient and therapist links are shared by token and need no sign-in. */
-const isClientFacingPath = (pathname: string) =>
-  pathname.startsWith("/patient/") || pathname.startsWith("/staff/");
-
 /**
- * Floating WhatsApp contact. Which number it uses depends on who is looking:
+ * Floating WhatsApp contact for product support — whoever maintains this
+ * software for the centre. Renders nothing when the number is empty.
  *
- * - Staff and administrators inside the app get **product support** — whoever
- *   maintains this software for them.
- * - Patients on their own shared link get the **centre's** contact, so they
- *   reach the people treating them rather than a software helpdesk.
- *
- * Renders nothing when the relevant number is empty.
+ * The centre's own patient-facing number lives in settings but has nowhere to
+ * appear until patients have a page of their own again. See the share-link
+ * feature issue.
  */
 export const SupportButton = () => {
   const { pathname } = useLocation();
-  const clientFacing = isClientFacingPath(pathname);
   const [number, setNumber] = useState<string | null>(null);
 
   useEffect(() => {
     setNumber(null);
-    // Patients are not signed in, so their pages read the one public endpoint.
-    const url = clientFacing ? `${API_BASE}/public/support` : `${API_BASE}/settings`;
-    fetch(url)
+    fetch(`${API_BASE}/settings`)
       .then((r) => (r.ok ? r.json() : null))
       .then((s) => {
         if (!s) return;
-        setNumber((clientFacing ? s.patient_support_whatsapp : s.support_whatsapp) || null);
+        setNumber(s.support_whatsapp || null);
       })
       .catch(() => { /* no button if it cannot be read */ });
-  }, [clientFacing]);
+  }, []);
 
   if (!number) return null;
   if (pathname === "/login" || pathname === "/setup") return null;
 
-  const label = clientFacing ? "Message the centre on WhatsApp" : "Get help with this app on WhatsApp";
+  const label = "Get help with this app on WhatsApp";
 
   return (
     <a
