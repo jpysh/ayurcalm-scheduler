@@ -121,7 +121,7 @@ install is two containers total.
 
 ## Status and roadmap
 
-Version 0.1.0 — usable, and in active development by a single maintainer. Known
+Version 0.2.0 — usable, and in active development by a single maintainer. Known
 to be unfinished:
 
 - **Daily schedule PDF density** — a busy day takes more pages than it should,

@@ -5,6 +5,10 @@ All notable changes to this project are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-11
+
+The day sheet a centre prints and pins up now works, and diet plans are real.
+
 ### Added
 - **Diet plans in the database** — a plan is a reusable record with its own meals
   for a day with treatment and for a rest day, plus medication and notes on
