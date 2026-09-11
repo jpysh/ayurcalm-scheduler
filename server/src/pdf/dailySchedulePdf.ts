@@ -208,7 +208,14 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const x = doc.page.margins.left;
 
   const noColW = 24;
-  doc.font('Helvetica').fontSize(9);
+  // The table shrinks its own type rather than breaking words across lines: a
+  // column narrower than its longest word gives 'Chatt / erjee', which on a
+  // printed notice board reads as a fault. Set by fitTypeSize() below.
+  let cellFont = 9;
+  let headFont = 11;
+  const useCellFont = () => doc.font('Helvetica').fontSize(cellFont);
+  const useHeadFont = () => doc.font('Helvetica-Bold').fontSize(headFont);
+  useCellFont();
   const nameWidths = displayPatients.map((p) => doc.widthOfString(patientById[p.id] || p.id));
   const dietWidths = displayPatients.map((p) => doc.widthOfString(dietByPatient.get(p.id)?.notes || ''));
   const maxNameW = Math.max(0, ...nameWidths);
@@ -313,8 +320,52 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   // `lastRow` is the last row this page will hold. Columns are chosen from the
   // rows actually on the page, so a start time used only by a later page does
   // not take width here — an empty column is a column the day did not need.
+  // A column narrower than its own header wraps '07:30' onto two lines, and one
+  // narrower than its longest word breaks that word mid-syllable. Both are the
+  // same fault on a printed sheet, so both set a floor.
+  const patientMinW = 70;
+  const slotMin = 38, dietMinW = 80;
+  // A meal column holds a sentence rather than 'Lunch (30m)', so it needs more
+  // room than a therapy slot.
+  const mealSlotMin = 84;
+
+  const longestWordWidth = (colIdx: number) => {
+    let widest = 0;
+    for (let r = 0; r < rowCount; r++) {
+      for (const word of (rawRows[r][colIdx] || '').split(/\s+/)) {
+        if (word) widest = Math.max(widest, doc.widthOfString(word));
+      }
+    }
+    return Math.ceil(widest) + 8;
+  };
+
+  const slotFloor = (colIdx: number) =>
+    Math.max(
+      mealByTimeSlot.has(timeSlots[colIdx - 2]) ? mealSlotMin : slotMin,
+      longestWordWidth(colIdx),
+    );
+
+  /**
+   * Shrink the table's type until the columns can hold their longest words. A
+   * sheet a size smaller is still read at arm's length; 'Chatt / erjee' is not.
+   *
+   * ponytail: below the smallest size tried, the table still runs past the right
+   * margin. Bucketing start times into a coarser grid is the fix — see #7.
+   */
+  const fitTypeSize = () => {
+    for (const size of [9, 8.5, 8, 7.5, 7, 6.5]) {
+      cellFont = size;
+      headFont = Math.min(11, size + 2);
+      useCellFont();
+      let needed = noColW + patientMinW + (anyDiet ? dietMinW : 0);
+      for (let t = 0; t < timeSlots.length; t++) needed += slotFloor(2 + t);
+      if (needed <= w) return;
+    }
+  };
+  fitTypeSize();
+
   const computePageLayout = (lastRow: number = rowCount - 1) => {
-    doc.font('Helvetica').fontSize(9);
+    useCellFont();
     const selectedTimeIdxs: number[] = [];
     for (let tIdx = 0; tIdx < timeSlots.length; tIdx++) {
       const colIdx = 2 + tIdx;
@@ -328,23 +379,13 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     // Measure widths for selected columns
     const idxNo = 0;
     const idxPatient = 1;
-    const patientMin = 70, patientMax = 140;
-    // A column narrower than its own header wraps '07:30' onto two lines, so the
-    // floor is the header text itself.
-    // ponytail: if a day has so many distinct start times that the minimums no
-    // longer fit the page width, the table runs past the right margin. Splitting
-    // time columns across pages is the fix when a centre hits it.
-    const slotMin = 38, slotMax = 110;
-    // A meal column holds a sentence rather than 'Lunch (30m)', so it needs more
-    // room than a therapy slot before words start breaking mid-syllable.
-    const mealSlotMin = 84;
-    const slotFloor = (colIdx: number) =>
-      mealByTimeSlot.has(timeSlots[colIdx - 2]) ? mealSlotMin : slotMin;
-    const dietMin = 80, dietMax = 150;
+    const patientMax = 140;
+    const slotMax = 110;
+    const dietMin = dietMinW, dietMax = 150;
     // Headers are drawn in bold 11; measuring them in regular 9 underestimates.
-    doc.font('Helvetica-Bold').fontSize(11);
+    useHeadFont();
     const headerWidths: number[] = headers.map((h) => Math.ceil(doc.widthOfString(h)) + 8);
-    doc.font('Helvetica').fontSize(9);
+    useCellFont();
     const patientW = Math.max(headerWidths[idxPatient], ...Array.from({ length: lastRow - i + 1 }, (_, r) => Math.ceil(doc.widthOfString(mergedRows[i + r][idxPatient] || '')) + 8));
     const timeWs: number[] = selectedTimeIdxs.map((colIdx) => {
       const maxCellW = Math.max(headerWidths[colIdx], ...Array.from({ length: lastRow - i + 1 }, (_, r) => Math.ceil(doc.widthOfString(mergedRows[i + r][colIdx] || '')) + 8));
@@ -354,7 +395,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     const dietIdx = headers.length - 1;
     const dietW = hasDiet ? Math.max(headerWidths[dietIdx], ...Array.from({ length: lastRow - i + 1 }, (_, r) => Math.ceil(doc.widthOfString(mergedRows[i + r][dietIdx] || '')) + 8)) : 0;
 
-    let pW = Math.max(patientMin, Math.min(patientMax, patientW));
+    let pW = Math.max(patientMinW, Math.min(patientMax, patientW));
     let dW = hasDiet ? Math.max(dietMin, Math.min(dietMax, dietW)) : 0;
     const widths = [noColW, pW, ...timeWs, ...(hasDiet ? [dW] : [])];
     const total = widths.reduce((a, b) => a + b, 0);
@@ -365,7 +406,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
         const flexIdxs = widths.map((_, idx) => idx).filter((idx) => idx !== 0);
         const mins = widths.map((_, idx) => {
           if (idx === 0) return noColW;
-          if (idx === 1) return patientMin;
+          if (idx === 1) return patientMinW;
           if (hasDiet && idx === widths.length - 1) return dietMin;
           const colIdx = selectedTimeIdxs[idx - 2];
           return colIdx === undefined ? slotMin : Math.max(slotFloor(colIdx), headerWidths[colIdx]);
@@ -403,7 +444,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     pageHeaders = ['No', 'Patient', ...selectedTimeIdxs.map((colIdx) => headers[colIdx]), ...(hasDiet ? ['Diet notes'] : [])];
   };
   const drawHeaderRow = () => {
-    doc.font('Helvetica-Bold').fontSize(11);
+    useHeadFont();
     let cx = x;
     for (let i = 0; i < pageHeaders.length; i++) {
       doc.rect(cx, yy, colWidths[i], headerH).stroke();
@@ -422,7 +463,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   // one pass so a therapy repeated down a column becomes a single merged box.
   const flushPageCells = () => {
     if (pageCells.length === 0) return;
-    doc.font('Helvetica').fontSize(9);
+    useCellFont();
     for (const k of pageDrawIdxs.filter(isMergedCol)) {
       let idx = 0;
       const colCells = pageCells.filter((c) => c.k === k);
@@ -478,7 +519,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
 
     yy = headerTop;
     drawHeaderRow();
-    doc.font('Helvetica').fontSize(9);
+    useCellFont();
   };
   layoutPage();
 
