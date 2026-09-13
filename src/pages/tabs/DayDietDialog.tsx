@@ -72,9 +72,9 @@ export default function DayDietDialog({ patient, onClose }: { patient: { id: str
 
   return (
     <Dialog open={!!patient} onOpenChange={(v: boolean) => { if (!v) { setDate(localToday()); onClose(); } }}>
-      <DialogContent className="w-full max-w-[95vw] sm:max-w-md p-4">
+      <DialogContent className="w-full max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto p-4">
         <DialogHeader>
-          <DialogTitle className="text-sm">Diet for one day — {patient?.name}</DialogTitle>
+          <DialogTitle className="text-sm pr-6">Diet for one day — {patient?.name}</DialogTitle>
           <DialogDescription className="text-xs">
             A filled meal replaces the plan on the day sheet for this date only. Leave a meal empty to follow the plan.
           </DialogDescription>
