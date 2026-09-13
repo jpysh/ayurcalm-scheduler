@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useCentreName } from "@/lib/centreName";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 
 const Login = () => {
+  const centreName = useCentreName();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -56,7 +58,7 @@ const Login = () => {
       <header className="bg-card border-b border-border sticky top-0 z-10 shadow-sm">
         <div className="container mx-auto px-2 py-1 md:px-3 md:py-2">
           <div className="grid grid-cols-2 items-center">
-            <h1 className="text-sm md:text-lg font-bold justify-self-start">Ayurveda Scheduler</h1>
+            <h1 className="text-sm md:text-lg font-bold justify-self-start">{centreName}</h1>
             <div className="justify-self-end">
               <Button
                 variant="outline"

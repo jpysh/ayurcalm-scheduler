@@ -84,7 +84,7 @@ const SetupWizard = () => {
                 <Label htmlFor="w_name">Centre name</Label>
                 <Input id="w_name" autoFocus value={form.centre_name}
                   onChange={(e) => set("centre_name", e.target.value)}
-                  placeholder="Green Valley Ayurveda" />
+                  placeholder="e.g. Green Valley Ayurveda" />
                 <p className="text-xs text-muted-foreground">Appears in the app and on the printed daily schedule.</p>
               </div>
               <div className="space-y-1">

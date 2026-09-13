@@ -192,14 +192,14 @@ const TimeOffTab = ({
                     {editingTimeOffId === holiday.id ? (
                       <Input type="datetime-local" step="60" value={toLocalInput(holiday.startDate || holiday.date)} onChange={(e: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, startDate: e.target.value } : h)))} />
                     ) : (
-                      new Date(holiday.startDate || holiday.date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                      new Date(holiday.startDate || holiday.date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', ...(isFullDay(holiday) && !holiday.startDate ? {} : { hour: '2-digit', minute: '2-digit' }) })
                     )}
                   </TableCell>
                   <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
                     {editingTimeOffId === holiday.id ? (
                       <Input type="datetime-local" step="60" value={toLocalInput(holiday.endDate || holiday.date)} onChange={(e: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, endDate: e.target.value } : h)))} />
                     ) : (
-                      new Date(holiday.endDate || holiday.date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                      new Date(holiday.endDate || holiday.date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', ...(isFullDay(holiday) && !holiday.startDate ? {} : { hour: '2-digit', minute: '2-digit' }) })
                     )}
                   </TableCell>
                   <TableCell className="text-xs md:text-sm leading-tight py-0.5 pl-1.5 pr-1 md:py-3 md:px-3">

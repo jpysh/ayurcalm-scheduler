@@ -34,6 +34,7 @@ import Settings from "./Settings";
 import { Fragment } from "react";
 import { API_BASE } from "@/lib/apiBase";
 import { loadTemplates, saveTemplate } from "@/lib/dietPlan";
+import { useCentreName } from "@/lib/centreName";
 
 type ApiSegment = { patient_id: string; start_date: string; end_date: string; template_id?: string | null; template_label?: string | null; therapy_ids?: (string | number)[] };
 
@@ -834,6 +835,8 @@ const AdminDashboard = () => {
     return `${hh}:${mm}`;
   };
   const isFullDay = (h: UiTimeOff) => {
+    // A single date with no times is the whole day.
+    if (h.date && !h.startDate && !h.startTime) return true;
     const sT = h.startTime || toHHMM(h.startDate || h.date);
     const eT = h.endTime || toHHMM(h.endDate || h.date);
     return sT === '09:00' && eT === '18:00';
@@ -1518,11 +1521,7 @@ const AdminDashboard = () => {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const role = location.pathname.startsWith('/staff')
-    ? 'Staff'
-    : location.pathname.startsWith('/patient')
-    ? 'Patient'
-    : 'Admin';
+  const centreName = useCentreName();
   useServerHealth(API_BASE);
   useEffect(() => {
     const segs = location.pathname.split('/').filter(Boolean);
@@ -1532,8 +1531,9 @@ const AdminDashboard = () => {
       setActiveTab(next);
     }
   }, [location.pathname]);
+  // Loaded on every tab, not only Events: the headline card counts them too and
+  // read 0 until the Events tab had been opened.
   useEffect(() => {
-    if (activeTab !== 'events') return;
     (async () => {
       try {
         const list = await fetch(`${API_BASE}/program-events`, { cache: 'no-store' }).then(r => r.json());
@@ -1548,7 +1548,7 @@ const AdminDashboard = () => {
       <header className="bg-card border-b border-border sticky top-0 z-10 shadow-sm">
         <div className="container mx-auto px-3 py-2 md:px-3 md:py-3">
           <div className="grid grid-cols-3 items-center">
-            <h1 className="text-sm md:text-lg font-bold justify-self-start">{`Ayur-${role}`}</h1>
+            <h1 className="text-sm md:text-lg font-bold justify-self-start">{centreName}</h1>
             <p className="text-xs md:text-sm font-medium tracking-tight text-center whitespace-nowrap">
             {new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
             </p>
@@ -1636,7 +1636,7 @@ const AdminDashboard = () => {
           <Card>
             <CardContent className="p-6">
               <div className="flex flex-col items-center justify-center gap-1 h-20 text-center">
-                <p className="text-sm text-muted-foreground">Appointments</p>
+                <p className="text-sm text-muted-foreground">Appointments today</p>
                 <p className="text-3xl font-bold">{todayAppointmentsVisible}</p>
               </div>
             </CardContent>
@@ -1644,7 +1644,7 @@ const AdminDashboard = () => {
           <Card>
             <CardContent className="p-6">
               <div className="flex flex-col items-center justify-center gap-1 h-20 text-center">
-                <p className="text-sm text-muted-foreground">Patients</p>
+                <p className="text-sm text-muted-foreground">Patients today</p>
                 <p className="text-3xl font-bold">{todayPatientsCount}</p>
               </div>
             </CardContent>
@@ -1652,7 +1652,7 @@ const AdminDashboard = () => {
           <Card>
             <CardContent className="p-6">
               <div className="flex flex-col items-center justify-center gap-1 h-20 text-center">
-                <p className="text-sm text-muted-foreground">Staff</p>
+                <p className="text-sm text-muted-foreground">Staff on today</p>
                 <p className="text-3xl font-bold">{todayStaffActive}</p>
               </div>
             </CardContent>
@@ -1660,7 +1660,7 @@ const AdminDashboard = () => {
           <Card>
             <CardContent className="p-6">
               <div className="flex flex-col items-center justify-center gap-1 h-20 text-center">
-                <p className="text-sm text-muted-foreground">Events</p>
+                <p className="text-sm text-muted-foreground">Events today</p>
                 <p className="text-3xl font-bold">{todayEventsCount}</p>
               </div>
             </CardContent>

@@ -182,7 +182,9 @@ async function main() {
       const key = d.toISOString().slice(0,10);
       if (!isBusinessDay(d) || used.has(key)) continue;
       used.add(key);
-      await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: s.id, date: d, description: 'Personal Leave' } });
+      // Midnight of the day, as the scheduler matches it; the time of day the seed
+      // happened to run made this leave invisible to booking.
+      await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: s.id, date: new Date(key), description: 'Personal Leave' } });
       count++;
     }
   }
