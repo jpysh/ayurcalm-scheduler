@@ -107,9 +107,6 @@ const Login = () => {
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
             </form>
-            <p className="mt-3 text-center text-xs text-muted-foreground">
-              Demo login: <span className="font-mono">admin@example.com</span> / <span className="font-mono">demo1234</span>
-            </p>
             <details className="mt-2 text-center">
               <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
                 Forgotten your password?
