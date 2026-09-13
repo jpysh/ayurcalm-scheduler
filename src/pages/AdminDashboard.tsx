@@ -1532,8 +1532,9 @@ const AdminDashboard = () => {
       setActiveTab(next);
     }
   }, [location.pathname]);
+  // Loaded on every tab, not only Events: the headline card counts them too and
+  // read 0 until the Events tab had been opened.
   useEffect(() => {
-    if (activeTab !== 'events') return;
     (async () => {
       try {
         const list = await fetch(`${API_BASE}/program-events`, { cache: 'no-store' }).then(r => r.json());
@@ -1636,7 +1637,7 @@ const AdminDashboard = () => {
           <Card>
             <CardContent className="p-6">
               <div className="flex flex-col items-center justify-center gap-1 h-20 text-center">
-                <p className="text-sm text-muted-foreground">Appointments</p>
+                <p className="text-sm text-muted-foreground">Appointments today</p>
                 <p className="text-3xl font-bold">{todayAppointmentsVisible}</p>
               </div>
             </CardContent>
@@ -1644,7 +1645,7 @@ const AdminDashboard = () => {
           <Card>
             <CardContent className="p-6">
               <div className="flex flex-col items-center justify-center gap-1 h-20 text-center">
-                <p className="text-sm text-muted-foreground">Patients</p>
+                <p className="text-sm text-muted-foreground">Patients today</p>
                 <p className="text-3xl font-bold">{todayPatientsCount}</p>
               </div>
             </CardContent>
@@ -1652,7 +1653,7 @@ const AdminDashboard = () => {
           <Card>
             <CardContent className="p-6">
               <div className="flex flex-col items-center justify-center gap-1 h-20 text-center">
-                <p className="text-sm text-muted-foreground">Staff</p>
+                <p className="text-sm text-muted-foreground">Staff on today</p>
                 <p className="text-3xl font-bold">{todayStaffActive}</p>
               </div>
             </CardContent>
@@ -1660,7 +1661,7 @@ const AdminDashboard = () => {
           <Card>
             <CardContent className="p-6">
               <div className="flex flex-col items-center justify-center gap-1 h-20 text-center">
-                <p className="text-sm text-muted-foreground">Events</p>
+                <p className="text-sm text-muted-foreground">Events today</p>
                 <p className="text-3xl font-bold">{todayEventsCount}</p>
               </div>
             </CardContent>
