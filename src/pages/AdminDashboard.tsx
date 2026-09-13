@@ -835,6 +835,8 @@ const AdminDashboard = () => {
     return `${hh}:${mm}`;
   };
   const isFullDay = (h: UiTimeOff) => {
+    // A single date with no times is the whole day.
+    if (h.date && !h.startDate && !h.startTime) return true;
     const sT = h.startTime || toHHMM(h.startDate || h.date);
     const eT = h.endTime || toHHMM(h.endDate || h.date);
     return sT === '09:00' && eT === '18:00';
