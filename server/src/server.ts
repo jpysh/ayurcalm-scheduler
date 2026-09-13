@@ -636,30 +636,43 @@ app.delete('/holidays/:id', deleteTimeOffHandler);
 app.put('/holidays/:id', updateTimeOffHandler);
 
 // Diet Plans
+// A DietPlan date is midnight UTC of the calendar day, as the day sheet and the
+// seed store it. Accept only YYYY-MM-DD so no time of day can shift the day and
+// leave an entry the UI shows but the sheet never prints.
+const dietDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
 app.get('/dietplans', async (req: Request, res: Response) => {
   const patient_id = req.query.patient_id as string | undefined;
-  const date = req.query.date as string | undefined;
+  const date = req.query.date === undefined ? undefined : dietDate.parse(req.query.date);
   const where: Prisma.DietPlanWhereInput = {};
   if (patient_id) where.patient_id = patient_id;
   if (date) where.date = new Date(date);
-  const data = await prisma.dietPlan.findMany({ where });
-  if (!date) { res.json(data); return; }
-  const dayKey = ymdInTZ(new Date(date));
-  const filtered = data.filter((d) => ymdInTZ(new Date(d.date)) === dayKey);
-  res.json(filtered);
+  res.json(await prisma.dietPlan.findMany({ where }));
 });
 
+// Writes one meal for one day. An empty description removes it, so the plan
+// applies again. created_by is whoever is signed in, never what the body says.
 app.post('/dietplans', async (req: Request, res: Response) => {
   const schema = z.object({
     patient_id: z.string().uuid(),
-    date: z.string(),
+    date: dietDate,
     meal_time: z.enum(['breakfast','lunch','dinner','snacks']),
-    description: z.string(),
-    instructions: z.string().optional(),
-    created_by: z.string().uuid(),
+    description: z.string().trim().max(500),
+    instructions: z.string().trim().max(500).optional(),
   });
   const body = schema.parse(req.body);
-  const dp = await prisma.dietPlan.create({ data: { ...body, date: new Date(body.date) } });
+  const key = { patient_id: body.patient_id, date: new Date(body.date), meal_time: body.meal_time };
+  if (!body.description) {
+    await prisma.dietPlan.deleteMany({ where: key });
+    res.status(204).end();
+    return;
+  }
+  const fields = { description: body.description, instructions: body.instructions || null, created_by: req.user!.id };
+  const dp = await prisma.dietPlan.upsert({
+    where: { patient_id_date_meal_time: key },
+    create: { ...key, ...fields },
+    update: fields,
+  });
   res.status(201).json(dp);
 });
 
