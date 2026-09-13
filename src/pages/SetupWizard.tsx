@@ -153,16 +153,16 @@ const SetupWizard = () => {
                 and a week of appointments — so you could see how it works.
               </p>
               <div className="grid gap-2">
-                <Button onClick={() => finish(false)} disabled={busy}>
-                  {busy ? "Setting up…" : "Clear it and start with my own centre"}
+                <Button onClick={() => finish(true)} disabled={busy}>
+                  {busy ? "Setting up…" : "Keep the example data for now"}
                 </Button>
                 <Button
                   variant="secondary"
                   className="border border-border bg-background hover:bg-muted text-foreground"
-                  onClick={() => finish(true)}
+                  onClick={() => { if (window.confirm("Delete all the example patients, staff, rooms, therapies and appointments? This cannot be undone.")) finish(false); }}
                   disabled={busy}
                 >
-                  Keep the example data for now
+                  Clear it and start with my own centre
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">

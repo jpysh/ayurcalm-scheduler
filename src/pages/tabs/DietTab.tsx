@@ -312,7 +312,21 @@ const DietTab = ({
                               }
                             })();
                           }}>Edit</Button>
-                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => {
+                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={async () => {
+                            if (!window.confirm(`Remove ${p.name}'s diet plan? Their per-day entries stay.`)) return;
+                            try {
+                              // The free-text diet is emptied too: with no segment the day
+                              // sheet falls back to it, and would print stale wording.
+                              const existing: { id: string }[] = await fetchJsonWithTimeout(`${API_BASE}/dietplans/segments?patient_id=${p.id}`);
+                              const results = await Promise.all([
+                                ...existing.map((seg) => fetch(`${API_BASE}/dietplans/segments/${seg.id}`, { method: 'DELETE' })),
+                                fetch(`${API_BASE}/patients/${p.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ diet_plan: '' }) }),
+                              ]);
+                              if (results.some((r) => !r.ok)) throw new Error('clear failed');
+                            } catch {
+                              toast.error('Could not clear the plan — reload to see what was kept');
+                              return;
+                            }
                             setPatients((prev: any[]) => prev.map((x) => x.id === p.id ? { ...x, dietPlan: '' } : x));
                             setPatientTherapyTags((prev: any) => { const next = { ...prev }; delete next[p.id]; return next; });
                             setDietSchedules((prev: any) => { const next = { ...prev }; delete next[p.id]; return next; });
