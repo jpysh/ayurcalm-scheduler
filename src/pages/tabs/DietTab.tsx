@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
+import DayDietDialog from "./DayDietDialog";
 import { toOverrides, saveTemplate, loadTemplates } from "@/lib/dietPlan";
 
 type Patient = { id: string; name: string; phone?: string; gender?: string; dietPlan?: string; actualStart?: string; actualEnd?: string };
@@ -181,8 +182,10 @@ const DietTab = ({
   setAddPatientDietPlanLabel,
   dietTabActive,
 }: DietTabProps) => {
+  const [dayDietPatient, setDayDietPatient] = useState<Patient | null>(null);
   return (
     <>
+      <DayDietDialog patient={dayDietPatient} onClose={() => setDayDietPatient(null)} />
       {dietTabActive && (
         <>
           <div className="flex items-center justify-between">
@@ -265,6 +268,7 @@ const DietTab = ({
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setDayDietPatient(p)}>Day</Button>
                           <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => {
                             setAddDialogPatientId(p.id);
                             setShowAddDietDialog(true);

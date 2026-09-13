@@ -124,6 +124,10 @@ model DietPlan {
   created_at   DateTime @default(now())
 
   Patient Patient @relation(fields: [patient_id], references: [id])
+
+  /// One entry per meal per day. Two rows for the same meal made the sheet
+  /// print whichever the database returned last.
+  @@unique([patient_id, date, meal_time])
 }
 
 model DietPlanSegment {
