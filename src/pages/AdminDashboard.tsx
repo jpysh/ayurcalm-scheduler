@@ -34,6 +34,7 @@ import Settings from "./Settings";
 import { Fragment } from "react";
 import { API_BASE } from "@/lib/apiBase";
 import { loadTemplates, saveTemplate } from "@/lib/dietPlan";
+import { useCentreName } from "@/lib/centreName";
 
 type ApiSegment = { patient_id: string; start_date: string; end_date: string; template_id?: string | null; template_label?: string | null; therapy_ids?: (string | number)[] };
 
@@ -1518,11 +1519,7 @@ const AdminDashboard = () => {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const role = location.pathname.startsWith('/staff')
-    ? 'Staff'
-    : location.pathname.startsWith('/patient')
-    ? 'Patient'
-    : 'Admin';
+  const centreName = useCentreName();
   useServerHealth(API_BASE);
   useEffect(() => {
     const segs = location.pathname.split('/').filter(Boolean);
@@ -1549,7 +1546,7 @@ const AdminDashboard = () => {
       <header className="bg-card border-b border-border sticky top-0 z-10 shadow-sm">
         <div className="container mx-auto px-3 py-2 md:px-3 md:py-3">
           <div className="grid grid-cols-3 items-center">
-            <h1 className="text-sm md:text-lg font-bold justify-self-start">{`Ayur-${role}`}</h1>
+            <h1 className="text-sm md:text-lg font-bold justify-self-start">{centreName}</h1>
             <p className="text-xs md:text-sm font-medium tracking-tight text-center whitespace-nowrap">
             {new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
             </p>
