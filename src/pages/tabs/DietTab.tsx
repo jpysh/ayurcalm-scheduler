@@ -213,8 +213,8 @@ const DietTab = ({
                   <TableRow>
                     <TableHead className="text-xs md:text-sm">Patient</TableHead>
                     <TableHead className="text-xs md:text-sm">Diet Plan</TableHead>
-                    <TableHead className="text-xs md:text-sm">Schedule</TableHead>
-                    <TableHead className="text-xs md:text-sm">Therapies</TableHead>
+                    <TableHead className="hidden md:table-cell text-xs md:text-sm">Schedule</TableHead>
+                    <TableHead className="hidden md:table-cell text-xs md:text-sm">Therapies</TableHead>
                     <TableHead className="text-xs md:text-sm text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -232,7 +232,7 @@ const DietTab = ({
                         // and a bespoke segment never had one — fall back to its label.
                         return tpl?.name || segs[0].label || 'Plan set for this patient';
                       })()}</TableCell>
-                      <TableCell className="text-xs md:text-sm">
+                      <TableCell className="hidden md:table-cell text-xs md:text-sm">
                         <div className="flex flex-wrap gap-1">
                           {(dietSchedules[p.id] || []).map((s: DietScheduleSegment, idx: number) => (
                             <Badge key={`${p.id}-${idx}`} variant="outline" className="text-[11px]">
@@ -241,7 +241,7 @@ const DietTab = ({
                           ))}
                         </div>
                       </TableCell>
-                      <TableCell className="text-xs md:text-sm">
+                      <TableCell className="hidden md:table-cell text-xs md:text-sm">
                         <div className="flex flex-wrap gap-1">
                           {(() => {
                             const segs = dietSchedules[p.id] || [];
@@ -267,7 +267,7 @@ const DietTab = ({
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex flex-wrap items-center justify-end gap-1">
                           <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setDayDietPatient(p)}>Day</Button>
                           <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => {
                             setAddDialogPatientId(p.id);
