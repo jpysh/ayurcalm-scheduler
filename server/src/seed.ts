@@ -194,10 +194,11 @@ async function main() {
     }
   }
 
-  // Create appointments for next 3 months targeting ~30% capacity on business days
+  // Appointments for the next 4 months at ~30% capacity on business days, so a
+  // test install stays useful for a full quarter.
   const start = new Date();
   const end = new Date(start);
-  end.setMonth(end.getMonth() + 3);
+  end.setMonth(end.getMonth() + 4);
   const dayTimes = ['09:00','10:30','12:00','13:30','15:00'];
   const busy: Record<string, { staff: Record<string, { s: number; e: number }[]>; room: Record<string, { s: number; e: number }[]>; patient: Record<string, { s: number; e: number }[]> }> = {};
   const centerHolidays = await prisma.timeOff.findMany({ where: { entity_type: 'center', date: { gte: start, lte: end } } });
@@ -328,42 +329,36 @@ async function main() {
   // so the day sheet shows neither meals nor the rest-day rows — two features
   // that would look missing rather than unseeded.
   const today = new Date(new Date().toISOString().slice(0, 10));
-  const windowStart = new Date(today); windowStart.setDate(windowStart.getDate() - 5);
-  const windowEnd = new Date(today); windowEnd.setDate(windowEnd.getDate() + 9);
-
-  const treatedToday = await prisma.appointment.findMany({
-    where: { scheduled_date: today },
-    select: { patient_id: true },
-    distinct: ['patient_id'],
-  });
-  // A couple of residents with no treatment today, so the sheet shows what a
-  // rest day looks like: no therapy, meals still theirs.
-  const resting = createdPatients
-    .filter((p) => !treatedToday.some((a) => a.patient_id === p.id))
-    .slice(0, 2);
-  const residents = [...treatedToday.map((a) => ({ id: a.patient_id })), ...resting];
-
   const templates = await prisma.dietTemplate.findMany({ orderBy: { name: 'asc' } });
-  for (const [idx, resident] of residents.entries()) {
-    await prisma.patientStay.create({
-      data: {
-        patient_id: resident.id,
-        start_date: windowStart,
-        end_date: windowEnd,
-        duration_days: 15,
-      },
+  // Fifteen-day stays back to back until the bookings end, so every day's sheet
+  // has residents. The first stay holds today's treated patients.
+  let residents: { id: string }[] = [];
+  for (let windowStart = new Date(today.getTime() - 5 * 86400000); windowStart <= end; windowStart = new Date(windowStart.getTime() + 15 * 86400000)) {
+    const windowEnd = new Date(windowStart.getTime() + 14 * 86400000);
+    const anchor = windowStart < today ? today : windowStart;
+    const treated = await prisma.appointment.findMany({
+      // Today's stay takes only today's patients; later ones look a few days
+      // ahead so a stay starting on a weekend still has someone in it.
+      where: { scheduled_date: { gte: anchor, lte: new Date(anchor.getTime() + (anchor === today ? 0 : 2) * 86400000) } },
+      select: { patient_id: true },
+      distinct: ['patient_id'],
     });
-    // Not everyone: a centre always has someone whose plan has not been set yet,
-    // and the sheet should show that honestly rather than inventing one.
-    if (idx % 6 === 5 || templates.length === 0) continue;
-    await prisma.dietPlanSegment.create({
-      data: {
-        patient_id: resident.id,
-        start_date: windowStart,
-        end_date: windowEnd,
-        template_id: templates[idx % templates.length].id,
-      },
-    });
+    // A couple of residents with no treatment, so the sheet shows what a rest
+    // day looks like: no therapy, meals still theirs.
+    const resting = createdPatients.filter((p) => !treated.some((a) => a.patient_id === p.id)).slice(0, 2);
+    const stay = [...treated.map((a) => ({ id: a.patient_id })), ...resting];
+    if (residents.length === 0) residents = stay;
+    for (const [idx, resident] of stay.entries()) {
+      await prisma.patientStay.create({
+        data: { patient_id: resident.id, start_date: windowStart, end_date: windowEnd, duration_days: 15 },
+      });
+      // Not everyone: a centre always has someone whose plan has not been set yet,
+      // and the sheet should show that honestly rather than inventing one.
+      if (idx % 6 === 5 || templates.length === 0) continue;
+      await prisma.dietPlanSegment.create({
+        data: { patient_id: resident.id, start_date: windowStart, end_date: windowEnd, template_id: templates[idx % templates.length].id },
+      });
+    }
   }
 
   // One patient given something different for one meal today, so the override
