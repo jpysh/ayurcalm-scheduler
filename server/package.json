@@ -17,7 +17,8 @@
     "test:ui": "tsx src/tests/uiPersistence.test.ts",
     "test:validation": "tsx src/tests/validation.test.ts",
     "test:auto-assign": "tsx src/tests/autoAssign.test.ts",
-    "test:diet": "tsx src/tests/dietResolution.test.ts"
+    "test:diet": "tsx src/tests/dietResolution.test.ts",
+    "test:pdf": "tsx src/tests/shortenWords.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

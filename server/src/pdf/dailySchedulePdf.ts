@@ -58,6 +58,19 @@ const drawTable = (
   return yy;
 };
 
+/**
+ * Shortens any word too wide for its column to what fits, plus '..', so a
+ * narrow hour column prints 'Dhanyamla.. 60m' rather than breaking the word
+ * across two lines. Words that fit are left alone.
+ */
+export const shortenWords = (text: string, maxW: number, widthOf: (s: string) => number) =>
+  text.split('\n').map((line) => line.split(' ').map((word) => {
+    if (widthOf(word) <= maxW) return word;
+    let cut = word.length - 1;
+    while (cut > 1 && widthOf(`${word.slice(0, cut)}..`) > maxW) cut--;
+    return `${word.slice(0, cut)}..`;
+  }).join(' ')).join('\n');
+
 const toMinutes = (t: string) => {
   const [hh, mm] = t.split(':').map((n) => parseInt(n, 10));
   return hh * 60 + mm;
@@ -321,18 +334,30 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
    * size smaller is still read at arm's length; 'Agni / karma' is not.
    */
   const allCols = headers.map((_, k) => k);
+  // PDFKit wraps a word together with the space after it, so measure it that way.
+  const fitsWord = (word: string, colW: number) => doc.widthOfString(`${word} `) <= colW - 10;
   const dayWidths = layoutWidths(allCols);
   const fitTypeSize = () => {
-    for (const size of [9, 8.5, 8, 7.5, 7, 6.5]) {
+    // Stops at 8pt: below that the whole sheet gets hard to read to save one
+    // long name, which is better shortened.
+    for (const size of [9, 8.5, 8]) {
       cellFont = size;
       headFont = Math.min(11, size + 2);
       useCellFont();
       const fits = allCols.every((k, c) => rawRows.every((row) =>
-        (row[k] || '').split(/\s+/).every((word) => doc.widthOfString(word) <= dayWidths[c] - 10)));
+        (row[k] || '').split(/\s+/).every((word) => fitsWord(word, dayWidths[c]))));
       if (fits) return;
     }
   };
   fitTypeSize();
+  // At the smallest type some words still do not fit: shorten those instead.
+  // Merging compares cell text, and the same text shortens the same way, so
+  // merged cells stay merged.
+  for (const rows of [rawRows, mergedRows]) {
+    for (const row of rows) {
+      allCols.forEach((k, c) => { if (row[k]) row[k] = shortenWords(row[k], dayWidths[c] - 10, (s) => doc.widthOfString(`${s} `)); });
+    }
+  }
 
   const computePageLayout = (lastRow: number = rowCount - 1) => {
     // A column nobody on this page uses is left out, and its width shared.

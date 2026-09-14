@@ -59,6 +59,8 @@ jobs:
       # resolution on its own, which is the part that fails quietly.
       - run: npm run test:diet
         working-directory: server
+      - run: npm run test:pdf
+        working-directory: server
 
   docker:
     runs-on: ubuntu-latest
