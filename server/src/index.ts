@@ -3,7 +3,6 @@ import 'dotenv/config';
 // which a malformed request body is enough to cause — never reaches the error
 // middleware below: Express 4 leaves it unhandled and Node exits, taking every
 // session with it because JWT_SECRET is regenerated on restart.
-import 'express-async-errors';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { app } from './server.js';
@@ -142,10 +141,10 @@ const __dirname = path.dirname(__filename);
 const staticDir = path.resolve(__dirname, '../../dist');
 if (fs.existsSync(staticDir)) {
   expressApp.use(express.static(staticDir));
-  expressApp.get('/api/*', (_req: Request, res: Response) => {
+  expressApp.get('/api/{*path}', (_req: Request, res: Response) => {
     res.status(404).json({ error: 'Not Found' });
   });
-  expressApp.get('*', (_req: Request, res: Response) => {
+  expressApp.get('/{*path}', (_req: Request, res: Response) => {
     res.sendFile(path.join(staticDir, 'index.html'));
   });
 }
@@ -153,7 +152,7 @@ if (!fs.existsSync(staticDir)) {
   expressApp.get('/', (_req: Request, res: Response) => {
     res.status(200).send('AyurCalm API');
   });
-  expressApp.get('*', (_req: Request, res: Response) => {
+  expressApp.get('/{*path}', (_req: Request, res: Response) => {
     res.status(404).json({ error: 'Not Found' });
   });
 }
@@ -177,6 +176,16 @@ expressApp.use((err: any, _req: Request, res: Response, _next: NextFunction) => 
       error: 'Invalid request',
       details: err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
     });
+    return;
+  }
+  // Body parsing sets a 4xx status (malformed JSON, body too large): the client's fault.
+  if (err?.status >= 400 && err.status < 500) {
+    res.status(err.status).json({ error: err.type === 'entity.too.large' ? 'Request too large' : 'Invalid request body' });
+    return;
+  }
+  // Prisma: the record to update or delete does not exist.
+  if (err?.code === 'P2025') {
+    res.status(404).json({ error: 'Not Found' });
     return;
   }
   console.error('[api] unhandled error', err);
