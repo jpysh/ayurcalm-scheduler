@@ -150,7 +150,7 @@ const SetupWizard = () => {
             <>
               <p className="text-sm text-muted-foreground">
                 This install came with an example centre — patients, therapists, rooms, therapies
-                and a week of appointments — so you could see how it works.
+                and three months of appointments — so you could see how it works.
               </p>
               <div className="grid gap-2">
                 <Button onClick={() => finish(true)} disabled={busy}>

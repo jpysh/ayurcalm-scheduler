@@ -16,7 +16,6 @@ import Login from "./pages/Login";
 import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
-import Ailments from "./pages/Ailments";
 import SetupWizard from "./pages/SetupWizard";
 import { SupportButton } from "@/components/SupportButton";
 import { API_BASE } from "@/lib/apiBase";

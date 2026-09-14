@@ -84,7 +84,7 @@ test('tabs render and navigate', async ({ page }) => {
   await expect(page.getByRole('tab', { name: 'Staff' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Rooms' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Therapies' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'TimeOff' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Time off' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Patients' })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Staff' }).click();
@@ -93,7 +93,7 @@ test('tabs render and navigate', async ({ page }) => {
   await expect(page.getByText('Room Management')).toBeVisible({ timeout: 15000 });
   await page.getByRole('tab', { name: 'Therapies' }).click();
   await expect(page.getByText('Therapy Management')).toBeVisible({ timeout: 15000 });
-  await page.getByRole('tab', { name: 'TimeOff' }).click();
+  await page.getByRole('tab', { name: 'Time off' }).click();
   await expect(page.getByText(/Time Off/)).toBeVisible({ timeout: 15000 });
 });
 
@@ -148,7 +148,7 @@ test('add therapy flow', async ({ page }) => {
 
 test('add center timeoff flow', async ({ page }) => {
   await loginAdmin(page);
-  await page.getByRole('tab', { name: 'TimeOff' }).click();
+  await page.getByRole('tab', { name: 'Time off' }).click();
   await expect(page.getByText(/Time Off/)).toBeVisible();
   await page.getByRole('button', { name: 'Add Time Off' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add TimeOff' });
