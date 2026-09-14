@@ -37,13 +37,13 @@ Sign in with `admin@example.com` / `demo1234`.
    ```bash
    npm run lint
    npm run build
-   npm run test:e2e
+   docker compose up -d && npm run test:e2e   # sign-in, tabs, day sheet on a real install
    cd server && npm run build && npm run test:smoke
    ```
 4. Open a pull request describing what changed and why. Screenshots help for UI
    changes.
 
-CI runs lint, both builds and a Docker image build on every pull request.
+CI runs lint, both builds, a Docker image build and the end-to-end tests on every pull request.
 
 `npm run lint` currently reports around 470 pre-existing `no-explicit-any`
 errors, so it is advisory in CI rather than blocking. Please don't add new ones —

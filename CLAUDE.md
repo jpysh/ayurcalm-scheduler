@@ -35,8 +35,9 @@ server/                 Express + Prisma + Zod, serves ../dist in production
   src/auth.ts           bcrypt + JWT login, requireAuth
   src/settings.ts       Centre settings, requireAdmin, public support endpoint
   src/users.ts          User management, change-password
-  src/seed.ts           Demo dataset (~120 patients, 3 months of appointments,
-                        residents with stays and diet plans)
+  src/seed.ts           Demo and test dataset (120 patients, 4 months of
+                        appointments, residents with diet plans). Settings →
+                        Reset demo data rebuilds it from today
   src/dietTemplateSeed.ts  The starting diet plans, seeded by name
   src/dietResolution.ts    What one patient eats on one day — pure, and tested
   src/dietTemplates.ts     Diet plan CRUD, admin-only writes
@@ -130,6 +131,9 @@ actually unchanged after the 403 rather than trusting the status code.
 `docker compose up -d --build` reuses the running container when the image has
 not changed, so it will not pick up anything you patched inside the container
 while debugging. Use `--force-recreate` before believing a clean result.
+
+`npm run test:e2e` runs sign-in, every tab and the day sheet in Chromium against
+the running stack (`E2E_BASE_URL`, default :8080). CI runs it too.
 
 Looking at the PDF is part of the check:
 

@@ -69,3 +69,19 @@ jobs:
       # The quick start is the first thing anyone tries, so make sure the
       # image still builds on every change.
       - run: docker build -t ayurcalm-scheduler .
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # The real quick start, seeded with demo data: sign in, every tab, the day sheet.
+      - run: docker compose up -d --build
+      - run: timeout 300 sh -c 'until docker compose logs app | grep -q "Seeded\|seed failed"; do sleep 3; done; until curl -sf localhost:8080/api/health; do sleep 2; done'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - if: failure()
+        run: docker compose logs app | tail -100
