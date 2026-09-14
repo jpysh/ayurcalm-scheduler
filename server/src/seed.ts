@@ -134,7 +134,10 @@ async function main() {
   const patients: string[] = [];
   const surnames = ['Sharma','Verma','Iyer','Nair','Reddy','Patel','Singh','Gupta','Joshi','Chatterjee','Das','Banerjee','Mishra','Yadav','Khan'];
   const firstNames = ['Aarav','Vivaan','Aditya','Vihaan','Arjun','Sai','Krishna','Ananya','Diya','Aarohi','Ishita','Sneha','Riya','Nisha','Meera'];
-  for (let i = 0; i < 120; i++) patients.push(`${randomOf(firstNames)} ${randomOf(surnames)}`);
+  // Every name distinct: two "Riya Das" rows on the day sheet read as a mistake.
+  for (let i = 0; i < 120; i++) patients.push(`${firstNames[i % 15]} ${surnames[Math.floor(i / 15)]}`);
+  // One name long enough to be shortened on the day sheet, as some real ones are.
+  patients[7] = 'Venkatasubramanian Raghunathan';
 
   const createdPatients = await Promise.all(patients.map((name, idx) => prisma.patient.create({
     data: { name, gender: idx % 2 === 0 ? 'male' : 'female', phone: `+91-9${Math.floor(100000000 + Math.random()*899999999)}` },
