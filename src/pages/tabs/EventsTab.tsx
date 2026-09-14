@@ -119,7 +119,7 @@ const EventsTab = ({
                         </SelectContent>
                       </Select>
                     ) : (
-                      (() => { const r = roomsList.find((r: any) => String(r.id) === String(ev.room_id)); return r ? r.name : ''; })()
+                      (() => { const r = roomsList.find((r: any) => String(r.id) === String(ev.room_id)); return r ? r.name : '—'; })()
                     )}
                   </TableCell>
                   <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
@@ -293,7 +293,7 @@ const EventsTab = ({
                         </PopoverContent>
                       </Popover>
                     ) : (
-                      (() => { const d = (ev.weekdays || []); if ((ev.recurrence !== 'weekly') || d.length === 0) return 'none'; if (d.length === 7) return 'All'; return d.map((w: string) => w.slice(0,3)).join(','); })()
+                      (() => { const d = (ev.weekdays || []); if ((ev.recurrence !== 'weekly') || d.length === 0) return 'Once'; if (d.length === 7) return 'Daily'; return d.map((w: string) => w.slice(0,3)).join(','); })()
                     )}
                   </TableCell>
                   <TableCell className="text-right text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">

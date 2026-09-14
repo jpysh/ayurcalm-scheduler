@@ -33,7 +33,6 @@ const Login = () => {
       localStorage.setItem("authToken", data.token);
       localStorage.setItem("authRole", data.user?.role === "admin" ? "Admin" : "Staff");
       localStorage.setItem("authUser", data.user?.email ?? username.trim());
-      toast.success(`Welcome, ${data.user?.name || data.user?.email}`);
       // An administrator lands in the setup wizard until the centre's details
       // have been filled in once.
       if (data.user?.role === "admin") {
