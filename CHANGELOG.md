@@ -5,6 +5,10 @@ All notable changes to this project are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-14
+
+The day sheet reads row by row, the demo data lasts four months, and no dependency advisories remain.
+
 ### Changed
 - **Day sheet** — each patient's row holds everything for them; treatment notes
   moved from the end of the sheet into a **Notes** column. Long names shorten
@@ -128,5 +132,6 @@ First public release.
 - The API base URL is resolved once in `src/lib/apiBase.ts` instead of in nine
   separate files, and the Vite dev server proxies `/api`
 
+[0.3.0]: https://github.com/jpysh/ayurcalm-scheduler/releases/tag/v0.3.0
 [0.2.0]: https://github.com/jpysh/ayurcalm-scheduler/releases/tag/v0.2.0
 [0.1.0]: https://github.com/jpysh/ayurcalm-scheduler/releases/tag/v0.1.0
