@@ -9,12 +9,15 @@ const fmtLong = (isoDate: string) => {
   return new Intl.DateTimeFormat('en-GB', { timeZone: ADMIN_TZ, weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(d);
 };
 
-const addHeader = (doc: any, dateStr: string, centreName: string) => {
+const addHeader = (doc: any, dateStr: string, centreName: string, everyone = '') => {
   const w = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const x = doc.page.margins.left;
   const top = doc.page.margins.top;
   // One line, so the table gets the rest of the page.
   doc.font('Helvetica-Bold').fontSize(14).text(`${centreName} \u2014 ${fmtLong(dateStr)}`, x, top, { align: 'center', width: w });
+  // Events for everyone are the same in every row, so they print once here
+  // instead of taking a column each.
+  if (everyone) doc.font('Helvetica').fontSize(9).text(`For everyone: ${everyone}`, x, doc.y + 2, { align: 'center', width: w });
   doc.moveDown(0.5);
 };
 
@@ -68,7 +71,6 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   doc.on('data', (c: any) => chunks.push(Buffer.from(c)));
   const done = new Promise<Buffer>((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
 
-  const dayStart = '07:00', dayEnd = '19:00';
   const day = new Date(dateISO);
 
   const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
@@ -96,15 +98,10 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const weekday = weekdayNames[day.getDay()];
   const filteredWeekly = weeklyEvents.filter((e) => Array.isArray(e.weekdays) && e.weekdays.includes(weekday));
   const allEventsRaw = [...eventsByDate, ...filteredWeekly];
-  const inWindow = (t: string) => t >= dayStart && t <= dayEnd;
-  const eventsWindow = allEventsRaw.filter((e) => inWindow(e.start_time) && (e.patients_scope !== 'none'));
-
-  const apptsDay = appts.filter((a) => inWindow(a.start_time));
-
-  const timeSlotsSet = new Set<string>();
-  apptsDay.forEach((a) => timeSlotsSet.add(a.start_time));
-  eventsWindow.forEach((e) => timeSlotsSet.add(e.start_time));
-  const timeSlots = Array.from(timeSlotsSet).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  // Everything on the day prints, whatever the hours: a booking the sheet
+  // leaves out is one a therapist never sees.
+  const eventsWindow = allEventsRaw.filter((e) => e.patients_scope !== 'none');
+  const apptsDay = appts;
 
   const apptsByPatient = new Map<string, typeof apptsDay>();
   for (const a of apptsDay) {
@@ -161,6 +158,34 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   }
   const mealsWithColumn = new Set(mealByTimeSlot.values());
 
+  // Columns are hours, not start times: a busy day has twenty distinct start
+  // times and the page has room for about ten columns. A cell states its own
+  // start when it is not on the hour. Meals keep a column at their own time
+  // because the cell holds each patient's meal. If even hours cannot fit at the
+  // smallest type, columns widen to two or three hours.
+  const isMealEvent = (e: (typeof eventsWindow)[number]) => mealByTimeSlot.has(e.start_time);
+  const sharedEvents = eventsWindow.filter((e) => !isMealEvent(e) && (e.patients_scope || 'all') !== 'custom');
+  const ownEvents = eventsWindow.filter((e) => !isMealEvent(e) && e.patients_scope === 'custom');
+  const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+  const startTimes = [...apptsDay.map((a) => a.start_time), ...ownEvents.map((e) => e.start_time)];
+  const bucketsFor = (size: number) => new Set(startTimes.map((t) => Math.floor(toMinutes(t) / size) * size));
+  // Widths are fixed rather than fitted to content, so no mix of start times can
+  // push the table past the right margin. Hour columns share what is left and
+  // widen to two, three or four hours when an hour would be too narrow to read.
+  const pageW = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const NO_W = 22, PATIENT_W = 90, MEAL_W = 95, NOTES_W = 120, HOUR_MIN_W = 48;
+  const hourShare = (size: number) => (pageW - NO_W - PATIENT_W - NOTES_W - mealByTimeSlot.size * MEAL_W) / Math.max(1, bucketsFor(size).size);
+  const bucket = [60, 120, 180, 240].find((size) => hourShare(size) >= HOUR_MIN_W) ?? 240;
+  type Slot = { label: string; start: number; end: number; meal?: MealKey };
+  const timeSlots = ([
+    ...[...bucketsFor(bucket)].map((start) => ({ label: hhmm(start), start, end: start + bucket })),
+    ...[...mealByTimeSlot].map(([t, meal]) => ({ label: `${meal[0].toUpperCase()}${meal.slice(1)} ${t}`, start: toMinutes(t), end: toMinutes(t), meal })),
+  ] as Slot[]).sort((a, b) => a.start - b.start || (a.meal ? 1 : -1));
+  const everyoneLine = [...sharedEvents]
+    .sort((a, b) => a.start_time.localeCompare(b.start_time))
+    .map((e) => `${e.start_time} ${e.activity_name} ${durationBetween(e.start_time, e.end_time)}m`)
+    .join('  \u00b7  ');
+
   const dietFor = (patient: (typeof patients)[number]) => {
     const seg = segmentByPatient.get(patient.id);
     return resolveDiet({
@@ -188,18 +213,9 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const useCellFont = () => doc.font('Helvetica').fontSize(cellFont);
   const useHeadFont = () => doc.font('Helvetica-Bold').fontSize(headFont);
   useCellFont();
-  const nameWidths = displayPatients.map((p) => doc.widthOfString(patientById[p.id] || p.id));
-  const dietWidths = displayPatients.map((p) => doc.widthOfString(dietByPatient.get(p.id)?.notes || ''));
-  const maxNameW = Math.max(0, ...nameWidths);
-  const maxDietW = Math.max(0, ...dietWidths);
-  const patientColW = Math.min(140, Math.max(80, Math.ceil(maxNameW + 12)));
   const anyDiet = displayPatients.some((p) => !!dietByPatient.get(p.id)?.notes);
-  const dietColW = anyDiet ? Math.min(190, Math.max(120, Math.ceil(maxDietW + 12))) : 0;
-  const minSlotW = 30;
-  const availableW = w - noColW - patientColW - (anyDiet ? dietColW : 0);
-  const slotW = Math.max(minSlotW, Math.floor(availableW / Math.max(1, timeSlots.length)));
 
-  addHeader(doc, dateISO, centreName);
+  addHeader(doc, dateISO, centreName, everyoneLine);
   const startY = doc.y + 2;
 
   if (displayPatients.length === 0) {
@@ -210,47 +226,35 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
 
   let yy = startY;
   const maxContentHeight = doc.page.height - doc.page.margins.bottom - yy;
-  const headers = ['No', 'Patient', ...timeSlots, ...(anyDiet ? ['Diet notes'] : [])];
+  const headers = ['No', 'Patient', ...timeSlots.map((t) => t.label), ...(anyDiet ? ['Diet notes'] : [])];
   let colWidths: number[] = [];
   const rawRows: string[][] = displayPatients.map((p, idx) => {
       const apptList = apptsByPatient.get(p.id) || [];
-      const cells = timeSlots.map((t) => {
-        const parts: string[] = [];
-        const a = apptList.find((x) => x.start_time === t);
-        if (a) {
-          const therapyName = therapyById[a.therapy_id] || a.therapy_id;
-          const staffName = a.staff_id ? (staffById[a.staff_id] || a.staff_id) : '';
-          const roomName = a.room_id ? (roomById[a.room_id] || a.room_id) : '';
-          const dur = a.duration_minutes || 0;
-          const metaParts: string[] = [];
-          if (staffName) metaParts.push(`Staff: ${staffName}`);
-          if (roomName) metaParts.push(`Room: ${roomName}`);
-          const meta = metaParts.join(', ');
-          parts.push(`${therapyName} (${dur}m)${meta ? ' [' + meta + ']' : ''}`);
+      const noDr = (name: string) => name.replace(/^Dr\.?\s+/i, '');
+      const cells = timeSlots.map((slot) => {
+        if (slot.meal) {
+          // A patient's own meal; the meal's name only stands in when they have no plan.
+          const own = dietByPatient.get(p.id)?.meals[slot.meal];
+          if (own) return own;
+          const applies = eventsWindow.some((e) => e.start_time === hhmm(slot.start) && isMealEvent(e) && eventAppliesToPatient(e, p.id));
+          return applies ? slot.label.split(' ')[0] : '';
         }
-        // A meal column carries this patient's own meal; the generic event name
-        // only stands in when they have no plan of their own.
-        const mealHere = mealByTimeSlot.get(t);
-        const ownMeal = mealHere ? dietByPatient.get(p.id)?.meals[mealHere] : undefined;
-        if (ownMeal) {
-          parts.push(ownMeal);
-          return parts.join(' | ');
-        }
-        const evs = eventsWindow.filter((e) => e.start_time === t && eventAppliesToPatient(e, p.id));
-        if (evs.length > 0) {
-          const e = evs[0];
-          const act = e.activity_name;
-          const lead = e.staff_id ? (staffById[e.staff_id] || e.staff_id) : '';
-          const loc = e.room_id ? (roomById[e.room_id] || e.room_id) : '';
-          const dur = durationBetween(e.start_time, e.end_time);
-          const metaPartsEv: string[] = [];
-          if (lead) metaPartsEv.push(`Staff: ${lead}`);
-          if (loc) metaPartsEv.push(`Room: ${loc}`);
-          const metaEv = metaPartsEv.join(', ');
-          parts.push(`${act} (${dur}m)${metaEv ? ' [' + metaEv + ']' : ''}`);
-          if (evs.length > 1) parts.push(`+${evs.length - 1} more`);
-        }
-        return parts.join(' | ') || '';
+        const inSlot = (t: string) => toMinutes(t) >= slot.start && toMinutes(t) < slot.end;
+        const lines = [
+          ...apptList.filter((a) => inSlot(a.start_time)).map((a) => ({
+            t: a.start_time,
+            text: [
+              `${therapyById[a.therapy_id] || a.therapy_id} ${a.duration_minutes || 0}m`,
+              a.staff_id ? noDr(staffById[a.staff_id] || a.staff_id) : '',
+              a.room_id ? roomById[a.room_id] || a.room_id : '',
+            ].filter(Boolean).join(' \u00b7 '),
+          })),
+          ...ownEvents.filter((e) => inSlot(e.start_time) && eventAppliesToPatient(e, p.id)).map((e) => ({
+            t: e.start_time,
+            text: `${e.activity_name} ${durationBetween(e.start_time, e.end_time)}m`,
+          })),
+        ].sort((m, n) => m.t.localeCompare(n.t));
+        return lines.map((l) => (l.t === slot.label ? l.text : `${l.t} ${l.text}`)).join('\n');
       });
       const row = [String(idx + 1), patientById[p.id] || p.id, ...cells];
       if (anyDiet) row.push(dietByPatient.get(p.id)?.notes || '');
@@ -285,7 +289,6 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     }
   }
   const headerH = 18;
-  const pageRowLimit = Number.MAX_SAFE_INTEGER;
   let i = 0;
   let pageHeaders: string[] = [];
   let pageDrawIdxs: number[] = [];
@@ -295,125 +298,49 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   // A column narrower than its own header wraps '07:30' onto two lines, and one
   // narrower than its longest word breaks that word mid-syllable. Both are the
   // same fault on a printed sheet, so both set a floor.
-  const patientMinW = 70;
-  const slotMin = 38, dietMinW = 80;
-  // A meal column holds a sentence rather than 'Lunch (30m)', so it needs more
-  // room than a therapy slot.
-  const mealSlotMin = 84;
-
-  const longestWordWidth = (colIdx: number) => {
-    let widest = 0;
-    for (let r = 0; r < rowCount; r++) {
-      for (const word of (rawRows[r][colIdx] || '').split(/\s+/)) {
-        if (word) widest = Math.max(widest, doc.widthOfString(word));
-      }
-    }
-    return Math.ceil(widest) + 8;
+  const widthOf = (colIdx: number, drawn: number[], hourW: number) => {
+    if (colIdx === 0) return NO_W;
+    if (colIdx === 1) return PATIENT_W;
+    if (anyDiet && colIdx === headers.length - 1) return NOTES_W;
+    return timeSlots[colIdx - 2].meal ? MEAL_W : hourW;
+  };
+  const layoutWidths = (drawn: number[]) => {
+    const hours = drawn.filter((k) => k >= 2 && k < timeColEndExclusive && !timeSlots[k - 2].meal).length;
+    const fixed = drawn.reduce((sum, k) => sum + (k >= 2 && k < timeColEndExclusive && !timeSlots[k - 2].meal ? 0 : widthOf(k, drawn, 0)), 0);
+    const hourW = hours ? (w - fixed) / hours : 0;
+    const widths = drawn.map((k) => widthOf(k, drawn, hourW));
+    // A page with no therapy hours gives the spare width to its meal columns.
+    const spare = w - widths.reduce((a2, b2) => a2 + b2, 0);
+    const meals = drawn.map((k, c) => (k >= 2 && k < timeColEndExclusive && timeSlots[k - 2].meal ? c : -1)).filter((c) => c >= 0);
+    if (spare > 0 && meals.length) for (const c of meals) widths[c] += spare / meals.length;
+    return widths;
   };
 
-  const slotFloor = (colIdx: number) =>
-    Math.max(
-      mealByTimeSlot.has(timeSlots[colIdx - 2]) ? mealSlotMin : slotMin,
-      longestWordWidth(colIdx),
-    );
-
   /**
-   * Shrink the table's type until the columns can hold their longest words. A
-   * sheet a size smaller is still read at arm's length; 'Chatt / erjee' is not.
-   *
-   * ponytail: below the smallest size tried, the table still runs past the right
-   * margin. Bucketing start times into a coarser grid is the fix — see #7.
+   * The largest type at which every column holds its longest word. A sheet a
+   * size smaller is still read at arm's length; 'Agni / karma' is not.
    */
+  const allCols = headers.map((_, k) => k);
+  const dayWidths = layoutWidths(allCols);
   const fitTypeSize = () => {
     for (const size of [9, 8.5, 8, 7.5, 7, 6.5]) {
       cellFont = size;
       headFont = Math.min(11, size + 2);
       useCellFont();
-      let needed = noColW + patientMinW + (anyDiet ? dietMinW : 0);
-      for (let t = 0; t < timeSlots.length; t++) needed += slotFloor(2 + t);
-      if (needed <= w) return;
+      const fits = allCols.every((k, c) => rawRows.every((row) =>
+        (row[k] || '').split(/\s+/).every((word) => doc.widthOfString(word) <= dayWidths[c] - 10)));
+      if (fits) return;
     }
   };
   fitTypeSize();
 
   const computePageLayout = (lastRow: number = rowCount - 1) => {
-    useCellFont();
-    const selectedTimeIdxs: number[] = [];
-    for (let tIdx = 0; tIdx < timeSlots.length; tIdx++) {
-      const colIdx = 2 + tIdx;
-      let hasContent = false;
-      for (let r = i; r <= lastRow; r++) {
-        if ((rawRows[r][colIdx] || '').length > 0) { hasContent = true; break; }
-      }
-      if (hasContent) selectedTimeIdxs.push(colIdx);
-    }
-
-    // Measure widths for selected columns
-    const idxNo = 0;
-    const idxPatient = 1;
-    const patientMax = 140;
-    const slotMax = 110;
-    const dietMin = dietMinW, dietMax = 150;
-    // Headers are drawn in bold 11; measuring them in regular 9 underestimates.
-    useHeadFont();
-    const headerWidths: number[] = headers.map((h) => Math.ceil(doc.widthOfString(h)) + 8);
-    useCellFont();
-    const patientW = Math.max(headerWidths[idxPatient], ...Array.from({ length: lastRow - i + 1 }, (_, r) => Math.ceil(doc.widthOfString(mergedRows[i + r][idxPatient] || '')) + 8));
-    const timeWs: number[] = selectedTimeIdxs.map((colIdx) => {
-      const maxCellW = Math.max(headerWidths[colIdx], ...Array.from({ length: lastRow - i + 1 }, (_, r) => Math.ceil(doc.widthOfString(mergedRows[i + r][colIdx] || '')) + 8));
-      return Math.max(slotFloor(colIdx), headerWidths[colIdx], Math.min(slotMax, maxCellW));
-    });
-    const hasDiet = anyDiet;
-    const dietIdx = headers.length - 1;
-    const dietW = hasDiet ? Math.max(headerWidths[dietIdx], ...Array.from({ length: lastRow - i + 1 }, (_, r) => Math.ceil(doc.widthOfString(mergedRows[i + r][dietIdx] || '')) + 8)) : 0;
-
-    let pW = Math.max(patientMinW, Math.min(patientMax, patientW));
-    let dW = hasDiet ? Math.max(dietMin, Math.min(dietMax, dietW)) : 0;
-    const widths = [noColW, pW, ...timeWs, ...(hasDiet ? [dW] : [])];
-    const total = widths.reduce((a, b) => a + b, 0);
-    if (total > w) {
-      for (let iter = 0; iter < 3; iter++) {
-        const over = widths.reduce((a, b) => a + b, 0) - w;
-        if (over <= 0) break;
-        const flexIdxs = widths.map((_, idx) => idx).filter((idx) => idx !== 0);
-        const mins = widths.map((_, idx) => {
-          if (idx === 0) return noColW;
-          if (idx === 1) return patientMinW;
-          if (hasDiet && idx === widths.length - 1) return dietMin;
-          const colIdx = selectedTimeIdxs[idx - 2];
-          return colIdx === undefined ? slotMin : Math.max(slotFloor(colIdx), headerWidths[colIdx]);
-        });
-        const flexSum = flexIdxs.reduce((a, idx) => a + widths[idx], 0);
-        for (const idx of flexIdxs) {
-          const share = (widths[idx] / flexSum) * over;
-          widths[idx] = Math.max(mins[idx], Math.floor(widths[idx] - share));
-        }
-      }
-    }
-    if (widths.reduce((a, b) => a + b, 0) < w) {
-      for (let iter = 0; iter < 3; iter++) {
-        let under = w - widths.reduce((a, b) => a + b, 0);
-        if (under <= 0) break;
-        const flexIdxs = widths.map((_, idx) => idx).filter((idx) => idx !== 0);
-        const caps = widths.map((_, idx) => {
-          if (idx === 0) return noColW;
-          if (idx === 1) return patientMax;
-          if (hasDiet && idx === widths.length - 1) return dietMax;
-          return slotMax;
-        });
-        const room = flexIdxs.reduce((a, idx) => a + Math.max(0, caps[idx] - widths[idx]), 0);
-        if (room <= 0) break;
-        for (const idx of flexIdxs) {
-          const capacity = Math.max(0, caps[idx] - widths[idx]);
-          const delta = Math.min(capacity, Math.floor((capacity / room) * under));
-          widths[idx] += delta;
-          under -= delta;
-        }
-      }
-    }
-    colWidths = widths;
-    pageDrawIdxs = [idxNo, idxPatient, ...selectedTimeIdxs, ...(hasDiet ? [dietIdx] : [])];
-    pageHeaders = ['No', 'Patient', ...selectedTimeIdxs.map((colIdx) => headers[colIdx]), ...(hasDiet ? ['Diet notes'] : [])];
+    // A column nobody on this page uses is left out, and its width shared.
+    const drawn = allCols.filter((k) => k < 2 || (anyDiet && k === headers.length - 1) ||
+      rawRows.slice(i, lastRow + 1).some((row) => !!row[k]));
+    colWidths = layoutWidths(drawn);
+    pageDrawIdxs = drawn;
+    pageHeaders = drawn.map((k) => headers[k]);
   };
   const drawHeaderRow = () => {
     useHeadFont();
@@ -482,11 +409,9 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const layoutPage = () => {
     const headerTop = yy;
 
-    // ponytail: columns are chosen from every row still to be drawn, so a start
-    // time nobody on this page uses can still take width. Choosing per page is
-    // circular — narrower columns make rows shorter, which changes which rows
-    // are on the page, which changes the columns — and needs the time bucketing
-    // in #7 to settle. Day-wide is the honest version until then.
+    // ponytail: columns are chosen from every row still to be drawn, so an hour
+    // used only on a later page still takes width here. Choosing per page is
+    // circular (column widths change row heights, which change the page).
     computePageLayout();
 
     yy = headerTop;
@@ -503,7 +428,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     if (rowsOnPage > 0 && yy + rowH > pageBottom) {
       flushPageCells();
       doc.addPage();
-      addHeader(doc, dateISO, centreName);
+      addHeader(doc, dateISO, centreName, everyoneLine);
       yy = doc.y + 2;
       rowsOnPage = 0;
       layoutPage();
@@ -552,7 +477,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     }
     if (yy + needed > pageBottom) {
       doc.addPage();
-      addHeader(doc, dateISO, centreName);
+      addHeader(doc, dateISO, centreName, everyoneLine);
       yy = doc.y + 2;
     } else {
       yy += 10;
