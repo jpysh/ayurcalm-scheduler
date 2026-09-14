@@ -124,7 +124,7 @@ install is two containers total.
 
 ## Status and roadmap
 
-Version 0.2.0 — usable, and in active development by a single maintainer. Known
+Version 0.3.0 — usable, and in active development by a single maintainer. Known
 to be unfinished:
 
 - **Ailments** — the tab is a placeholder
