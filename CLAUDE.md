@@ -57,10 +57,9 @@ change to `dailySchedulePdf.ts` must break the page *before* drawing a row that
 will not fit, and must be checked by generating a PDF and looking at it — the
 code does not throw when it is wrong.
 
-**Routes are async and validate with Zod, so `express-async-errors` is load-bearing.**
-Without that import in `index.ts`, a rejected handler never reaches the error
-middleware: Express 4 leaves it unhandled, Node exits, and every session dies
-with the restart. Do not remove it while the app is on Express 4.
+**Express 5 forwards rejected async handlers to the error middleware.** Routes
+are async and validate with Zod; a thrown error becomes a 500, not a crashed
+process. Wildcard routes use Express 5 syntax: `/{*path}`, not `*`.
 
 **Diet resolution lives in `dietResolution.ts`, not in the PDF.** It decides what
 a patient may eat: what was written for that date beats their own wording, which
