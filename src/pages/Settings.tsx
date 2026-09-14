@@ -119,6 +119,26 @@ const Settings = () => {
     }
   };
 
+  const resetDemoData = async () => {
+    if (!window.confirm(
+      "Replace the demo data with a fresh four months starting today?\n\n" +
+      "Any changes made to demo patients and bookings are lost. Your account and centre settings are kept."
+    )) return;
+    setClearing(true);
+    try {
+      const res = await fetch(`${API_BASE}/settings/reset-demo-data`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error || "Could not reset demo data");
+        return;
+      }
+      toast.success("Demo data rebuilt from today");
+      setTimeout(() => window.location.reload(), 900);
+    } finally {
+      setClearing(false);
+    }
+  };
+
   if (!settings) {
     return <div className="container mx-auto p-6 text-sm text-muted-foreground">Loading settings…</div>;
   }
@@ -319,10 +339,14 @@ const Settings = () => {
             <p className="text-sm text-muted-foreground">
               This install was seeded with example patients, therapists, rooms, therapies and
               appointments so you could try the app straight away. Clear it when you are ready to
-              enter your centre's own details. Your account and the settings above are kept.
+              enter your centre's own details, or reset it to get four fresh months of bookings from today.
+              Your account and the settings above are kept.
             </p>
             <Button variant="destructive" onClick={clearDemoData} disabled={clearing}>
-              {clearing ? "Clearing…" : "Clear demo data"}
+              {clearing ? "Working… (up to two minutes)" : "Clear demo data"}
+            </Button>
+            <Button variant="outline" className="ml-2" onClick={resetDemoData} disabled={clearing}>
+              Reset demo data from today
             </Button>
           </CardContent>
         </Card>

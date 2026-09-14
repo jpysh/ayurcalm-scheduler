@@ -1,6 +1,10 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from './server.js';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const SINGLETON_ID = 'singleton';
 
@@ -102,8 +106,8 @@ settingsRouter.put('/', requireAdmin, async (req: Request, res: Response) => {
  * and settings intact so the operator stays signed in. Order matters: rows that
  * reference others go first.
  */
-settingsRouter.post('/clear-demo-data', requireAdmin, async (_req: Request, res: Response) => {
-  const deleted = await prisma.$transaction(async (tx) => {
+const clearDemoData = () =>
+  prisma.$transaction(async (tx) => {
     const appointments = await tx.appointment.deleteMany({});
     await tx.dietPlanSegment.deleteMany({});
     await tx.dietPlan.deleteMany({});
@@ -124,7 +128,24 @@ settingsRouter.post('/clear-demo-data', requireAdmin, async (_req: Request, res:
       therapies: therapies.count,
     };
   });
-  res.json({ ok: true, deleted });
+
+settingsRouter.post('/clear-demo-data', requireAdmin, async (_req: Request, res: Response) => {
+  res.json({ ok: true, deleted: await clearDemoData() });
+});
+
+/**
+ * Rebuilds the demo from today, so a test install that has run past its
+ * bookings gets a fresh four months. Refused once the demo has been cleared:
+ * by then the data is the centre's own.
+ */
+settingsRouter.post('/reset-demo-data', requireAdmin, async (_req: Request, res: Response) => {
+  const settings = await prisma.settings.findUnique({ where: { id: SINGLETON_ID } });
+  if (!settings?.demo_data) return res.status(409).json({ error: 'This install holds the centre\'s own data, not demo data' });
+  await clearDemoData();
+  // The seed is the same script a new install runs; it only fills an empty database.
+  const seed = fileURLToPath(new URL('../src/seed.ts', import.meta.url));
+  await promisify(execFile)('npx', ['tsx', seed], { cwd: dirname(dirname(seed)), timeout: 10 * 60 * 1000 });
+  res.json({ ok: true });
 });
 
 /**

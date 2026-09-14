@@ -1694,43 +1694,43 @@ const AdminDashboard = () => {
             </div>
             <TabsList ref={tabsListRef} className="flex justify-start md:justify-between w-full h-auto p-1 md:p-1 gap-1 overflow-x-auto md:overflow-x-hidden whitespace-nowrap scroll-smooth">
               <TabsTrigger value="schedule" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <CalendarIcon className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
+                <CalendarIcon className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
                 <span data-testid="tab-schedule">Schedule</span>
               </TabsTrigger>
               <TabsTrigger value="staff" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Users className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
+                <Users className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
                 <span data-testid="tab-staff">Staff</span>
               </TabsTrigger>
               <TabsTrigger value="rooms" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Home className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
+                <Home className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
                 <span data-testid="tab-rooms">Rooms</span>
               </TabsTrigger>
               <TabsTrigger value="therapies" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Sparkles className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
+                <Sparkles className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
                 <span data-testid="tab-therapies">Therapies</span>
               </TabsTrigger>
               <TabsTrigger value="diet" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Utensils className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
+                <Utensils className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
                 <span data-testid="tab-diet">Diet</span>
               </TabsTrigger>
               <TabsTrigger value="timeoff" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <CalendarDays className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
+                <CalendarDays className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
                 <span data-testid="tab-timeoff">Time off</span>
               </TabsTrigger>
               <TabsTrigger value="events" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Activity className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
+                <Activity className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
                 <span data-testid="tab-events">Events</span>
               </TabsTrigger>
               <TabsTrigger value="patients" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <User className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
+                <User className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
                 <span data-testid="tab-patients">Patients</span>
               </TabsTrigger>
               <TabsTrigger value="ailments" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Stethoscope className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
+                <Stethoscope className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
                 <span data-testid="tab-ailments" title="Coming soon">Ailments</span>
               </TabsTrigger>
               <TabsTrigger value="settings" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <SettingsIcon className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
+                <SettingsIcon className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
                 <span data-testid="tab-settings">Settings</span>
               </TabsTrigger>
             </TabsList>
