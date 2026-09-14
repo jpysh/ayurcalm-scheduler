@@ -149,8 +149,10 @@ async function main() {
 
   const scheduleStd = { sunday: { start: '09:00', end: '18:00' }, monday: { start: '09:00', end: '18:00' }, tuesday: { start: '09:00', end: '18:00' }, wednesday: { start: '09:00', end: '18:00' }, thursday: { start: '09:00', end: '18:00' }, friday: { start: '09:00', end: '18:00' }, saturday: { start: '09:00', end: '18:00' } };
 
-  const rooms = await Promise.all(ayurvedaRoomNames.map((rn) => prisma.therapyRoom.create({
-    data: { name: rn, amenities: amenitiesSet.slice(0, 4), weekly_schedule: scheduleStd, is_active: true },
+  // Every other room is fully equipped; with only the first four amenities
+  // everywhere, dhara, kizhi and lepam therapies could never be booked.
+  const rooms = await Promise.all(ayurvedaRoomNames.map((rn, idx) => prisma.therapyRoom.create({
+    data: { name: rn, amenities: idx % 2 ? amenitiesSet : amenitiesSet.slice(0, 4), weekly_schedule: scheduleStd, is_active: true },
   })));
 
   const staffNames = ['Dr. Priya','Dr. Raj','Dr. Anjali','Dr. Kumar','Dr. Neha','Dr. Ravi','Dr. Asha','Dr. Suresh','Dr. Meera','Dr. Arvind','Dr. Pooja','Dr. Kiran','Dr. Alok','Dr. Varsha','Dr. Manish','Dr. Bhavna','Dr. Rohit','Dr. Trisha','Dr. Dev','Dr. Kriti'];
@@ -255,6 +257,34 @@ async function main() {
         pBusy.push({ s: sMin, e: eMin });
         slotsCreatedForRoom++;
       }
+    }
+  }
+
+  // Today also gets early and late bookings of the longest therapy name, so the
+  // demo day sheet has narrow multi-hour columns and shows a name shortened
+  // with '..'. Checking the sheet then needs no hand-made data.
+  const longest = therapies.find((t) => t.name === 'Dhanyamladhara');
+  // Nobody is generated with this specialism, so one therapist is given it.
+  if (longest && !staff.some((c) => c.specializations.includes(longest.id))) {
+    staff[1].specializations.push(longest.id);
+    await prisma.staff.update({ where: { id: staff[1].id }, data: { specializations: staff[1].specializations } });
+  }
+  const todayBusy = busy[todayKey];
+  if (longest && todayBusy) {
+    for (const time of ['06:30', '08:00', '14:30', '16:30']) {
+      const sMin = toMinutes(time);
+      const eMin = sMin + longest.duration_minutes;
+      const free = (list?: { s: number; e: number }[]) => !(list || []).some((b) => overlaps(b.s, b.e, sMin, eMin));
+      const p = createdPatients.find((c) => todayBusy.patient[c.id] && free(todayBusy.patient[c.id]));
+      const s = staff.find((c) => c.specializations.includes(longest.id) && free(todayBusy.staff[c.id]));
+      const r = rooms.find((c) => longest.required_amenities.every((a) => c.amenities.includes(a)) && free(todayBusy.room[c.id]));
+      if (!p || !s || !r) continue;
+      await prisma.appointment.create({ data: {
+        patient_id: p.id, therapy_id: longest.id, staff_id: s.id, room_id: r.id,
+        scheduled_date: new Date(todayKey), start_time: time, duration_minutes: longest.duration_minutes,
+        session_number: 1, total_sessions: 1, status: 'pending', assignment_type: 'auto',
+      } });
+      for (const list of [todayBusy.patient[p.id], (todayBusy.staff[s.id] ??= []), (todayBusy.room[r.id] ??= [])]) list.push({ s: sMin, e: eMin });
     }
   }
 

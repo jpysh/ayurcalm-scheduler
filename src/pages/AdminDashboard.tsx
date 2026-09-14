@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Sparkles, Users, Home, CalendarDays, Plus, Edit, Trash2, Activity, AlertCircle, User, StopCircle, Info, X } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Sparkles, Users, Home, CalendarDays, Plus, Edit, Trash2, Activity, User, StopCircle, X, Utensils, Stethoscope, Settings as SettingsIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AutoAssignDialog } from "@/components/AutoAssignDialog";
 import { VerifyDialog } from "@/components/VerifyDialog";
@@ -29,7 +29,6 @@ import EventsTab from "./tabs/EventsTab";
 import DietTab from "./tabs/DietTab";
 import PatientsTab from "./tabs/PatientsTab";
 import ScheduleTab from "./tabs/ScheduleTab";
-import Ailments from "./Ailments";
 import Settings from "./Settings";
 import { Fragment } from "react";
 import { API_BASE } from "@/lib/apiBase";
@@ -1695,43 +1694,43 @@ const AdminDashboard = () => {
             </div>
             <TabsList ref={tabsListRef} className="flex justify-start md:justify-between w-full h-auto p-1 md:p-1 gap-1 overflow-x-auto md:overflow-x-hidden whitespace-nowrap scroll-smooth">
               <TabsTrigger value="schedule" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <CalendarIcon className="w-4 h-4 md:w-5 md:h-5" />
+                <CalendarIcon className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
                 <span data-testid="tab-schedule">Schedule</span>
               </TabsTrigger>
               <TabsTrigger value="staff" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Users className="w-4 h-4 md:w-5 md:h-5" />
+                <Users className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
                 <span data-testid="tab-staff">Staff</span>
               </TabsTrigger>
               <TabsTrigger value="rooms" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Home className="w-4 h-4 md:w-5 md:h-5" />
+                <Home className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
                 <span data-testid="tab-rooms">Rooms</span>
               </TabsTrigger>
               <TabsTrigger value="therapies" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Sparkles className="w-4 h-4 md:w-5 md:h-5" />
+                <Sparkles className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
                 <span data-testid="tab-therapies">Therapies</span>
               </TabsTrigger>
               <TabsTrigger value="diet" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <AlertCircle className="w-4 h-4 md:w-5 md:h-5" />
+                <Utensils className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
                 <span data-testid="tab-diet">Diet</span>
               </TabsTrigger>
               <TabsTrigger value="timeoff" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <CalendarDays className="w-4 h-4 md:w-5 md:h-5" />
-                <span data-testid="tab-timeoff">TimeOff</span>
+                <CalendarDays className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
+                <span data-testid="tab-timeoff">Time off</span>
               </TabsTrigger>
               <TabsTrigger value="events" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Activity className="w-4 h-4 md:w-5 md:h-5" />
+                <Activity className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
                 <span data-testid="tab-events">Events</span>
               </TabsTrigger>
               <TabsTrigger value="patients" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <User className="w-4 h-4 md:w-5 md:h-5" />
+                <User className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
                 <span data-testid="tab-patients">Patients</span>
               </TabsTrigger>
               <TabsTrigger value="ailments" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <AlertCircle className="w-4 h-4 md:w-5 md:h-5" />
-                <span data-testid="tab-ailments">Ailments</span>
+                <Stethoscope className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
+                <span data-testid="tab-ailments" title="Coming soon">Ailments</span>
               </TabsTrigger>
               <TabsTrigger value="settings" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Info className="w-4 h-4 md:w-5 md:h-5" />
+                <SettingsIcon className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
                 <span data-testid="tab-settings">Settings</span>
               </TabsTrigger>
             </TabsList>
@@ -2242,7 +2241,8 @@ const AdminDashboard = () => {
           </TabsContent>
 
           <TabsContent value="ailments" data-testid="tabpanel-ailments">
-            <Ailments />
+            {/* The form kept ailments only in the browser, so they were lost on refresh. See #34. */}
+            <Card><CardContent className="p-6 text-sm text-muted-foreground"><p className="font-medium text-foreground">Ailments (coming soon)</p><p>A list of conditions and the therapies that suit each. Nothing to set up here yet.</p></CardContent></Card>
           </TabsContent>
 
           <TabsContent value="settings" data-testid="tabpanel-settings">
