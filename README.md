@@ -168,7 +168,7 @@ server proxies that to `http://localhost:4000` (override with
 set `VITE_API_BASE`.
 
 ```bash
-npm run test:e2e          # Playwright
+npm run test:e2e          # Playwright, against docker compose on :8080 (E2E_BASE_URL to change)
 cd server && npm run test:smoke
 ```
 
