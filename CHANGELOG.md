@@ -5,6 +5,23 @@ All notable changes to this project are documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+- **Day sheet** — each patient's row holds everything for them; treatment notes
+  moved from the end of the sheet into a **Notes** column. Long names shorten
+  with `..` instead of breaking mid-word
+- **Demo data** covers four months; **Settings → Reset demo data from today**
+  rebuilds it
+- Ailments tab marked coming soon: it never saved (#34)
+- Express 5, react-router 7, Vite 8; `npm audit` reports no advisories
+
+### Fixed
+- Malformed or oversized request bodies return 400/413, a missing record 404,
+  instead of 500
+- Merged day-sheet cells could spill text above their box
+
+### Tests
+- End-to-end suite replaced with four tests against a real install, run in CI
+
 ## [0.2.0] - 2026-09-11
 
 The day sheet a centre prints and pins up now works, and diet plans are real.

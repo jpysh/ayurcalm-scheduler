@@ -40,7 +40,7 @@ Open **http://localhost:8080** and sign in:
 | `admin@example.com` | `demo1234` |
 
 The first boot creates the database, applies migrations, and seeds a demo centre —
-patients, therapists, rooms, therapies, a week of appointments, and a daily
+patients, therapists, rooms, therapies, four months of appointments, and a daily
 programme. Restarts keep your data; the seed only runs against an empty database.
 
 > **Change the demo password before putting this on a network.** The server prints
@@ -76,6 +76,8 @@ Staff, therapists, treatment rooms and therapies are managed in their own tabs.
 When you are ready to replace the seeded example centre with your own, use
 **Settings → Clear demo data**. It removes the demo patients, staff, rooms,
 therapies and appointments, and keeps your account and centre settings.
+**Reset demo data from today** instead rebuilds a fresh four months, for trying
+things out.
 
 ## Configuration
 
@@ -94,10 +96,10 @@ to `.env` if you want to change any — the defaults work as-is for a local tria
 
 | Layer | Stack |
 |---|---|
-| Front end | React 18, Vite, TypeScript, Tailwind, shadcn/ui |
-| API | Express, Prisma, Zod, JWT auth |
+| Front end | React 18, Vite 8, TypeScript, Tailwind, shadcn/ui |
+| API | Express 5, Prisma, Zod, JWT auth |
 | Database | PostgreSQL 16 |
-| Tests | Playwright (end-to-end), Vitest (server) |
+| Tests | Playwright end-to-end on a real install; plain Node tests for diet and PDF logic |
 
 One container serves both the API and the built front end, so a self-hosted
 install is two containers total.
@@ -116,7 +118,8 @@ install is two containers total.
   one-off sessions
 - **Daily schedule PDF** — the day sheet a centre prints and pins up: every
   resident as a row, their therapies by start time, and their own meals in the
-  breakfast, lunch and dinner columns
+  breakfast, lunch and dinner columns, and their plan and treatment notes in the
+  same row
 - **Audit log** — records changes to scheduling data
 
 ## Status and roadmap
@@ -124,9 +127,8 @@ install is two containers total.
 Version 0.2.0 — usable, and in active development by a single maintainer. Known
 to be unfinished:
 
-- **Daily schedule PDF density** — a busy day takes more pages than it should,
-  because every distinct start time earns a column
-  ([#7](https://github.com/jpysh/ayurcalm-scheduler/issues/7))
+- **Ailments** — the tab is a placeholder
+  ([#34](https://github.com/jpysh/ayurcalm-scheduler/issues/34))
 - **Diet tab polish** — the plans and the sheet are done; the tab around them
   still has rough edges
   ([#6](https://github.com/jpysh/ayurcalm-scheduler/issues/6))
