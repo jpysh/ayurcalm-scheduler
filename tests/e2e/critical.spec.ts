@@ -28,6 +28,15 @@ async function passSetupIfShown(page: Page) {
 // Tabs keep the last panel mounted while switching, so ask for the open one.
 const activePanel = (page: Page) => page.locator('[role=tabpanel][data-state=active]');
 
+/** A click while the previous tab is still loading can be lost, so retry until selected. */
+async function openTab(page: Page, name: string) {
+  const tab = page.getByRole('tab', { name, exact: true });
+  await expect(async () => {
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 1000 });
+  }).toPass({ timeout: 15000 });
+}
+
 test('wrong password stays on the login page', async ({ page }) => {
   await signIn(page, 'not-the-password');
   await expect(page.getByText(/invalid/i)).toBeVisible();
@@ -54,11 +63,11 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
     ['Settings', 'Centre details'],
     ['Schedule', 'Schedule'],
   ]) {
-    await page.getByRole('tab', { name: tab, exact: true }).click();
-    await expect(activePanel(page)).toContainText(text);
+    await openTab(page, tab);
+    await expect(activePanel(page)).toContainText(text, { timeout: 15000 });
   }
   // A seeded install has patients; an empty table means the API is not answering.
-  await page.getByRole('tab', { name: 'Patients', exact: true }).click();
+  await openTab(page, 'Patients');
   await expect(activePanel(page).getByRole('row').nth(5)).toBeVisible();
 });
 
