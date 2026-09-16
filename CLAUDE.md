@@ -153,3 +153,46 @@ pdftoppm -png -r 75 -f 1 -l 1 day.pdf page  # is it where it should be
   explicit field allow-list — copy that pattern.
 - Commit messages: what changed and why, in prose. Reference issues with
   `Closes #N`.
+
+## How a session works here
+
+The maintainer is a solo developer who does not read code, working in public with
+no users yet. Sessions are driven from GitHub issues: **#70 is the roadmap and
+lists them in order, one issue per session.** "Work on #N" is the whole brief —
+read that issue, do it, close it, and tick it off in #70. Never re-open or redo a closed session issue; if it
+needs more, open a new one that builds on it.
+
+Everything below applies to every session without being restated.
+
+**Verify the premise before building on it.** Findings in our own issues have
+been wrong. #55's highest-ranked finding claimed the scheduler was broken and it
+was not — the API booked correctly the whole time. Reproduce the problem
+yourself first. If it does not reproduce, say so and stop, rather than fixing
+something that works.
+
+**There are no users.** Nobody runs this in production. Delete dead code and
+dead fields rather than deprecating them, change the schema when the schema is
+wrong, and write no compatibility shims for installs that do not exist. The only
+data that must survive is the demo seed.
+
+**Write less prose on GitHub.** Issues and PR bodies are read by an agent in a
+later session, not by a team. Under 3,000 characters: what changed, why, what was
+verified, what was skipped. No tables of contents, no restating the brief.
+
+**Keep the change revertible.** One PR per session, small enough that
+`git revert` on the merge commit undoes it cleanly. If the work turns out bigger
+than the issue implies, stop and say so before expanding scope.
+
+**Finish with a "check it yourself" list** — at most five steps, each one
+something the maintainer clicks or looks at, never code to read. A session is not
+done until someone who cannot read the diff can confirm it worked.
+
+**Design for the admin's phone.** One operator, one centre, and they may never
+open a desktop after setup.
+
+**The printed day sheet is the product.** A screen change either improves it or
+leaves it alone.
+
+**Out of scope, settled:** patient self-booking, payments, marketplace,
+marketing and loyalty, multi-location, payroll, GST billing. The reasoning is in
+#53 §2 and §5 — read it before proposing any of them again.
