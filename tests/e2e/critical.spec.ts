@@ -133,8 +133,14 @@ test('the booking dialog offers the slots the API found, and books one', async (
   // The centre's clock and the browser's clock are rarely the same one. The
   // dialog used to re-filter the server's slots against the browser's, so a
   // browser west of the centre saw "No slots available" for slots that exist.
+  // From tomorrow: a run late in the day would otherwise be left with only the
+  // slots the evening programme occupies, and find nothing for reasons that
+  // have nothing to do with what this test is about.
+  const start = new Date();
+  start.setDate(start.getDate() + 1);
   const end = new Date();
   end.setDate(end.getDate() + 10);
+  await page.getByLabel('Start Date').fill(start.toISOString().slice(0, 10));
   await page.getByLabel('End Date').fill(end.toISOString().slice(0, 10));
   await page.getByRole('button', { name: 'Select patient' }).click();
   await page.getByPlaceholder('Search patient').fill('Aarav Iyer');
@@ -149,4 +155,14 @@ test('the booking dialog offers the slots the API found, and books one', async (
   await page.getByText(/^Option 1$/).click();
   await page.getByRole('button', { name: 'Confirm Selected Slot' }).click();
   await expect(page.getByText('Selected slot confirmed')).toBeVisible({ timeout: 20000 });
+});
+
+test("the day's problems are named on the first screen", async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  // The seed puts a therapist on full-day leave with treatments still booked.
+  // Verify has always found it; the point of the band is that nobody has to ask.
+  await expect(page.getByText(/is on leave and still has \d+ treatment/)).toBeVisible({ timeout: 20000 });
+  // And it is there before any tab is chosen, not two clicks deep.
+  await expect(page.getByText(/things? to fix/)).toBeVisible();
 });

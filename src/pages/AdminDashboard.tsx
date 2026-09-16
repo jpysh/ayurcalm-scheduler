@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Sparkles, Users, Home, CalendarDays, Plus, Edit, Trash2, Activity, User, StopCircle, X, Utensils, Stethoscope, Settings as SettingsIcon } from "lucide-react";
+import {
+  AlertCircle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Sparkles, Users, Home, CalendarDays, Plus, Edit, Trash2, Activity, User, StopCircle, X, Utensils, Stethoscope, Settings as SettingsIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AutoAssignDialog } from "@/components/AutoAssignDialog";
 import { VerifyDialog } from "@/components/VerifyDialog";
@@ -32,6 +33,7 @@ import ScheduleTab from "./tabs/ScheduleTab";
 import Settings from "./Settings";
 import { Fragment } from "react";
 import { API_BASE } from "@/lib/apiBase";
+import { dayExceptions, WEEKDAYS } from "@/lib/dayExceptions";
 import { loadTemplates, saveTemplate } from "@/lib/dietPlan";
 import { useCentreName } from "@/lib/centreName";
 
@@ -1341,73 +1343,55 @@ const AdminDashboard = () => {
     return ymdInTZ(d);
   }), [monday]);
   const todayKey = ymdInTZ(currentDate);
+  const isToday = todayKey === ymdInTZ(new Date());
   const dayStartMin = timeSlots.length ? toMinutes(timeSlots[0]) : 9 * 60;
   const dayEndMin = timeSlots.length ? toMinutes(timeSlots[timeSlots.length - 1]) : 18 * 60;
-  const todayAppointmentsVisible = (Array.isArray(appointmentsByDate[todayKey]) ? appointmentsByDate[todayKey] : []).filter((a) => {
-    const m = toMinutes(a.start_time);
-    return m >= dayStartMin && m <= dayEndMin && (a.status ? a.status !== "cancelled" : true);
-  }).length;
-  const weekTotal = weekDatesKeys.reduce((sum, k) => {
-    const items = (Array.isArray(appointmentsByDate[k]) ? appointmentsByDate[k] : []).filter((a) => {
-      const m = toMinutes(a.start_time);
-      return m >= dayStartMin && m <= dayEndMin && (a.status ? a.status !== "cancelled" : true);
-    });
-    return sum + items.length;
-  }, 0);
-  const capacityWeek = Math.max(1, roomsList.length) * timeSlots.length * weekDatesKeys.length;
-  const utilizationRate = Math.min(100, Math.round((weekTotal / capacityWeek) * 100));
-  const availableSlots = Math.max(0, (roomsList.length * timeSlots.length) - todayAppointmentsVisible);
-  const todayPatientsCount = (() => {
-    const items = (Array.isArray(appointmentsByDate[todayKey]) ? appointmentsByDate[todayKey] : []).filter((a) => {
-      const m = toMinutes(a.start_time);
-      return m >= dayStartMin && m <= dayEndMin && (a.status ? a.status !== "cancelled" : true);
-    });
-    const set = new Set(items.map((a) => String(a.patient_id)));
-    return set.size;
-  })();
-  const todayStaffActive = (() => {
-    const wd = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"][new Date(currentDate).getDay()];
-    const centerClosed = (timeOffs || []).some((t) => {
-      if (t.type !== "Center") return false;
+  // What is wrong with the day, where the count tiles used to be. A count of 39
+  // answers no question asked at 8am; a therapist on leave who is still booked
+  // does.
+  const dayEvents = useMemo(() => {
     const d = new Date(currentDate);
-    const s = t.startDate ? new Date(t.startDate) : undefined;
-    const e = t.endDate ? new Date(t.endDate) : undefined;
-    const isoEq = t.date ? ymdInTZFromISO(t.date) === todayKey : false;
-      const inRange = s || e ? (!s || d >= s) && (!e || d <= e) : false;
-      const weekly = (t.recurrence === "weekly") && Array.isArray(t.weekdays) && t.weekdays.includes(wd);
-      return isoEq || inRange || weekly;
-    });
-    if (centerClosed) return 0;
-    const active = staff.filter((s) => s.status === "Active");
-    const offSet = new Set(
-      (timeOffs || [])
-        .filter((t) => t.type === "Staff")
-        .filter((t) => {
-          const d = new Date(currentDate);
-          const s = t.startDate ? new Date(t.startDate) : undefined;
-          const e = t.endDate ? new Date(t.endDate) : undefined;
-          const isoEq = t.date ? new Date(t.date).toISOString().slice(0,10) === todayKey : false;
-          const inRange = s || e ? (!s || d >= s) && (!e || d <= e) : false;
-          const weekly = (t.recurrence === "weekly") && Array.isArray(t.weekdays) && t.weekdays.includes(wd);
-          return isoEq || inRange || weekly;
-        })
-        .map((t) => String(t.entity))
-    );
-    return active.filter((s) => !offSet.has(String(s.id)) && String(s.id) !== "All").length;
-  })();
-  const todayEventsCount = (() => {
-    const d = new Date(currentDate);
-    const wd = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"][d.getDay()];
-    const iso = todayKey;
+    const wd = WEEKDAYS[d.getDay()];
     return (events || []).filter((ev) => {
-      const exact = ev.date ? ymdInTZFromISO(ev.date) === iso : false;
-      const s = ev.start_date ? new Date(ev.start_date) : undefined;
-      const e = ev.end_date ? new Date(ev.end_date) : undefined;
-      const inRange = s || e ? (!s || d >= s) && (!e || d <= e) : true;
+      const exact = ev.date ? ymdInTZFromISO(ev.date) === todayKey : false;
+      const st = ev.start_date ? new Date(ev.start_date) : undefined;
+      const en = ev.end_date ? new Date(ev.end_date) : undefined;
+      const inRange = st || en ? (!st || d >= st) && (!en || d <= en) : true;
       const weekly = Array.isArray(ev.weekdays) ? ev.weekdays.includes(wd) : false;
       return exact || (weekly && inRange);
-    }).length;
-  })();
+    });
+  }, [events, currentDate, todayKey]);
+
+  // Who is in the centre on the day being looked at. The Diet tab's list is for
+  // today only, and the header follows the date the admin has moved to.
+  const [residentsOnDay, setResidentsOnDay] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE}/patients?resident_on=${todayKey}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: { id: string }[]) => { if (!cancelled) setResidentsOnDay(rows.map((p) => String(p.id))); })
+      .catch(() => { if (!cancelled) setResidentsOnDay([]); });
+    return () => { cancelled = true; };
+  }, [todayKey]);
+
+  const exceptions = useMemo(() => dayExceptions({
+    day: new Date(currentDate),
+    appointments: (Array.isArray(appointmentsByDate[todayKey]) ? appointmentsByDate[todayKey] : []).map((a) => ({
+      id: a.id, patient_id: a.patient_id, therapy_id: a.therapy_id, staff_id: a.staff_id,
+      room_id: a.room_id, start_time: a.start_time, duration_minutes: a.duration_minutes, status: a.status,
+    })),
+    events: dayEvents.map((ev) => ({ activity_name: ev.activity_name, start_time: ev.start_time, end_time: ev.end_time, patients_scope: (ev as { patients_scope?: string }).patients_scope })),
+    timeoff: (timeOffs || []).map((h) => ({
+      entity_type: (h.type === 'Center' ? 'center' : h.type === 'Staff' ? 'staff' : h.type === 'Room' ? 'room' : h.type === 'Therapy' ? 'therapy' : 'patient') as 'center'|'staff'|'room'|'therapy'|'patient',
+      entity_id: h.entity, date: h.date, start_date: h.startDate, end_date: h.endDate, recurrence: h.recurrence, weekdays: h.weekdays,
+    })),
+    patients: patients.map((p) => ({ id: String(p.id), name: p.name })),
+    staff: staff.map((x) => ({ id: String(x.id), name: x.name })),
+    rooms: roomsList.map((r) => ({ id: String(r.id), name: r.name })),
+    therapies: therapies.map((t) => ({ id: String(t.id), name: t.name })),
+    residentIds: residentsOnDay,
+  }), [currentDate, appointmentsByDate, todayKey, dayEvents, timeOffs, patients, staff, roomsList, therapies, residentsOnDay]);
+
   const compareRoomNames = (aName: string, bName: string) => {
     const ax = String(aName).trim();
     const bx = String(bName).trim();
@@ -1571,99 +1555,30 @@ const AdminDashboard = () => {
       </header>
 
       {/* Main Content */}
-      <div className="container mx-auto px-3 md:px-4 py-3 md:py-6">
-        <div className="md:hidden relative mb-2 h-11">
-          <div className="pointer-events-none absolute inset-0 z-50">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="pointer-events-auto h-3 w-3 absolute left-1 top-1/2 -translate-y-1/2"
-              onClick={prevMetric}
-            >
-              <ChevronLeft className="w-2.5 h-2.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="pointer-events-auto h-3 w-3 absolute right-1 top-1/2 -translate-y-1/2"
-              onClick={nextMetric}
-            >
-              <ChevronRight className="w-2.5 h-2.5" />
-            </Button>
-          </div>
-          <div
-            ref={metricsRef}
-            onScroll={onMetricsScroll}
-            className="flex items-center overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth gap-0 px-0 h-full rounded-md bg-muted text-muted-foreground p-1"
-          >
-            <div className="min-w-full snap-center flex items-center justify-center">
-              <Card className="w-[90%] rounded-md bg-background text-foreground border shadow-sm">
-                <CardContent className="p-0 h-9 px-2 flex items-center justify-center">
-                  <p className="text-sm text-center"><span className="text-muted-foreground">Appointments</span>: <span className="font-bold">{todayAppointmentsVisible}</span></p>
-                </CardContent>
-              </Card>
-            </div>
-            <div className="min-w-full snap-center flex items-center justify-center">
-              <Card className="w-[90%] rounded-md bg-background text-foreground border shadow-sm">
-                <CardContent className="p-0 h-9 px-2 flex items-center justify-center">
-                  <p className="text-sm text-center"><span className="text-muted-foreground">Patients</span>: <span className="font-bold">{todayPatientsCount}</span></p>
-                </CardContent>
-              </Card>
-            </div>
-            <div className="min-w-full snap-center flex items-center justify-center">
-              <Card className="w-[90%] rounded-md bg-background text-foreground border shadow-sm">
-                <CardContent className="p-0 h-9 px-2 flex items-center justify-center">
-                  <p className="text-sm text-center"><span className="text-muted-foreground">Staff</span>: <span className="font-bold">{todayStaffActive}</span></p>
-                </CardContent>
-              </Card>
-            </div>
-            <div className="min-w-full snap-center flex items-center justify-center">
-              <Card className="w-[90%] rounded-md bg-background text-foreground border shadow-sm">
-                <CardContent className="p-0 h-9 px-2 flex items-center justify-center">
-                  <p className="text-sm text-center"><span className="text-muted-foreground">Events</span>: <span className="font-bold">{todayEventsCount}</span></p>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-          <div className="flex justify-center mt-2 gap-2">
-            {[0,1,2,3].map((i) => (
-              <div key={i} className={`h-2 w-2 rounded-full ${metricIndex === i ? 'bg-primary' : 'bg-muted-foreground/30'}`} />
-            ))}
-          </div>
-        </div>
-        <div className="hidden md:grid md:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex flex-col items-center justify-center gap-1 h-20 text-center">
-                <p className="text-sm text-muted-foreground">Appointments today</p>
-                <p className="text-3xl font-bold">{todayAppointmentsVisible}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex flex-col items-center justify-center gap-1 h-20 text-center">
-                <p className="text-sm text-muted-foreground">Patients today</p>
-                <p className="text-3xl font-bold">{todayPatientsCount}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex flex-col items-center justify-center gap-1 h-20 text-center">
-                <p className="text-sm text-muted-foreground">Staff on today</p>
-                <p className="text-3xl font-bold">{todayStaffActive}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex flex-col items-center justify-center gap-1 h-20 text-center">
-                <p className="text-sm text-muted-foreground">Events today</p>
-                <p className="text-3xl font-bold">{todayEventsCount}</p>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="container mx-auto px-3 md:px-4 py-3 md:py-6">        <div className="mb-3 md:mb-6 rounded-md border bg-card px-3 py-2">
+          {exceptions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nothing wrong with {isToday ? 'today' : 'this day'}.</p>
+          ) : (
+            <>
+              <p className="text-sm font-semibold mb-1">
+                {exceptions.length} thing{exceptions.length === 1 ? '' : 's'} to fix {isToday ? 'today' : 'this day'}
+              </p>
+              <ul className="space-y-0.5">
+                {exceptions.slice(0, 5).map((e, i) => (
+                  <li key={i} className="flex items-start gap-1.5 text-sm">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />
+                    <span>{e.text}</span>
+                  </li>
+                ))}
+              </ul>
+              {/* A bad day must not push the schedule off a phone screen. */}
+              {exceptions.length > 5 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  and {exceptions.length - 5} more — Verify lists them all
+                </p>
+              )}
+            </>
+          )}
         </div>
 
         <Tabs value={activeTab} onValueChange={(v) => {
