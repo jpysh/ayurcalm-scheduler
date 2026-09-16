@@ -124,6 +124,26 @@ previously wiped them. An explicit empty string is how a field is cleared.
 advisory in CI for that reason. Do not add new ones; do not "fix" them in
 unrelated PRs. Issues #1–#5 exist to clear them file by file.
 
+## The local copy you look at
+
+One stack, started from the repo, so it shows up in Docker Desktop as
+`ayurcalm-scheduler` and nothing else has to be remembered:
+
+```bash
+npm run dev:up        # build the current code and start it on http://localhost:8080
+npm run dev:logs      # watch what the app is doing
+npm run dev:down      # stop it, keeping the data
+npm run dev:reset     # throw the data away and seed a fresh centre
+```
+
+`dev:up` after a code change rebuilds and restarts, so the browser shows what
+the repo currently says. Sign in with `admin@example.com` / `demo1234`.
+
+Run a second stack only for a throwaway check, and name it so it cannot be
+confused with the one above — `docker compose -p <name> ... down -v` when
+finished. A second long-lived stack on another port is how you end up testing
+last week's code without noticing.
+
 ## Before you say something works
 
 Build both sides, then exercise it against the running stack:

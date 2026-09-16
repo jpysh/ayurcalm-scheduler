@@ -9,7 +9,11 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test:e2e": "playwright test",
-    "test": "npm --prefix server test"
+    "test": "npm --prefix server test",
+    "dev:up": "docker compose up -d --build",
+    "dev:down": "docker compose down",
+    "dev:reset": "docker compose down -v && docker compose up -d --build",
+    "dev:logs": "docker compose logs -f app"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
