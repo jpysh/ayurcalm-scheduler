@@ -10,27 +10,6 @@ MIT, maintained by one person (`jpysh`) roughly one pass a week. Built first for
 residential Ayurveda centres; positioned to also fit massage studios, spas and
 physiotherapy practices.
 
-## Who you are working with
-
-The maintainer is a solo, non-technical founder. They know this product and the
-centre it runs better than anyone; they do not read code and should never be
-asked to. You are the expert here — the developer, the UX designer and the
-reviewer — so:
-
-- Decide the technical questions yourself and say what you decided and why, in
-  plain English. Bring a decision, not a menu. Ask only when the answer is about
-  the centre or the business, which is theirs to know and yours to act on.
-- Never hand back a task as a set of steps for them to carry out. If it can be
-  done here, do it. If it genuinely cannot — a password to type, a button in a
-  hosting dashboard — say exactly what to type and where, in one line.
-- Verify your own work against the running app and say what you actually
-  checked. "Tests pass" is not the same as "I looked at the sheet".
-- Explain findings the way you would to a smart colleague from another trade:
-  what broke, what it costs the centre, what you did. No jargon that does not
-  earn its place, no file-by-file tours.
-- Files, commits, issues and PRs are read by other people and other sessions:
-  they stay in careful English regardless of how terse the chat is.
-
 Being a **self-hosted, single-maintainer** project decides most design arguments:
 
 - Anything a receptionist might change lives in the database and is edited in
@@ -42,6 +21,18 @@ Being a **self-hosted, single-maintainer** project decides most design arguments
   has asked for.
 - `docker compose up -d` must stay the entire install. If a change breaks that,
   the change is wrong.
+
+## Who you are working with
+
+The maintainer is solo and non-technical. They know the centre and the product;
+they do not read code and should not be asked to.
+
+So: decide the technical questions and say what you decided, in plain English.
+Ask only what is theirs to know — the centre, the business. Do the work rather
+than handing back steps; when something genuinely needs their hands (a password,
+a hosting dashboard), say what to type and where, in one line. Verify against the
+running app and say what you actually looked at: "tests pass" is not "I read the
+sheet".
 
 ## Layout
 
@@ -207,8 +198,7 @@ pdftoppm -png -r 75 -f 1 -l 1 day.pdf page  # is it where it should be
 
 ## How a session works here
 
-The maintainer is a solo developer who does not read code, working in public with
-no users yet. Sessions are driven from GitHub issues: **#70 is the roadmap and
+Sessions are driven from GitHub issues: **#70 is the roadmap and
 lists them in order, one issue per session.** "Work on #N" is the whole brief —
 read that issue, do it, close it, and tick it off in #70. Never re-open or redo a closed session issue; if it
 needs more, open a new one that builds on it.
@@ -226,9 +216,13 @@ dead fields rather than deprecating them, change the schema when the schema is
 wrong, and write no compatibility shims for installs that do not exist. The only
 data that must survive is the demo seed.
 
-**Write less prose on GitHub.** Issues and PR bodies are read by an agent in a
-later session, not by a team. Under 3,000 characters: what changed, why, what was
-verified, what was skipped. No tables of contents, no restating the brief.
+**Write less prose, everywhere.** Issues, PR bodies, CLAUDE.md and the docs are
+read by an agent in a later session and by a maintainer who does not read code —
+not by a team, and not by anyone who needs convincing. Under 3,000 characters:
+what changed, why, what was verified, what was skipped. No tables of contents, no
+restating the brief, nothing written to impress a reader who is not there.
+README.md and CONTRIBUTING.md are the exception: a stranger on GitHub reads
+those.
 
 **Keep the change revertible.** One PR per session, small enough that
 `git revert` on the merge commit undoes it cleanly. If the work turns out bigger
