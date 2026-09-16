@@ -21,10 +21,24 @@ const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'satur
 
 const timeString = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Expected HH:MM');
 
+/**
+ * A mistyped zone is stored happily and then surfaces much later as a day sheet
+ * printed for the wrong day, so it is checked here rather than trusted. Node
+ * knows the zone table; asking it is cheaper than shipping our own list.
+ */
+const isRealTimezone = (tz: string) => {
+  try {
+    new Intl.DateTimeFormat('en-GB', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const settingsSchema = z.object({
   centre_name: z.string().trim().min(1).max(120),
   address: z.string().trim().max(400).nullish(),
-  timezone: z.string().trim().min(1).max(64),
+  timezone: z.string().trim().min(1).max(64).refine(isRealTimezone, 'Expected an IANA timezone name, such as Asia/Kolkata'),
   opening_time: timeString,
   closing_time: timeString,
   slot_minutes: z.number().int().refine(n => [15, 20, 30, 60].includes(n), 'Expected 15, 20, 30 or 60'),
