@@ -21,43 +21,6 @@ const addHeader = (doc: any, dateStr: string, centreName: string, everyone = '')
   doc.moveDown(0.5);
 };
 
-const drawTable = (
-  doc: any,
-  x: number,
-  y: number,
-  colWidths: number[],
-  headers: string[],
-  rows: string[][],
-  maxRows?: number
-) => {
-  const rowH = 20;
-  doc.font('Helvetica-Bold').fontSize(10);
-  let cx = x;
-  headers.forEach((h, i) => {
-    doc.rect(cx, y, colWidths[i], rowH).stroke();
-    doc.text(h, cx + 4, y + 4, { width: colWidths[i] - 8, valign: 'center' });
-    cx += colWidths[i];
-  });
-  doc.font('Helvetica').fontSize(9);
-  let yy = y + rowH;
-  const limit = typeof maxRows === 'number' ? Math.min(maxRows, rows.length) : rows.length;
-  for (let i = 0; i < limit; i++) {
-    const fill = i % 2 === 1;
-    if (fill) {
-      doc.save();
-      doc.rect(x, yy, colWidths.reduce((a, b) => a + b, 0), rowH).fillOpacity(0.05).fill('#000').restore();
-    }
-    let cx2 = x;
-    rows[i].forEach((cell, k) => {
-      doc.rect(cx2, yy, colWidths[k], rowH).stroke();
-      doc.text(cell, cx2 + 4, yy + 4, { width: colWidths[k] - 8, valign: 'center' });
-      cx2 += colWidths[k];
-    });
-    yy += rowH;
-  }
-  return yy;
-};
-
 /**
  * Shortens any word too wide for its column to what fits, plus '..', so a
  * narrow hour column prints 'Dhanyamla.. 60m' rather than breaking the word
@@ -159,35 +122,32 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     if (!held || seg.start_date > held.start_date) segmentByPatient.set(seg.patient_id, seg);
   }
 
-  // Meals are programme events like any other, so each patient's own meal goes
-  // in the time column its sitting falls in, beside that hour's therapy.
-  // Anything with no sitting of its own (snacks, medication, therapy notes)
-  // goes to the notes column.
-  const mealByTimeSlot = new Map<string, MealKey>();
-  for (const e of eventsWindow) {
-    const name = (e.activity_name || '').trim().toLowerCase();
-    const meal = mealOrder.find((m) => name === m || name.startsWith(`${m} `));
-    if (meal && !mealByTimeSlot.has(e.start_time)) mealByTimeSlot.set(e.start_time, meal);
-  }
-  const mealsWithColumn = new Set(mealByTimeSlot.values());
+  // Meals no longer take columns in the grid. What a resident eats is the same
+  // paragraph for everyone on their plan, so it belongs once in that plan's
+  // heading; the sittings themselves are the same times for the whole centre and
+  // are stated in the line under the title. What is left in the grid is what
+  // differs person to person and hour to hour: treatment.
+  const mealsWithColumn = new Set<MealKey>();
 
-  // One time axis for the whole sheet. Columns are hour bands, not start times:
-  // a busy day has twenty distinct start times and the page has room for about
-  // ten columns. Meals sit in the band their sitting falls in rather than in a
-  // column of their own — two column systems over one axis is what made a 13:30
-  // therapy look like it belonged to a column headed '12:00'. A band wider than
-  // an hour says so in its header, and every entry states its own start time.
-  const isMealEvent = (e: (typeof eventsWindow)[number]) => mealByTimeSlot.has(e.start_time);
-  const sharedEvents = eventsWindow.filter((e) => !isMealEvent(e) && (e.patients_scope || 'all') !== 'custom');
-  const ownEvents = eventsWindow.filter((e) => !isMealEvent(e) && e.patients_scope === 'custom');
+  // One time axis for the whole sheet, and it is the axis of the day actually
+  // scheduled: bands come from the treatments and the events a resident is named
+  // on, so a centre working 09:00-16:30 does not print columns for 08:00 or
+  // 20:00. A band wider than an hour says so in its header, and every entry
+  // states its own start time.
+  const sharedEvents = eventsWindow.filter((e) => (e.patients_scope || 'all') !== 'custom');
+  const ownEvents = eventsWindow.filter((e) => e.patients_scope === 'custom');
   const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
-  const startTimes = [...apptsDay.map((a) => a.start_time), ...ownEvents.map((e) => e.start_time), ...mealByTimeSlot.keys()];
+  const startTimes = [...apptsDay.map((a) => a.start_time), ...ownEvents.map((e) => e.start_time)];
   const bucketsFor = (size: number) => new Set(startTimes.map((t) => Math.floor(toMinutes(t) / size) * size));
   // Widths are fixed rather than fitted to content, so no mix of start times can
   // push the table past the right margin. Time columns share what is left and
   // widen to two, three or four hours when an hour would be too narrow to read.
   const pageW = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const NO_W = 22, NOTES_W = 160, HOUR_MIN_W = 62;
+  // A band has to be wide enough to print a treatment on one or two lines:
+  // 'Padabhyanga 45m · Varsha Iyer · Chandra' down an hour-wide column is four
+  // lines, and four lines a row is what made this sheet seven pages. Every entry
+  // carries its own start time, so a wide band costs nothing in precision.
+  const HOUR_MIN_W = 170;
   // The patient column is fitted to the longest name actually on the sheet
   // rather than fixed: a centre of short names was giving a third of that
   // column to white space the time columns needed.
@@ -196,7 +156,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   // time column on the sheet: a name past the cap is shortened with '..' the
   // way an overlong therapy name already is.
   const PATIENT_W = Math.min(104, Math.max(58, ...displayPatients.map((p) => doc.widthOfString(`${patientById[p.id] || p.id} `) + 10)));
-  const hourShare = (size: number) => (pageW - NO_W - PATIENT_W - NOTES_W) / Math.max(1, bucketsFor(size).size);
+  const hourShare = (size: number) => (pageW - PATIENT_W) / Math.max(1, bucketsFor(size).size);
   const bucket = [60, 120, 180, 240].find((size) => hourShare(size) >= HOUR_MIN_W) ?? 240;
   type Slot = { label: string; start: number; end: number };
   const timeSlots: Slot[] = [...bucketsFor(bucket)]
@@ -228,10 +188,10 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     return [diet?.notes, diet?.therapyNotes && `Treatment: ${diet.therapyNotes}`].filter(Boolean).join('. ');
   };
 
-  const w = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+
+  const w = pageW;
   const x = doc.page.margins.left;
 
-  const noColW = 24;
   // The table shrinks its own type rather than breaking words across lines: a
   // column narrower than its longest word gives 'Chatt / erjee', which on a
   // printed notice board reads as a fault. Set by fitTypeSize() below.
@@ -240,123 +200,89 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const useCellFont = () => doc.font('Helvetica').fontSize(cellFont);
   const useHeadFont = () => doc.font('Helvetica-Bold').fontSize(headFont);
   useCellFont();
-  const anyDiet = displayPatients.some((p) => !!notesFor(p.id));
 
   addHeader(doc, dateISO, centreName, everyoneLine);
   const startY = doc.y + 2;
 
   if (displayPatients.length === 0) {
-    doc.fontSize(12).text('No scheduled activities for this date.', doc.page.margins.left, doc.page.margins.top + 20);
+    doc.fontSize(12).text('No scheduled activities for this date.', doc.page.margins.left, startY + 8);
     doc.end();
     return await done;
   }
 
-  let yy = startY;
-  const maxContentHeight = doc.page.height - doc.page.margins.bottom - yy;
-  const headers = ['No', 'Patient', ...timeSlots.map((t) => t.label), ...(anyDiet ? ['Notes'] : [])];
-  let colWidths: number[] = [];
-  const rawRows: string[][] = displayPatients.map((p, idx) => {
-      const apptList = apptsByPatient.get(p.id) || [];
-      const noDr = (name: string) => name.replace(/^Dr\.?\s+/i, '');
+  // Residents are grouped by the plan they are on, because the plan text is the
+  // same forty words for a third of the centre. Alphabetical order scattered
+  // each plan across every page and reprinted it on each of them; grouped, it is
+  // one heading per plan and the rows below it carry only what is personal.
+  const noDr = (name: string) => name.replace(/^Dr\.?\s+/i, '');
+  const groups = new Map<string, string[]>();
+  for (const p of displayPatients) {
+    const key = notesFor(p.id);
+    const held = groups.get(key);
+    if (held) held.push(p.id); else groups.set(key, [p.id]);
+  }
+  // Largest plan first, and the residents with no plan text last: a heading that
+  // covers twenty people earns the top of the sheet.
+  const groupOrder = [...groups.entries()].sort((a, b) => {
+    if (!a[0] !== !b[0]) return a[0] ? -1 : 1;
+    return b[1].length - a[1].length || a[0].localeCompare(b[0]);
+  });
+
+  /** A line inside a time cell. Treatments are bold; food and events are not. */
+  type Line = { t: string; text: string; bold: boolean };
+  type Row = { kind: 'row'; name: string; cells: Line[][] };
+  type Heading = { kind: 'heading'; title: string; body: string };
+  const items: (Row | Heading)[] = [];
+  for (const [notes, ids] of groupOrder) {
+    const planName = dietByPatient.get(ids[0])?.planName || '';
+    const body = planName && notes.startsWith(`${planName}: `) ? notes.slice(planName.length + 2) : notes;
+    // Residents with nothing recorded get a heading of their own rather than
+    // falling under the last plan printed — and a centre watching that heading
+    // grow knows something needs writing.
+    const title = `${planName || (notes ? 'Individual instructions' : 'No diet plan recorded')} — ${ids.length} resident${ids.length === 1 ? '' : 's'}`;
+    items.push({ kind: 'heading', title, body });
+    for (const id of ids) {
+      const apptList = apptsByPatient.get(id) || [];
       const cells = timeSlots.map((slot) => {
         const inSlot = (t: string) => toMinutes(t) >= slot.start && toMinutes(t) < slot.end;
-        const lines = [
+        return [
           ...apptList.filter((a) => inSlot(a.start_time)).map((a) => ({
             t: a.start_time,
+            bold: true,
             text: [
               `${therapyById[a.therapy_id] || a.therapy_id} ${a.duration_minutes || 0}m`,
               a.staff_id ? noDr(staffById[a.staff_id] || a.staff_id) : '',
               a.room_id ? roomById[a.room_id] || a.room_id : '',
-            ].filter(Boolean).join(' \u00b7 '),
+            ].filter(Boolean).join(' · '),
           })),
-          ...ownEvents.filter((e) => inSlot(e.start_time) && eventAppliesToPatient(e, p.id)).map((e) => ({
+          ...ownEvents.filter((e) => inSlot(e.start_time) && eventAppliesToPatient(e, id)).map((e) => ({
             t: e.start_time,
+            bold: false,
             text: `${e.activity_name} ${durationBetween(e.start_time, e.end_time)}m`,
           })),
-          // A sitting the patient is on shows what they eat. With no plan of
-          // their own the row stays empty: 'Lunch' with nothing after it tells
-          // a therapist nothing the header has not already said.
-          ...[...mealByTimeSlot].filter(([t]) => inSlot(t)).flatMap(([t, meal]) => {
-            const own = dietByPatient.get(p.id)?.meals[meal];
-            const applies = eventsWindow.some((e) => e.start_time === t && isMealEvent(e) && eventAppliesToPatient(e, p.id));
-            if (!own || !applies) return [];
-            return [{ t, text: `${meal[0].toUpperCase()}${meal.slice(1)}: ${own}` }];
-          }),
         ].sort((m, n) => m.t.localeCompare(n.t));
-        // Every entry states its own start, so a 13:30 therapy in a 12:00-15:00
-        // band can never be read as starting at 12:00.
-        return lines.map((l) => `${l.t} ${l.text}`).join('\n');
       });
-      const row = [String(idx + 1), patientById[p.id] || p.id, ...cells];
-      if (anyDiet) row.push(notesFor(p.id));
-      return row;
-    });
-  const mergedRows = rawRows.map((row) => [...row]);
-  // How many rows each merged cell covers, so its text can be measured against
-  // the box it is actually painted in rather than against one row of it.
-  const spanLengths = new Map<string, number>();
-  const rowCount = rawRows.length;
-  const timeColStart = 2;
-  const timeColEndExclusive = timeColStart + timeSlots.length;
-  // Patients on the same plan carry the same notes, so those cells merge down
-  // the column: one box, read once.
-  //
-  // Time cells are never merged, however identical they are. Two patients given
-  // the same lunch had their two rows painted as one box, so a resident looking
-  // along their own row found the text sitting in the row above — on a notice
-  // board that is a person reading someone else's schedule.
-  const notesColIdx = headers.length - 1;
-  const isMergedCol = (k: number) => anyDiet && k === notesColIdx;
-  for (const col of headers.map((_, k) => k).filter(isMergedCol)) {
-    let r = 0;
-    while (r < rowCount) {
-      const value = rawRows[r][col];
-      if (!value) { r++; continue; }
-      let span = 1;
-      while (r + span < rowCount && rawRows[r + span][col] === value) {
-        span++;
-      }
-      for (let i = 0; i < span; i++) {
-        if (i > 0) mergedRows[r + i][col] = '';
-        spanLengths.set(`${r + i}:${col}`, span);
-      }
-      r += span;
+      items.push({ kind: 'row', name: patientById[id] || id, cells });
     }
   }
-  const headerH = 18;
-  let i = 0;
-  let pageHeaders: string[] = [];
-  let pageDrawIdxs: number[] = [];
-  // `lastRow` is the last row this page will hold. Columns are chosen from the
-  // rows actually on the page, so a start time used only by a later page does
-  // not take width here — an empty column is a column the day did not need.
-  // A column narrower than its own header wraps '07:30' onto two lines, and one
-  // narrower than its longest word breaks that word mid-syllable. Both are the
-  // same fault on a printed sheet, so both set a floor.
-  const widthOf = (colIdx: number, drawn: number[], hourW: number) => {
-    if (colIdx === 0) return NO_W;
-    if (colIdx === 1) return PATIENT_W;
-    if (anyDiet && colIdx === headers.length - 1) return NOTES_W;
-    return hourW;
-  };
-  const isTimeCol = (k: number) => k >= 2 && k < timeColEndExclusive;
-  const layoutWidths = (drawn: number[]) => {
-    // Time columns split whatever the fixed columns leave, so the table always
-    // ends exactly on the right margin however many bands the day needs.
-    const hours = drawn.filter(isTimeCol).length;
-    const fixed = drawn.reduce((sum, k) => sum + (isTimeCol(k) ? 0 : widthOf(k, drawn, 0)), 0);
-    const hourW = hours ? (w - fixed) / hours : 0;
-    return drawn.map((k) => widthOf(k, drawn, hourW));
-  };
+
+  // Columns: No, Patient, then one band of the day each. The plan text that used
+  // to need the widest column on the page is a heading now.
+  const headers = ['Patient', ...timeSlots.map((t) => t.label)];
+  const colWidths = headers.map((_, k) =>
+    k === 0 ? PATIENT_W : (w - PATIENT_W) / Math.max(1, timeSlots.length));
+  const colX = headers.map((_, k) => x + colWidths.slice(0, k).reduce((a, b) => a + b, 0));
+
+  // Every entry states its own start, so a 13:30 therapy in a 12:00-15:00 band
+  // can never be read as starting at 12:00.
+  const lineText = (l: Line) => `${l.t} ${l.text}`;
 
   /**
    * The largest type at which every column holds its longest word. A sheet a
    * size smaller is still read at arm's length; 'Agni / karma' is not.
    */
-  const allCols = headers.map((_, k) => k);
-  // PDFKit wraps a word together with the space after it, so measure it that way.
   const fitsWord = (word: string, colW: number) => doc.widthOfString(`${word} `) <= colW - 10;
-  const dayWidths = layoutWidths(allCols);
+  const rowItems = items.filter((it): it is Row => it.kind === 'row');
   const fitTypeSize = () => {
     // Stops at 8pt: below that the whole sheet gets hard to read to save one
     // long name, which is better shortened.
@@ -364,194 +290,155 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
       cellFont = size;
       headFont = Math.min(11, size + 2);
       useCellFont();
-      const fits = allCols.every((k, c) => rawRows.every((row) =>
-        (row[k] || '').split(/\s+/).every((word) => fitsWord(word, dayWidths[c]))));
+      const fits = rowItems.every((r) =>
+        r.name.split(/\s+/).every((word) => fitsWord(word, colWidths[0]))
+        && r.cells.every((cell, c) => cell.every((l) =>
+          lineText(l).split(/\s+/).every((word) => fitsWord(word, colWidths[c + 1])))));
       if (fits) return;
     }
   };
   fitTypeSize();
   // At the smallest type some words still do not fit: shorten those instead.
-  // Merging compares cell text, and the same text shortens the same way, so
-  // merged cells stay merged.
-  for (const rows of [rawRows, mergedRows]) {
-    for (const row of rows) {
-      allCols.forEach((k, c) => { if (row[k]) row[k] = shortenWords(row[k], dayWidths[c] - 10, (s) => doc.widthOfString(`${s} `)); });
-    }
+  const widthOfWord = (str: string) => doc.widthOfString(`${str} `);
+  for (const r of rowItems) {
+    r.name = shortenWords(r.name, colWidths[0] - 10, widthOfWord);
+    // Shortened as the line is printed — with its start time — then the time is
+    // taken back off, so a word is measured against the width it really has.
+    r.cells.forEach((cell, c) => cell.forEach((l) => {
+      l.text = shortenWords(lineText(l), colWidths[c + 1] - 10, widthOfWord).slice(l.t.length + 1);
+    }));
   }
 
-  const computePageLayout = (lastRow: number = rowCount - 1) => {
-    // A column nobody on this page uses is left out, and its width shared.
-    const drawn = allCols.filter((k) => k < 2 || (anyDiet && k === headers.length - 1) ||
-      rawRows.slice(i, lastRow + 1).some((row) => !!row[k]));
-    colWidths = layoutWidths(drawn);
-    pageDrawIdxs = drawn;
-    pageHeaders = drawn.map((k) => headers[k]);
+  const headerH = 18;
+  // The page number sits inside the page, not in the bottom margin: text drawn
+  // past the margin makes PDFKit start a page of its own, which is how a blank
+  // first sheet appeared.
+  const FOOTER_H = 14;
+  const pageBottom = doc.page.height - doc.page.margins.bottom - FOOTER_H;
+  // A page after the first repeats the heading of the group it continues, so a
+  // sheet taken off the board on its own still says which plan it is about.
+  const CONTINUED_H = 14;
+
+  // Measured in the weight it is printed in: bold is wider, so measuring a
+  // treatment in book weight gave a box one line too short and the last line of
+  // the cell was drawn over the row below.
+  const lineHeight = (l: Line, colW: number) => {
+    doc.font(l.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(cellFont);
+    return doc.heightOfString(lineText(l), { width: colW - 8 });
   };
+  const cellHeight = (cell: Line[], colW: number) =>
+    cell.reduce((sum, l) => sum + lineHeight(l, colW), 0);
+  const itemHeight = (it: Row | Heading) => {
+    if (it.kind === 'heading') {
+      useHeadFont();
+      doc.fontSize(cellFont + 1);
+      let h = doc.heightOfString(it.title, { width: w - 8 });
+      if (it.body) {
+        useCellFont();
+        h += doc.heightOfString(it.body, { width: w - 8 });
+      }
+      return h + 8;
+    }
+    // The name is printed bold in a fixed column and can take two lines of its
+    // own, so it is measured with the rest: a long name was drawing over the
+    // resident below it.
+    doc.font('Helvetica-Bold').fontSize(cellFont);
+    const nameH = doc.heightOfString(it.name, { width: colWidths[0] - 8 }) + 6;
+    return Math.max(18, nameH, ...it.cells.map((cell, c) => cellHeight(cell, colWidths[c + 1]) + 6));
+  };
+  const heights = items.map(itemHeight);
+
+  // Page breaks are chosen before anything is drawn, because PDFKit cannot
+  // unpaint a row: text drawn past the bottom margin quietly moves to the next
+  // page while the box it belongs in stays here.
+  const pageStarts = new Set<number>([0]);
+  {
+    let used = 0;
+    let available = pageBottom - startY - headerH;
+    for (let r = 0; r < items.length; r++) {
+      if (r > 0 && used + heights[r] > available) {
+        // A heading alone at the foot of a page belongs with its rows.
+        const start = items[r - 1].kind === 'heading' && r - 1 > 0 ? r - 1 : r;
+        pageStarts.add(start);
+        available = pageBottom - startY - headerH - CONTINUED_H;
+        used = 0;
+        for (let back = start; back <= r; back++) used += heights[back];
+      } else {
+        used += heights[r];
+      }
+    }
+  }
+  const totalPages = pageStarts.size;
+
+  let pageNo = 0;
+  let yy = startY;
   const drawHeaderRow = () => {
     useHeadFont();
-    let cx = x;
-    for (let i = 0; i < pageHeaders.length; i++) {
-      doc.rect(cx, yy, colWidths[i], headerH).stroke();
-      const h = doc.heightOfString(pageHeaders[i], { width: colWidths[i] - 8 });
-      const ty = yy + Math.max(5, (headerH - h) / 2);
-      doc.text(pageHeaders[i], cx + 4, ty, { width: colWidths[i] - 8, align: 'center' });
-      cx += colWidths[i];
-    }
+    headers.forEach((h, k) => {
+      doc.rect(colX[k], yy, colWidths[k], headerH).stroke();
+      const th = doc.heightOfString(h, { width: colWidths[k] - 8 });
+      doc.text(h, colX[k] + 4, yy + Math.max(5, (headerH - th) / 2), { width: colWidths[k] - 8, align: 'center' });
+    });
     yy += headerH;
   };
-  let rowsOnPage = 0;
-  let pageCells: { k: number; row: number; text: string; top: number; height: number }[] = [];
-  let pageRowTops: number[] = [];
-  let pageRowHeights: number[] = [];
-  // Appointment cells are collected while their rows are drawn, then painted in
-  // one pass so a therapy repeated down a column becomes a single merged box.
-  const flushPageCells = () => {
-    if (pageCells.length === 0) return;
-    useCellFont();
-    for (const k of pageDrawIdxs.filter(isMergedCol)) {
-      let idx = 0;
-      const colCells = pageCells.filter((c) => c.k === k);
-      while (idx < colCells.length) {
-        const t = colCells[idx].text;
-        if (!t) { idx++; continue; }
-        let span = 1;
-        let spanH = colCells[idx].height;
-        // Adjacent rows only. A row with nothing in this column is not
-        // collected here at all, so comparing neighbours in this list merged
-        // two patients across the row between them and painted one box over
-        // all three.
-        while (idx + span < colCells.length && colCells[idx + span].text === t
-          && colCells[idx + span].row === colCells[idx + span - 1].row + 1) {
-          spanH += colCells[idx + span].height;
-          span++;
-        }
-        const top = colCells[idx].top;
-        const pos = pageDrawIdxs.indexOf(k);
-        const cx = x + colWidths.slice(0, pos).reduce((a, b) => a + b, 0);
-        doc.rect(cx, top, colWidths[pos], spanH).stroke();
-        const th = doc.heightOfString(t, { width: colWidths[pos] - 8 });
-        const ty = top + (spanH - th) / 2;
-        doc.text(t, cx + 4, ty, { width: colWidths[pos] - 8 });
-        idx += span;
-      }
-    }
-    pageCells = [];
-    pageRowTops = [];
-    pageRowHeights = [];
-  };
-
-  const measureRow = (r: number) => {
-    const heights = pageDrawIdxs.map((k, c) => {
-      const text = rawRows[r][k] || '';
-      if (!text) return 6;
-      // A cell merged down N rows is painted as one box that tall, so every row
-      // it covers, not just the first, takes an Nth of its height.
-      const span = spanLengths.get(`${r}:${k}`) ?? 1;
-      return doc.heightOfString(text, { width: colWidths[c] - 8 }) / span + 6;
-    });
-    return Math.max(18, ...heights);
-  };
-  const pageBottom = doc.page.height - doc.page.margins.bottom;
-
-  // Two passes: the first sizes columns against every remaining row to learn how
-  // many fit, the second re-sizes against only those rows so the page keeps the
-  // columns it actually uses.
-  const layoutPage = () => {
-    const headerTop = yy;
-
-    // ponytail: columns are chosen from every row still to be drawn, so an hour
-    // used only on a later page still takes width here. Choosing per page is
-    // circular (column widths change row heights, which change the page).
-    computePageLayout();
-
-    yy = headerTop;
-    drawHeaderRow();
-    useCellFont();
-  };
-  layoutPage();
-
-  // Row heights are settled once, before anything is drawn. A merged box is
-  // painted as tall as the rows it covers, so where those rows do not add up to
-  // its text the shortfall is given to the last row of the run: the box then
-  // always holds its own text instead of spilling into the row below.
-  const rowHeights = Array.from({ length: rowCount }, (_, r) => measureRow(r));
-  for (const k of pageDrawIdxs.filter(isMergedCol)) {
-    for (let r = 0; r < rowCount; r++) {
-      const span = spanLengths.get(`${r}:${k}`) ?? 1;
-      if (!rawRows[r][k] || (r > 0 && !mergedRows[r][k])) continue;
-      const covered = rowHeights.slice(r, r + span).reduce((a, b) => a + b, 0);
-      const needed = doc.heightOfString(rawRows[r][k], { width: colWidths[pageDrawIdxs.indexOf(k)] - 8 }) + 6;
-      if (needed > covered) rowHeights[r + span - 1] += needed - covered;
-    }
-  }
-
-  // A row that only continues a merged run cannot start a page: the box would
-  // then be painted over fewer rows than its text was measured against.
-  const continuesRun = (r: number) =>
-    pageDrawIdxs.some((k) => isMergedCol(k) && rawRows[r][k] && !mergedRows[r][k]);
-  // Page breaks are chosen before anything is drawn, because a break can only
-  // be moved earlier and PDFKit cannot unpaint a row.
-  const pageStarts = new Set<number>();
-  {
-    const available = pageBottom - yy;
-    let used = 0;
-    let firstOnPage = 0;
-    for (let r = 0; r < rowCount; r++) {
-      const h = rowHeights[r];
-      if (r > firstOnPage && used + h > available) {
-        let start = r;
-        while (start > firstOnPage + 1 && continuesRun(start)) start--;
-        pageStarts.add(start);
-        firstOnPage = start;
-        used = 0;
-        for (let back = start; back <= r; back++) used += rowHeights[back];
-      } else {
-        used += h;
-      }
-    }
-  }
-
-  for (; i < rowCount; i++) {
-    const rowH = rowHeights[i];
-    // A row drawn past the bottom margin takes its cell text with it: PDFKit
-    // paginates text that overflows the page, so the boxes stay here and the
-    // therapy names silently move to the next page. Break before drawing.
-    //
-    // A merged box is painted as tall as the rows it covers, and each of those
-    // rows was measured as an Nth of its text. Break inside such a run and the
-    // box gets fewer rows than it was measured for, so its text spills over the
-    // rows below. Break before the run starts instead: rows that share a diet
-    // plan then stay together, which is how the sheet is read anyway.
-    if (rowsOnPage > 0 && pageStarts.has(i)) {
-      flushPageCells();
+  const startPage = (first: boolean) => {
+    if (!first) {
       doc.addPage();
       addHeader(doc, dateISO, centreName, everyoneLine);
       yy = doc.y + 2;
-      rowsOnPage = 0;
-      layoutPage();
     }
-    // no alternate row shading (B/W print)
-    let cx2 = x;
-    for (let c = 0; c < pageDrawIdxs.length; c++) {
-      const k = pageDrawIdxs[c];
-      const rawText = rawRows[i][k] || '';
-      if (isMergedCol(k) && rawText) {
-        pageCells.push({ k, row: i, text: rawText, top: yy, height: rowH });
-      } else {
-        doc.rect(cx2, yy, colWidths[c], rowH).stroke();
-        const text = mergedRows[i][k] || '';
-        const th = doc.heightOfString(text, { width: colWidths[c] - 8 });
-        const ty = yy + Math.max(2, (rowH - th) / 2);
-        doc.text(text, cx2 + 4, ty, { width: colWidths[c] - 8 });
+    pageNo++;
+    // Seven loose sheets on a notice board need to say which one they are.
+    doc.font('Helvetica').fontSize(8)
+      .text(`Page ${pageNo} of ${totalPages}`, x, pageBottom + 4, { width: w, align: 'center', lineBreak: false });
+    drawHeaderRow();
+  };
+
+  let currentHeading: Heading | null = null;
+  startPage(true);
+  for (let r = 0; r < items.length; r++) {
+    const it = items[r];
+    if (r > 0 && pageStarts.has(r)) {
+      startPage(false);
+      if (it.kind === 'row' && currentHeading) {
+        doc.font('Helvetica-Bold').fontSize(cellFont)
+          .text(`${currentHeading.title} (continued)`, x + 2, yy + 2, { width: w - 4 });
+        yy += CONTINUED_H;
       }
-      cx2 += colWidths[c];
     }
-    pageRowTops.push(yy);
-    pageRowHeights.push(rowH);
+    if (it.kind === 'heading') {
+      currentHeading = it;
+      const h = heights[r];
+      doc.save();
+      doc.rect(x, yy, w, h).fillOpacity(0.07).fill('#000');
+      doc.restore();
+      doc.rect(x, yy, w, h).stroke();
+      doc.font('Helvetica-Bold').fontSize(cellFont + 1).text(it.title, x + 4, yy + 3, { width: w - 8 });
+      if (it.body) {
+        useCellFont();
+        doc.text(it.body, x + 4, doc.y, { width: w - 8 });
+      }
+      yy += h;
+      continue;
+    }
+    const rowH = heights[r];
+    doc.rect(colX[0], yy, colWidths[0], rowH).stroke();
+    doc.font('Helvetica-Bold').fontSize(cellFont).text(it.name, colX[0] + 4, yy + 3, { width: colWidths[0] - 8 });
+    it.cells.forEach((cell, c) => {
+      const k = c + 1;
+      doc.rect(colX[k], yy, colWidths[k], rowH).stroke();
+      let ty = yy + 3;
+      for (const l of cell) {
+        // The one time-critical, person-specific thing on the sheet reads as
+        // such: treatment in bold, the standing diet text beside it in book
+        // weight.
+        doc.font(l.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(cellFont);
+        doc.text(lineText(l), colX[k] + 4, ty, { width: colWidths[k] - 8 });
+        ty += doc.heightOfString(lineText(l), { width: colWidths[k] - 8 });
+      }
+    });
     yy += rowH;
-    rowsOnPage++;
   }
-  flushPageCells();
 
   doc.end();
   return await done;

@@ -83,6 +83,13 @@ test('day sheet PDF prints for today', async ({ page, request }) => {
   expect(body.subarray(0, 4).toString()).toBe('%PDF');
   // The seed books today, so the sheet has a table, not the "no activities" page.
   expect(body.length).toBeGreaterThan(5000);
+  // Page count, from the page tree. The sheet was seven pages of repeated diet
+  // text; grouping by plan took it to three, and a layout fault that makes it
+  // grow again (or emit a blank page) is invisible in every other assertion
+  // here.
+  const count = Number(/\/Count (\d+)/.exec(body.toString('latin1'))?.[1]);
+  expect(count).toBeGreaterThan(0);
+  expect(count).toBeLessThanOrEqual(4);
 });
 
 test('an edit to a room is still there after a reload', async ({ page }) => {
