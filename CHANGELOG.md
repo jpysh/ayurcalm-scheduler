@@ -25,8 +25,20 @@ All notable changes to this project are documented here. This project follows
 - `npm run test:invariants` checks that no therapist, room or patient is double
   booked, that rooms have the amenities their therapies need, that gender
   matching holds, and that nothing sits outside opening hours
+- `npm test` runs the self-contained tests; `npm run test:all` adds those that
+  need a running install
+- End-to-end test that an edit to a room survives a reload
+- Tests that write to the database refuse to run against an install not marked
+  as demo data (`ALLOW_TEST_WRITES=1` overrides)
+
+### Removed
+- `test:smoke` and `test:ui`. `test:smoke` only checked that seeding produced
+  some rows, which the end-to-end suite proves better; `test:ui` touched no UI
+  and had not run since authentication was added
 
 ### Fixed
+- `test:validation` had been failing since authentication was added — it posted
+  without a token — and nothing in CI ran it. It now signs in, and CI runs it
 - Day-sheet cells with the same text in non-adjacent rows were painted as one
   box across the row between them, so a resident read someone else's schedule
 - A merged Notes box could still spill text past the rows it covered

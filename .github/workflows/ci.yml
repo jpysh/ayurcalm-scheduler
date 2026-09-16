@@ -83,5 +83,16 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      # The stack is already up, so the tests that need a database and a server
+      # run here rather than in a job that would have to build one again. They
+      # run inside the app container because the db publishes no host port, and
+      # that container already has the database URL and the dependencies. These
+      # tests rotted unnoticed for months while they had nowhere in CI to run.
+      - name: Database and scheduler tests
+        run: |
+          docker compose exec -T -w /app/server -e API_BASE=http://localhost:4000/api app \
+            sh -c 'npx tsx src/tests/scheduleInvariants.test.ts \
+                && npx tsx src/tests/validation.test.ts \
+                && npx tsx src/tests/autoAssign.test.ts'
       - if: failure()
         run: docker compose logs app | tail -100

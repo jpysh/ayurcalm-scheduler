@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { autoSchedule } from '../scheduler';
+import { requireDemoData } from './demoGuard.js';
 
 async function main() {
   const prisma = new PrismaClient();
@@ -9,6 +10,8 @@ async function main() {
       prisma.$connect(),
       new Promise((_, reject) => setTimeout(() => reject(new Error('DB_CONNECT_TIMEOUT')), 1500)),
     ]);
+    // This test creates rooms, staff and appointments and deletes them again.
+    await requireDemoData(prisma);
     const therapy = await prisma.therapy.create({ data: { name: 'Test Therapy', required_amenities: ['massage_table'], duration_minutes: 60, requires_gender_match: false } });
     const room = await prisma.therapyRoom.create({ data: { name: 'Test Room', amenities: ['massage_table'], is_active: true, weekly_schedule: { thursday: { start: '09:00', end: '18:00' }, friday: { start: '09:00', end: '18:00' } } } });
     const staff = await prisma.staff.create({ data: { name: 'Test Staff', gender: 'other', is_active: true, specializations: [therapy.id], weekly_schedule: { thursday: { start: '09:00', end: '18:00' }, friday: { start: '09:00', end: '18:00' } } } });

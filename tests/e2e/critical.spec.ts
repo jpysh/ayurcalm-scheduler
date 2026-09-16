@@ -84,3 +84,42 @@ test('day sheet PDF prints for today', async ({ page, request }) => {
   // The seed books today, so the sheet has a table, not the "no activities" page.
   expect(body.length).toBeGreaterThan(5000);
 });
+
+test('an edit to a room is still there after a reload', async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  await openTab(page, 'Rooms');
+  // A centre edits its own data on day one, and an edit that looks saved but is
+  // not is the failure nobody notices until the schedule is already wrong.
+  //
+  // Rows are found by position, not by their text: editing puts the name into
+  // an input, so a locator matching on the name stops matching the moment the
+  // row is opened for editing.
+  const rowAt = (n: number) => activePanel(page).getByRole('row').nth(n);
+  const indexOfRow = async (text: string) => {
+    const rows = activePanel(page).getByRole('row');
+    for (let n = 0; n < await rows.count(); n++) {
+      if ((await rows.nth(n).innerText()).includes(text)) return n;
+    }
+    throw new Error(`no room row contains "${text}"`);
+  };
+  const rename = async (n: number, to: string) => {
+    await rowAt(n).getByRole('button', { name: 'Edit', exact: true }).click();
+    await rowAt(n).getByRole('textbox').first().fill(to);
+    await rowAt(n).getByRole('button', { name: 'Save', exact: true }).click();
+  };
+
+  const original = (await rowAt(1).innerText()).split('\n')[0].trim();
+  const edited = `${original} Renamed`;
+  await rename(1, edited);
+  await expect(activePanel(page)).toContainText(edited, { timeout: 15000 });
+
+  await page.reload();
+  await passSetupIfShown(page);
+  await openTab(page, 'Rooms');
+  await expect(activePanel(page)).toContainText(edited, { timeout: 15000 });
+
+  // Put the name back, so the day sheet and the next run see the centre as it was.
+  await rename(await indexOfRow(edited), original);
+  await expect(activePanel(page)).not.toContainText(edited, { timeout: 15000 });
+});
