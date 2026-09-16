@@ -3,6 +3,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { autoSchedule } from './scheduler.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
+import { generateTherapistRotaPdf } from './pdf/therapistRotaPdf.js';
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:5433/ayurcalm_dev?schema=public';
@@ -868,14 +869,20 @@ app.delete('/program-events/:id', async (req: Request, res: Response) => {
   res.status(204).end();
 });
 
-// Daily Schedule PDF
+// Daily Schedule PDF. Without `staff_id` this is the centre sheet pinned to the
+// notice board; with it, the same day as a therapist rota, filtered to one
+// person for whoever works off-site.
 app.get('/daily-schedule-pdf', async (req: Request, res: Response) => {
   const date = req.query.date as string | undefined;
+  const staffId = typeof req.query.staff_id === 'string' && req.query.staff_id ? req.query.staff_id : undefined;
+  const rota = staffId != null || req.query.view === 'therapist';
   if (!date) { res.status(400).json({ error: 'Missing date' }); return; }
   try {
-    const pdf = await generateDailySchedulePdf(date, prisma);
+    const pdf = rota
+      ? await generateTherapistRotaPdf(date, prisma, staffId)
+      : await generateDailySchedulePdf(date, prisma);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="ayurcalm-daily-schedule-${date}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="ayurcalm-${rota ? 'therapist-rota' : 'daily-schedule'}-${date}.pdf"`);
     res.send(pdf);
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Failed to generate PDF';

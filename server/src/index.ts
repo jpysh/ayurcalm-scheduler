@@ -11,7 +11,6 @@ import { authRouter, requireAuth, warnIfDefaultAdminUnchanged, loadJwtSecret } f
 import { settingsRouter, publicSettingsRouter } from './settings.js';
 import { usersRouter, accountRouter } from './users.js';
 import { dietTemplatesRouter } from './dietTemplates.js';
-import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import { ZodError } from 'zod';
 import path from 'path';
 import fs from 'fs';
@@ -123,18 +122,8 @@ expressApp.use('/api/account', accountRouter);
 expressApp.use('/api/diet-templates', dietTemplatesRouter);
 expressApp.use('/api', app);
 
-expressApp.get('/api/daily-schedule-pdf', async (req: Request, res: Response) => {
-  try {
-    const dateParam = String(req.query.date || '');
-    const dateISO = dateParam || new Date().toISOString().slice(0, 10);
-    const pdf = await generateDailySchedulePdf(dateISO, prisma);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="daily-schedule.pdf"');
-    res.status(200).send(pdf);
-  } catch (e) {
-    res.status(500).json({ error: 'Failed to generate PDF' });
-  }
-});
+// The daily schedule and therapist rota PDFs are served by the router mounted
+// at /api above (server/src/server.ts). A second handler here never ran.
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

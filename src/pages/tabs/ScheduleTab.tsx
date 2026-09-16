@@ -36,8 +36,8 @@ type ScheduleTabProps = {
   staff: { id: string | number; name: string }[];
   therapyNameById: Record<string, string>;
   setSelectedAppointment: (v: ApiAppointment) => void;
-  pdfLoading: boolean;
-  handleGenerateDailyPdf: () => void;
+  pdfLoading: 'patient' | 'therapist' | null;
+  handleGenerateDailyPdf: (kind?: 'patient' | 'therapist') => void;
   setShowAutoAssign: (b: boolean) => void;
   setShowVerify: (b: boolean) => void;
   calendarTriggerRef: RefObject<HTMLButtonElement | null>;
@@ -124,10 +124,11 @@ const ScheduleTab = ({
             </Button>
           </div>
           
-          <div className="flex items-center justify-center gap-2 md:gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2 md:gap-2">
             <Button variant="secondary" size="sm" className="h-8 px-3" onClick={() => setShowAutoAssign(true)}>Assign</Button>
             <Button variant="secondary" size="sm" className="h-8 px-3" onClick={() => setShowVerify(true)}>Verify</Button>
-            <Button size="sm" className="h-8 px-3" disabled={!!pdfLoading} onClick={handleGenerateDailyPdf}>{pdfLoading ? "Generating…" : "PDF"}</Button>
+            <Button size="sm" className="h-8 px-3" disabled={!!pdfLoading} onClick={() => handleGenerateDailyPdf('patient')}>{pdfLoading === 'patient' ? "Generating…" : "Patient PDF"}</Button>
+            <Button size="sm" variant="outline" className="h-8 px-3" disabled={!!pdfLoading} onClick={() => handleGenerateDailyPdf('therapist')}>{pdfLoading === 'therapist' ? "Generating…" : "Therapist PDF"}</Button>
           </div>
         </div>
       </CardHeader>

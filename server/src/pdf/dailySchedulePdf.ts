@@ -9,7 +9,7 @@ const fmtLong = (isoDate: string) => {
   return new Intl.DateTimeFormat('en-GB', { timeZone: ADMIN_TZ, weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(d);
 };
 
-const addHeader = (doc: any, dateStr: string, centreName: string, everyone = '') => {
+export const addHeader = (doc: any, dateStr: string, centreName: string, everyone = '') => {
   const w = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const x = doc.page.margins.left;
   const top = doc.page.margins.top;
@@ -34,11 +34,11 @@ export const shortenWords = (text: string, maxW: number, widthOf: (s: string) =>
     return `${word.slice(0, cut)}..`;
   }).join(' ')).join('\n');
 
-const toMinutes = (t: string) => {
+export const toMinutes = (t: string) => {
   const [hh, mm] = t.split(':').map((n) => parseInt(n, 10));
   return hh * 60 + mm;
 };
-const durationBetween = (start: string, end: string) => Math.max(0, toMinutes(end) - toMinutes(start));
+export const durationBetween = (start: string, end: string) => Math.max(0, toMinutes(end) - toMinutes(start));
 
 export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaClient): Promise<Buffer> {
   const margin = 36;
