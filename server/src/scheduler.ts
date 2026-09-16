@@ -1,5 +1,6 @@
 import { PrismaClient, Appointment, Staff, TherapyRoom } from '@prisma/client';
 import { z } from 'zod';
+import { staffEventBusy, eventBlocking, type EventRow } from './availability.js';
 
 const inputSchema = z.object({
   patient_id: z.string().uuid(),
@@ -96,6 +97,10 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
   if (!patient) throw new Error('Patient not found');
   const pAvailFrom = (patient as { available_from?: Date | null }).available_from || null;
   const pAvailTo = (patient as { available_to?: Date | null }).available_to || null;
+
+  // The whole table: a centre's programme is a handful of rows, and which of
+  // them run on a given day is decided in memory a day at a time.
+  const programEvents = (await withTimeout(prisma.programEvent.findMany(), maxMs, 'EVENTS')) as unknown as EventRow[];
 
   const candidateStaff = await withTimeout(prisma.staff.findMany({ where: { is_active: true } }), maxMs, 'STAFF');
   const staffFiltered = candidateStaff.filter((s) => {
@@ -272,6 +277,15 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
         patientBusy.push({ s: sMin, e: eMin });
       }
     }
+    // An event a therapist is running is time they are not free, the same as a
+    // treatment: one person cannot be in the yoga hall and the therapy room.
+    for (const s of staffAvail) {
+      for (const b of staffEventBusy(programEvents, s.id, nd)) {
+        staffBusy[s.id] ??= [];
+        staffBusy[s.id].push({ s: b.s, e: b.e });
+      }
+    }
+
     const sameTherapyToday = appointmentsOnDate.some((a) => a.patient_id === input.patient_id && a.therapy_id === input.therapy_id);
     if (sameTherapyToday) {
       currentDate.setDate(nd.getDate() + 1);
@@ -368,6 +382,20 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     }
 
     if (!chosen.room || !chosen.staff || chosen.start === undefined) {
+      // "No slots" is not an answer the admin can act on. When they named a
+      // therapist and an event is what stands in the way, say so.
+      if (input.preferred_staff_id) {
+        const blocking = eventBlocking(programEvents, input.preferred_staff_id, nd, toMinutes(reqStart), toMinutes(reqEnd));
+        if (blocking) {
+          conflicts.reason = 'STAFF_IN_EVENT';
+          conflicts.details = {
+            ...(conflicts.details || {}),
+            activity_name: blocking.label,
+            event_start: toTimeString(blocking.s),
+            event_end: toTimeString(blocking.e),
+          };
+        }
+      }
       conflicts.reason = conflicts.reason || 'NO_MATCHING_TIME_SLOTS';
       currentDate.setDate(nd.getDate() + 1);
       continue;
