@@ -51,6 +51,10 @@ server/                 Express + Prisma + Zod, serves ../dist in production
                         appointments, residents with diet plans). Settings →
                         Reset demo data rebuilds it from today
   src/dietTemplateSeed.ts  The starting diet plans, seeded by name
+  src/availability.ts      When a therapist is not free — events, absences, the
+                        more-specific-event rule. Pure, and tested
+  src/appointmentGuard.ts  Whether one appointment may sit where it is put
+  src/replan.ts            Rehousing an absent therapist's day
   src/dietResolution.ts    What one patient eats on one day — pure, and tested
   src/dietTemplates.ts     Diet plan CRUD, admin-only writes
   src/scripts/          resetPassword.ts — lockout recovery
@@ -73,6 +77,26 @@ code does not throw when it is wrong.
 **Express 5 forwards rejected async handlers to the error middleware.** Routes
 are async and validate with Zod; a thrown error becomes a 500, not a crashed
 process. Wildcard routes use Express 5 syntax: `/{*path}`, not `*`.
+
+**Availability is decided on the server, and only there.** `availability.ts`,
+`appointmentGuard.ts` and `scheduler.ts` say who is free; `replan.ts` says what
+to do when someone is not. Two screens have re-implemented those rules in the
+browser and both were wrong within a release — the booking dialog threw away
+every valid slot once meals became four-hour windows, and `VerifyDialog` still
+carries its own copy, which #88 removes. A screen asks the server; it never
+decides for itself.
+
+**"Today" is the centre's day, from `Settings.timezone`.** The seed, the
+schedule, the warnings, the invariants test and the day sheet all work it out
+the same way, and the default is `Asia/Kolkata`. Machine time is never the
+answer: on a laptop behind the centre after 18:30 UTC, a UTC "today" put the
+seeded absence on yesterday and headed the 17th's schedule with the 16th.
+
+**The seeded day carries its problems on purpose.** A therapist on leave with
+four treatments still on their name, spaced so a swap has somewhere to go, and
+a resident who may only be treated by one therapist. They are what the
+reassignment exists for, so a seed change that quietly fixes the day has broken
+the dataset.
 
 **Diet resolution lives in `dietResolution.ts`, not in the PDF.** It decides what
 a patient may eat: what was written for that date beats their own wording, which
@@ -165,7 +189,17 @@ not changed, so it will not pick up anything you patched inside the container
 while debugging. Use `--force-recreate` before believing a clean result.
 
 `npm run test:e2e` runs sign-in, every tab and the day sheet in Chromium against
-the running stack (`E2E_BASE_URL`, default :8080). CI runs it too.
+the running stack (`E2E_BASE_URL`, default :8080). CI runs it too, together with
+the schedule invariants, which check the seeded months for a double-booked
+therapist, room or resident — buffers included.
+
+The database-backed tests (`test:replan`, `test:invariants`) need the compose
+network. The quickest way to run one is against the running stack:
+
+```bash
+npx tsc -p server && docker compose cp server/dist/. app:/app/server/dist/
+docker compose exec -T -e ALLOW_TEST_WRITES=1 app node server/dist/tests/replanSimulation.test.js
+```
 
 There is one dataset, not a demo one and a test one: a stress fixture kept
 beside the demo would drift from it, and then a test passes on data no install
