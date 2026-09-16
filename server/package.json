@@ -20,8 +20,9 @@
     "test:rota": "tsx src/tests/therapistRota.test.ts",
     "test:invariants": "tsx src/tests/scheduleInvariants.test.ts",
     "test": "npm run test:diet && npm run test:pdf && npm run test:rota && npm run test:availability",
-    "test:all": "npm run test:diet && npm run test:pdf && npm run test:rota && npm run test:availability && npm run test:invariants && npm run test:validation && npm run test:auto-assign",
-    "test:availability": "tsx src/tests/availability.test.ts"
+    "test:all": "npm run test:diet && npm run test:pdf && npm run test:rota && npm run test:availability && npm run test:invariants && npm run test:validation && npm run test:auto-assign && npm run test:replan",
+    "test:availability": "tsx src/tests/availability.test.ts",
+    "test:replan": "tsx src/tests/replanSimulation.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

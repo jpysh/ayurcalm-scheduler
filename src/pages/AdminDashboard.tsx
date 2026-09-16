@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -238,7 +238,7 @@ type AppointmentDetailed = (typeof mockAppointments)[number] & {
   };
 };
 
-type Patient = typeof mockPatientsDetailed[number];
+type Patient = typeof mockPatientsDetailed[number] & { preferredStaffId?: string | null; requiresPreferredStaff?: boolean };
 type ApiTherapy = { id: string; name: string; required_amenities: string[]; duration_minutes: number; requires_gender_match: boolean };
 type ApiStaff = { id: string; name: string; gender: "male" | "female" | "other"; specializations: string[]; phone?: string };
 type ApiRoom = { id: string; name: string; amenities: string[]; is_active: boolean };
@@ -763,6 +763,7 @@ const AdminDashboard = () => {
         staff_ids: (curr as any).staff_ids || [],
         recurrence: (curr.weekdays && curr.weekdays.length) ? 'weekly' : null,
         weekdays: curr.weekdays || [],
+        is_optional: !!(curr as any).is_optional,
       };
       try {
         const res = await fetch(`${API_BASE}/program-events/${curr.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
@@ -792,6 +793,8 @@ const AdminDashboard = () => {
         diet_plan: curr.dietPlan || undefined,
         available_from: curr.actualStart || undefined,
         available_to: curr.actualEnd || undefined,
+        preferred_staff_id: curr.preferredStaffId || null,
+        requires_preferred_staff: !!curr.requiresPreferredStaff,
       };
       try {
         const res = await fetch(`${API_BASE}/patients/${curr.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
@@ -1007,7 +1010,7 @@ const AdminDashboard = () => {
         const r: ApiRoom[] = await fetchJsonWithTimeout(`${API_BASE}/rooms`);
         setRoomsList(r.map((x) => ({ id: x.id, name: x.name, amenities: x.amenities, schedule: "", status: x.is_active ? "Active" : "Maintenance" })));
         const p: ApiPatient[] = await fetchJsonWithTimeout(`${API_BASE}/patients`);
-        setPatients(p.map((x) => ({ id: x.id, name: x.name, phone: x.phone ?? "", email: x.email ?? "", gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", dob: x.date_of_birth ? new Date(x.date_of_birth as unknown as string).toISOString().slice(0,10) : "", emergencyContact: x.emergency_contact ?? "", emergencyPhone: x.emergency_phone ?? "", address: "", medicalNotes: x.medical_notes ?? "", dietPlan: x.diet_plan ?? "", actualStart: x.available_from || "", actualEnd: x.available_to || "" })));
+        setPatients(p.map((x) => ({ id: x.id, name: x.name, phone: x.phone ?? "", email: x.email ?? "", gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", dob: x.date_of_birth ? new Date(x.date_of_birth as unknown as string).toISOString().slice(0,10) : "", emergencyContact: x.emergency_contact ?? "", emergencyPhone: x.emergency_phone ?? "", address: "", medicalNotes: x.medical_notes ?? "", dietPlan: x.diet_plan ?? "", actualStart: x.available_from || "", actualEnd: x.available_to || "", preferredStaffId: (x as { preferred_staff_id?: string | null }).preferred_staff_id ?? null, requiresPreferredStaff: !!(x as { requires_preferred_staff?: boolean }).requires_preferred_staff })));
       } catch {
         setTherapies([]);
         setStaff([]);
@@ -1376,13 +1379,65 @@ const AdminDashboard = () => {
     return () => { cancelled = true; };
   }, [todayKey]);
 
+  // What the replan did when a therapist was marked off, in the words the admin
+  // would use. It is the only place those moves are reported, so it is dismissed
+  // per day rather than switched off: mark someone else off and it comes back.
+  type ReplanMove = { patient_name: string; therapy_name: string; tier: 1 | 2 | 3; appointment_id: string; from: { staff_name: string; start_time: string }; to: { staff_id: string | null; staff_name: string; start_time: string; date: string; room_id: string | null } };
+  type ReplanBatch = { batch_id: string; staff_name: string; moved: ReplanMove[]; proposed: ReplanMove[]; unplaced: { patient_name: string; therapy_name: string; start_time: string; reason: string }[] };
+  const [replans, setReplans] = useState<ReplanBatch[]>([]);
+  // The centre's day, not the machine's. The warnings read appointments keyed
+  // by the centre's timezone and absences by the machine's local date, which on
+  // an evening in Europe is already tomorrow in Asia/Kolkata — a therapist read
+  // as absent on a day they are working. Both sides use the centre's day.
+  const exceptionDayKey = todayKey;
+  const exceptionDay = useMemo(() => new Date(`${todayKey}T00:00:00`), [todayKey]);
+  const [replanDismissed, setReplanDismissed] = useState<string[]>([]);
+  const [undone, setUndone] = useState<string | null>(null);
+  const loadReplans = useCallback(() => {
+    fetch(`${API_BASE}/replan/summary?date=${exceptionDayKey}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: ReplanBatch[]) => setReplans(Array.isArray(rows) ? rows : []))
+      .catch(() => setReplans([]));
+  }, [exceptionDayKey]);
+  useEffect(() => { loadReplans(); }, [loadReplans]);
+  useEffect(() => {
+    try { setReplanDismissed(JSON.parse(localStorage.getItem(`replanDismissed:${exceptionDayKey}`) || '[]')); } catch { setReplanDismissed([]); }
+  }, [exceptionDayKey]);
+  const dismissReplan = (id: string) => {
+    const next = [...replanDismissed, id];
+    setReplanDismissed(next);
+    try { localStorage.setItem(`replanDismissed:${exceptionDayKey}`, JSON.stringify(next)); } catch { /* private window */ }
+  };
+  const undoReplanBatch = async (batch: ReplanBatch) => {
+    const res = await fetch(`${API_BASE}/replan/undo`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batch_id: batch.batch_id }) });
+    if (!res.ok) return;
+    const out = await res.json().catch(() => ({ restored: batch.moved.length }));
+    setUndone(`Undone: ${batch.staff_name} reinstated, ${out.restored} treatment${out.restored === 1 ? '' : 's'} back as they were.`);
+    loadReplans();
+    refreshAppointmentsForDate(todayKey, true);
+  };
+  const reassignDay = async (staffId: string) => {
+    const res = await fetch(`${API_BASE}/replan`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ staff_id: staffId, date: exceptionDayKey, apply: true }) });
+    if (!res.ok) { toast.error('Could not reassign that day'); return; }
+    const out = await res.json();
+    toast.success(`${out.moved.length} treatment${out.moved.length === 1 ? '' : 's'} rebooked`);
+    loadReplans();
+    refreshAppointmentsForDate(todayKey, true);
+  };
+  const acceptProposal = async (m: ReplanMove) => {
+    await fetch(`${API_BASE}/replan/accept`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ appointment_id: m.appointment_id, staff_id: m.to.staff_id, date: m.to.date, start_time: m.to.start_time, room_id: m.to.room_id }) });
+    loadReplans();
+    refreshAppointmentsForDate(todayKey, true);
+  };
+  const visibleReplans = replans.filter((r) => !replanDismissed.includes(r.batch_id));
+
   const exceptions = useMemo(() => dayExceptions({
-    day: new Date(currentDate),
+    day: exceptionDay,
     appointments: (Array.isArray(appointmentsByDate[todayKey]) ? appointmentsByDate[todayKey] : []).map((a) => ({
       id: a.id, patient_id: a.patient_id, therapy_id: a.therapy_id, staff_id: a.staff_id,
       room_id: a.room_id, start_time: a.start_time, duration_minutes: a.duration_minutes, status: a.status,
     })),
-    events: dayEvents.map((ev) => ({ activity_name: ev.activity_name, start_time: ev.start_time, end_time: ev.end_time, patients_scope: (ev as { patients_scope?: string }).patients_scope })),
+    events: dayEvents.map((ev) => ({ activity_name: ev.activity_name, start_time: ev.start_time, end_time: ev.end_time, patients_scope: (ev as { patients_scope?: string }).patients_scope, is_optional: (ev as { is_optional?: boolean }).is_optional })),
     timeoff: (timeOffs || []).map((h) => ({
       entity_type: (h.type === 'Center' ? 'center' : h.type === 'Staff' ? 'staff' : h.type === 'Room' ? 'room' : h.type === 'Therapy' ? 'therapy' : 'patient') as 'center'|'staff'|'room'|'therapy'|'patient',
       entity_id: h.entity, date: h.date, start_date: h.startDate, end_date: h.endDate, recurrence: h.recurrence, weekdays: h.weekdays,
@@ -1392,7 +1447,7 @@ const AdminDashboard = () => {
     rooms: roomsList.map((r) => ({ id: String(r.id), name: r.name })),
     therapies: therapies.map((t) => ({ id: String(t.id), name: t.name })),
     residentIds: residentsOnDay,
-  }), [currentDate, appointmentsByDate, todayKey, dayEvents, timeOffs, patients, staff, roomsList, therapies, residentsOnDay]);
+  }), [exceptionDay, appointmentsByDate, todayKey, dayEvents, timeOffs, patients, staff, roomsList, therapies, residentsOnDay]);
 
   const compareRoomNames = (aName: string, bName: string) => {
     const ax = String(aName).trim();
@@ -1557,7 +1612,38 @@ const AdminDashboard = () => {
       </header>
 
       {/* Main Content */}
-      <div className="container mx-auto px-3 md:px-4 py-3 md:py-6">        <div className="mb-3 md:mb-6 rounded-md border bg-card px-3 py-2">
+      <div className="container mx-auto px-3 md:px-4 py-3 md:py-6">
+        {undone ? (
+          <div className="mb-2 rounded-md border bg-card px-3 py-2 text-sm">{undone}</div>
+        ) : null}
+        {visibleReplans.map((batch) => (
+          <div key={batch.batch_id} className="mb-2 rounded-md border bg-card px-3 py-2 space-y-1">
+            <p className="text-sm font-semibold">{batch.staff_name} is off — {batch.moved.length} treatment{batch.moved.length === 1 ? '' : 's'} rebooked</p>
+            <ul className="space-y-0.5">
+              {batch.moved.map((m) => (
+                <li key={m.appointment_id} className="text-sm">
+                  {m.patient_name}: {m.therapy_name} {m.tier === 1 ? `at ${m.to.start_time} with ${m.to.staff_name}` : `moved to ${m.to.start_time} with ${m.to.staff_name}`}
+                </li>
+              ))}
+              {batch.proposed.map((m) => (
+                <li key={m.appointment_id} className="text-sm flex flex-wrap items-center gap-2">
+                  <span>{m.patient_name}: nothing free today — {m.to.date} at {m.to.start_time} with {m.to.staff_name}?</span>
+                  <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => acceptProposal(m)}>Move it</Button>
+                </li>
+              ))}
+              {batch.unplaced.map((u, i) => (
+                <li key={`u-${i}`} className="text-sm text-amber-700">
+                  {u.patient_name}: {u.therapy_name} at {u.start_time} has nobody — {u.reason}
+                </li>
+              ))}
+            </ul>
+            <div className="flex gap-2 pt-1">
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => undoReplanBatch(batch)}>Undo</Button>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => dismissReplan(batch.batch_id)}>Done with this</Button>
+            </div>
+          </div>
+        ))}
+        <div className="mb-3 md:mb-6 rounded-md border bg-card px-3 py-2">
           {exceptions.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nothing wrong with {isToday ? 'today' : 'this day'}.</p>
           ) : (
@@ -1570,6 +1656,12 @@ const AdminDashboard = () => {
                   <li key={i} className="flex items-start gap-1.5 text-sm">
                     <AlertCircle className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />
                     <span>{e.text}</span>
+                    {/* The whole point of the warning: give the day away in one tap. */}
+                    {e.staff_id ? (
+                      <Button size="sm" variant="outline" className="h-6 text-xs shrink-0" onClick={() => reassignDay(e.staff_id!)}>
+                        Reassign the day
+                      </Button>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -2222,6 +2314,7 @@ const AdminDashboard = () => {
   
   <TabsContent value="patients">
     <PatientsTab
+              staff={staff.map((x) => ({ id: String(x.id), name: x.name }))}
       patients={patients}
       searchPatients={searchPatients}
       setSearchPatients={setSearchPatients}
@@ -2841,6 +2934,14 @@ const AdminDashboard = () => {
                     }),
                   });
                   const created = await res.json();
+                  // Marking a therapist off rebuilds their day on the server.
+                  // Show what it did where the admin is looking next.
+                  if (Array.isArray(created.replan) && created.replan.length > 0) {
+                    const total = created.replan.reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0);
+                    toast.success(`${total} treatment${total === 1 ? '' : 's'} rebooked — see the top of the dashboard`);
+                    loadReplans();
+                    refreshAppointmentsForDate(todayKey, true);
+                  }
                   setTimeOffs((prev) => prev.map((h) => h.id === tempId ? { id: created.id, startDate: created.start_date ? new Date(created.start_date).toISOString() : undefined, endDate: created.end_date ? new Date(created.end_date).toISOString() : undefined, recurrence: created.recurrence || undefined, weekdays: created.weekdays || undefined, type: optimistic.type, entity: created.entity_id ?? optimistic.entity, description: created.description ?? optimistic.description } : h));
                 } catch {
                   toast.error('Failed to save time off');

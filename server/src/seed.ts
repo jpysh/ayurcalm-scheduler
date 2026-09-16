@@ -318,19 +318,52 @@ async function main() {
     }
   }
 
-  // Program Events — Weekly schedule for All Guests
+  // Program Events — the centre's day. Classes and prayers are optional: a
+  // resident may be treated during one. Meals are not, and the day sheet prints
+  // them in the resident's own column.
+  //
+  // Yoga and the meditations have a therapist on them, which is the point: that
+  // person is genuinely unbookable for those hours, and the rota says why.
   const weekdays = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-  await prisma.programEvent.create({ data: { recurrence: 'weekly', weekdays, start_time: '07:30', end_time: '08:30', activity_name: 'Yoga', room_id: null, staff_id: null, required_amenities: [], notes: 'All Guests', audience: 'all' } });
-  await prisma.programEvent.create({ data: { recurrence: 'weekly', weekdays, start_time: '08:30', end_time: '09:00', activity_name: 'Breakfast', room_id: null, staff_id: null, required_amenities: [], notes: 'Diet per plan', audience: 'all' } });
-  await prisma.programEvent.create({ data: { recurrence: 'weekly', weekdays, start_time: '13:00', end_time: '13:30', activity_name: 'Lunch', room_id: null, staff_id: null, required_amenities: [], notes: '', audience: 'patients', patients_scope: 'all' } });
-  await prisma.programEvent.create({ data: { recurrence: 'weekly', weekdays, start_time: '18:30', end_time: '19:00', activity_name: 'Dinner', room_id: null, staff_id: null, required_amenities: [], notes: '', audience: 'patients', patients_scope: 'all' } });
-  await prisma.programEvent.create({ data: { recurrence: 'weekly', weekdays, start_time: '17:00', end_time: '18:00', activity_name: 'Evening Meditation', room_id: null, staff_id: null, required_amenities: [], notes: '', audience: 'all' } });
-  await prisma.programEvent.create({ data: { recurrence: 'weekly', weekdays: ['monday'], start_time: '08:00', end_time: '08:30', activity_name: 'Temple Prayers', room_id: null, staff_id: null, required_amenities: [], notes: '', audience: 'all' } });
+  const offTodayIds = new Set((await prisma.timeOff.findMany({ where: { entity_type: 'staff', date: new Date(new Date().toISOString().slice(0, 10)) } })).map((h) => h.entity_id));
+  const yogaStaff = staff.find((s) => s.gender === 'female' && !offTodayIds.has(s.id)) || staff[0];
+  const prayerStaff = staff.find((s) => s.id !== yogaStaff.id && !offTodayIds.has(s.id)) || staff[1];
+  const event = (over: Record<string, unknown>) => prisma.programEvent.create({ data: {
+    recurrence: 'weekly', weekdays, room_id: null, staff_id: null, required_amenities: [],
+    notes: '', audience: 'all', patients_scope: 'all', staff_scope: 'none', staff_ids: [],
+    is_optional: false, start_time: '00:00', end_time: '00:00', activity_name: '',
+    ...over,
+  } as any });
+
+  await event({ start_time: '07:00', end_time: '08:00', activity_name: 'Morning Yoga', is_optional: true, staff_scope: 'custom', staff_ids: [yogaStaff.id], staff_id: yogaStaff.id });
+  await event({ start_time: '08:30', end_time: '09:00', activity_name: 'Morning Prayer Meditation', is_optional: true, staff_scope: 'custom', staff_ids: [prayerStaff.id], staff_id: prayerStaff.id });
+  await event({ start_time: '08:00', end_time: '12:00', activity_name: 'Breakfast', notes: 'Diet per plan' });
+  await event({ start_time: '12:00', end_time: '16:00', activity_name: 'Lunch' });
+  await event({ start_time: '17:00', end_time: '18:30', activity_name: 'Snacks', is_optional: true });
+  await event({ start_time: '17:00', end_time: '18:00', activity_name: 'Evening Yoga', is_optional: true, staff_scope: 'custom', staff_ids: [yogaStaff.id], staff_id: yogaStaff.id });
+  await event({ start_time: '18:00', end_time: '19:00', activity_name: 'Evening Prayer Meditation', is_optional: true, staff_scope: 'custom', staff_ids: [prayerStaff.id], staff_id: prayerStaff.id });
+  await event({ start_time: '18:30', end_time: '20:30', activity_name: 'Dinner' });
+  // Mondays the havan runs over the morning prayer, and replaces it: where two
+  // events overlap, the more specific one is the one that happens.
+  await event({ weekdays: ['monday'], start_time: '08:30', end_time: '09:30', activity_name: 'Temple Havan Ritual', staff_scope: 'custom', staff_ids: [prayerStaff.id], staff_id: prayerStaff.id });
 
   const nextMonth = new Date(); nextMonth.setMonth(nextMonth.getMonth() + 1); nextMonth.setDate(10);
   for (let i = 0; i < 4; i++) {
     const d = new Date(nextMonth); d.setDate(nextMonth.getDate() + i * 5);
     await prisma.programEvent.create({ data: { date: d, start_time: '10:00', end_time: '11:00', activity_name: `Special Session ${i+1}`, room_id: null, staff_id: null, required_amenities: [], audience: 'all', notes: '', patients_scope: 'all' } });
+  }
+
+  // One resident who is only treated by their own therapist. The replan cannot
+  // swap their hands, so it offers them another time — which is the case that
+  // looks right until you meet it, and is now in the dataset by default.
+  const todaysBookings = await prisma.appointment.findMany({ where: { scheduled_date: new Date(todayKey) } });
+  const offToday = new Set((await prisma.timeOff.findMany({ where: { entity_type: 'staff', date: new Date(todayKey) } })).map((h) => h.entity_id));
+  const loyal = todaysBookings.find((a) => a.staff_id && offToday.has(a.staff_id));
+  if (loyal?.staff_id) {
+    await prisma.patient.update({
+      where: { id: loyal.patient_id },
+      data: { preferred_staff_id: loyal.staff_id, requires_preferred_staff: true },
+    });
   }
 
   // Demo login. Idempotent so re-seeding never locks you out, and never

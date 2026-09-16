@@ -5,6 +5,7 @@ import { autoSchedule } from './scheduler.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import { generateTherapistRotaPdf } from './pdf/therapistRotaPdf.js';
 import { findConflict, loadDay, nearestFreeTime } from './appointmentGuard.js';
+import { replanStaffDay, undoReplan } from './replan.js';
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:5433/ayurcalm_dev?schema=public';
@@ -389,6 +390,8 @@ app.post('/patients', async (req: Request, res: Response) => {
     diet_plan: z.string().optional(),
     available_from: z.string().optional(),
     available_to: z.string().optional(),
+    preferred_staff_id: z.string().uuid().nullable().optional(),
+    requires_preferred_staff: z.boolean().optional(),
   });
   const body = schema.parse(req.body);
   const data: any = { name: body.name, gender: body.gender, phone: body.phone, email: body.email, emergency_contact: body.emergency_contact, emergency_phone: body.emergency_phone, medical_notes: body.medical_notes, diet_plan: body.diet_plan };
@@ -413,6 +416,8 @@ app.put('/patients/:id', async (req: Request, res: Response) => {
     diet_plan: z.string().optional(),
     available_from: z.string().optional(),
     available_to: z.string().optional(),
+    preferred_staff_id: z.string().uuid().nullable().optional(),
+    requires_preferred_staff: z.boolean().optional(),
   });
   const body = schema.parse(req.body);
   const data: any = { ...body };
@@ -594,15 +599,32 @@ const createTimeOffHandler = async (req: Request, res: Response) => {
       else if (data.recurrence === 'weekly') data.date = new Date();
     }
     const h = await prisma.timeOff.create({ data });
-    res.status(201).json(h);
+
+    // Recording an absence is the moment the day has to be rebuilt: the admin
+    // is the only person here, and a treatment left on the name of someone who
+    // is not coming in prints on the day sheet as though it will happen.
+    let replan = null;
+    if (h.entity_type === 'staff' && h.entity_id) {
+      const days = datesCovered(h);
+      const results = [];
+      for (const d of days) results.push(await replanStaffDay(h.entity_id, d, prisma, { apply: true, timeOffId: h.id }));
+      replan = results.filter((r) => r.moved.length || r.proposed.length || r.unplaced.length);
+    }
+    res.status(201).json({ ...h, replan });
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : 'TimeOff creation failed' });
   }
 };
 
 const deleteTimeOffHandler = async (req: Request, res: Response) => {
-  const id = req.params.id;
+  const id = String(req.params.id);
   try {
+    // Deleting the absence undoes what recording it did: the therapist is
+    // coming in after all, so their day goes back as it was.
+    const batches = await prisma.auditLog.findMany({ where: { action: 'replan' }, orderBy: { timestamp: 'desc' }, take: 50 });
+    for (const b of batches) {
+      if ((b.old_value as { time_off_id?: string } | null)?.time_off_id === id) await undoReplan(b.id, prisma);
+    }
     await prisma.timeOff.delete({ where: { id } });
     res.status(204).end();
   } catch (e) {
@@ -625,6 +647,49 @@ const updateTimeOffHandler = async (req: Request, res: Response) => {
     res.status(400).json({ error: e instanceof Error ? e.message : 'TimeOff update failed' });
   }
 };
+
+/** Every date an absence covers, capped at a fortnight: a replan is a day's work. */
+const datesCovered = (h: { date: Date | null; start_date: Date | null; end_date: Date | null }) => {
+  if (h.start_date && h.end_date) {
+    const out: Date[] = [];
+    for (const d = new Date(h.start_date); d <= h.end_date && out.length < 14; d.setDate(d.getDate() + 1)) out.push(new Date(d));
+    return out;
+  }
+  return h.date ? [h.date] : [];
+};
+
+/** The plan for one therapist's day: what it would do, or what it did. */
+app.post('/replan', async (req: Request, res: Response) => {
+  const schema = z.object({ staff_id: z.string().uuid(), date: z.string(), apply: z.boolean().optional() });
+  const body = schema.parse(req.body);
+  res.json(await replanStaffDay(body.staff_id, new Date(body.date), prisma, { apply: body.apply }));
+});
+
+/** Apply one proposal — the moves to another day the replan would not make alone. */
+app.post('/replan/accept', async (req: Request, res: Response) => {
+  const schema = z.object({ appointment_id: z.string().uuid(), staff_id: z.string().uuid(), date: z.string(), start_time: z.string(), room_id: z.string().uuid().nullable().optional() });
+  const body = schema.parse(req.body);
+  const appt = await prisma.appointment.update({
+    where: { id: body.appointment_id },
+    data: { staff_id: body.staff_id, scheduled_date: new Date(body.date), start_time: body.start_time, room_id: body.room_id ?? undefined, status: 'rescheduled' },
+  });
+  res.json(appt);
+});
+
+app.post('/replan/undo', async (req: Request, res: Response) => {
+  const body = z.object({ batch_id: z.string().uuid() }).parse(req.body);
+  const result = await undoReplan(body.batch_id, prisma);
+  if (!result) { res.status(404).json({ error: 'Nothing to undo' }); return; }
+  res.json(result);
+});
+
+/** What the replan did on a date, for the warning at the top of the dashboard. */
+app.get('/replan/summary', async (req: Request, res: Response) => {
+  const date = String(req.query.date || '').slice(0, 10);
+  const rows = await prisma.auditLog.findMany({ where: { action: 'replan' }, orderBy: { timestamp: 'desc' }, take: 50 });
+  const forDate = rows.filter((r) => (r.old_value as { date?: string } | null)?.date === date);
+  res.json(forDate.map((r) => ({ batch_id: r.id, at: r.timestamp, ...(r.new_value as object) })));
+});
 
 app.get('/timeoff', getTimeOffHandler);
 app.post('/timeoff', createTimeOffHandler);
@@ -796,6 +861,7 @@ app.post('/program-events', async (req: Request, res: Response) => {
     patient_ids: z.array(z.string()).optional(),
     staff_scope: z.enum(['all','none','custom']).optional().nullable(),
     staff_ids: z.array(z.string()).optional(),
+    is_optional: z.boolean().optional(),
   });
   const body = schema.parse(req.body);
   const data = await prisma.programEvent.create({ data: {
@@ -816,6 +882,7 @@ app.post('/program-events', async (req: Request, res: Response) => {
     patient_ids: body.patient_ids || [],
     staff_scope: body.staff_scope || null,
     staff_ids: body.staff_ids || [],
+    is_optional: body.is_optional ?? false,
   } });
   res.status(201).json(data);
 });
@@ -840,6 +907,7 @@ app.put('/program-events/:id', async (req: Request, res: Response) => {
     patient_ids: z.array(z.string()).optional(),
     staff_scope: z.enum(['all','none','custom']).optional().nullable(),
     staff_ids: z.array(z.string()).optional(),
+    is_optional: z.boolean().optional(),
   });
   const body = schema.parse(req.body);
   const data = await prisma.programEvent.update({ where: { id }, data: {
@@ -860,6 +928,7 @@ app.put('/program-events/:id', async (req: Request, res: Response) => {
     patient_ids: body.patient_ids,
     staff_scope: body.staff_scope === undefined ? undefined : (body.staff_scope || null),
     staff_ids: body.staff_ids,
+    is_optional: body.is_optional,
   } });
   res.json(data);
 });

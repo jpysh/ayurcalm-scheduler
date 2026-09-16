@@ -51,6 +51,7 @@ const settingsSchema = z.object({
   support_whatsapp: z.string().trim().regex(/^\d{8,15}$/, 'Use international format with no + or leading zero, e.g. 420777558262').or(z.literal('')).nullish(),
   patient_support_whatsapp: z.string().trim().regex(/^\d{8,15}$/, 'Use international format with no + or leading zero, e.g. 420777558262').or(z.literal('')).nullish(),
   setup_complete: z.boolean().optional(),
+  enforce_gender_match: z.boolean().optional(),
 }).refine(
   v => toMinutes(v.closing_time) > toMinutes(v.opening_time),
   { message: 'Closing time must be after opening time', path: ['closing_time'] },

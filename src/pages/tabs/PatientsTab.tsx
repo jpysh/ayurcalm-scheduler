@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Edit, Trash2, Info, Plus } from "lucide-react";
 // removed dialog import to avoid dev parse error
 
-type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; dietPlan?: string };
+type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; dietPlan?: string; preferredStaffId?: string | null; requiresPreferredStaff?: boolean };
 
 type PatientsTabProps = {
   patients: Patient[];
@@ -20,9 +20,10 @@ type PatientsTabProps = {
   setShowAddPatient: (v: boolean) => void;
   onShowInfo: (p: Patient) => void;
   onEditDiet: (patientId: string | number) => void;
+  staff: { id: string | number; name: string }[];
 };
 
-const PatientsTab = ({ patients, searchPatients, setSearchPatients, showAddPatient, setShowAddPatient, onShowInfo, onEditDiet }: PatientsTabProps) => {
+const PatientsTab = ({ patients, searchPatients, setSearchPatients, showAddPatient, setShowAddPatient, onShowInfo, onEditDiet, staff }: PatientsTabProps) => {
   const [localPatients, setLocalPatients] = useState<Patient[]>(patients);
   const [editingPatientId, setEditingPatientId] = useState<string | number | null>(null);
   const [originalPatient, setOriginalPatient] = useState<Patient | null>(null);
@@ -224,6 +225,7 @@ const PatientsTab = ({ patients, searchPatients, setSearchPatients, showAddPatie
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Name</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Phone</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Gender</TableHead>
+              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Therapist</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Diet Plan</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Start</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">End</TableHead>
@@ -273,6 +275,33 @@ const PatientsTab = ({ patients, searchPatients, setSearchPatients, showAddPatie
                     </Select>
                   ) : (
                     p.gender
+                  )}
+                </TableCell>
+                <TableCell className="text-xs md:text-sm leading-tight py-0 pl-1.5 pr-1 md:py-0 md:px-3">
+                  {editingPatientId === p.id ? (
+                    <div className="space-y-1">
+                      <Select value={p.preferredStaffId || 'none'} onValueChange={(v) => setLocalPatients((prev) => prev.map((x) => (x.id === p.id ? { ...x, preferredStaffId: v === 'none' ? null : v, requiresPreferredStaff: v === 'none' ? false : x.requiresPreferredStaff } : x)))}>
+                        <SelectTrigger className="h-8"><SelectValue placeholder="Anyone" /></SelectTrigger>
+                        <SelectContent className="max-h-[45vh]">
+                          <SelectItem value="none">Anyone</SelectItem>
+                          {staff.map((sm) => (<SelectItem key={String(sm.id)} value={String(sm.id)}>{sm.name}</SelectItem>))}
+                        </SelectContent>
+                      </Select>
+                      {p.preferredStaffId ? (
+                        <label className="flex items-center gap-1.5 text-[11px]">
+                          <Checkbox
+                            className="h-4 w-4"
+                            checked={!!p.requiresPreferredStaff}
+                            onCheckedChange={(v) => setLocalPatients((prev) => prev.map((x) => (x.id === p.id ? { ...x, requiresPreferredStaff: !!v } : x)))}
+                          />
+                          Must be this therapist
+                        </label>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <span className="text-[11px] md:text-sm text-muted-foreground">
+                      {p.preferredStaffId ? `${staff.find((sm) => String(sm.id) === String(p.preferredStaffId))?.name || ''}${p.requiresPreferredStaff ? ' (only)' : ''}` : ''}
+                    </span>
                   )}
                 </TableCell>
                 <TableCell className="text-xs md:text-sm leading-tight py-0 pl-1.5 pr-1 md:py-0 md:px-3">
