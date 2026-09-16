@@ -123,3 +123,30 @@ test('an edit to a room is still there after a reload', async ({ page }) => {
   await rename(await indexOfRow(edited), original);
   await expect(activePanel(page)).not.toContainText(edited, { timeout: 15000 });
 });
+
+test('the booking dialog offers the slots the API found, and books one', async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  await openTab(page, 'Schedule');
+  await activePanel(page).getByRole('button', { name: 'Assign' }).click();
+
+  // The centre's clock and the browser's clock are rarely the same one. The
+  // dialog used to re-filter the server's slots against the browser's, so a
+  // browser west of the centre saw "No slots available" for slots that exist.
+  const end = new Date();
+  end.setDate(end.getDate() + 10);
+  await page.getByLabel('End Date').fill(end.toISOString().slice(0, 10));
+  await page.getByRole('button', { name: 'Select patient' }).click();
+  await page.getByPlaceholder('Search patient').fill('Aarav Iyer');
+  await page.getByRole('option').first().click();
+  await page.getByRole('button', { name: /Select therapy/i }).click();
+  await page.getByPlaceholder(/Search therapy/i).fill('Abhyanga');
+  await page.getByRole('option').first().click();
+
+  await page.getByRole('button', { name: 'Auto-Assign' }).click();
+  await expect(page.getByText(/suggested slot/)).toBeVisible({ timeout: 20000 });
+
+  await page.getByText(/^Option 1$/).click();
+  await page.getByRole('button', { name: 'Confirm Selected Slot' }).click();
+  await expect(page.getByText('Selected slot confirmed')).toBeVisible({ timeout: 20000 });
+});

@@ -195,6 +195,7 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
     setDaysPickerOpen(false);
     setStaffPickerOpen(false);
     setPreferredFallbackUsed(false);
+    setEventsBlocked(false);
     load();
   }, [open, defaultDateISO]);
 
@@ -219,6 +220,7 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
   }, [open, formData.startDate, formData.endDate]);
 
   const [conflictReason, setConflictReason] = useState<string | null>(null);
+  const [eventsBlocked, setEventsBlocked] = useState(false);
   const [conflictDetails, setConflictDetails] = useState<Record<string, unknown> | null>(null);
   const defaultBusinessDay = useMemo(() => ({ start: "09:00", end: "18:00" } as const), []);
   type Weekday = 'sunday'|'monday'|'tuesday'|'wednesday'|'thursday'|'friday'|'saturday';
@@ -269,6 +271,20 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
       return { ...prev, preferredTimeStart: s, preferredTimeEnd: e };
     });
   }, [effectiveHours.start, effectiveHours.end]);
+
+  // A result describes the inputs it was run with, so changing any of them
+  // must clear it rather than leave a stale verdict on screen.
+  useEffect(() => {
+    setAssignmentResult(null);
+    setSuggestions([]);
+    setSelectedSuggestionIdx(null);
+    setConflictReason(null);
+    setConflictDetails(null);
+    setEventsBlocked(false);
+    setPreferredFallbackUsed(false);
+  }, [formData.patientId, formData.therapyId, formData.totalSessions, formData.preferredDays,
+      formData.preferredTimeStart, formData.preferredTimeEnd, formData.startDate,
+      formData.endDate, formData.preferredStaffId]);
 
   const therapyAvailableFilter = useMemo(() => {
     const start = new Date(formData.startDate);
@@ -414,15 +430,11 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
         room: roomMap[s.room_id] || s.room_id,
         staff: staffMap[s.staff_id] || s.staff_id,
       }));
-      const now = new Date();
-      const today = toLocalDateStr(now);
-      const nowMin = now.getHours()*60 + now.getMinutes();
+      // The server already drops slots that have passed, against the centre's
+      // clock. Re-filtering here against the browser's clock threw away valid
+      // slots whenever the two disagreed, and the empty list then read as
+      // "no slots available".
       const sugg = suggRaw.filter((x) => {
-        if (x.date !== today) return true;
-        const [hh,mm] = x.time.split(':').map(Number);
-        const m = hh*60+mm;
-        return m >= nowMin;
-      }).filter((x) => {
         const evs = eventsByDate.get(x.date) || [];
         const toMin = (t: string) => { const [h,m] = t.split(':').map(Number); return h*60+m; };
         const sM = toMin(x.time);
@@ -438,6 +450,7 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
         return true;
       });
       setSuggestions(sugg);
+      setEventsBlocked(suggRaw.length > 0 && sugg.length === 0);
       setAssignedDates((data.appointments || []).map((a: { scheduled_date: string }) => toLocalDateStr(new Date(a.scheduled_date))));
     } catch (e) {
       if ((e as unknown as { name?: string }).name === 'AbortError') {
@@ -450,6 +463,35 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // One session per day is all the scheduler will place, so the window is a
+  // hard ceiling on Total Sessions — without this it fails and blames the time
+  // range instead.
+  const availableDays = useMemo(() => {
+    const days = (formData.preferredDays.length > 0 ? formData.preferredDays : weekdayNames) as Weekday[];
+    let n = 0;
+    const end = new Date(formData.endDate);
+    for (let d = new Date(formData.startDate); d <= end; d.setDate(d.getDate() + 1)) {
+      if (days.includes(weekdayNames[d.getDay()])) n += 1;
+    }
+    return n;
+  }, [formData.startDate, formData.endDate, formData.preferredDays, weekdayNames]);
+
+  const startAssign = () => {
+    if (!formData.patientId || !formData.therapyId) {
+      toast.error("Please select both patient and therapy");
+      return;
+    }
+    if (new Date(formData.endDate) < new Date(formData.startDate)) {
+      toast.error("End date cannot be before start date");
+      return;
+    }
+    if (Number(formData.totalSessions) > availableDays) {
+      toast.error(`Only ${availableDays} day${availableDays === 1 ? '' : 's'} in this window, and one session is placed per day — extend the end date or reduce sessions`);
+      return;
+    }
+    handleAssign();
   };
 
   const handleClose = () => {
@@ -769,7 +811,7 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
                 id="sessions"
                 type="number"
                 min="1"
-                max="30"
+                max={Math.max(1, availableDays)}
                 value={formData.totalSessions}
                 onChange={(e) => setFormData({ ...formData, totalSessions: e.target.value })}
                 className="h-7 text-xs px-1.5 w-20"
@@ -831,7 +873,9 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
                           case 'SCHEDULER_TIMEOUT': return 'Scheduling timed out — please try again';
                           case 'DB_TIMEOUT': return 'System busy — please retry shortly';
                           case 'SCHEDULER_ERROR': return 'Unexpected scheduling error';
-                          default: return 'No slots available in the chosen window';
+                          default: return eventsBlocked
+                            ? 'Every free slot clashes with a scheduled programme event'
+                            : 'No slots available in the chosen window';
                         }
                       })()}
                     </p>
@@ -841,6 +885,8 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
                           const tips: string[] = [];
                           if (conflictReason === 'CENTER_HOLIDAY') {
                             tips.push('Adjust center holiday in Time Off');
+                          } else if (eventsBlocked) {
+                            tips.push('Pick a different day, or move the clashing event in Programme');
                           } else {
                             tips.push('Widen time range or change preferred days');
                             if (formData.preferredStaffId) tips.push('Remove preferred staff to consider alternatives');
@@ -862,17 +908,7 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
 
         <DialogFooter className="gap-1">
           {!assignmentResult && !isProcessing && (
-          <Button onClick={() => {
-            if (!formData.patientId || !formData.therapyId) {
-              toast.error("Please select both patient and therapy");
-              return;
-            }
-            if (new Date(formData.endDate) < new Date(formData.startDate)) {
-              toast.error("End date cannot be before start date");
-              return;
-            }
-            handleAssign();
-          }} size="sm" className="h-8 text-xs px-3 min-w-[9rem]">
+          <Button onClick={startAssign} size="sm" className="h-8 text-xs px-3 min-w-[9rem]">
               <Sparkles className="w-4 h-4 mr-2" />
               Auto-Assign
             </Button>
@@ -886,17 +922,7 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
           {assignmentResult && !isProcessing && (
             <Button
               variant="outline"
-              onClick={() => {
-                if (!formData.patientId || !formData.therapyId) {
-                  toast.error("Please select both patient and therapy");
-                  return;
-                }
-                if (new Date(formData.endDate) < new Date(formData.startDate)) {
-                  toast.error("End date cannot be before start date");
-                  return;
-                }
-                handleAssign();
-              }}
+              onClick={startAssign}
               size="sm"
               className="h-8 text-xs px-3 min-w-[9rem]"
             >
