@@ -252,7 +252,10 @@ model Settings {
   id                       String   @id @default("singleton")
   centre_name              String   @default("Wellness Centre")
   address                  String?
-  timezone                 String   @default("UTC")
+  /// The centre's timezone, which decides what "today" is everywhere — the
+  /// schedule, the warnings and the day sheet. India by default: that is who
+  /// this was built for, and a wrong guess prints the wrong day's sheet.
+  timezone                 String   @default("Asia/Kolkata")
   opening_time             String   @default("09:00")
   closing_time             String   @default("18:00")
   slot_minutes             Int      @default(30)

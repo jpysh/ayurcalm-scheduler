@@ -23,7 +23,9 @@ const SetupWizard = () => {
   const [form, setForm] = useState({
     centre_name: "",
     address: "",
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    // The centre's timezone, not the browser's: the machine setting it up is
+    // often not in the same country as the centre.
+    timezone: "Asia/Kolkata",
     opening_time: "09:00",
     closing_time: "18:00",
     slot_minutes: 30,

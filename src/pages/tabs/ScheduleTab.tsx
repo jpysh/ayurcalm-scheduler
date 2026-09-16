@@ -8,6 +8,8 @@ import type { RefObject } from "react";
 
 type ScheduleTabProps = {
   currentDate: Date;
+  /** The centre's timezone, from Settings. */
+  timezone: string;
   viewType: "day" | "week";
   setCurrentDate: (d: Date) => void;
   goToPreviousWeek: () => void;
@@ -93,10 +95,15 @@ const ScheduleTab = ({
   setShowVerify,
   calendarTriggerRef,
   calendarRef,
+  timezone,
 }: ScheduleTabProps) => {
   const dateLabel = (() => {
     try {
+      // The centre's timezone, so the heading names the day whose appointments
+      // are underneath it. On a machine behind the centre these differ, and the
+      // day sheet is printed from what this says.
       return new Date(currentDate).toLocaleDateString("en-IN", {
+        timeZone: timezone,
         weekday: "long",
         month: "long",
         day: "numeric",

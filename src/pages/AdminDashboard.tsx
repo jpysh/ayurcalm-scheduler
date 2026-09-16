@@ -253,7 +253,7 @@ const AdminDashboard = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   // Opening hours drive the schedule's time rows. Defaults match the old
   // hardcoded 09:00-18:00 grid so the page renders before settings arrive.
-  const [centreHours, setCentreHours] = useState({ opening_time: "09:00", closing_time: "18:00", slot_minutes: 30 });
+  const [centreHours, setCentreHours] = useState({ opening_time: "09:00", closing_time: "18:00", slot_minutes: 30, timezone: "Asia/Kolkata" });
   const timeSlots = useMemo(
     () => buildTimeSlots(centreHours.opening_time, centreHours.closing_time, centreHours.slot_minutes),
     [centreHours],
@@ -263,7 +263,7 @@ const AdminDashboard = () => {
       .then((r) => (r.ok ? r.json() : null))
       .then((s) => {
         if (s?.opening_time && s?.closing_time) {
-          setCentreHours({ opening_time: s.opening_time, closing_time: s.closing_time, slot_minutes: s.slot_minutes ?? 30 });
+          setCentreHours({ opening_time: s.opening_time, closing_time: s.closing_time, slot_minutes: s.slot_minutes ?? 30, timezone: s.timezone || "Asia/Kolkata" });
         }
       })
       .catch(() => { /* falls back to the defaults above */ });
@@ -803,7 +803,10 @@ const AdminDashboard = () => {
       } catch {}
     }, 400);
   };
-  const ADMIN_TZ = ((import.meta as unknown as { env?: { VITE_ADMIN_TZ?: string } }).env?.VITE_ADMIN_TZ as string | undefined) || 'Asia/Kolkata';
+  // The centre's timezone, set once in Settings. Never the machine's: an admin
+  // on a laptop abroad, or a browser with the wrong clock, must still see the
+  // centre's day — the day sheet is printed from it.
+  const ADMIN_TZ = centreHours.timezone;
   const ymdInTZ = (date: Date) => {
     const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: ADMIN_TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
     const parts = fmt.formatToParts(date);
@@ -1294,7 +1297,7 @@ const AdminDashboard = () => {
   };
 
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString("en-IN", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    return date.toLocaleDateString("en-IN", { timeZone: ADMIN_TZ, weekday: "long", month: "long", day: "numeric", year: "numeric" });
   };
 
   const goToPreviousWeek = () => {
@@ -1774,6 +1777,7 @@ const AdminDashboard = () => {
           <TabsContent value="schedule" className="space-y-6">
             <ScheduleTab
               currentDate={currentDate}
+              timezone={ADMIN_TZ}
               viewType={viewType}
               setCurrentDate={setCurrentDate}
               goToPreviousWeek={goToPreviousWeek}
@@ -2426,11 +2430,13 @@ const AdminDashboard = () => {
           }
         }
       }} />
+      {/* Verify works out its own dates from currentDate in the browser's
+          timezone, so it is handed the centre's day rather than the machine's. */}
       <VerifyDialog
         open={showVerify}
         onOpenChange={setShowVerify}
         apiBase={API_BASE}
-        currentDate={currentDate}
+        currentDate={exceptionDay}
         patients={patients.map(p => ({ id: p.id, name: p.name, gender: p.gender }))}
         staff={staff.map(s => ({ id: s.id, name: s.name, gender: s.gender, specializations: s.specializations, schedule: s.schedule, status: s.status }))}
         rooms={roomsList.map(r => ({ id: r.id, name: r.name, amenities: r.amenities, status: r.status }))}
