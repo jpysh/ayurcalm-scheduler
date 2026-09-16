@@ -5,6 +5,33 @@ All notable changes to this project are documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+- **Day sheet** — one time axis. Meal columns are gone: a meal now appears in
+  the time column its sitting falls in, next to that hour's therapy, and every
+  entry states its own start time. A column covering more than an hour says so
+  (`12:00\u201315:00`), so a 13:30 therapy can no longer look like it belongs to
+  a column headed `12:00`. The patient column is fitted to the longest name on
+  the sheet instead of a fixed width
+- Meals with no plan behind them print nothing, instead of the bare word
+  `Breakfast`
+- **Demo data** is deterministic and fuller: about 40 residents treated each
+  day, so a fresh install shows what a real centre's sheet looks like
+
+### Added
+- **Therapies** carry a buffer — rest for the patient, cleanup for the room —
+  which the scheduler blocks out after the treatment. Defaults come from what
+  each therapy needs: 30 minutes after steam or shower therapies, 20 after oil
+  ones. Existing installs keep 0 until they set their own
+- `npm run test:invariants` checks that no therapist, room or patient is double
+  booked, that rooms have the amenities their therapies need, that gender
+  matching holds, and that nothing sits outside opening hours
+
+### Fixed
+- Day-sheet cells with the same text in non-adjacent rows were painted as one
+  box across the row between them, so a resident read someone else's schedule
+- A merged Notes box could still spill text past the rows it covered
+- The seed could book a treatment past a room's closing time
+
 ## [0.3.0] - 2026-09-14
 
 The day sheet reads row by row, the demo data lasts four months, and no dependency advisories remain.
