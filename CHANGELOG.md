@@ -5,6 +5,10 @@ All notable changes to this project are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-16
+
+The day sheet runs on one time axis, the demo data fills a real centre's day, and every test runs in CI.
+
 ### Changed
 - **Day sheet** — one time axis. Meal columns are gone: a meal now appears in
   the time column its sitting falls in, next to that hour's therapy, and every
@@ -171,6 +175,7 @@ First public release.
 - The API base URL is resolved once in `src/lib/apiBase.ts` instead of in nine
   separate files, and the Vite dev server proxies `/api`
 
+[0.4.0]: https://github.com/jpysh/ayurcalm-scheduler/releases/tag/v0.4.0
 [0.3.0]: https://github.com/jpysh/ayurcalm-scheduler/releases/tag/v0.3.0
 [0.2.0]: https://github.com/jpysh/ayurcalm-scheduler/releases/tag/v0.2.0
 [0.1.0]: https://github.com/jpysh/ayurcalm-scheduler/releases/tag/v0.1.0
