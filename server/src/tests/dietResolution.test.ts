@@ -63,7 +63,7 @@ const cases: [string, () => void][] = [
 
   ['a meal with no column of its own is kept in the notes', () => {
     const out = resolveDiet({ ...base, template: plan, hasTherapyToday: true });
-    assert.ok(out.notes.includes('S: Buttermilk'), out.notes);
+    assert.ok(out.notes.includes('Snacks: Buttermilk'), out.notes);
   }],
 
   ['therapy notes are kept out of the row and printed once under the table', () => {

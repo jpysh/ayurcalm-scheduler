@@ -135,6 +135,16 @@ while debugging. Use `--force-recreate` before believing a clean result.
 `npm run test:e2e` runs sign-in, every tab and the day sheet in Chromium against
 the running stack (`E2E_BASE_URL`, default :8080). CI runs it too.
 
+There is one dataset, not a demo one and a test one: a stress fixture kept
+beside the demo would drift from it, and then a test passes on data no install
+has. To see the app at a size no demo has, raise how much the seed books on an
+empty database:
+
+```bash
+APP_PORT=8099 SEED_TREATMENTS_PER_ROOM=8 docker compose -p scale up -d --build
+docker compose -p scale down -v     # when finished
+```
+
 Looking at the PDF is part of the check:
 
 ```bash

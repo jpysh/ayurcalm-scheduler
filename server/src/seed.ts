@@ -229,6 +229,9 @@ async function main() {
   // Inside the rooms' opening hours, with a couple of half-hour starts because
   // a real day has them and the day sheet has to place them correctly.
   const dayTimes = ['09:00','10:00','11:00','12:00','13:30','14:30','15:30','16:30'];
+  // One knob, not a second dataset: a stress fixture kept beside the demo one
+  // drifts from it, and then a test passes on data no install has.
+  const treatmentsPerRoom = Math.max(1, Math.min(dayTimes.length, Number(process.env.SEED_TREATMENTS_PER_ROOM) || 2));
   // Patients are taken in rotation rather than at random so a day's bookings
   // land on ~40 different people. A real centre of this size treats most of its
   // residents each day, and picking at random gave the same dozen names twice
@@ -258,9 +261,11 @@ async function main() {
       if (!rDay) continue;
       // Two treatments per room per day: a centre of twenty rooms then treats
       // about forty of its residents, which is what the day sheet has to hold.
+      // SEED_TREATMENTS_PER_ROOM raises that for checking how the sheet and the
+      // screens behave at a size no demo install has.
       let slotsCreatedForRoom = 0;
       for (const time of dayTimes) {
-        if (slotsCreatedForRoom >= 2) break;
+        if (slotsCreatedForRoom >= treatmentsPerRoom) break;
         const th = randomOf(therapies);
         if (!th.required_amenities.every(a => r.amenities.includes(a))) continue;
         // Next patient in rotation who is free at this time, so one person's

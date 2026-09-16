@@ -1,0 +1,116 @@
+import assert from 'node:assert/strict';
+import { buildRota } from '../pdf/therapistRotaPdf.js';
+
+// A Wednesday.
+const day = new Date('2026-09-16T00:00:00.000Z');
+
+const base = {
+  day,
+  staff: [
+    { id: 's1', name: 'Anjali Rao', is_active: true },
+    { id: 's2', name: 'Kumar Nair', is_active: true },
+    { id: 's3', name: 'Priya Menon', is_active: true },
+    { id: 's4', name: 'Retired Therapist', is_active: false },
+  ],
+  appts: [
+    { staff_id: 's2', patient_id: 'p1', therapy_id: 't1', room_id: 'r1', start_time: '10:00', duration_minutes: 60 },
+    { staff_id: 's1', patient_id: 'p2', therapy_id: 't2', room_id: null, start_time: '09:00', duration_minutes: 45 },
+  ],
+  events: [
+    { start_time: '07:30', end_time: '08:30', activity_name: 'Yoga', staff_id: 's3', staff_scope: 'custom', staff_ids: [] },
+  ],
+  timeOff: [] as any[],
+  patientById: { p1: 'Sarah Smith', p2: 'Mike Johnson' },
+  therapyById: { t1: 'Abhyanga', t2: 'Shirodhara' },
+  roomById: { r1: 'Room 1' },
+  hourMinW: 110,
+  bandWidth: 700,
+};
+
+const off = (over: Record<string, unknown>) => ({
+  entity_type: 'staff', entity_id: null, date: null, start_date: null, end_date: null,
+  start_time: null, end_time: null, recurrence: null, weekdays: [], description: null, ...over,
+} as any);
+
+// Inactive staff are not on the rota at all, and the rest are alphabetical.
+{
+  const { rows } = buildRota(base);
+  assert.deepEqual(rows.map((r) => r.name), ['Anjali Rao', 'Kumar Nair', 'Priya Menon']);
+  assert.ok(rows.every((r) => r.available));
+}
+
+// A cell names the therapy, its length, the patient and the room.
+{
+  const { slots, rows } = buildRota(base);
+  const kumar = rows.find((r) => r.name === 'Kumar Nair')!;
+  const at10 = slots.findIndex((s) => s.start <= 600 && s.end > 600);
+  assert.equal(kumar.cells[at10][0].text, 'Abhyanga 60m · Sarah Smith · Room 1');
+  assert.equal(kumar.cells[at10][0].t, '10:00');
+  assert.ok(kumar.cells[at10][0].bold, 'a treatment is bold');
+  // A therapy with no room still prints what is known.
+  const anjali = rows.find((r) => r.name === 'Anjali Rao')!;
+  const at9 = slots.findIndex((s) => s.start <= 540 && s.end > 540);
+  assert.equal(anjali.cells[at9][0].text, 'Shirodhara 45m · Mike Johnson');
+}
+
+// An event the therapist runs is on their row: that hour is not free.
+{
+  const { slots, rows } = buildRota(base);
+  const priya = rows.find((r) => r.name === 'Priya Menon')!;
+  const at730 = slots.findIndex((s) => s.start <= 450 && s.end > 450);
+  assert.equal(priya.cells[at730][0].text, 'Yoga 60m');
+  assert.equal(priya.cells[at730][0].bold, false, 'an event is not a treatment');
+}
+
+// A full-day absence moves the therapist to the unavailable group, with the
+// reason, and takes their cells with them.
+{
+  const { rows } = buildRota({ ...base, timeOff: [off({ entity_id: 's1', date: day, description: 'Sick leave' })] });
+  assert.deepEqual(rows.map((r) => r.name), ['Kumar Nair', 'Priya Menon', 'Anjali Rao']);
+  const anjali = rows[2];
+  assert.equal(anjali.available, false);
+  assert.equal(anjali.note, 'Sick leave');
+  assert.ok(anjali.cells.every((c) => c.length === 0));
+}
+
+// A part-day absence keeps them working, greying only the hours it covers.
+{
+  const { slots, rows } = buildRota({
+    ...base,
+    timeOff: [off({ entity_id: 's2', date: day, start_time: '14:00', end_time: '17:00', description: 'Dentist' })],
+  });
+  const kumar = rows.find((r) => r.name === 'Kumar Nair')!;
+  assert.equal(kumar.available, true, 'part of a day off is still on shift');
+  const at10 = slots.findIndex((s) => s.start <= 600 && s.end > 600);
+  assert.ok(kumar.cells[at10].some((l) => l.bold), 'the morning treatment survives');
+  // The absence only shows in bands it overlaps, and says why.
+  const greyed = kumar.cells.filter((c) => c.some((l) => l.grey));
+  assert.ok(greyed.length >= 1);
+  assert.ok(greyed.every((c) => c.some((l) => l.text.includes('Dentist'))));
+}
+
+// A weekly recurring absence lands on its weekday.
+{
+  const { rows } = buildRota({ ...base, timeOff: [off({ entity_id: 's3', recurrence: 'weekly', weekdays: ['wednesday'], description: 'Weekly off' })] });
+  assert.equal(rows.find((r) => r.name === 'Priya Menon')!.available, false);
+  const other = buildRota({ ...base, timeOff: [off({ entity_id: 's3', recurrence: 'weekly', weekdays: ['monday'], description: 'Weekly off' })] });
+  assert.equal(other.rows.find((r) => r.name === 'Priya Menon')!.available, true);
+}
+
+// Asked for one therapist, the rota is only that therapist.
+{
+  const { rows } = buildRota({ ...base, onlyStaffId: 's2' });
+  assert.deepEqual(rows.map((r) => r.name), ['Kumar Nair']);
+}
+
+// Bands widen past the hour rather than printing a column too narrow to read.
+{
+  const many = Array.from({ length: 9 }, (_, i) => ({
+    staff_id: 's1', patient_id: 'p1', therapy_id: 't1', room_id: 'r1',
+    start_time: `${String(8 + i).padStart(2, '0')}:00`, duration_minutes: 60,
+  }));
+  const { slots } = buildRota({ ...base, appts: many, events: [] });
+  assert.ok(700 / slots.length >= 110, 'no band narrower than the readable minimum');
+}
+
+console.log('therapistRota: ok');

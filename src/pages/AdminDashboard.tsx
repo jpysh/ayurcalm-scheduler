@@ -273,21 +273,23 @@ const AdminDashboard = () => {
   const [showAutoAssign, setShowAutoAssign] = useState(false);
   const [showVerify, setShowVerify] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const handleGenerateDailyPdf = async () => {
-    setPdfLoading(true);
+  const [pdfLoading, setPdfLoading] = useState<'patient' | 'therapist' | null>(null);
+  // Two sheets off the same day: the patient one for the notice board, the
+  // therapist rota for the treatment team.
+  const handleGenerateDailyPdf = async (kind: 'patient' | 'therapist' = 'patient') => {
+    setPdfLoading(kind);
     try {
       const y = currentDate.getFullYear();
       const m = String(currentDate.getMonth() + 1).padStart(2, '0');
       const d = String(currentDate.getDate()).padStart(2, '0');
       const iso = `${y}-${m}-${d}`;
-      const res = await fetch(`${API_BASE}/daily-schedule-pdf?date=${iso}`);
+      const res = await fetch(`${API_BASE}/daily-schedule-pdf?date=${iso}${kind === 'therapist' ? '&view=therapist' : ''}`);
       if (!res.ok) throw new Error('failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `ayurcalm-daily-schedule-${iso}.pdf`;
+      a.download = `ayurcalm-${kind === 'therapist' ? 'therapist-rota' : 'daily-schedule'}-${iso}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -295,7 +297,7 @@ const AdminDashboard = () => {
     } catch {
       toast.error('Failed to generate PDF');
     } finally {
-      setPdfLoading(false);
+      setPdfLoading(null);
     }
   };
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentDetailed | null>(null);

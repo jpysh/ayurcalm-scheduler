@@ -28,6 +28,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-}
       CENTRE_NAME: ${CENTRE_NAME:-Wellness Centre}
       DEFAULT_SUPPORT_WHATSAPP: ${DEFAULT_SUPPORT_WHATSAPP:-420777558262}
+      # Unset in a real install. Raises how many treatments the demo seed books
+      # per room per day, for checking the app at a size no demo install has.
+      SEED_TREATMENTS_PER_ROOM: ${SEED_TREATMENTS_PER_ROOM:-}
       NODE_ENV: production
     ports:
       - "${APP_PORT:-8080}:4000"
