@@ -313,7 +313,7 @@ const Settings = () => {
               placeholder="Asia/Kolkata"
               disabled={!isAdmin}
             />
-            <p className="text-xs text-muted-foreground">An IANA name, such as Europe/Prague.</p>
+            <p className="text-xs text-muted-foreground">An IANA name, such as Asia/Kolkata.</p>
           </div>
         </CardContent>
       </Card>

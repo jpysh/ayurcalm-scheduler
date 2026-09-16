@@ -5,6 +5,17 @@ All notable changes to this project are documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+- A new centre starts with **all seven days** as working days. A residential
+  centre treats its residents on the days they are resident, so Monday to Friday
+  was something every install had to correct
+
+### Fixed
+- The timezone field is checked against the real zone table. A mistyped name was
+  stored happily and surfaced later as a day sheet printed for the wrong day
+- The timezone help text gave a European example while its own placeholder gave
+  an Indian one
+
 ## [0.4.0] - 2026-09-16
 
 The day sheet runs on one time axis, the demo data fills a real centre's day, and every test runs in CI.

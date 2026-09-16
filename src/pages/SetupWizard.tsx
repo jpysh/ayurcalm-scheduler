@@ -27,7 +27,9 @@ const SetupWizard = () => {
     opening_time: "09:00",
     closing_time: "18:00",
     slot_minutes: 30,
-    working_days: ["monday", "tuesday", "wednesday", "thursday", "friday"] as string[],
+    // Every day, not Monday to Friday: a residential centre treats its residents
+    // on the days they are resident, which includes the weekend.
+    working_days: [...WEEKDAYS] as string[],
   });
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
