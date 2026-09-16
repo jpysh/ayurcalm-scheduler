@@ -214,17 +214,18 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
   // Rows in a group print under a heading that says what the group is, so the
   // sheet answers 'who is in today' before it answers 'doing what'. A single
   // therapist asked for by name gets neither heading: it is their own day.
-  type Heading = { kind: 'heading'; title: string };
-  type Row = { kind: 'row' } & RotaRow;
+  type Heading = { kind: 'heading'; title: string; group: number };
+  type Row = { kind: 'row'; group: number } & RotaRow;
   const items: (Row | Heading)[] = [];
   if (staffId) {
-    for (const r of rota.rows) items.push({ kind: 'row', ...r });
+    for (const r of rota.rows) items.push({ kind: 'row', group: -1, ...r });
   } else {
     for (const available of [true, false]) {
       const group = rota.rows.filter((r) => r.available === available);
       if (group.length === 0) continue;
-      items.push({ kind: 'heading', title: `${available ? 'Working today' : 'Not available today'} — ${group.length}` });
-      for (const r of group) items.push({ kind: 'row', ...r });
+      const at = items.length;
+      items.push({ kind: 'heading', group: at, title: `${available ? 'Working today' : 'Not available today'} — ${group.length}` });
+      for (const r of group) items.push({ kind: 'row', group: at, ...r });
     }
   }
 
@@ -255,18 +256,23 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
 
   const headerH = 18;
   const FOOTER_H = 14;
+  // A page that carries on a group repeats that group's heading. A rota is read
+  // where it hangs, and a second page that does not say whether these people are
+  // working or off is worse than no second page.
+  const continuedTitle = (it: Row) => `${(items[it.group] as Heading).title} (continued)`;
   const pageBottom = doc.page.height - doc.page.margins.bottom - FOOTER_H;
 
   const lineHeight = (l: RotaLine, colW: number) => {
     doc.font(l.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(cellFont);
     return doc.heightOfString(lineText(l), { width: colW - 8 });
   };
+  const headingHeight = (title: string) => {
+    applyHeadFont();
+    doc.fontSize(cellFont + 1);
+    return doc.heightOfString(title, { width: w - 8 }) + 8;
+  };
   const itemHeight = (it: Row | Heading) => {
-    if (it.kind === 'heading') {
-      applyHeadFont();
-      doc.fontSize(cellFont + 1);
-      return doc.heightOfString(it.title, { width: w - 8 }) + 8;
-    }
+    if (it.kind === 'heading') return headingHeight(it.title);
     doc.font('Helvetica-Bold').fontSize(cellFont);
     const nameH = doc.heightOfString(`${it.name}${it.note ? `\n${it.note}` : ''}`, { width: colWidths[0] - 8 }) + 6;
     return Math.max(18, nameH, ...it.cells.map((cell, c) => cell.reduce((sum, l) => sum + lineHeight(l, colWidths[c + 1]), 0) + 6));
@@ -278,12 +284,19 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
   // it belongs in stays here.
   const pageStarts = new Set<number>([0]);
   {
+    // What a page costs before a single row is drawn: the table's header row,
+    // plus the repeated group heading when the page opens mid-group.
+    const overheadAt = (start: number) => {
+      const it = items[start];
+      return headerH + (it.kind === 'row' && it.group >= 0 ? headingHeight(continuedTitle(it)) : 0);
+    };
     let used = 0;
-    const available = pageBottom - startY - headerH;
+    let available = pageBottom - startY - overheadAt(0);
     for (let r = 0; r < items.length; r++) {
       if (r > 0 && used + heights[r] > available) {
         const start = items[r - 1].kind === 'heading' && r - 1 > 0 ? r - 1 : r;
         pageStarts.add(start);
+        available = pageBottom - startY - overheadAt(start);
         used = 0;
         for (let back = start; back <= r; back++) used += heights[back];
       } else {
@@ -304,6 +317,15 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
     });
     yy += headerH;
   };
+  const drawHeading = (title: string) => {
+    const h = headingHeight(title);
+    doc.save();
+    doc.rect(x, yy, w, h).fillOpacity(0.07).fill('#000');
+    doc.restore();
+    doc.rect(x, yy, w, h).stroke();
+    doc.font('Helvetica-Bold').fontSize(cellFont + 1).text(title, x + 4, yy + 3, { width: w - 8 });
+    yy += h;
+  };
   const startPage = (first: boolean) => {
     if (!first) {
       doc.addPage();
@@ -319,15 +341,12 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
   startPage(true);
   for (let r = 0; r < items.length; r++) {
     const it = items[r];
-    if (r > 0 && pageStarts.has(r)) startPage(false);
+    if (r > 0 && pageStarts.has(r)) {
+      startPage(false);
+      if (it.kind === 'row' && it.group >= 0) drawHeading(continuedTitle(it));
+    }
     if (it.kind === 'heading') {
-      const h = heights[r];
-      doc.save();
-      doc.rect(x, yy, w, h).fillOpacity(0.07).fill('#000');
-      doc.restore();
-      doc.rect(x, yy, w, h).stroke();
-      doc.font('Helvetica-Bold').fontSize(cellFont + 1).text(it.title, x + 4, yy + 3, { width: w - 8 });
-      yy += h;
+      drawHeading(it.title);
       continue;
     }
     const rowH = heights[r];
