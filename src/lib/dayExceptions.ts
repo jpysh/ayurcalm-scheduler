@@ -29,6 +29,7 @@ export type DayEvent = {
   start_time: string;
   end_time: string;
   patients_scope?: string | null;
+  is_optional?: boolean | null;
 };
 
 export type Named = { id: string; name: string };
@@ -36,6 +37,8 @@ export type Named = { id: string; name: string };
 export type DayException = {
   kind: 'staff_on_leave' | 'no_therapist' | 'room_clash' | 'event_overlap' | 'idle_resident';
   text: string;
+  /** The therapist the warning is about, so the header can offer to rehouse their day. */
+  staff_id?: string;
 };
 
 export const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
@@ -102,7 +105,7 @@ export function dayExceptions(input: {
   }
   for (const [id, n] of byLeaveStaff) {
     const name = nameOf(input.staff, id) || 'A therapist';
-    out.push({ kind: 'staff_on_leave', text: `${name} is on leave and still has ${n} treatment${n === 1 ? '' : 's'}` });
+    out.push({ kind: 'staff_on_leave', staff_id: id, text: `${name} is on leave and still has ${n} treatment${n === 1 ? '' : 's'}` });
   }
 
   const unassigned = appointments.filter((a) => !a.staff_id);
@@ -138,12 +141,16 @@ export function dayExceptions(input: {
     }
   }
 
-  // An all-guests event is where the resident is expected to be, so a treatment
-  // across it is a treatment they will not attend.
+  // A required all-guests event is where the resident is expected to be, so a
+  // treatment they cannot work around is a treatment they will not attend.
+  // Optional classes raise nothing — a resident may skip yoga for an Abhyanga.
+  // Neither does a treatment inside a meal window: breakfast runs 08:00-12:00
+  // and an hour of it is still breakfast. Only a treatment covering the whole
+  // event leaves the resident no way to be there.
   for (const a of appointments) {
     const s = toMinutes(a.start_time);
     const e = s + a.duration_minutes;
-    const clash = events.find((ev) => isAllGuests(ev) && overlaps(s, e, toMinutes(ev.start_time), toMinutes(ev.end_time)));
+    const clash = events.find((ev) => isAllGuests(ev) && !ev.is_optional && s <= toMinutes(ev.start_time) && e >= toMinutes(ev.end_time));
     if (clash) {
       out.push({
         kind: 'event_overlap',

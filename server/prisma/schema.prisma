@@ -24,6 +24,11 @@ model Patient {
   created_at        DateTime  @default(now())
   available_from    DateTime?
   available_to      DateTime?
+  /// The therapist this resident is booked with when there is a choice.
+  preferred_staff_id String?
+  /// True when that is a condition of their treatment rather than a habit: the
+  /// replan offers them a different time rather than different hands.
+  requires_preferred_staff Boolean @default(false)
 
   DietPlans        DietPlan[]
   DietPlanSegments DietPlanSegment[]
@@ -172,6 +177,9 @@ model ProgramEvent {
   recurrence         String?
   weekdays           String[]
   audience           String?
+  /// Residents are expected at a required event, so a treatment across one is a
+  /// treatment they will not attend. An optional class raises no such question.
+  is_optional        Boolean   @default(false)
   patients_scope     String?
   patient_ids        String[]
   staff_scope        String?
@@ -260,6 +268,9 @@ model Settings {
   patient_support_whatsapp String?
   /// False until the first-run wizard has been completed or skipped.
   setup_complete           Boolean  @default(false)
+  /// Whether a therapy marked as needing a gender match is allowed to be booked
+  /// without one. On by default; a centre that asks residents turns it off.
+  enforce_gender_match     Boolean  @default(true)
   updated_at               DateTime @updatedAt
 }
 

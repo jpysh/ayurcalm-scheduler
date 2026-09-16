@@ -99,7 +99,10 @@ const main = async () => {
     }],
 
     ['the sheet has enough patients to be worth printing', () => {
-      const today = new Date().toISOString().slice(0, 10);
+      // The centre's day, as the seed builds it and the app reads it. Using the
+      // server's UTC day found an empty schedule whenever the two disagreed.
+      const tz = process.env.ADMIN_TZ || 'Asia/Kolkata';
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
       const distinct = new Set((byDay.get(today) || []).map((a) => a.patient_id));
       assert.ok(distinct.size >= 30, `only ${distinct.size} patients booked today`);
     }],

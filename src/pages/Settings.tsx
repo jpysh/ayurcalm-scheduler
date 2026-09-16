@@ -27,6 +27,7 @@ type Settings = {
   support_whatsapp: string | null;
   patient_support_whatsapp: string | null;
   setup_complete: boolean;
+  enforce_gender_match: boolean;
 };
 
 const Settings = () => {
@@ -82,6 +83,7 @@ const Settings = () => {
           logo: settings.logo,
           support_whatsapp: settings.support_whatsapp ?? "",
           patient_support_whatsapp: settings.patient_support_whatsapp ?? "",
+          enforce_gender_match: settings.enforce_gender_match !== false,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -286,6 +288,21 @@ const Settings = () => {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Gender matching</Label>
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                checked={settings.enforce_gender_match !== false}
+                onCheckedChange={(v) => update("enforce_gender_match", !!v)}
+                disabled={!isAdmin}
+              />
+              <span>
+                Only book a therapy that requires a gender match with a matching therapist.
+                <span className="block text-muted-foreground text-xs">Turn this off only if your centre asks the resident and works to their answer.</span>
+              </span>
+            </label>
           </div>
 
           <div className="space-y-2">

@@ -62,6 +62,7 @@ const EventsTab = ({
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Staff</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Req. Amenities</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Patients</TableHead>
+              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Attendance</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Recurring</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal text-right">Actions</TableHead>
             </TableRow>
@@ -251,6 +252,19 @@ const EventsTab = ({
                       </Popover>
                     ) : (
                       (() => { const scope = (ev as any).patients_scope || 'all'; const ids = Array.isArray((ev as any).patient_ids) ? (ev as any).patient_ids : []; if (scope === 'all') return 'All'; if (scope === 'none') return ids.length ? ids.map((id: string) => patientNameById[id] || id).join(', ') : 'None'; return ids.length ? ids.map((id: string) => patientNameById[id] || id).join(', ') : 'Custom'; })()
+                    )}
+                  </TableCell>
+                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
+                    {editingEventId === ev.id ? (
+                      <Select value={(ev as any).is_optional ? 'optional' : 'required'} onValueChange={(v) => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, is_optional: v === 'optional' } : x)); scheduleEventAutosave(ev.id, 'Attendance'); }}>
+                        <SelectTrigger className="h-7"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="required">Required</SelectItem>
+                          <SelectItem value="optional">Optional</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      (ev as any).is_optional ? 'Optional' : 'Required'
                     )}
                   </TableCell>
                   <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
