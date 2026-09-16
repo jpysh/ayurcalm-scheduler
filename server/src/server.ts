@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { autoSchedule } from './scheduler.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import { generateTherapistRotaPdf } from './pdf/therapistRotaPdf.js';
+import { findConflict, loadDay, nearestFreeTime } from './appointmentGuard.js';
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:5433/ayurcalm_dev?schema=public';
@@ -1056,6 +1057,30 @@ app.put('/appointments/:id', async (req: Request, res: Response) => {
     therapy_id: z.string().uuid().optional(),
   });
   const body = schema.parse(req.body);
+  const existing = await prisma.appointment.findUnique({ where: { id: String(id) } });
+  if (!existing) { res.status(404).json({ error: 'Appointment not found' }); return; }
+
+  const candidate = {
+    id: String(id),
+    scheduled_date: body.scheduled_date ? new Date(body.scheduled_date) : existing.scheduled_date,
+    start_time: body.start_time ?? existing.start_time,
+    duration_minutes: body.duration_minutes ?? existing.duration_minutes,
+    staff_id: body.staff_id !== undefined ? body.staff_id : existing.staff_id,
+    room_id: body.room_id !== undefined ? body.room_id : existing.room_id,
+    patient_id: body.patient_id ?? existing.patient_id,
+  };
+
+  // Cancelling or completing a treatment moves nobody, so it is never refused.
+  const movesIt = body.scheduled_date || body.start_time || body.duration_minutes || body.staff_id !== undefined || body.room_id !== undefined;
+  if (movesIt && body.status !== 'cancelled') {
+    const ctx = await loadDay(candidate.scheduled_date, prisma);
+    const conflict = findConflict(candidate, ctx);
+    if (conflict) {
+      res.status(409).json({ ...conflict, alternative_start_time: nearestFreeTime(candidate, ctx) });
+      return;
+    }
+  }
+
   const appt = await prisma.appointment.update({
     where: { id },
     data: {

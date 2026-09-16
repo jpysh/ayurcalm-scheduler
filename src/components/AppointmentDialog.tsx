@@ -49,11 +49,11 @@ export const AppointmentDialog = ({ appointment, open, onOpenChange, onOpenAssig
   type ApiTherapy = { id: string; name: string; duration_minutes?: number; required_amenities?: string[] };
   type ApiRoom = { id: string; name: string; amenities?: string[] };
   type ApiStaff = { id: string; name: string };
-  type ApiAppointmentSimple = { id: string | number; start_time: string; duration_minutes: number };
   const [patients, setPatients] = useState<ApiPatient[]>([]);
   const [therapies, setTherapies] = useState<ApiTherapy[]>([]);
   const [rooms, setRooms] = useState<ApiRoom[]>([]);
   const [staff, setStaff] = useState<ApiStaff[]>([]);
+  const [refusal, setRefusal] = useState<{ message?: string; alternative_start_time?: string | null } | null>(null);
   const [form, setForm] = useState({
     patientId: appointment?.patientId || "",
     therapyId: appointment?.therapyId || "",
@@ -107,41 +107,27 @@ export const AppointmentDialog = ({ appointment, open, onOpenChange, onOpenAssig
     return rr?.amenities || [];
   }, [form.roomId, rooms]);
   const selectedPatient = useMemo(() => patients.find((x) => x.id === form.patientId), [patients, form.patientId]);
-  const timeToMinutes = (t:string) => {
-    const [hh,mm] = t.split(":").map(Number);
-    return hh*60+mm;
-  };
-  const overlaps = (startA:number, durA:number, startB:number, durB:number) => {
-    const endA = startA+durA;
-    const endB = startB+durB;
-    return startA < endB && startB < endA;
-  };
-  const checkAvailability = async () => {
-    const dateIso = appointment.scheduledDate || new Date().toISOString().slice(0,10);
-    const [staffAppts, roomAppts] = await Promise.all([
-      form.staffId ? fetch(`${API_BASE}/appointments?date=${dateIso}&staff_id=${form.staffId}`).then(r=>r.json()).catch(()=>[]) : Promise.resolve([] as ApiAppointmentSimple[]),
-      form.roomId ? fetch(`${API_BASE}/appointments?date=${dateIso}&room_id=${form.roomId}`).then(r=>r.json()).catch(()=>[]) : Promise.resolve([] as ApiAppointmentSimple[]),
-    ]);
-    const startM = timeToMinutes(form.time);
-    const conflictStaff = (staffAppts as ApiAppointmentSimple[]).some((a) => a.id !== (appointment?.id ?? -1) && overlaps(startM, form.duration, timeToMinutes(a.start_time), a.duration_minutes));
-    const conflictRoom = (roomAppts as ApiAppointmentSimple[]).some((a) => a.id !== (appointment?.id ?? -1) && overlaps(startM, form.duration, timeToMinutes(a.start_time), a.duration_minutes));
-    return { conflictStaff, conflictRoom };
-  };
-  const saveEdits = async () => {
-    const conflicts = await checkAvailability();
-    if (conflicts.conflictStaff || conflicts.conflictRoom) {
-      alert("Selected staff or room unavailable at this time");
-      return;
-    }
+  /**
+   * The server decides. This used to check two fetches' worth of clashes in the
+   * browser and then PUT regardless of what else was true — an absence, a class
+   * the therapist is running — so a refusal was one drag away from being lost.
+   */
+  const saveEdits = async (overrides: Record<string, unknown> = {}) => {
     const body: Record<string, unknown> = {
       duration_minutes: form.duration,
       staff_id: form.staffId || null,
       room_id: form.roomId || null,
+      ...overrides,
     };
     if (form.patientId) body.patient_id = form.patientId;
     if (form.therapyId) body.therapy_id = form.therapyId;
     if (!appointment) return;
-    await fetch(`${API_BASE}/appointments/${appointment.id}`, { method: "PUT", headers: { "Content-Type": "application/json", ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(body) });
+    const res = await fetch(`${API_BASE}/appointments/${appointment.id}`, { method: "PUT", headers: { "Content-Type": "application/json", ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(body) });
+    if (res.status === 409) {
+      setRefusal(await res.json().catch(() => ({ message: 'That change clashes with something else.' })));
+      return;
+    }
+    setRefusal(null);
     setIsEditing(false);
     if (onChanged) onChanged();
   };
@@ -164,7 +150,7 @@ export const AppointmentDialog = ({ appointment, open, onOpenChange, onOpenAssig
             <X className="w-4 h-4" />
           </Button>
           {isEditing ? (
-            <Button size="icon" className="h-8 w-8 justify-self-center" aria-label="Save" onClick={saveEdits}>
+            <Button size="icon" className="h-8 w-8 justify-self-center" aria-label="Save" onClick={() => saveEdits()}>
               <Check className="w-4 h-4" />
             </Button>
           ) : (
@@ -205,6 +191,19 @@ export const AppointmentDialog = ({ appointment, open, onOpenChange, onOpenAssig
         ) : null}
         
         
+        {refusal ? (
+          <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 space-y-2 text-xs sm:text-sm">
+            <div>{refusal.message}</div>
+            {refusal.alternative_start_time ? (
+              <Button size="sm" className="h-7" onClick={() => saveEdits({ start_time: refusal.alternative_start_time })}>
+                Move to {refusal.alternative_start_time}
+              </Button>
+            ) : (
+              <div className="text-muted-foreground">Nothing else is free today with this therapist and room.</div>
+            )}
+          </div>
+        ) : null}
+
         <div className="space-y-3 sm:space-y-5">
           {appointment ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-4">
