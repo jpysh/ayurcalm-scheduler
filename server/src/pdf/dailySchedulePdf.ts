@@ -214,33 +214,62 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   // same forty words for a third of the centre. Alphabetical order scattered
   // each plan across every page and reprinted it on each of them; grouped, it is
   // one heading per plan and the rows below it carry only what is personal.
+  //
+  // Groups are keyed on the resolved text, not the plan's name, so one plan
+  // makes more than one group whenever it genuinely says different things: its
+  // rest-day side for a resident with no treatment today, and a meal written for
+  // one person for this date. Those are not duplicates, and the heading says
+  // which is which rather than leaving a reader to wonder.
   const noDr = (name: string) => name.replace(/^Dr\.?\s+/i, '');
+  const hasOverrideToday = (id: string) => Object.keys(dayMealsByPatient.get(id) || {}).length > 0;
+  const hasTherapyToday = (id: string) => (apptsByPatient.get(id) || []).length > 0;
   const groups = new Map<string, string[]>();
   for (const p of displayPatients) {
-    const key = notesFor(p.id);
+    // Someone with no plan at all is grouped by whether the centre owes them
+    // one: a resident in house should have a plan, a patient in for a treatment
+    // and going home should not.
+    const key = notesFor(p.id) || (residentToday.has(p.id) ? '\u0000resident' : '\u0000outpatient');
     const held = groups.get(key);
     if (held) held.push(p.id); else groups.set(key, [p.id]);
   }
-  // Largest plan first, and the residents with no plan text last: a heading that
-  // covers twenty people earns the top of the sheet.
-  const groupOrder = [...groups.entries()].sort((a, b) => {
-    if (!a[0] !== !b[0]) return a[0] ? -1 : 1;
-    return b[1].length - a[1].length || a[0].localeCompare(b[0]);
-  });
+
+  type Group = { key: string; ids: string[]; plan: string; qualifier: string; title: string; body: string };
+  const describe = ([key, ids]: [string, string[]]): Group => {
+    const n = ids.length;
+    if (key === '\u0000resident') return { key, ids, plan: '\uffff1', qualifier: '', body: '', title: `Residents with no diet plan \u2014 ${n} resident${n === 1 ? '' : 's'}` };
+    if (key === '\u0000outpatient') return { key, ids, plan: '\uffff2', qualifier: '', body: '', title: `Outpatients \u2014 not staying \u2014 ${n} ${n === 1 ? 'person' : 'people'}` };
+    const plan = dietByPatient.get(ids[0])?.planName || '';
+    const body = plan && key.startsWith(`${plan}: `) ? key.slice(plan.length + 2) : key;
+    const qualifier = ids.every((id) => hasOverrideToday(id)) ? 'changed for today'
+      : ids.every((id) => !hasTherapyToday(id)) ? 'rest day'
+      : '';
+    const label = plan || 'Individual instructions';
+    return {
+      key, ids, plan: label, qualifier, body,
+      title: `${label}${qualifier ? ` \u2014 ${qualifier}` : ''} \u2014 ${ids.length} resident${ids.length === 1 ? '' : 's'}`,
+    };
+  };
+  const described = [...groups.entries()].map(describe);
+  // Plans are ordered by their largest group, so the heading covering most of
+  // the centre is on page one; the other sides of a plan follow it directly
+  // rather than turning up three pages later under a title that looks the same.
+  const planRank = new Map<string, number>();
+  for (const g of described) planRank.set(g.plan, Math.max(planRank.get(g.plan) ?? 0, g.ids.length));
+  const qualifierRank = (q: string) => (q === '' ? 0 : q === 'rest day' ? 1 : 2);
+  const groupOrder = described.sort((a, b) =>
+    (planRank.get(b.plan)! - planRank.get(a.plan)!)
+    || a.plan.localeCompare(b.plan)
+    || qualifierRank(a.qualifier) - qualifierRank(b.qualifier)
+    || b.ids.length - a.ids.length);
 
   /** A line inside a time cell. Treatments are bold; food and events are not. */
   type Line = { t: string; text: string; bold: boolean };
-  type Row = { kind: 'row'; name: string; cells: Line[][] };
-  type Heading = { kind: 'heading'; title: string; body: string };
+  type Row = { kind: 'row'; name: string; cells: Line[][]; group: number };
+  type Heading = { kind: 'heading'; title: string; body: string; group: number };
   const items: (Row | Heading)[] = [];
-  for (const [notes, ids] of groupOrder) {
-    const planName = dietByPatient.get(ids[0])?.planName || '';
-    const body = planName && notes.startsWith(`${planName}: `) ? notes.slice(planName.length + 2) : notes;
-    // Residents with nothing recorded get a heading of their own rather than
-    // falling under the last plan printed — and a centre watching that heading
-    // grow knows something needs writing.
-    const title = `${planName || (notes ? 'Individual instructions' : 'No diet plan recorded')} — ${ids.length} resident${ids.length === 1 ? '' : 's'}`;
-    items.push({ kind: 'heading', title, body });
+  for (const { ids, title, body } of groupOrder) {
+    const group = items.length;
+    items.push({ kind: 'heading', title, body, group });
     for (const id of ids) {
       const apptList = apptsByPatient.get(id) || [];
       const cells = timeSlots.map((slot) => {
@@ -262,7 +291,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
           })),
         ].sort((m, n) => m.t.localeCompare(n.t));
       });
-      items.push({ kind: 'row', name: patientById[id] || id, cells });
+      items.push({ kind: 'row', name: patientById[id] || id, cells, group });
     }
   }
 
@@ -315,9 +344,12 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   // first sheet appeared.
   const FOOTER_H = 14;
   const pageBottom = doc.page.height - doc.page.margins.bottom - FOOTER_H;
-  // A page after the first repeats the heading of the group it continues, so a
-  // sheet taken off the board on its own still says which plan it is about.
-  const CONTINUED_H = 14;
+  // A page that continues a group repeats that group's whole heading — plan,
+  // qualifier and the food — not just its title. A sheet on a notice board is
+  // read where it hangs; one that sends the reader to the page before it has
+  // failed at the only job it has.
+  const headingOf = (it: Row | Heading) => items[it.group] as Heading;
+  const continuedTitle = (h: Heading) => `${h.title} (continued)`;
 
   // Measured in the weight it is printed in: bold is wider, so measuring a
   // treatment in book weight gave a box one line too short and the last line of
@@ -328,17 +360,18 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   };
   const cellHeight = (cell: Line[], colW: number) =>
     cell.reduce((sum, l) => sum + lineHeight(l, colW), 0);
-  const itemHeight = (it: Row | Heading) => {
-    if (it.kind === 'heading') {
-      useHeadFont();
-      doc.fontSize(cellFont + 1);
-      let h = doc.heightOfString(it.title, { width: w - 8 });
-      if (it.body) {
-        useCellFont();
-        h += doc.heightOfString(it.body, { width: w - 8 });
-      }
-      return h + 8;
+  const headingHeight = (title: string, body: string) => {
+    useHeadFont();
+    doc.fontSize(cellFont + 1);
+    let h = doc.heightOfString(title, { width: w - 8 });
+    if (body) {
+      useCellFont();
+      h += doc.heightOfString(body, { width: w - 8 });
     }
+    return h + 8;
+  };
+  const itemHeight = (it: Row | Heading) => {
+    if (it.kind === 'heading') return headingHeight(it.title, it.body);
     // The name is printed bold in a fixed column and can take two lines of its
     // own, so it is measured with the rest: a long name was drawing over the
     // resident below it.
@@ -351,16 +384,23 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   // Page breaks are chosen before anything is drawn, because PDFKit cannot
   // unpaint a row: text drawn past the bottom margin quietly moves to the next
   // page while the box it belongs in stays here.
+  // What a page costs before any row is drawn: the table's own header row, and
+  // the repeated heading when the page opens in the middle of a group.
+  const overheadAt = (start: number) => {
+    const it = items[start];
+    const repeated = it.kind === 'row' ? headingHeight(continuedTitle(headingOf(it)), headingOf(it).body) : 0;
+    return headerH + repeated;
+  };
   const pageStarts = new Set<number>([0]);
   {
     let used = 0;
-    let available = pageBottom - startY - headerH;
+    let available = pageBottom - startY - overheadAt(0);
     for (let r = 0; r < items.length; r++) {
       if (r > 0 && used + heights[r] > available) {
         // A heading alone at the foot of a page belongs with its rows.
         const start = items[r - 1].kind === 'heading' && r - 1 > 0 ? r - 1 : r;
         pageStarts.add(start);
-        available = pageBottom - startY - headerH - CONTINUED_H;
+        available = pageBottom - startY - overheadAt(start);
         used = 0;
         for (let back = start; back <= r; back++) used += heights[back];
       } else {
@@ -394,31 +434,32 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     drawHeaderRow();
   };
 
-  let currentHeading: Heading | null = null;
+  const drawHeading = (title: string, body: string) => {
+    const h = headingHeight(title, body);
+    doc.save();
+    doc.rect(x, yy, w, h).fillOpacity(0.07).fill('#000');
+    doc.restore();
+    doc.rect(x, yy, w, h).stroke();
+    doc.font('Helvetica-Bold').fontSize(cellFont + 1).text(title, x + 4, yy + 3, { width: w - 8 });
+    if (body) {
+      useCellFont();
+      doc.text(body, x + 4, doc.y, { width: w - 8 });
+    }
+    yy += h;
+  };
+
   startPage(true);
   for (let r = 0; r < items.length; r++) {
     const it = items[r];
     if (r > 0 && pageStarts.has(r)) {
       startPage(false);
-      if (it.kind === 'row' && currentHeading) {
-        doc.font('Helvetica-Bold').fontSize(cellFont)
-          .text(`${currentHeading.title} (continued)`, x + 2, yy + 2, { width: w - 4 });
-        yy += CONTINUED_H;
+      if (it.kind === 'row') {
+        const h = headingOf(it);
+        drawHeading(continuedTitle(h), h.body);
       }
     }
     if (it.kind === 'heading') {
-      currentHeading = it;
-      const h = heights[r];
-      doc.save();
-      doc.rect(x, yy, w, h).fillOpacity(0.07).fill('#000');
-      doc.restore();
-      doc.rect(x, yy, w, h).stroke();
-      doc.font('Helvetica-Bold').fontSize(cellFont + 1).text(it.title, x + 4, yy + 3, { width: w - 8 });
-      if (it.body) {
-        useCellFont();
-        doc.text(it.body, x + 4, doc.y, { width: w - 8 });
-      }
-      yy += h;
+      drawHeading(it.title, it.body);
       continue;
     }
     const rowH = heights[r];

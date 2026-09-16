@@ -8,11 +8,13 @@
 export type MealKey = 'breakfast' | 'lunch' | 'dinner' | 'snacks';
 
 export const mealOrder: MealKey[] = ['breakfast', 'lunch', 'dinner', 'snacks'];
+// Spelled out. The day sheet goes on a notice board and is read by residents,
+// not only by staff who know what 'S:' stands for.
 export const mealLabel: Record<MealKey, string> = {
-  breakfast: 'B',
-  lunch: 'L',
-  dinner: 'D',
-  snacks: 'S',
+  breakfast: 'Breakfast',
+  lunch: 'Lunch',
+  dinner: 'Dinner',
+  snacks: 'Snacks',
 };
 
 /**
