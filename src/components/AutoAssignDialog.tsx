@@ -196,7 +196,6 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
     setDaysPickerOpen(false);
     setStaffPickerOpen(false);
     setPreferredFallbackUsed(false);
-    setEventsBlocked(false);
     load();
   }, [open, defaultDateISO]);
 
@@ -221,7 +220,6 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
   }, [open, formData.startDate, formData.endDate]);
 
   const [conflictReason, setConflictReason] = useState<string | null>(null);
-  const [eventsBlocked, setEventsBlocked] = useState(false);
   const [conflictDetails, setConflictDetails] = useState<Record<string, unknown> | null>(null);
   const defaultBusinessDay = useMemo(() => ({ start: "09:00", end: "18:00" } as const), []);
   type Weekday = 'sunday'|'monday'|'tuesday'|'wednesday'|'thursday'|'friday'|'saturday';
@@ -281,7 +279,6 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
     setSelectedSuggestionIdx(null);
     setConflictReason(null);
     setConflictDetails(null);
-    setEventsBlocked(false);
     setPreferredFallbackUsed(false);
   }, [formData.patientId, formData.therapyId, formData.totalSessions, formData.preferredDays,
       formData.preferredTimeStart, formData.preferredTimeEnd, formData.startDate,
@@ -431,27 +428,12 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
         room: roomMap[s.room_id] || s.room_id,
         staff: staffMap[s.staff_id] || s.staff_id,
       }));
-      // The server already drops slots that have passed, against the centre's
-      // clock. Re-filtering here against the browser's clock threw away valid
-      // slots whenever the two disagreed, and the empty list then read as
-      // "no slots available".
-      const sugg = suggRaw.filter((x) => {
-        const evs = eventsByDate.get(x.date) || [];
-        const toMin = (t: string) => { const [h,m] = t.split(':').map(Number); return h*60+m; };
-        const sM = toMin(x.time);
-        const endM = sM + (selectedTherapy?.duration_minutes || 60);
-        const conflictAll = evs.some(e => isAllGuests(e) && Math.max(sM, toMin(e.start_time)) < Math.min(endM, toMin(e.end_time)));
-        if (conflictAll) return false;
-        const conflictRoom = evs.some(e => e.room_id && String(e.room_id) === String(x.room_id) && Math.max(sM, toMin(e.start_time)) < Math.min(endM, toMin(e.end_time)));
-        if (conflictRoom) return false;
-        const conflictStaffDirect = evs.some(e => e.staff_id && String(e.staff_id) === String(x.staff_id) && Math.max(sM, toMin(e.start_time)) < Math.min(endM, toMin(e.end_time)));
-        if (conflictStaffDirect) return false;
-        const conflictStaffScope = evs.some(e => ((e as any).staff_scope === 'all' || (Array.isArray((e as any).staff_ids) && (e as any).staff_ids.includes(String(x.staff_id)))) && Math.max(sM, toMin(e.start_time)) < Math.min(endM, toMin(e.end_time)));
-        if (conflictStaffScope) return false;
-        return true;
-      });
+      // The server decides what clashes with an event; it reads ProgramEvent
+      // when it picks a therapist. This used to re-check that here, and once
+      // meals became windows rather than half-hour bands, every valid slot was
+      // thrown away and the dialog reported that the programme blocked the day.
+      const sugg = suggRaw;
       setSuggestions(sugg);
-      setEventsBlocked(suggRaw.length > 0 && sugg.length === 0);
       setAssignedDates((data.appointments || []).map((a: { scheduled_date: string }) => toLocalDateStr(new Date(a.scheduled_date))));
     } catch (e) {
       if ((e as unknown as { name?: string }).name === 'AbortError') {
@@ -874,9 +856,7 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
                           case 'SCHEDULER_TIMEOUT': return 'Scheduling timed out — please try again';
                           case 'DB_TIMEOUT': return 'System busy — please retry shortly';
                           case 'SCHEDULER_ERROR': return 'Unexpected scheduling error';
-                          default: return eventsBlocked
-                            ? 'Every free slot clashes with a scheduled programme event'
-                            : 'No slots available in the chosen window';
+                          default: return 'No slots available in the chosen window';
                         }
                       })()}
                     </p>
@@ -886,8 +866,8 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
                           const tips: string[] = [];
                           if (conflictReason === 'CENTER_HOLIDAY') {
                             tips.push('Adjust center holiday in Time Off');
-                          } else if (eventsBlocked) {
-                            tips.push('Pick a different day, or move the clashing event in Programme');
+                          } else if (conflictReason === 'STAFF_IN_EVENT') {
+                            tips.push('That therapist is running a programme event then — pick another, or move the event in Programme');
                           } else {
                             tips.push('Widen time range or change preferred days');
                             if (formData.preferredStaffId) tips.push('Remove preferred staff to consider alternatives');

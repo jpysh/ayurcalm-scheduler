@@ -142,6 +142,14 @@ function overlaps(aS: number, aE: number, bS: number, bE: number) { return Math.
 
 
 
+// The centre's day, not the server's. Everything the app shows — the schedule,
+// the warnings, the day sheet — is worked out in the centre's timezone, so a
+// seed built on the UTC day puts today's absence on yesterday whenever the two
+// disagree, and the demo opens with the problem it exists to show missing.
+const CENTRE_TZ = process.env.ADMIN_TZ || 'Asia/Kolkata';
+const centreYmd = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: CENTRE_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+const centreToday = () => new Date(`${centreYmd(new Date())}T00:00:00.000Z`);
+
 async function main() {
   const existingCounts = await Promise.all([
     prisma.patient.count(),
@@ -201,7 +209,7 @@ async function main() {
     await prisma.timeOff.create({ data: { entity_type: 'center', date: new Date(h.date), description: h.desc } });
   }
   // staff holidays (5 random business days within next 3 months per staff)
-  const startRange = new Date();
+  const startRange = centreToday();
   const endRange = new Date(startRange);
   endRange.setMonth(endRange.getMonth() + 3);
   function isBusinessDay(d: Date) { const day = d.getDay(); return day >= 1 && day <= 5; }
@@ -211,7 +219,7 @@ async function main() {
     while (count < 5) {
       const d = new Date(startRange);
       d.setDate(d.getDate() + Math.floor(random() * 90));
-      const key = d.toISOString().slice(0,10);
+      const key = centreYmd(d);
       if (!isBusinessDay(d) || used.has(key)) continue;
       used.add(key);
       // Midnight of the day, as the scheduler matches it; the time of day the seed
@@ -223,7 +231,7 @@ async function main() {
 
   // Appointments for the next 4 months at ~30% capacity on business days, so a
   // test install stays useful for a full quarter.
-  const start = new Date();
+  const start = centreToday();
   const end = new Date(start);
   end.setMonth(end.getMonth() + 4);
   // Inside the rooms' opening hours, with a couple of half-hour starts because
@@ -246,7 +254,7 @@ async function main() {
     staffHolidaysByDay[key] ??= new Set<string>();
     if (h.entity_id) staffHolidaysByDay[key].add(h.entity_id);
   }
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayKey = centreYmd(new Date());
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const weekday = d.getDay();
     const dateKey = d.toISOString().slice(0,10);
@@ -325,7 +333,7 @@ async function main() {
   // Yoga and the meditations have a therapist on them, which is the point: that
   // person is genuinely unbookable for those hours, and the rota says why.
   const weekdays = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-  const offTodayIds = new Set((await prisma.timeOff.findMany({ where: { entity_type: 'staff', date: new Date(new Date().toISOString().slice(0, 10)) } })).map((h) => h.entity_id));
+  const offTodayIds = new Set((await prisma.timeOff.findMany({ where: { entity_type: 'staff', date: centreToday() } })).map((h) => h.entity_id));
   const yogaStaff = staff.find((s) => s.gender === 'female' && !offTodayIds.has(s.id)) || staff[0];
   const prayerStaff = staff.find((s) => s.id !== yogaStaff.id && !offTodayIds.has(s.id)) || staff[1];
   const event = (over: Record<string, unknown>) => prisma.programEvent.create({ data: {
@@ -351,6 +359,25 @@ async function main() {
   for (let i = 0; i < 4; i++) {
     const d = new Date(nextMonth); d.setDate(nextMonth.getDate() + i * 5);
     await prisma.programEvent.create({ data: { date: d, start_time: '10:00', end_time: '11:00', activity_name: `Special Session ${i+1}`, room_id: null, staff_id: null, required_amenities: [], audience: 'all', notes: '', patients_scope: 'all' } });
+  }
+
+  // A therapist who is off today, with treatments still on their name. This is
+  // the centre's daily crisis and the case the reassignment exists for, so the
+  // dataset carries it on purpose rather than by accident: the bookings were
+  // made before they rang in, which is how it happens. Four, in four different
+  // hours, so a swap has somewhere to go.
+  const absentToday = (await prisma.timeOff.findMany({ where: { entity_type: 'staff', date: centreToday() } }))[0]?.entity_id;
+  if (absentToday) {
+    const todays = await prisma.appointment.findMany({ where: { scheduled_date: centreToday() }, orderBy: { start_time: 'asc' } });
+    const takenHours = new Set<string>();
+    const toMove = todays.filter((a) => {
+      if (a.staff_id === absentToday || takenHours.has(a.start_time)) return false;
+      takenHours.add(a.start_time);
+      return true;
+    }).slice(0, 4);
+    for (const a of toMove) {
+      await prisma.appointment.update({ where: { id: a.id }, data: { staff_id: absentToday } });
+    }
   }
 
   // One resident who is only treated by their own therapist. The replan cannot
@@ -390,7 +417,7 @@ async function main() {
   // Residents. Without these the demo has nobody actually staying at the centre,
   // so the day sheet shows neither meals nor the rest-day rows — two features
   // that would look missing rather than unseeded.
-  const today = new Date(new Date().toISOString().slice(0, 10));
+  const today = centreToday();
   const templates = await prisma.dietTemplate.findMany({ orderBy: { name: 'asc' } });
   // Fifteen-day stays back to back until the bookings end, so every day's sheet
   // has residents. The first stay holds today's treated patients.
