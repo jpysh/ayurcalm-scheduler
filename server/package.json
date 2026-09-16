@@ -13,13 +13,13 @@
     "fix:remove-dr": "tsx src/scripts/removeDoctorPrefix.ts",
     "fix:rooms-randomize": "tsx src/scripts/renameRoomsAndRandomizeAmenities.ts",
     "migrate:center-timeoff-dev-to-prod": "tsx src/scripts/migrateCenterTimeOffDevToProd.ts",
-    "test:smoke": "tsx src/tests/smokeHealth.test.ts",
-    "test:ui": "tsx src/tests/uiPersistence.test.ts",
     "test:validation": "tsx src/tests/validation.test.ts",
     "test:auto-assign": "tsx src/tests/autoAssign.test.ts",
     "test:diet": "tsx src/tests/dietResolution.test.ts",
     "test:pdf": "tsx src/tests/shortenWords.test.ts",
-    "test:invariants": "tsx src/tests/scheduleInvariants.test.ts"
+    "test:invariants": "tsx src/tests/scheduleInvariants.test.ts",
+    "test": "npm run test:diet && npm run test:pdf",
+    "test:all": "npm run test:diet && npm run test:pdf && npm run test:invariants && npm run test:validation && npm run test:auto-assign"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

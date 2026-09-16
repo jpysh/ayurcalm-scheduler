@@ -173,16 +173,22 @@ server proxies that to `http://localhost:4000` (override with
 set `VITE_API_BASE`.
 
 ```bash
+npm test                  # the tests that need nothing running
 npm run test:e2e          # Playwright, against docker compose on :8080 (E2E_BASE_URL to change)
-cd server && npm run test:smoke
-cd server && npm run test:invariants   # scheduling rules over every booked day in the database
+cd server && npm run test:all   # the above plus the tests that need a database and a server
 ```
 
-`test:invariants` reads the database `DATABASE_URL` points at and checks that no
-therapist, room or patient is double-booked, that every room has the amenities
-its therapy needs, that a therapy requiring a gender match has one, and that
-nothing is booked outside a room's opening hours. Run it against the seeded demo
-data, or against your own once you are running for real.
+`npm test` runs only what is self-contained: diet resolution and day-sheet text
+fitting. `test:all` adds three that need a running install — `test:invariants`
+(no therapist, room or patient double-booked; rooms have the amenities their
+therapies need; gender matching holds; nothing outside opening hours, over every
+booked day), `test:validation` (null fields in a request body are handled, not a
+500) and `test:auto-assign` (the scheduler books a course of sessions).
+
+Those last two **write to the database and tidy up afterwards**, so they refuse
+to run unless it is marked as demo data. Point `DATABASE_URL` at a test install,
+or set `ALLOW_TEST_WRITES=1` if you are certain. CI runs all of them inside the
+compose stack it has already started.
 
 ## If you are locked out
 
