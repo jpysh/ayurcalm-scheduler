@@ -1393,6 +1393,7 @@ const AdminDashboard = () => {
   const exceptionDay = useMemo(() => new Date(`${todayKey}T00:00:00`), [todayKey]);
   const [replanDismissed, setReplanDismissed] = useState<string[]>([]);
   const [undone, setUndone] = useState<string | null>(null);
+  const [replanExpanded, setReplanExpanded] = useState<string[]>([]);
   const loadReplans = useCallback(() => {
     fetch(`${API_BASE}/replan/summary?date=${exceptionDayKey}`)
       .then((r) => (r.ok ? r.json() : []))
@@ -1616,41 +1617,66 @@ const AdminDashboard = () => {
         {undone ? (
           <div className="mb-2 rounded-md border bg-card px-3 py-2 text-sm">{undone}</div>
         ) : null}
-        {visibleReplans.map((batch) => (
-          <div key={batch.batch_id} className="mb-2 rounded-md border bg-card px-3 py-2 space-y-1">
-            <p className="text-sm font-semibold">{batch.staff_name} is off — {batch.moved.length} treatment{batch.moved.length === 1 ? '' : 's'} rebooked</p>
-            <ul className="space-y-0.5">
-              {batch.moved.map((m) => (
-                <li key={m.appointment_id} className="text-sm">
-                  {m.patient_name}: {m.therapy_name} {m.tier === 1 ? `at ${m.to.start_time} with ${m.to.staff_name}` : `moved to ${m.to.start_time} with ${m.to.staff_name}`}
-                </li>
-              ))}
-              {batch.proposed.map((m) => (
-                <li key={m.appointment_id} className="text-sm flex flex-wrap items-center gap-2">
-                  <span>{m.patient_name}: nothing free today — {m.to.date} at {m.to.start_time} with {m.to.staff_name}?</span>
-                  <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => acceptProposal(m)}>Move it</Button>
-                </li>
-              ))}
-              {batch.unplaced.map((u, i) => (
-                <li key={`u-${i}`} className="text-sm text-amber-700">
-                  {u.patient_name}: {u.therapy_name} at {u.start_time} has nobody — {u.reason}
-                </li>
-              ))}
-            </ul>
-            <div className="flex gap-2 pt-1">
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => undoReplanBatch(batch)}>Undo</Button>
-              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => dismissReplan(batch.batch_id)}>Done with this</Button>
+        {visibleReplans.map((batch) => {
+          const needsDecision = batch.proposed.length + batch.unplaced.length;
+          const open = replanExpanded.includes(batch.batch_id);
+          return (
+            <div key={batch.batch_id} className="mb-2 rounded-md border bg-card px-3 py-2 space-y-1">
+              {/* One line, then out of the way. Fixing things is Verify's job;
+                  this is here to say what happened while nobody was looking,
+                  and to keep Undo within reach while it is still fresh. */}
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-semibold">
+                  {batch.staff_name} is off — {batch.moved.length} rebooked{needsDecision > 0 ? `, ${needsDecision} needs a decision` : ''}
+                </span>
+                <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => undoReplanBatch(batch)}>Undo</Button>
+                {needsDecision > 0 ? (
+                  <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => setShowVerify(true)}>
+                    <AlertCircle className="w-3 h-3 mr-1 text-amber-600" />Verify
+                  </Button>
+                ) : null}
+                <button type="button" className="text-xs underline text-muted-foreground" onClick={() => setReplanExpanded((prev) => (open ? prev.filter((x) => x !== batch.batch_id) : [...prev, batch.batch_id]))}>
+                  {open ? 'Hide' : 'Show what changed'}
+                </button>
+                <button type="button" className="text-xs text-muted-foreground ml-auto" onClick={() => dismissReplan(batch.batch_id)}>Done with this</button>
+              </div>
+              {open ? (
+                <ul className="space-y-0.5 pt-1">
+                  {batch.moved.map((m) => (
+                    <li key={m.appointment_id} className="text-sm">
+                      {m.patient_name}: {m.therapy_name} {m.tier === 1 ? `at ${m.to.start_time} with ${m.to.staff_name}` : `moved to ${m.to.start_time} with ${m.to.staff_name}`}
+                    </li>
+                  ))}
+                  {batch.proposed.map((m) => (
+                    <li key={m.appointment_id} className="text-sm flex flex-wrap items-center gap-2">
+                      <span>{m.patient_name}: nothing free today — {m.to.date} at {m.to.start_time} with {m.to.staff_name}?</span>
+                      <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => acceptProposal(m)}>Move it</Button>
+                    </li>
+                  ))}
+                  {batch.unplaced.map((u, i) => (
+                    <li key={`u-${i}`} className="text-sm text-amber-700">
+                      {u.patient_name}: {u.therapy_name} at {u.start_time} has nobody — {u.reason}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div className="mb-3 md:mb-6 rounded-md border bg-card px-3 py-2">
           {exceptions.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nothing wrong with {isToday ? 'today' : 'this day'}.</p>
           ) : (
             <>
-              <p className="text-sm font-semibold mb-1">
-                {exceptions.length} thing{exceptions.length === 1 ? '' : 's'} to fix {isToday ? 'today' : 'this day'}
-              </p>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm font-semibold">
+                  {exceptions.length} thing{exceptions.length === 1 ? '' : 's'} to fix {isToday ? 'today' : 'this day'}
+                </p>
+                {/* The header says what is wrong; Verify is where it gets fixed. */}
+                <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => setShowVerify(true)}>
+                  <AlertCircle className="w-3 h-3 mr-1 text-amber-600" />Verify
+                </Button>
+              </div>
               <ul className="space-y-0.5">
                 {exceptions.slice(0, 5).map((e, i) => (
                   <li key={i} className="flex items-start gap-1.5 text-sm">
