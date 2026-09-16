@@ -369,10 +369,20 @@ async function main() {
   const absentToday = (await prisma.timeOff.findMany({ where: { entity_type: 'staff', date: centreToday() } }))[0]?.entity_id;
   if (absentToday) {
     const todays = await prisma.appointment.findMany({ where: { scheduled_date: centreToday() }, orderBy: { start_time: 'asc' } });
-    const takenHours = new Set<string>();
+    const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+    // The buffer after a treatment is the patient's rest and the room's
+    // cleanup, and it keeps the therapist busy too — the same rule the
+    // scheduler enforces, so the seeded day obeys it.
+    const bufferOf = new Map(therapies.map((t) => [t.id, t.buffer_minutes]));
+    const taken: { s: number; e: number }[] = [];
     const toMove = todays.filter((a) => {
-      if (a.staff_id === absentToday || takenHours.has(a.start_time)) return false;
-      takenHours.add(a.start_time);
+      if (a.staff_id === absentToday) return false;
+      const s = mins(a.start_time);
+      const e = s + a.duration_minutes + (bufferOf.get(a.therapy_id) ?? 0);
+      // One person cannot give two treatments at once, even the ones they will
+      // not be here to give: the day has to be wrong in the way a real day is.
+      if (taken.some((b) => Math.max(b.s, s) < Math.min(b.e, e))) return false;
+      taken.push({ s, e });
       return true;
     }).slice(0, 4);
     for (const a of toMove) {
