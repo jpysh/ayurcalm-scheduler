@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 
 /**
- * Three plans to start from, so a fresh install has something to assign on day
+ * Five plans to start from, so a fresh install has something to assign on day
  * one. They are written from the classical regimens a residential Ayurveda
  * centre actually runs, but they are a starting point, not a prescription — a
  * centre's own plans differ, and the physician edits these in the Diet tab.
@@ -20,6 +20,16 @@ import type { PrismaClient } from '@prisma/client';
  *   - Sattvic diet and mitahara, moderate eating:
  *     https://en.wikipedia.org/wiki/Sattvic_diet
  *     https://en.wikipedia.org/wiki/Mitahara
+ *   - Deepana and pachana, the preparatory phase before purification:
+ *     https://irjay.com/index.php/irjay/article/view/883
+ *     https://arogyaayu.com/ayurveda/panchkarma/purvakarma/dipana-pachana-karma/
+ *   - Sthaulya (medoroga), and the langhana/rukshana regimen for it:
+ *     https://jaims.in/jaims/article/download/3934/5899?inline=1
+ *     https://www.ovid.com/jnls/joay/fulltext/10.4103/joa.joa_71_20~wholesome-ayurvedic-diet-and-lifestyle-for-sthaulya-obesity
+ *
+ * The five cover the arc a residential centre actually runs: an everyday plan,
+ * the three phases of a purification (before, during, after), and the commonest
+ * standalone programme. A centre that runs something else adds its own.
  *
  * Each plan carries two sides. `therapy_*` is what a patient eats on a day they
  * are treated; `rest_*` is a day without treatment. Both are needed because a
@@ -73,6 +83,38 @@ export const starterDietTemplates = [
     medication: 'As prescribed. Appetite, stool and energy reported daily',
     pre_therapy_notes: 'Confirm the current step with the physician before the first meal',
     post_therapy_notes: 'Do not advance a step without instruction; step back if there is heaviness or no appetite',
+  },
+  {
+    name: 'Before purification (deepana–pachana)',
+    description:
+      'The preparatory days that kindle digestion and clear ama before oleation begins. Food is deliberately lighter than the patient wants; the point is to arrive at genuine hunger, which is the sign the physician is waiting for.',
+    therapy_breakfast: 'Warm water with ginger; thin gruel only if hungry',
+    therapy_lunch: 'Mung soup with ginger, pepper and long pepper; soft rice, small quantity',
+    therapy_dinner: 'Clear vegetable soup, early and light',
+    therapy_snacks: 'Warm water; nothing between meals',
+    rest_breakfast: 'Warm water with ginger; thin gruel only if hungry',
+    rest_lunch: 'Soft rice with mung soup and digestive spices; cooked bitter gourd or drumstick',
+    rest_dinner: 'Thin gruel or clear soup, early',
+    rest_snacks: 'Warm water; buttermilk with roasted cumin at midday if advised',
+    medication: 'Digestive preparations before meals as prescribed. Nothing cold, no curd, no fried food',
+    pre_therapy_notes: 'Eat only when hungry, never by the clock; skip a meal rather than eat without appetite',
+    post_therapy_notes: 'Report appetite, stool and coating on the tongue daily — these decide when oleation starts',
+  },
+  {
+    name: 'Weight and metabolism (sthaulya)',
+    description:
+      'For a resident on a weight or metabolic programme. Drier and lighter than the general plan, with the largest meal at midday and nothing after dark. Written as a regimen, not a calorie count; portions are set per patient.',
+    therapy_breakfast: 'Warm water with honey if advised; roasted barley or millet porridge, no sugar',
+    therapy_lunch: 'Barley or millet roti; mung dal; two cooked vegetables with little oil; small salad',
+    therapy_dinner: 'Clear vegetable soup with pepper; no rice, no wheat after dark',
+    therapy_snacks: 'Buttermilk with roasted cumin; warm water. No fruit juice, no milk sweets',
+    rest_breakfast: 'Roasted barley or millet porridge; a few soaked almonds',
+    rest_lunch: 'Barley or millet roti; horse gram or mung soup; two cooked vegetables; salad',
+    rest_dinner: 'Vegetable soup or steamed greens, early',
+    rest_snacks: 'Buttermilk; warm water',
+    medication: 'As prescribed. No day sleep; walk after meals',
+    pre_therapy_notes: 'Udvartana and similar dry treatments are given on an empty stomach — nothing for two hours before',
+    post_therapy_notes: 'Warm water, not cold; do not lie down straight after the treatment',
   },
 ];
 
