@@ -407,10 +407,13 @@ async function main() {
   }
 
   // Flags this install as carrying demo data, so Settings can offer to clear it.
+  // Seeded means configured: an install arriving with staff, rooms, therapies
+  // and a week of bookings is not a centre that has yet to say what it is
+  // called, and sending it to the setup wizard asks for what it already has.
   await prisma.settings.upsert({
     where: { id: 'singleton' },
-    update: { demo_data: true },
-    create: { id: 'singleton', demo_data: true, centre_name: process.env.CENTRE_NAME || 'Wellness Centre' },
+    update: { demo_data: true, setup_complete: true },
+    create: { id: 'singleton', demo_data: true, setup_complete: true, centre_name: process.env.CENTRE_NAME || 'Wellness Centre' },
   });
 
   console.log('Seeded extended AyurCalm dataset successfully');
