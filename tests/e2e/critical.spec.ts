@@ -133,8 +133,14 @@ test('the booking dialog offers the slots the API found, and books one', async (
   // The centre's clock and the browser's clock are rarely the same one. The
   // dialog used to re-filter the server's slots against the browser's, so a
   // browser west of the centre saw "No slots available" for slots that exist.
+  // From tomorrow: a run late in the day would otherwise be left with only the
+  // slots the evening programme occupies, and find nothing for reasons that
+  // have nothing to do with what this test is about.
+  const start = new Date();
+  start.setDate(start.getDate() + 1);
   const end = new Date();
   end.setDate(end.getDate() + 10);
+  await page.getByLabel('Start Date').fill(start.toISOString().slice(0, 10));
   await page.getByLabel('End Date').fill(end.toISOString().slice(0, 10));
   await page.getByRole('button', { name: 'Select patient' }).click();
   await page.getByPlaceholder('Search patient').fill('Aarav Iyer');
