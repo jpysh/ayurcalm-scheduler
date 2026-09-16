@@ -18,7 +18,8 @@
     "test:validation": "tsx src/tests/validation.test.ts",
     "test:auto-assign": "tsx src/tests/autoAssign.test.ts",
     "test:diet": "tsx src/tests/dietResolution.test.ts",
-    "test:pdf": "tsx src/tests/shortenWords.test.ts"
+    "test:pdf": "tsx src/tests/shortenWords.test.ts",
+    "test:invariants": "tsx src/tests/scheduleInvariants.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

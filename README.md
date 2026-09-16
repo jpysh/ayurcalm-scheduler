@@ -40,8 +40,11 @@ Open **http://localhost:8080** and sign in:
 | `admin@example.com` | `demo1234` |
 
 The first boot creates the database, applies migrations, and seeds a demo centre —
-patients, therapists, rooms, therapies, four months of appointments, and a daily
-programme. Restarts keep your data; the seed only runs against an empty database.
+120 patients, 20 therapists, 20 rooms, 50 therapies, four months of appointments,
+and a daily programme. About 40 residents are treated each day, which is what a
+centre of this size looks like on paper. The seed is deterministic, so everyone
+who clones this repo gets the same centre and the same day sheet. Restarts keep
+your data; the seed only runs against an empty database.
 
 > **Change the demo password before putting this on a network.** The server prints
 > a warning on every startup while the default is still in place.
@@ -172,7 +175,14 @@ set `VITE_API_BASE`.
 ```bash
 npm run test:e2e          # Playwright, against docker compose on :8080 (E2E_BASE_URL to change)
 cd server && npm run test:smoke
+cd server && npm run test:invariants   # scheduling rules over every booked day in the database
 ```
+
+`test:invariants` reads the database `DATABASE_URL` points at and checks that no
+therapist, room or patient is double-booked, that every room has the amenities
+its therapy needs, that a therapy requiring a gender match has one, and that
+nothing is booked outside a room's opening hours. Run it against the seeded demo
+data, or against your own once you are running for real.
 
 ## If you are locked out
 

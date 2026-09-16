@@ -66,6 +66,22 @@ const therapyDefs = [
   { name: 'Pizhichil Deluxe', req: ['massage_table','shower'], dur: 90, gender: true },
 ];
 
+/**
+ * Rest for the patient and cleanup for the room after a therapy, derived from
+ * what the therapy needs rather than listed per therapy: steam and oil are what
+ * make a room take time to turn round and a patient take time to get up.
+ * Panchakarma centres commonly allow half an hour after swedana or a full-body
+ * oil therapy, and the room needs wiping down before the next oil treatment.
+ * A centre tunes these per therapy in the Therapies tab; these are the defaults
+ * a fresh install starts from.
+ */
+const bufferFor = (req: string[]) => {
+  if (req.includes('steam') || req.includes('shower')) return 30;
+  if (req.includes('herbal_oil') || req.includes('dhara_stand') || req.includes('shirodhara_stand')) return 20;
+  if (req.includes('rice_boluses') || req.includes('herbal_paste')) return 15;
+  return 10;
+};
+
 const indianHolidays2025 = [
   { date: '2025-01-26', desc: 'Republic Day' },
   { date: '2025-03-14', desc: 'Holi' },
@@ -109,7 +125,18 @@ const indianHolidays2026 = [
   { date: '2026-07-19', desc: 'Muharram' },
 ];
 
-function randomOf<T>(arr: T[]) { return arr[Math.floor(Math.random() * arr.length)]; }
+// The demo data is a fixture, not a lottery: everyone who clones this repo gets
+// the same centre, and the scheduling invariant test can assert on it. Seeded
+// PRNG rather than Math.random for that reason.
+let rngState = 0x9e3779b9;
+function random() {
+  rngState |= 0;
+  rngState = (rngState + 0x6d2b79f5) | 0;
+  let t = Math.imul(rngState ^ (rngState >>> 15), 1 | rngState);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+function randomOf<T>(arr: T[]) { return arr[Math.floor(random() * arr.length)]; }
 function toMinutes(t: string) { const [h, m] = t.split(':').map(Number); return h * 60 + m; }
 function overlaps(aS: number, aE: number, bS: number, bE: number) { return Math.max(aS, bS) < Math.min(aE, bE); }
 
@@ -140,11 +167,11 @@ async function main() {
   patients[7] = 'Venkatasubramanian Raghunathan';
 
   const createdPatients = await Promise.all(patients.map((name, idx) => prisma.patient.create({
-    data: { name, gender: idx % 2 === 0 ? 'male' : 'female', phone: `+91-9${Math.floor(100000000 + Math.random()*899999999)}` },
+    data: { name, gender: idx % 2 === 0 ? 'male' : 'female', phone: `+91-9${Math.floor(100000000 + random()*899999999)}` },
   })));
 
   const therapies = await Promise.all(therapyDefs.map(t => prisma.therapy.create({
-    data: { name: t.name, required_amenities: t.req, duration_minutes: t.dur, requires_gender_match: t.gender },
+    data: { name: t.name, required_amenities: t.req, duration_minutes: t.dur, requires_gender_match: t.gender, buffer_minutes: bufferFor(t.req) },
   })));
 
   const scheduleStd = { sunday: { start: '09:00', end: '18:00' }, monday: { start: '09:00', end: '18:00' }, tuesday: { start: '09:00', end: '18:00' }, wednesday: { start: '09:00', end: '18:00' }, thursday: { start: '09:00', end: '18:00' }, friday: { start: '09:00', end: '18:00' }, saturday: { start: '09:00', end: '18:00' } };
@@ -160,7 +187,7 @@ async function main() {
     data: {
       name: `${n} ${randomOf(surnames)}`,
       gender: idx % 2 === 0 ? 'female' : 'male',
-      phone: `+91-8${Math.floor(100000000 + Math.random()*899999999)}`,
+      phone: `+91-8${Math.floor(100000000 + random()*899999999)}`,
       specializations: therapies.filter((_, j) => j % (idx % 3 + 2) === 0).map(t => t.id),
       weekly_schedule: scheduleStd,
       is_active: true,
@@ -183,7 +210,7 @@ async function main() {
     const used: Set<string> = new Set();
     while (count < 5) {
       const d = new Date(startRange);
-      d.setDate(d.getDate() + Math.floor(Math.random() * 90));
+      d.setDate(d.getDate() + Math.floor(random() * 90));
       const key = d.toISOString().slice(0,10);
       if (!isBusinessDay(d) || used.has(key)) continue;
       used.add(key);
@@ -199,7 +226,14 @@ async function main() {
   const start = new Date();
   const end = new Date(start);
   end.setMonth(end.getMonth() + 4);
-  const dayTimes = ['09:00','10:30','12:00','13:30','15:00'];
+  // Inside the rooms' opening hours, with a couple of half-hour starts because
+  // a real day has them and the day sheet has to place them correctly.
+  const dayTimes = ['09:00','10:00','11:00','12:00','13:30','14:30','15:30','16:30'];
+  // Patients are taken in rotation rather than at random so a day's bookings
+  // land on ~40 different people. A real centre of this size treats most of its
+  // residents each day, and picking at random gave the same dozen names twice
+  // over and a day sheet that looked half empty.
+  let patientCursor = 0;
   const busy: Record<string, { staff: Record<string, { s: number; e: number }[]>; room: Record<string, { s: number; e: number }[]>; patient: Record<string, { s: number; e: number }[]> }> = {};
   const centerHolidays = await prisma.timeOff.findMany({ where: { entity_type: 'center', date: { gte: start, lte: end } } });
   const staffHolidaysByDay: Record<string, Set<string>> = {};
@@ -222,19 +256,37 @@ async function main() {
     for (const r of rooms) {
       const rDay = (scheduleStd as any)[['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][weekday]];
       if (!rDay) continue;
+      // Two treatments per room per day: a centre of twenty rooms then treats
+      // about forty of its residents, which is what the day sheet has to hold.
       let slotsCreatedForRoom = 0;
       for (const time of dayTimes) {
         if (slotsCreatedForRoom >= 2) break;
         const th = randomOf(therapies);
         if (!th.required_amenities.every(a => r.amenities.includes(a))) continue;
-        const p = randomOf(createdPatients);
+        // Next patient in rotation who is free at this time, so one person's
+        // clash does not cost the slot.
+        const slotS = toMinutes(time);
+        const slotE = slotS + th.duration_minutes + th.buffer_minutes;
+        // The treatment itself must finish before the room closes; the buffer
+        // after it is the patient's rest, not the room's next booking.
+        if (slotS < toMinutes(rDay.start) || slotS + th.duration_minutes > toMinutes(rDay.end)) continue;
+        const p = createdPatients
+          .map((_, k) => createdPatients[(patientCursor + k) % createdPatients.length])
+          .find((c) => !(busy[dateKey].patient[c.id] || []).some(b => overlaps(b.s, b.e, slotS, slotE)));
+        if (!p) continue;
+        patientCursor++;
         const sCandidates = staff.filter(s => s.specializations.includes(th.id) && (!th.requires_gender_match || s.gender === p.gender));
-        // skip if staff holiday
+        // The first qualified therapist who is neither on leave nor already
+        // busy. Taking the first qualified one and giving up when they were
+        // booked was losing most of the day's slots to one person's diary.
         const staffOnLeave = staffHolidaysByDay[dateKey] || new Set<string>();
-        const s = sCandidates.find(sc => !staffOnLeave.has(sc.id));
+        const s = sCandidates.find(sc => !staffOnLeave.has(sc.id) &&
+          !(busy[dateKey].staff[sc.id] || []).some(b => overlaps(b.s, b.e, slotS, slotE)));
         if (!s) continue;
         const sMin = toMinutes(time);
-        const eMin = sMin + th.duration_minutes;
+        // Busy intervals carry the buffer, so the seed obeys the same rest and
+        // cleanup rule the scheduler enforces.
+        const eMin = sMin + th.duration_minutes + th.buffer_minutes;
         const rBusy = busy[dateKey].room[r.id] ??= [];
         const sBusy = busy[dateKey].staff[s.id] ??= [];
         const pBusy = busy[dateKey].patient[p.id] ??= [];
@@ -258,34 +310,6 @@ async function main() {
         pBusy.push({ s: sMin, e: eMin });
         slotsCreatedForRoom++;
       }
-    }
-  }
-
-  // Today also gets early and late bookings of the longest therapy name, so the
-  // demo day sheet has narrow multi-hour columns and shows a name shortened
-  // with '..'. Checking the sheet then needs no hand-made data.
-  const longest = therapies.find((t) => t.name === 'Dhanyamladhara');
-  // Nobody is generated with this specialism, so one therapist is given it.
-  if (longest && !staff.some((c) => c.specializations.includes(longest.id))) {
-    staff[1].specializations.push(longest.id);
-    await prisma.staff.update({ where: { id: staff[1].id }, data: { specializations: staff[1].specializations } });
-  }
-  const todayBusy = busy[todayKey];
-  if (longest && todayBusy) {
-    for (const time of ['06:30', '08:00', '14:30', '16:30']) {
-      const sMin = toMinutes(time);
-      const eMin = sMin + longest.duration_minutes;
-      const free = (list?: { s: number; e: number }[]) => !(list || []).some((b) => overlaps(b.s, b.e, sMin, eMin));
-      const p = createdPatients.find((c) => todayBusy.patient[c.id] && free(todayBusy.patient[c.id]));
-      const s = staff.find((c) => c.specializations.includes(longest.id) && free(todayBusy.staff[c.id]));
-      const r = rooms.find((c) => longest.required_amenities.every((a) => c.amenities.includes(a)) && free(todayBusy.room[c.id]));
-      if (!p || !s || !r) continue;
-      await prisma.appointment.create({ data: {
-        patient_id: p.id, therapy_id: longest.id, staff_id: s.id, room_id: r.id,
-        scheduled_date: new Date(todayKey), start_time: time, duration_minutes: longest.duration_minutes,
-        session_number: 1, total_sessions: 1, status: 'pending', assignment_type: 'auto',
-      } });
-      for (const list of [todayBusy.patient[p.id], (todayBusy.staff[s.id] ??= []), (todayBusy.room[r.id] ??= [])]) list.push({ s: sMin, e: eMin });
     }
   }
 

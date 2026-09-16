@@ -69,6 +69,9 @@ model Therapy {
   required_amenities    String[]
   duration_minutes      Int
   requires_gender_match Boolean  @default(false)
+  // Rest for the patient and cleanup for the room after an oil or steam
+  // therapy. One number because no centre has asked to tell the two apart.
+  buffer_minutes        Int      @default(0)
   description           String?
 
   Appointments Appointment[]

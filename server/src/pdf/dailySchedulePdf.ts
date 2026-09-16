@@ -159,10 +159,10 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     if (!held || seg.start_date > held.start_date) segmentByPatient.set(seg.patient_id, seg);
   }
 
-  // The day already has a Breakfast, Lunch and Dinner column — those meals are
-  // programme events like any other — so each patient's own meal goes in the
-  // matching column rather than in a block of its own. Anything with no column
-  // of its own (snacks, medication, therapy notes) goes to the notes column.
+  // Meals are programme events like any other, so each patient's own meal goes
+  // in the time column its sitting falls in, beside that hour's therapy.
+  // Anything with no sitting of its own (snacks, medication, therapy notes)
+  // goes to the notes column.
   const mealByTimeSlot = new Map<string, MealKey>();
   for (const e of eventsWindow) {
     const name = (e.activity_name || '').trim().toLowerCase();
@@ -171,29 +171,37 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   }
   const mealsWithColumn = new Set(mealByTimeSlot.values());
 
-  // Columns are hours, not start times: a busy day has twenty distinct start
-  // times and the page has room for about ten columns. A cell states its own
-  // start when it is not on the hour. Meals keep a column at their own time
-  // because the cell holds each patient's meal. If even hours cannot fit at the
-  // smallest type, columns widen to two or three hours.
+  // One time axis for the whole sheet. Columns are hour bands, not start times:
+  // a busy day has twenty distinct start times and the page has room for about
+  // ten columns. Meals sit in the band their sitting falls in rather than in a
+  // column of their own — two column systems over one axis is what made a 13:30
+  // therapy look like it belonged to a column headed '12:00'. A band wider than
+  // an hour says so in its header, and every entry states its own start time.
   const isMealEvent = (e: (typeof eventsWindow)[number]) => mealByTimeSlot.has(e.start_time);
   const sharedEvents = eventsWindow.filter((e) => !isMealEvent(e) && (e.patients_scope || 'all') !== 'custom');
   const ownEvents = eventsWindow.filter((e) => !isMealEvent(e) && e.patients_scope === 'custom');
   const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
-  const startTimes = [...apptsDay.map((a) => a.start_time), ...ownEvents.map((e) => e.start_time)];
+  const startTimes = [...apptsDay.map((a) => a.start_time), ...ownEvents.map((e) => e.start_time), ...mealByTimeSlot.keys()];
   const bucketsFor = (size: number) => new Set(startTimes.map((t) => Math.floor(toMinutes(t) / size) * size));
   // Widths are fixed rather than fitted to content, so no mix of start times can
-  // push the table past the right margin. Hour columns share what is left and
+  // push the table past the right margin. Time columns share what is left and
   // widen to two, three or four hours when an hour would be too narrow to read.
   const pageW = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const NO_W = 22, PATIENT_W = 90, MEAL_W = 95, NOTES_W = 160, HOUR_MIN_W = 48;
-  const hourShare = (size: number) => (pageW - NO_W - PATIENT_W - NOTES_W - mealByTimeSlot.size * MEAL_W) / Math.max(1, bucketsFor(size).size);
+  const NO_W = 22, NOTES_W = 160, HOUR_MIN_W = 62;
+  // The patient column is fitted to the longest name actually on the sheet
+  // rather than fixed: a centre of short names was giving a third of that
+  // column to white space the time columns needed.
+  doc.font('Helvetica').fontSize(9);
+  // Capped, because one unusually long name should not take width from every
+  // time column on the sheet: a name past the cap is shortened with '..' the
+  // way an overlong therapy name already is.
+  const PATIENT_W = Math.min(104, Math.max(58, ...displayPatients.map((p) => doc.widthOfString(`${patientById[p.id] || p.id} `) + 10)));
+  const hourShare = (size: number) => (pageW - NO_W - PATIENT_W - NOTES_W) / Math.max(1, bucketsFor(size).size);
   const bucket = [60, 120, 180, 240].find((size) => hourShare(size) >= HOUR_MIN_W) ?? 240;
-  type Slot = { label: string; start: number; end: number; meal?: MealKey };
-  const timeSlots = ([
-    ...[...bucketsFor(bucket)].map((start) => ({ label: hhmm(start), start, end: start + bucket })),
-    ...[...mealByTimeSlot].map(([t, meal]) => ({ label: `${meal[0].toUpperCase()}${meal.slice(1)} ${t}`, start: toMinutes(t), end: toMinutes(t), meal })),
-  ] as Slot[]).sort((a, b) => a.start - b.start || (a.meal ? 1 : -1));
+  type Slot = { label: string; start: number; end: number };
+  const timeSlots: Slot[] = [...bucketsFor(bucket)]
+    .map((start) => ({ label: bucket > 60 ? `${hhmm(start)}\u2013${hhmm(start + bucket)}` : hhmm(start), start, end: start + bucket }))
+    .sort((a, b) => a.start - b.start);
   const everyoneLine = [...sharedEvents]
     .sort((a, b) => a.start_time.localeCompare(b.start_time))
     .map((e) => `${e.start_time} ${e.activity_name} ${durationBetween(e.start_time, e.end_time)}m`)
@@ -251,13 +259,6 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
       const apptList = apptsByPatient.get(p.id) || [];
       const noDr = (name: string) => name.replace(/^Dr\.?\s+/i, '');
       const cells = timeSlots.map((slot) => {
-        if (slot.meal) {
-          // A patient's own meal; the meal's name only stands in when they have no plan.
-          const own = dietByPatient.get(p.id)?.meals[slot.meal];
-          if (own) return own;
-          const applies = eventsWindow.some((e) => e.start_time === hhmm(slot.start) && isMealEvent(e) && eventAppliesToPatient(e, p.id));
-          return applies ? slot.label.split(' ')[0] : '';
-        }
         const inSlot = (t: string) => toMinutes(t) >= slot.start && toMinutes(t) < slot.end;
         const lines = [
           ...apptList.filter((a) => inSlot(a.start_time)).map((a) => ({
@@ -272,8 +273,19 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
             t: e.start_time,
             text: `${e.activity_name} ${durationBetween(e.start_time, e.end_time)}m`,
           })),
+          // A sitting the patient is on shows what they eat. With no plan of
+          // their own the row stays empty: 'Lunch' with nothing after it tells
+          // a therapist nothing the header has not already said.
+          ...[...mealByTimeSlot].filter(([t]) => inSlot(t)).flatMap(([t, meal]) => {
+            const own = dietByPatient.get(p.id)?.meals[meal];
+            const applies = eventsWindow.some((e) => e.start_time === t && isMealEvent(e) && eventAppliesToPatient(e, p.id));
+            if (!own || !applies) return [];
+            return [{ t, text: `${meal[0].toUpperCase()}${meal.slice(1)}: ${own}` }];
+          }),
         ].sort((m, n) => m.t.localeCompare(n.t));
-        return lines.map((l) => (l.t === slot.label ? l.text : `${l.t} ${l.text}`)).join('\n');
+        // Every entry states its own start, so a 13:30 therapy in a 12:00-15:00
+        // band can never be read as starting at 12:00.
+        return lines.map((l) => `${l.t} ${l.text}`).join('\n');
       });
       const row = [String(idx + 1), patientById[p.id] || p.id, ...cells];
       if (anyDiet) row.push(notesFor(p.id));
@@ -287,11 +299,15 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const timeColStart = 2;
   const timeColEndExclusive = timeColStart + timeSlots.length;
   // Patients on the same plan carry the same notes, so those cells merge down
-  // the column the way a repeated therapy does — one box, read once.
+  // the column: one box, read once.
+  //
+  // Time cells are never merged, however identical they are. Two patients given
+  // the same lunch had their two rows painted as one box, so a resident looking
+  // along their own row found the text sitting in the row above — on a notice
+  // board that is a person reading someone else's schedule.
   const notesColIdx = headers.length - 1;
-  const isMergedCol = (k: number) =>
-    (k >= timeColStart && k < timeColEndExclusive) || (anyDiet && k === notesColIdx);
-  for (let col = timeColStart; col < timeColEndExclusive + (anyDiet ? 1 : 0); col++) {
+  const isMergedCol = (k: number) => anyDiet && k === notesColIdx;
+  for (const col of headers.map((_, k) => k).filter(isMergedCol)) {
     let r = 0;
     while (r < rowCount) {
       const value = rawRows[r][col];
@@ -321,18 +337,16 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     if (colIdx === 0) return NO_W;
     if (colIdx === 1) return PATIENT_W;
     if (anyDiet && colIdx === headers.length - 1) return NOTES_W;
-    return timeSlots[colIdx - 2].meal ? MEAL_W : hourW;
+    return hourW;
   };
+  const isTimeCol = (k: number) => k >= 2 && k < timeColEndExclusive;
   const layoutWidths = (drawn: number[]) => {
-    const hours = drawn.filter((k) => k >= 2 && k < timeColEndExclusive && !timeSlots[k - 2].meal).length;
-    const fixed = drawn.reduce((sum, k) => sum + (k >= 2 && k < timeColEndExclusive && !timeSlots[k - 2].meal ? 0 : widthOf(k, drawn, 0)), 0);
+    // Time columns split whatever the fixed columns leave, so the table always
+    // ends exactly on the right margin however many bands the day needs.
+    const hours = drawn.filter(isTimeCol).length;
+    const fixed = drawn.reduce((sum, k) => sum + (isTimeCol(k) ? 0 : widthOf(k, drawn, 0)), 0);
     const hourW = hours ? (w - fixed) / hours : 0;
-    const widths = drawn.map((k) => widthOf(k, drawn, hourW));
-    // A page with no therapy hours gives the spare width to its meal columns.
-    const spare = w - widths.reduce((a2, b2) => a2 + b2, 0);
-    const meals = drawn.map((k, c) => (k >= 2 && k < timeColEndExclusive && timeSlots[k - 2].meal ? c : -1)).filter((c) => c >= 0);
-    if (spare > 0 && meals.length) for (const c of meals) widths[c] += spare / meals.length;
-    return widths;
+    return drawn.map((k) => widthOf(k, drawn, hourW));
   };
 
   /**
@@ -386,7 +400,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     yy += headerH;
   };
   let rowsOnPage = 0;
-  let pageCells: { k: number; text: string; top: number; height: number }[] = [];
+  let pageCells: { k: number; row: number; text: string; top: number; height: number }[] = [];
   let pageRowTops: number[] = [];
   let pageRowHeights: number[] = [];
   // Appointment cells are collected while their rows are drawn, then painted in
@@ -402,7 +416,12 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
         if (!t) { idx++; continue; }
         let span = 1;
         let spanH = colCells[idx].height;
-        while (idx + span < colCells.length && colCells[idx + span].text === t) {
+        // Adjacent rows only. A row with nothing in this column is not
+        // collected here at all, so comparing neighbours in this list merged
+        // two patients across the row between them and painted one box over
+        // all three.
+        while (idx + span < colCells.length && colCells[idx + span].text === t
+          && colCells[idx + span].row === colCells[idx + span - 1].row + 1) {
           spanH += colCells[idx + span].height;
           span++;
         }
@@ -451,19 +470,65 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   };
   layoutPage();
 
+  // Row heights are settled once, before anything is drawn. A merged box is
+  // painted as tall as the rows it covers, so where those rows do not add up to
+  // its text the shortfall is given to the last row of the run: the box then
+  // always holds its own text instead of spilling into the row below.
+  const rowHeights = Array.from({ length: rowCount }, (_, r) => measureRow(r));
+  for (const k of pageDrawIdxs.filter(isMergedCol)) {
+    for (let r = 0; r < rowCount; r++) {
+      const span = spanLengths.get(`${r}:${k}`) ?? 1;
+      if (!rawRows[r][k] || (r > 0 && !mergedRows[r][k])) continue;
+      const covered = rowHeights.slice(r, r + span).reduce((a, b) => a + b, 0);
+      const needed = doc.heightOfString(rawRows[r][k], { width: colWidths[pageDrawIdxs.indexOf(k)] - 8 }) + 6;
+      if (needed > covered) rowHeights[r + span - 1] += needed - covered;
+    }
+  }
+
+  // A row that only continues a merged run cannot start a page: the box would
+  // then be painted over fewer rows than its text was measured against.
+  const continuesRun = (r: number) =>
+    pageDrawIdxs.some((k) => isMergedCol(k) && rawRows[r][k] && !mergedRows[r][k]);
+  // Page breaks are chosen before anything is drawn, because a break can only
+  // be moved earlier and PDFKit cannot unpaint a row.
+  const pageStarts = new Set<number>();
+  {
+    const available = pageBottom - yy;
+    let used = 0;
+    let firstOnPage = 0;
+    for (let r = 0; r < rowCount; r++) {
+      const h = rowHeights[r];
+      if (r > firstOnPage && used + h > available) {
+        let start = r;
+        while (start > firstOnPage + 1 && continuesRun(start)) start--;
+        pageStarts.add(start);
+        firstOnPage = start;
+        used = 0;
+        for (let back = start; back <= r; back++) used += rowHeights[back];
+      } else {
+        used += h;
+      }
+    }
+  }
+
   for (; i < rowCount; i++) {
-    let rowH = measureRow(i);
+    const rowH = rowHeights[i];
     // A row drawn past the bottom margin takes its cell text with it: PDFKit
     // paginates text that overflows the page, so the boxes stay here and the
     // therapy names silently move to the next page. Break before drawing.
-    if (rowsOnPage > 0 && yy + rowH > pageBottom) {
+    //
+    // A merged box is painted as tall as the rows it covers, and each of those
+    // rows was measured as an Nth of its text. Break inside such a run and the
+    // box gets fewer rows than it was measured for, so its text spills over the
+    // rows below. Break before the run starts instead: rows that share a diet
+    // plan then stay together, which is how the sheet is read anyway.
+    if (rowsOnPage > 0 && pageStarts.has(i)) {
       flushPageCells();
       doc.addPage();
       addHeader(doc, dateISO, centreName, everyoneLine);
       yy = doc.y + 2;
       rowsOnPage = 0;
       layoutPage();
-      rowH = measureRow(i);
     }
     // no alternate row shading (B/W print)
     let cx2 = x;
@@ -471,7 +536,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
       const k = pageDrawIdxs[c];
       const rawText = rawRows[i][k] || '';
       if (isMergedCol(k) && rawText) {
-        pageCells.push({ k, text: rawText, top: yy, height: rowH });
+        pageCells.push({ k, row: i, text: rawText, top: yy, height: rowH });
       } else {
         doc.rect(cx2, yy, colWidths[c], rowH).stroke();
         const text = mergedRows[i][k] || '';
