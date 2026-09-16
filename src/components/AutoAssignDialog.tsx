@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sparkles, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
+import { isAllGuests } from "@/lib/dayExceptions";
 
 interface AutoAssignDialogProps {
   open: boolean;
@@ -439,7 +440,7 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
         const toMin = (t: string) => { const [h,m] = t.split(':').map(Number); return h*60+m; };
         const sM = toMin(x.time);
         const endM = sM + (selectedTherapy?.duration_minutes || 60);
-        const conflictAll = evs.some(e => (e as any).patients_scope === 'all' && Math.max(sM, toMin(e.start_time)) < Math.min(endM, toMin(e.end_time)));
+        const conflictAll = evs.some(e => isAllGuests(e) && Math.max(sM, toMin(e.start_time)) < Math.min(endM, toMin(e.end_time)));
         if (conflictAll) return false;
         const conflictRoom = evs.some(e => e.room_id && String(e.room_id) === String(x.room_id) && Math.max(sM, toMin(e.start_time)) < Math.min(endM, toMin(e.end_time)));
         if (conflictRoom) return false;

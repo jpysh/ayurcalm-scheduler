@@ -150,3 +150,13 @@ test('the booking dialog offers the slots the API found, and books one', async (
   await page.getByRole('button', { name: 'Confirm Selected Slot' }).click();
   await expect(page.getByText('Selected slot confirmed')).toBeVisible({ timeout: 20000 });
 });
+
+test("the day's problems are named on the first screen", async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  // The seed puts a therapist on full-day leave with treatments still booked.
+  // Verify has always found it; the point of the band is that nobody has to ask.
+  await expect(page.getByText(/is on leave and still has \d+ treatment/)).toBeVisible({ timeout: 20000 });
+  // And it is there before any tab is chosen, not two clicks deep.
+  await expect(page.getByText(/things? to fix/)).toBeVisible();
+});

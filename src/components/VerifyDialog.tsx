@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sparkles, RefreshCw, X, Trash2, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
+import { hitsTimeOff, isAllGuests, overlaps, toMinutes } from "@/lib/dayExceptions";
 
 type ApiAppointment = { id: string; patient_id: string; therapy_id: string; staff_id: string; room_id: string; scheduled_date: string; start_time: string; duration_minutes: number };
 type ApiStaff = { id: string; name: string; gender: "Male"|"Female"|"Other"; specializations: string[]; schedule: string; status: string };
@@ -22,11 +23,6 @@ function toLocalDateISO(d: Date) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
-}
-
-function toMinutes(t: string) {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
 }
 
 function addMinutes(t: string, mins: number) {
@@ -164,13 +160,7 @@ export function VerifyDialog({ open, onOpenChange, apiBase, currentDate, patient
 
   function isAffected(a: ApiAppointment) {
     const dISO = new Date(a.scheduled_date).toISOString().slice(0,10);
-    const hSameDay = timeoff.filter(h => {
-      const day = new Date(dISO);
-      const dateHit = h.date ? sameDay(new Date(h.date), day) : false;
-      const rangeHit = h.start_date && h.end_date ? (new Date(h.start_date) <= day && new Date(h.end_date) >= day) : false;
-      const weeklyHit = h.recurrence === 'weekly' && Array.isArray(h.weekdays) ? h.weekdays.includes(['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][day.getDay()]) : false;
-      return dateHit || rangeHit || weeklyHit;
-    });
+    const hSameDay = timeoff.filter(h => hitsTimeOff(h, new Date(dISO)));
     if (hSameDay.some(h => h.entity_type === "center")) return { affected: true, reason: "Center time off" };
     if (hSameDay.some(h => h.entity_type === "staff" && h.entity_id === a.staff_id)) return { affected: true, reason: "Staff time off" };
     if (hSameDay.some(h => h.entity_type === "room" && h.entity_id === a.room_id)) return { affected: true, reason: "Room time off" };
@@ -193,13 +183,13 @@ export function VerifyDialog({ open, onOpenChange, apiBase, currentDate, patient
     const evs = eventsByDate.get(dISO) || [];
     const aStartM = toMinutes(a.start_time);
     const aEndM = aStartM + a.duration_minutes;
-    const overlapAll = evs.some(e => (e as any).patients_scope === 'all' && Math.max(aStartM, toMinutes(e.start_time)) < Math.min(aEndM, toMinutes(e.end_time)));
+    const overlapAll = evs.some(e => isAllGuests(e) && overlaps(aStartM, aEndM, toMinutes(e.start_time), toMinutes(e.end_time)));
     if (overlapAll) return { affected: true, reason: "Overlaps all-guests event" };
-    const overlapRoom = evs.some(e => e.room_id && String(e.room_id) === String(a.room_id) && Math.max(aStartM, toMinutes(e.start_time)) < Math.min(aEndM, toMinutes(e.end_time)));
+    const overlapRoom = evs.some(e => e.room_id && String(e.room_id) === String(a.room_id) && overlaps(aStartM, aEndM, toMinutes(e.start_time), toMinutes(e.end_time)));
     if (overlapRoom) return { affected: true, reason: "Room used by event" };
-    const overlapStaffDirect = evs.some(e => e.staff_id && String(e.staff_id) === String(a.staff_id) && Math.max(aStartM, toMinutes(e.start_time)) < Math.min(aEndM, toMinutes(e.end_time)));
+    const overlapStaffDirect = evs.some(e => e.staff_id && String(e.staff_id) === String(a.staff_id) && overlaps(aStartM, aEndM, toMinutes(e.start_time), toMinutes(e.end_time)));
     if (overlapStaffDirect) return { affected: true, reason: "Staff busy (event host)" };
-    const overlapStaffScope = evs.some(e => ((e as any).staff_scope === 'all' || (Array.isArray((e as any).staff_ids) && (e as any).staff_ids.includes(String(a.staff_id)))) && Math.max(aStartM, toMinutes(e.start_time)) < Math.min(aEndM, toMinutes(e.end_time)));
+    const overlapStaffScope = evs.some(e => ((e as any).staff_scope === 'all' || (Array.isArray((e as any).staff_ids) && (e as any).staff_ids.includes(String(a.staff_id)))) && overlaps(aStartM, aEndM, toMinutes(e.start_time), toMinutes(e.end_time)));
     if (overlapStaffScope) return { affected: true, reason: "Staff busy (event participants)" };
     return { affected: false, reason: "" };
   }
