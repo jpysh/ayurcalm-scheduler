@@ -229,13 +229,7 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
   }
 
   const headers = ['Therapist', ...rota.slots.map((s) => s.label)];
-  // Roughly the shape of the centre's day: the morning and the early afternoon
-  // carry about three treatments for every two in the evening, so the evening
-  // gives up a quarter of its share and the two busy columns take half each.
-  // Narrower than this and every evening entry wraps to three lines, which
-  // costs more height than the width saved.
-  const share = (w - NAME_W) / 3;
-  const colWidths = [NAME_W, share * 1.125, share * 1.125, share * 0.75];
+  const colWidths = headers.map((_, k) => (k === 0 ? NAME_W : (w - NAME_W) / Math.max(1, rota.slots.length)));
   const colX = headers.map((_, k) => x + colWidths.slice(0, k).reduce((a, b) => a + b, 0));
 
   const lineText = (l: RotaLine) => (l.noTime ? l.text : `${l.t} ${l.text}`);
@@ -249,11 +243,21 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
   if (staffId) {
     for (const r of rota.rows) items.push({ kind: 'row', group: -1, ...r });
   } else {
-    for (const available of [true, false]) {
-      const group = rota.rows.filter((r) => r.available === available);
+    // Three groups, in the order the sheet is used: who has treatments today,
+    // who is in but has none, then who is not in at all. A therapist with an
+    // empty row scattered among busy ones was read as a gap in the day rather
+    // than as someone free to take work, and there are usually several.
+    const busy = (r: RotaRow) => r.cells.some((c) => c.length > 0);
+    const groups: [string, (r: RotaRow) => boolean][] = [
+      ['Working today', (r) => r.available && busy(r)],
+      ['Working today, nothing booked', (r) => r.available && !busy(r)],
+      ['Not available today', (r) => !r.available],
+    ];
+    for (const [title, match] of groups) {
+      const group = rota.rows.filter(match);
       if (group.length === 0) continue;
       const at = items.length;
-      items.push({ kind: 'heading', group: at, title: `${available ? 'Working today' : 'Not available today'} — ${group.length}` });
+      items.push({ kind: 'heading', group: at, title: `${title} — ${group.length}` });
       for (const r of group) items.push({ kind: 'row', group: at, ...r });
     }
   }
@@ -296,13 +300,19 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
   const continuedTitle = (it: Row) => `${(items[it.group] as Heading).title} (continued)`;
   const pageBottom = doc.page.height - doc.page.margins.bottom - FOOTER_H;
 
-  // Measured with the time in bold across the whole entry, which is wider than
-  // what is actually drawn. Over-measuring costs a little white space; under-
-  // measuring overlaps two treatments, and PDFKit does not say when it has.
   const SEP_H = 4;
-  const lineHeight = (l: RotaLine, colW: number) => {
+  const timeWidth = (l: RotaLine) => {
     doc.font('Helvetica-Bold').fontSize(cellFont);
-    return doc.heightOfString(lineText(l), { width: colW - 8 });
+    return doc.widthOfString(`${l.t} `);
+  };
+  // Measured the way it is drawn: the description sits to the right of the bold
+  // time and wraps in what is left of the column. Measuring the full width
+  // instead would under-measure and overlap the next entry, and PDFKit does not
+  // say when it has.
+  const lineHeight = (l: RotaLine, colW: number) => {
+    const tw = l.noTime ? 0 : timeWidth(l);
+    doc.font('Helvetica').fontSize(cellFont);
+    return Math.max(doc.currentLineHeight(), doc.heightOfString(l.text, { width: colW - 8 - tw }));
   };
   const cellHeight = (cell: RotaLine[], colW: number) =>
     cell.reduce((sum, l) => sum + lineHeight(l, colW), 0) + Math.max(0, cell.length - 1) * SEP_H;
@@ -351,9 +361,15 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
   const drawHeaderRow = () => {
     applyHeadFont();
     headers.forEach((h, k) => {
+      // Reversed out: the header is the one row that has to be findable from
+      // across the room, and on a sheet with no other colour on it black is
+      // the only weight available.
+      doc.save();
+      doc.rect(colX[k], yy, colWidths[k], headerH).fill('#000');
+      doc.restore();
       doc.rect(colX[k], yy, colWidths[k], headerH).stroke();
       const th = doc.heightOfString(h, { width: colWidths[k] - 8 });
-      doc.text(h, colX[k] + 4, yy + Math.max(5, (headerH - th) / 2), { width: colWidths[k] - 8, align: 'center' });
+      doc.fillColor('#fff').text(h, colX[k] + 4, yy + Math.max(5, (headerH - th) / 2), { width: colWidths[k] - 8, align: 'center' }).fillColor('#000');
     });
     yy += headerH;
   };
@@ -425,13 +441,21 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
         }
         if (l.grey) doc.fillColor('#555');
         // Only the time is bold. Bolding the whole entry made every entry
-        // shout, which is the same as none of them doing.
+        // shout, which is the same as none of them doing. Note that pdftoppm
+        // here renders both Helvetica faces with the same substitute, so a
+        // rendered PNG cannot be used to check weight — read the content
+        // stream, or open the PDF.
         if (l.noTime) {
           doc.font('Helvetica').fontSize(cellFont).text(l.text, colX[k] + 4, ty, { width: colWidths[k] - 8 });
         } else {
-          doc.font('Helvetica-Bold').fontSize(cellFont)
-            .text(`${l.t} `, colX[k] + 4, ty, { width: colWidths[k] - 8, continued: true });
-          doc.font('Helvetica').fontSize(cellFont).text(l.text, { width: colWidths[k] - 8 });
+          // Drawn as two runs rather than one wrapped line so the times form a
+          // column down the left of the cell and a description that wraps sits
+          // clear of them. A reader looking for 'what is next' finds every
+          // time in the same place instead of hunting for it in a paragraph.
+          const tw = timeWidth(l);
+          doc.font('Helvetica-Bold').fontSize(cellFont).text(l.t, colX[k] + 4, ty);
+          doc.font('Helvetica').fontSize(cellFont)
+            .text(l.text, colX[k] + 4 + tw, ty, { width: colWidths[k] - 8 - tw });
         }
         doc.fillColor('#000');
         ty += h;
