@@ -233,11 +233,14 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     if (held) held.push(p.id); else groups.set(key, [p.id]);
   }
 
+  // Sorted last by planRank below, so the values only have to be distinct.
+  const NO_PLAN = '\uffff1';
+  const OUTPATIENT = '\uffff2';
   type Group = { key: string; ids: string[]; plan: string; qualifier: string; title: string; body: string };
   const describe = ([key, ids]: [string, string[]]): Group => {
     const n = ids.length;
-    if (key === '\u0000resident') return { key, ids, plan: '\uffff1', qualifier: '', body: '', title: `Residents with no diet plan \u2014 ${n} resident${n === 1 ? '' : 's'}` };
-    if (key === '\u0000outpatient') return { key, ids, plan: '\uffff2', qualifier: '', body: '', title: `Outpatients \u2014 not staying \u2014 ${n} ${n === 1 ? 'person' : 'people'}` };
+    if (key === '\u0000resident') return { key, ids, plan: NO_PLAN, qualifier: '', body: '', title: `No diet plan \u2014 ${n} resident${n === 1 ? '' : 's'}` };
+    if (key === '\u0000outpatient') return { key, ids, plan: OUTPATIENT, qualifier: '', body: '', title: `Outpatients \u2014 not staying \u2014 ${n} ${n === 1 ? 'person' : 'people'}` };
     const plan = dietByPatient.get(ids[0])?.planName || '';
     const body = plan && key.startsWith(`${plan}: `) ? key.slice(plan.length + 2) : key;
     const qualifier = ids.every((id) => hasOverrideToday(id)) ? 'changed for today'
@@ -255,6 +258,16 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   // rather than turning up three pages later under a title that looks the same.
   const planRank = new Map<string, number>();
   for (const g of described) planRank.set(g.plan, Math.max(planRank.get(g.plan) ?? 0, g.ids.length));
+  // ...except the two groups that carry no plan text, which stay last however
+  // many people are in them (#82). Ordering by size alone put "No diet plan" at
+  // the top of page one whenever it was the biggest group, so a sheet pinned on
+  // the board opened with a list of people whose food it does not state and
+  // pushed every plan a reader came for onto page two. Neither group is a debt
+  // the sheet should chase: both eat the kitchen's general food, and an
+  // outpatient never needed a plan. Decided with the maintainer; #80 had the
+  // same rule before the size sort replaced it.
+  planRank.set(NO_PLAN, -1);
+  planRank.set(OUTPATIENT, -2);
   const qualifierRank = (q: string) => (q === '' ? 0 : q === 'rest day' ? 1 : 2);
   const groupOrder = described.sort((a, b) =>
     (planRank.get(b.plan)! - planRank.get(a.plan)!)

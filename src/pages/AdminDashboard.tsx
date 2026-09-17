@@ -278,6 +278,10 @@ const AdminDashboard = () => {
   // therapist rota for the treatment team.
   const handleGenerateDailyPdf = async (kind: 'patient' | 'therapist' = 'patient') => {
     setPdfLoading(kind);
+    // Opened before the await, because a phone browser blocks a window opened
+    // after one: by then the tap is over and it is a popup. The tab sits blank
+    // while the sheet is built, then gets the same blob the download uses.
+    const tab = window.open('', '_blank');
     try {
       const y = currentDate.getFullYear();
       const m = String(currentDate.getMonth() + 1).padStart(2, '0');
@@ -287,14 +291,17 @@ const AdminDashboard = () => {
       if (!res.ok) throw new Error('failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
+      if (tab) tab.location.href = url;
       const a = document.createElement('a');
       a.href = url;
       a.download = `ayurcalm-${kind === 'therapist' ? 'therapist-rota' : 'daily-schedule'}-${iso}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
+      // Not revoked: the new tab is still reading this URL. The browser frees it
+      // when the page goes.
     } catch {
+      tab?.close();
       toast.error('Failed to generate PDF');
     } finally {
       setPdfLoading(null);
