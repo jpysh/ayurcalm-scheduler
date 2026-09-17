@@ -23,8 +23,8 @@ const base = {
   patientById: { p1: 'Sarah Smith', p2: 'Mike Johnson' },
   therapyById: { t1: 'Abhyanga', t2: 'Shirodhara' },
   roomById: { r1: 'Room 1' },
-  hourMinW: 110,
-  bandWidth: 700,
+  openingTime: '09:00',
+  closingTime: '18:00',
 };
 
 const off = (over: Record<string, unknown>) => ({
@@ -83,10 +83,11 @@ const off = (over: Record<string, unknown>) => ({
   assert.equal(kumar.available, true, 'part of a day off is still on shift');
   const at10 = slots.findIndex((s) => s.start <= 600 && s.end > 600);
   assert.ok(kumar.cells[at10].some((l) => l.bold), 'the morning treatment survives');
-  // The absence only shows in bands it overlaps, and says why.
+  // The absence shows in every column it overlaps, and each one states the
+  // hours and the reason rather than leaving a wide column to be guessed at.
   const greyed = kumar.cells.filter((c) => c.some((l) => l.grey));
-  assert.ok(greyed.length >= 1);
-  assert.ok(greyed.every((c) => c.some((l) => l.text.includes('Dentist'))));
+  assert.equal(greyed.length, 2, '14:00-17:00 spans the afternoon and the evening');
+  assert.ok(greyed.every((c) => c.some((l) => l.text === 'Not available 14:00–17:00 — Dentist')));
 }
 
 // A weekly recurring absence lands on its weekday.
@@ -103,14 +104,28 @@ const off = (over: Record<string, unknown>) => ({
   assert.deepEqual(rows.map((r) => r.name), ['Kumar Nair']);
 }
 
-// Bands widen past the hour rather than printing a column too narrow to read.
+// Always the same three columns, however much is booked.
 {
   const many = Array.from({ length: 9 }, (_, i) => ({
     staff_id: 's1', patient_id: 'p1', therapy_id: 't1', room_id: 'r1',
     start_time: `${String(8 + i).padStart(2, '0')}:00`, duration_minutes: 60,
   }));
   const { slots } = buildRota({ ...base, appts: many, events: [] });
-  assert.ok(700 / slots.length >= 110, 'no band narrower than the readable minimum');
+  assert.deepEqual(slots.map((s) => s.label.split(' ')[0]), ['Morning', 'Afternoon', 'Evening']);
+  assert.deepEqual([slots[0].end, slots[1].start, slots[1].end, slots[2].start], [720, 720, 960, 960]);
+}
+
+// The outer edges stretch to whatever the day actually holds, so a 07:30 class
+// and a treatment running past closing both have a column to sit in.
+{
+  const { slots } = buildRota(base);
+  assert.equal(slots[0].start, 450, 'morning opens at the 07:30 yoga, not at 09:00');
+  assert.equal(slots[2].end, 18 * 60, 'evening runs to closing when nothing is later');
+  const late = buildRota({
+    ...base,
+    appts: [{ staff_id: 's1', patient_id: 'p1', therapy_id: 't1', room_id: 'r1', start_time: '19:00', duration_minutes: 90 }],
+  });
+  assert.equal(late.slots[2].end, 20 * 60 + 30, 'evening stretches to the last treatment');
 }
 
 console.log('therapistRota: ok');

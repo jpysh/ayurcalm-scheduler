@@ -3,10 +3,13 @@ import PDFDocument from 'pdfkit';
 import { PrismaClient } from '@prisma/client';
 import { addHeader, shortenWords, toMinutes, durationBetween } from './dailySchedulePdf.js';
 
+const MIDDAY = 12 * 60;
+const AFTERNOON_END = 16 * 60;
+
 const weekdayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 
 /** A line inside a time cell. Treatment is bold; an event or an absence is not. */
-export type RotaLine = { t: string; text: string; bold: boolean; grey?: boolean };
+export type RotaLine = { t: string; text: string; bold: boolean; grey?: boolean; noTime?: boolean };
 export type RotaRow = { name: string; note: string; cells: RotaLine[][]; available: boolean };
 export type Rota = { slots: { label: string; start: number; end: number }[]; rows: RotaRow[] };
 
@@ -58,8 +61,8 @@ export const buildRota = (input: {
   patientById: Record<string, string>;
   therapyById: Record<string, string>;
   roomById: Record<string, string>;
-  hourMinW: number;
-  bandWidth: number;
+  openingTime: string;
+  closingTime: string;
   onlyStaffId?: string;
 }): Rota => {
   const { day, appts, events, timeOff, patientById, therapyById, roomById } = input;
@@ -84,13 +87,29 @@ export const buildRota = (input: {
   const offTimes = onShift.flatMap((s) => offsByStaff.get(s.id) || []).filter((h) => !isFullDay(h)).map((h) => h.start_time as string);
   const apptTimes = appts.filter((a) => onShift.some((s) => s.id === a.staff_id)).map((a) => a.start_time);
   const startTimes = [...apptTimes, ...eventsOnStaff.map((e) => e.start_time), ...offTimes];
-  const bucketsFor = (size: number) => new Set(startTimes.map((t) => Math.floor(toMinutes(t) / size) * size));
-  const share = (size: number) => input.bandWidth / Math.max(1, bucketsFor(size).size);
-  const bucket = [60, 120, 180, 240].find((size) => share(size) >= input.hourMinW) ?? 240;
+  // Three columns, always the same three, because the rota hangs on a staff
+  // board and a reader who has to work out what today's columns mean has
+  // already stopped reading. An hour a column was tried and cannot fit: twelve
+  // start hours need about 1320pt of table and A4 landscape has 674, so the
+  // columns came out too narrow to hold a treatment and the sheet fell back to
+  // unlabelled three-hour bands anyway.
+  //
+  // Morning ends at midday and the afternoon at 16:00 because that is what the
+  // words mean. The outer edges stretch to the centre's opening hours, and
+  // further if anything is scheduled outside them, so a 07:00 yoga class has a
+  // column to sit in rather than earning a fourth column of its own.
   const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
-  const slots = [...bucketsFor(bucket)]
-    .map((start) => ({ label: bucket > 60 ? `${hhmm(start)}–${hhmm(start + bucket)}` : hhmm(start), start, end: start + bucket }))
-    .sort((a, b) => a.start - b.start);
+  const endTimes = [
+    ...appts.filter((a) => onShift.some((s) => s.id === a.staff_id)).map((a) => toMinutes(a.start_time) + (a.duration_minutes || 0)),
+    ...eventsOnStaff.map((e) => toMinutes(e.end_time)),
+  ];
+  const dayStart = Math.min(toMinutes(input.openingTime), MIDDAY, ...startTimes.map(toMinutes));
+  const dayEnd = Math.max(toMinutes(input.closingTime), AFTERNOON_END, ...endTimes);
+  const slots = [
+    { label: `Morning ${hhmm(dayStart)}–${hhmm(MIDDAY)}`, start: dayStart, end: MIDDAY },
+    { label: `Afternoon ${hhmm(MIDDAY)}–${hhmm(AFTERNOON_END)}`, start: MIDDAY, end: AFTERNOON_END },
+    { label: `Evening ${hhmm(AFTERNOON_END)}–${hhmm(dayEnd)}`, start: AFTERNOON_END, end: dayEnd },
+  ];
 
   const working: RotaRow[] = [];
   const out: RotaRow[] = [];
@@ -130,12 +149,14 @@ export const buildRota = (input: {
             t: h.start_time as string,
             bold: false,
             grey: true,
-            // The reason is spelled out in the first band the absence covers and
-            // shortened in the rest: three bands each repeating the same sentence
-            // is three bands of noise.
-            text: toMinutes(h.start_time as string) >= slot.start
-              ? `Off — ${h.description || 'time off'} (to ${h.end_time})`
-              : 'Off',
+            noTime: true,
+            // States its own hours in every column it covers, like every other
+            // entry on the sheet. An absence shortened to 'Off' in the columns
+            // after the first was readable when a column was one hour and is
+            // not now: 'Off' in a column headed 16:00-21:00 reads as the whole
+            // evening. Two wide columns repeating one short line is cheaper
+            // than a reader guessing which hours are gone.
+            text: `Not available ${h.start_time}–${h.end_time} — ${h.description || 'time off'}`,
           })),
       ];
       return lines.sort((m, n) => m.t.localeCompare(n.t));
@@ -152,7 +173,9 @@ export const buildRota = (input: {
  * own row; this one is read by the team and whoever is running the day.
  */
 export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaClient, staffId?: string): Promise<Buffer> {
-  const margin = 36;
+  // 1cm all round. The rota is read off a board, so the page is worth more
+  // than the white edge around it.
+  const margin = 28.35;
   const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margins: { top: margin, bottom: margin, left: margin, right: margin } });
   const chunks: Buffer[] = [];
   doc.on('data', (c: any) => chunks.push(Buffer.from(c)));
@@ -191,8 +214,8 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
     patientById: Object.fromEntries(patients.map((p) => [p.id, p.name])),
     therapyById: Object.fromEntries(therapies.map((t) => [t.id, t.name])),
     roomById: Object.fromEntries(rooms.map((r) => [r.id, r.name])),
-    hourMinW: 110,
-    bandWidth: w - NAME_W,
+    openingTime: settings?.opening_time || '09:00',
+    closingTime: settings?.closing_time || '18:00',
     onlyStaffId: staffId,
   });
 
@@ -206,10 +229,16 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
   }
 
   const headers = ['Therapist', ...rota.slots.map((s) => s.label)];
-  const colWidths = headers.map((_, k) => (k === 0 ? NAME_W : (w - NAME_W) / Math.max(1, rota.slots.length)));
+  // Roughly the shape of the centre's day: the morning and the early afternoon
+  // carry about three treatments for every two in the evening, so the evening
+  // gives up a quarter of its share and the two busy columns take half each.
+  // Narrower than this and every evening entry wraps to three lines, which
+  // costs more height than the width saved.
+  const share = (w - NAME_W) / 3;
+  const colWidths = [NAME_W, share * 1.125, share * 1.125, share * 0.75];
   const colX = headers.map((_, k) => x + colWidths.slice(0, k).reduce((a, b) => a + b, 0));
 
-  const lineText = (l: RotaLine) => `${l.t} ${l.text}`;
+  const lineText = (l: RotaLine) => (l.noTime ? l.text : `${l.t} ${l.text}`);
 
   // Rows in a group print under a heading that says what the group is, so the
   // sheet answers 'who is in today' before it answers 'doing what'. A single
@@ -250,11 +279,16 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
   for (const r of rowItems) {
     r.name = shortenWords(r.name, colWidths[0] - 10, widthOfWord);
     r.cells.forEach((cell, c) => cell.forEach((l) => {
-      l.text = shortenWords(lineText(l), colWidths[c + 1] - 10, widthOfWord).slice(l.t.length + 1);
+      const shortened = shortenWords(lineText(l), colWidths[c + 1] - 10, widthOfWord);
+      l.text = l.noTime ? shortened : shortened.slice(l.t.length + 1);
     }));
   }
 
-  const headerH = 18;
+  // Measured, not assumed: a column header is two lines now — what the column
+  // is called and the hours it covers — and a fixed 18pt printed the hours on
+  // top of the group heading below.
+  applyHeadFont();
+  const headerH = Math.max(18, ...headers.map((h, k) => doc.heightOfString(h, { width: colWidths[k] - 8 }) + 8));
   const FOOTER_H = 14;
   // A page that carries on a group repeats that group's heading. A rota is read
   // where it hangs, and a second page that does not say whether these people are
@@ -262,10 +296,16 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
   const continuedTitle = (it: Row) => `${(items[it.group] as Heading).title} (continued)`;
   const pageBottom = doc.page.height - doc.page.margins.bottom - FOOTER_H;
 
+  // Measured with the time in bold across the whole entry, which is wider than
+  // what is actually drawn. Over-measuring costs a little white space; under-
+  // measuring overlaps two treatments, and PDFKit does not say when it has.
+  const SEP_H = 4;
   const lineHeight = (l: RotaLine, colW: number) => {
-    doc.font(l.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(cellFont);
+    doc.font('Helvetica-Bold').fontSize(cellFont);
     return doc.heightOfString(lineText(l), { width: colW - 8 });
   };
+  const cellHeight = (cell: RotaLine[], colW: number) =>
+    cell.reduce((sum, l) => sum + lineHeight(l, colW), 0) + Math.max(0, cell.length - 1) * SEP_H;
   const headingHeight = (title: string) => {
     applyHeadFont();
     doc.fontSize(cellFont + 1);
@@ -275,7 +315,7 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
     if (it.kind === 'heading') return headingHeight(it.title);
     doc.font('Helvetica-Bold').fontSize(cellFont);
     const nameH = doc.heightOfString(`${it.name}${it.note ? `\n${it.note}` : ''}`, { width: colWidths[0] - 8 }) + 6;
-    return Math.max(18, nameH, ...it.cells.map((cell, c) => cell.reduce((sum, l) => sum + lineHeight(l, colWidths[c + 1]), 0) + 6));
+    return Math.max(18, nameH, ...it.cells.map((cell, c) => cellHeight(cell, colWidths[c + 1]) + 6));
   };
   const heights = items.map(itemHeight);
 
@@ -366,18 +406,36 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
       }
       doc.rect(colX[k], yy, colWidths[k], rowH).stroke();
       let ty = yy + 3;
-      for (const l of cell) {
+      cell.forEach((l, i) => {
+        // A column this wide holds four treatments, and each one wraps. Without
+        // a line between them the gap inside an entry looks like the gap
+        // between two, and the cell reads as one long instruction.
+        if (i > 0) {
+          doc.save();
+          doc.moveTo(colX[k] + 4, ty + SEP_H / 2).lineTo(colX[k] + colWidths[k] - 4, ty + SEP_H / 2)
+            .lineWidth(0.4).dash(1.5, { space: 1.5 }).strokeColor('#999').stroke();
+          doc.restore();
+          ty += SEP_H;
+        }
+        const h = lineHeight(l, colWidths[k]);
         if (l.grey) {
           doc.save();
-          doc.rect(colX[k] + 1, ty - 2, colWidths[k] - 2, lineHeight(l, colWidths[k]) + 2).fillOpacity(0.12).fill('#000');
+          doc.rect(colX[k] + 1, ty - 2, colWidths[k] - 2, h + 2).fillOpacity(0.12).fill('#000');
           doc.restore();
         }
-        doc.font(l.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(cellFont);
         if (l.grey) doc.fillColor('#555');
-        doc.text(lineText(l), colX[k] + 4, ty, { width: colWidths[k] - 8 });
+        // Only the time is bold. Bolding the whole entry made every entry
+        // shout, which is the same as none of them doing.
+        if (l.noTime) {
+          doc.font('Helvetica').fontSize(cellFont).text(l.text, colX[k] + 4, ty, { width: colWidths[k] - 8 });
+        } else {
+          doc.font('Helvetica-Bold').fontSize(cellFont)
+            .text(`${l.t} `, colX[k] + 4, ty, { width: colWidths[k] - 8, continued: true });
+          doc.font('Helvetica').fontSize(cellFont).text(l.text, { width: colWidths[k] - 8 });
+        }
         doc.fillColor('#000');
-        ty += doc.heightOfString(lineText(l), { width: colWidths[k] - 8 });
-      }
+        ty += h;
+      });
     });
     yy += rowH;
   }
