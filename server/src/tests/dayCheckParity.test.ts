@@ -33,9 +33,9 @@ async function main() {
 
     const day = new Date(new Date().toISOString().slice(0, 10));
 
-    const plain = await prisma.therapy.create({ data: { name: 'Parity Plain', required_amenities: ['table'], duration_minutes: 60, buffer_minutes: 0, requires_gender_match: false } });
-    const gendered = await prisma.therapy.create({ data: { name: 'Parity Gendered', required_amenities: ['table'], duration_minutes: 60, buffer_minutes: 0, requires_gender_match: true } });
-    const needsDroni = await prisma.therapy.create({ data: { name: 'Parity Droni', required_amenities: ['droni'], duration_minutes: 60, buffer_minutes: 0, requires_gender_match: false } });
+    const plain = await prisma.therapy.create({ data: { name: 'Parity Plain', required_amenities: ['table'], duration_minutes: 60, requires_gender_match: false } });
+    const gendered = await prisma.therapy.create({ data: { name: 'Parity Gendered', required_amenities: ['table'], duration_minutes: 60, requires_gender_match: true } });
+    const needsDroni = await prisma.therapy.create({ data: { name: 'Parity Droni', required_amenities: ['droni'], duration_minutes: 60, requires_gender_match: false } });
     [plain, gendered, needsDroni].forEach((t) => made.push({ table: 'therapy', id: t.id }));
 
     const roomA = await prisma.therapyRoom.create({ data: { name: 'Parity Room A', amenities: ['table', 'droni'], is_active: true, weekly_schedule: allDay } });

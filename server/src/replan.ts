@@ -1,6 +1,6 @@
 /**
- * What to do with a day's treatments when the therapist who was going to give
- * them is not coming in.
+ * One planner for a day's broken treatments, and the only place the order of
+ * preference is written down.
  *
  * The daily crisis in a residential centre is not a no-show, it is a therapist
  * not turning up. A resident's day is anchored to their meals, their other
@@ -25,6 +25,17 @@ export type Move = {
   tier: 1 | 2 | 3;
   from: { staff_name: string; start_time: string; date: string };
   to: { staff_id: string | null; staff_name: string; start_time: string; date: string; room_id: string | null };
+  /** True when the admin chose this row themselves and the plan must keep it. */
+  pinned?: boolean;
+};
+
+/** A row the admin has decided for themselves. The plan fits around it. */
+export type Pin = {
+  appointment_id: string;
+  staff_id: string | null;
+  start_time: string;
+  date: string;
+  room_id: string | null;
 };
 
 export type Unplaced = {
@@ -62,24 +73,33 @@ type Busy = { s: number; e: number };
 const free = (busy: Busy[] | undefined, s: number, e: number) => !(busy || []).some((b) => overlaps(b.s, b.e, s, e));
 
 /**
- * Work out the plan, and apply tiers 1 and 2 unless asked only to look.
+ * Plan a day.
  *
- * `apply` writes the moves and one audit row for the batch, which is what Undo
- * reads to put the day back exactly as it was.
+ * Every treatment that has to move is planned against one running picture of
+ * the day, so two answers can never take the same room at the same minute. That
+ * is the difference between this and asking the same question once per problem:
+ * separately, two clashing treatments were both told to move to 12:00.
+ *
+ * `appointmentIds` says what is being rehoused — a therapist's whole day, or
+ * whatever Verify found wrong. `pins` are the rows the admin has decided for
+ * themselves: they are placed first and never moved, and everything else fits
+ * around them.
  */
-export async function replanStaffDay(
+export async function planDay(
   staffId: string | null,
   date: Date,
   prisma: PrismaClient,
   opts: {
     apply?: boolean;
     timeOffId?: string;
-    onlyAppointmentId?: string;
+    /** The treatments to rehouse. Defaults to everything on `staffId`. */
+    appointmentIds?: string[];
+    /** Rows the admin has already decided. */
+    pins?: Pin[];
     /** Therapists already offered, so asking again gives a different answer. */
     excludeStaffIds?: string[];
-    /** The two rules the admin may switch off in Verify, and nothing else. */
+    /** The one rule the admin may switch off, and nothing else. */
     relaxPreferredStaff?: boolean;
-    relaxBuffer?: boolean;
   } = {},
 ): Promise<ReplanResult> {
   const [absent, settings, staff, therapies, rooms, patients, events, timeOff] = await Promise.all([
@@ -105,10 +125,12 @@ export async function replanStaffDay(
   });
   // The treatments being rehoused: a therapist's whole day, or the single
   // session Verify is fixing.
+  const wanted = opts.appointmentIds ? new Set(opts.appointmentIds) : null;
   const mine = dayAppointments
-    .filter((a) => (opts.onlyAppointmentId ? a.id === opts.onlyAppointmentId : a.staff_id === staffId))
+    .filter((a) => (wanted ? wanted.has(a.id) : a.staff_id === staffId))
     .sort((a, b) => toMinutes(a.start_time) - toMinutes(b.start_time));
   const mineIds = new Set(mine.map((a) => a.id));
+  const pinnedBy = new Map((opts.pins || []).map((p) => [p.appointment_id, p]));
 
   // Busy maps for the day, with the absent therapist's own bookings left out —
   // they are the ones being rehoused.
@@ -123,7 +145,7 @@ export async function replanStaffDay(
   for (const a of dayAppointments) {
     if (mineIds.has(a.id)) continue;
     const s = toMinutes(a.start_time);
-    const e = s + a.duration_minutes + (therapyById.get(a.therapy_id)?.buffer_minutes ?? 0);
+    const e = s + a.duration_minutes;
     addBusy(staffBusy, a.staff_id, s, e);
     addBusy(roomBusy, a.room_id, s, e);
     addBusy(patientBusy, a.patient_id, s, e);
@@ -150,10 +172,48 @@ export async function replanStaffDay(
   const unplaced: Unplaced[] = [];
   const writes: { appointment_id: string; before: Record<string, unknown>; after: Record<string, unknown> }[] = [];
 
+  // The admin's own choices go down first, so the rest of the plan fits around
+  // them rather than the other way round.
   for (const appt of mine) {
+    const pin = pinnedBy.get(appt.id);
+    if (!pin) continue;
     const therapy = therapyById.get(appt.therapy_id);
     const patient = patientById.get(appt.patient_id);
-    const duration = appt.duration_minutes + (opts.relaxBuffer ? 0 : (therapy?.buffer_minutes ?? 0));
+    const s = toMinutes(pin.start_time);
+    const e = s + appt.duration_minutes;
+    if (pin.date === ymd(date)) {
+      addBusy(staffBusy, pin.staff_id, s, e);
+      addBusy(roomBusy, pin.room_id, s, e);
+      addBusy(patientBusy, appt.patient_id, s, e);
+    }
+    const move: Move = {
+      appointment_id: appt.id,
+      patient_name: patient?.name || 'Unknown',
+      therapy_name: therapy?.name || 'Treatment',
+      tier: pin.date === ymd(date) ? (pin.start_time === appt.start_time ? 1 : 2) : 3,
+      from: { staff_name: staffById.get(appt.staff_id || '')?.name || 'Unassigned', start_time: appt.start_time, date: ymd(date) },
+      to: {
+        staff_id: pin.staff_id,
+        staff_name: pin.staff_id ? staffById.get(pin.staff_id)?.name || 'Unknown' : 'Unassigned',
+        start_time: pin.start_time,
+        date: pin.date,
+        room_id: pin.room_id,
+      },
+      pinned: true,
+    };
+    moved.push(move);
+    writes.push({
+      appointment_id: appt.id,
+      before: { staff_id: appt.staff_id, room_id: appt.room_id, start_time: appt.start_time, scheduled_date: appt.scheduled_date.toISOString() },
+      after: { staff_id: pin.staff_id, room_id: pin.room_id, start_time: pin.start_time, scheduled_date: new Date(`${pin.date}T00:00:00.000Z`).toISOString() },
+    });
+  }
+
+  for (const appt of mine) {
+    if (pinnedBy.has(appt.id)) continue;
+    const therapy = therapyById.get(appt.therapy_id);
+    const patient = patientById.get(appt.patient_id);
+    const duration = appt.duration_minutes;
     const start = toMinutes(appt.start_time);
     const names = {
       patient_name: patient?.name || 'Unknown',
@@ -306,6 +366,9 @@ export async function replanStaffDay(
           staff_id: (w.after.staff_id as string | null) ?? null,
           room_id: (w.after.room_id as string | null) ?? null,
           start_time: w.after.start_time as string,
+          // A pinned row can be on another day; everything the planner decides
+          // by itself stays on this one.
+          scheduled_date: w.after.scheduled_date ? new Date(w.after.scheduled_date as string) : undefined,
         },
       });
     }
@@ -324,6 +387,55 @@ export async function replanStaffDay(
 
   return { batch_id, staff_name: absent?.name || 'Therapist', date: ymd(date), moved, proposed, unplaced };
 }
+
+/**
+ * Write a plan the admin has confirmed, as one batch with one Undo.
+ *
+ * The moves are checked once more on the way in, because the plan was worked
+ * out a moment ago and the day may have moved since — a refusal here is the
+ * whole point of the guard, not a surprise.
+ */
+export async function applyPlan(
+  moves: { appointment_id: string; staff_id: string | null; room_id: string | null; start_time: string; date: string }[],
+  prisma: PrismaClient,
+): Promise<{ batch_id: string; applied: number }> {
+  const writes: { appointment_id: string; before: Record<string, unknown>; after: Record<string, unknown> }[] = [];
+  for (const m of moves) {
+    const before = await prisma.appointment.findUnique({ where: { id: m.appointment_id } });
+    if (!before) continue;
+    await prisma.appointment.update({
+      where: { id: m.appointment_id },
+      data: { staff_id: m.staff_id, room_id: m.room_id, start_time: m.start_time, scheduled_date: new Date(`${m.date}T00:00:00.000Z`) },
+    });
+    writes.push({
+      appointment_id: m.appointment_id,
+      before: { staff_id: before.staff_id, room_id: before.room_id, start_time: before.start_time, scheduled_date: before.scheduled_date.toISOString() },
+      after: { staff_id: m.staff_id, room_id: m.room_id, start_time: m.start_time, scheduled_date: `${m.date}T00:00:00.000Z` },
+    });
+  }
+  const row = await prisma.auditLog.create({
+    data: {
+      admin_id: 'admin',
+      action: 'dayfix',
+      entity_type: 'appointment',
+      entity_id: writes[0]?.appointment_id || '',
+      old_value: { writes, date: moves[0]?.date ?? null } as unknown as Prisma.InputJsonValue,
+      new_value: { applied: writes.length } as unknown as Prisma.InputJsonValue,
+    },
+  });
+  return { batch_id: row.id, applied: writes.length };
+}
+
+/**
+ * A therapist's whole day, rehoused. The absence path and the button in Verify
+ * both come here, and it is `planDay` underneath — one ladder, one set of rules.
+ */
+export const replanStaffDay = (
+  staffId: string,
+  date: Date,
+  prisma: PrismaClient,
+  opts: { apply?: boolean; timeOffId?: string } = {},
+) => planDay(staffId, date, prisma, opts);
 
 /** Put a replan back exactly as it was. */
 export async function undoReplan(batchId: string, prisma: PrismaClient) {

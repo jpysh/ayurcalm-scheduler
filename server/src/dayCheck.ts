@@ -1,5 +1,5 @@
 /**
- * What is wrong with one day, and what would fix each thing.
+ * What is wrong with one day, and the one plan that fixes it.
  *
  * One rulebook. Two screens used to keep their own: `dayExceptions.ts` decided
  * the header's warnings and `VerifyDialog` ran its own checks in the browser,
@@ -8,9 +8,14 @@
  * of its treatments because the therapist was on leave.
  *
  * So the refusal here is `findConflict`, the same function the booking path
- * calls, and the fix is `replanStaffDay`, the same ladder that rehouses an
- * absent therapist's day: another pair of hands first, another time today next,
- * another day last. Nothing decides anything for itself, here or in the browser.
+ * calls, and the fixes are one pass of `planDay`, the same planner that rehouses
+ * an absent therapist's whole day: another pair of hands first, another time
+ * today next, another day last.
+ *
+ * The day is planned in **one** pass, not once per problem. Asked separately,
+ * two treatments clashing over one room were both told to move to 12:00, and
+ * whichever the admin tapped second was refused. Planned together, every answer
+ * knows about the others.
  *
  * Two classes of problem come back:
  *
@@ -21,7 +26,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { findConflict, loadDay, type Candidate, type DayContext } from './appointmentGuard.js';
-import { replanStaffDay, type Move } from './replan.js';
+import { planDay, type Move, type Pin } from './replan.js';
 import { toMinutes } from './availability.js';
 
 export type Fix = {
@@ -29,6 +34,8 @@ export type Fix = {
   tier: 1 | 2 | 3;
   /** Set when taking the fix moves the resident to another day. */
   cost_note: string | null;
+  /** True when this row is the admin's own choice and the plan fits around it. */
+  pinned: boolean;
   appointment_id: string;
   staff_id: string | null;
   staff_name: string;
@@ -41,22 +48,40 @@ export type DayProblem = {
   id: string;
   kind: string;
   problem_class: 'blocking' | 'worth_knowing';
-  /** Who and what, for the top line of the card: "Meena Nair — Abhyanga, 09:00". */
+  /** Who and what: "Meena Nair — Abhyanga". The time is its own field. */
   who: string;
+  start_time: string | null;
   /** What is wrong, in one sentence. */
   what: string;
+  /** Problems sharing a cause share this, so the screen shows one heading. */
+  group_key: string;
   appointment_id: string | null;
   patient_id: string | null;
   patient_name: string;
   staff_id: string | null;
+  /** True when the resident's own-therapist rule is what leaves them stuck. */
+  blocked_by_preferred_staff: boolean;
   fix: Fix | null;
   /** Why there is no fix, when there is none. */
   no_fix_reason: string | null;
 };
 
+export type ProblemGroup = {
+  key: string;
+  /** "Dr Raj Joshi is off — 4 treatments". */
+  label: string;
+  problem_class: 'blocking' | 'worth_knowing';
+  /** Set when the whole group is one therapist's day, so it can be given away. */
+  staff_id: string | null;
+  problem_ids: string[];
+};
+
 export type DayCheck = {
   date: string;
   problems: DayProblem[];
+  groups: ProblemGroup[];
+  /** Every move of the plan, ready to be written as one batch. */
+  plan: Fix[];
   /** The line the dashboard header shows, already written. */
   headline: string | null;
 };
@@ -81,9 +106,6 @@ const COST: Record<string, number> = {
   EVENT_OVERLAP: 8,
 };
 
-/** The therapist is the thing in the way, so the fix must not offer them again. */
-const THERAPIST_IS_THE_PROBLEM = new Set(['STAFF_OFF', 'STAFF_BUSY', 'STAFF_IN_EVENT', 'GENDER_MISMATCH']);
-
 const candidateOf = (a: DayContext['appointments'][number]): Candidate => ({
   id: a.id,
   scheduled_date: a.scheduled_date,
@@ -101,12 +123,13 @@ const dayName = (iso: string) =>
 
 const fixFromMove = (m: Move, sameDay: boolean): Fix => ({
   label: m.tier === 1
-    ? `Swap to ${m.to.staff_name}, same time`
+    ? `${m.to.staff_name}, same time`
     : sameDay
-      ? `Move to ${m.to.start_time} with ${m.to.staff_name}`
-      : `Move to ${dayName(m.to.date)}, ${m.to.start_time} with ${m.to.staff_name}`,
+      ? `${m.to.start_time} with ${m.to.staff_name}`
+      : `${dayName(m.to.date)}, ${m.to.start_time} with ${m.to.staff_name}`,
   tier: m.tier,
   cost_note: sameDay ? null : "changes the resident's diet day",
+  pinned: Boolean(m.pinned),
   appointment_id: m.appointment_id,
   staff_id: m.to.staff_id,
   staff_name: m.to.staff_name,
@@ -115,93 +138,16 @@ const fixFromMove = (m: Move, sameDay: boolean): Fix => ({
   date: m.to.date,
 });
 
-/**
- * The best available fix for one treatment, from the same ladder the whole-day
- * reassignment uses, and then checked against the guard: a fix the booking path
- * would refuse is not a fix.
- */
-async function fixFor(
-  appointment: DayContext['appointments'][number],
-  reason: string,
-  day: Date,
-  prisma: PrismaClient,
-  ctx: DayContext,
-): Promise<{ fix: Fix | null; no_fix_reason: string | null }> {
-  const plan = await replanStaffDay(
-    THERAPIST_IS_THE_PROBLEM.has(reason) ? appointment.staff_id : null,
-    day,
-    prisma,
-    { onlyAppointmentId: appointment.id },
-  );
-  const move = plan.moved[0] || plan.proposed[0] || null;
-  if (!move) return { fix: null, no_fix_reason: plan.unplaced[0]?.reason || 'Nothing free anywhere this week.' };
+export type CheckOptions = {
+  /** Skip the plan. The 30-day scan asks 30 times and shows no fixes. */
+  withFixes?: boolean;
+  /** Rows the admin decided themselves; the rest of the plan fits around them. */
+  pins?: Pin[];
+  /** The one negotiable rule: a resident's own therapist. */
+  relaxPreferredStaff?: boolean;
+};
 
-  const sameDay = move.to.date === ymd(day);
-  // A "fix" that leaves the treatment exactly where it is fixes nothing.
-  if (sameDay && move.to.staff_id === appointment.staff_id && move.to.start_time === appointment.start_time && move.to.room_id === appointment.room_id) {
-    return { fix: null, no_fix_reason: 'Nothing free anywhere this week.' };
-  }
-  if (sameDay) {
-    const still = findConflict(
-      { ...candidateOf(appointment), staff_id: move.to.staff_id, room_id: move.to.room_id, start_time: move.to.start_time },
-      ctx,
-    );
-    if (still) return { fix: null, no_fix_reason: still.message };
-  }
-  return { fix: fixFromMove(move, sameDay), no_fix_reason: null };
-}
-
-/**
- * Up to three ways to fix one treatment, worst-first in the same order: another
- * pair of hands, another time today, another day. The ladder is asked again with
- * each answer's therapist excluded, so "other options" cannot invent a rule the
- * first answer did not have.
- *
- * `relax` switches off one of the two negotiable rules — the buffer between
- * treatments and the resident's own therapist. Nothing else is negotiable:
- * relaxing only widens the search, it never books what the guard refuses.
- */
-export async function optionsFor(
-  appointmentId: string,
-  day: Date,
-  prisma: PrismaClient,
-  relax: { preferredStaff?: boolean; buffer?: boolean } = {},
-): Promise<Fix[]> {
-  const ctx = await loadDay(day, prisma);
-  const appointment = ctx.appointments.find((a) => a.id === appointmentId);
-  if (!appointment) return [];
-  const conflict = findConflict(candidateOf(appointment), ctx);
-  const excludeStaffIds: string[] = [];
-  const out: Fix[] = [];
-
-  for (let i = 0; i < 3; i++) {
-    const plan = await replanStaffDay(
-      conflict && THERAPIST_IS_THE_PROBLEM.has(conflict.reason) ? appointment.staff_id : null,
-      day,
-      prisma,
-      {
-        onlyAppointmentId: appointment.id,
-        excludeStaffIds,
-        relaxPreferredStaff: relax.preferredStaff,
-        relaxBuffer: relax.buffer,
-      },
-    );
-    const move = plan.moved[0] || plan.proposed[0] || null;
-    if (!move) break;
-    const fix = fixFromMove(move, move.to.date === ymd(day));
-    if (!out.some((f) => f.staff_id === fix.staff_id && f.start_time === fix.start_time && f.date === fix.date)) out.push(fix);
-    if (!move.to.staff_id) break;
-    excludeStaffIds.push(move.to.staff_id);
-  }
-  return out;
-}
-
-/**
- * `withFixes: false` answers only what is wrong. The 30-day scan asks 30 times
- * and does not show a fix for any of them, and working one out costs a pass of
- * the ladder per problem.
- */
-export async function checkDay(day: Date, prisma: PrismaClient, opts: { withFixes?: boolean } = {}): Promise<DayCheck> {
+export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptions = {}): Promise<DayCheck> {
   const withFixes = opts.withFixes !== false;
   const ctx = await loadDay(day, prisma);
   const [stays, events] = await Promise.all([
@@ -211,29 +157,38 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: { withFixe
 
   const nameOfPatient = (id: string | null) => ctx.patients.find((p) => p.id === id)?.name || 'Unknown';
   const nameOfTherapy = (id: string) => ctx.therapies.find((t) => t.id === id)?.name || 'Treatment';
+  const nameOfStaff = (id: string | null) => ctx.staff.find((s) => s.id === id)?.name || 'A therapist';
   const appointments = [...ctx.appointments].sort((a, b) => toMinutes(a.start_time) - toMinutes(b.start_time));
 
-  const raw: (DayProblem & { cost: number })[] = [];
+  type Raw = DayProblem & { cost: number; group_label: string };
+  const raw: Raw[] = [];
 
   for (const a of appointments) {
-    const who = `${nameOfPatient(a.patient_id)} — ${nameOfTherapy(a.therapy_id)}, ${a.start_time}`;
+    const common = {
+      who: `${nameOfPatient(a.patient_id)} — ${nameOfTherapy(a.therapy_id)}`,
+      start_time: a.start_time,
+      appointment_id: a.id,
+      patient_id: a.patient_id,
+      patient_name: nameOfPatient(a.patient_id),
+      blocked_by_preferred_staff: false,
+      fix: null,
+      no_fix_reason: null,
+    };
 
     // Blocking: exactly what the booking path refuses, from the same function.
     const conflict = findConflict(candidateOf(a), ctx);
     if (conflict) {
-      const { fix, no_fix_reason } = withFixes ? await fixFor(a, conflict.reason, day, prisma, ctx) : { fix: null, no_fix_reason: null };
+      // One heading per cause: an absent therapist is one thing that happened,
+      // not four. A room clash names the room, so the pair sits together.
       raw.push({
+        ...common,
         id: `${conflict.reason}:${a.id}`,
         kind: conflict.reason,
         problem_class: 'blocking',
-        who,
         what: conflict.message,
-        appointment_id: a.id,
-        patient_id: a.patient_id,
-        patient_name: nameOfPatient(a.patient_id),
+        group_key: `${conflict.reason}:${conflict.reason === 'ROOM_BUSY' ? a.room_id : a.staff_id}`,
+        group_label: conflict.message,
         staff_id: a.staff_id,
-        fix,
-        no_fix_reason,
         cost: COST[conflict.reason] ?? 9,
       });
       continue;
@@ -242,19 +197,15 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: { withFixe
     // Worth knowing: nobody refuses a session with no name on it, and it is
     // still a resident standing in a corridor at 09:00.
     if (!a.staff_id) {
-      const { fix, no_fix_reason } = withFixes ? await fixFor(a, 'NO_THERAPIST', day, prisma, ctx) : { fix: null, no_fix_reason: null };
       raw.push({
+        ...common,
         id: `NO_THERAPIST:${a.id}`,
         kind: 'NO_THERAPIST',
         problem_class: 'worth_knowing',
-        who,
         what: 'No therapist is on this treatment.',
-        appointment_id: a.id,
-        patient_id: a.patient_id,
-        patient_name: nameOfPatient(a.patient_id),
+        group_key: 'NO_THERAPIST',
+        group_label: 'Treatments with no therapist',
         staff_id: null,
-        fix,
-        no_fix_reason,
         cost: COST.NO_THERAPIST,
       });
       continue;
@@ -267,7 +218,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: { withFixe
     const s = toMinutes(a.start_time);
     const e = s + a.duration_minutes;
     const clash = events.find((ev) => {
-      const row = ev as unknown as { patients_scope: string | null; is_optional: boolean; start_time: string; end_time: string; date: Date | null; start_date: Date | null; end_date: Date | null; recurrence: string | null; weekdays: string[]; activity_name: string };
+      const row = ev as unknown as { patients_scope: string | null; is_optional: boolean; start_time: string; end_time: string; date: Date | null; start_date: Date | null; end_date: Date | null; recurrence: string | null; weekdays: string[] };
       if ((row.patients_scope || 'all') !== 'all' || row.is_optional) return false;
       const onDay = (row.date && row.date.toDateString() === day.toDateString())
         || (row.start_date && row.end_date && row.start_date <= day && row.end_date >= day)
@@ -276,19 +227,15 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: { withFixe
       return s <= toMinutes(row.start_time) && e >= toMinutes(row.end_time);
     }) as unknown as { activity_name: string } | undefined;
     if (clash) {
-      const { fix, no_fix_reason } = withFixes ? await fixFor(a, 'EVENT_OVERLAP', day, prisma, ctx) : { fix: null, no_fix_reason: null };
       raw.push({
+        ...common,
         id: `EVENT_OVERLAP:${a.id}`,
         kind: 'EVENT_OVERLAP',
         problem_class: 'worth_knowing',
-        who,
         what: `This runs through the whole of ${clash.activity_name}.`,
-        appointment_id: a.id,
-        patient_id: a.patient_id,
-        patient_name: nameOfPatient(a.patient_id),
+        group_key: `EVENT_OVERLAP:${clash.activity_name}`,
+        group_label: `Treatments running through ${clash.activity_name}`,
         staff_id: a.staff_id,
-        fix,
-        no_fix_reason,
         cost: COST.EVENT_OVERLAP,
       });
     }
@@ -303,21 +250,116 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: { withFixe
       id: `IDLE_RESIDENT:${stay.patient_id}`,
       kind: 'IDLE_RESIDENT',
       problem_class: 'worth_knowing',
-      who: `${nameOfPatient(stay.patient_id)} — in house`,
+      who: nameOfPatient(stay.patient_id),
+      start_time: null,
       what: 'Nothing is booked for them today.',
+      group_key: 'IDLE_RESIDENT',
+      group_label: 'Residents in house with nothing booked',
       appointment_id: null,
       patient_id: stay.patient_id,
       patient_name: nameOfPatient(stay.patient_id),
       staff_id: null,
+      blocked_by_preferred_staff: false,
       fix: null,
       no_fix_reason: null,
       cost: COST.IDLE_RESIDENT,
     });
   }
 
-  raw.sort((a, b) => a.cost - b.cost || a.who.localeCompare(b.who));
-  const problems = raw.map(({ cost: _cost, ...p }) => p);
-  return { date: ymd(day), problems, headline: headlineFor(problems) };
+  raw.sort((a, b) => a.cost - b.cost || (a.start_time || '').localeCompare(b.start_time || '') || a.who.localeCompare(b.who));
+
+  // One plan for everything that can move, worked out together so that no two
+  // answers take the same room at the same minute.
+  const plan: Fix[] = [];
+  if (withFixes) {
+    const movable = raw.filter((p) => p.appointment_id).map((p) => p.appointment_id as string);
+    if (movable.length > 0) {
+      const result = await planDay(null, day, prisma, {
+        appointmentIds: movable,
+        pins: opts.pins,
+        relaxPreferredStaff: opts.relaxPreferredStaff,
+      });
+      const byAppointment = new Map<string, Fix>();
+      for (const m of [...result.moved, ...result.proposed]) {
+        byAppointment.set(m.appointment_id, fixFromMove(m, m.to.date === ymd(day)));
+      }
+      const unplacedBy = new Map(result.unplaced.map((u) => [u.appointment_id, u.reason]));
+      for (const p of raw) {
+        if (!p.appointment_id) continue;
+        const appt = appointments.find((a) => a.id === p.appointment_id);
+        const fix = byAppointment.get(p.appointment_id) || null;
+        // A plan that leaves a treatment exactly where it is has fixed nothing.
+        const noop = Boolean(
+          fix && appt && fix.date === ymd(day) && fix.staff_id === appt.staff_id &&
+          fix.start_time === appt.start_time && fix.room_id === appt.room_id,
+        );
+        p.fix = noop ? null : fix;
+        p.no_fix_reason = p.fix ? null : unplacedBy.get(p.appointment_id) || 'Nothing free anywhere this week.';
+        p.blocked_by_preferred_staff = Boolean(p.no_fix_reason && /only treated by/i.test(p.no_fix_reason));
+        if (p.fix) plan.push(p.fix);
+      }
+    }
+  }
+
+  const groups: ProblemGroup[] = [];
+  for (const p of raw) {
+    const existing = groups.find((g) => g.key === p.group_key);
+    if (existing) {
+      existing.problem_ids.push(p.id);
+      continue;
+    }
+    groups.push({
+      key: p.group_key,
+      label: p.group_label,
+      problem_class: p.problem_class,
+      // Only an absence is a whole day to give away; a room clash is not.
+      staff_id: p.kind === 'STAFF_OFF' ? p.staff_id : null,
+      problem_ids: [p.id],
+    });
+  }
+  for (const g of groups) {
+    const n = g.problem_ids.length;
+    if (g.key.startsWith('STAFF_OFF:')) {
+      const first = raw.find((x) => x.id === g.problem_ids[0]);
+      g.label = `${nameOfStaff(first?.staff_id ?? null)} is off — ${n} treatment${n === 1 ? '' : 's'}`;
+    } else if (n > 1 && g.key !== 'IDLE_RESIDENT' && g.key !== 'NO_THERAPIST') {
+      g.label = `${g.label} (${n} treatments)`;
+    }
+  }
+
+  const problems: DayProblem[] = raw.map(({ cost: _cost, group_label: _label, ...p }) => p);
+  return { date: ymd(day), problems, groups, plan, headline: headlineFor(problems) };
+}
+
+/**
+ * Other ways to place one treatment, for the admin who does not like the row
+ * they were given. The planner is asked again with the answers already offered
+ * excluded and the admin's other choices held, so an alternative is never
+ * something the plan could not accept.
+ */
+export async function rowOptions(
+  appointmentId: string,
+  day: Date,
+  prisma: PrismaClient,
+  opts: { pins?: Pin[]; relaxPreferredStaff?: boolean } = {},
+): Promise<Fix[]> {
+  const excludeStaffIds: string[] = [];
+  const out: Fix[] = [];
+  for (let i = 0; i < 3; i++) {
+    const result = await planDay(null, day, prisma, {
+      appointmentIds: [appointmentId],
+      pins: (opts.pins || []).filter((p) => p.appointment_id !== appointmentId),
+      relaxPreferredStaff: opts.relaxPreferredStaff,
+      excludeStaffIds,
+    });
+    const move = result.moved[0] || result.proposed[0] || null;
+    if (!move) break;
+    const fix = fixFromMove(move, move.to.date === ymd(day));
+    if (!out.some((f) => f.staff_id === fix.staff_id && f.start_time === fix.start_time && f.date === fix.date)) out.push(fix);
+    if (!move.to.staff_id) break;
+    excludeStaffIds.push(move.to.staff_id);
+  }
+  return out;
 }
 
 /**

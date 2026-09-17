@@ -41,7 +41,7 @@ const main = async () => {
   // "busy" means the treatment plus its rest and cleanup.
   const span = (a: (typeof appts)[number]) => {
     const s = toMinutes(a.start_time);
-    return { s, e: s + a.duration_minutes + (therapyById.get(a.therapy_id)?.buffer_minutes ?? 0) };
+    return { s, e: s + a.duration_minutes };
   };
   const noDoubleBooking = (key: (a: (typeof appts)[number]) => string | null, what: string) => {
     for (const [day, list] of byDay) {

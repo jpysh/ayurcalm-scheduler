@@ -81,12 +81,6 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     if (!therapy) throw new Error('Therapy not found');
 
   const duration = therapy.duration_minutes;
-  // A therapy's buffer is rest for the patient and cleanup for the room, so it
-  // blocks the room, the therapist and the patient just as the therapy does.
-  // It is added to the busy interval, never to the window a room is open for:
-  // a 17:00 therapy with a 30m buffer still fits a centre closing at 18:00.
-  const bufferOf = new Map((await withTimeout(prisma.therapy.findMany({ select: { id: true, buffer_minutes: true } }), maxMs, 'BUFFERS')).map((t) => [t.id, t.buffer_minutes]));
-  const buffer = therapy.buffer_minutes;
 
   const candidateRooms = await withTimeout(prisma.therapyRoom.findMany({ where: { is_active: true } }), maxMs, 'ROOMS');
   const roomsFiltered = candidateRooms.filter((r) =>
@@ -264,7 +258,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     const patientBusy: { s: number; e: number }[] = [];
     for (const a of appointmentsOnDate) {
       const sMin = toMinutes(a.start_time);
-      const eMin = sMin + a.duration_minutes + (bufferOf.get(a.therapy_id) ?? 0);
+      const eMin = sMin + a.duration_minutes;
       if (a.room_id) {
         roomBusy[a.room_id] ??= [];
         roomBusy[a.room_id].push({ s: sMin, e: eMin });
@@ -302,7 +296,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     for (let slotStart = alignedStart; slotStart + duration <= windowEnd; slotStart += step) {
       const slotEnd = slotStart + duration;
       // Opening hours are checked against slotEnd, conflicts against slotBusyEnd.
-      const slotBusyEnd = slotEnd + buffer;
+      const slotBusyEnd = slotEnd;
       // try rooms and staff
       for (const r of roomsAvail) {
         const rDay = getDay(r.weekly_schedule, weekday) || defaultDay;
