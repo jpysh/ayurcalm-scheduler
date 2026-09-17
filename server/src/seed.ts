@@ -75,7 +75,7 @@ const therapyDefs = [
  * A centre tunes these per therapy in the Therapies tab; these are the defaults
  * a fresh install starts from.
  */
-const bufferFor = (req: string[]) => {
+const cleaningFor = (req: string[]) => {
   if (req.includes('steam') || req.includes('shower')) return 30;
   if (req.includes('herbal_oil') || req.includes('dhara_stand') || req.includes('shirodhara_stand')) return 20;
   if (req.includes('rice_boluses') || req.includes('herbal_paste')) return 15;
@@ -179,7 +179,9 @@ async function main() {
   })));
 
   const therapies = await Promise.all(therapyDefs.map(t => prisma.therapy.create({
-    data: { name: t.name, required_amenities: t.req, duration_minutes: t.dur, requires_gender_match: t.gender, buffer_minutes: bufferFor(t.req) },
+    // One number per therapy: hands-on time plus the room's cleaning time, which
+    // is what the day sheet prints and what the slot actually costs.
+    data: { name: t.name, required_amenities: t.req, duration_minutes: t.dur + cleaningFor(t.req), requires_gender_match: t.gender },
   })));
 
   const scheduleStd = { sunday: { start: '09:00', end: '18:00' }, monday: { start: '09:00', end: '18:00' }, tuesday: { start: '09:00', end: '18:00' }, wednesday: { start: '09:00', end: '18:00' }, thursday: { start: '09:00', end: '18:00' }, friday: { start: '09:00', end: '18:00' }, saturday: { start: '09:00', end: '18:00' } };
@@ -279,7 +281,7 @@ async function main() {
         // Next patient in rotation who is free at this time, so one person's
         // clash does not cost the slot.
         const slotS = toMinutes(time);
-        const slotE = slotS + th.duration_minutes + th.buffer_minutes;
+        const slotE = slotS + th.duration_minutes;
         // The treatment itself must finish before the room closes; the buffer
         // after it is the patient's rest, not the room's next booking.
         if (slotS < toMinutes(rDay.start) || slotS + th.duration_minutes > toMinutes(rDay.end)) continue;
@@ -299,7 +301,7 @@ async function main() {
         const sMin = toMinutes(time);
         // Busy intervals carry the buffer, so the seed obeys the same rest and
         // cleanup rule the scheduler enforces.
-        const eMin = sMin + th.duration_minutes + th.buffer_minutes;
+        const eMin = sMin + th.duration_minutes;
         const rBusy = busy[dateKey].room[r.id] ??= [];
         const sBusy = busy[dateKey].staff[s.id] ??= [];
         const pBusy = busy[dateKey].patient[p.id] ??= [];
@@ -370,15 +372,11 @@ async function main() {
   if (absentToday) {
     const todays = await prisma.appointment.findMany({ where: { scheduled_date: centreToday() }, orderBy: { start_time: 'asc' } });
     const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
-    // The buffer after a treatment is the patient's rest and the room's
-    // cleanup, and it keeps the therapist busy too — the same rule the
-    // scheduler enforces, so the seeded day obeys it.
-    const bufferOf = new Map(therapies.map((t) => [t.id, t.buffer_minutes]));
     const taken: { s: number; e: number }[] = [];
     const toMove = todays.filter((a) => {
       if (a.staff_id === absentToday) return false;
       const s = mins(a.start_time);
-      const e = s + a.duration_minutes + (bufferOf.get(a.therapy_id) ?? 0);
+      const e = s + a.duration_minutes;
       // One person cannot give two treatments at once, even the ones they will
       // not be here to give: the day has to be wrong in the way a real day is.
       if (taken.some((b) => Math.max(b.s, s) < Math.min(b.e, e))) return false;

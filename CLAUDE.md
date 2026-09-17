@@ -54,10 +54,10 @@ server/                 Express + Prisma + Zod, serves ../dist in production
   src/availability.ts      When a therapist is not free — events, absences, the
                         more-specific-event rule. Pure, and tested
   src/appointmentGuard.ts  Whether one appointment may sit where it is put
-  src/replan.ts            Rehousing an absent therapist's day, and the fix for
-                        one treatment — same ladder, `onlyAppointmentId`
-  src/dayCheck.ts          What is wrong with a day and what would fix it. The
-                        header and Verify both read it; neither has its own rules
+  src/replan.ts            `planDay` — the one planner: an absent therapist's
+                        whole day, or whatever Verify found wrong, in one pass
+  src/dayCheck.ts          What is wrong with a day and the one plan that fixes
+                        it. The header and Verify read it and decide nothing
   src/dietResolution.ts    What one patient eats on one day — pure, and tested
   src/dietTemplates.ts     Diet plan CRUD, admin-only writes
   src/scripts/          resetPassword.ts — lockout recovery
@@ -94,9 +94,24 @@ A screen asks the server; it never decides for itself, and
 **Gender match and room amenities are refusals, not preferences.** The scheduler
 always avoided proposing them; since #88 `appointmentGuard` refuses them too, so
 nothing can arrive by another route. Gender matching still honours the Settings
-switch. What an admin may switch off in Verify is only the buffer between
-treatments and a resident's own therapist — both live in the fix-finder, so
-relaxing one widens the search and can never book what the guard refuses.
+switch. The only rule an admin may switch off in Verify is a resident's own
+therapist, and it lives in the planner — relaxing it widens the search and can
+never book what the guard refuses.
+
+**A therapy has one length, and it includes the room's cleaning time.**
+`buffer_minutes` is gone. It was a second number nobody could see — not in
+Therapies, not on the day sheet — enforced by the scheduler and the replan but by
+nothing that refuses a booking, so an edited treatment could sit inside another's
+cleaning time and no screen said so. A centre that runs treatments back to back
+sets a length with no cleaning time in it.
+
+**The day is planned in one pass, never once per problem.** `checkDay` asks
+`planDay` once for everything that has to move, so two answers cannot take the
+same room at the same minute — asked separately, two treatments clashing over one
+room were both told to move to 12:00. A row the admin changes becomes a pin and
+the rest is planned again around it, so what is on screen can always be accepted
+whole. `npm run test:day-plan` asserts all of that, plus that Undo restores the
+day exactly.
 
 **"Today" is the centre's day, from `Settings.timezone`.** The seed, the
 schedule, the warnings, the invariants test and the day sheet all work it out

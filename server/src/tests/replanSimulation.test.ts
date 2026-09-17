@@ -28,7 +28,7 @@ async function main() {
     await requireDemoData(prisma);
 
     const day = new Date(new Date().toISOString().slice(0, 10));
-    const therapy = await prisma.therapy.create({ data: { name: 'Sim Therapy', required_amenities: ['table'], duration_minutes: 60, buffer_minutes: 0, requires_gender_match: false } });
+    const therapy = await prisma.therapy.create({ data: { name: 'Sim Therapy', required_amenities: ['table'], duration_minutes: 60, requires_gender_match: false } });
     made.push({ table: 'therapy', id: therapy.id });
 
     const rooms = [];
