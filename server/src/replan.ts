@@ -68,13 +68,22 @@ const free = (busy: Busy[] | undefined, s: number, e: number) => !(busy || []).s
  * reads to put the day back exactly as it was.
  */
 export async function replanStaffDay(
-  staffId: string,
+  staffId: string | null,
   date: Date,
   prisma: PrismaClient,
-  opts: { apply?: boolean; timeOffId?: string } = {},
+  opts: {
+    apply?: boolean;
+    timeOffId?: string;
+    onlyAppointmentId?: string;
+    /** Therapists already offered, so asking again gives a different answer. */
+    excludeStaffIds?: string[];
+    /** The two rules the admin may switch off in Verify, and nothing else. */
+    relaxPreferredStaff?: boolean;
+    relaxBuffer?: boolean;
+  } = {},
 ): Promise<ReplanResult> {
   const [absent, settings, staff, therapies, rooms, patients, events, timeOff] = await Promise.all([
-    prisma.staff.findUnique({ where: { id: staffId } }),
+    staffId ? prisma.staff.findUnique({ where: { id: staffId } }) : Promise.resolve(null),
     prisma.settings.findUnique({ where: { id: 'singleton' } }),
     prisma.staff.findMany({ where: { is_active: true } }),
     prisma.therapy.findMany(),
@@ -94,9 +103,12 @@ export async function replanStaffDay(
   const dayAppointments = await prisma.appointment.findMany({
     where: { scheduled_date: date, status: { not: 'cancelled' } },
   });
+  // The treatments being rehoused: a therapist's whole day, or the single
+  // session Verify is fixing.
   const mine = dayAppointments
-    .filter((a) => a.staff_id === staffId)
+    .filter((a) => (opts.onlyAppointmentId ? a.id === opts.onlyAppointmentId : a.staff_id === staffId))
     .sort((a, b) => toMinutes(a.start_time) - toMinutes(b.start_time));
+  const mineIds = new Set(mine.map((a) => a.id));
 
   // Busy maps for the day, with the absent therapist's own bookings left out —
   // they are the ones being rehoused.
@@ -109,7 +121,7 @@ export async function replanStaffDay(
     map[key].push({ s, e });
   };
   for (const a of dayAppointments) {
-    if (a.staff_id === staffId) continue;
+    if (mineIds.has(a.id)) continue;
     const s = toMinutes(a.start_time);
     const e = s + a.duration_minutes + (therapyById.get(a.therapy_id)?.buffer_minutes ?? 0);
     addBusy(staffBusy, a.staff_id, s, e);
@@ -141,18 +153,19 @@ export async function replanStaffDay(
   for (const appt of mine) {
     const therapy = therapyById.get(appt.therapy_id);
     const patient = patientById.get(appt.patient_id);
-    const duration = appt.duration_minutes + (therapy?.buffer_minutes ?? 0);
+    const duration = appt.duration_minutes + (opts.relaxBuffer ? 0 : (therapy?.buffer_minutes ?? 0));
     const start = toMinutes(appt.start_time);
     const names = {
       patient_name: patient?.name || 'Unknown',
       therapy_name: therapy?.name || 'Treatment',
-      from: { staff_name: absent?.name || 'Unknown', start_time: appt.start_time, date: ymd(date) },
+      from: { staff_name: absent?.name || staffById.get(appt.staff_id || '')?.name || 'Unassigned', start_time: appt.start_time, date: ymd(date) },
     };
 
-    const mustKeepTherapist = patient?.requires_preferred_staff ? patient.preferred_staff_id : null;
+    const mustKeepTherapist = patient?.requires_preferred_staff && !opts.relaxPreferredStaff ? patient.preferred_staff_id : null;
 
     const qualified = (s: (typeof staff)[number]) => {
       if (s.id === staffId) return false;
+      if (opts.excludeStaffIds?.includes(s.id)) return false;
       if (!s.specializations.includes(appt.therapy_id)) return false;
       if (enforceGender && therapy?.requires_gender_match && patient && s.gender !== patient.gender) return false;
       return true;
@@ -301,7 +314,7 @@ export async function replanStaffDay(
         admin_id: 'admin',
         action: 'replan',
         entity_type: 'staff',
-        entity_id: staffId,
+        entity_id: staffId ?? '',
         old_value: { writes, time_off_id: opts.timeOffId ?? null, date: ymd(date) } as unknown as Prisma.InputJsonValue,
         new_value: { moved, proposed, unplaced, staff_name: absent?.name || '' } as unknown as Prisma.InputJsonValue,
       },
@@ -315,7 +328,7 @@ export async function replanStaffDay(
 /** Put a replan back exactly as it was. */
 export async function undoReplan(batchId: string, prisma: PrismaClient) {
   const row = await prisma.auditLog.findUnique({ where: { id: batchId } });
-  if (!row || row.action !== 'replan') return null;
+  if (!row || (row.action !== 'replan' && row.action !== 'dayfix')) return null;
   const payload = row.old_value as unknown as { writes: { appointment_id: string; before: Record<string, unknown> }[] };
   for (const w of payload.writes || []) {
     await prisma.appointment.update({

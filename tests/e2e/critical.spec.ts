@@ -168,8 +168,10 @@ test("the day's problems are named on the first screen", async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
   // The seed puts a therapist on full-day leave with treatments still booked.
-  // Verify has always found it; the point of the band is that nobody has to ask.
-  await expect(page.getByText(/is on leave and still has \d+ treatment/)).toBeVisible({ timeout: 20000 });
+  // The line names the worst problem and the residents in it, because a count
+  // only tells the admin to open something. It comes from the same server check
+  // that refuses a booking — the header has no rules of its own.
+  await expect(page.getByText(/is not in on this day.*—.*\w/)).toBeVisible({ timeout: 20000 });
   // And it is there before any tab is chosen, not two clicks deep.
-  await expect(page.getByText(/things? to fix/)).toBeVisible();
+  await expect(page.getByText(/more to fix/)).toBeVisible();
 });
