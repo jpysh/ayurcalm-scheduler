@@ -19,6 +19,7 @@ export type Candidate = {
   staff_id: string | null;
   room_id: string | null;
   patient_id: string;
+  therapy_id?: string;
 };
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -37,15 +38,17 @@ const hitsDay = (
 
 /** Everything a day's worth of checks needs, read once. */
 export async function loadDay(day: Date, prisma: PrismaClient) {
-  const [appointments, timeOff, events, staff, rooms, settings] = await Promise.all([
+  const [appointments, timeOff, events, staff, rooms, settings, patients, therapies] = await Promise.all([
     prisma.appointment.findMany({ where: { scheduled_date: day, status: { not: 'cancelled' } } }),
     prisma.timeOff.findMany(),
     prisma.programEvent.findMany() as unknown as Promise<EventRow[]>,
     prisma.staff.findMany(),
     prisma.therapyRoom.findMany(),
     prisma.settings.findUnique({ where: { id: 'singleton' } }),
+    prisma.patient.findMany(),
+    prisma.therapy.findMany(),
   ]);
-  return { day, appointments, timeOff, events, staff, rooms, settings };
+  return { day, appointments, timeOff, events, staff, rooms, settings, patients, therapies };
 }
 
 export type DayContext = Awaited<ReturnType<typeof loadDay>>;
@@ -85,6 +88,36 @@ export function findConflict(c: Candidate, ctx: DayContext): Conflict | null {
     if (clash) {
       const room = ctx.rooms.find((r) => r.id === c.room_id);
       return { reason: 'ROOM_BUSY', message: `${room?.name || 'That room'} is in use at ${clash.start_time}.`, details: { start_time: clash.start_time } };
+    }
+  }
+
+  const therapy = c.therapy_id ? ctx.therapies.find((t) => t.id === c.therapy_id) : undefined;
+  const patient = ctx.patients.find((p) => p.id === c.patient_id);
+
+  // A therapy that needs a therapist of the resident's own gender, where the
+  // centre has left that rule switched on. The scheduler has always avoided
+  // proposing these; nothing refused one that arrived another way.
+  if (therapy?.requires_gender_match && c.staff_id && ctx.settings?.enforce_gender_match !== false) {
+    const s = ctx.staff.find((x) => x.id === c.staff_id);
+    if (s && patient && s.gender !== patient.gender) {
+      return {
+        reason: 'GENDER_MISMATCH',
+        message: `${therapy.name} is given by a therapist of the resident's own gender, and ${s.name} is not.`,
+      };
+    }
+  }
+
+  // The room has to have what the treatment is done with. A Pizhichil without a
+  // droni is not an awkward booking, it is one that cannot happen.
+  if (therapy && c.room_id) {
+    const room = ctx.rooms.find((r) => r.id === c.room_id);
+    const missing = (therapy.required_amenities || []).filter((a) => !(room?.amenities || []).includes(a));
+    if (room && missing.length > 0) {
+      return {
+        reason: 'AMENITIES_MISSING',
+        message: `${room.name} has no ${missing.join(' or ')}, which ${therapy.name} needs.`,
+        details: { missing },
+      };
     }
   }
 

@@ -6,6 +6,7 @@ import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import { generateTherapistRotaPdf } from './pdf/therapistRotaPdf.js';
 import { findConflict, loadDay, nearestFreeTime } from './appointmentGuard.js';
 import { replanStaffDay, undoReplan } from './replan.js';
+import { checkDay, headlineFor, optionsFor } from './dayCheck.js';
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:5433/ayurcalm_dev?schema=public';
@@ -659,6 +660,110 @@ const datesCovered = (h: { date: Date | null; start_date: Date | null; end_date:
 };
 
 /** The plan for one therapist's day: what it would do, or what it did. */
+
+/**
+ * What is wrong with one day, and what would fix it — the one rulebook the
+ * header and Verify both read. The rules are `appointmentGuard` and `replan`,
+ * never a copy of them.
+ */
+app.get('/day-check', async (req: Request, res: Response) => {
+  const date = String(req.query.date || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { res.status(400).json({ error: 'date=YYYY-MM-DD required' }); return; }
+  res.json(await checkDay(new Date(date), prisma));
+});
+
+/**
+ * Which of the coming days have something wrong, for the "check the next 30
+ * days?" line. Dates to jump to, not a month of cards.
+ */
+app.get('/day-check/upcoming', async (req: Request, res: Response) => {
+  const from = String(req.query.from || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) { res.status(400).json({ error: 'from=YYYY-MM-DD required' }); return; }
+  const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 60);
+  // Only what the server would refuse. A resident with nothing booked three
+  // weeks out is not news — the day has not been built yet — and counting those
+  // would put "40 things" on every future day and say nothing.
+  const out: { date: string; count: number; headline: string | null }[] = [];
+  for (let i = 1; i <= days; i++) {
+    const d = new Date(from);
+    d.setDate(d.getDate() + i);
+    const check = await checkDay(d, prisma, { withFixes: false });
+    const blocking = check.problems.filter((p) => p.problem_class === 'blocking');
+    if (blocking.length > 0) out.push({ date: check.date, count: blocking.length, headline: headlineFor(blocking) });
+  }
+  res.json({ from, days, days_with_problems: out });
+});
+
+/**
+ * The other ways to fix one treatment, and what changes if a negotiable rule is
+ * switched off. Asked only when the admin opens the disclosure on a card.
+ */
+app.get('/day-check/options', async (req: Request, res: Response) => {
+  const date = String(req.query.date || '').slice(0, 10);
+  const id = String(req.query.appointment_id || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !id) { res.status(400).json({ error: 'date and appointment_id required' }); return; }
+  const options = await optionsFor(id, new Date(date), prisma, {
+    preferredStaff: req.query.relax_preferred_staff === 'true',
+    buffer: req.query.relax_buffer === 'true',
+  });
+  res.json({ options });
+});
+
+/**
+ * Take one fix. Written as its own audit batch so the card can offer Undo for
+ * the rest of the day, and kept out of the header's replan summary, which is
+ * about a whole day being reassigned.
+ */
+app.post('/day-check/fix', async (req: Request, res: Response) => {
+  const schema = z.object({
+    appointment_id: z.string().uuid(),
+    staff_id: z.string().uuid().nullable(),
+    room_id: z.string().uuid().nullable(),
+    start_time: z.string(),
+    date: z.string(),
+  });
+  const body = schema.parse(req.body);
+  const before = await prisma.appointment.findUnique({ where: { id: body.appointment_id } });
+  if (!before) { res.status(404).json({ error: 'Appointment not found' }); return; }
+
+  const candidate = {
+    id: before.id,
+    scheduled_date: new Date(body.date),
+    start_time: body.start_time,
+    duration_minutes: before.duration_minutes,
+    staff_id: body.staff_id,
+    room_id: body.room_id,
+    patient_id: before.patient_id,
+    therapy_id: before.therapy_id,
+  };
+  const ctx = await loadDay(candidate.scheduled_date, prisma);
+  const conflict = findConflict(candidate, ctx);
+  if (conflict) { res.status(409).json(conflict); return; }
+
+  const after = await prisma.appointment.update({
+    where: { id: before.id },
+    data: { staff_id: body.staff_id, room_id: body.room_id, start_time: body.start_time, scheduled_date: new Date(body.date) },
+  });
+  const staff_name = body.staff_id ? (await prisma.staff.findUnique({ where: { id: body.staff_id } }))?.name || '' : 'Unassigned';
+  const batch = await prisma.auditLog.create({
+    data: {
+      admin_id: 'admin',
+      action: 'dayfix',
+      entity_type: 'appointment',
+      entity_id: before.id,
+      old_value: {
+        date: ymdInTZ(before.scheduled_date),
+        writes: [{
+          appointment_id: before.id,
+          before: { staff_id: before.staff_id, room_id: before.room_id, start_time: before.start_time, scheduled_date: before.scheduled_date.toISOString() },
+        }],
+      } as unknown as Prisma.InputJsonValue,
+      new_value: { staff_name, moved: [{ appointment_id: before.id }] } as unknown as Prisma.InputJsonValue,
+    },
+  });
+  res.json({ appointment: after, batch_id: batch.id });
+});
+
 app.post('/replan', async (req: Request, res: Response) => {
   const schema = z.object({ staff_id: z.string().uuid(), date: z.string(), apply: z.boolean().optional() });
   const body = schema.parse(req.body);
@@ -1137,6 +1242,7 @@ app.put('/appointments/:id', async (req: Request, res: Response) => {
     staff_id: body.staff_id !== undefined ? body.staff_id : existing.staff_id,
     room_id: body.room_id !== undefined ? body.room_id : existing.room_id,
     patient_id: body.patient_id ?? existing.patient_id,
+    therapy_id: body.therapy_id ?? existing.therapy_id,
   };
 
   // Cancelling or completing a treatment moves nobody, so it is never refused.

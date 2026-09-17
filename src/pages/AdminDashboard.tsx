@@ -33,7 +33,7 @@ import ScheduleTab from "./tabs/ScheduleTab";
 import Settings from "./Settings";
 import { Fragment } from "react";
 import { API_BASE } from "@/lib/apiBase";
-import { dayExceptions, WEEKDAYS } from "@/lib/dayExceptions";
+import { WEEKDAYS } from "@/lib/weekdays";
 import { loadTemplates, saveTemplate } from "@/lib/dietPlan";
 import { useCentreName } from "@/lib/centreName";
 
@@ -1396,7 +1396,6 @@ const AdminDashboard = () => {
   const exceptionDay = useMemo(() => new Date(`${todayKey}T00:00:00`), [todayKey]);
   const [replanDismissed, setReplanDismissed] = useState<string[]>([]);
   const [undone, setUndone] = useState<string | null>(null);
-  const [replanExpanded, setReplanExpanded] = useState<string[]>([]);
   const loadReplans = useCallback(() => {
     fetch(`${API_BASE}/replan/summary?date=${exceptionDayKey}`)
       .then((r) => (r.ok ? r.json() : []))
@@ -1420,38 +1419,24 @@ const AdminDashboard = () => {
     loadReplans();
     refreshAppointmentsForDate(todayKey, true);
   };
-  const reassignDay = async (staffId: string) => {
-    const res = await fetch(`${API_BASE}/replan`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ staff_id: staffId, date: exceptionDayKey, apply: true }) });
-    if (!res.ok) { toast.error('Could not reassign that day'); return; }
-    const out = await res.json();
-    toast.success(`${out.moved.length} treatment${out.moved.length === 1 ? '' : 's'} rebooked`);
-    loadReplans();
-    refreshAppointmentsForDate(todayKey, true);
-  };
-  const acceptProposal = async (m: ReplanMove) => {
-    await fetch(`${API_BASE}/replan/accept`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ appointment_id: m.appointment_id, staff_id: m.to.staff_id, date: m.to.date, start_time: m.to.start_time, room_id: m.to.room_id }) });
-    loadReplans();
-    refreshAppointmentsForDate(todayKey, true);
-  };
   const visibleReplans = replans.filter((r) => !replanDismissed.includes(r.batch_id));
 
-  const exceptions = useMemo(() => dayExceptions({
-    day: exceptionDay,
-    appointments: (Array.isArray(appointmentsByDate[todayKey]) ? appointmentsByDate[todayKey] : []).map((a) => ({
-      id: a.id, patient_id: a.patient_id, therapy_id: a.therapy_id, staff_id: a.staff_id,
-      room_id: a.room_id, start_time: a.start_time, duration_minutes: a.duration_minutes, status: a.status,
-    })),
-    events: dayEvents.map((ev) => ({ activity_name: ev.activity_name, start_time: ev.start_time, end_time: ev.end_time, patients_scope: (ev as { patients_scope?: string }).patients_scope, is_optional: (ev as { is_optional?: boolean }).is_optional })),
-    timeoff: (timeOffs || []).map((h) => ({
-      entity_type: (h.type === 'Center' ? 'center' : h.type === 'Staff' ? 'staff' : h.type === 'Room' ? 'room' : h.type === 'Therapy' ? 'therapy' : 'patient') as 'center'|'staff'|'room'|'therapy'|'patient',
-      entity_id: h.entity, date: h.date, start_date: h.startDate, end_date: h.endDate, recurrence: h.recurrence, weekdays: h.weekdays,
-    })),
-    patients: patients.map((p) => ({ id: String(p.id), name: p.name })),
-    staff: staff.map((x) => ({ id: String(x.id), name: x.name })),
-    rooms: roomsList.map((r) => ({ id: String(r.id), name: r.name })),
-    therapies: therapies.map((t) => ({ id: String(t.id), name: t.name })),
-    residentIds: residentsOnDay,
-  }), [exceptionDay, appointmentsByDate, todayKey, dayEvents, timeOffs, patients, staff, roomsList, therapies, residentsOnDay]);
+  // What is wrong with the day comes from the server, which is the same code
+  // that refuses a booking. Two screens used to work this out in the browser and
+  // both disagreed with it; #88 deleted them.
+  type DayProblem = {
+    id: string; kind: string; problem_class: 'blocking' | 'worth_knowing'; who: string; what: string;
+    appointment_id: string | null; patient_id: string | null; patient_name: string; staff_id: string | null;
+    fix: unknown; no_fix_reason: string | null;
+  };
+  const [dayCheck, setDayCheck] = useState<{ problems: DayProblem[]; headline: string | null }>({ problems: [], headline: null });
+  const loadDayCheck = useCallback(() => {
+    fetch(`${API_BASE}/day-check?date=${exceptionDayKey}`)
+      .then((r) => (r.ok ? r.json() : { problems: [], headline: null }))
+      .then((d) => setDayCheck({ problems: Array.isArray(d.problems) ? d.problems : [], headline: d.headline ?? null }))
+      .catch(() => setDayCheck({ problems: [], headline: null }));
+  }, [exceptionDayKey]);
+  useEffect(() => { loadDayCheck(); }, [loadDayCheck, appointmentsByDate]);
 
   const compareRoomNames = (aName: string, bName: string) => {
     const ax = String(aName).trim();
@@ -1622,85 +1607,37 @@ const AdminDashboard = () => {
         ) : null}
         {visibleReplans.map((batch) => {
           const needsDecision = batch.proposed.length + batch.unplaced.length;
-          const open = replanExpanded.includes(batch.batch_id);
           return (
-            <div key={batch.batch_id} className="mb-2 rounded-md border bg-card px-3 py-2 space-y-1">
-              {/* One line, then out of the way. Fixing things is Verify's job;
-                  this is here to say what happened while nobody was looking,
-                  and to keep Undo within reach while it is still fresh. */}
+            <div key={batch.batch_id} className="mb-2 rounded-md border bg-card px-3 py-2">
+              {/* One line and Undo. Everything else about the day — what moved,
+                  what still needs a decision, giving a whole day away — is
+                  Verify's, so the admin has one place to act. */}
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="font-semibold">
                   {batch.staff_name} is off — {batch.moved.length} rebooked{needsDecision > 0 ? `, ${needsDecision} needs a decision` : ''}
                 </span>
-                <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => undoReplanBatch(batch)}>Undo</Button>
-                {needsDecision > 0 ? (
-                  <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => setShowVerify(true)}>
-                    <AlertCircle className="w-3 h-3 mr-1 text-amber-600" />Verify
-                  </Button>
-                ) : null}
-                <button type="button" className="text-xs underline text-muted-foreground" onClick={() => setReplanExpanded((prev) => (open ? prev.filter((x) => x !== batch.batch_id) : [...prev, batch.batch_id]))}>
-                  {open ? 'Hide' : 'Show what changed'}
-                </button>
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => undoReplanBatch(batch)}>Undo</Button>
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowVerify(true)}>
+                  <AlertCircle className="w-3 h-3 mr-1 text-amber-600" />Verify
+                </Button>
                 <button type="button" className="text-xs text-muted-foreground ml-auto" onClick={() => dismissReplan(batch.batch_id)}>Done with this</button>
               </div>
-              {open ? (
-                <ul className="space-y-0.5 pt-1">
-                  {batch.moved.map((m) => (
-                    <li key={m.appointment_id} className="text-sm">
-                      {m.patient_name}: {m.therapy_name} {m.tier === 1 ? `at ${m.to.start_time} with ${m.to.staff_name}` : `moved to ${m.to.start_time} with ${m.to.staff_name}`}
-                    </li>
-                  ))}
-                  {batch.proposed.map((m) => (
-                    <li key={m.appointment_id} className="text-sm flex flex-wrap items-center gap-2">
-                      <span>{m.patient_name}: nothing free today — {m.to.date} at {m.to.start_time} with {m.to.staff_name}?</span>
-                      <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => acceptProposal(m)}>Move it</Button>
-                    </li>
-                  ))}
-                  {batch.unplaced.map((u, i) => (
-                    <li key={`u-${i}`} className="text-sm text-amber-700">
-                      {u.patient_name}: {u.therapy_name} at {u.start_time} has nobody — {u.reason}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
             </div>
           );
         })}
         <div className="mb-3 md:mb-6 rounded-md border bg-card px-3 py-2">
-          {exceptions.length === 0 ? (
+          {dayCheck.problems.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nothing wrong with {isToday ? 'today' : 'this day'}.</p>
           ) : (
-            <>
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-sm font-semibold">
-                  {exceptions.length} thing{exceptions.length === 1 ? '' : 's'} to fix {isToday ? 'today' : 'this day'}
-                </p>
-                {/* The header says what is wrong; Verify is where it gets fixed. */}
-                <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => setShowVerify(true)}>
-                  <AlertCircle className="w-3 h-3 mr-1 text-amber-600" />Verify
-                </Button>
-              </div>
-              <ul className="space-y-0.5">
-                {exceptions.slice(0, 5).map((e, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-sm">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />
-                    <span>{e.text}</span>
-                    {/* The whole point of the warning: give the day away in one tap. */}
-                    {e.staff_id ? (
-                      <Button size="sm" variant="outline" className="h-6 text-xs shrink-0" onClick={() => reassignDay(e.staff_id!)}>
-                        Reassign the day
-                      </Button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-              {/* A bad day must not push the schedule off a phone screen. */}
-              {exceptions.length > 5 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  and {exceptions.length - 5} more — Verify lists them all
-                </p>
-              )}
-            </>
+            /* The worst problem by name, with the residents in it: a count tells
+               the admin to open something, a name tells them what happened. */
+            <div className="flex flex-wrap items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <p className="text-sm font-semibold">{dayCheck.headline}</p>
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowVerify(true)}>
+                Verify
+              </Button>
+            </div>
           )}
         </div>
 
@@ -2432,19 +2369,20 @@ const AdminDashboard = () => {
       }} />
       {/* Verify works out its own dates from currentDate in the browser's
           timezone, so it is handed the centre's day rather than the machine's. */}
+      {/* Verify checks the day the schedule is on — no date question, and the
+          centre's day rather than the machine's. */}
       <VerifyDialog
         open={showVerify}
         onOpenChange={setShowVerify}
         apiBase={API_BASE}
         currentDate={exceptionDay}
-        patients={patients.map(p => ({ id: p.id, name: p.name, gender: p.gender }))}
-        staff={staff.map(s => ({ id: s.id, name: s.name, gender: s.gender, specializations: s.specializations, schedule: s.schedule, status: s.status }))}
-        rooms={roomsList.map(r => ({ id: r.id, name: r.name, amenities: r.amenities, status: r.status }))}
-        therapies={therapies.map(t => ({ id: String(t.id), name: t.name, required_amenities: t.amenities, duration_minutes: t.duration, requires_gender_match: t.genderMatch }))}
-        timeoff={timeOffs.map(h => ({ id: h.id, entity_type: (h.type === 'Center' ? 'center' : h.type === 'Staff' ? 'staff' : h.type === 'Room' ? 'room' : h.type === 'Therapy' ? 'therapy' : 'patient'), entity_id: h.entity, date: h.date, start_date: h.startDate, end_date: h.endDate, start_time: h.startTime, end_time: h.endTime, recurrence: h.recurrence, weekdays: h.weekdays }))}
-        onOpenAppointment={(a) => {
+        staff={staff.map((s) => ({ id: String(s.id), name: s.name }))}
+        onOpenAppointment={(appointmentId) => {
+          const a = (Array.isArray(appointmentsByDate[exceptionDayKey]) ? appointmentsByDate[exceptionDayKey] : []).find((x) => String(x.id) === String(appointmentId));
+          if (!a) return;
           const roomInfo = roomsList.find((r) => r.id === a.room_id);
           const patientInfo = patients.find((p) => p.id === a.patient_id);
+          setShowVerify(false);
           setSelectedAppointment({
             id: a.id,
             scheduledDate: a.scheduled_date,
@@ -2456,16 +2394,20 @@ const AdminDashboard = () => {
             roomId: a.room_id,
             patient: patientInfo?.name || a.patient_id,
             therapy: therapyNameById[a.therapy_id] || a.therapy_id,
-            staff: staff.find((s) => s.id === a.staff_id)?.name || a.staff_id,
+            staff: staff.find((x) => x.id === a.staff_id)?.name || a.staff_id,
             room: roomInfo?.name || a.room_id,
             roomAmenities: roomInfo?.amenities || [],
             patientDetails: patientInfo,
           });
         }}
+        onAssignFor={() => { setShowVerify(false); setShowAutoAssign(true); }}
+        onJumpToDate={(iso) => { setViewType('day'); setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); }}
         onRefresh={async (datesISO) => {
           for (const iso of datesISO) {
             await refreshAppointmentsForDate(iso, true);
           }
+          loadDayCheck();
+          loadReplans();
         }}
       />
       <AppointmentDialog 

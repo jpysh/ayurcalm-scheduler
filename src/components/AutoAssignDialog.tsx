@@ -23,7 +23,11 @@ import { Badge } from "@/components/ui/badge";
 import { Sparkles, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
-import { isAllGuests } from "@/lib/dayExceptions";
+/**
+ * An event with no audience set applies to everyone: the field was added after
+ * these events existed and the form shows "All" for a null.
+ */
+const isAllGuests = (ev: { patients_scope?: string | null }) => (ev.patients_scope || 'all') === 'all';
 
 interface AutoAssignDialogProps {
   open: boolean;

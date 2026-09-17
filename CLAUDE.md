@@ -54,7 +54,10 @@ server/                 Express + Prisma + Zod, serves ../dist in production
   src/availability.ts      When a therapist is not free — events, absences, the
                         more-specific-event rule. Pure, and tested
   src/appointmentGuard.ts  Whether one appointment may sit where it is put
-  src/replan.ts            Rehousing an absent therapist's day
+  src/replan.ts            Rehousing an absent therapist's day, and the fix for
+                        one treatment — same ladder, `onlyAppointmentId`
+  src/dayCheck.ts          What is wrong with a day and what would fix it. The
+                        header and Verify both read it; neither has its own rules
   src/dietResolution.ts    What one patient eats on one day — pure, and tested
   src/dietTemplates.ts     Diet plan CRUD, admin-only writes
   src/scripts/          resetPassword.ts — lockout recovery
@@ -80,11 +83,20 @@ process. Wildcard routes use Express 5 syntax: `/{*path}`, not `*`.
 
 **Availability is decided on the server, and only there.** `availability.ts`,
 `appointmentGuard.ts` and `scheduler.ts` say who is free; `replan.ts` says what
-to do when someone is not. Two screens have re-implemented those rules in the
-browser and both were wrong within a release — the booking dialog threw away
-every valid slot once meals became four-hour windows, and `VerifyDialog` still
-carries its own copy, which #88 removes. A screen asks the server; it never
-decides for itself.
+to do when someone is not; `dayCheck.ts` answers "what is wrong with this day"
+by asking both. Two screens once re-implemented those rules in the browser and
+both were wrong within a release — the booking dialog threw away every valid
+slot once meals became four-hour windows, and Verify reported a clean day while
+`PUT /appointments` refused four of its treatments. Both copies are gone (#88).
+A screen asks the server; it never decides for itself, and
+`npm run test:day-check` fails if `/day-check` and the write ever disagree.
+
+**Gender match and room amenities are refusals, not preferences.** The scheduler
+always avoided proposing them; since #88 `appointmentGuard` refuses them too, so
+nothing can arrive by another route. Gender matching still honours the Settings
+switch. What an admin may switch off in Verify is only the buffer between
+treatments and a resident's own therapist — both live in the fix-finder, so
+relaxing one widens the search and can never book what the guard refuses.
 
 **"Today" is the centre's day, from `Settings.timezone`.** The seed, the
 schedule, the warnings, the invariants test and the day sheet all work it out
