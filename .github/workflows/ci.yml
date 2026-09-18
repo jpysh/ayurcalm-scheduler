@@ -68,12 +68,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      # qa walks one path in a browser, so Chromium goes in first.
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
       # The same command the maintainer runs locally: starts the stack and runs
       # every server test inside the app container.
       - run: npm run qa
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      # Sign in, every tab, the day sheet.
-      - run: npm run test:e2e
+      # Sign in, every tab, the day sheet. The absence walk already ran in qa, and
+      # a second run would press on the API's write limit.
+      - run: npm run test:e2e -- --grep-invert "a therapist off"
       - if: failure()
         run: docker compose logs app | tail -100
