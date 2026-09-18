@@ -32,6 +32,10 @@ async function main() {
     const day = new Date('2030-01-16T00:00:00.000Z');
     const therapy = await prisma.therapy.create({ data: { name: 'Sim Therapy', required_amenities: ['table'], duration_minutes: 60, requires_gender_match: false } });
     made.push({ table: 'therapy', id: therapy.id });
+    // Worked by two at once. When one of the pair is off, one seat is refilled
+    // and the other therapist stays on it.
+    const pairTherapy = await prisma.therapy.create({ data: { name: 'Sim Pair Therapy', required_amenities: ['table'], duration_minutes: 60, staff_required: 2 } });
+    made.push({ table: 'therapy', id: pairTherapy.id });
 
     const rooms = [];
     for (const name of ['Sim Room A', 'Sim Room B']) {
@@ -41,7 +45,7 @@ async function main() {
 
     const staff = [];
     for (const name of ['Sim Absent', 'Sim Cover One', 'Sim Cover Two', 'Sim Loyal']) {
-      staff.push(await prisma.staff.create({ data: { name, gender: 'other', is_active: true, specializations: [therapy.id], weekly_schedule: allDay } }));
+      staff.push(await prisma.staff.create({ data: { name, gender: 'other', is_active: true, specializations: [therapy.id, pairTherapy.id], weekly_schedule: allDay } }));
     }
     staff.forEach((s) => made.push({ table: 'staff', id: s.id }));
     const [absent, coverOne, coverTwo, loyalTherapist] = staff;
@@ -71,8 +75,15 @@ async function main() {
     await book(pOne.id, absent.id, rooms[0].id, '10:00');
     await book(pTwo.id, absent.id, rooms[0].id, '11:00');
     await book(pLoyal.id, absent.id, rooms[1].id, '12:00');
+    // A pair treatment with the absent therapist as the second pair of hands.
+    const pair = await prisma.appointment.create({ data: {
+      patient_id: pTwo.id, therapy_id: pairTherapy.id, staff_id: coverOne.id, co_staff_ids: [absent.id], room_id: rooms[1].id,
+      scheduled_date: day, start_time: '15:00', duration_minutes: 60, session_number: 1, total_sessions: 1,
+      status: 'confirmed', assignment_type: 'manual', notes: '',
+    } });
+    made.push({ table: 'appointment', id: pair.id });
     // Sim Loyal is busy at noon, so the loyal resident cannot simply stay put.
-    await book(pOne.id, loyalTherapist.id, rooms[1].id, '15:00');
+    await book(pOne.id, loyalTherapist.id, rooms[0].id, '12:00');
 
     // Sim Cover Two runs a class over 10:00, so only Sim Cover One can take the
     // first treatment at its own time.
@@ -86,10 +97,19 @@ async function main() {
     const result = await replanStaffDay(absent.id, day, prisma, { apply: true });
 
     // Nothing is left on the absent therapist.
-    const after = await prisma.appointment.findMany({ where: { scheduled_date: day, staff_id: absent.id } });
+    const after = await prisma.appointment.findMany({ where: { scheduled_date: day, OR: [{ staff_id: absent.id }, { co_staff_ids: { has: absent.id } }] } });
     assert.equal(after.length, 0, 'the absent therapist still has treatments');
 
-    // The two ordinary residents kept their time — a swap, not a move.
+    // The pair kept its time, its room and the therapist who is in; only the
+    // absent seat was filled.
+    const pairMove = result.moved.find((m) => m.appointment_id === pair.id);
+    assert.ok(pairMove, 'the pair treatment was not dealt with');
+    assert.equal(pairMove!.tier, 1, 'the pair treatment was moved instead of having one seat refilled');
+    assert.equal(pairMove!.to.staff_id, coverOne.id, 'the therapist who is in was taken off the pair treatment');
+    assert.equal(pairMove!.to.co_staff_ids.length, 1);
+    assert.ok(![absent.id, coverOne.id].includes(pairMove!.to.co_staff_ids[0]), 'the empty seat went to the absent therapist or to the lead twice');
+
+    // The ordinary residents kept their time — a swap, not a move.
     const tier1 = result.moved.filter((m) => m.tier === 1);
     assert.ok(tier1.length >= 2, `expected two same-time swaps, got ${tier1.length}`);
     assert.ok(tier1.every((m) => m.to.start_time === m.from.start_time));
@@ -118,6 +138,13 @@ async function main() {
       return null;
     };
     for (const key of ['staff_id', 'room_id', 'patient_id'] as const) assert.equal(clash(key), null);
+    // A co-therapist counts: nobody leads one treatment while assisting another.
+    const team = (a: (typeof dayNow)[number]) => [a.staff_id, ...a.co_staff_ids].filter(Boolean);
+    for (const a of dayNow) for (const b of dayNow) {
+      if (a.id === b.id || !team(a).some((id) => team(b).includes(id))) continue;
+      assert.ok(!overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, toMinutes(b.start_time), toMinutes(b.start_time) + b.duration_minutes),
+        `a therapist is on two treatments at ${a.start_time}`);
+    }
 
     // Nobody was booked across the class they are running.
     const overClass = dayNow.find((a) => a.staff_id === coverTwo.id && overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, 600, 660));
@@ -129,6 +156,8 @@ async function main() {
     const restored = await prisma.appointment.findMany({ where: { scheduled_date: day, staff_id: absent.id } });
     assert.equal(restored.length, 3, 'undo did not put the absent therapist back on their three treatments');
     assert.deepEqual(restored.map((a) => a.start_time).sort(), ['10:00', '11:00', '12:00']);
+    const pairBack = await prisma.appointment.findUnique({ where: { id: pair.id } });
+    assert.deepEqual([pairBack?.staff_id, pairBack?.co_staff_ids], [coverOne.id, [absent.id]], 'undo did not put the pair back as it was');
 
     console.log('replan simulation passed');
   } finally {

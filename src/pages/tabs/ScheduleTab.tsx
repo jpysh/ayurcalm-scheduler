@@ -51,6 +51,7 @@ type ApiAppointment = {
   patient_id: string;
   therapy_id: string;
   staff_id: string | null;
+  co_staff_ids?: string[];
   room_id: string | null;
   scheduled_date: string;
   start_time: string;
@@ -223,7 +224,8 @@ const ScheduleTab = ({
                             const items = slot.map((a: any) => {
                               const pname = String(patientNameMap.get(String(a.patient_id)) || 'Patient');
                               const tname = String(therapyNameById[String(a.therapy_id)] || 'Therapy');
-                              const sname = String(staffNameMap.get(String(a.staff_id ?? '')) || '');
+                              // Everyone on it: a second therapist left off the card is one the admin books twice.
+                              const sname = [a.staff_id, ...(a.co_staff_ids || [])].filter(Boolean).map((id: string) => staffNameMap.get(String(id)) || '').filter(Boolean).join(' & ');
                               const mins = Number(a.duration_minutes) || 0;
                               const roomInfo = Array.isArray(roomsList) ? (roomsList as any[]).find((rr) => String(rr.id) === String(a.room_id)) : null;
                               return (
@@ -238,6 +240,7 @@ const ScheduleTab = ({
                                     patient_id: a.patient_id,
                                     therapy_id: a.therapy_id,
                                     staff_id: a.staff_id,
+                                    co_staff_ids: a.co_staff_ids || [],
                                     room_id: a.room_id,
                                     patient: pname,
                                     therapy: tname,

@@ -43,11 +43,11 @@ const main = async () => {
     const s = toMinutes(a.start_time);
     return { s, e: s + a.duration_minutes };
   };
-  const noDoubleBooking = (key: (a: (typeof appts)[number]) => string | null, what: string) => {
+  // A key can be several people: everyone on a treatment worked by two.
+  const noDoubleBooking = (key: (a: (typeof appts)[number]) => string | null | (string | null)[], what: string) => {
     for (const [day, list] of byDay) {
       const seen = new Map<string, { s: number; e: number; id: string }[]>();
-      for (const a of list) {
-        const k = key(a);
+      for (const a of list) for (const k of [key(a)].flat()) {
         if (!k) continue;
         const { s, e } = span(a);
         const prior = seen.get(k) || [];
@@ -59,7 +59,19 @@ const main = async () => {
   };
 
   const cases: [string, () => void][] = [
-    ['no therapist is in two places at once', () => noDoubleBooking((a) => a.staff_id, 'therapist')],
+    ['no therapist is in two places at once, leading or assisting', () => noDoubleBooking((a) => [a.staff_id, ...a.co_staff_ids], 'therapist')],
+    ['a treatment worked by two has two therapists', () => {
+      let pairs = 0;
+      for (const a of appts) {
+        const th = therapyById.get(a.therapy_id);
+        const team = new Set([a.staff_id, ...a.co_staff_ids].filter(Boolean));
+        if (!th || !a.staff_id) continue;
+        assert.equal(team.size, th.staff_required, `${th.name} ${a.id} has ${team.size} therapists, needs ${th.staff_required}`);
+        if (th.staff_required > 1) pairs++;
+      }
+      // The demo shows the case, or nobody at :8080 can see it.
+      assert.ok(pairs > 0, 'the demo books no treatment worked by two');
+    }],
     ['no room holds two treatments at once', () => noDoubleBooking((a) => a.room_id, 'room')],
     ['no patient has two treatments at once', () => noDoubleBooking((a) => a.patient_id, 'patient')],
 
@@ -79,8 +91,10 @@ const main = async () => {
         const th = therapyById.get(a.therapy_id);
         if (!th?.requires_gender_match || !a.staff_id) continue;
         const p = patientById.get(a.patient_id);
-        const s = staffById.get(a.staff_id);
-        assert.equal(s?.gender, p?.gender, `${th.name} for ${p?.name} assigned to ${s?.name}`);
+        for (const id of [a.staff_id, ...a.co_staff_ids]) {
+          const s = staffById.get(id);
+          assert.equal(s?.gender, p?.gender, `${th.name} for ${p?.name} assigned to ${s?.name}`);
+        }
       }
     }],
 

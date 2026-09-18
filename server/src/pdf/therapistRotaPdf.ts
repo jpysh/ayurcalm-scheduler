@@ -1,4 +1,5 @@
 declare module 'pdfkit';
+import { teamOf } from '../availability.js';
 import PDFDocument from 'pdfkit';
 import { PrismaClient } from '@prisma/client';
 import { addHeader, shortenWords, toMinutes, durationBetween } from './dailySchedulePdf.js';
@@ -55,7 +56,7 @@ const eventAppliesToStaff = (e: { staff_id: string | null; staff_scope: string |
 export const buildRota = (input: {
   day: Date;
   staff: { id: string; name: string; is_active: boolean }[];
-  appts: { staff_id: string | null; patient_id: string; therapy_id: string; room_id: string | null; start_time: string; duration_minutes: number }[];
+  appts: { staff_id: string | null; co_staff_ids?: string[]; patient_id: string; therapy_id: string; room_id: string | null; start_time: string; duration_minutes: number }[];
   events: { start_time: string; end_time: string; activity_name: string; staff_id: string | null; staff_scope: string | null; staff_ids: string[] }[];
   timeOff: TimeOffRow[];
   patientById: Record<string, string>;
@@ -66,6 +67,7 @@ export const buildRota = (input: {
   onlyStaffId?: string;
 }): Rota => {
   const { day, appts, events, timeOff, patientById, therapyById, roomById } = input;
+  const staffName = new Map(input.staff.map((s) => [s.id, s.name] as const));
   const weekday = weekdayNames[day.getDay()];
 
   const staff = input.staff
@@ -85,7 +87,7 @@ export const buildRota = (input: {
   // an afternoon with no treatments is exactly the afternoon the rota has to
   // show as unavailable.
   const offTimes = onShift.flatMap((s) => offsByStaff.get(s.id) || []).filter((h) => !isFullDay(h)).map((h) => h.start_time as string);
-  const apptTimes = appts.filter((a) => onShift.some((s) => s.id === a.staff_id)).map((a) => a.start_time);
+  const apptTimes = appts.filter((a) => onShift.some((s) => teamOf(a).includes(s.id))).map((a) => a.start_time);
   const startTimes = [...apptTimes, ...eventsOnStaff.map((e) => e.start_time), ...offTimes];
   // Three columns, always the same three, because the rota hangs on a staff
   // board and a reader who has to work out what today's columns mean has
@@ -100,7 +102,7 @@ export const buildRota = (input: {
   // column to sit in rather than earning a fourth column of its own.
   const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
   const endTimes = [
-    ...appts.filter((a) => onShift.some((s) => s.id === a.staff_id)).map((a) => toMinutes(a.start_time) + (a.duration_minutes || 0)),
+    ...appts.filter((a) => onShift.some((s) => teamOf(a).includes(s.id))).map((a) => toMinutes(a.start_time) + (a.duration_minutes || 0)),
     ...eventsOnStaff.map((e) => toMinutes(e.end_time)),
   ];
   const dayStart = Math.min(toMinutes(input.openingTime), MIDDAY, ...startTimes.map(toMinutes));
@@ -121,20 +123,27 @@ export const buildRota = (input: {
       out.push({ name: s.name, note: reason || 'Not available', cells: slots.map(() => []), available: false });
       continue;
     }
-    const mine = appts.filter((a) => a.staff_id === s.id);
+    const mine = appts.filter((a) => teamOf(a).includes(s.id));
     const myEvents = events.filter((e) => eventAppliesToStaff(e, s.id));
     const cells = slots.map((slot) => {
       const inSlot = (t: string) => toMinutes(t) >= slot.start && toMinutes(t) < slot.end;
       const lines: RotaLine[] = [
-        ...mine.filter((a) => inSlot(a.start_time)).map((a) => ({
-          t: a.start_time,
-          bold: true,
-          text: [
-            `${therapyById[a.therapy_id] || a.therapy_id} ${a.duration_minutes || 0}m`,
-            patientById[a.patient_id] || a.patient_id,
-            a.room_id ? roomById[a.room_id] || a.room_id : '',
-          ].filter(Boolean).join(' · '),
-        })),
+        ...mine.filter((a) => inSlot(a.start_time)).flatMap((a) => {
+          const partners = teamOf(a).filter((id) => id !== s.id).map((id) => staffName.get(id) || id);
+          return [
+            {
+              t: a.start_time,
+              bold: true,
+              text: [
+                `${therapyById[a.therapy_id] || a.therapy_id} ${a.duration_minutes || 0}m`,
+                patientById[a.patient_id] || a.patient_id,
+                a.room_id ? roomById[a.room_id] || a.room_id : '',
+              ].filter(Boolean).join(' · '),
+            },
+            // Who they are working with, under the treatment it belongs to.
+            ...(partners.length ? [{ t: a.start_time, bold: false, noTime: true, text: `with ${partners.join(' & ')}` }] : []),
+          ];
+        }),
         // An event the therapist is running is time they are not free, so it
         // belongs on the rota beside the treatments, not hidden behind them.
         ...myEvents.filter((e) => inSlot(e.start_time)).map((e) => ({

@@ -18,9 +18,10 @@ const therapyDefs = [
   { name: 'Shirodhara', req: ['shirodhara_stand','massage_table'], dur: 90, gender: true },
   { name: 'Panchakarma', req: ['steam','massage_table','shower'], dur: 120, gender: true },
   { name: 'Nasya', req: ['massage_table'], dur: 45, gender: false },
-  { name: 'Pizhichil', req: ['massage_table','shower'], dur: 75, gender: true },
+  // Worked by two therapists at once, one each side of the resident.
+  { name: 'Pizhichil', req: ['massage_table','shower'], dur: 75, gender: true, staff: 2 },
   { name: 'Udvartana', req: ['massage_table','herbal_paste'], dur: 60, gender: false },
-  { name: 'Njavarakizhi', req: ['massage_table','rice_boluses'], dur: 90, gender: true },
+  { name: 'Njavarakizhi', req: ['massage_table','rice_boluses'], dur: 90, gender: true, staff: 2 },
   { name: 'Kizhi', req: ['massage_table','rice_boluses'], dur: 60, gender: false },
   { name: 'Takradhara', req: ['dhara_stand','massage_table'], dur: 60, gender: true },
   { name: 'Padabhyanga', req: ['massage_table','herbal_oil'], dur: 45, gender: false },
@@ -181,7 +182,7 @@ async function main() {
   const therapies = await Promise.all(therapyDefs.map(t => prisma.therapy.create({
     // One number per therapy: hands-on time plus the room's cleaning time, which
     // is what the day sheet prints and what the slot actually costs.
-    data: { name: t.name, required_amenities: t.req, duration_minutes: t.dur + cleaningFor(t.req), requires_gender_match: t.gender },
+    data: { name: t.name, required_amenities: t.req, duration_minutes: t.dur + cleaningFor(t.req), requires_gender_match: t.gender, staff_required: (t as { staff?: number }).staff ?? 1 },
   })));
 
   const scheduleStd = { sunday: { start: '09:00', end: '20:00' }, monday: { start: '09:00', end: '20:00' }, tuesday: { start: '09:00', end: '20:00' }, wednesday: { start: '09:00', end: '20:00' }, thursday: { start: '09:00', end: '20:00' }, friday: { start: '09:00', end: '20:00' }, saturday: { start: '09:00', end: '20:00' } };
@@ -305,9 +306,11 @@ async function main() {
         // busy. Taking the first qualified one and giving up when they were
         // booked was losing most of the day's slots to one person's diary.
         const staffOnLeave = staffHolidaysByDay[dateKey] || new Set<string>();
-        const s = sCandidates.find(sc => !staffOnLeave.has(sc.id) &&
-          !(busy[dateKey].staff[sc.id] || []).some(b => overlaps(b.s, b.e, slotS, slotE)));
-        if (!s) continue;
+        // As many as the therapy needs, or the slot goes to something else.
+        const team = sCandidates.filter(sc => !staffOnLeave.has(sc.id) &&
+          !(busy[dateKey].staff[sc.id] || []).some(b => overlaps(b.s, b.e, slotS, slotE))).slice(0, th.staff_required);
+        if (team.length < th.staff_required) continue;
+        const [s, ...co] = team;
         const sMin = toMinutes(time);
         // Busy intervals carry the buffer, so the seed obeys the same rest and
         // cleanup rule the scheduler enforces.
@@ -317,10 +320,12 @@ async function main() {
         const pBusy = busy[dateKey].patient[p.id] ??= [];
         const conflict = rBusy.some(b => overlaps(b.s, b.e, sMin, eMin)) || sBusy.some(b => overlaps(b.s, b.e, sMin, eMin)) || pBusy.some(b => overlaps(b.s, b.e, sMin, eMin));
         if (conflict) continue;
+        for (const c of co) (busy[dateKey].staff[c.id] ??= []).push({ s: sMin, e: eMin });
         await prisma.appointment.create({ data: {
           patient_id: p.id,
           therapy_id: th.id,
           staff_id: s.id,
+          co_staff_ids: co.map((c) => c.id),
           room_id: r.id,
           scheduled_date: new Date(dateKey),
           start_time: time,
@@ -384,7 +389,9 @@ async function main() {
     const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
     const taken: { s: number; e: number }[] = [];
     const toMove = todays.filter((a) => {
-      if (a.staff_id === absentToday) return false;
+      // Only single-handed treatments: the case here is one therapist's day, and
+      // the absent one cannot also be the partner already on it.
+      if (a.staff_id === absentToday || a.co_staff_ids.length > 0) return false;
       const s = mins(a.start_time);
       const e = s + a.duration_minutes;
       // One person cannot give two treatments at once, even the ones they will

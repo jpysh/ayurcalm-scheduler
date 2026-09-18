@@ -128,4 +128,18 @@ const off = (over: Record<string, unknown>) => ({
   assert.equal(late.slots[2].end, 20 * 60 + 30, 'evening stretches to the last treatment');
 }
 
+// A treatment worked by two is on both therapists' rows, each saying who the
+// other one is, under the treatment it belongs to.
+{
+  const { rows, slots } = buildRota({
+    ...base,
+    appts: [{ staff_id: 's2', co_staff_ids: ['s3'], patient_id: 'p1', therapy_id: 't1', room_id: 'r1', start_time: '10:00', duration_minutes: 60 }],
+    events: [],
+  });
+  const at10 = slots.findIndex((s) => s.start <= 600 && s.end > 600);
+  const cell = (name: string) => rows.find((r) => r.name === name)!.cells[at10].map((l) => l.text);
+  assert.deepEqual(cell('Kumar Nair'), ['Abhyanga 60m · Sarah Smith · Room 1', 'with Priya Menon']);
+  assert.deepEqual(cell('Priya Menon'), ['Abhyanga 60m · Sarah Smith · Room 1', 'with Kumar Nair']);
+}
+
 console.log('therapistRota: ok');

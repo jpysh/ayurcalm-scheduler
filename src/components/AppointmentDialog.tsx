@@ -36,7 +36,7 @@ interface Appointment {
 }
 
 interface AppointmentDialogProps {
-  appointment: (Appointment & { scheduledDate?: string; duration?: number; patientId?: string; therapyId?: string; staffId?: string; roomId?: string }) | null;
+  appointment: (Appointment & { scheduledDate?: string; duration?: number; patientId?: string; therapyId?: string; staffId?: string; coStaffIds?: string[]; roomId?: string }) | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOpenAssign?: () => void;
@@ -46,7 +46,7 @@ interface AppointmentDialogProps {
 export const AppointmentDialog = ({ appointment, open, onOpenChange, onOpenAssign, onChanged }: AppointmentDialogProps) => {
   const [isEditing, setIsEditing] = useState(false);
   type ApiPatient = { id: string; name: string; gender?: string; phone?: string };
-  type ApiTherapy = { id: string; name: string; duration_minutes?: number; required_amenities?: string[] };
+  type ApiTherapy = { id: string; name: string; duration_minutes?: number; required_amenities?: string[]; staff_required?: number };
   type ApiRoom = { id: string; name: string; amenities?: string[] };
   type ApiStaff = { id: string; name: string };
   const [patients, setPatients] = useState<ApiPatient[]>([]);
@@ -58,6 +58,7 @@ export const AppointmentDialog = ({ appointment, open, onOpenChange, onOpenAssig
     patientId: appointment?.patientId || "",
     therapyId: appointment?.therapyId || "",
     staffId: appointment?.staffId || "",
+    coStaffIds: [] as string[],
     roomId: appointment?.roomId || "",
     duration: appointment?.duration || 60,
     time: appointment?.time || "09:00",
@@ -83,13 +84,18 @@ export const AppointmentDialog = ({ appointment, open, onOpenChange, onOpenAssig
   }, []);
   useEffect(() => {
     if (!appointment) return;
+    // The schedule grid hands over the API's own field names and Verify hands
+    // over these; reading only one set opened the grid's edits with every field
+    // blank, and saving then took the therapist and room off the treatment.
+    const a = appointment as typeof appointment & Record<string, any>;
     setForm({
-      patientId: appointment.patientId || "",
-      therapyId: appointment.therapyId || "",
-      staffId: appointment.staffId || "",
-      roomId: appointment.roomId || "",
-      duration: appointment.duration || 60,
-      time: appointment.time,
+      patientId: a.patientId || a.patient_id || "",
+      therapyId: a.therapyId || a.therapy_id || "",
+      staffId: a.staffId || a.staff_id || "",
+      coStaffIds: a.coStaffIds || a.co_staff_ids || [],
+      roomId: a.roomId || a.room_id || "",
+      duration: a.duration || a.duration_minutes || 60,
+      time: a.time || a.start_time,
     });
   }, [appointment]);
   const patientsSorted = useMemo(() => [...patients].sort((a, b) => (a.name || "").localeCompare(b.name || "")), [patients]);
@@ -106,6 +112,8 @@ export const AppointmentDialog = ({ appointment, open, onOpenChange, onOpenAssig
     const rr = rooms.find((x) => x.id === form.roomId);
     return rr?.amenities || [];
   }, [form.roomId, rooms]);
+  // One picker per seat the therapy needs beyond the lead.
+  const seatsNeeded = Math.max(1, therapies.find((x) => x.id === form.therapyId)?.staff_required ?? 1);
   const selectedPatient = useMemo(() => patients.find((x) => x.id === form.patientId), [patients, form.patientId]);
   /**
    * The server decides. This used to check two fetches' worth of clashes in the
@@ -116,6 +124,7 @@ export const AppointmentDialog = ({ appointment, open, onOpenChange, onOpenAssig
     const body: Record<string, unknown> = {
       duration_minutes: form.duration,
       staff_id: form.staffId || null,
+      co_staff_ids: form.coStaffIds.filter(Boolean),
       room_id: form.roomId || null,
       ...overrides,
     };
@@ -276,14 +285,26 @@ export const AppointmentDialog = ({ appointment, open, onOpenChange, onOpenAssig
                 <span className="text-xs sm:text-sm">Staff</span>
               </div>
               {isEditing ? (
-                <Select value={form.staffId} onValueChange={(v:string) => setForm(f => ({ ...f, staffId: v }))}>
-                  <SelectTrigger className="h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[45vh] w-[90vw] sm:w-auto">
-                    {staffSorted.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
-                  </SelectContent>
-                </Select>
+                <div className="space-y-1">
+                  <Select value={form.staffId} onValueChange={(v:string) => setForm(f => ({ ...f, staffId: v }))}>
+                    <SelectTrigger className="h-8" aria-label="Lead therapist">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[45vh] w-[90vw] sm:w-auto">
+                      {staffSorted.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                  {Array.from({ length: seatsNeeded - 1 }, (_, i) => (
+                    <Select key={i} value={form.coStaffIds[i] || ""} onValueChange={(v:string) => setForm(f => { const co = [...f.coStaffIds]; co[i] = v; return { ...f, coStaffIds: co }; })}>
+                      <SelectTrigger className="h-8" aria-label={`Therapist ${i + 2}`}>
+                        <SelectValue placeholder={`Therapist ${i + 2}`} />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[45vh] w-[90vw] sm:w-auto">
+                        {staffSorted.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  ))}
+                </div>
               ) : (
                 <Badge variant="secondary" className="text-xs sm:text-sm px-2.5 py-0.5">{appointment.staff}</Badge>
               )}

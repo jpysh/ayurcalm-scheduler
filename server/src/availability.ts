@@ -94,3 +94,7 @@ export const staffEventBusy = (events: EventRow[], staffId: string, day: Date): 
 /** The event in the way of a booking, if there is one. */
 export const eventBlocking = (events: EventRow[], staffId: string, day: Date, start: number, end: number) =>
   staffEventBusy(events, staffId, day).find((b) => overlaps(b.s, b.e, start, end));
+
+/** Everyone working on a treatment, the lead first. */
+export const teamOf = (a: { staff_id: string | null; co_staff_ids?: string[] | null }): string[] =>
+  [...new Set([a.staff_id, ...(a.co_staff_ids || [])].filter((id): id is string => Boolean(id)))];

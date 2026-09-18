@@ -8,7 +8,9 @@
  *
  * So: build a small centre, put four deliberately wrong treatments on one day —
  * a therapist on leave, a double-booked room, a therapist of the wrong gender
- * for a therapy that requires a match, and a room without the equipment — then
+ * for a therapy that requires a match, and a room without the equipment — and
+ * two about a therapy worked by a pair: a co-therapist booked elsewhere at the
+ * same time, and a pair treatment with one therapist on it. Then
  * check every appointment both ways and assert the two answers are the same
  * appointment for appointment. It tidies up after itself and refuses to run
  * against a centre's own database.
@@ -38,7 +40,8 @@ async function main() {
     const plain = await prisma.therapy.create({ data: { name: 'Parity Plain', required_amenities: ['table'], duration_minutes: 60, requires_gender_match: false } });
     const gendered = await prisma.therapy.create({ data: { name: 'Parity Gendered', required_amenities: ['table'], duration_minutes: 60, requires_gender_match: true } });
     const needsDroni = await prisma.therapy.create({ data: { name: 'Parity Droni', required_amenities: ['droni'], duration_minutes: 60, requires_gender_match: false } });
-    [plain, gendered, needsDroni].forEach((t) => made.push({ table: 'therapy', id: t.id }));
+    const pair = await prisma.therapy.create({ data: { name: 'Parity Pair', required_amenities: ['table'], duration_minutes: 60, staff_required: 2 } });
+    [plain, gendered, needsDroni, pair].forEach((t) => made.push({ table: 'therapy', id: t.id }));
 
     const roomA = await prisma.therapyRoom.create({ data: { name: 'Parity Room A', amenities: ['table', 'droni'], is_active: true, weekly_schedule: allDay } });
     const roomB = await prisma.therapyRoom.create({ data: { name: 'Parity Room B', amenities: ['table'], is_active: true, weekly_schedule: allDay } });
@@ -47,7 +50,8 @@ async function main() {
     const away = await prisma.staff.create({ data: { name: 'Parity Away', gender: 'female', is_active: true, specializations: [plain.id, gendered.id, needsDroni.id], weekly_schedule: allDay } });
     const here = await prisma.staff.create({ data: { name: 'Parity Here', gender: 'female', is_active: true, specializations: [plain.id, gendered.id, needsDroni.id], weekly_schedule: allDay } });
     const man = await prisma.staff.create({ data: { name: 'Parity Man', gender: 'male', is_active: true, specializations: [gendered.id], weekly_schedule: allDay } });
-    [away, here, man].forEach((s) => made.push({ table: 'staff', id: s.id }));
+    const helper = await prisma.staff.create({ data: { name: 'Parity Helper', gender: 'female', is_active: true, specializations: [plain.id, pair.id], weekly_schedule: allDay } });
+    [away, here, man, helper].forEach((s) => made.push({ table: 'staff', id: s.id }));
 
     const one = await prisma.patient.create({ data: { name: 'Parity One', gender: 'female' } });
     const two = await prisma.patient.create({ data: { name: 'Parity Two', gender: 'female' } });
@@ -56,10 +60,10 @@ async function main() {
     const five = await prisma.patient.create({ data: { name: 'Parity Five', gender: 'female' } });
     [one, two, three, four, five].forEach((p) => made.push({ table: 'patient', id: p.id }));
 
-    const book = async (patientId: string, therapyId: string, staffId: string, roomId: string, start: string) => {
+    const book = async (patientId: string, therapyId: string, staffId: string, roomId: string, start: string, co: string[] = []) => {
       const a = await prisma.appointment.create({
         data: {
-          patient_id: patientId, therapy_id: therapyId, staff_id: staffId, room_id: roomId,
+          patient_id: patientId, therapy_id: therapyId, staff_id: staffId, co_staff_ids: co, room_id: roomId,
           scheduled_date: day, start_time: start, duration_minutes: 60,
           session_number: 1, total_sessions: 1, status: 'pending', assignment_type: 'manual',
         },
@@ -77,6 +81,12 @@ async function main() {
     const wrongGender = await book(four.id, gendered.id, man.id, roomA.id, '14:00');
     const noDroni = await book(five.id, needsDroni.id, here.id, roomB.id, '15:30');
     const fine = await book(one.id, plain.id, here.id, roomA.id, '16:30');
+    // Parity Helper assists on a pair treatment at 13:00 and is also booked to
+    // lead one of her own at 13:00: a co-therapist is in the room, not free.
+    const pairTreatment = await book(two.id, pair.id, here.id, roomA.id, '13:00', [helper.id]);
+    const helperElsewhere = await book(three.id, plain.id, helper.id, roomB.id, '13:00');
+    // A pair treatment with one pair of hands.
+    const shortHanded = await book(five.id, pair.id, here.id, roomA.id, '10:00');
 
     const leave = await prisma.timeOff.create({
       data: { entity_type: 'staff', entity_id: away.id, date: day, description: 'Parity leave', weekdays: [] },
@@ -96,7 +106,7 @@ async function main() {
       const conflict = findConflict(
         {
           id: a.id, scheduled_date: a.scheduled_date, start_time: a.start_time,
-          duration_minutes: a.duration_minutes, staff_id: a.staff_id, room_id: a.room_id,
+          duration_minutes: a.duration_minutes, staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id,
           patient_id: a.patient_id, therapy_id: a.therapy_id,
         },
         ctx,
@@ -120,6 +130,9 @@ async function main() {
       'the double-booked room should be reported',
     );
     assert.ok(!blockingById.has(fine.id), 'a treatment nothing is wrong with should not be reported');
+    assert.equal(blockingById.get(helperElsewhere.id)?.kind, 'STAFF_BUSY', 'a co-therapist was bookable elsewhere in the same slot');
+    assert.equal(blockingById.get(pairTreatment.id)?.kind, 'STAFF_BUSY', 'the pair treatment does not see its co-therapist booked elsewhere');
+    assert.equal(blockingById.get(shortHanded.id)?.kind, 'STAFF_SHORT', 'a pair treatment with one therapist was not refused');
 
     // A fix that is offered must be one the write would accept: the card's
     // button cannot hand the admin a refusal.
@@ -131,7 +144,7 @@ async function main() {
       const conflict = findConflict(
         {
           id: appt.id, scheduled_date: day, start_time: p.fix.start_time,
-          duration_minutes: appt.duration_minutes, staff_id: p.fix.staff_id, room_id: p.fix.room_id,
+          duration_minutes: appt.duration_minutes, staff_id: p.fix.staff_id, co_staff_ids: p.fix.co_staff_ids, room_id: p.fix.room_id,
           patient_id: appt.patient_id, therapy_id: appt.therapy_id,
         },
         after,

@@ -360,7 +360,7 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
         signal: controller.signal,
       });
       clearTimeout(timeout);
-      let data: { success: boolean; appointments?: { scheduled_date: string; start_time: string; room_id: string; staff_id: string }[]; suggestions?: { scheduled_date: string; start_time: string; room_id: string; staff_id: string }[]; conflicts?: { reason?: string; details?: Record<string, unknown> } } = { success: false };
+      let data: { success: boolean; appointments?: { scheduled_date: string; start_time: string; room_id: string; staff_id: string; co_staff_ids?: string[] }[]; suggestions?: { scheduled_date: string; start_time: string; room_id: string; staff_id: string; co_staff_ids?: string[] }[]; conflicts?: { reason?: string; details?: Record<string, unknown> } } = { success: false };
       const ct = res.headers.get('content-type') || '';
       if (ct.includes('application/json')) {
         data = await res.json();
@@ -418,7 +418,8 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
           date: dateStr,
           time: a.start_time,
           room: roomMap[a.room_id] || a.room_id || "",
-          staff: staffMap[a.staff_id] || a.staff_id || "",
+          // Both names when the treatment is worked by two.
+          staff: [a.staff_id, ...(a.co_staff_ids || [])].map((id) => staffMap[id] || id).join(' & '),
           therapy: selectedTherapy?.name,
           patient: selectedPatient?.name,
         };
@@ -430,7 +431,7 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
         room_id: s.room_id,
         staff_id: s.staff_id,
         room: roomMap[s.room_id] || s.room_id,
-        staff: staffMap[s.staff_id] || s.staff_id,
+        staff: [s.staff_id, ...(s.co_staff_ids || [])].map((id) => staffMap[id] || id).join(' & '),
       }));
       // The server decides what clashes with an event; it reads ProgramEvent
       // when it picks a therapist. This used to re-check that here, and once

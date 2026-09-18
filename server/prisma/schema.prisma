@@ -74,6 +74,9 @@ model Therapy {
   required_amenities    String[]
   duration_minutes      Int
   requires_gender_match Boolean  @default(false)
+  /// How many therapists the treatment needs. A rule the guard enforces, not a
+  /// choice made per booking: a four-hand Pizhichil always needs two.
+  staff_required        Int      @default(1)
   // Rest for the patient and cleanup for the room after an oil or steam
   // therapy. One number because no centre has asked to tell the two apart.
   description           String?
@@ -85,7 +88,12 @@ model Appointment {
   id               String            @id @default(uuid())
   patient_id       String
   therapy_id       String
+  /// The lead therapist.
   staff_id         String?
+  /// Everyone else working on it. A list rather than a join table so that every
+  /// query for a day's appointments carries them without asking: a co-therapist
+  /// left out of a busy check is a double booking.
+  co_staff_ids     String[]          @default([])
   room_id          String?
   scheduled_date   DateTime
   start_time       String

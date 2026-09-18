@@ -16,7 +16,7 @@
  * course, so it is put to the admin rather than done to them.
  */
 import { PrismaClient, Prisma } from '@prisma/client';
-import { overlaps, staffEventBusy, toMinutes, type EventRow } from './availability.js';
+import { overlaps, staffEventBusy, teamOf, toMinutes, type EventRow } from './availability.js';
 
 export type Move = {
   appointment_id: string;
@@ -24,7 +24,8 @@ export type Move = {
   therapy_name: string;
   tier: 1 | 2 | 3;
   from: { staff_name: string; start_time: string; date: string };
-  to: { staff_id: string | null; staff_name: string; start_time: string; date: string; room_id: string | null };
+  /** `staff_id` leads; `co_staff_ids` is everyone else on the treatment. */
+  to: { staff_id: string | null; co_staff_ids: string[]; staff_name: string; start_time: string; date: string; room_id: string | null };
   /** True when the admin chose this row themselves and the plan must keep it. */
   pinned?: boolean;
 };
@@ -33,6 +34,7 @@ export type Move = {
 export type Pin = {
   appointment_id: string;
   staff_id: string | null;
+  co_staff_ids?: string[];
   start_time: string;
   date: string;
   room_id: string | null;
@@ -127,7 +129,7 @@ export async function planDay(
   // session Verify is fixing.
   const wanted = opts.appointmentIds ? new Set(opts.appointmentIds) : null;
   const mine = dayAppointments
-    .filter((a) => (wanted ? wanted.has(a.id) : a.staff_id === staffId))
+    .filter((a) => (wanted ? wanted.has(a.id) : Boolean(staffId) && teamOf(a).includes(staffId as string)))
     .sort((a, b) => toMinutes(a.start_time) - toMinutes(b.start_time));
   const mineIds = new Set(mine.map((a) => a.id));
   const pinnedBy = new Map((opts.pins || []).map((p) => [p.appointment_id, p]));
@@ -146,7 +148,7 @@ export async function planDay(
     if (mineIds.has(a.id)) continue;
     const s = toMinutes(a.start_time);
     const e = s + a.duration_minutes;
-    addBusy(staffBusy, a.staff_id, s, e);
+    for (const id of teamOf(a)) addBusy(staffBusy, id, s, e);
     addBusy(roomBusy, a.room_id, s, e);
     addBusy(patientBusy, a.patient_id, s, e);
   }
@@ -167,6 +169,12 @@ export async function planDay(
     }
   }
 
+  const teamName = (ids: (string | null)[]) =>
+    ids.filter(Boolean).map((id) => staffById.get(id as string)?.name || 'Unknown').join(' and ') || 'Unassigned';
+  const beforeOf = (a: (typeof dayAppointments)[number]) => ({
+    staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id, start_time: a.start_time, scheduled_date: a.scheduled_date.toISOString(),
+  });
+
   const moved: Move[] = [];
   const proposed: Move[] = [];
   const unplaced: Unplaced[] = [];
@@ -181,8 +189,9 @@ export async function planDay(
     const patient = patientById.get(appt.patient_id);
     const s = toMinutes(pin.start_time);
     const e = s + appt.duration_minutes;
+    const pinCo = pin.co_staff_ids || [];
     if (pin.date === ymd(date)) {
-      addBusy(staffBusy, pin.staff_id, s, e);
+      for (const id of teamOf({ staff_id: pin.staff_id, co_staff_ids: pinCo })) addBusy(staffBusy, id, s, e);
       addBusy(roomBusy, pin.room_id, s, e);
       addBusy(patientBusy, appt.patient_id, s, e);
     }
@@ -194,7 +203,8 @@ export async function planDay(
       from: { staff_name: staffById.get(appt.staff_id || '')?.name || 'Unassigned', start_time: appt.start_time, date: ymd(date) },
       to: {
         staff_id: pin.staff_id,
-        staff_name: pin.staff_id ? staffById.get(pin.staff_id)?.name || 'Unknown' : 'Unassigned',
+        co_staff_ids: pinCo,
+        staff_name: teamName([pin.staff_id, ...pinCo]),
         start_time: pin.start_time,
         date: pin.date,
         room_id: pin.room_id,
@@ -204,8 +214,8 @@ export async function planDay(
     moved.push(move);
     writes.push({
       appointment_id: appt.id,
-      before: { staff_id: appt.staff_id, room_id: appt.room_id, start_time: appt.start_time, scheduled_date: appt.scheduled_date.toISOString() },
-      after: { staff_id: pin.staff_id, room_id: pin.room_id, start_time: pin.start_time, scheduled_date: new Date(`${pin.date}T00:00:00.000Z`).toISOString() },
+      before: beforeOf(appt),
+      after: { staff_id: pin.staff_id, co_staff_ids: pinCo, room_id: pin.room_id, start_time: pin.start_time, scheduled_date: new Date(`${pin.date}T00:00:00.000Z`).toISOString() },
     });
   }
 
@@ -222,6 +232,7 @@ export async function planDay(
     };
 
     const mustKeepTherapist = patient?.requires_preferred_staff && !opts.relaxPreferredStaff ? patient.preferred_staff_id : null;
+    const needed = Math.max(1, therapy?.staff_required ?? 1);
 
     const qualified = (s: (typeof staff)[number]) => {
       if (s.id === staffId) return false;
@@ -239,6 +250,26 @@ export async function planDay(
         return pref(a.id) - pref(b.id) || (staffBusy[a.id]?.length || 0) - (staffBusy[b.id]?.length || 0);
       });
 
+    /**
+     * A full team for one slot, or null. Whoever is on the treatment already
+     * and can stay, stays: a therapist off replaces one seat, not the pair.
+     * `isFree` says whether someone can work that slot.
+     */
+    const teamFor = (isFree: (sid: string) => boolean): string[] | null => {
+      const ok = (sid: string, team: string[]) => {
+        const s = staffById.get(sid);
+        return Boolean(s && qualified(s) && isFree(sid) && !team.includes(sid));
+      };
+      const team: string[] = [];
+      if (mustKeepTherapist) {
+        if (!ok(mustKeepTherapist, team)) return null;
+        team.push(mustKeepTherapist);
+      }
+      for (const sid of teamOf(appt)) if (team.length < needed && ok(sid, team)) team.push(sid);
+      for (const s of candidates) if (team.length < needed && ok(s.id, team)) team.push(s.id);
+      return team.length === needed ? team : null;
+    };
+
     const canTake = (sid: string, s: number, e: number) => free(staffBusy[sid], s, e);
     const roomFor = (s: number, e: number) => {
       if (appt.room_id && free(roomBusy[appt.room_id], s, e)) return appt.room_id;
@@ -248,60 +279,42 @@ export async function planDay(
       return alt?.id ?? null;
     };
 
-    const take = (sid: string | null, startMin: number, roomId: string | null, tier: 1 | 2) => {
+    const take = (team: string[], startMin: number, roomId: string | null, tier: 1 | 2) => {
       const end = startMin + duration;
-      addBusy(staffBusy, sid, startMin, end);
+      for (const sid of team) addBusy(staffBusy, sid, startMin, end);
       addBusy(roomBusy, roomId, startMin, end);
       addBusy(patientBusy, appt.patient_id, startMin, end);
-      const move: Move = {
+      const [lead, ...co] = team;
+      moved.push({
         appointment_id: appt.id,
         ...names,
         tier,
-        to: {
-          staff_id: sid,
-          staff_name: sid ? staffById.get(sid)?.name || 'Unknown' : 'Unassigned',
-          start_time: minutesToTime(startMin),
-          date: ymd(date),
-          room_id: roomId,
-        },
-      };
-      moved.push(move);
+        to: { staff_id: lead, co_staff_ids: co, staff_name: teamName(team), start_time: minutesToTime(startMin), date: ymd(date), room_id: roomId },
+      });
       writes.push({
         appointment_id: appt.id,
-        before: { staff_id: appt.staff_id, room_id: appt.room_id, start_time: appt.start_time, scheduled_date: appt.scheduled_date.toISOString() },
-        after: { staff_id: sid, room_id: roomId, start_time: minutesToTime(startMin) },
+        before: beforeOf(appt),
+        after: { staff_id: lead, co_staff_ids: co, room_id: roomId, start_time: minutesToTime(startMin) },
       });
     };
 
-    // Tier 1 — same time, same room, another therapist.
-    if (!mustKeepTherapist) {
-      const swap = candidates.find((s) => canTake(s.id, start, start + duration));
-      if (swap && appt.room_id && free(roomBusy[appt.room_id], start, start + duration)) {
-        take(swap.id, start, appt.room_id, 1);
-        continue;
-      }
-      if (swap) {
-        const room = roomFor(start, start + duration);
-        if (room) {
-          take(swap.id, start, room, 1);
-          continue;
-        }
-      }
+    // Tier 1 — same time, another pair of hands where one is missing.
+    const sameTime = teamFor((sid) => canTake(sid, start, start + duration));
+    const sameTimeRoom = sameTime && roomFor(start, start + duration);
+    if (sameTime && sameTimeRoom) {
+      take(sameTime, start, sameTimeRoom, 1);
+      continue;
     }
 
-    // Tier 2 — same day, another time. A resident who must have their own
-    // therapist keeps them; everyone else takes the first therapist free.
-    const tier2Candidates = mustKeepTherapist
-      ? staff.filter((s) => s.id === mustKeepTherapist)
-      : candidates;
+    // Tier 2 — same day, another time, with the whole team free then.
     let placed = false;
     for (let t = open; t + duration <= close && !placed; t += 30) {
       if (!free(patientBusy[appt.patient_id], t, t + duration)) continue;
       const room = roomFor(t, t + duration);
       if (!room) continue;
-      const who = tier2Candidates.find((s) => canTake(s.id, t, t + duration));
-      if (!who) continue;
-      take(who.id, t, room, 2);
+      const team = teamFor((sid) => canTake(sid, t, t + duration));
+      if (!team) continue;
+      take(team, t, room, 2);
       placed = true;
     }
     if (placed) continue;
@@ -314,21 +327,22 @@ export async function planDay(
       if (patient?.available_to && other > patient.available_to) break;
       const otherDay = await prisma.appointment.findMany({ where: { scheduled_date: other, status: { not: 'cancelled' } } });
       const busyThen = (sid: string) =>
-        otherDay.some((a) => a.staff_id === sid && overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, start, start + duration)) ||
+        otherDay.some((a) => teamOf(a).includes(sid) && overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, start, start + duration)) ||
         staffEventBusy(events, sid, other).some((b) => overlaps(b.s, b.e, start, start + duration)) ||
         timeOff.some((h) => h.entity_type === 'staff' && h.entity_id === sid && timeOffHitsDay(h, other));
-      const who = tier2Candidates.find((s) => !busyThen(s.id));
+      const team = teamFor((sid) => !busyThen(sid));
       const roomFree = rooms.find(
         (r) =>
           (therapy?.required_amenities || []).every((a) => r.amenities.includes(a)) &&
           !otherDay.some((a) => a.room_id === r.id && overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, start, start + duration)),
       );
-      if (who && roomFree) {
+      if (team && roomFree) {
+        const [lead, ...co] = team;
         proposal = {
           appointment_id: appt.id,
           ...names,
           tier: 3,
-          to: { staff_id: who.id, staff_name: who.name, start_time: appt.start_time, date: ymd(other), room_id: roomFree.id },
+          to: { staff_id: lead, co_staff_ids: co, staff_name: teamName(team), start_time: appt.start_time, date: ymd(other), room_id: roomFree.id },
         };
       }
     }
@@ -339,10 +353,16 @@ export async function planDay(
 
     writes.push({
       appointment_id: appt.id,
-      before: { staff_id: appt.staff_id, room_id: appt.room_id, start_time: appt.start_time, scheduled_date: appt.scheduled_date.toISOString() },
-      // The name comes off: an absent therapist's name on a treatment reads as
-      // covered, and the warning has to stay lit until someone deals with it.
-      after: { staff_id: null, room_id: appt.room_id, start_time: appt.start_time },
+      before: beforeOf(appt),
+      // The absent therapist's name comes off: it reads as covered, and the
+      // warning has to stay lit until someone deals with it. Anyone else on the
+      // treatment is still coming in, so they stay on it.
+      after: {
+        staff_id: appt.staff_id === staffId ? null : appt.staff_id,
+        co_staff_ids: appt.co_staff_ids.filter((id) => id !== staffId),
+        room_id: appt.room_id,
+        start_time: appt.start_time,
+      },
     });
     unplaced.push({
       appointment_id: appt.id,
@@ -364,6 +384,7 @@ export async function planDay(
         where: { id: w.appointment_id },
         data: {
           staff_id: (w.after.staff_id as string | null) ?? null,
+          co_staff_ids: (w.after.co_staff_ids as string[] | undefined) ?? [],
           room_id: (w.after.room_id as string | null) ?? null,
           start_time: w.after.start_time as string,
           // A pinned row can be on another day; everything the planner decides
@@ -396,7 +417,7 @@ export async function planDay(
  * whole point of the guard, not a surprise.
  */
 export async function applyPlan(
-  moves: { appointment_id: string; staff_id: string | null; room_id: string | null; start_time: string; date: string }[],
+  moves: { appointment_id: string; staff_id: string | null; co_staff_ids?: string[]; room_id: string | null; start_time: string; date: string }[],
   prisma: PrismaClient,
 ): Promise<{ batch_id: string; applied: number }> {
   const writes: { appointment_id: string; before: Record<string, unknown>; after: Record<string, unknown> }[] = [];
@@ -405,12 +426,12 @@ export async function applyPlan(
     if (!before) continue;
     await prisma.appointment.update({
       where: { id: m.appointment_id },
-      data: { staff_id: m.staff_id, room_id: m.room_id, start_time: m.start_time, scheduled_date: new Date(`${m.date}T00:00:00.000Z`) },
+      data: { staff_id: m.staff_id, co_staff_ids: m.co_staff_ids ?? [], room_id: m.room_id, start_time: m.start_time, scheduled_date: new Date(`${m.date}T00:00:00.000Z`) },
     });
     writes.push({
       appointment_id: m.appointment_id,
-      before: { staff_id: before.staff_id, room_id: before.room_id, start_time: before.start_time, scheduled_date: before.scheduled_date.toISOString() },
-      after: { staff_id: m.staff_id, room_id: m.room_id, start_time: m.start_time, scheduled_date: `${m.date}T00:00:00.000Z` },
+      before: { staff_id: before.staff_id, co_staff_ids: before.co_staff_ids, room_id: before.room_id, start_time: before.start_time, scheduled_date: before.scheduled_date.toISOString() },
+      after: { staff_id: m.staff_id, co_staff_ids: m.co_staff_ids ?? [], room_id: m.room_id, start_time: m.start_time, scheduled_date: `${m.date}T00:00:00.000Z` },
     });
   }
   const row = await prisma.auditLog.create({
@@ -447,6 +468,8 @@ export async function undoReplan(batchId: string, prisma: PrismaClient) {
       where: { id: w.appointment_id },
       data: {
         staff_id: (w.before.staff_id as string | null) ?? null,
+        // A batch written before co-therapists existed has no list; it had none.
+        co_staff_ids: (w.before.co_staff_ids as string[] | undefined) ?? [],
         room_id: (w.before.room_id as string | null) ?? null,
         start_time: w.before.start_time as string,
         scheduled_date: new Date(w.before.scheduled_date as string),

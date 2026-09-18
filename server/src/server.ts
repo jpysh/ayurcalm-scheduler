@@ -248,6 +248,7 @@ app.delete('/staff/:id', async (req: Request, res: Response) => {
   try {
     await prisma.$transaction(async (tx) => {
       await tx.appointment.deleteMany({ where: { staff_id: id } });
+      await tx.$executeRaw`UPDATE "Appointment" SET "co_staff_ids" = array_remove("co_staff_ids", ${id}) WHERE ${id} = ANY("co_staff_ids")`;
       await tx.timeOff.deleteMany({ where: { entity_type: 'staff', entity_id: id } });
       await tx.staff.update({ where: { id }, data: { is_active: false } });
     });
@@ -313,6 +314,7 @@ app.post('/therapies', async (req: Request, res: Response) => {
     required_amenities: z.array(z.string()).default([]),
     duration_minutes: z.number().int().positive(),
     requires_gender_match: z.boolean().default(false),
+    staff_required: z.number().int().min(1).max(6).default(1),
     description: z.string().optional(),
   });
   const body = schema.parse(req.body);
@@ -327,6 +329,7 @@ app.put('/therapies/:id', async (req: Request, res: Response) => {
     required_amenities: z.array(z.string()).optional(),
     duration_minutes: z.number().int().positive().optional(),
     requires_gender_match: z.boolean().optional(),
+    staff_required: z.number().int().min(1).max(6).optional(),
     description: z.string().optional(),
   });
   const body = schema.parse(req.body);
@@ -665,6 +668,7 @@ const datesCovered = (h: { date: Date | null; start_date: Date | null; end_date:
 const pinSchema = z.object({
   appointment_id: z.string().uuid(),
   staff_id: z.string().uuid().nullable(),
+  co_staff_ids: z.array(z.string().uuid()).default([]),
   room_id: z.string().uuid().nullable(),
   start_time: z.string(),
   date: z.string(),
@@ -745,6 +749,7 @@ app.post('/day-check/accept', async (req: Request, res: Response) => {
       start_time: m.start_time,
       duration_minutes: appt.duration_minutes,
       staff_id: m.staff_id,
+      co_staff_ids: m.co_staff_ids,
       room_id: m.room_id,
       patient_id: appt.patient_id,
       therapy_id: appt.therapy_id,
@@ -762,11 +767,11 @@ app.post('/replan', async (req: Request, res: Response) => {
 
 /** Apply one proposal — the moves to another day the replan would not make alone. */
 app.post('/replan/accept', async (req: Request, res: Response) => {
-  const schema = z.object({ appointment_id: z.string().uuid(), staff_id: z.string().uuid(), date: z.string(), start_time: z.string(), room_id: z.string().uuid().nullable().optional() });
+  const schema = z.object({ appointment_id: z.string().uuid(), staff_id: z.string().uuid(), co_staff_ids: z.array(z.string().uuid()).optional(), date: z.string(), start_time: z.string(), room_id: z.string().uuid().nullable().optional() });
   const body = schema.parse(req.body);
   const appt = await prisma.appointment.update({
     where: { id: body.appointment_id },
-    data: { staff_id: body.staff_id, scheduled_date: new Date(body.date), start_time: body.start_time, room_id: body.room_id ?? undefined, status: 'rescheduled' },
+    data: { staff_id: body.staff_id, co_staff_ids: body.co_staff_ids, scheduled_date: new Date(body.date), start_time: body.start_time, room_id: body.room_id ?? undefined, status: 'rescheduled' },
   });
   res.json(appt);
 });
@@ -1063,7 +1068,8 @@ app.get('/appointments', async (req: Request, res: Response) => {
   const room_id = req.query.room_id as string | undefined;
   const where: Prisma.AppointmentWhereInput = {};
   if (date) where.scheduled_date = new Date(date);
-  if (staff_id) where.staff_id = staff_id;
+  // A therapist's appointments include the ones they assist on.
+  if (staff_id) where.OR = [{ staff_id }, { co_staff_ids: { has: staff_id } }];
   if (patient_id) where.patient_id = patient_id;
   if (room_id) where.room_id = room_id;
   const data = await prisma.appointment.findMany({ where });
@@ -1156,6 +1162,7 @@ app.post('/staff/cleanup-duplicates', async (_req: Request, res: Response) => {
     await prisma.$transaction(async (tx) => {
       for (const dup of duplicates) {
         const apptUpdate = await tx.appointment.updateMany({ where: { staff_id: dup.id }, data: { staff_id: primary.id } });
+        await tx.$executeRaw`UPDATE "Appointment" SET "co_staff_ids" = array_replace("co_staff_ids", ${dup.id}, ${primary.id}) WHERE ${dup.id} = ANY("co_staff_ids")`;
         apptsReassigned += apptUpdate.count;
         const toDel = await tx.timeOff.deleteMany({ where: { entity_type: 'staff', entity_id: dup.id } });
         timeoffsDeleted += toDel.count;
@@ -1214,6 +1221,7 @@ app.put('/appointments/:id', async (req: Request, res: Response) => {
     start_time: z.string().optional(),
     duration_minutes: z.number().int().positive().optional(),
     staff_id: z.string().uuid().nullable().optional(),
+    co_staff_ids: z.array(z.string().uuid()).optional(),
     room_id: z.string().uuid().nullable().optional(),
     status: z.enum(['pending','confirmed','completed','cancelled','rescheduled']).optional(),
     notes: z.string().optional(),
@@ -1230,13 +1238,14 @@ app.put('/appointments/:id', async (req: Request, res: Response) => {
     start_time: body.start_time ?? existing.start_time,
     duration_minutes: body.duration_minutes ?? existing.duration_minutes,
     staff_id: body.staff_id !== undefined ? body.staff_id : existing.staff_id,
+    co_staff_ids: body.co_staff_ids ?? existing.co_staff_ids,
     room_id: body.room_id !== undefined ? body.room_id : existing.room_id,
     patient_id: body.patient_id ?? existing.patient_id,
     therapy_id: body.therapy_id ?? existing.therapy_id,
   };
 
   // Cancelling or completing a treatment moves nobody, so it is never refused.
-  const movesIt = body.scheduled_date || body.start_time || body.duration_minutes || body.staff_id !== undefined || body.room_id !== undefined;
+  const movesIt = body.scheduled_date || body.start_time || body.duration_minutes || body.staff_id !== undefined || body.co_staff_ids !== undefined || body.room_id !== undefined;
   if (movesIt && body.status !== 'cancelled') {
     const ctx = await loadDay(candidate.scheduled_date, prisma);
     const conflict = findConflict(candidate, ctx);
