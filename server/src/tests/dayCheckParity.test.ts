@@ -31,7 +31,9 @@ async function main() {
     await prisma.$connect();
     await requireDemoData(prisma);
 
-    const day = new Date(new Date().toISOString().slice(0, 10));
+    // A fixed day far from the seeded months and from the clock, so the result
+    // never depends on what day or hour the test runs.
+    const day = new Date('2030-01-16T00:00:00.000Z');
 
     const plain = await prisma.therapy.create({ data: { name: 'Parity Plain', required_amenities: ['table'], duration_minutes: 60, requires_gender_match: false } });
     const gendered = await prisma.therapy.create({ data: { name: 'Parity Gendered', required_amenities: ['table'], duration_minutes: 60, requires_gender_match: true } });

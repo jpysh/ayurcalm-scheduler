@@ -20,8 +20,11 @@ async function main() {
     // the weekday asked for made every case built on it depend on the clock:
     // on a Thursday after 12:00 UTC the 09:00-12:00 window had passed, and the
     // centre-holiday case reported no free slot instead of the holiday.
+    // Every case starts from a fixed day, not the clock: the seeded holidays and
+    // the hour of the run cannot change the answer.
+    const anchor = new Date('2030-01-01T00:00:00.000Z');
     const nextDay = (from: Date, wd: number) => { const d = new Date(from); d.setDate(d.getDate() + 1); while (d.getDay() !== wd) d.setDate(d.getDate() + 1); return d; };
-    const startDate = nextDay(new Date(), 4).toISOString().slice(0,10);
+    const startDate = nextDay(anchor, 4).toISOString().slice(0,10);
     const payload = { patient_id: patient.id, therapy_id: therapy.id, total_sessions: 2, preferred_days: ['thursday','friday'], preferred_time_range: { start: '09:00', end: '12:00' }, start_date: startDate, preview_only: false, preferred_staff_id: staff.id };
     const result = await Promise.race([ autoSchedule(payload, prisma), new Promise((resolve) => setTimeout(() => resolve({ success: false, appointments: [], conflicts: { reason: 'TEST_TIMEOUT', alternatives: [] } }), 4000)) ]) as any;
     if (!result.success) { console.error('Auto-assign failed', result.conflicts); process.exit(2); }
@@ -49,7 +52,7 @@ async function main() {
     const candidates = ['monday','tuesday','wednesday','thursday','friday'];
     const pick = candidates.find((d) => !blocked.has(d)) || 'thursday';
     const wdIdx: Record<string, number> = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
-    const gStart = nextDay(new Date(), wdIdx[pick]).toISOString().slice(0,10);
+    const gStart = nextDay(anchor, wdIdx[pick]).toISOString().slice(0,10);
     const gmPayloadPreferredMale = { patient_id: gPatient.id, therapy_id: gTherapy.id, total_sessions: 1, preferred_days: [pick], preferred_time_range: { start: '09:00', end: '12:00' }, start_date: gStart, preview_only: false, preferred_staff_id: gStaffM.id };
     const gmResMale = await Promise.race([ autoSchedule(gmPayloadPreferredMale, prisma), new Promise((resolve) => setTimeout(() => resolve({ success: false, conflicts: { reason: 'TEST_TIMEOUT', alternatives: [] } }), 6000)) ]) as any;
     if (gmResMale.success) { console.error('Expected failure for mismatched gender preferred staff'); process.exit(6); }
@@ -69,13 +72,14 @@ async function main() {
     const cRoom = await prisma.therapyRoom.create({ data: { name: 'Center Room', amenities: ['massage_table'], is_active: true, weekly_schedule: { thursday: { start: '09:00', end: '18:00' } } } });
     const cStaff = await prisma.staff.create({ data: { name: 'Center Staff', gender: 'other', is_active: true, specializations: [cTherapy.id], weekly_schedule: { thursday: { start: '09:00', end: '18:00' } } } });
     const cPatient = await prisma.patient.create({ data: { name: 'Center Patient', gender: 'other' } });
-    const cStart = nextDay(new Date(), 4).toISOString().slice(0,10);
-    await prisma.timeOff.create({ data: { entity_type: 'center', entity_id: null, date: new Date(), recurrence: 'weekly', weekdays: ['thursday'], start_date: new Date() } });
+    const cStart = nextDay(anchor, 4).toISOString().slice(0,10);
+    const cHoliday = await prisma.timeOff.create({ data: { entity_type: 'center', entity_id: null, date: anchor, recurrence: 'weekly', weekdays: ['thursday'], start_date: anchor } });
     const cPayload = { patient_id: cPatient.id, therapy_id: cTherapy.id, total_sessions: 1, preferred_days: ['thursday'], preferred_time_range: { start: '09:00', end: '12:00' }, start_date: cStart, end_date: cStart, preview_only: true };
     const cRes = await Promise.race([ autoSchedule(cPayload, prisma), new Promise((resolve) => setTimeout(() => resolve({ success: false, appointments: [], suggestions: [], conflicts: { reason: 'TEST_TIMEOUT', alternatives: [] } }), 4000)) ]) as any;
     if (cRes.success || (cRes.suggestions || []).length > 0) { console.error('Expected no suggestions on center holiday'); process.exit(9); }
     if (cRes.conflicts?.reason !== 'CENTER_HOLIDAY') { console.error('Unexpected conflict for center holiday', cRes.conflicts?.reason); process.exit(10); }
-    await prisma.timeOff.deleteMany({ where: { entity_type: 'center' } });
+    // Only the holiday made here; the seed's own centre holidays stay.
+    await prisma.timeOff.delete({ where: { id: cHoliday.id } });
     await prisma.patient.delete({ where: { id: cPatient.id } });
     await prisma.staff.delete({ where: { id: cStaff.id } });
     await prisma.therapyRoom.delete({ where: { id: cRoom.id } });
@@ -85,13 +89,15 @@ async function main() {
     const sdRoom = await prisma.therapyRoom.create({ data: { name: 'Same Day Room', amenities: ['massage_table'], is_active: true, weekly_schedule: { thursday: { start: '09:00', end: '18:00' }, friday: { start: '09:00', end: '18:00' }, wednesday: { start: '09:00', end: '18:00' }, tuesday: { start: '09:00', end: '18:00' }, monday: { start: '09:00', end: '18:00' }, saturday: { start: '09:00', end: '18:00' }, sunday: { start: '09:00', end: '18:00' } } } });
     const sdStaff = await prisma.staff.create({ data: { name: 'Same Day Staff', gender: 'other', is_active: true, specializations: [sdTherapy.id], weekly_schedule: { thursday: { start: '09:00', end: '18:00' }, friday: { start: '09:00', end: '18:00' }, wednesday: { start: '09:00', end: '18:00' }, tuesday: { start: '09:00', end: '18:00' }, monday: { start: '09:00', end: '18:00' }, saturday: { start: '09:00', end: '18:00' }, sunday: { start: '09:00', end: '18:00' } } } });
     const sdPatient = await prisma.patient.create({ data: { name: 'Same Day Patient', gender: 'other' } });
-    const now = new Date();
+    // "Now" is 11:00 on the anchor day, passed in, so the guard is tested at
+    // the same hour on every run instead of whenever CI happens to start.
+    const now = new Date(anchor); now.setHours(11, 0, 0, 0);
     const nowM = now.getHours() * 60 + now.getMinutes();
-    const sdStart = new Date().toISOString().slice(0,10);
+    const sdStart = anchor.toISOString().slice(0,10);
     const toStr = (m: number) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
     const prefStart = toStr(Math.max(0, nowM - 60));
     const prefEnd = toStr(Math.min(23*60+59, nowM + 30));
-    const sdPayload = { patient_id: sdPatient.id, therapy_id: sdTherapy.id, total_sessions: 1, preferred_days: ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'], preferred_time_range: { start: prefStart, end: prefEnd }, start_date: sdStart, end_date: sdStart, preview_only: false };
+    const sdPayload = { patient_id: sdPatient.id, therapy_id: sdTherapy.id, total_sessions: 1, preferred_days: ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'], preferred_time_range: { start: prefStart, end: prefEnd }, start_date: sdStart, end_date: sdStart, preview_only: false, now: now.toISOString() };
     const sdRes = await Promise.race([ autoSchedule(sdPayload, prisma), new Promise((resolve) => setTimeout(() => resolve({ success: false, appointments: [], conflicts: { reason: 'TEST_TIMEOUT', alternatives: [] } }), 6000)) ]) as any;
     if (sdRes.success) { console.error('Expected same-day guard to block scheduling'); process.exit(11); }
     const sdDetails = sdRes.conflicts?.details as any;
@@ -105,8 +111,8 @@ async function main() {
     const thRoom = await prisma.therapyRoom.create({ data: { name: 'TH Room', amenities: ['massage_table'], is_active: true, weekly_schedule: { friday: { start: '09:00', end: '18:00' } } } });
     const thStaff = await prisma.staff.create({ data: { name: 'TH Staff', gender: 'other', is_active: true, specializations: [thTherapy.id], weekly_schedule: { friday: { start: '09:00', end: '18:00' } } } });
     const thPatient = await prisma.patient.create({ data: { name: 'TH Patient', gender: 'other' } });
-    const nextFri = nextDay(new Date(), 5).toISOString().slice(0,10);
-    await prisma.timeOff.create({ data: { entity_type: 'therapy', entity_id: thTherapy.id, recurrence: 'weekly', weekdays: ['friday'], date: new Date() } });
+    const nextFri = nextDay(anchor, 5).toISOString().slice(0,10);
+    await prisma.timeOff.create({ data: { entity_type: 'therapy', entity_id: thTherapy.id, recurrence: 'weekly', weekdays: ['friday'], date: anchor } });
     const thPayload = { patient_id: thPatient.id, therapy_id: thTherapy.id, total_sessions: 1, preferred_days: ['friday'], preferred_time_range: { start: '09:00', end: '12:00' }, start_date: nextFri, end_date: nextFri, preview_only: true };
     const thRes = await Promise.race([ autoSchedule(thPayload, prisma), new Promise((resolve) => setTimeout(() => resolve({ success: false, appointments: [], suggestions: [], conflicts: { reason: 'TEST_TIMEOUT', alternatives: [] } }), 6000)) ]) as any;
     if (thRes.success || (thRes.suggestions || []).length > 0) { console.error('Expected no suggestions on therapy holiday'); process.exit(13); }
