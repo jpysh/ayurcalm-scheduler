@@ -16,7 +16,11 @@ async function main() {
     const room = await prisma.therapyRoom.create({ data: { name: 'Test Room', amenities: ['massage_table'], is_active: true, weekly_schedule: { thursday: { start: '09:00', end: '18:00' }, friday: { start: '09:00', end: '18:00' } } } });
     const staff = await prisma.staff.create({ data: { name: 'Test Staff', gender: 'other', is_active: true, specializations: [therapy.id], weekly_schedule: { thursday: { start: '09:00', end: '18:00' }, friday: { start: '09:00', end: '18:00' } } } });
     const patient = await prisma.patient.create({ data: { name: 'Test Patient', gender: 'other' } });
-    const nextDay = (from: Date, wd: number) => { let d = new Date(from); for (let i = 0; i < 14; i++) { if (d.getDay() === wd) return d; d.setDate(d.getDate() + 1); } return new Date(from); };
+    // Always a future day, never today. Returning today when it was already
+    // the weekday asked for made every case built on it depend on the clock:
+    // on a Thursday after 12:00 UTC the 09:00-12:00 window had passed, and the
+    // centre-holiday case reported no free slot instead of the holiday.
+    const nextDay = (from: Date, wd: number) => { const d = new Date(from); d.setDate(d.getDate() + 1); while (d.getDay() !== wd) d.setDate(d.getDate() + 1); return d; };
     const startDate = nextDay(new Date(), 4).toISOString().slice(0,10);
     const payload = { patient_id: patient.id, therapy_id: therapy.id, total_sessions: 2, preferred_days: ['thursday','friday'], preferred_time_range: { start: '09:00', end: '12:00' }, start_date: startDate, preview_only: false, preferred_staff_id: staff.id };
     const result = await Promise.race([ autoSchedule(payload, prisma), new Promise((resolve) => setTimeout(() => resolve({ success: false, appointments: [], conflicts: { reason: 'TEST_TIMEOUT', alternatives: [] } }), 4000)) ]) as any;
