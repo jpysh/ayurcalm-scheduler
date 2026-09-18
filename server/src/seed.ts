@@ -184,7 +184,7 @@ async function main() {
     data: { name: t.name, required_amenities: t.req, duration_minutes: t.dur + cleaningFor(t.req), requires_gender_match: t.gender },
   })));
 
-  const scheduleStd = { sunday: { start: '09:00', end: '18:00' }, monday: { start: '09:00', end: '18:00' }, tuesday: { start: '09:00', end: '18:00' }, wednesday: { start: '09:00', end: '18:00' }, thursday: { start: '09:00', end: '18:00' }, friday: { start: '09:00', end: '18:00' }, saturday: { start: '09:00', end: '18:00' } };
+  const scheduleStd = { sunday: { start: '09:00', end: '20:00' }, monday: { start: '09:00', end: '20:00' }, tuesday: { start: '09:00', end: '20:00' }, wednesday: { start: '09:00', end: '20:00' }, thursday: { start: '09:00', end: '20:00' }, friday: { start: '09:00', end: '20:00' }, saturday: { start: '09:00', end: '20:00' } };
 
   // Every other room is fully equipped; with only the first four amenities
   // everywhere, dhara, kizhi and lepam therapies could never be booked.
@@ -192,7 +192,9 @@ async function main() {
     data: { name: rn, amenities: idx % 2 ? amenitiesSet : amenitiesSet.slice(0, 4), weekly_schedule: scheduleStd, is_active: true },
   })));
 
-  const staffNames = ['Dr. Priya','Dr. Raj','Dr. Anjali','Dr. Kumar','Dr. Neha','Dr. Ravi','Dr. Asha','Dr. Suresh','Dr. Meera','Dr. Arvind','Dr. Pooja','Dr. Kiran','Dr. Alok','Dr. Varsha','Dr. Manish','Dr. Bhavna','Dr. Rohit','Dr. Trisha','Dr. Dev','Dr. Kriti'];
+  // Therapists, not physicians. The 'Dr.' the seed used to carry was wrong for
+  // most of them and made every rota column a word narrower.
+  const staffNames = ['Priya','Raj','Anjali','Kumar','Neha','Ravi','Asha','Suresh','Meera','Arvind','Pooja','Kiran','Alok','Varsha','Manish','Bhavna','Rohit','Trisha','Dev','Kriti'];
   const staff = await Promise.all(staffNames.map((n, idx) => prisma.staff.create({
     data: {
       name: `${n} ${randomOf(surnames)}`,
@@ -236,9 +238,12 @@ async function main() {
   const start = centreToday();
   const end = new Date(start);
   end.setMonth(end.getMonth() + 4);
-  // Inside the rooms' opening hours, with a couple of half-hour starts because
-  // a real day has them and the day sheet has to place them correctly.
-  const dayTimes = ['09:00','10:00','11:00','12:00','13:30','14:30','15:30','16:30'];
+  // The centre this dataset models treats from 09:00 to 13:00 and again from
+  // 14:00 to 20:00, so the seed books across both halves — an evening with
+  // nothing in it let the rota's evening column go untested for a release.
+  // A couple of half-hour starts because a real day has them and the sheets
+  // have to place them correctly.
+  const dayTimes = ['09:00','10:00','11:00','12:00','14:00','15:00','16:30','17:30','18:30','19:00'];
   // One knob, not a second dataset: a stress fixture kept beside the demo one
   // drifts from it, and then a test passes on data no install has.
   const treatmentsPerRoom = Math.max(1, Math.min(dayTimes.length, Number(process.env.SEED_TREATMENTS_PER_ROOM) || 2));
@@ -274,7 +279,12 @@ async function main() {
       // SEED_TREATMENTS_PER_ROOM raises that for checking how the sheet and the
       // screens behave at a size no demo install has.
       let slotsCreatedForRoom = 0;
-      for (const time of dayTimes) {
+      // Each room starts its rotation at a different hour. Walking dayTimes from
+      // the front gave every room the two earliest starts, so the afternoon and
+      // the evening were empty in a dataset that claims to cover them.
+      const firstTime = (rooms.indexOf(r) * 3) % dayTimes.length;
+      for (let ti = 0; ti < dayTimes.length; ti++) {
+        const time = dayTimes[(firstTime + ti) % dayTimes.length];
         if (slotsCreatedForRoom >= treatmentsPerRoom) break;
         const th = randomOf(therapies);
         if (!th.required_amenities.every(a => r.amenities.includes(a))) continue;
@@ -481,7 +491,13 @@ async function main() {
   await prisma.settings.upsert({
     where: { id: 'singleton' },
     update: { demo_data: true, setup_complete: true },
-    create: { id: 'singleton', demo_data: true, setup_complete: true, centre_name: process.env.CENTRE_NAME || 'Wellness Centre' },
+    create: {
+      id: 'singleton', demo_data: true, setup_complete: true,
+      centre_name: process.env.CENTRE_NAME || 'Wellness Centre',
+      // The modelled centre treats into the evening, and the Schedule grid is
+      // built from these, so a 19:00 treatment is invisible without them.
+      opening_time: '09:00', closing_time: '20:00',
+    },
   });
 
   console.log('Seeded extended AyurCalm dataset successfully');
