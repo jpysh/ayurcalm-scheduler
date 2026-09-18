@@ -218,9 +218,14 @@ async function main() {
   const endRange = new Date(startRange);
   endRange.setMonth(endRange.getMonth() + 3);
   function isBusinessDay(d: Date) { const day = d.getDay(); return day >= 1 && day <= 5; }
+  // Today always has one therapist off, weekend or not: the absence and its
+  // reassignment are what the seeded day exists to show, and leave drawn only
+  // from weekdays left every Saturday and Sunday without it.
+  const onLeaveToday = staff[staff.length - 1];
+  await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: onLeaveToday.id, date: new Date(centreYmd(startRange)), description: 'Personal Leave' } });
   for (const s of staff) {
     let count = 0;
-    const used: Set<string> = new Set();
+    const used: Set<string> = new Set(s.id === onLeaveToday.id ? [centreYmd(startRange)] : []);
     while (count < 5) {
       const d = new Date(startRange);
       d.setDate(d.getDate() + Math.floor(random() * 90));
