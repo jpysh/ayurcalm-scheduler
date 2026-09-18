@@ -102,12 +102,11 @@ export const AppointmentDialog = ({ appointment, open, onOpenChange, onOpenAssig
   const therapiesSorted = useMemo(() => [...therapies].sort((a, b) => (a.name || "").localeCompare(b.name || "")), [therapies]);
   const staffSorted = useMemo(() => [...staff].sort((a, b) => (a.name || "").localeCompare(b.name || "")), [staff]);
   const roomsSorted = useMemo(() => [...rooms].sort((a, b) => (a.name || "").localeCompare(b.name || "")), [rooms]);
-  useEffect(() => {
-    if (form.therapyId) {
-      const tt = therapies.find((x) => x.id === form.therapyId);
-      if (tt?.duration_minutes) setForm(f => ({ ...f, duration: tt.duration_minutes }));
-    }
-  }, [form.therapyId, therapies]);
+  // A booked treatment keeps its own length; only choosing another therapy
+  // takes that therapy's. Doing it on load swapped a 105-minute Pizhichil for
+  // the default, and saving wrote the wrong length.
+  const therapyLength = therapies.find((x) => x.id === form.therapyId)?.duration_minutes;
+  const durationChoices = [...new Set([30, 45, 60, 75, 90, 120, form.duration, ...(therapyLength ? [therapyLength] : [])])].sort((a, b) => a - b);
   const selectedRoomAmenities = useMemo(() => {
     const rr = rooms.find((x) => x.id === form.roomId);
     return rr?.amenities || [];
@@ -266,7 +265,7 @@ export const AppointmentDialog = ({ appointment, open, onOpenChange, onOpenAssig
                 <span className="text-xs sm:text-sm">Therapy</span>
               </div>
               {isEditing ? (
-                <Select value={form.therapyId} onValueChange={(v:string) => setForm(f => ({ ...f, therapyId: v }))}>
+                <Select value={form.therapyId} onValueChange={(v:string) => setForm(f => ({ ...f, therapyId: v, duration: therapies.find((x) => x.id === v)?.duration_minutes || f.duration }))}>
                   <SelectTrigger className="h-8">
                     <SelectValue />
                   </SelectTrigger>
@@ -340,11 +339,11 @@ export const AppointmentDialog = ({ appointment, open, onOpenChange, onOpenAssig
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[30,45,60,75,90,120].map((d) => (<SelectItem key={d} value={String(d)}>{d} minutes</SelectItem>))}
+                    {durationChoices.map((d) => (<SelectItem key={d} value={String(d)}>{d} minutes{d === therapyLength ? " (usual)" : ""}</SelectItem>))}
                   </SelectContent>
                 </Select>
               ) : (
-                <p className="text-base sm:text-lg font-semibold">{appointment.duration || 60} minutes</p>
+                <p className="text-base sm:text-lg font-semibold">{form.duration} minutes</p>
               )}
             </div>
           </div>

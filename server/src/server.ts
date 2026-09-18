@@ -772,17 +772,6 @@ app.post('/replan', async (req: Request, res: Response) => {
   res.json(await replanStaffDay(body.staff_id, new Date(body.date), prisma, { apply: body.apply }));
 });
 
-/** Apply one proposal — the moves to another day the replan would not make alone. */
-app.post('/replan/accept', async (req: Request, res: Response) => {
-  const schema = z.object({ appointment_id: z.string().uuid(), staff_id: z.string().uuid(), co_staff_ids: z.array(z.string().uuid()).optional(), date: z.string(), start_time: z.string(), room_id: z.string().uuid().nullable().optional() });
-  const body = schema.parse(req.body);
-  const appt = await prisma.appointment.update({
-    where: { id: body.appointment_id },
-    data: { staff_id: body.staff_id, co_staff_ids: body.co_staff_ids, scheduled_date: new Date(body.date), start_time: body.start_time, room_id: body.room_id ?? undefined, status: 'rescheduled' },
-  });
-  res.json(appt);
-});
-
 app.post('/replan/undo', async (req: Request, res: Response) => {
   const body = z.object({ batch_id: z.string().uuid() }).parse(req.body);
   const result = await undoReplan(body.batch_id, prisma);

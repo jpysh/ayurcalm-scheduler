@@ -91,6 +91,11 @@ slot once meals became four-hour windows, and Verify reported a clean day while
 A screen asks the server; it never decides for itself, and
 `npm run test:day-check` fails if `/day-check` and the write ever disagree.
 
+**A treatment can have more than one therapist.** `staff_id` is the lead and
+`co_staff_ids` lists everyone else. Anything asking "is this therapist busy"
+goes through `teamOf()`, or a co-therapist reads as free and gets booked twice.
+`Therapy.staff_required` is a refusal (`STAFF_SHORT`), not a preference.
+
 **Gender match and room amenities are refusals, not preferences.** The scheduler
 always avoided proposing them; since #88 `appointmentGuard` refuses them too, so
 nothing can arrive by another route. Gender matching still honours the Settings
@@ -180,7 +185,7 @@ npm run dev:reset     # throw the data away and seed a fresh centre
 ```
 
 `dev:up` after a code change rebuilds and restarts, so the browser shows what
-the repo currently says. Sign in with `admin@example.com` / `demo1234`.
+the repo currently says. If the build fails it says so and restarts nothing. Sign in with `admin@example.com` / `demo1234`.
 
 Run a second stack only for a throwaway check, and name it so it cannot be
 confused with the one above — `docker compose -p <name> ... down -v` when
@@ -224,7 +229,9 @@ Chromium) on any pull request that touches `server/` or the Docker files, and on
 every merge; other pull requests get the builds and the database-free tests only.
 
 A test that needs a date uses a fixed day far from the seeded months, never
-`new Date()`: a clock-dependent date once failed only on Thursday afternoons.
+`new Date()`: a clock-dependent date once failed only on Thursday afternoons. It builds its
+own day in 2030, as `daySheet.test.ts` does, rather than using the seeded day,
+which moves with today.
 
 There is one dataset, not a demo one and a test one: a stress fixture kept
 beside the demo would drift from it, and then a test passes on data no install

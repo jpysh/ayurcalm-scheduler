@@ -10,9 +10,9 @@
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test": "npm --prefix server test",
-    "dev:up": "docker compose up -d --build",
+    "dev:up": "docker compose build || { echo; echo 'BUILD FAILED: nothing was restarted, so :8080 is still the old code. Fix the error above and run this again.'; exit 1; } && docker compose up -d",
     "dev:down": "docker compose down",
-    "dev:reset": "docker compose down -v && docker compose up -d --build",
+    "dev:reset": "docker compose build || { echo; echo 'BUILD FAILED: nothing was restarted, so :8080 is still the old code. Fix the error above and run this again.'; exit 1; } && docker compose down -v && docker compose up -d",
     "dev:logs": "docker compose logs -f app",
     "qa": "sh scripts/qa.sh",
     "qa:fresh": "npm run dev:reset && npm run qa"
