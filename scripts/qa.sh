@@ -47,6 +47,24 @@ run autoAssign         "Auto-booking a course respects gender, holidays, and tim
 run replanSimulation   "When a therapist is absent, their day moves to others without clashes, and Undo restores it"
 run dayCheckParity     "Verify flags exactly the treatments the app would refuse to save"
 run dayPlan            "Verify's fix for a day is one plan with no clashes, and accepting then undoing it restores the day"
+run daySheet           "The day sheet lists every resident, treatment time and therapist, in its groups, with no empty boxes"
+run onboarding         "After the setup wizard, the centre has its hours, timezone, therapies, rooms and therapists, and the day sheet prints"
+
+# The wizard is read from the checkout, not the container: the app image carries
+# only the built front end. Onboarding speed is the point of the wizard, so it
+# may not grow a screen or a field without someone lowering these on purpose.
+WIZARD=src/pages/SetupWizard.tsx
+MAX_SCREENS=3
+MAX_FIELDS=7
+screens=$(grep -o 'step === [0-9]* && (' "$WIZARD" | sort -u | wc -l | tr -d ' ')
+fields=$(grep -c '<Label' "$WIZARD")
+if [ "$screens" -le "$MAX_SCREENS" ] && [ "$fields" -le "$MAX_FIELDS" ]; then
+  echo "  PASS  The setup wizard is still $screens screens and $fields fields, no more than $MAX_SCREENS and $MAX_FIELDS"
+  passed=$((passed + 1))
+else
+  echo "  FAIL  The setup wizard has grown to $screens screens and $fields fields (limit $MAX_SCREENS and $MAX_FIELDS)"
+  failed=$((failed + 1))
+fi
 
 rm -f "$log"
 echo ""

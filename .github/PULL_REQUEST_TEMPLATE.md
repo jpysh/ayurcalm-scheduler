@@ -14,3 +14,4 @@ Closes #
 - [ ] `cd server && npm run build` passes
 - [ ] Schema changes include a Prisma migration
 - [ ] README or CONTRIBUTING updated if behaviour or setup changed
+- [ ] If this touches the setup wizard: it is now __ screens and __ fields (`npm run qa` prints both)
