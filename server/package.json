@@ -20,15 +20,19 @@
     "test:rota": "tsx src/tests/therapistRota.test.ts",
     "test:invariants": "tsx src/tests/scheduleInvariants.test.ts",
     "test": "npm run test:diet && npm run test:pdf && npm run test:rota && npm run test:availability",
-    "test:all": "npm run test:diet && npm run test:pdf && npm run test:rota && npm run test:availability && npm run test:invariants && npm run test:validation && npm run test:auto-assign && npm run test:replan && npm run test:day-check && npm run test:day-plan && npm run test:day-sheet && npm run test:onboarding",
+    "test:all": "npm run test:diet && npm run test:pdf && npm run test:rota && npm run test:availability && npm run test:invariants && npm run test:validation && npm run test:auto-assign && npm run test:replan && npm run test:day-check && npm run test:day-plan && npm run test:day-sheet && npm run test:onboarding && npm run test:mcp",
     "test:availability": "tsx src/tests/availability.test.ts",
     "test:replan": "tsx src/tests/replanSimulation.test.ts",
     "test:day-check": "tsx src/tests/dayCheckParity.test.ts",
     "test:day-plan": "tsx src/tests/dayPlan.test.ts",
     "test:day-sheet": "tsx src/tests/daySheet.test.ts",
-    "test:onboarding": "tsx src/tests/onboarding.test.ts"
+    "test:onboarding": "tsx src/tests/onboarding.test.ts",
+    "test:mcp": "tsx src/tests/mcp.test.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/express": "^2.0.0",
+    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "@prisma/client": "^5.22.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
@@ -36,7 +40,7 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.3",
     "pdfkit": "^0.14.0",
-    "zod": "^3.25.8"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

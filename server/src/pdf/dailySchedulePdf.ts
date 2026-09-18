@@ -1,7 +1,7 @@
 declare module 'pdfkit';
 import { teamOf } from '../availability.js';
 import PDFDocument from 'pdfkit';
-import { resolveDiet, mealOrder, type MealKey } from '../dietResolution.js';
+import { loadDietsForDay, mealOrder, type MealKey } from '../dietResolution.js';
 import { PrismaClient } from '@prisma/client';
 
 const ADMIN_TZ = process.env.ADMIN_TZ || 'Asia/Kolkata';
@@ -53,7 +53,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
   const centreName = settings?.centre_name || process.env.CENTRE_NAME || 'Wellness Centre';
 
-  const [rooms, patients, therapies, staff, appts, eventsByDate, weeklyEvents, dietDay, dietSegments, staysToday] = await Promise.all([
+  const [rooms, patients, therapies, staff, appts, eventsByDate, weeklyEvents, diets, staysToday] = await Promise.all([
     prisma.therapyRoom.findMany(),
     prisma.patient.findMany(),
     prisma.therapy.findMany(),
@@ -61,8 +61,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     prisma.appointment.findMany({ where: { scheduled_date: day } }),
     prisma.programEvent.findMany({ where: { OR: [{ date: day }, { AND: [{ start_date: { lte: day } }, { end_date: { gte: day } }] }] } }),
     prisma.programEvent.findMany({ where: { recurrence: 'weekly' } }),
-    prisma.dietPlan.findMany({ where: { date: day } }),
-    prisma.dietPlanSegment.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } }, include: { Template: true } }),
+    loadDietsForDay(day, prisma),
     prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } } }),
   ]);
 
@@ -104,31 +103,11 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   activePatients.sort((a, b) => (patientById[a.id] || a.id).localeCompare(patientById[b.id] || b.id));
   const displayPatients = activePatients;
 
-  // What a patient eats today comes from three places, most specific first: a
-  // DietPlan row written for this date, the template on the segment covering
-  // this date, then the free-text field on the patient. Precedence is per meal,
-  // so overriding breakfast leaves the rest of the plan standing.
-  const dayMealsByPatient = new Map<string, Partial<Record<MealKey, string>>>();
-  for (const d of dietDay) {
-    const meals = dayMealsByPatient.get(d.patient_id) || {};
-    meals[d.meal_time as MealKey] = [d.description, d.instructions].filter(Boolean).join(' \u2014 ');
-    dayMealsByPatient.set(d.patient_id, meals);
-  }
-
-  const segmentByPatient = new Map<string, (typeof dietSegments)[number]>();
-  for (const seg of dietSegments) {
-    // A patient should not hold two overlapping segments, but if they do, the
-    // one that started most recently is the one set last.
-    const held = segmentByPatient.get(seg.patient_id);
-    if (!held || seg.start_date > held.start_date) segmentByPatient.set(seg.patient_id, seg);
-  }
-
   // Meals no longer take columns in the grid. What a resident eats is the same
   // paragraph for everyone on their plan, so it belongs once in that plan's
   // heading; the sittings themselves are the same times for the whole centre and
   // are stated in the line under the title. What is left in the grid is what
   // differs person to person and hour to hour: treatment.
-  const mealsWithColumn = new Set<MealKey>();
 
   // One time axis for the whole sheet, and it is the axis of the day actually
   // scheduled: bands come from the treatments and the events a resident is named
@@ -168,20 +147,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     .map((e) => `${e.start_time} ${e.activity_name} ${durationBetween(e.start_time, e.end_time)}m`)
     .join('  \u00b7  ');
 
-  const dietFor = (patient: (typeof patients)[number]) => {
-    const seg = segmentByPatient.get(patient.id);
-    return resolveDiet({
-      template: seg?.Template ?? null,
-      overrides: (seg?.overrides || null) as Record<string, string | undefined> | null,
-      dayMeals: dayMealsByPatient.get(patient.id) || {},
-      hasTherapyToday: (apptsByPatient.get(patient.id) || []).length > 0,
-      mealsWithColumn,
-      freeText: patient.diet_plan,
-      segmentLabel: seg?.template_label,
-    });
-  };
-
-  const dietByPatient = new Map(displayPatients.map((p) => [p.id, dietFor(p)] as const));
+  const dietByPatient = new Map(displayPatients.map((p) => [p.id, diets.dietFor(p, (apptsByPatient.get(p.id) || []).length > 0)] as const));
   // Everyone reads only their own row, so how to eat around treatment sits
   // there too, after the plan, snacks and medication.
   const notesFor = (id: string) => {
@@ -222,7 +188,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   // one person for this date. Those are not duplicates, and the heading says
   // which is which rather than leaving a reader to wonder.
   const noDr = (name: string) => name.replace(/^Dr\.?\s+/i, '');
-  const hasOverrideToday = (id: string) => Object.keys(dayMealsByPatient.get(id) || {}).length > 0;
+  const hasOverrideToday = (id: string) => diets.hasDayMeals(id);
   const hasTherapyToday = (id: string) => (apptsByPatient.get(id) || []).length > 0;
   const groups = new Map<string, string[]>();
   for (const p of displayPatients) {

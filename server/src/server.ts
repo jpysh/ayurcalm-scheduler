@@ -211,7 +211,7 @@ app.post('/staff', async (req: Request, res: Response) => {
     gender: z.enum(['male', 'female', 'other']),
     specializations: z.array(z.string()).default([]),
     phone: z.string().optional(),
-    weekly_schedule: z.record(z.any()).default({}),
+    weekly_schedule: z.record(z.string(), z.any()).default({}),
   });
   const body = schema.parse(req.body);
   const s = await prisma.staff.create({ data: { ...body, name: body.name.trim(), is_active: true } });
@@ -225,7 +225,7 @@ app.put('/staff/:id', async (req: Request, res: Response) => {
     gender: z.enum(['male', 'female', 'other']).optional(),
     specializations: z.array(z.string()).optional(),
     phone: z.string().optional(),
-    weekly_schedule: z.record(z.any()).optional(),
+    weekly_schedule: z.record(z.string(), z.any()).optional(),
     is_active: z.boolean().optional(),
   });
   const body = schema.parse(req.body);
@@ -268,7 +268,7 @@ app.post('/rooms', async (req: Request, res: Response) => {
   const schema = z.object({
     name: z.string(),
     amenities: z.array(z.string()).default([]),
-    weekly_schedule: z.record(z.any()).default({}),
+    weekly_schedule: z.record(z.string(), z.any()).default({}),
   });
   const body = schema.parse(req.body);
   const r = await prisma.therapyRoom.create({ data: { ...body, is_active: true } });
@@ -280,7 +280,7 @@ app.put('/rooms/:id', async (req: Request, res: Response) => {
   const schema = z.object({
     name: z.string().optional(),
     amenities: z.array(z.string()).optional(),
-    weekly_schedule: z.record(z.any()).optional(),
+    weekly_schedule: z.record(z.string(), z.any()).optional(),
     is_active: z.boolean().optional(),
   });
   const body = schema.parse(req.body);
@@ -864,7 +864,7 @@ app.post('/dietplans/segments', async (req: Request, res: Response) => {
     start_date: z.string(),
     end_date: z.string(),
     template_id: z.string().uuid().optional(),
-    overrides: z.record(z.any()).optional(),
+    overrides: z.record(z.string(), z.any()).optional(),
     template_label: z.string().optional(),
     therapy_ids: z.array(z.string()).default([]),
     description: z.string().optional(),
@@ -889,7 +889,7 @@ app.put('/dietplans/segments/:id', async (req: Request, res: Response) => {
     start_date: z.string().optional(),
     end_date: z.string().optional(),
     template_id: z.string().uuid().optional().nullable(),
-    overrides: z.record(z.any()).optional().nullable(),
+    overrides: z.record(z.string(), z.any()).optional().nullable(),
     template_label: z.string().optional().nullable(),
     therapy_ids: z.array(z.string()).optional(),
     description: z.string().optional().nullable(),
