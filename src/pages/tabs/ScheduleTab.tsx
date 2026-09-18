@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
-import { Badge } from "@/components/ui/badge";
+import DayGrid from "@/components/DayGrid";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { RefObject } from "react";
 
@@ -22,17 +22,7 @@ type ScheduleTabProps = {
   ymdInTZ: (d: Date) => string;
   appointmentsByDate: Record<string, ApiAppointment[]>;
   timeSlots: string[];
-  roomsToRender: { id: string | number; name: string }[];
-  dayGridCols: string;
   dayKeyMemo: string;
-  dayRoomsSet: unknown;
-  dayScrollRef: RefObject<HTMLDivElement | null>;
-  timeHeaderRef: RefObject<HTMLDivElement | null>;
-  dayScrollProgress: number;
-  prevRoom: () => void;
-  nextRoom: () => void;
-  weekCompact: boolean;
-  setWeekCompact: (b: boolean) => void;
   patients: { id: string | number; name: string }[];
   roomsList: { id: string | number; name: string }[];
   staff: { id: string | number; name: string }[];
@@ -58,7 +48,16 @@ type ApiAppointment = {
   duration_minutes: number;
   status?: "pending" | "confirmed" | "completed" | "cancelled" | "rescheduled";
 };
-type PatientLite = { id: string | number; name: string };
+
+/** Minutes past midnight now, on the centre's clock. */
+const nowInTZ = (timeZone: string) => {
+  try {
+    const [h, m] = new Date().toLocaleTimeString("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false }).split(":").map(Number);
+    return h * 60 + m;
+  } catch {
+    return new Date().getHours() * 60 + new Date().getMinutes();
+  }
+};
 
 const ScheduleTab = ({
   currentDate,
@@ -74,17 +73,7 @@ const ScheduleTab = ({
   ymdInTZ,
   appointmentsByDate,
   timeSlots,
-  roomsToRender,
-  dayGridCols,
   dayKeyMemo,
-  dayRoomsSet,
-  dayScrollRef,
-  timeHeaderRef,
-  dayScrollProgress,
-  prevRoom,
-  nextRoom,
-  weekCompact,
-  setWeekCompact,
   patients,
   roomsList,
   staff,
@@ -165,114 +154,18 @@ const ScheduleTab = ({
         </div>
       )}
       <CardContent className="pt-0 p-2">
-        {(() => {
-          const byDate = appointmentsByDate as Record<string, ApiAppointment[]>;
-          const dayKey = String(dayKeyMemo || "");
-          const dayAppointments = Array.isArray(byDate?.[dayKey]) ? byDate[dayKey] : [];
-          const index = new Map<string, ApiAppointment[]>();
-          for (const a of dayAppointments) {
-            const rid = String(a.room_id ?? "");
-            const key = `${rid}-${a.start_time}`;
-            const list = index.get(key) || [];
-            list.push(a);
-            index.set(key, list);
-          }
-          const pArr = Array.isArray(patients) ? (patients as PatientLite[]) : [];
-          const patientNameById = new Map<string, string>(pArr.map((p) => [String(p.id), String(p.name || "")]));
-          const sArr = Array.isArray(staff) ? (staff as PatientLite[]) : [];
-          const staffNameById = new Map<string, string>(sArr.map((s) => [String(s.id), String((s as any).name || "")]));
-          const tNameById = (therapyNameById || {}) as Record<string, string>;
-          return null;
-        })()}
-        {/* room arrows row removed */}
-
-        <div ref={dayScrollRef} className="overflow-x-auto">
-          <div className="min-w-max">
-            <div className="grid gap-1 md:gap-1 mb-1 sticky top-0 z-20 bg-background px-0" style={{ gridTemplateColumns: String(dayGridCols || '') }}>
-              <div ref={timeHeaderRef} className="font-semibold text-base md:text-base text-muted-foreground px-2">Time</div>
-              {Array.isArray(roomsToRender) && roomsToRender.map((room) => (
-                <div key={String(room.id)} className="font-semibold text-base md:text-base text-center px-2">
-                  <div className="min-w-0 w-full overflow-hidden">
-                    <div className="truncate w-full text-center">{String(room.name)}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {(() => {
-              const dayAppointments = Array.isArray(appointmentsByDate?.[String(dayKeyMemo || '')]) ? appointmentsByDate[String(dayKeyMemo || '')] : [];
-              if ((Array.isArray(dayAppointments) ? dayAppointments.length : 0) === 0) {
-                return <div className="p-4 text-sm md:text-sm text-muted-foreground">No bookings for today</div>;
-              }
-              return Array.isArray(timeSlots) ? timeSlots.map((time) => {
-                const appointmentsAtTime = dayAppointments.filter((apt: any) => apt.start_time === time);
-                const hasAny = appointmentsAtTime.some((apt: any) => (dayRoomsSet as any)?.has ? (dayRoomsSet as any).has(apt.room_id) : true);
-                if (!hasAny) return null;
-                return (
-                  <div key={time} className={`grid gap-2 md:gap-2 border-t ${String(time).endsWith(':00') ? 'border-t-2' : ''} border-border`} style={{ gridTemplateColumns: String(dayGridCols || '') }}>
-                    <div className="flex items-center min-h-12 md:min-h-14 sticky left-0 z-20 bg-background px-2">
-                      <span className="font-medium text-sm md:text-sm">{time}</span>
-                    </div>
-                    {Array.isArray(roomsToRender) && roomsToRender.map((room) => {
-                      const rid = String(room.id);
-                      const slot = dayAppointments.filter((apt: any) => String(apt.room_id ?? '') === rid && apt.start_time === time);
-                      return (
-                        <div key={rid} className="min-h-12 md:min-h-14 px-1 py-1">
-                          {(() => {
-                            const patientNameMap = new Map<string, string>(patients.map(p => [String(p.id), String(p.name)]));
-                            const staffNameMap = new Map<string, string>(staff.map(s => [String(s.id), String(s.name)]));
-                            const items = slot.map((a: any) => {
-                              const pname = String(patientNameMap.get(String(a.patient_id)) || 'Patient');
-                              const tname = String(therapyNameById[String(a.therapy_id)] || 'Therapy');
-                              // Everyone on it: a second therapist left off the card is one the admin books twice.
-                              const sname = [a.staff_id, ...(a.co_staff_ids || [])].filter(Boolean).map((id: string) => staffNameMap.get(String(id)) || '').filter(Boolean).join(' & ');
-                              const mins = Number(a.duration_minutes) || 0;
-                              const roomInfo = Array.isArray(roomsList) ? (roomsList as any[]).find((rr) => String(rr.id) === String(a.room_id)) : null;
-                              return (
-                                <Card
-                                  key={a.id}
-                                  className="h-full bg-primary/10 border-primary/30 hover:bg-primary/20 transition-colors cursor-pointer rounded-md mx-0 w-full"
-                                  onClick={() => setSelectedAppointment({
-                                    id: a.id,
-                                    scheduled_date: a.scheduled_date,
-                                    start_time: a.start_time,
-                                    duration_minutes: a.duration_minutes,
-                                    patient_id: a.patient_id,
-                                    therapy_id: a.therapy_id,
-                                    staff_id: a.staff_id,
-                                    co_staff_ids: a.co_staff_ids || [],
-                                    room_id: a.room_id,
-                                    patient: pname,
-                                    therapy: tname,
-                                    staff: sname,
-                                    room: roomInfo ? String((roomInfo as any).name) : String(a.room_id || ''),
-                                    roomAmenities: roomInfo && Array.isArray((roomInfo as any).amenities) ? (roomInfo as any).amenities : [],
-                                  })}
-                                >
-                                  <CardContent className="p-2 md:p-2 flex flex-col items-start justify-center gap-0.5">
-                                    <div className="font-semibold text-sm md:text-sm whitespace-normal break-words">{pname}</div>
-                                    <div className="text-xs md:text-xs text-muted-foreground whitespace-normal break-words">{`${tname} (${mins}min)`}</div>
-                                    {sname ? (
-                                      <Badge variant="secondary" className="w-fit text-xs md:text-xs max-w-full whitespace-normal break-words leading-tight">{`Staff: ${sname}`}</Badge>
-                                    ) : null}
-                                  </CardContent>
-                                </Card>
-                              );
-                            });
-                            if (items.length === 0) {
-                              return <div className="h-full border-2 border-dashed border-border rounded-md hover:border-primary/50 transition-colors cursor-pointer" />;
-                            }
-                            return items;
-                          })()}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              }) : null;
-            })()}
-          </div>
-        </div>
+        <DayGrid
+          dayAppointments={Array.isArray(appointmentsByDate?.[dayKeyMemo]) ? appointmentsByDate[dayKeyMemo] : []}
+          dayKey={dayKeyMemo}
+          isToday={dayKeyMemo === ymdInTZ(new Date())}
+          nowMinutes={nowInTZ(timezone)}
+          timeSlots={timeSlots}
+          patients={patients}
+          roomsList={roomsList}
+          staff={staff}
+          therapyNameById={therapyNameById}
+          setSelectedAppointment={setSelectedAppointment}
+        />
       </CardContent>
     </Card>
   );

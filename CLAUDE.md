@@ -136,10 +136,11 @@ rather than around it.
 eats. `overrides` on the segment is what one patient was told specifically and
 must survive that edit. Never go back to copying the plan into the segment.
 
-**`ScheduleTab` renders only rows that contain appointments.** So a booking
-outside the configured opening hours is invisible, not merely awkward. The grid
-is built by `buildTimeSlots()` in `AdminDashboard.tsx` from the centre's
-settings. Never reintroduce a hardcoded hour range.
+**The schedule grid is `components/DayGrid.tsx`, built for a phone.** Its hours
+come from `buildTimeSlots()` (the centre's settings), stretched to any booking
+outside them, so no treatment is ever off the grid. Never reintroduce a
+hardcoded hour range. "Who is free" reads `GET /staff-day`, which applies the
+guard's leave and event rules; the browser only compares times.
 
 **Prisma needs `binaryTargets`.** The Docker image is Debian; local dev is
 usually macOS. `["native", "debian-openssl-3.0.x"]` is deliberate — removing it
