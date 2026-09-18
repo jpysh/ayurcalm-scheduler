@@ -239,7 +239,7 @@ type AppointmentDetailed = (typeof mockAppointments)[number] & {
 };
 
 type Patient = typeof mockPatientsDetailed[number] & { preferredStaffId?: string | null; requiresPreferredStaff?: boolean };
-type ApiTherapy = { id: string; name: string; required_amenities: string[]; duration_minutes: number; requires_gender_match: boolean };
+type ApiTherapy = { id: string; name: string; required_amenities: string[]; duration_minutes: number; requires_gender_match: boolean; staff_required?: number };
 type ApiStaff = { id: string; name: string; gender: "male" | "female" | "other"; specializations: string[]; phone?: string };
 type ApiRoom = { id: string; name: string; amenities: string[]; is_active: boolean };
 type ApiPatient = { id: string; name: string; gender: "male" | "female" | "other"; phone?: string; email?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; medical_notes?: string | null; diet_plan?: string | null; available_from?: string | null; available_to?: string | null };
@@ -248,7 +248,7 @@ type ApiDietPlan = { id: string; patient_id: string; date: string; meal_time: 'b
 type ApiStay = { id: string; patient_id: string; start_date: string; end_date: string; duration_days: number };
 type UiStaff = { id: string | number; name: string; gender: "Male" | "Female" | "Other"; specializations: string[]; phone: string; schedule: string; status: "Active" | "Inactive" };
 type UiRoom = { id: string | number; name: string; amenities: string[]; schedule: string; status: "Active" | "Maintenance" };
-type UiTherapy = { id: string | number; name: string; duration: number; amenities: string[]; genderMatch: boolean };
+type UiTherapy = { id: string | number; name: string; duration: number; amenities: string[]; genderMatch: boolean; staffRequired?: number };
 const AdminDashboard = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   // Opening hours drive the schedule's time rows. Defaults match the old
@@ -997,6 +997,7 @@ const AdminDashboard = () => {
     duration: 60,
     amenitiesText: "",
     genderMatch: false,
+    staffRequired: 1,
   });
   const [newTimeOff, setNewTimeOff] = useState({
     date: "",
@@ -1014,7 +1015,7 @@ const AdminDashboard = () => {
     const load = async () => {
       try {
         const t: ApiTherapy[] = await fetchJsonWithTimeout(`${API_BASE}/therapies`);
-        setTherapies(t.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match })));
+        setTherapies(t.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match, staffRequired: x.staff_required ?? 1 })));
         const s: (ApiStaff & { is_active?: boolean; status?: string })[] = await fetchJsonWithTimeout(`${API_BASE}/staff`);
         setStaff(s.map((x) => ({ id: x.id, name: x.name, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", specializations: x.specializations.map((id) => t.find((k) => k.id === id)?.name).filter((n): n is string => !!n), phone: x.phone ?? "", schedule: "", status: (typeof x.is_active === 'boolean' ? (x.is_active ? 'Active' : 'Inactive') : (x.status === 'Active' ? 'Active' : 'Inactive')) })));
         const r: ApiRoom[] = await fetchJsonWithTimeout(`${API_BASE}/rooms`);
@@ -1273,7 +1274,7 @@ const AdminDashboard = () => {
           return next;
         });
         const t2: ApiTherapy[] = await fetchJsonWithTimeout(`${API_BASE}/therapies`);
-        setTherapies(t2.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match })));
+        setTherapies(t2.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match, staffRequired: x.staff_required ?? 1 })));
         const s2: (ApiStaff & { is_active?: boolean; status?: string })[] = await fetchJsonWithTimeout(`${API_BASE}/staff`);
         setStaff(s2.map((x) => ({ id: x.id, name: x.name, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", specializations: x.specializations.map((tid) => t2.find((k) => k.id === tid)?.name).filter((n): n is string => !!n), phone: x.phone ?? "", schedule: "", status: (typeof x.is_active === 'boolean' ? (x.is_active ? 'Active' : 'Inactive') : (x.status === 'Active' ? 'Active' : 'Inactive')) })));
       } else if (kind === 'patient') {
@@ -2748,11 +2749,13 @@ const AdminDashboard = () => {
                 <SelectItem value="false">Not Required</SelectItem>
               </SelectContent>
             </Select>
+            <Label htmlFor="new-therapy-staff">Therapists needed</Label>
+            <Input id="new-therapy-staff" type="number" min={1} max={6} value={String(newTherapy.staffRequired)} onChange={(e) => setNewTherapy({ ...newTherapy, staffRequired: Math.max(1, Number(e.target.value) || 1) })} />
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setShowAddTherapy(false)}>Cancel</Button>
               <Button onClick={async () => {
                 const required_amenities = newTherapy.amenitiesText.split(',').map((s) => s.trim()).filter(Boolean);
-                const payload: { name: string; required_amenities: string[]; duration_minutes: number; requires_gender_match: boolean } = { name: newTherapy.name, required_amenities, duration_minutes: newTherapy.duration, requires_gender_match: newTherapy.genderMatch };
+                const payload = { name: newTherapy.name, required_amenities, duration_minutes: newTherapy.duration, requires_gender_match: newTherapy.genderMatch, staff_required: newTherapy.staffRequired };
                 try {
                   const res = await fetch(`${API_BASE}/therapies`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                   const created = await res.json();
@@ -2764,10 +2767,11 @@ const AdminDashboard = () => {
                       duration: created.duration_minutes,
                       amenities: created.required_amenities || [],
                       genderMatch: !!created.requires_gender_match,
+                      staffRequired: created.staff_required ?? 1,
                     },
                   ]);
                   setShowAddTherapy(false);
-                  setNewTherapy({ name: '', duration: 60, amenitiesText: '', genderMatch: false });
+                  setNewTherapy({ name: '', duration: 60, amenitiesText: '', genderMatch: false, staffRequired: 1 });
                 } catch {
                   toast.error('Failed to save therapy');
                 }

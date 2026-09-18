@@ -7,7 +7,7 @@
  * way the notice board does:
  *
  *   - every resident, and under each of them every treatment's time and
- *     therapist, in the order the sheet groups them (a diet plan, then residents
+ *     therapist (both of them, for a treatment worked by a pair), in the order the sheet groups them (a diet plan, then residents
  *     with no plan, then outpatients; alphabetical inside a group)
  *   - on every page, every box drawn between two lines has ink in it
  *   - the PDF carries both weights, bold and regular, read from its own fonts
@@ -111,14 +111,16 @@ async function main() {
       // Residents on the no-plan list have a rest day: meals only, no treatment.
       for (const k of group === 'none' && i % 2 ? [] : [i % 5, (i + 2) % 5]) {
         const therapist = therapists[(i + k) % 3];
+        // Every fifth resident's first treatment is worked by two.
+        const partner = i % 5 === 0 && k === i % 5 ? therapists[(i + k + 1) % 3] : null;
         await prisma.appointment.create({
           data: {
-            patient_id: patient.id, therapy_id: therapy.id, staff_id: therapist.id, room_id: room.id,
+            patient_id: patient.id, therapy_id: therapy.id, staff_id: therapist.id, co_staff_ids: partner ? [partner.id] : [], room_id: room.id,
             scheduled_date: day, start_time: times[k], duration_minutes: 60,
             session_number: 1, total_sessions: 1, status: 'pending', assignment_type: 'manual',
           },
         });
-        appts.push({ time: times[k], therapist: therapist.name });
+        appts.push({ time: times[k], therapist: partner ? `${therapist.name} & ${partner.name}` : therapist.name });
       }
       expected.push({ name: patient.name, group, appts: appts.sort((a, b) => a.time.localeCompare(b.time)) });
     }
@@ -142,13 +144,16 @@ async function main() {
       at = i + p.name.length;
       return i;
     });
+    let pairs = 0;
     expected.forEach((p, n) => {
       const own = text.slice(positions[n], positions[n + 1] ?? text.length);
       for (const a of p.appts) {
         assert.ok(own.includes(`${a.time} ${TAG} Abhyanga 60m`), `${p.name}'s ${a.time} treatment is missing`);
         assert.ok(own.includes(a.therapist), `${p.name}'s ${a.time} treatment does not name ${a.therapist}`);
+        pairs += a.therapist.includes(' & ') ? 1 : 0;
       }
     });
+    assert.ok(pairs >= 5, `Expected pair treatments on the sheet, found ${pairs}`);
     const heading = (s: string) => text.indexOf(s);
     assert.ok(heading(`${TAG} Plan`) < heading('No diet plan') && heading('No diet plan') < heading('Outpatients'),
       'Groups are not in the order plan, no plan, outpatients');

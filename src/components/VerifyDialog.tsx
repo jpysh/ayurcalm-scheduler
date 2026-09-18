@@ -24,6 +24,7 @@ export type Fix = {
   pinned: boolean;
   appointment_id: string;
   staff_id: string | null;
+  co_staff_ids?: string[];
   staff_name: string;
   room_id: string | null;
   start_time: string;
@@ -56,7 +57,7 @@ type ProblemGroup = {
 };
 
 type DayCheck = { date: string; problems: DayProblem[]; groups: ProblemGroup[]; plan: Fix[]; headline: string | null };
-type Pin = { appointment_id: string; staff_id: string | null; room_id: string | null; start_time: string; date: string };
+type Pin = { appointment_id: string; staff_id: string | null; co_staff_ids: string[]; room_id: string | null; start_time: string; date: string };
 type UpcomingDay = { date: string; count: number; headline: string | null };
 
 const dateLabel = (iso: string) =>
@@ -136,7 +137,7 @@ export function VerifyDialog({
         body: JSON.stringify({
           date: dateISO,
           moves: check.plan.map((f) => ({
-            appointment_id: f.appointment_id, staff_id: f.staff_id, room_id: f.room_id, start_time: f.start_time, date: f.date,
+            appointment_id: f.appointment_id, staff_id: f.staff_id, co_staff_ids: f.co_staff_ids || [], room_id: f.room_id, start_time: f.start_time, date: f.date,
           })),
         }),
       });
@@ -195,7 +196,7 @@ export function VerifyDialog({
   async function pick(fix: Fix) {
     const next = [
       ...pins.filter((p) => p.appointment_id !== fix.appointment_id),
-      { appointment_id: fix.appointment_id, staff_id: fix.staff_id, room_id: fix.room_id, start_time: fix.start_time, date: fix.date },
+      { appointment_id: fix.appointment_id, staff_id: fix.staff_id, co_staff_ids: fix.co_staff_ids || [], room_id: fix.room_id, start_time: fix.start_time, date: fix.date },
     ];
     setPins(next);
     setChanging(null);

@@ -1,6 +1,6 @@
 import { PrismaClient, Appointment, Staff, TherapyRoom } from '@prisma/client';
 import { z } from 'zod';
-import { staffEventBusy, eventBlocking, type EventRow } from './availability.js';
+import { staffEventBusy, eventBlocking, teamOf, type EventRow } from './availability.js';
 
 const inputSchema = z.object({
   patient_id: z.string().uuid(),
@@ -81,6 +81,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     if (!therapy) throw new Error('Therapy not found');
 
   const duration = therapy.duration_minutes;
+  const staffRequired = Math.max(1, therapy.staff_required ?? 1);
 
   const candidateRooms = await withTimeout(prisma.therapyRoom.findMany({ where: { is_active: true } }), maxMs, 'ROOMS');
   const roomsFiltered = candidateRooms.filter((r) =>
@@ -109,7 +110,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
   const defaultDay = { start: '09:00', end: '18:00' } as const;
 
   const appointments: Appointment[] = [];
-  const suggestions: { scheduled_date: Date; start_time: string; room_id: string; staff_id: string }[] = [];
+  const suggestions: { scheduled_date: Date; start_time: string; room_id: string; staff_id: string; co_staff_ids: string[] }[] = [];
   const conflicts: { reason: string; alternatives: { date: Date; start_time: string }[]; details?: Record<string, unknown> } = { reason: '', alternatives: [] };
 
   let sessionsScheduled = 0;
@@ -239,7 +240,10 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     let roomsAvail: TherapyRoom[] = roomsOk.filter((r) => !holidays.some((h) => h.entity_type === 'room' && h.entity_id === r.id && ((h.date && h.date.toDateString() === nd.toDateString()) || (h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd) || isWeeklyMatch(h))));
     let staffAvail: Staff[] = staffOk.filter((s) => !holidays.some((h) => h.entity_type === 'staff' && h.entity_id === s.id && ((h.date && h.date.toDateString() === nd.toDateString()) || (h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd) || isWeeklyMatch(h))));
     if (input.preferred_room_id) roomsAvail = roomsAvail.filter((r) => r.id === input.preferred_room_id);
-    if (input.preferred_staff_id) staffAvail = staffAvail.filter((s) => s.id === input.preferred_staff_id);
+    // A named therapist leads; the rest of the team, when the therapy needs one,
+    // comes from everyone else free.
+    const leadAvail = input.preferred_staff_id ? staffAvail.filter((s) => s.id === input.preferred_staff_id) : staffAvail;
+    if (input.preferred_staff_id && leadAvail.length === 0) staffAvail = [];
 
     if (roomsAvail.length === 0 || staffAvail.length === 0) {
       conflicts.reason = conflicts.reason || 'NO_MATCHING_TIME_SLOTS';
@@ -251,7 +255,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     // prefetch all appointments on date for conflict checks and workloads
     const appointmentsOnDate = await withTimeout(prisma.appointment.findMany({
       where: { scheduled_date: nd },
-      select: { start_time: true, duration_minutes: true, room_id: true, staff_id: true, patient_id: true, therapy_id: true },
+      select: { start_time: true, duration_minutes: true, room_id: true, staff_id: true, co_staff_ids: true, patient_id: true, therapy_id: true },
     }), maxMs, 'APPTS_prefetch');
     const roomBusy: Record<string, { s: number; e: number }[]> = {};
     const staffBusy: Record<string, { s: number; e: number }[]> = {};
@@ -263,9 +267,9 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
         roomBusy[a.room_id] ??= [];
         roomBusy[a.room_id].push({ s: sMin, e: eMin });
       }
-      if (a.staff_id) {
-        staffBusy[a.staff_id] ??= [];
-        staffBusy[a.staff_id].push({ s: sMin, e: eMin });
+      for (const id of teamOf(a)) {
+        staffBusy[id] ??= [];
+        staffBusy[id].push({ s: sMin, e: eMin });
       }
       if (a.patient_id === input.patient_id) {
         patientBusy.push({ s: sMin, e: eMin });
@@ -290,7 +294,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
 
     // search for a concrete slot within preferred window using 30-min steps
     const step = 30;
-    let chosen: { room?: TherapyRoom; staff?: Staff; start?: number } = {};
+    let chosen: { room?: TherapyRoom; staff?: Staff; co?: Staff[]; start?: number } = {};
     const seenTimes = new Set<string>();
     const alignedStart = Math.ceil(slotWindowStart / step) * step;
     for (let slotStart = alignedStart; slotStart + duration <= windowEnd; slotStart += step) {
@@ -326,11 +330,11 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
           return true; // default to full-day block for ranges spanning the day
         });
         if (roomConflict) continue;
-        for (const s of staffAvail) {
+        const staffFree = (s: Staff) => {
           const sDay = getDay(s.weekly_schedule, weekday) || defaultDay;
           const sS = toMinutes(sDay.start);
           const sE = toMinutes(sDay.end);
-          if (!(slotStart >= sS && slotEnd <= sE)) continue;
+          if (!(slotStart >= sS && slotEnd <= sE)) return false;
           const staffConflictBusy = (staffBusy[s.id] || []).some((b) => overlaps(b.s, b.e, slotStart, slotBusyEnd));
           const staffHolidayBlock = holidays.some((h) => {
             if (!(h.entity_type === 'staff' && h.entity_id === s.id)) return false;
@@ -351,24 +355,20 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
             }
             return true;
           });
-          const staffConflict = staffConflictBusy || staffHolidayBlock;
-          const patientConflict = patientBusy.some((b) => overlaps(b.s, b.e, slotStart, slotBusyEnd));
-          if (!staffConflict && !patientConflict) {
-            const startStr = toTimeString(slotStart);
-            if (seenTimes.has(startStr)) {
-              // already suggested this start time; skip to encourage alternate times
-            } else {
-              const candidate = { scheduled_date: nd, start_time: startStr, room_id: r.id, staff_id: s.id };
-              if (suggestions.length < 3) {
-                suggestions.push(candidate);
-                seenTimes.add(startStr);
-              }
-            }
-            if (!chosen.room || !chosen.staff) {
-              chosen = { room: r, staff: s, start: slotStart };
-            }
-            break;
+          return !staffConflictBusy && !staffHolidayBlock;
+        };
+        const patientConflict = patientBusy.some((b) => overlaps(b.s, b.e, slotStart, slotBusyEnd));
+        if (patientConflict) continue;
+        const lead = leadAvail.find(staffFree);
+        const co = lead ? staffAvail.filter((s) => s.id !== lead.id && staffFree(s)).slice(0, staffRequired - 1) : [];
+        // A therapy it cannot fully staff is not booked short-handed.
+        if (lead && co.length === staffRequired - 1) {
+          const startStr = toTimeString(slotStart);
+          if (!seenTimes.has(startStr) && suggestions.length < 3) {
+            suggestions.push({ scheduled_date: nd, start_time: startStr, room_id: r.id, staff_id: lead.id, co_staff_ids: co.map((s) => s.id) });
+            seenTimes.add(startStr);
           }
+          if (!chosen.room || !chosen.staff) chosen = { room: r, staff: lead, co, start: slotStart };
         }
         if (chosen.room && chosen.staff && suggestions.length >= 3) break;
       }
@@ -401,6 +401,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
           patient_id: input.patient_id,
           therapy_id: input.therapy_id,
           staff_id: chosen.staff!.id,
+          co_staff_ids: (chosen.co || []).map((s) => s.id),
           room_id: chosen.room!.id,
           scheduled_date: nd,
           start_time: toTimeString(chosen.start!),

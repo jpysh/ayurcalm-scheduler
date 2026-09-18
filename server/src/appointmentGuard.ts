@@ -7,7 +7,7 @@
  * that check, on the server, where it cannot be skipped.
  */
 import { PrismaClient } from '@prisma/client';
-import { overlaps, staffEventBusy, toMinutes, type EventRow } from './availability.js';
+import { overlaps, staffEventBusy, teamOf, toMinutes, type EventRow } from './availability.js';
 
 export type Conflict = { reason: string; message: string; details?: Record<string, unknown> };
 
@@ -17,6 +17,7 @@ export type Candidate = {
   start_time: string;
   duration_minutes: number;
   staff_id: string | null;
+  co_staff_ids?: string[];
   room_id: string | null;
   patient_id: string;
   therapy_id?: string;
@@ -60,25 +61,28 @@ export function findConflict(c: Candidate, ctx: DayContext): Conflict | null {
   const hits = (a: { start_time: string; duration_minutes: number }) =>
     overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, start, end);
 
-  if (c.staff_id) {
-    const name = ctx.staff.find((s) => s.id === c.staff_id)?.name || 'That therapist';
+  // Everyone on the treatment is checked, lead or not: a co-therapist is in the
+  // room, and cannot be anywhere else.
+  const team = teamOf(c);
+  for (const staffId of team) {
+    const name = ctx.staff.find((s) => s.id === staffId)?.name || 'That therapist';
 
-    const clash = others.find((a) => a.staff_id === c.staff_id && hits(a));
+    const clash = others.find((a) => teamOf(a).includes(staffId) && hits(a));
     if (clash) {
-      return { reason: 'STAFF_BUSY', message: `${name} already has a treatment at ${clash.start_time}.`, details: { start_time: clash.start_time } };
+      return { reason: 'STAFF_BUSY', message: `${name} already has a treatment at ${clash.start_time}.`, details: { start_time: clash.start_time, staff_id: staffId } };
     }
 
-    const off = ctx.timeOff.find((h) => h.entity_type === 'staff' && h.entity_id === c.staff_id && hitsDay(h, ctx.day));
+    const off = ctx.timeOff.find((h) => h.entity_type === 'staff' && h.entity_id === staffId && hitsDay(h, ctx.day));
     if (off) {
-      return { reason: 'STAFF_OFF', message: `${name} is not in on this day (${off.description || 'time off'}).` };
+      return { reason: 'STAFF_OFF', message: `${name} is not in on this day (${off.description || 'time off'}).`, details: { staff_id: staffId } };
     }
 
-    const inEvent = staffEventBusy(ctx.events, c.staff_id, ctx.day).find((b) => overlaps(b.s, b.e, start, end));
+    const inEvent = staffEventBusy(ctx.events, staffId, ctx.day).find((b) => overlaps(b.s, b.e, start, end));
     if (inEvent) {
       return {
         reason: 'STAFF_IN_EVENT',
         message: `${name} is running ${inEvent.label} from ${minutesToTime(inEvent.s)} to ${minutesToTime(inEvent.e)}.`,
-        details: { activity_name: inEvent.label, event_start: minutesToTime(inEvent.s), event_end: minutesToTime(inEvent.e) },
+        details: { staff_id: staffId, activity_name: inEvent.label, event_start: minutesToTime(inEvent.s), event_end: minutesToTime(inEvent.e) },
       };
     }
   }
@@ -97,14 +101,26 @@ export function findConflict(c: Candidate, ctx: DayContext): Conflict | null {
   // A therapy that needs a therapist of the resident's own gender, where the
   // centre has left that rule switched on. The scheduler has always avoided
   // proposing these; nothing refused one that arrived another way.
-  if (therapy?.requires_gender_match && c.staff_id && ctx.settings?.enforce_gender_match !== false) {
-    const s = ctx.staff.find((x) => x.id === c.staff_id);
-    if (s && patient && s.gender !== patient.gender) {
+  if (therapy?.requires_gender_match && ctx.settings?.enforce_gender_match !== false) {
+    const s = ctx.staff.find((x) => team.includes(x.id) && patient && x.gender !== patient.gender);
+    if (s) {
       return {
         reason: 'GENDER_MISMATCH',
-        message: `${therapy.name} is given by a therapist of the resident's own gender, and ${s.name} is not.`,
+        message: `${therapy.name} is given by therapists of the resident's own gender, and ${s.name} is not.`,
+        details: { staff_id: s.id },
       };
     }
+  }
+
+  // A treatment short of hands does not happen. No one at all is a different
+  // problem (Verify's "no therapist"), so that is left to it.
+  const needed = therapy?.staff_required ?? 1;
+  if (team.length > 0 && team.length < needed) {
+    return {
+      reason: 'STAFF_SHORT',
+      message: `${therapy!.name} needs ${needed} therapists and has ${team.length}.`,
+      details: { needed, has: team.length },
+    };
   }
 
   // The room has to have what the treatment is done with. A Pizhichil without a

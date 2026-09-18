@@ -1,4 +1,5 @@
 declare module 'pdfkit';
+import { teamOf } from '../availability.js';
 import PDFDocument from 'pdfkit';
 import { resolveDiet, mealOrder, type MealKey } from '../dietResolution.js';
 import { PrismaClient } from '@prisma/client';
@@ -293,7 +294,8 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
             bold: true,
             text: [
               `${therapyById[a.therapy_id] || a.therapy_id} ${a.duration_minutes || 0}m`,
-              a.staff_id ? noDr(staffById[a.staff_id] || a.staff_id) : '',
+              // Everyone working it, so a resident knows two people are coming.
+              teamOf(a).map((id) => noDr(staffById[id] || id)).join(' & '),
               a.room_id ? roomById[a.room_id] || a.room_id : '',
             ].filter(Boolean).join(' · '),
           })),

@@ -38,6 +38,8 @@ export type Fix = {
   pinned: boolean;
   appointment_id: string;
   staff_id: string | null;
+  /** Everyone else on the treatment after the fix. */
+  co_staff_ids: string[];
   staff_name: string;
   room_id: string | null;
   start_time: string;
@@ -98,6 +100,7 @@ const COST: Record<string, number> = {
   STAFF_BUSY: 1,
   STAFF_IN_EVENT: 1,
   GENDER_MISMATCH: 2,
+  STAFF_SHORT: 2,
   PATIENT_BUSY: 3,
   ROOM_BUSY: 4,
   AMENITIES_MISSING: 5,
@@ -112,6 +115,7 @@ const candidateOf = (a: DayContext['appointments'][number]): Candidate => ({
   start_time: a.start_time,
   duration_minutes: a.duration_minutes,
   staff_id: a.staff_id,
+  co_staff_ids: a.co_staff_ids,
   room_id: a.room_id,
   patient_id: a.patient_id,
   therapy_id: a.therapy_id,
@@ -132,6 +136,7 @@ const fixFromMove = (m: Move, sameDay: boolean): Fix => ({
   pinned: Boolean(m.pinned),
   appointment_id: m.appointment_id,
   staff_id: m.to.staff_id,
+  co_staff_ids: m.to.co_staff_ids,
   staff_name: m.to.staff_name,
   room_id: m.to.room_id,
   start_time: m.to.start_time,
@@ -179,16 +184,18 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
     const conflict = findConflict(candidateOf(a), ctx);
     if (conflict) {
       // One heading per cause: an absent therapist is one thing that happened,
-      // not four. A room clash names the room, so the pair sits together.
+      // not four. A room clash names the room, so the pair sits together. The
+      // therapist named is the one at fault, who need not be the lead.
+      const culprit = (conflict.details?.staff_id as string | undefined) ?? a.staff_id;
       raw.push({
         ...common,
         id: `${conflict.reason}:${a.id}`,
         kind: conflict.reason,
         problem_class: 'blocking',
         what: conflict.message,
-        group_key: `${conflict.reason}:${conflict.reason === 'ROOM_BUSY' ? a.room_id : a.staff_id}`,
+        group_key: `${conflict.reason}:${conflict.reason === 'ROOM_BUSY' ? a.room_id : culprit}`,
         group_label: conflict.message,
-        staff_id: a.staff_id,
+        staff_id: culprit,
         cost: COST[conflict.reason] ?? 9,
       });
       continue;
@@ -291,6 +298,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
         // A plan that leaves a treatment exactly where it is has fixed nothing.
         const noop = Boolean(
           fix && appt && fix.date === ymd(day) && fix.staff_id === appt.staff_id &&
+          fix.co_staff_ids.join() === appt.co_staff_ids.join() &&
           fix.start_time === appt.start_time && fix.room_id === appt.room_id,
         );
         p.fix = noop ? null : fix;

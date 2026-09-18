@@ -156,15 +156,26 @@ const TherapiesTab = ({
                   </TableCell>
                   <TableCell className="text-xs md:text-sm leading-tight py-0 pl-1.5 pr-1 md:py-0 md:px-3">
                     {editingTherapyId === therapy.id ? (
-                      <Select value={therapy.genderMatch ? 'true' : 'false'} onValueChange={(v: any) => setTherapies((prev: any[]) => prev.map((t: any) => t.id === therapy.id ? { ...t, genderMatch: v === 'true' } : t))}>
-                        <SelectTrigger data-testid={`therapy-gender-${therapy.id}`} className="h-10"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="true">Required</SelectItem>
-                          <SelectItem value="false">Not Required</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="space-y-1">
+                        <Select value={therapy.genderMatch ? 'true' : 'false'} onValueChange={(v: any) => setTherapies((prev: any[]) => prev.map((t: any) => t.id === therapy.id ? { ...t, genderMatch: v === 'true' } : t))}>
+                          <SelectTrigger data-testid={`therapy-gender-${therapy.id}`} className="h-10"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="true">Required</SelectItem>
+                            <SelectItem value="false">Not Required</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <label className="flex items-center gap-2 text-xs">
+                          Therapists
+                          <Input type="number" min={1} max={6} className="h-10 w-16" aria-label="Therapists needed" value={String(therapy.staffRequired ?? 1)}
+                            onChange={(e: any) => setTherapies((prev: any[]) => prev.map((t: any) => t.id === therapy.id ? { ...t, staffRequired: Math.max(1, Number(e.target.value) || 1) } : t))} />
+                        </label>
+                      </div>
                     ) : (
-                      <Badge variant={therapy.genderMatch ? "default" : "secondary"}>{therapy.genderMatch ? "Required" : "Not Required"}</Badge>
+                      <div className="flex flex-wrap gap-1">
+                        <Badge variant={therapy.genderMatch ? "default" : "secondary"}>{therapy.genderMatch ? "Required" : "Not Required"}</Badge>
+                        {/* Only said when it is more than one, which is the case worth noticing. */}
+                        {(therapy.staffRequired ?? 1) > 1 ? <Badge variant="outline">{therapy.staffRequired} therapists</Badge> : null}
+                      </div>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
@@ -174,10 +185,10 @@ const TherapiesTab = ({
                           <Button variant="outline" size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={() => { if (originalTherapyEntry) setTherapies((prev: any[]) => prev.map((t: any) => t.id === therapy.id ? originalTherapyEntry : t)); setEditingTherapyId(null); setOriginalTherapyEntry(null); }}>Cancel</Button>
                           <Button size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={async () => {
                             try {
-                              const payload = { name: therapy.name, required_amenities: therapy.amenities, duration_minutes: therapy.duration, requires_gender_match: therapy.genderMatch };
+                              const payload = { name: therapy.name, required_amenities: therapy.amenities, duration_minutes: therapy.duration, requires_gender_match: therapy.genderMatch, staff_required: therapy.staffRequired ?? 1 };
                               const res = await fetch(`${API_BASE}/therapies/${therapy.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
                               const updated = await res.json();
-                              setTherapies((prev: any[]) => prev.map((t: any) => t.id === therapy.id ? { ...t, name: updated.name, amenities: (updated.required_amenities || t.amenities), duration: (updated.duration_minutes ?? t.duration), genderMatch: !!updated.requires_gender_match } : t));
+                              setTherapies((prev: any[]) => prev.map((t: any) => t.id === therapy.id ? { ...t, name: updated.name, amenities: (updated.required_amenities || t.amenities), duration: (updated.duration_minutes ?? t.duration), genderMatch: !!updated.requires_gender_match, staffRequired: updated.staff_required ?? 1 } : t));
                               setEditingTherapyId(null);
                               setOriginalTherapyEntry(null);
                             } catch {
