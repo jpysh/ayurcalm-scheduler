@@ -17,8 +17,9 @@ COPY server/ ./
 RUN npx prisma generate && npm run build
 
 FROM node:24-slim AS runner
-# openssl is a Prisma runtime dependency on slim images.
-RUN apt-get update && apt-get install -y --no-install-recommends openssl \
+# openssl is a Prisma runtime dependency on slim images. poppler-utils lets
+# npm run qa read the day sheet PDF back (text, fonts, and a rendered page).
+RUN apt-get update && apt-get install -y --no-install-recommends openssl poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 

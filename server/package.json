@@ -20,11 +20,13 @@
     "test:rota": "tsx src/tests/therapistRota.test.ts",
     "test:invariants": "tsx src/tests/scheduleInvariants.test.ts",
     "test": "npm run test:diet && npm run test:pdf && npm run test:rota && npm run test:availability",
-    "test:all": "npm run test:diet && npm run test:pdf && npm run test:rota && npm run test:availability && npm run test:invariants && npm run test:validation && npm run test:auto-assign && npm run test:replan && npm run test:day-check && npm run test:day-plan",
+    "test:all": "npm run test:diet && npm run test:pdf && npm run test:rota && npm run test:availability && npm run test:invariants && npm run test:validation && npm run test:auto-assign && npm run test:replan && npm run test:day-check && npm run test:day-plan && npm run test:day-sheet && npm run test:onboarding",
     "test:availability": "tsx src/tests/availability.test.ts",
     "test:replan": "tsx src/tests/replanSimulation.test.ts",
     "test:day-check": "tsx src/tests/dayCheckParity.test.ts",
-    "test:day-plan": "tsx src/tests/dayPlan.test.ts"
+    "test:day-plan": "tsx src/tests/dayPlan.test.ts",
+    "test:day-sheet": "tsx src/tests/daySheet.test.ts",
+    "test:onboarding": "tsx src/tests/onboarding.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

@@ -50,7 +50,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = push ] \
             || git diff --name-only ${{ github.event.pull_request.base.sha }} HEAD \
-               | grep -qE '^(server/|Dockerfile|docker-compose\.yml|docker-entrypoint\.sh|scripts/qa\.sh|\.github/)'; then
+               | grep -qE '^(server/|src/pages/SetupWizard\.tsx|Dockerfile|docker-compose\.yml|docker-entrypoint\.sh|scripts/qa\.sh|\.github/)'; then
             echo full=true >> "$GITHUB_OUTPUT"
           else
             echo full=false >> "$GITHUB_OUTPUT"
