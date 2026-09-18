@@ -7,7 +7,7 @@ import { DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD } from './auth.js';
 const prisma = new PrismaClient();
 
 const ayurvedaRoomNames = [
-  'Dhanvantari', 'Ashwini Kumar East', 'Ashwini Kumar West', 'Lord Shiva', 'Lord Vishnu', 'Lakshmi', 'Parvati', 'Ganesha',
+  'Dhanvantari', 'Nasatya', 'Dasra', 'Shiva', 'Vishnu', 'Lakshmi', 'Parvati', 'Ganesha',
   'Hanuman', 'Saraswati', 'Surya', 'Chandra', 'Agni', 'Vayu', 'Indra', 'Varuna', 'Kubera', 'Yama', 'Brahma', 'Narada'
 ];
 

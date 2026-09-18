@@ -167,6 +167,7 @@ const DayGrid = ({ dayAppointments, dayKey, isToday, nowMinutes, timeSlots, pati
   const H = (end - start) * PX;
   const hours: number[] = [];
   for (let m = start + 60; m < end; m += 60) hours.push(m);
+  const offIds = new Set(staffDay.filter((d) => d.off).map((d) => d.staff_id));
   const offWithWork = (id: string) => staffDay.some((d) => d.staff_id === id && d.off) && dayAppointments.some((a) => team(a).includes(id));
   const times: number[] = [];
   for (let m = start; m < end; m += 30) times.push(m);
@@ -190,8 +191,13 @@ const DayGrid = ({ dayAppointments, dayKey, isToday, nowMinutes, timeSlots, pati
           {Object.values(STATUS).map((s) => (
             <span key={s.label} className="inline-flex items-center gap-1"><i className={`inline-block w-2.5 h-2.5 rounded-sm border-l-[3px] ${s.cls}`} />{s.label}</span>
           ))}
-          <span className="inline-flex items-center gap-1"><i className={`inline-block w-2.5 h-2.5 rounded-sm border ${LEAVE_BG}`} />On leave</span>
-          <span><b className="text-primary">+1</b> two therapists</span>
+          {mode === "staff" ? (
+            <>
+              <span className="inline-flex items-center gap-1"><i className={`inline-block w-2.5 h-2.5 rounded-sm border ${LEAVE_BG}`} />On leave</span>
+              <span><b className="text-primary">+1</b> two therapists</span>
+            </>
+          ) : null}
+          <span className="inline-flex items-center gap-1"><i className="inline-block w-2.5 h-2.5 rounded-sm ring-2 ring-inset ring-destructive" />Therapist on leave</span>
         </div>
       <div className="sticky top-0 z-20 bg-background space-y-1.5 py-1.5">
         <div ref={chipsRef} className="flex gap-1.5 overflow-x-auto [scrollbar-width:none]">
@@ -201,7 +207,7 @@ const DayGrid = ({ dayAppointments, dayKey, isToday, nowMinutes, timeSlots, pati
             return (
               <button key={c.id} type="button" onClick={() => goTo(Math.floor(i / perPage))}
                 className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs whitespace-nowrap ${on ? (warn ? "bg-destructive text-destructive-foreground border-destructive" : "bg-primary text-primary-foreground border-primary") : warn ? "border-destructive text-destructive" : c.off ? "text-muted-foreground" : ""}`}>
-                {c.name.split(" ")[0]}
+                {mode === "staff" ? c.name.split(" ")[0] : c.name}
               </button>
             );
           })}
@@ -242,9 +248,10 @@ const DayGrid = ({ dayAppointments, dayKey, isToday, nowMinutes, timeSlots, pati
                       {c.items.map((a) => {
                         const t = toM(a.start_time);
                         const extra = team(a).length - 1;
+                        const onLeave = team(a).some((id) => offIds.has(id));
                         return (
                           <button key={a.id} type="button" onClick={() => setDetail(a)}
-                            className={`absolute inset-x-0.5 rounded border-l-[3px] px-1 py-0.5 text-left text-[11px] leading-tight overflow-hidden ${statusOf(a).cls} ${warn ? "ring-2 ring-destructive ring-inset" : ""}`}
+                            className={`absolute inset-x-0.5 rounded border-l-[3px] px-1 py-0.5 text-left text-[11px] leading-tight overflow-hidden ${statusOf(a).cls} ${onLeave ? "ring-2 ring-destructive ring-inset" : ""}`}
                             style={{ top: (t - start) * PX, height: a.duration_minutes * PX - 2 }}>
                             <span className="block text-[10px] text-muted-foreground tabular-nums">{a.start_time}–{fmt(t + a.duration_minutes)}</span>
                             <span className="block font-semibold line-clamp-2 break-words">
@@ -252,7 +259,7 @@ const DayGrid = ({ dayAppointments, dayKey, isToday, nowMinutes, timeSlots, pati
                               {mode === "staff" && extra > 0 ? <b className="text-primary"> +{extra}</b> : null}
                             </span>
                             <span className="block truncate text-muted-foreground">{therapyNameById[String(a.therapy_id)] || "Therapy"}</span>
-                            <span className="block truncate text-muted-foreground">{mode === "staff" ? roomName.get(String(a.room_id)) || "No room" : names(a) || "No therapist"}</span>
+                            <span className={`block text-muted-foreground ${mode === "staff" ? "truncate" : "break-words"}`}>{mode === "staff" ? roomName.get(String(a.room_id)) || "No room" : names(a) || "No therapist"}</span>
                           </button>
                         );
                       })}
