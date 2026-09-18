@@ -37,7 +37,7 @@ async function main() {
     await requireDemoData(prisma);
 
     // A day of its own, so the seeded centre's day is neither read nor touched.
-    const day = new Date('2026-10-15T00:00:00.000Z');
+    const day = new Date('2030-01-16T00:00:00.000Z');
 
     const therapy = await prisma.therapy.create({ data: { name: 'Plan Therapy', required_amenities: ['table'], duration_minutes: 60, requires_gender_match: false } });
     made.push({ table: 'therapy', id: therapy.id });

@@ -6,7 +6,9 @@ on:
   pull_request:
 
 jobs:
-  frontend:
+  # Every pull request: builds and the tests that need no database. Minutes, not
+  # the full stack, so a day sheet styling change is not held up.
+  fast:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,6 +16,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
       - run: npm ci
       # Non-blocking: the codebase carries ~470 pre-existing no-explicit-any
       # errors. Reported so the count goes down over time, not up, without
@@ -21,78 +26,54 @@ jobs:
       - run: npm run lint
         continue-on-error: true
       - run: npm run build
-
-  server:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: ayurcalm
-          POSTGRES_PASSWORD: ayurcalm
-          POSTGRES_DB: ayurcalm_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-        ports:
-          - 5432:5432
-    env:
-      DATABASE_URL: postgresql://ayurcalm:ayurcalm@localhost:5432/ayurcalm_test?schema=public
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: server/package-lock.json
       - run: npm ci
         working-directory: server
       - run: npx prisma generate
         working-directory: server
-      - run: npx prisma migrate deploy
-        working-directory: server
       - run: npm run build
         working-directory: server
-      # Needs neither the database nor a running server: it is the diet
-      # resolution on its own, which is the part that fails quietly.
-      - run: npm run test:diet
-        working-directory: server
-      - run: npm run test:pdf
+      # Diet resolution, PDF word shortening, availability and the rota: pure
+      # functions, no database.
+      - run: npm test
         working-directory: server
 
-  docker:
+  # Does this change reach the server? Merges to main always count.
+  scope:
     runs-on: ubuntu-latest
+    outputs:
+      full: ${{ steps.check.outputs.full }}
     steps:
       - uses: actions/checkout@v4
-      # The quick start is the first thing anyone tries, so make sure the
-      # image still builds on every change.
-      - run: docker build -t ayurcalm-scheduler .
+        with:
+          fetch-depth: 0
+      - id: check
+        run: |
+          if [ "${{ github.event_name }}" = push ] \
+            || git diff --name-only ${{ github.event.pull_request.base.sha }} HEAD \
+               | grep -qE '^(server/|Dockerfile|docker-compose\.yml|docker-entrypoint\.sh|scripts/qa\.sh|\.github/)'; then
+            echo full=true >> "$GITHUB_OUTPUT"
+          else
+            echo full=false >> "$GITHUB_OUTPUT"
+          fi
 
-  e2e:
+  # The real quick start, seeded with demo data, then every server test and the
+  # browser walk against it. A change to the scheduler or the planner must not
+  # merge without this.
+  full:
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      # The real quick start, seeded with demo data: sign in, every tab, the day sheet.
-      - run: docker compose up -d --build
-      - run: timeout 300 sh -c 'until docker compose logs app | grep -q "Seeded\|seed failed"; do sleep 3; done; until curl -sf localhost:8080/api/health; do sleep 2; done'
+      # The same command the maintainer runs locally: starts the stack and runs
+      # every server test inside the app container.
+      - run: npm run qa
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      # Sign in, every tab, the day sheet.
       - run: npm run test:e2e
-      # The stack is already up, so the tests that need a database and a server
-      # run here rather than in a job that would have to build one again. They
-      # run inside the app container because the db publishes no host port, and
-      # that container already has the database URL and the dependencies. These
-      # tests rotted unnoticed for months while they had nowhere in CI to run.
-      - name: Database and scheduler tests
-        run: |
-          docker compose exec -T -w /app/server -e API_BASE=http://localhost:4000/api app \
-            sh -c 'npx tsx src/tests/scheduleInvariants.test.ts \
-                && npx tsx src/tests/validation.test.ts \
-                && npx tsx src/tests/autoAssign.test.ts'
       - if: failure()
         run: docker compose logs app | tail -100

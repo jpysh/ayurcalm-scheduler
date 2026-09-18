@@ -13,7 +13,9 @@
     "dev:up": "docker compose up -d --build",
     "dev:down": "docker compose down",
     "dev:reset": "docker compose down -v && docker compose up -d --build",
-    "dev:logs": "docker compose logs -f app"
+    "dev:logs": "docker compose logs -f app",
+    "qa": "sh scripts/qa.sh",
+    "qa:fresh": "npm run dev:reset && npm run qa"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

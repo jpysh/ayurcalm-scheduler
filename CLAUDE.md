@@ -215,18 +215,15 @@ actually unchanged after the 403 rather than trusting the status code.
 not changed, so it will not pick up anything you patched inside the container
 while debugging. Use `--force-recreate` before believing a clean result.
 
-`npm run test:e2e` runs sign-in, every tab and the day sheet in Chromium against
-the running stack (`E2E_BASE_URL`, default :8080). CI runs it too, together with
-the schedule invariants, which check the seeded months for a double-booked
-therapist, room or resident — buffers included.
+`npm run qa` runs every server test inside the app container, after an
+`up --build` so it tests the code in the checkout, and prints one plain-English
+line per test. `npm run qa:fresh` does the same on a freshly seeded centre. CI
+runs `qa` plus `npm run test:e2e` (sign-in, every tab, the day sheet, in
+Chromium) on any pull request that touches `server/` or the Docker files, and on
+every merge; other pull requests get the builds and the database-free tests only.
 
-The database-backed tests (`test:replan`, `test:invariants`) need the compose
-network. The quickest way to run one is against the running stack:
-
-```bash
-npx tsc -p server && docker compose cp server/dist/. app:/app/server/dist/
-docker compose exec -T -e ALLOW_TEST_WRITES=1 app node server/dist/tests/replanSimulation.test.js
-```
+A test that needs a date uses a fixed day far from the seeded months, never
+`new Date()`: a clock-dependent date once failed only on Thursday afternoons.
 
 There is one dataset, not a demo one and a test one: a stress fixture kept
 beside the demo would drift from it, and then a test passes on data no install
