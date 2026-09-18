@@ -51,6 +51,7 @@ run dayPlan            "Verify's fix for a day is one plan with no clashes, and 
 run daySheet           "The day sheet lists every resident, treatment time and therapist, in its groups, with no empty boxes"
 run dietOverride       "Editing a diet plan changes it for everyone except what one patient was told specifically"
 run onboarding         "After the setup wizard, the centre has its hours, timezone, therapies, rooms and therapists, and the day sheet prints"
+run mcp                "Claude reads the centre only with the current key: the day, residents, who is free and the day sheet, and reading changes nothing"
 
 # A browser walk, run from the checkout against the stack: it needs Chromium
 # (npx playwright install chromium) on the machine running this.

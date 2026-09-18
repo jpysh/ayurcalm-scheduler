@@ -290,6 +290,12 @@ model ServerSecret {
   id         String   @id @default("singleton")
   jwt_secret String
   created_at DateTime @default(now())
+  /// The AI assistant's key (#119): a hash only, shown once at download.
+  /// Revoking clears it. The key acts as the admin who made it.
+  mcp_key_hash         String?
+  mcp_key_user_id      String?
+  mcp_key_created_at   DateTime?
+  mcp_key_last_used_at DateTime?
 }
 
 /// A reusable diet plan. Most patients are put on one of these rather than

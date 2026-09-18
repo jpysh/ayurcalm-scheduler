@@ -11,6 +11,7 @@ import { authRouter, requireAuth, warnIfDefaultAdminUnchanged, loadJwtSecret } f
 import { settingsRouter, publicSettingsRouter } from './settings.js';
 import { usersRouter, accountRouter } from './users.js';
 import { dietTemplatesRouter } from './dietTemplates.js';
+import { mcpRouter, mcpKeyRouter } from './mcp.js';
 import { ZodError } from 'zod';
 import path from 'path';
 import fs from 'fs';
@@ -99,6 +100,9 @@ expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
   if (p === '/health') return next();
   return globalLimiter(req, res, next);
 });
+// The AI assistant's door (#119). It carries its own key rather than a login
+// session, so it sits outside /api and before the static site.
+expressApp.use('/mcp', globalLimiter, mcpRouter);
 // Login and health are the only unauthenticated API routes. Everything else
 // requires a valid session token, reads included — appointment and patient
 // data is not public.
@@ -120,6 +124,7 @@ expressApp.use('/api/settings', settingsRouter);
 expressApp.use('/api/users', usersRouter);
 expressApp.use('/api/account', accountRouter);
 expressApp.use('/api/diet-templates', dietTemplatesRouter);
+expressApp.use('/api/mcp-key', mcpKeyRouter);
 expressApp.use('/api', app);
 
 // The daily schedule and therapist rota PDFs are served by the router mounted

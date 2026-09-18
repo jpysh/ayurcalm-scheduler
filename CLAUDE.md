@@ -60,6 +60,10 @@ server/                 Express + Prisma + Zod, serves ../dist in production
                         it. The header and Verify read it and decide nothing
   src/dietResolution.ts    What one patient eats on one day — pure, and tested
   src/dietTemplates.ts     Diet plan CRUD, admin-only writes
+  src/mcp.ts               The AI assistant's door at /mcp (#119, spec #102):
+                        grouped tools that call the functions above and
+                        decide nothing. src/mcpb/proxy.cjs is the Claude
+                        Desktop extension Settings hands out
   src/scripts/          resetPassword.ts — lockout recovery
 ```
 

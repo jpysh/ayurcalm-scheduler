@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { UsersSection, ChangePasswordCard } from "@/components/UsersSection";
+import { AssistantSection } from "@/components/AssistantSection";
 
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
 const SLOT_OPTIONS = [15, 20, 30, 60];
@@ -345,6 +346,7 @@ const Settings = () => {
 
       <ChangePasswordCard />
 
+      {isAdmin && <AssistantSection />}
       {isAdmin && <UsersSection />}
 
       {settings.demo_data && isAdmin && (

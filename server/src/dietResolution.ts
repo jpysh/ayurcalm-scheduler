@@ -5,6 +5,7 @@
  * about what somebody is allowed to eat.
  */
 
+import type { PrismaClient } from '@prisma/client';
 export type MealKey = 'breakfast' | 'lunch' | 'dinner' | 'snacks';
 
 export const mealOrder: MealKey[] = ['breakfast', 'lunch', 'dinner', 'snacks'];
@@ -95,4 +96,50 @@ export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
     planName: label,
     therapyNotes,
   };
+}
+
+/**
+ * Everyone's diet on one day, read once. The day sheet and the AI assistant
+ * both ask this, so they cannot disagree about what somebody eats.
+ *
+ * Three places, most specific first: a DietPlan row written for this date, the
+ * template on the segment covering this date, then the free-text field on the
+ * patient. Precedence is per meal, so overriding breakfast leaves the rest of
+ * the plan standing.
+ */
+export async function loadDietsForDay(day: Date, prisma: PrismaClient) {
+  const [dietDay, dietSegments] = await Promise.all([
+    prisma.dietPlan.findMany({ where: { date: day } }),
+    prisma.dietPlanSegment.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } }, include: { Template: true } }),
+  ]);
+  const dayMealsByPatient = new Map<string, Partial<Record<MealKey, string>>>();
+  for (const d of dietDay) {
+    const meals = dayMealsByPatient.get(d.patient_id) || {};
+    meals[d.meal_time as MealKey] = [d.description, d.instructions].filter(Boolean).join(' — ');
+    dayMealsByPatient.set(d.patient_id, meals);
+  }
+  const segmentByPatient = new Map<string, (typeof dietSegments)[number]>();
+  for (const seg of dietSegments) {
+    // A patient should not hold two overlapping segments, but if they do, the
+    // one that started most recently is the one set last.
+    const held = segmentByPatient.get(seg.patient_id);
+    if (!held || seg.start_date > held.start_date) segmentByPatient.set(seg.patient_id, seg);
+  }
+  // Meals no longer take columns on the sheet, so every meal resolves as text.
+  const mealsWithColumn = new Set<MealKey>();
+  const dietFor = (patient: { id: string; diet_plan: string | null }, hasTherapyToday: boolean) => {
+    const seg = segmentByPatient.get(patient.id);
+    return resolveDiet({
+      template: seg?.Template ?? null,
+      overrides: (seg?.overrides || null) as Record<string, string | undefined> | null,
+      dayMeals: dayMealsByPatient.get(patient.id) || {},
+      hasTherapyToday,
+      mealsWithColumn,
+      freeText: patient.diet_plan,
+      segmentLabel: seg?.template_label,
+    });
+  };
+  /** True when a meal was written for this person for this date alone. */
+  const hasDayMeals = (id: string) => Object.keys(dayMealsByPatient.get(id) || {}).length > 0;
+  return { dietFor, hasDayMeals };
 }
