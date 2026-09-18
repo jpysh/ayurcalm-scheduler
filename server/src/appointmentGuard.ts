@@ -160,3 +160,21 @@ export function nearestFreeTime(c: Candidate, ctx: DayContext): string | null {
   }
   return null;
 }
+
+/**
+ * Each therapist's day as the guard sees it: on leave, or the times they are
+ * tied up running an event or giving a treatment. The schedule's "who is free
+ * at 11:00" reads this, so it can never call someone free whom a booking
+ * would refuse.
+ */
+export function staffDay(ctx: DayContext) {
+  return ctx.staff.filter((s) => s.is_active).map((s) => {
+    const off = ctx.timeOff.find((h) => h.entity_type === 'staff' && h.entity_id === s.id && hitsDay(h, ctx.day));
+    const busy = [
+      ...staffEventBusy(ctx.events, s.id, ctx.day),
+      ...ctx.appointments.filter((a) => teamOf(a).includes(s.id))
+        .map((a) => ({ s: toMinutes(a.start_time), e: toMinutes(a.start_time) + a.duration_minutes, label: 'treatment' })),
+    ].sort((a, b) => a.s - b.s);
+    return { staff_id: s.id, off: off ? (off.description || 'time off') : null, busy };
+  });
+}

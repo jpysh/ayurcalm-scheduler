@@ -323,7 +323,6 @@ const AdminDashboard = () => {
   const [originalTherapyEntry, setOriginalTherapyEntry] = useState<UiTherapy | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ kind: 'staff'|'room'|'therapy'|'patient'|'timeoff'|'appointment'; id: string; name?: string; counts?: Record<string, number> } | null>(null);
   const [showAddPatient, setShowAddPatient] = useState(false);
-  const [weekCompact, setWeekCompact] = useState(true);
   const [newPatient, setNewPatient] = useState<Patient>({
     id: String(mockPatientsDetailed.length + 1),
     name: "",
@@ -423,7 +422,6 @@ const AdminDashboard = () => {
   const staffNameById = useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
   const roomNameById = useMemo(() => Object.fromEntries(roomsList.map((r) => [r.id, r.name])), [roomsList]);
   const patientNameById = useMemo(() => Object.fromEntries(patients.map((p) => [p.id, p.name])), [patients]);
-  const roomIdsSet = useMemo(() => new Set(roomsList.map((r) => r.id)), [roomsList]);
   const amenityOptions = useMemo(() => {
     const s = new Set<string>();
     for (const r of roomsList) for (const a of r.amenities) s.add(a);
@@ -909,9 +907,6 @@ const AdminDashboard = () => {
   const [showAddTherapy, setShowAddTherapy] = useState(false);
   const [showAddTimeOff, setShowAddTimeOff] = useState(false);
   const tabsListRef = useRef<HTMLDivElement | null>(null);
-  const dayScrollRef = useRef<HTMLDivElement | null>(null);
-  const timeHeaderRef = useRef<HTMLDivElement | null>(null);
-  const [dayScrollProgress, setDayScrollProgress] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
   const DEFAULT_PAGE_SIZE = isMobile ? 20 : 40;
   const [visibleStaffRows, setVisibleStaffRows] = useState(DEFAULT_PAGE_SIZE);
@@ -924,7 +919,6 @@ const AdminDashboard = () => {
   const therapiesTotalRef = useRef(0);
   const timeoffTotalRef = useRef(0);
   const eventsTotalRef = useRef(0);
-  const [activeRoomIndex, setActiveRoomIndex] = useState(0);
   const calendarRef = useRef<HTMLDivElement | null>(null);
   const calendarTriggerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -966,17 +960,6 @@ const AdminDashboard = () => {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [showCalendar]);
-  const dayGridCols = useMemo(() => {
-    const dayKey = ymdInTZ(currentDate);
-    const dayAppointments = Array.isArray(appointmentsByDate[dayKey]) ? appointmentsByDate[dayKey] : [];
-    const roomsForDay = roomsList.filter((r) => dayAppointments.some((a: ApiAppointment) => a.room_id === r.id));
-    const fullCount = viewType === "day" ? roomsForDay.length : roomsList.length;
-    const count = fullCount;
-    if (isMobile) {
-      return `minmax(56px,72px) repeat(${count}, minmax(200px, 200px))`;
-    }
-    return `minmax(56px,72px) repeat(${count}, minmax(160px, 1fr))`;
-  }, [roomsList, currentDate, appointmentsByDate, viewType, isMobile]);
 
   const [newStaff, setNewStaff] = useState({
     name: "",
@@ -1332,20 +1315,6 @@ const AdminDashboard = () => {
     setCurrentDate(newDate);
   };
 
-  useEffect(() => {
-    const el = dayScrollRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      const timeW = timeHeaderRef.current?.offsetWidth ?? 0;
-      const maxRooms = Math.max(0, el.scrollWidth - el.clientWidth - timeW);
-      const leftRooms = Math.max(0, el.scrollLeft - timeW);
-      const pct = maxRooms > 0 ? Math.min(1, leftRooms / maxRooms) : 0;
-      setDayScrollProgress(pct);
-    };
-    el.addEventListener('scroll', onScroll);
-    onScroll();
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [currentDate, roomsList.length]);
 
   // Calculate stats for overview
   const monday = useMemo(() => {
@@ -1469,42 +1438,6 @@ const AdminDashboard = () => {
   }, [roomsList]);
 
   const dayKeyMemo = useMemo(() => ymdInTZ(currentDate), [currentDate]);
-  const dayRoomsSortedAZ = useMemo(() => {
-    const dayAppointments = Array.isArray(appointmentsByDate[dayKeyMemo]) ? appointmentsByDate[dayKeyMemo] : [];
-    const knownRoomsWithAppts = roomsList.filter((r) => dayAppointments.some((a: ApiAppointment) => a.room_id === r.id));
-    const unknownRoomIds = Array.from(new Set(dayAppointments.map((a: ApiAppointment) => a.room_id))).filter((id) => !roomIdsSet.has(id));
-    const syntheticRooms = unknownRoomIds.map((id) => ({ id, name: id, amenities: [], schedule: "", status: "Maintenance" as UiRoom["status"] }));
-    const base = viewType === "day" ? [...knownRoomsWithAppts, ...syntheticRooms] : roomsList;
-    return [...base].sort((a, b) => {
-      const an = typeof a === "string" ? a : a.name;
-      const bn = typeof b === "string" ? b : b.name;
-      return compareRoomNames(an, bn);
-    });
-  }, [roomsList, appointmentsByDate, dayKeyMemo, viewType, roomIdsSet]);
-  const dayRoomsSet = useMemo(() => new Set(dayRoomsSortedAZ.map((r) => r.id)), [dayRoomsSortedAZ]);
-  const roomsToRender = useMemo(() => {
-    return dayRoomsSortedAZ;
-  }, [dayRoomsSortedAZ]);
-  const prevRoom = () => {
-    const el = dayScrollRef.current;
-    if (!el) return;
-    const step = isMobile ? 200 : 0;
-    if (step) el.scrollBy({ left: -step, behavior: "smooth" });
-    setActiveRoomIndex((i) => Math.max(0, i - 1));
-  };
-  const nextRoom = () => {
-    const el = dayScrollRef.current;
-    if (!el) return;
-    const step = isMobile ? 200 : 0;
-    if (step) el.scrollBy({ left: step, behavior: "smooth" });
-    setActiveRoomIndex((i) => Math.min(dayRoomsSortedAZ.length - 1, i + 1));
-  };
-
-  useEffect(() => {
-    if (!isMobile || viewType !== "day") return;
-    const len = dayRoomsSortedAZ.length;
-    setDayScrollProgress(len > 1 ? Math.min(1, activeRoomIndex / (len - 1)) : 0);
-  }, [isMobile, viewType, activeRoomIndex, dayRoomsSortedAZ.length]);
 
   const metricsRef = useRef<HTMLDivElement | null>(null);
   const [metricIndex, setMetricIndex] = useState(0);
@@ -1580,7 +1513,7 @@ const AdminDashboard = () => {
   }, [activeTab]);
 
   return (
-    <div className="min-h-screen bg-muted/30 overflow-x-hidden">
+    <div className="min-h-screen bg-muted/30 overflow-x-clip">
       {/* Header */}
       <header className="bg-card border-b border-border sticky top-0 z-10 shadow-sm">
         <div className="container mx-auto px-3 py-2 md:px-3 md:py-3">
@@ -1735,17 +1668,7 @@ const AdminDashboard = () => {
               ymdInTZ={ymdInTZ}
               appointmentsByDate={appointmentsByDate}
               timeSlots={timeSlots}
-              roomsToRender={roomsToRender}
-              dayGridCols={dayGridCols}
               dayKeyMemo={dayKeyMemo}
-              dayRoomsSet={dayRoomsSet}
-              dayScrollRef={dayScrollRef}
-              timeHeaderRef={timeHeaderRef}
-              dayScrollProgress={dayScrollProgress}
-              prevRoom={prevRoom}
-              nextRoom={nextRoom}
-              weekCompact={weekCompact}
-              setWeekCompact={setWeekCompact}
               patients={patients}
               roomsList={roomsList}
               staff={staff}

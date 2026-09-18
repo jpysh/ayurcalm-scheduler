@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { autoSchedule } from './scheduler.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import { generateTherapistRotaPdf } from './pdf/therapistRotaPdf.js';
-import { findConflict, loadDay, nearestFreeTime } from './appointmentGuard.js';
+import { findConflict, loadDay, nearestFreeTime, staffDay } from './appointmentGuard.js';
 import { replanStaffDay, applyPlan, undoReplan, type Pin } from './replan.js';
 import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
 
@@ -693,6 +693,13 @@ app.post('/day-check', async (req: Request, res: Response) => {
     pins: body.pins as Pin[] | undefined,
     relaxPreferredStaff: body.relax_preferred_staff,
   }));
+});
+
+/** Who is on leave, and when each therapist is tied up, for the schedule's "who is free". */
+app.get('/staff-day', async (req: Request, res: Response) => {
+  const date = String(req.query.date || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { res.status(400).json({ error: 'date=YYYY-MM-DD required' }); return; }
+  res.json(staffDay(await loadDay(new Date(date), prisma)));
 });
 
 /** The same thing for the first load, where nothing has been decided yet. */
