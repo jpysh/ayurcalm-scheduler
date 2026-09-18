@@ -70,6 +70,38 @@ async function main() {
       });
       if (res.status !== 401) throw new Error(`expected 401, got ${res.status}`);
     }],
+
+    ['a staff account cannot edit a diet plan, and the plan is unchanged', async () => {
+      const email = 'validation-staff@example.com';
+      await prisma.user.deleteMany({ where: { email } });
+      const made = await post('/users', { email, role: 'staff', password: 'staffpass123' });
+      if (made.status !== 201) throw new Error(`creating staff returned ${made.status}: ${await made.text()}`);
+      try {
+        const login = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password: 'staffpass123' }),
+        });
+        const { token: staffToken } = await login.json();
+        const plan = await prisma.dietTemplate.findFirst();
+        if (!plan) throw new Error('no diet plan in the demo data');
+        const res = await fetch(`${API_BASE}/diet-templates/${plan.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${staffToken}` },
+          body: JSON.stringify({ rest_lunch: 'Changed by staff' }),
+        });
+        if (res.status !== 403) throw new Error(`expected 403, got ${res.status}`);
+        // The status code is not proof: read the plan back.
+        const after = await prisma.dietTemplate.findUnique({ where: { id: plan.id } });
+        if (JSON.stringify(after) !== JSON.stringify(plan)) {
+          // Put the demo plan back before failing, so a broken server does not leave it edited.
+          const { id, ...fields } = plan;
+          await prisma.dietTemplate.update({ where: { id }, data: fields });
+          throw new Error('the plan changed although the edit was refused');
+        }
+      } finally {
+        await prisma.user.deleteMany({ where: { email } });
+      }
+    }],
   ];
 
   let failed = 0;

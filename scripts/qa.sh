@@ -42,13 +42,25 @@ run shortenWords       "Long names are shortened sensibly to fit the day sheet"
 run availability       "A therapist counts as busy during their absences and the centre's events"
 run therapistRota      "The therapist rota shows who works when, and why someone is away"
 run scheduleInvariants "The demo schedule has no double bookings and today is properly full"
-run validation         "A half-filled form is refused politely, not crashed on, and nobody signed out can save"
+run validation         "A half-filled form is refused politely, not crashed on, and nobody signed out can save, and staff cannot change a diet plan"
 run autoAssign         "Auto-booking a course respects gender, holidays, and times already past"
 run replanSimulation   "When a therapist is absent, their day moves to others without clashes, and Undo restores it"
 run dayCheckParity     "Verify flags exactly the treatments the app would refuse to save"
 run dayPlan            "Verify's fix for a day is one plan with no clashes, and accepting then undoing it restores the day"
 run daySheet           "The day sheet lists every resident, treatment time and therapist, in its groups, with no empty boxes"
+run dietOverride       "Editing a diet plan changes it for everyone except what one patient was told specifically"
 run onboarding         "After the setup wizard, the centre has its hours, timezone, therapies, rooms and therapists, and the day sheet prints"
+
+# A browser walk, run from the checkout against the stack: it needs Chromium
+# (npx playwright install chromium) on the machine running this.
+if E2E_BASE_URL="http://localhost:$PORT" npx playwright test absenceReplan >"$log" 2>&1; then
+  echo "  PASS  In the browser: a therapist marked off shows in Verify, its plan clears the day, and Undo puts the day back"
+  passed=$((passed + 1))
+else
+  echo "  FAIL  In the browser: a therapist marked off shows in Verify, its plan clears the day, and Undo puts the day back"
+  sed 's/^/        /' "$log" | tail -15
+  failed=$((failed + 1))
+fi
 
 # The wizard is read from the checkout, not the container: the app image carries
 # only the built front end. Onboarding speed is the point of the wizard, so it
