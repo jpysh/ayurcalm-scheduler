@@ -117,7 +117,8 @@ async function main() {
         assert.equal(reported.kind, conflict.reason, `day-check and the write disagree about why ${a.id} is wrong`);
         assert.equal(reported.what, conflict.message, 'the admin should read the same sentence either way');
       } else {
-        assert.ok(!reported, `day-check calls ${a.id} a clash and the write accepts it`);
+        // A treatment with no therapist is must-fix without being a refusal.
+        assert.ok(!reported || reported.kind === 'NO_THERAPIST', `day-check calls ${a.id} a clash and the write accepts it`);
       }
     }
 

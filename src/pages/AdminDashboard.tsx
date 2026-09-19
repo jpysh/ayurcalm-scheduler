@@ -772,7 +772,8 @@ const AdminDashboard = () => {
       };
       try {
         const res = await fetch(`${API_BASE}/program-events/${curr.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
-        if (!res.ok) return;
+        // A refused save must say so: the row still shows the edit, which is not saved.
+        if (!res.ok) { const j = await res.json().catch(() => ({})); toast.error(j.error || 'Not saved', { duration: 10000 }); return; }
         // Do not mutate local events on autosave to avoid clearing in-progress inputs
       } catch {}
     }, 400);
@@ -1566,12 +1567,12 @@ const AdminDashboard = () => {
             </div>
           );
         })}
-        <div className="mb-3 md:mb-6 rounded-md border bg-card px-3 py-2">
-          {dayCheck.problems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nothing wrong with {isToday ? 'today' : 'this day'}.</p>
-          ) : (
-            /* The worst problem by name, with the residents in it: a count tells
-               the admin to open something, a name tells them what happened. */
+        {/* Only what must be fixed. A clear day shows nothing: phone space is
+            short, and notes (a resident with nothing booked) live in Verify. */}
+        {dayCheck.headline ? (
+          <div className="mb-3 md:mb-6 rounded-md border bg-card px-3 py-2">
+            {/* The worst problem by name, with the residents in it: a count tells
+               the admin to open something, a name tells them what happened. */}
             <div className="flex flex-wrap items-center gap-2">
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
               <p className="text-sm font-semibold">{dayCheck.headline}</p>
@@ -1579,8 +1580,8 @@ const AdminDashboard = () => {
                 Verify
               </Button>
             </div>
-          )}
-        </div>
+          </div>
+        ) : null}
 
         <Tabs value={activeTab} onValueChange={(v) => {
           setActiveTab(v);
@@ -1879,7 +1880,7 @@ const AdminDashboard = () => {
                     staff_ids: (newEvent as any).staff_ids || [],
                   };
                   const res = await fetch(`${API_BASE}/program-events`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
-                  if (!res.ok) { toast.error('Failed to add'); return; }
+                  if (!res.ok) { const j = await res.json().catch(() => ({})); toast.error(j.error || 'Failed to add', { duration: 10000 }); return; }
                   const all = await fetch(`${API_BASE}/program-events`).then(r => r.json());
                   setEvents(all);
                   const name = (newEvent.activity_name || '').trim();

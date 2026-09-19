@@ -15,7 +15,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertCircle, ArrowRight, CheckCircle2, Loader2, MoreHorizontal } from "lucide-react";
 
 export type Fix = {
   label: string;
@@ -78,6 +79,8 @@ export function VerifyDialog({
   onJumpToDate: (dateISO: string) => void;
   onRefresh: (datesISO: string[]) => Promise<void>;
 }) {
+  const now = new Date();
+  const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const dateISO = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
 
   const [loading, setLoading] = useState(false);
@@ -94,6 +97,7 @@ export function VerifyDialog({
   const [note, setNote] = useState<string | null>(null);
   const [upcoming, setUpcoming] = useState<UpcomingDay[] | null>(null);
   const [upcomingLoading, setUpcomingLoading] = useState(false);
+  const [showReassign, setShowReassign] = useState(false);
 
   // No Scan button: Verify is opened because something is wrong, and the plan is
   // worked out before the admin has finished reading the first line.
@@ -124,6 +128,7 @@ export function VerifyDialog({
     setReassignStaff("");
     setNote(null);
     setUpcoming(null);
+    setShowReassign(false);
     load([], false);
   }, [open, load]);
 
@@ -269,6 +274,16 @@ export function VerifyDialog({
     const working = busy === problem.id;
     const fix = problem.fix;
 
+    // A note about a resident is one line and one action.
+    if (!problem.appointment_id) {
+      return (
+        <li key={problem.id} className="border-t px-3 py-1.5 first:border-t-0 flex items-center gap-2">
+          <span className="text-[14px] flex-1">{problem.patient_name}</span>
+          <button type="button" className="text-[13px] underline min-h-9" onClick={() => onAssignFor(problem.patient_id!)}>Book</button>
+        </li>
+      );
+    }
+
     return (
       <li key={problem.id} className="border-t px-3 py-2.5 first:border-t-0">
         <div className="flex items-baseline gap-2">
@@ -303,29 +318,32 @@ export function VerifyDialog({
         <div className="flex flex-wrap items-center gap-x-4 pl-[3.25rem] pt-1">
           {problem.appointment_id ? (
             <>
-              <button type="button" className="text-[13px] underline min-h-9" disabled={working} onClick={() => openChange(problem)}>
+              <Button type="button" variant="outline" size="sm" className="h-9 text-[13px]" disabled={working} onClick={() => openChange(problem)}>
                 {isChanging ? "Close" : "Change"}
-              </button>
-              <button type="button" className="text-[13px] underline min-h-9" onClick={() => onOpenAppointment(problem.appointment_id!)}>
-                Open
-              </button>
+              </Button>
               {confirmDelete === problem.id ? (
                 <span className="text-[13px] flex items-center gap-3 ml-auto">
-                  Delete?
+                  Delete this treatment?
                   <button type="button" className="underline text-red-600 min-h-9" disabled={working} onClick={() => removeAppointment(problem)}>Yes</button>
                   <button type="button" className="underline min-h-9" onClick={() => setConfirmDelete(null)}>No</button>
                 </span>
               ) : (
-                <button type="button" className="text-[13px] underline text-red-600 min-h-9 ml-auto" onClick={() => setConfirmDelete(problem.id)}>
-                  Delete
-                </button>
+                /* Delete sits behind a menu: next to every row it was the
+                   loudest thing on the sheet, one stray thumb from a mistake. */
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" aria-label="More" className="ml-auto h-9 w-9 inline-flex items-center justify-center rounded-md hover:bg-muted">
+                      <MoreHorizontal className="w-4 h-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => onOpenAppointment(problem.appointment_id!)}>Open</DropdownMenuItem>
+                    <DropdownMenuItem className="text-red-600" onSelect={() => setConfirmDelete(problem.id)}>Delete</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
             </>
-          ) : (
-            <button type="button" className="text-[13px] underline min-h-9" onClick={() => onAssignFor(problem.patient_id!)}>
-              Book something for {problem.patient_name.split(" ")[0]}
-            </button>
-          )}
+          ) : null}
         </div>
 
         {isChanging ? (
@@ -356,10 +374,10 @@ export function VerifyDialog({
     const rows = group.problem_ids.map((id) => problemById.get(id)).filter(Boolean) as DayProblem[];
     if (rows.length === 0) return null;
     return (
-      <section key={group.key} className="rounded-lg border bg-card overflow-hidden">
+      <section key={group.key} className={group.problem_class === "blocking" ? "rounded-lg border border-amber-300 bg-card overflow-hidden" : "rounded-lg border bg-muted/30 overflow-hidden"}>
         <header className="px-3 pt-3 pb-2 flex items-start gap-2">
           {group.problem_class === "blocking" ? <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" /> : null}
-          <h3 className="text-[15px] font-semibold leading-snug">{group.label}</h3>
+          <h3 className={group.problem_class === "blocking" ? "text-[15px] font-semibold leading-snug" : "text-[14px] font-medium leading-snug text-muted-foreground"}>{group.label}</h3>
         </header>
         {/* One decision that settles the whole group, where there is one. */}
         {group.staff_id ? (
@@ -382,13 +400,17 @@ export function VerifyDialog({
 
   const blocking = groups.filter((g) => g.problem_class === "blocking");
   const worthKnowing = groups.filter((g) => g.problem_class === "worth_knowing");
+  const toFix = problems.filter((p) => p.problem_class === "blocking").length;
+  const notes = problems.length - toFix;
+  // The size of the job before any scrolling.
+  const summary = [toFix ? `${toFix} to fix` : "", notes ? `${notes} note${notes === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-none w-screen h-[100dvh] rounded-none p-0 gap-0 flex flex-col sm:max-w-lg sm:w-full sm:h-auto sm:max-h-[88vh] sm:rounded-lg">
         <DialogHeader className="px-4 pt-4 pb-3 space-y-0.5 text-left shrink-0">
           <DialogTitle className="text-lg">Verify</DialogTitle>
-          <p className="text-[13px] text-muted-foreground">{dateLabel(dateISO)}</p>
+          <p className="text-[13px] text-muted-foreground">{dateLabel(dateISO)}{summary && !loading ? ` · ${summary}` : ""}</p>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
@@ -396,43 +418,40 @@ export function VerifyDialog({
             <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Working out the day…</p>
           ) : (
             <>
-              {accepted ? (
-                <div className="rounded-lg border bg-card px-3 py-2.5 flex flex-wrap items-center gap-3">
-                  <p className="text-sm flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-green-700 shrink-0" />{accepted.text}</p>
-                  {accepted.batch_id ? (
-                    <button type="button" className="text-sm underline min-h-9" disabled={busy === "accept"} onClick={undoAccepted}>Undo</button>
-                  ) : null}
-                </div>
-              ) : null}
-
               {note ? <p className="text-[13px] text-amber-700">{note}</p> : null}
 
               {groups.length === 0 ? (
-                <p className="text-sm flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-green-700" />Nothing is wrong with this day.</p>
+                <p className="text-sm flex items-center gap-2 py-6 justify-center"><CheckCircle2 className="w-4 h-4 text-green-700" />Nothing to do {dateISO === todayISO ? "today" : "on this day"}.</p>
               ) : null}
 
               {blocking.map(groupCard)}
 
               {worthKnowing.length > 0 ? (
                 <>
-                  <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide pt-1">Worth knowing</h2>
+                  <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide pt-1">Notes</h2>
                   {worthKnowing.map(groupCard)}
                 </>
               ) : null}
 
-              {/* A therapist who is not marked off but is not coming in either:
-                  the phone call comes before the paperwork. */}
-              <section className="rounded-lg border bg-card p-3 space-y-2">
-                <h3 className="text-[15px] font-semibold">Give a therapist's whole day to someone else</h3>
-                <Select value={reassignStaff} onValueChange={(v) => { setReassignStaff(v); reassignWholeDay(v); }}>
-                  <SelectTrigger className="min-h-11 text-[14px]">
-                    <SelectValue placeholder="Which therapist?" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {staff.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </section>
+              {/* Tools, not problems, so they sit last and quiet. A therapist
+                  not marked off but not coming in either: the phone call comes
+                  before the paperwork. */}
+              <div className="pt-2 border-t">
+                {showReassign ? (
+                  <Select value={reassignStaff} onValueChange={(v) => { setReassignStaff(v); reassignWholeDay(v); }}>
+                    <SelectTrigger className="min-h-11 text-[14px]">
+                      <SelectValue placeholder="Whose day should go to someone else?" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {staff.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <button type="button" className="text-[13px] underline min-h-11" onClick={() => setShowReassign(true)}>
+                    Give a therapist's whole day to someone else
+                  </button>
+                )}
+              </div>
 
               {/* Room and therapy edits can break a future day; absences already
                   fix themselves. So the future is offered, never scanned at you. */}
@@ -461,6 +480,14 @@ export function VerifyDialog({
 
         {/* One decision, always in reach of a thumb. */}
         <div className="shrink-0 border-t bg-background px-4 py-3 space-y-2">
+          {accepted ? (
+            <p className="text-sm flex items-center justify-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-green-700 shrink-0" />{accepted.text}
+              {accepted.batch_id ? (
+                <button type="button" className="underline min-h-9" disabled={busy === "accept"} onClick={undoAccepted}>Undo</button>
+              ) : null}
+            </p>
+          ) : null}
           {plan.length > 0 ? (
             <Button className="w-full h-auto min-h-12 py-2.5 text-[15px]" disabled={busy === "accept" || replanning} onClick={acceptPlan}>
               {busy === "accept" || replanning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}

@@ -19,10 +19,12 @@
  *
  * Two classes of problem come back:
  *
- *   blocking      — the server would refuse this booking. Tested against it.
- *   worth_knowing — nobody refuses it and it still costs the centre a day: a
- *                   resident in house with nothing booked, a session with no
- *                   therapist's name on it, a treatment running through a meal.
+ *   blocking      — must be fixed before the day runs: what the server would
+ *                   refuse (tested against it), plus a treatment with no
+ *                   therapist, where a resident waits and nobody comes.
+ *                   Only these reach the header.
+ *   worth_knowing — a note, never a warning: a resident in house with nothing
+ *                   booked is often a rest day by design.
  */
 import { PrismaClient } from '@prisma/client';
 import { findConflict, loadDay, type Candidate, type DayContext } from './appointmentGuard.js';
@@ -201,14 +203,14 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
       continue;
     }
 
-    // Worth knowing: nobody refuses a session with no name on it, and it is
-    // still a resident standing in a corridor at 09:00.
+    // Must fix: nobody refuses a session with no name on it, and it is still a
+    // resident standing in a corridor at 09:00.
     if (!a.staff_id) {
       raw.push({
         ...common,
         id: `NO_THERAPIST:${a.id}`,
         kind: 'NO_THERAPIST',
-        problem_class: 'worth_knowing',
+        problem_class: 'blocking',
         what: 'No therapist is on this treatment.',
         group_key: 'NO_THERAPIST',
         group_label: 'Treatments with no therapist',
@@ -375,7 +377,9 @@ export async function rowOptions(
  * them what happened before they touch anything, so the worst problem is named
  * with its residents and the rest are counted after it.
  */
-export function headlineFor(problems: DayProblem[]): string | null {
+export function headlineFor(all: DayProblem[]): string | null {
+  // Notes stay inside Verify: the header is only for what must be fixed.
+  const problems = all.filter((p) => p.problem_class === 'blocking');
   if (problems.length === 0) return null;
   const worst = problems[0];
   const sameKind = problems.filter((p) => p.kind === worst.kind);
