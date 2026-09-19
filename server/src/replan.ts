@@ -16,7 +16,7 @@
  * course, so it is put to the admin rather than done to them.
  */
 import { PrismaClient, Prisma } from '@prisma/client';
-import { overlaps, staffEventBusy, teamOf, toMinutes, type EventRow } from './availability.js';
+import { offOnDay, overlaps, staffEventBusy, teamOf, toMinutes, type EventRow } from './availability.js';
 
 export type Move = {
   appointment_id: string;
@@ -59,18 +59,6 @@ export type ReplanResult = {
 
 const minutesToTime = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
-const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-
-const timeOffHitsDay = (
-  h: { entity_type: string; entity_id: string | null; date: Date | null; start_date: Date | null; end_date: Date | null; recurrence: string | null; weekdays: string[] },
-  day: Date,
-) => {
-  if (h.date && h.date.toDateString() === day.toDateString()) return true;
-  if (h.start_date && h.end_date && h.start_date <= day && h.end_date >= day) return true;
-  if (h.recurrence === 'weekly' && Array.isArray(h.weekdays) && h.weekdays.includes(WEEKDAYS[day.getDay()])) return true;
-  return false;
-};
-
 type Busy = { s: number; e: number };
 const free = (busy: Busy[] | undefined, s: number, e: number) => !(busy || []).some((b) => overlaps(b.s, b.e, s, e));
 
@@ -128,8 +116,12 @@ export async function planDay(
   // The treatments being rehoused: a therapist's whole day, or the single
   // session Verify is fixing.
   const wanted = opts.appointmentIds ? new Set(opts.appointmentIds) : null;
+  // A therapist out for some hours keeps the treatments outside them.
+  const staffOff = staffId ? offOnDay(timeOff, 'staff', staffId, date) : [];
+  const inWindow = (a: { start_time: string; duration_minutes: number }) =>
+    staffOff.length === 0 || staffOff.some((b) => overlaps(b.s, b.e, toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes));
   const mine = dayAppointments
-    .filter((a) => (wanted ? wanted.has(a.id) : Boolean(staffId) && teamOf(a).includes(staffId as string)))
+    .filter((a) => (wanted ? wanted.has(a.id) : Boolean(staffId) && teamOf(a).includes(staffId as string) && inWindow(a)))
     .sort((a, b) => toMinutes(a.start_time) - toMinutes(b.start_time));
   const mineIds = new Set(mine.map((a) => a.id));
   const pinnedBy = new Map((opts.pins || []).map((p) => [p.appointment_id, p]));
@@ -154,10 +146,9 @@ export async function planDay(
   }
   for (const s of staff) {
     for (const b of staffEventBusy(events, s.id, date)) addBusy(staffBusy, s.id, b.s, b.e);
-    if (timeOff.some((h) => h.entity_type === 'staff' && h.entity_id === s.id && timeOffHitsDay(h, date))) {
-      addBusy(staffBusy, s.id, 0, 24 * 60);
-    }
+    for (const b of offOnDay(timeOff, 'staff', s.id, date)) addBusy(staffBusy, s.id, b.s, b.e);
   }
+  for (const r of rooms) for (const b of offOnDay(timeOff, 'room', r.id, date)) addBusy(roomBusy, r.id, b.s, b.e);
   for (const a of mine) {
     // The resident still owes this hour to the treatment being rehoused, so
     // their own slot is only busy for the others.
@@ -329,12 +320,13 @@ export async function planDay(
       const busyThen = (sid: string) =>
         otherDay.some((a) => teamOf(a).includes(sid) && overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, start, start + duration)) ||
         staffEventBusy(events, sid, other).some((b) => overlaps(b.s, b.e, start, start + duration)) ||
-        timeOff.some((h) => h.entity_type === 'staff' && h.entity_id === sid && timeOffHitsDay(h, other));
+        offOnDay(timeOff, 'staff', sid, other).some((b) => overlaps(b.s, b.e, start, start + duration));
       const team = teamFor((sid) => !busyThen(sid));
       const roomFree = rooms.find(
         (r) =>
           (therapy?.required_amenities || []).every((a) => r.amenities.includes(a)) &&
-          !otherDay.some((a) => a.room_id === r.id && overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, start, start + duration)),
+          !otherDay.some((a) => a.room_id === r.id && overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, start, start + duration)) &&
+          !offOnDay(timeOff, 'room', r.id, other).some((b) => overlaps(b.s, b.e, start, start + duration)),
       );
       if (team && roomFree) {
         const [lead, ...co] = team;
