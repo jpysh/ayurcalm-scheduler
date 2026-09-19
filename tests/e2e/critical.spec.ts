@@ -172,6 +172,7 @@ test("the day's problems are named on the first screen", async ({ page }) => {
   // only tells the admin to open something. It comes from the same server check
   // that refuses a booking — the header has no rules of its own.
   await expect(page.getByText(/is not in on this day.*—.*\w/)).toBeVisible({ timeout: 20000 });
-  // And it is there before any tab is chosen, not two clicks deep.
-  await expect(page.getByText(/more to fix/)).toBeVisible();
+  // Notes (a resident with nothing booked) stay in Verify: the header is only
+  // for what must be fixed.
+  await expect(page.getByText(/nothing booked/)).toHaveCount(0);
 });

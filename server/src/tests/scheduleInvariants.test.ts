@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
+import { staffEventBusy } from '../availability.js';
 
 /**
  * A double-booked therapist is not a crash — it is a sheet that sends two
@@ -19,12 +20,13 @@ const toMinutes = (t: string) => {
 const overlaps = (aS: number, aE: number, bS: number, bE: number) => Math.max(aS, bS) < Math.min(aE, bE);
 
 const main = async () => {
-  const [appts, therapies, rooms, patients, staff] = await Promise.all([
+  const [appts, therapies, rooms, patients, staff, events] = await Promise.all([
     prisma.appointment.findMany(),
     prisma.therapy.findMany(),
     prisma.therapyRoom.findMany(),
     prisma.patient.findMany(),
     prisma.staff.findMany(),
+    prisma.programEvent.findMany(),
   ]);
   const therapyById = new Map(therapies.map((t) => [t.id, t]));
   const roomById = new Map(rooms.map((r) => [r.id, r]));
@@ -71,6 +73,17 @@ const main = async () => {
       }
       // The demo shows the case, or nobody at :8080 can see it.
       assert.ok(pairs > 0, 'the demo books no treatment worked by two');
+    }],
+    ['no therapist is treating someone while running an event', () => {
+      for (const a of appts) {
+        if (a.status === 'cancelled') continue;
+        const { s, e } = span(a);
+        for (const id of [a.staff_id, ...a.co_staff_ids]) {
+          if (!id) continue;
+          const clash = staffEventBusy(events, id, a.scheduled_date).find((b) => overlaps(b.s, b.e, s, e));
+          assert.equal(clash, undefined, `therapist ${id} runs ${clash?.label} during ${a.id} on ${a.scheduled_date.toISOString().slice(0, 10)}`);
+        }
+      }
     }],
     ['no room holds two treatments at once', () => noDoubleBooking((a) => a.room_id, 'room')],
     ['no patient has two treatments at once', () => noDoubleBooking((a) => a.patient_id, 'patient')],

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { activeEventsOnDay, eventAppliesToStaff, eventBlocking, staffEventBusy, type EventRow } from '../availability.js';
+import { activeEventsOnDay, eventAppliesToStaff, eventBlocking, eventClashes, staffEventBusy, type EventRow } from '../availability.js';
 
 const monday = new Date('2026-09-14T00:00:00.000Z');
 const wednesday = new Date('2026-09-16T00:00:00.000Z');
@@ -59,6 +59,15 @@ const event = (over: Partial<EventRow>): EventRow => ({
   const daily = event({ activity_name: 'Evening Yoga', start_time: '17:00', end_time: '18:00' });
   const mondayOnly = event({ activity_name: 'Satsang', start_time: '19:00', end_time: '20:00', weekdays: ['monday'] });
   assert.equal(activeEventsOnDay([daily, mondayOnly], monday).length, 2);
+}
+
+// Saving an event finds the treatments it would land on, assisting included.
+{
+  const yoga = event({ activity_name: 'Evening Yoga', start_time: '17:00', end_time: '18:00', staff_scope: 'custom', staff_ids: ['s1'], weekdays: ['monday'] });
+  const at = (start_time: string, over = {}) => ({ id: start_time, staff_id: 's2', co_staff_ids: ['s1'], scheduled_date: monday, start_time, duration_minutes: 60, ...over });
+  assert.deepEqual(eventClashes(yoga, [at('16:30'), at('18:00'), at('17:00', { scheduled_date: wednesday })]).map((a) => a.id), ['16:30'],
+    'overlapping Monday treatment clashes; one starting as yoga ends, or on a Wednesday, does not');
+  assert.equal(eventClashes(yoga, [at('17:00', { co_staff_ids: [] })]).length, 0, 'someone else\'s treatment is not a clash');
 }
 
 console.log('availability tests passed');

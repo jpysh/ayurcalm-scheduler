@@ -98,3 +98,16 @@ export const eventBlocking = (events: EventRow[], staffId: string, day: Date, st
 /** Everyone working on a treatment, the lead first. */
 export const teamOf = (a: { staff_id: string | null; co_staff_ids?: string[] | null }): string[] =>
   [...new Set([a.staff_id, ...(a.co_staff_ids || [])].filter((id): id is string => Boolean(id)))];
+
+/**
+ * Treatments an event would land on: a therapist it ties up is already treating
+ * someone then. The guard refuses a treatment over an event; this is the same
+ * rule from the other side, so saving an event cannot double-book anyone.
+ */
+export const eventClashes = <A extends { staff_id: string | null; co_staff_ids?: string[] | null; scheduled_date: Date; start_time: string; duration_minutes: number | null }>(
+  e: EventRow, appts: A[],
+): A[] =>
+  appts.filter((a) =>
+    eventHitsDay(e, a.scheduled_date)
+    && teamOf(a).some((id) => eventAppliesToStaff(e, id))
+    && overlaps(toMinutes(e.start_time), toMinutes(e.end_time), toMinutes(a.start_time), toMinutes(a.start_time) + (a.duration_minutes || 0)));

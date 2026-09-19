@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { ensureStarterDietTemplates } from './dietTemplateSeed.js';
 import { PrismaClient } from '@prisma/client';
+import { staffEventBusy } from './availability.js';
 import bcrypt from 'bcrypt';
 import { DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD } from './auth.js';
 
@@ -239,10 +240,46 @@ async function main() {
     }
   }
 
+  // Program Events — the centre's day. Classes and prayers are optional: a
+  // resident may be treated during one. Meals are not, and the day sheet prints
+  // them in the resident's own column.
+  //
+  // Yoga and the meditations have a therapist on them, which is the point: that
+  // person is genuinely unbookable for those hours, and the rota says why.
+  const weekdays = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+  const offTodayIds = new Set((await prisma.timeOff.findMany({ where: { entity_type: 'staff', date: centreToday() } })).map((h) => h.entity_id));
+  const yogaStaff = staff.find((s) => s.gender === 'female' && !offTodayIds.has(s.id)) || staff[0];
+  const prayerStaff = staff.find((s) => s.id !== yogaStaff.id && !offTodayIds.has(s.id)) || staff[1];
+  const event = (over: Record<string, unknown>) => prisma.programEvent.create({ data: {
+    recurrence: 'weekly', weekdays, room_id: null, staff_id: null, required_amenities: [],
+    notes: '', audience: 'all', patients_scope: 'all', staff_scope: 'none', staff_ids: [],
+    is_optional: false, start_time: '00:00', end_time: '00:00', activity_name: '',
+    ...over,
+  } as any });
+
+  await event({ start_time: '07:00', end_time: '08:00', activity_name: 'Morning Yoga', is_optional: true, staff_scope: 'custom', staff_ids: [yogaStaff.id], staff_id: yogaStaff.id });
+  await event({ start_time: '08:30', end_time: '09:00', activity_name: 'Morning Prayer Meditation', is_optional: true, staff_scope: 'custom', staff_ids: [prayerStaff.id], staff_id: prayerStaff.id });
+  await event({ start_time: '08:00', end_time: '12:00', activity_name: 'Breakfast', notes: 'Diet per plan' });
+  await event({ start_time: '12:00', end_time: '16:00', activity_name: 'Lunch' });
+  await event({ start_time: '17:00', end_time: '18:30', activity_name: 'Snacks', is_optional: true });
+  await event({ start_time: '17:00', end_time: '18:00', activity_name: 'Evening Yoga', is_optional: true, staff_scope: 'custom', staff_ids: [yogaStaff.id], staff_id: yogaStaff.id });
+  await event({ start_time: '18:00', end_time: '19:00', activity_name: 'Evening Prayer Meditation', is_optional: true, staff_scope: 'custom', staff_ids: [prayerStaff.id], staff_id: prayerStaff.id });
+  await event({ start_time: '18:30', end_time: '20:30', activity_name: 'Dinner' });
+  // Mondays the havan runs over the morning prayer, and replaces it: where two
+  // events overlap, the more specific one is the one that happens.
+  await event({ weekdays: ['monday'], start_time: '08:30', end_time: '09:30', activity_name: 'Temple Havan Ritual', staff_scope: 'custom', staff_ids: [prayerStaff.id], staff_id: prayerStaff.id });
+
+  // Seeded before the treatments so the treatments can go round them: a
+  // therapist running Evening Yoga is not also giving a Spinal Basti at 17:30.
+  const seededEvents = await prisma.programEvent.findMany();
+
+  // Two weeks back as well as four months on: yesterday's day sheet, a Log with
+  // something in it, and past days to check a report against.
   // Appointments for the next 4 months at ~30% capacity on business days, so a
   // test install stays useful for a full quarter.
   const start = centreToday();
-  const end = new Date(start);
+  start.setDate(start.getDate() - 14);
+  const end = centreToday();
   end.setMonth(end.getMonth() + 4);
   // The centre this dataset models treats from 09:00 to 13:00 and again from
   // 14:00 to 20:00, so the seed books across both halves — an evening with
@@ -275,7 +312,10 @@ async function main() {
     // would otherwise open on an empty schedule.
     if ((weekday === 0 || weekday === 6) && dateKey !== todayKey) continue;
     if (centerHolidays.some(h => h.date && h.date.toISOString().slice(0,10) === dateKey)) continue;
-    busy[dateKey] ??= { staff: {}, room: {}, patient: {} };
+    busy[dateKey] ??= {
+      staff: Object.fromEntries(staff.map((s) => [s.id, staffEventBusy(seededEvents, s.id, new Date(dateKey)).map((b) => ({ s: b.s, e: b.e }))])),
+      room: {}, patient: {},
+    };
     // heuristic capacity: aim ~2 slots per room per day for 30% (assuming ~6 possible)
     for (const r of rooms) {
       const rDay = (scheduleStd as any)[['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][weekday]];
@@ -337,7 +377,7 @@ async function main() {
           duration_minutes: th.duration_minutes,
           session_number: 1,
           total_sessions: 1,
-          status: 'pending',
+          status: dateKey < todayKey ? 'completed' : 'pending',
           assignment_type: 'auto',
         } });
         rBusy.push({ s: sMin, e: eMin });
@@ -347,35 +387,6 @@ async function main() {
       }
     }
   }
-
-  // Program Events — the centre's day. Classes and prayers are optional: a
-  // resident may be treated during one. Meals are not, and the day sheet prints
-  // them in the resident's own column.
-  //
-  // Yoga and the meditations have a therapist on them, which is the point: that
-  // person is genuinely unbookable for those hours, and the rota says why.
-  const weekdays = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-  const offTodayIds = new Set((await prisma.timeOff.findMany({ where: { entity_type: 'staff', date: centreToday() } })).map((h) => h.entity_id));
-  const yogaStaff = staff.find((s) => s.gender === 'female' && !offTodayIds.has(s.id)) || staff[0];
-  const prayerStaff = staff.find((s) => s.id !== yogaStaff.id && !offTodayIds.has(s.id)) || staff[1];
-  const event = (over: Record<string, unknown>) => prisma.programEvent.create({ data: {
-    recurrence: 'weekly', weekdays, room_id: null, staff_id: null, required_amenities: [],
-    notes: '', audience: 'all', patients_scope: 'all', staff_scope: 'none', staff_ids: [],
-    is_optional: false, start_time: '00:00', end_time: '00:00', activity_name: '',
-    ...over,
-  } as any });
-
-  await event({ start_time: '07:00', end_time: '08:00', activity_name: 'Morning Yoga', is_optional: true, staff_scope: 'custom', staff_ids: [yogaStaff.id], staff_id: yogaStaff.id });
-  await event({ start_time: '08:30', end_time: '09:00', activity_name: 'Morning Prayer Meditation', is_optional: true, staff_scope: 'custom', staff_ids: [prayerStaff.id], staff_id: prayerStaff.id });
-  await event({ start_time: '08:00', end_time: '12:00', activity_name: 'Breakfast', notes: 'Diet per plan' });
-  await event({ start_time: '12:00', end_time: '16:00', activity_name: 'Lunch' });
-  await event({ start_time: '17:00', end_time: '18:30', activity_name: 'Snacks', is_optional: true });
-  await event({ start_time: '17:00', end_time: '18:00', activity_name: 'Evening Yoga', is_optional: true, staff_scope: 'custom', staff_ids: [yogaStaff.id], staff_id: yogaStaff.id });
-  await event({ start_time: '18:00', end_time: '19:00', activity_name: 'Evening Prayer Meditation', is_optional: true, staff_scope: 'custom', staff_ids: [prayerStaff.id], staff_id: prayerStaff.id });
-  await event({ start_time: '18:30', end_time: '20:30', activity_name: 'Dinner' });
-  // Mondays the havan runs over the morning prayer, and replaces it: where two
-  // events overlap, the more specific one is the one that happens.
-  await event({ weekdays: ['monday'], start_time: '08:30', end_time: '09:30', activity_name: 'Temple Havan Ritual', staff_scope: 'custom', staff_ids: [prayerStaff.id], staff_id: prayerStaff.id });
 
   const nextMonth = new Date(); nextMonth.setMonth(nextMonth.getMonth() + 1); nextMonth.setDate(10);
   for (let i = 0; i < 4; i++) {
@@ -391,12 +402,18 @@ async function main() {
   const absentToday = (await prisma.timeOff.findMany({ where: { entity_type: 'staff', date: centreToday() } }))[0]?.entity_id;
   if (absentToday) {
     const todays = await prisma.appointment.findMany({ where: { scheduled_date: centreToday() }, orderBy: { start_time: 'asc' } });
+    const absentGender = staff.find((s) => s.id === absentToday)?.gender;
     const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
     const taken: { s: number; e: number }[] = [];
     const toMove = todays.filter((a) => {
       // Only single-handed treatments: the case here is one therapist's day, and
       // the absent one cannot also be the partner already on it.
       if (a.staff_id === absentToday || a.co_staff_ids.length > 0) return false;
+      // Only what they could have been booked for: the day is wrong because
+      // they are away, not because the seed broke the gender rule.
+      const th = therapies.find((t) => t.id === a.therapy_id);
+      const pt = createdPatients.find((c) => c.id === a.patient_id);
+      if (th?.requires_gender_match && pt?.gender !== absentGender) return false;
       const s = mins(a.start_time);
       const e = s + a.duration_minutes;
       // One person cannot give two treatments at once, even the ones they will

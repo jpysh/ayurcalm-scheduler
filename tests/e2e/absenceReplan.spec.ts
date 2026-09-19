@@ -126,7 +126,7 @@ test('a therapist off: Verify names it, its plan clears the day, and Undo puts t
   const before = await snapshot(call);
   await verify.getByRole('button', { name: /^Accept the plan — 1 change$/ }).click();
   await expect(verify).toContainText('1 change made.', { timeout: 20000 });
-  await expect(verify).toContainText('Nothing is wrong with this day.');
+  await expect(verify).toContainText('Nothing to do');
   const accepted = await snapshot(call);
   expect(accepted).not.toEqual(before);
   expect((await call('get', `/day-check?date=${DAY}`)).problems).toEqual([]);

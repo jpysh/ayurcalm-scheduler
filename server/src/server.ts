@@ -7,6 +7,7 @@ import { generateTherapistRotaPdf } from './pdf/therapistRotaPdf.js';
 import { findConflict, loadDay, nearestFreeTime, staffDay } from './appointmentGuard.js';
 import { replanStaffDay, applyPlan, undoReplan, type Pin } from './replan.js';
 import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
+import { eventClashes, type EventRow } from './availability.js';
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:5433/ayurcalm_dev?schema=public';
@@ -938,6 +939,30 @@ app.get('/program-events', async (req: Request, res: Response) => {
   res.json(items);
 });
 
+/**
+ * Refuses an event that would put a therapist in two places at once. Only
+ * clashes the save would add count, so editing the name or notes of an event
+ * never fails over something that was already there.
+ */
+async function eventClashRefusal(next: EventRow, before: EventRow | null): Promise<{ error: string; clashes: unknown[] } | null> {
+  const today = new Date(new Date().toDateString());
+  const appts = await prisma.appointment.findMany({ where: { scheduled_date: { gte: today }, status: { not: 'cancelled' } } });
+  const old = new Set(before ? eventClashes(before, appts).map((a) => a.id) : []);
+  const clashes = eventClashes(next, appts).filter((a) => !old.has(a.id));
+  if (clashes.length === 0) return null;
+  const [staff, patients, therapies] = await Promise.all([prisma.staff.findMany(), prisma.patient.findMany(), prisma.therapy.findMany()]);
+  const name = (list: { id: string; name: string }[], id: string | null) => list.find((x) => x.id === id)?.name || '';
+  const lines = clashes
+    .sort((m, n) => +m.scheduled_date - +n.scheduled_date || m.start_time.localeCompare(n.start_time))
+    .map((a) => `${name(staff, a.staff_id)} has ${name(patients, a.patient_id)}, ${name(therapies, a.therapy_id)} at ${a.start_time} on ${a.scheduled_date.toDateString().slice(0, 10)}`);
+  const shown = lines.slice(0, 5).join('; ');
+  const more = lines.length > 5 ? `; and ${lines.length - 5} more` : '';
+  return {
+    error: `This would double-book a therapist: ${shown}${more}. Move those treatments first, or change the therapist or time.`,
+    clashes: clashes.map((a) => ({ appointment_id: a.id, date: a.scheduled_date, start_time: a.start_time, staff_id: a.staff_id })),
+  };
+}
+
 app.post('/program-events', async (req: Request, res: Response) => {
   const schema = z.object({
     date: z.string().optional().nullable(),
@@ -960,6 +985,15 @@ app.post('/program-events', async (req: Request, res: Response) => {
     is_optional: z.boolean().optional(),
   });
   const body = schema.parse(req.body);
+  const refusal = await eventClashRefusal({
+    date: body.date ? new Date(body.date) : null,
+    start_date: body.start_date ? new Date(body.start_date) : null,
+    end_date: body.end_date ? new Date(body.end_date) : null,
+    start_time: body.start_time, end_time: body.end_time, activity_name: body.activity_name,
+    recurrence: body.recurrence || null, weekdays: body.weekdays || [],
+    staff_id: body.staff_id || null, staff_scope: body.staff_scope || null, staff_ids: body.staff_ids || [],
+  }, null);
+  if (refusal) { res.status(409).json(refusal); return; }
   const data = await prisma.programEvent.create({ data: {
     date: body.date ? new Date(body.date) : null,
     start_date: body.start_date ? new Date(body.start_date) : null,
@@ -1006,6 +1040,24 @@ app.put('/program-events/:id', async (req: Request, res: Response) => {
     is_optional: z.boolean().optional(),
   });
   const body = schema.parse(req.body);
+  const before = await prisma.programEvent.findUnique({ where: { id } });
+  if (!before) { res.status(404).json({ error: 'Event not found' }); return; }
+  const pick = <T,>(v: T | undefined, old: T) => (v === undefined ? old : v);
+  const date = (v: string | null | undefined, old: Date | null) => (v === undefined ? old : v ? new Date(v) : null);
+  const refusal = await eventClashRefusal({
+    date: date(body.date, before.date),
+    start_date: date(body.start_date, before.start_date),
+    end_date: date(body.end_date, before.end_date),
+    start_time: pick(body.start_time, before.start_time),
+    end_time: pick(body.end_time, before.end_time),
+    activity_name: pick(body.activity_name, before.activity_name),
+    recurrence: pick(body.recurrence, before.recurrence),
+    weekdays: body.weekdays === null ? [] : pick(body.weekdays, before.weekdays),
+    staff_id: pick(body.staff_id, before.staff_id) || null,
+    staff_scope: pick(body.staff_scope, before.staff_scope),
+    staff_ids: pick(body.staff_ids, before.staff_ids),
+  }, before);
+  if (refusal) { res.status(409).json(refusal); return; }
   const data = await prisma.programEvent.update({ where: { id }, data: {
     date: body.date === undefined ? undefined : (body.date ? new Date(body.date) : null),
     start_date: body.start_date === undefined ? undefined : (body.start_date ? new Date(body.start_date) : null),
