@@ -243,7 +243,7 @@ type ApiTherapy = { id: string; name: string; required_amenities: string[]; dura
 type ApiStaff = { id: string; name: string; gender: "male" | "female" | "other"; specializations: string[]; phone?: string };
 type ApiRoom = { id: string; name: string; amenities: string[]; is_active: boolean };
 type ApiPatient = { id: string; name: string; gender: "male" | "female" | "other"; phone?: string; email?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; medical_notes?: string | null; diet_plan?: string | null; available_from?: string | null; available_to?: string | null };
-type ApiAppointment = { id: string; patient_id: string; therapy_id: string; staff_id: string | null; room_id: string | null; scheduled_date: string; start_time: string; duration_minutes: number; status?: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'rescheduled' };
+type ApiAppointment = { id: string; patient_id: string; therapy_id: string; staff_id: string | null; room_id: string | null; scheduled_date: string; start_time: string; duration_minutes: number; status?: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'rescheduled'; notes?: string | null };
 type ApiDietPlan = { id: string; patient_id: string; date: string; meal_time: 'breakfast'|'lunch'|'dinner'|'snacks'; description: string; instructions?: string };
 type ApiStay = { id: string; patient_id: string; start_date: string; end_date: string; duration_days: number };
 type UiStaff = { id: string | number; name: string; gender: "Male" | "Female" | "Other"; specializations: string[]; phone: string; schedule: string; status: "Active" | "Inactive" };
@@ -2308,7 +2308,14 @@ const AdminDashboard = () => {
         onOpenChange={setShowVerify}
         apiBase={API_BASE}
         currentDate={exceptionDay}
-        staff={staff.map((s) => ({ id: String(s.id), name: s.name }))}
+        staff={staff.filter((s) => s.status === 'Active').map((s) => ({ id: String(s.id), name: s.name }))}
+        rooms={roomsList.filter((r) => r.status === 'Active').map((r) => ({ id: String(r.id), name: r.name }))}
+        treatments={(Array.isArray(appointmentsByDate[exceptionDayKey]) ? appointmentsByDate[exceptionDayKey] : []).map((a) => ({
+          id: String(a.id), start_time: a.start_time, status: a.status || 'pending', notes: a.notes ?? null,
+          label: `${patients.find((p) => p.id === a.patient_id)?.name || 'Resident'} — ${therapyNameById[a.therapy_id] || 'Treatment'}`,
+        }))}
+        openingTime={centreHours.opening_time}
+        closingTime={centreHours.closing_time}
         onOpenAppointment={(appointmentId) => {
           const a = (Array.isArray(appointmentsByDate[exceptionDayKey]) ? appointmentsByDate[exceptionDayKey] : []).find((x) => String(x.id) === String(appointmentId));
           if (!a) return;
