@@ -143,3 +143,25 @@ const off = (over: Record<string, unknown>) => ({
 }
 
 console.log('therapistRota: ok');
+
+// Booked time counts assisting the same as leading, plus events; absent shows nothing.
+{
+  const { rows } = buildRota({
+    ...base,
+    appts: [...base.appts, { staff_id: 's2', co_staff_ids: ['s3'], patient_id: 'p1', therapy_id: 't1', room_id: 'r1', start_time: '14:00', duration_minutes: 105 }],
+    timeOff: [off({ entity_id: 's1', date: day, description: 'Sick leave' })],
+  });
+  const by = (n: string) => rows.find((r) => r.name === n)!;
+  assert.equal(by('Kumar Nair').note, '2h 45m');
+  assert.equal(by('Priya Menon').note, '2h 45m', 'assisting 105m + yoga 60m');
+  assert.equal(by('Anjali Rao').note, 'Sick leave');
+}
+
+// A treatment running into an event counts the shared half hour once.
+{
+  const { rows } = buildRota({
+    ...base,
+    appts: [{ staff_id: 's3', patient_id: 'p1', therapy_id: 't1', room_id: null, start_time: '08:00', duration_minutes: 60 }],
+  });
+  assert.equal(rows.find((r) => r.name === 'Priya Menon')!.note, '1h 30m', 'yoga 07:30-08:30 + 08:00-09:00');
+}
