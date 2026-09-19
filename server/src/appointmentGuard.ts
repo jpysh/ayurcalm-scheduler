@@ -7,7 +7,7 @@
  * that check, on the server, where it cannot be skipped.
  */
 import { PrismaClient } from '@prisma/client';
-import { overlaps, staffEventBusy, teamOf, toMinutes, type EventRow } from './availability.js';
+import { offOnDay, overlaps, staffEventBusy, teamOf, toMinutes, type EventRow } from './availability.js';
 
 export type Conflict = { reason: string; message: string; details?: Record<string, unknown> };
 
@@ -23,19 +23,9 @@ export type Candidate = {
   therapy_id?: string;
 };
 
-const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
 const minutesToTime = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
-const hitsDay = (
-  h: { date: Date | null; start_date: Date | null; end_date: Date | null; recurrence: string | null; weekdays: string[] },
-  day: Date,
-) => {
-  if (h.date && h.date.toDateString() === day.toDateString()) return true;
-  if (h.start_date && h.end_date && h.start_date <= day && h.end_date >= day) return true;
-  if (h.recurrence === 'weekly' && Array.isArray(h.weekdays) && h.weekdays.includes(WEEKDAYS[day.getDay()])) return true;
-  return false;
-};
 
 /** Everything a day's worth of checks needs, read once. */
 export async function loadDay(day: Date, prisma: PrismaClient) {
@@ -72,9 +62,10 @@ export function findConflict(c: Candidate, ctx: DayContext): Conflict | null {
       return { reason: 'STAFF_BUSY', message: `${name} already has a treatment at ${clash.start_time}.`, details: { start_time: clash.start_time, staff_id: staffId } };
     }
 
-    const off = ctx.timeOff.find((h) => h.entity_type === 'staff' && h.entity_id === staffId && hitsDay(h, ctx.day));
+    const off = offOnDay(ctx.timeOff, 'staff', staffId, ctx.day).find((b) => overlaps(b.s, b.e, start, end));
     if (off) {
-      return { reason: 'STAFF_OFF', message: `${name} is not in on this day (${off.description || 'time off'}).`, details: { staff_id: staffId } };
+      const when = off.whole ? 'on this day' : `from ${minutesToTime(off.s)} to ${minutesToTime(off.e)}`;
+      return { reason: 'STAFF_OFF', message: `${name} is not in ${when} (${off.label}).`, details: { staff_id: staffId } };
     }
 
     const inEvent = staffEventBusy(ctx.events, staffId, ctx.day).find((b) => overlaps(b.s, b.e, start, end));
@@ -92,6 +83,12 @@ export function findConflict(c: Candidate, ctx: DayContext): Conflict | null {
     if (clash) {
       const room = ctx.rooms.find((r) => r.id === c.room_id);
       return { reason: 'ROOM_BUSY', message: `${room?.name || 'That room'} is in use at ${clash.start_time}.`, details: { start_time: clash.start_time } };
+    }
+    const off = offOnDay(ctx.timeOff, 'room', c.room_id, ctx.day).find((b) => overlaps(b.s, b.e, start, end));
+    if (off) {
+      const room = ctx.rooms.find((r) => r.id === c.room_id);
+      const when = off.whole ? 'on this day' : `from ${minutesToTime(off.s)} to ${minutesToTime(off.e)}`;
+      return { reason: 'ROOM_OFF', message: `${room?.name || 'That room'} is out of use ${when} (${off.label}).`, details: { room_id: c.room_id } };
     }
   }
 
@@ -169,12 +166,14 @@ export function nearestFreeTime(c: Candidate, ctx: DayContext): string | null {
  */
 export function staffDay(ctx: DayContext) {
   return ctx.staff.filter((s) => s.is_active).map((s) => {
-    const off = ctx.timeOff.find((h) => h.entity_type === 'staff' && h.entity_id === s.id && hitsDay(h, ctx.day));
+    const offs = offOnDay(ctx.timeOff, 'staff', s.id, ctx.day);
+    const off = offs.find((b) => b.whole);
     const busy = [
+      ...offs.filter((b) => !b.whole).map(({ s: from, e, label }) => ({ s: from, e, label })),
       ...staffEventBusy(ctx.events, s.id, ctx.day),
       ...ctx.appointments.filter((a) => teamOf(a).includes(s.id))
         .map((a) => ({ s: toMinutes(a.start_time), e: toMinutes(a.start_time) + a.duration_minutes, label: 'treatment' })),
     ].sort((a, b) => a.s - b.s);
-    return { staff_id: s.id, off: off ? (off.description || 'time off') : null, busy };
+    return { staff_id: s.id, off: off ? off.label : null, busy };
   });
 }

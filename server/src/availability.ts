@@ -111,3 +111,24 @@ export const eventClashes = <A extends { staff_id: string | null; co_staff_ids?:
     eventHitsDay(e, a.scheduled_date)
     && teamOf(a).some((id) => eventAppliesToStaff(e, id))
     && overlaps(toMinutes(e.start_time), toMinutes(e.end_time), toMinutes(a.start_time), toMinutes(a.start_time) + (a.duration_minutes || 0)));
+
+export type OffRow = {
+  entity_type: string; entity_id: string | null;
+  date: Date | null; start_date: Date | null; end_date: Date | null;
+  start_time: string | null; end_time: string | null;
+  recurrence: string | null; weekdays: string[]; description: string | null;
+};
+
+/**
+ * The hours a therapist or room is out on a day. Time off with hours takes only
+ * those hours: a therapist two hours late is still in for the afternoon. Time off
+ * without hours takes the whole day. The guard and the planner both read this,
+ * so what one refuses the other never proposes.
+ */
+export const offOnDay = (rows: OffRow[], type: 'staff' | 'room', id: string, day: Date): (Busy & { whole: boolean })[] =>
+  rows
+    .filter((h) => h.entity_type === type && h.entity_id === id && eventHitsDay(h as unknown as EventRow, day))
+    .map((h) => {
+      const whole = !h.start_time || !h.end_time;
+      return { s: whole ? 0 : toMinutes(h.start_time!), e: whole ? 24 * 60 : toMinutes(h.end_time!), label: h.description || 'time off', whole };
+    });

@@ -99,6 +99,7 @@ const ymd = (d: Date) => d.toISOString().slice(0, 10);
  */
 const COST: Record<string, number> = {
   STAFF_OFF: 0,
+  ROOM_OFF: 0,
   STAFF_BUSY: 1,
   STAFF_IN_EVENT: 1,
   GENDER_MISMATCH: 2,
@@ -195,7 +196,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
         kind: conflict.reason,
         problem_class: 'blocking',
         what: conflict.message,
-        group_key: `${conflict.reason}:${conflict.reason === 'ROOM_BUSY' ? a.room_id : culprit}`,
+        group_key: `${conflict.reason}:${conflict.reason === 'ROOM_BUSY' || conflict.reason === 'ROOM_OFF' ? a.room_id : culprit}`,
         group_label: conflict.message,
         staff_id: culprit,
         cost: COST[conflict.reason] ?? 9,
