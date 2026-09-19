@@ -11,7 +11,8 @@ const weekdayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'f
 
 /** A line inside a time cell. Treatment is bold; an event or an absence is not. */
 export type RotaLine = { t: string; text: string; bold: boolean; grey?: boolean; noTime?: boolean };
-export type RotaRow = { name: string; note: string; cells: RotaLine[][]; available: boolean };
+/** `booked` is minutes on treatments (leading or assisting) and events that day. */
+export type RotaRow = { name: string; note: string; cells: RotaLine[][]; available: boolean; booked: number };
 export type Rota = { slots: { label: string; start: number; end: number }[]; rows: RotaRow[] };
 
 type TimeOffRow = {
@@ -43,6 +44,12 @@ const eventAppliesToStaff = (e: { staff_id: string | null; staff_scope: string |
   if (scope === 'all') return true;
   if (scope === 'none') return false;
   return e.staff_id === staffId || (Array.isArray(e.staff_ids) && e.staff_ids.includes(staffId));
+};
+
+/** 315 -> '5h 15m', 60 -> '1h', 45 -> '45m'. */
+export const formatBooked = (min: number) => {
+  const h = Math.floor(min / 60), m = min % 60;
+  return [h ? `${h}h` : '', m ? `${m}m` : ''].filter(Boolean).join(' ');
 };
 
 /**
@@ -120,7 +127,7 @@ export const buildRota = (input: {
     const fullDay = offs.find(isFullDay);
     const reason = (fullDay || offs[0])?.description || '';
     if (fullDay) {
-      out.push({ name: s.name, note: reason || 'Not available', cells: slots.map(() => []), available: false });
+      out.push({ name: s.name, note: reason || 'Not available', cells: slots.map(() => []), available: false, booked: 0 });
       continue;
     }
     const mine = appts.filter((a) => teamOf(a).includes(s.id));
@@ -170,7 +177,19 @@ export const buildRota = (input: {
       ];
       return lines.sort((m, n) => m.t.localeCompare(n.t));
     });
-    working.push({ name: s.name, note: '', cells, available: true });
+    // Assisting counts the same as leading: the assistant is just as busy.
+    // Overlaps are merged, so a treatment running into an event counts once.
+    const spans = [
+      ...mine.map((a) => [toMinutes(a.start_time), toMinutes(a.start_time) + (a.duration_minutes || 0)]),
+      ...myEvents.map((e) => [toMinutes(e.start_time), toMinutes(e.end_time)]),
+    ].sort((m, n) => m[0] - n[0]);
+    let booked = 0;
+    let reach = -1;
+    for (const [from, to] of spans) {
+      booked += Math.max(0, to - Math.max(from, reach));
+      reach = Math.max(reach, to);
+    }
+    working.push({ name: s.name, note: booked ? formatBooked(booked) : '', cells, available: true, booked });
   }
 
   return { slots, rows: [...working, ...out] };
