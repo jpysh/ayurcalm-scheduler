@@ -123,7 +123,7 @@ export function VerifyDialog({
 
   // No Scan button: Verify is opened because something is wrong, and the plan is
   // worked out before the admin has finished reading the first line.
-  const load = useCallback(async (nextPins: Pin[], relax: boolean, quiet = false) => {
+  const load = useCallback(async (nextPins: Pin[], relax: boolean, quiet = false): Promise<DayCheck | null> => {
     if (quiet) setReplanning(true); else setLoading(true);
     try {
       const res = await fetch(`${apiBase}/day-check`, {
@@ -132,7 +132,11 @@ export function VerifyDialog({
         body: JSON.stringify({ date: dateISO, pins: nextPins, relax_preferred_staff: relax }),
       });
       const data = await res.json().catch(() => null);
-      setCheck(data && Array.isArray(data.problems) ? data : { date: dateISO, problems: [], groups: [], plan: [], headline: null });
+      const next: DayCheck = data && Array.isArray(data.problems) ? data : { date: dateISO, problems: [], groups: [], plan: [], headline: null };
+      setCheck(next);
+      return next;
+    } catch {
+      return null;
     } finally {
       setLoading(false);
       setReplanning(false);
@@ -157,7 +161,7 @@ export function VerifyDialog({
   const refresh = async () => {
     setPins([]);
     await onRefresh([dateISO]);
-    await load([], relaxPreferred, true);
+    return load([], relaxPreferred, true);
   };
 
   function startReport(kind: Report) {
@@ -187,17 +191,21 @@ export function VerifyDialog({
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { setNote(body.error || "That could not be saved."); return; }
       const hours = whole ? "all day" : `${form.from}–${form.until}`;
-      // A therapist's absence moves their treatments straight away (the Time
-      // off tab does the same); a room's shows below as a plan to accept.
-      const moved = kind === "staff" ? (body.replan || []).reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0) : 0;
-      setDone({
-        text: kind === "staff"
-          ? `${name} not in ${hours}${moved ? ` — ${moved} moved` : ""}.`
-          : `${name} out of use ${hours}.`,
-        undo: async () => (await fetch(`${apiBase}/timeoff/${body.id}`, { method: "DELETE" })).ok,
-      });
+      const undo = async () => (await fetch(`${apiBase}/timeoff/${body.id}`, { method: "DELETE" })).ok;
       setReport(null);
-      await refresh();
+      const after = await refresh();
+      // Say what it touched: a room with nothing booked in those hours is
+      // worth knowing too, or the admin goes looking for a change that is not there.
+      const reason = kind === "staff" ? "STAFF_OFF" : "ROOM_OFF";
+      const left = (after?.problems || []).filter((p) => p.kind === reason && p.what.startsWith(name)).length;
+      // A therapist's absence moves their treatments straight away (the Time
+      // off tab does the same); a room's show below as a plan to accept.
+      const moved = kind === "staff" ? (body.replan || []).reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0) : 0;
+      const parts = [moved ? `${moved} moved` : "", left ? `${left} to fix below` : ""].filter(Boolean);
+      setDone({
+        text: `${name} ${kind === "staff" ? "not in" : "out of use"} ${hours} — ${parts.length ? parts.join(", ") : "nothing booked then"}.`,
+        undo,
+      });
     } finally {
       setBusy(null);
     }
@@ -463,10 +471,10 @@ export function VerifyDialog({
   const hours = (
     <div className="grid grid-cols-2 gap-2">
       <label className="space-y-1 text-[13px]">From
-        <Input type="time" className="min-h-11" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} />
+        <Input type="time" className="min-h-11 min-w-0 px-2 text-[14px]" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} />
       </label>
       <label className="space-y-1 text-[13px]">Until
-        <Input type="time" className="min-h-11" value={form.until} onChange={(e) => setForm({ ...form, until: e.target.value })} />
+        <Input type="time" className="min-h-11 min-w-0 px-2 text-[14px]" value={form.until} onChange={(e) => setForm({ ...form, until: e.target.value })} />
       </label>
     </div>
   );
@@ -479,8 +487,8 @@ export function VerifyDialog({
         ) : (
           <Select value={form.who} onValueChange={(v) => setForm({ ...form, who: v })}>
             <SelectTrigger className="min-h-11 text-[14px]"><SelectValue placeholder="Which treatment?" /></SelectTrigger>
-            <SelectContent>
-              {missable.map((t) => <SelectItem key={t.id} value={t.id}>{t.start_time} · {t.label}</SelectItem>)}
+            <SelectContent className="max-w-[calc(100vw-2rem)]">
+              {missable.map((t) => <SelectItem key={t.id} value={t.id} className="whitespace-normal">{t.start_time} · {t.label}</SelectItem>)}
             </SelectContent>
           </Select>
         )
@@ -493,7 +501,7 @@ export function VerifyDialog({
             </SelectContent>
           </Select>
           {hours}
-          <Input className="min-h-11" placeholder={report === "staff" ? "Why? e.g. running late, unwell" : "Why? e.g. heater broken, not cleaned"}
+          <Input className="min-h-11 text-[14px]" placeholder={report === "staff" ? "Why? e.g. late, unwell" : "Why? e.g. heater broken"}
             value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
         </>
       )}
@@ -591,10 +599,11 @@ export function VerifyDialog({
         {/* One decision, always in reach of a thumb. */}
         <div className="shrink-0 space-y-2 border-t bg-background px-4 py-3">
           {done ? (
-            <p className="flex flex-wrap items-center justify-center gap-x-2 text-center text-sm">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" />{done.text}
-              {done.undo ? <button type="button" className="min-h-9 underline" disabled={busy === "undo"} onClick={undoDone}>Undo</button> : null}
-            </p>
+            <div className="flex items-start gap-2 text-[14px]">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+              <p className="flex-1 leading-snug">{done.text}</p>
+              {done.undo ? <button type="button" className="-my-2 min-h-9 shrink-0 font-medium underline" disabled={busy === "undo"} onClick={undoDone}>Undo</button> : null}
+            </div>
           ) : null}
           {plan.length > 0 ? (
             <Button className="h-auto min-h-12 w-full py-2.5 text-[15px]" disabled={busy === "accept" || replanning} onClick={acceptPlan}>
