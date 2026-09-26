@@ -29,7 +29,7 @@
 import { PrismaClient } from '@prisma/client';
 import { findConflict, loadDay, type Candidate, type DayContext } from './appointmentGuard.js';
 import { planDay, type Move, type Pin } from './replan.js';
-import { toMinutes } from './availability.js';
+import { centreClock, startedBefore, toMinutes, type Clock } from './availability.js';
 
 export type Fix = {
   label: string;
@@ -164,11 +164,15 @@ export type CheckOptions = {
   pins?: Pin[];
   /** The one negotiable rule: a resident's own therapist. */
   relaxPreferredStaff?: boolean;
+  /** The centre's clock. Defaults to now; tests pass a fixed one. */
+  now?: Clock;
 };
 
 export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptions = {}): Promise<DayCheck> {
   const withFixes = opts.withFixes !== false;
   const ctx = await loadDay(day, prisma);
+  const now = opts.now ?? centreClock(ctx.settings?.timezone || 'Asia/Kolkata');
+  const cutoff = startedBefore(now, day);
   const [stays, events] = await Promise.all([
     prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } } }),
     prisma.programEvent.findMany(),
@@ -183,6 +187,8 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
   const raw: Raw[] = [];
 
   for (const a of appointments) {
+    // Started or over: it happened as it happened, and there is nothing to fix.
+    if (toMinutes(a.start_time) < cutoff) continue;
     const common = {
       who: `${nameOfPatient(a.patient_id)} — ${nameOfTherapy(a.therapy_id)}`,
       start_time: a.start_time,
@@ -301,6 +307,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
         appointmentIds: movable,
         pins: opts.pins,
         relaxPreferredStaff: opts.relaxPreferredStaff,
+        now,
       });
       const byAppointment = new Map<string, Fix>();
       for (const m of [...result.moved, ...result.proposed]) {

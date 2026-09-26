@@ -20,7 +20,7 @@
  * them, so it is put to the admin: only their Accept applies it.
  */
 import { PrismaClient, Prisma } from '@prisma/client';
-import { offOnDay, overlaps, staffEventBusy, teamOf, toMinutes, type EventRow } from './availability.js';
+import { centreClock, offOnDay, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow } from './availability.js';
 
 /** Which of the tier 4 choices a move is. */
 export type Choice = 'this_time_only' | 'next_free_day' | 'cancel';
@@ -108,6 +108,8 @@ export async function planDay(
     excludeStaffIds?: string[];
     /** The one rule the admin may switch off, and nothing else. */
     relaxPreferredStaff?: boolean;
+    /** The centre's clock. Defaults to now; tests pass a fixed one. */
+    now?: Clock;
   } = {},
 ): Promise<ReplanResult> {
   const [absent, settings, staff, therapies, rooms, patients, events, timeOff] = await Promise.all([
@@ -124,6 +126,10 @@ export async function planDay(
   const open = toMinutes(settings?.opening_time || '09:00');
   const close = toMinutes(settings?.closing_time || '18:00');
   const enforceGender = settings?.enforce_gender_match !== false;
+  // What has started stays where it is: the plan never rewrites a treatment
+  // that already happened, and never moves one to a time already gone.
+  const cutoff = startedBefore(opts.now ?? centreClock(settings?.timezone || 'Asia/Kolkata'), date);
+  const firstSlot = cutoff > open ? open + Math.ceil((cutoff - open) / 30) * 30 : open;
   const therapyById = new Map(therapies.map((t) => [t.id, t]));
   const patientById = new Map(patients.map((p) => [p.id, p]));
   const staffById = new Map(staff.map((s) => [s.id, s]));
@@ -139,6 +145,7 @@ export async function planDay(
   const inWindow = (a: { start_time: string; duration_minutes: number }) =>
     staffOff.length === 0 || staffOff.some((b) => overlaps(b.s, b.e, toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes));
   const mine = dayAppointments
+    .filter((a) => toMinutes(a.start_time) >= cutoff)
     .filter((a) => (wanted ? wanted.has(a.id) : Boolean(staffId) && teamOf(a).includes(staffId as string) && inWindow(a)))
     .sort((a, b) => toMinutes(a.start_time) - toMinutes(b.start_time));
   const mineIds = new Set(mine.map((a) => a.id));
@@ -302,7 +309,7 @@ export async function planDay(
       const team = teamFor((sid) => canTake(sid, start, start + duration), true, relax);
       const room = team && roomFor(start, start + duration);
       if (team && room) return { team, start, room, tier: 1, date: ymd(date) };
-      for (let t = open; t + duration <= close; t += 30) {
+      for (let t = firstSlot; t + duration <= close; t += 30) {
         if (!free(patientBusy[appt.patient_id], t, t + duration)) continue;
         const r = roomFor(t, t + duration);
         if (!r) continue;
@@ -539,7 +546,7 @@ export const replanStaffDay = (
   staffId: string,
   date: Date,
   prisma: PrismaClient,
-  opts: { apply?: boolean; timeOffId?: string } = {},
+  opts: { apply?: boolean; timeOffId?: string; now?: Clock } = {},
 ) => planDay(staffId, date, prisma, opts);
 
 /** Put a replan back exactly as it was. */
