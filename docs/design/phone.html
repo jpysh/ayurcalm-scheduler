@@ -473,7 +473,9 @@ let scope='upcoming',recent=['Rahul','Shirodhara'];
 function openSearch(){$('#mainbar').hidden=true;$('#searchbar').hidden=false;['s-home','s-page'].forEach(i=>$('#'+i).hidden=true);$('#s-search').hidden=false;$('#pill').hidden=true;$('#sq').value='';searchRender();main.scrollTop=0;$('#sq').focus()}
 function closeSearch(){$('#mainbar').hidden=false;$('#searchbar').hidden=true;$('#s-search').hidden=true;go(page)}
 const esc=q=>q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-const hl=(t,q)=>q?t.replace(new RegExp('('+esc(q)+')','ig'),'<mark>$1</mark>'):t;
+// Anything the admin types is escaped before it becomes HTML.
+const safe=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const hl=(t,q)=>{t=safe(t);q=safe(q);return q?t.replace(new RegExp('('+esc(q)+')','ig'),'<mark>$1</mark>'):t};
 function searchRender(){const q=$('#sq').value.trim(),el=$('#s-search');
   const chips=(l,a)=>`<div class="label">${l}</div><div class="chips">${a.map(r=>`<button class="chipb" data-q="${r}">${r}</button>`).join('')}</div>`;
   if(!q){el.innerHTML=chips('Recent',recent)+chips('Residents',RES.slice(0,6))+chips('Therapists',THER);return}
@@ -481,7 +483,7 @@ function searchRender(){const q=$('#sq').value.trim(),el=$('#s-search');
   const isPast=x=>x.o<0||(x.o===0&&mins(x.t)+x.len<=NOW);
   let hits=m.filter(x=>scope==='all'||(scope==='past')===isPast(x));if(scope==='past')hits.reverse();
   let h=`<div class="chips" style="padding-top:12px">${[['upcoming','Upcoming'],['past','Past'],['all','All']].map(([k,v])=>`<button class="chipb" data-scope="${k}" aria-pressed="${k===scope}">${v}</button>`).join('')}</div>`;
-  if(!hits.length)h+=`<div class="endday">No ${scope==='all'?'':scope+' '}treatments match “${q}”.${m.length?' Try All.':''}</div>`;
+  if(!hits.length)h+=`<div class="endday">No ${scope==='all'?'':scope+' '}treatments match “${safe(q)}”.${m.length?' Try All.':''}</div>`;
   let last=null;hits.slice(0,30).forEach(x=>{if(x.o!==last){if(last!==null)h+='</div>';const d=dateOf(x.o);h+=`<div class="ghead">${x.o===0?'Today':x.o===1?'Tomorrow':x.o===-1?'Yesterday':fmt(d)}<span>${Math.abs(x.o)<=1?fmt(d):''}</span></div><div class="grp">`;last=x.o}
     h+=`<button class="row${isPast(x)?' past':''}" data-go="${x.o}" data-i="${x.i}" data-o="${x.o}"><span class="time">${x.t}<small>${hm(mins(x.t)+x.len)}</small></span><span class="m"><div class="top"><span class="n">${hl(x.who,q)}</span><span class="rm">${DOOR}${hl(x.room,q)}</span></div><div class="who">${hl(x.th,q)} · ${hl(withText(x.p),q)}</div></span></button>`});
   if(last!==null)h+='</div>';el.innerHTML=h}
@@ -516,7 +518,7 @@ function treatment(b){const o=+b.dataset.o,src=dayRows(o)[+b.dataset.i],x=info({
     ${fact('therapy','Treatment',`${x.th} · ${x.len} min`)}
     ${fact('staff','With',x.p.split(' + ').join(' and '))}
     ${fact('room','Room',x.room)}
-    ${fact('note','Note',src.note||'<span class="none">Add a note</span>')}
+    ${fact('note','Note',src.note?safe(src.note):'<span class="none">Add a note</span>')}
   </div>
   ${x.past||src.noshow?'':`<div class="facts"><button class="fact wrong" data-f="wrong"><span class="v">Something wrong?<small>Didn't come, running late, cancel, staff or room</small></span><span class="c"></span></button></div>`}
   <div class="facts">
@@ -570,8 +572,8 @@ function sub(k,x,src,o,back){const first=x.who.split(' ')[0];
   if(k==='staff'){const free=THER.filter(n=>!x.p.includes(n)).slice(0,4);return list('Therapist','Free for the whole treatment',[{l:x.p.split(' + ').join(' and '),cur:1},...free.map((n,i)=>({l:n,best:!i,go:()=>set({p:n},`Now with ${n}`)}))],back)}
   if(k==='room'){const rs=ROOMS.filter(r=>r!==x.room).slice(0,4);return list('Room','Free for the whole treatment, with what it needs',[{l:x.room,cur:1},...rs.map((r,i)=>({l:r,best:!i,go:()=>set({room:r},`Now in ${r}`)}))],back)}
   if(k==='therapy'){const ts=TH.filter(t=>t[0]!==x.th&&t[1]<=x.len+15).slice(0,4);return list('Treatment','Fits the same time, therapist and room',[{l:`${x.th} · ${x.len} min`,cur:1},...ts.map((t,i)=>({l:`${t[0]} · ${t[1]} min`,go:()=>set({th:t[0],len:t[1]},`Changed to ${t[0]}`)}))],back)}
-  if(k==='note'){sheet(`<div class="nav"><button class="backb" id="backb">‹ Back</button><h2>Note</h2><button class="backb done" id="okn">Save</button></div><div class="sub">Prints on the therapist's sheet</div><textarea id="nt" class="search" rows="3" style="border-radius:12px;padding:10px;height:auto">${src.note||''}</textarea>`);
-    $('#nt').focus();on('#backb',back);on('#okn',()=>{src.note=$('#nt').value.trim();logOf(src,o).unshift({w:stamp(),t:src.note?'Note: '+src.note:'Note removed'});back()})}
+  if(k==='note'){sheet(`<div class="nav"><button class="backb" id="backb">‹ Back</button><h2>Note</h2><button class="backb done" id="okn">Save</button></div><div class="sub">Prints on the therapist's sheet</div><textarea id="nt" class="search" rows="3" style="border-radius:12px;padding:10px;height:auto">${safe(src.note||'')}</textarea>`);
+    $('#nt').focus();on('#backb',back);on('#okn',()=>{src.note=$('#nt').value.trim();logOf(src,o).unshift({w:stamp(),t:src.note?'Note: '+safe(src.note):'Note removed'});back()})}
 }
 
 document.addEventListener('click',e=>{
