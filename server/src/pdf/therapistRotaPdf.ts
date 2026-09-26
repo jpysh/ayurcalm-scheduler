@@ -12,7 +12,8 @@ const weekdayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'f
 /** A line inside a time cell. Treatment is bold; an event or an absence is not. */
 export type RotaLine = { t: string; text: string; bold: boolean; grey?: boolean; noTime?: boolean };
 /** `booked` is minutes on treatments (leading or assisting) and events that day. */
-export type RotaRow = { name: string; note: string; cells: RotaLine[][]; available: boolean; booked: number };
+/** `unstaffed`: out for the whole day yet still has treatments booked (#134). */
+export type RotaRow = { name: string; note: string; cells: RotaLine[][]; available: boolean; booked: number; unstaffed?: boolean };
 export type Rota = { slots: { label: string; start: number; end: number }[]; rows: RotaRow[] };
 
 type TimeOffRow = {
@@ -94,7 +95,9 @@ export const buildRota = (input: {
   // an afternoon with no treatments is exactly the afternoon the rota has to
   // show as unavailable.
   const offTimes = onShift.flatMap((s) => offsByStaff.get(s.id) || []).filter((h) => !isFullDay(h)).map((h) => h.start_time as string);
-  const apptTimes = appts.filter((a) => onShift.some((s) => teamOf(a).includes(s.id))).map((a) => a.start_time);
+  // A treatment still booked on someone out for the day prints too (#134), so
+  // it opens a column like any other.
+  const apptTimes = appts.filter((a) => staff.some((s) => teamOf(a).includes(s.id))).map((a) => a.start_time);
   const startTimes = [...apptTimes, ...eventsOnStaff.map((e) => e.start_time), ...offTimes];
   // Three columns, always the same three, because the rota hangs on a staff
   // board and a reader who has to work out what today's columns mean has
@@ -109,7 +112,7 @@ export const buildRota = (input: {
   // column to sit in rather than earning a fourth column of its own.
   const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
   const endTimes = [
-    ...appts.filter((a) => onShift.some((s) => teamOf(a).includes(s.id))).map((a) => toMinutes(a.start_time) + (a.duration_minutes || 0)),
+    ...appts.filter((a) => staff.some((s) => teamOf(a).includes(s.id))).map((a) => toMinutes(a.start_time) + (a.duration_minutes || 0)),
     ...eventsOnStaff.map((e) => toMinutes(e.end_time)),
   ];
   const dayStart = Math.min(toMinutes(input.openingTime), MIDDAY, ...startTimes.map(toMinutes));
@@ -120,17 +123,32 @@ export const buildRota = (input: {
     { label: `Evening ${hhmm(AFTERNOON_END)}–${hhmm(dayEnd)}`, start: AFTERNOON_END, end: dayEnd },
   ];
 
+  const unstaffed: RotaRow[] = [];
   const working: RotaRow[] = [];
   const out: RotaRow[] = [];
   for (const s of staff) {
     const offs = offsByStaff.get(s.id) || [];
     const fullDay = offs.find(isFullDay);
     const reason = (fullDay || offs[0])?.description || '';
+    const mine = appts.filter((a) => teamOf(a).includes(s.id));
     if (fullDay) {
-      out.push({ name: s.name, note: reason || 'Not available', cells: slots.map(() => []), available: false, booked: 0 });
+      // Out, yet a resident is still booked with them. Dropping the treatment
+      // left the resident waiting for someone not in and no therapist told to
+      // be there (#134), so it prints, marked, at the top of the sheet.
+      const cells = slots.map((slot) => mine
+        .filter((a) => toMinutes(a.start_time) >= slot.start && toMinutes(a.start_time) < slot.end)
+        .sort((m, n) => m.start_time.localeCompare(n.start_time))
+        .map((a) => ({
+          t: a.start_time,
+          bold: true,
+          text: ['NO THERAPIST', `${therapyById[a.therapy_id] || a.therapy_id} ${a.duration_minutes || 0}m`, patientById[a.patient_id] || a.patient_id, a.room_id ? roomById[a.room_id] || a.room_id : '']
+            .filter(Boolean).join(' · '),
+        })));
+      (mine.length ? unstaffed : out).push({
+        name: s.name, note: `${mine.length ? 'Off — ' : ''}${reason || 'Not available'}`, cells, available: false, booked: 0, unstaffed: mine.length > 0,
+      });
       continue;
     }
-    const mine = appts.filter((a) => teamOf(a).includes(s.id));
     const myEvents = events.filter((e) => eventAppliesToStaff(e, s.id));
     const cells = slots.map((slot) => {
       const inSlot = (t: string) => toMinutes(t) >= slot.start && toMinutes(t) < slot.end;
@@ -192,7 +210,7 @@ export const buildRota = (input: {
     working.push({ name: s.name, note: booked ? formatBooked(booked) : '', cells, available: true, booked });
   }
 
-  return { slots, rows: [...working, ...out] };
+  return { slots, rows: [...unstaffed, ...working, ...out] };
 };
 
 /**
@@ -277,9 +295,10 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
     // than as someone free to take work, and there are usually several.
     const busy = (r: RotaRow) => r.cells.some((c) => c.length > 0);
     const groups: [string, (r: RotaRow) => boolean][] = [
+      ['Needs a therapist: booked with someone who is off', (r) => !!r.unstaffed],
       ['Working today', (r) => r.available && busy(r)],
       ['Working today, nothing booked', (r) => r.available && !busy(r)],
-      ['Not available today', (r) => !r.available],
+      ['Not available today', (r) => !r.available && !r.unstaffed],
     ];
     for (const [title, match] of groups) {
       const group = rota.rows.filter(match);

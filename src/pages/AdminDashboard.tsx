@@ -1681,6 +1681,8 @@ const AdminDashboard = () => {
               handleGenerateDailyPdf={handleGenerateDailyPdf}
               setShowAutoAssign={setShowAutoAssign}
               setShowVerify={setShowVerify}
+              // Verify's open items apply to today only, the day /day-check reads.
+              verifyOpen={dayKeyMemo === exceptionDayKey ? dayCheck.problems.filter((p) => p.problem_class === 'blocking').length : 0}
               calendarTriggerRef={calendarTriggerRef}
               calendarRef={calendarRef}
             />

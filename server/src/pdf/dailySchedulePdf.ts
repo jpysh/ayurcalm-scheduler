@@ -1,5 +1,5 @@
 declare module 'pdfkit';
-import { teamOf } from '../availability.js';
+import { teamOf, offOnDay, overlaps } from '../availability.js';
 import PDFDocument from 'pdfkit';
 import { loadDietsForDay, mealOrder, type MealKey } from '../dietResolution.js';
 import { PrismaClient } from '@prisma/client';
@@ -53,7 +53,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
   const centreName = settings?.centre_name || process.env.CENTRE_NAME || 'Wellness Centre';
 
-  const [rooms, patients, therapies, staff, appts, eventsByDate, weeklyEvents, diets, staysToday] = await Promise.all([
+  const [rooms, patients, therapies, staff, appts, eventsByDate, weeklyEvents, diets, staysToday, timeOff] = await Promise.all([
     prisma.therapyRoom.findMany(),
     prisma.patient.findMany(),
     prisma.therapy.findMany(),
@@ -63,12 +63,19 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     prisma.programEvent.findMany({ where: { recurrence: 'weekly' } }),
     loadDietsForDay(day, prisma),
     prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } } }),
+    prisma.timeOff.findMany({ where: { entity_type: 'staff' } }),
   ]);
 
   const roomById = Object.fromEntries(rooms.map((r) => [r.id, r.name]));
   const patientById = Object.fromEntries(patients.map((p) => [p.id, p.name]));
   const therapyById = Object.fromEntries(therapies.map((t) => [t.id, t.name]));
   const staffById = Object.fromEntries(staff.map((s) => [s.id, s.name]));
+  // A therapist who is off during a treatment still booked with them (#134).
+  // The therapist rota lists the same treatment under 'Needs a therapist'.
+  const isOff = (id: string, a: { start_time: string; duration_minutes: number | null }) => {
+    const s = toMinutes(a.start_time);
+    return offOnDay(timeOff, 'staff', id, day).some((b) => overlaps(b.s, b.e, s, s + (a.duration_minutes || 0)));
+  };
 
   const weekdayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const;
   const weekday = weekdayNames[day.getDay()];
@@ -259,9 +266,10 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
             t: a.start_time,
             bold: true,
             text: [
+              teamOf(a).some((id) => isOff(id, a)) ? 'NO THERAPIST' : '',
               `${therapyById[a.therapy_id] || a.therapy_id} ${a.duration_minutes || 0}m`,
               // Everyone working it, so a resident knows two people are coming.
-              teamOf(a).map((id) => noDr(staffById[id] || id)).join(' & '),
+              teamOf(a).map((id) => `${noDr(staffById[id] || id)}${isOff(id, a) ? ' (off)' : ''}`).join(' & '),
               a.room_id ? roomById[a.room_id] || a.room_id : '',
             ].filter(Boolean).join(' · '),
           })),
