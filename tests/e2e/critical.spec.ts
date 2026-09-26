@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 
 /**
  * The paths a centre cannot work without: signing in, reaching every tab, and
@@ -27,6 +27,13 @@ async function passSetupIfShown(page: Page) {
 
 // Tabs keep the last panel mounted while switching, so ask for the open one.
 const activePanel = (page: Page) => page.locator('[role=tabpanel][data-state=active]');
+
+/** Puts the schedule on a day: tapping the heading opens the calendar, which carries the date box. */
+async function showDay(page: Page, day: string) {
+  await openTab(page, 'Schedule');
+  await activePanel(page).getByText('Schedule', { exact: true }).click();
+  await activePanel(page).locator('input[type=date]').first().fill(day);
+}
 
 /** A click while the previous tab is still loading can be lost, so retry until selected. */
 async function openTab(page: Page, name: string) {
@@ -164,15 +171,55 @@ test('the booking dialog offers the slots the API found, and books one', async (
   await expect(page.getByText('Selected slot confirmed')).toBeVisible({ timeout: 20000 });
 });
 
-test("the day's problems are named on the first screen", async ({ page }) => {
-  await signIn(page);
-  await passSetupIfShown(page);
-  // The seed puts a therapist on full-day leave with treatments still booked.
-  // The line names the worst problem and the residents in it, because a count
-  // only tells the admin to open something. It comes from the same server check
-  // that refuses a booking — the header has no rules of its own.
-  await expect(page.getByText(/is not in on this day.*—.*\w/)).toBeVisible({ timeout: 20000 });
-  // Notes (a resident with nothing booked) stay in Verify: the header is only
-  // for what must be fixed.
-  await expect(page.getByText(/nothing booked/)).toHaveCount(0);
+test("the day's problems are named on the first screen", async ({ page, request }) => {
+  // Its own day in 2030: the seeded problem is today's, and once the centre's
+  // clock passes its last treatment there is nothing left to fix (#149).
+  const DAY = '2030-03-20';
+  const TAG = 'Headline';
+  const login = await (await request.post('/api/auth/login', { data: ADMIN })).json();
+  const headers = { Authorization: `Bearer ${login.token}` };
+  const call = async (method: 'get' | 'post' | 'delete', path: string, data?: unknown) => {
+    const res = await (request as APIRequestContext)[method](`/api${path}`, { headers, data });
+    expect(res.ok(), `${method} ${path}: ${res.status()}`).toBeTruthy();
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  };
+  const tidy = async () => {
+    for (const h of await call('get', '/timeoff')) if (String(h.description).startsWith(TAG)) await call('delete', `/timeoff/${h.id}`);
+    for (const p of await call('get', '/patients')) if (p.name.startsWith(TAG)) await call('delete', `/patients/${p.id}`);
+    for (const x of await call('get', '/staff')) if (x.name.startsWith(TAG)) await call('delete', `/staff/${x.id}`);
+    for (const r of await call('get', '/rooms')) if (r.name.startsWith(TAG)) await call('delete', `/rooms/${r.id}`);
+    for (const t of await call('get', '/therapies')) if (t.name.startsWith(TAG)) await call('delete', `/therapies/${t.id}`);
+  };
+  await tidy();
+  try {
+    const allWeek = Object.fromEntries(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].map((d) => [d, { start: '09:00', end: '18:00' }]));
+    const therapy = await call('post', '/therapies', { name: `${TAG} Abhyanga`, duration_minutes: 60 });
+    await call('post', '/rooms', { name: `${TAG} Room`, weekly_schedule: allWeek });
+    const therapist = await call('post', '/staff', { name: `${TAG} Asha`, gender: 'female', specializations: [therapy.id], weekly_schedule: allWeek });
+    // Only she may treat this resident, so marking her off cannot quietly move it.
+    const resident = await call('post', '/patients', {
+      name: `${TAG} Rekha`, gender: 'female', available_from: '2030-03-01', available_to: '2030-03-31',
+      preferred_staff_id: therapist.id, requires_preferred_staff: true,
+    });
+    await call('post', '/appointments', {
+      patient_id: resident.id, therapy_id: therapy.id, total_sessions: 1,
+      preferred_time_range: { start: '10:00', end: '11:00' }, start_date: DAY, end_date: DAY,
+      preferred_staff_id: therapist.id, now: '2030-01-01T00:00:00.000Z',
+    });
+    await call('post', '/timeoff', { entity_type: 'staff', entity_id: therapist.id, date: DAY, description: `${TAG} leave` });
+
+    await signIn(page);
+    await passSetupIfShown(page);
+    await showDay(page, DAY);
+    // The line names the worst problem and the resident in it, because a count
+    // only tells the admin to open something. It comes from the same server
+    // check that refuses a booking — the header has no rules of its own.
+    await expect(page.getByText(new RegExp(`is not in on this day.*—.*${TAG} Rekha`))).toBeVisible({ timeout: 20000 });
+    // Notes (a resident with nothing booked) stay in Verify: the header is only
+    // for what must be fixed.
+    await expect(page.getByText(/nothing booked/)).toHaveCount(0);
+  } finally {
+    await tidy();
+  }
 });
