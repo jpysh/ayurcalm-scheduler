@@ -63,14 +63,15 @@ const off = (over: Record<string, unknown>) => ({
 }
 
 // A full-day absence moves the therapist to the unavailable group, with the
-// reason, and takes their cells with them.
+// reason, and takes their cells with them. (Priya has an event, no treatment;
+// a treatment still booked with them is the #134 case below.)
 {
-  const { rows } = buildRota({ ...base, timeOff: [off({ entity_id: 's1', date: day, description: 'Sick leave' })] });
-  assert.deepEqual(rows.map((r) => r.name), ['Kumar Nair', 'Priya Menon', 'Anjali Rao']);
-  const anjali = rows[2];
-  assert.equal(anjali.available, false);
-  assert.equal(anjali.note, 'Sick leave');
-  assert.ok(anjali.cells.every((c) => c.length === 0));
+  const { rows } = buildRota({ ...base, timeOff: [off({ entity_id: 's3', date: day, description: 'Sick leave' })] });
+  assert.deepEqual(rows.map((r) => r.name), ['Anjali Rao', 'Kumar Nair', 'Priya Menon']);
+  const priya = rows[2];
+  assert.equal(priya.available, false);
+  assert.equal(priya.note, 'Sick leave');
+  assert.ok(priya.cells.every((c) => c.length === 0));
 }
 
 // A part-day absence keeps them working, greying only the hours it covers.
@@ -154,7 +155,7 @@ console.log('therapistRota: ok');
   const by = (n: string) => rows.find((r) => r.name === n)!;
   assert.equal(by('Kumar Nair').note, '2h 45m');
   assert.equal(by('Priya Menon').note, '2h 45m', 'assisting 105m + yoga 60m');
-  assert.equal(by('Anjali Rao').note, 'Sick leave');
+  assert.equal(by('Anjali Rao').note, 'Off — Sick leave', 'still booked, so marked (#134)');
 }
 
 // A treatment running into an event counts the shared half hour once.
@@ -164,4 +165,15 @@ console.log('therapistRota: ok');
     appts: [{ staff_id: 's3', patient_id: 'p1', therapy_id: 't1', room_id: null, start_time: '08:00', duration_minutes: 60 }],
   });
   assert.equal(rows.find((r) => r.name === 'Priya Menon')!.note, '1h 30m', 'yoga 07:30-08:30 + 08:00-09:00');
+}
+
+// #134: a treatment still booked with someone off for the whole day is not
+// dropped. It prints on their row, marked, and that row leads the sheet.
+{
+  const { slots, rows } = buildRota({ ...base, timeOff: [off({ entity_id: 's2', date: day, description: 'Leave' })] });
+  assert.equal(rows[0].name, 'Kumar Nair');
+  assert.ok(rows[0].unstaffed && !rows[0].available);
+  assert.equal(rows[0].note, 'Off — Leave');
+  const at10 = slots.findIndex((s) => s.start <= 600 && s.end > 600);
+  assert.equal(rows[0].cells[at10][0].text, 'NO THERAPIST · Abhyanga 60m · Sarah Smith · Room 1');
 }
