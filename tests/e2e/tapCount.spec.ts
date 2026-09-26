@@ -13,7 +13,7 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '@
  * Everything a job changes is undone, and the two days it touches are
  * compared back through the API.
  */
-const BLOCKING = new Set<string>([]);
+const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets"]);
 
 /** The design's order, which is the order the table prints in. */
 const JOBS: [string, number][] = [
@@ -70,28 +70,39 @@ async function signIn(page: Page) {
 
 const activePanel = (page: Page) => page.locator('[role=tabpanel][data-state=active]');
 
-/** Not counted: puts the schedule on a day before a job starts. */
+/** Not counted: puts the day on screen before a job starts, from the bottom bar's day button. */
 async function showDay(page: Page, day: string) {
-  await activePanel(page).getByText('Schedule', { exact: true }).click();
-  await activePanel(page).locator('input[type=date]').first().fill(day);
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /^Change day/ }).click();
+  const box = page.getByRole('dialog').locator('input[type=date]');
+  // Already on that day: nothing changes, so the sheet stays open until closed.
+  if ((await box.inputValue()) === day) await page.keyboard.press('Escape');
+  else await box.fill(day);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
 type Walk = (tap: (target: Locator) => Promise<void>, swipe: () => void) => Promise<string | void>;
 
-/** Walks one job from the Schedule tab with nothing open, counting its taps. */
+/** Walks one job from the day with nothing open, counting its taps. */
 async function job(page: Page, rows: Row[], name: string, walk: Walk) {
   // The page is not reloaded between jobs: the admin does not, and a reload
   // per job ran into the server's rate limit.
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.getByRole('tab', { name: 'Schedule', exact: true }).click();
-  await expect(page.getByRole('tab', { name: 'Schedule', exact: true })).toHaveAttribute('aria-selected', 'true');
+  // A note from the last job fades by itself; the admin would not be mid-note.
+  await expect(page.locator('[data-sonner-toast]')).toHaveCount(0, { timeout: 15000 });
+  if (!page.url().endsWith('/schedule')) {
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /^The day/ }).click();
+    await expect(page).toHaveURL(/\/schedule$/);
+  }
 
   let taps = 0;
   let scrolls = 0;
   const tap = async (target: Locator) => {
     await target.waitFor({ timeout: 15000 });
+    // A sheet still sliding in is not where the thumb will find it.
+    await page.evaluate(() => Promise.all(document.getAnimations()
+      .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity).map((a) => a.finished.catch(() => null))));
     // Reachable means a thumb could tap it now: inside the viewport, and not
     // clipped by a scrolled list or covered by something else.
     const reachable = await target.evaluate((el) => {
@@ -181,7 +192,8 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     });
 
     await job(page, rows, "A resident's meals today", async (tap) => {
-      await tap(page.getByRole('tab', { name: 'Diet', exact: true }));
+      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Diet plans/ }));
       const dayButtons = activePanel(page).getByRole('button', { name: 'Day', exact: true });
       await dayButtons.first().waitFor();
       // Someone from the middle of the list: nobody the admin looks for is first.
@@ -193,13 +205,13 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     await job(page, rows, "Print today's sheets", async (tap) => {
       await showDay(page, today);
       const download = page.waitForEvent('download');
-      await tap(activePanel(page).getByRole('button', { name: /^Patient PDF/ }));
+      await tap(page.getByRole('button', { name: "Print the day's sheets" }));
       expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
-      return 'the therapist rota is a second tap';
+      return 'the therapist rota is a second tap, on the note that follows';
     });
 
     await job(page, rows, 'Book one treatment', async (tap) => {
-      await tap(activePanel(page).getByRole('button', { name: 'Assign' }));
+      await tap(page.getByRole('button', { name: 'Book a treatment' }));
       await page.getByLabel('Start Date').fill(day);
       await page.getByLabel('End Date').fill(ymd(new Date(Date.parse(day) + 7 * 86400000)));
       await tap(page.getByRole('button', { name: 'Select patient' }));

@@ -40,7 +40,10 @@ sheet".
 src/                    React 18 + Vite + TypeScript + Tailwind + shadcn/ui
   lib/apiBase.ts        THE API base URL. One definition. Do not add another.
   main.tsx              Global fetch wrapper: attaches the JWT, handles 401
-  pages/AdminDashboard  The shell: shared data, the day's warnings, Verify, tabs
+  pages/AdminDashboard  The shell: shared data, the day's warnings, Verify, and
+                        which screen is showing
+  components/BottomBar  The phone frame (#66): menu · day · print · book, and
+                        the bottom sheets they open. Screens are reached from it
   pages/tabs/           One file per screen: its tab, dialogs and useXScreen()
                         state hook. Shared types and helpers: tabs/shared.ts
   pages/SetupWizard     First-run flow, shown until settings.setup_complete
