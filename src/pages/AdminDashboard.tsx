@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useLocation, useNavigate } from "react-router-dom";
-import {
-  AlertCircle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Sparkles, Users, Home, CalendarDays, Activity, User, StopCircle, Utensils, Stethoscope, Settings as SettingsIcon } from "lucide-react";
+import { AlertCircle } from "lucide-react";
+import { BottomBar, SCREENS } from "@/components/BottomBar";
 import { AutoAssignDialog } from "@/components/AutoAssignDialog";
 import { VerifyDialog } from "@/components/VerifyDialog";
 import { AppointmentDialog } from "@/components/AppointmentDialog";
@@ -127,35 +126,13 @@ const AdminDashboard = () => {
       .catch(() => { /* falls back to the defaults above */ });
   }, []);
   const [activeTab, setActiveTab] = useState("schedule");
-  const [viewType, setViewType] = useState<"day" | "week">("day");
   const [showAutoAssign, setShowAutoAssign] = useState(false);
   const [showVerify, setShowVerify] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentDetailed | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<{ kind: 'staff'|'room'|'therapy'|'patient'|'timeoff'|'appointment'; id: string; name?: string; counts?: Record<string, number> } | null>(null);
 
-  const TAB_ORDER = ["schedule", "staff", "rooms", "therapies", "diet", "timeoff", "events", "patients", "ailments", "settings"] as const;
-  const prevTab = () => {
-    const idx = TAB_ORDER.indexOf(activeTab as typeof TAB_ORDER[number]);
-    const nextIdx = Math.max(0, idx - 1);
-    setActiveTab(TAB_ORDER[nextIdx]);
-  };
-  const nextTab = () => {
-    const idx = TAB_ORDER.indexOf(activeTab as typeof TAB_ORDER[number]);
-    const nextIdx = Math.min(TAB_ORDER.length - 1, idx + 1);
-    setActiveTab(TAB_ORDER[nextIdx]);
-  };
-
-  const centerActiveTab = (behavior: ScrollBehavior = "smooth") => {
-    const el = tabsListRef.current;
-    if (!el) return;
-    const active = el.querySelector('[data-state="active"]') as HTMLElement | null;
-    if (!active) return;
-    const target = active.offsetLeft - (el.clientWidth - active.offsetWidth) / 2;
-    const max = el.scrollWidth - el.clientWidth;
-    const clamped = Math.max(0, Math.min(target, max));
-    el.scrollTo({ left: clamped, behavior });
-  };
+  const TAB_ORDER = SCREENS.map(([key]) => key as string);
   const [staff, setStaff] = useState<UiStaff[]>([]);
   const [roomsList, setRoomsList] = useState<UiRoom[]>([]);
   const [therapies, setTherapies] = useState<UiTherapy[]>([]);
@@ -186,7 +163,6 @@ const AdminDashboard = () => {
     return `${y}-${m}-${d}`;
   };
 
-  const tabsListRef = useRef<HTMLDivElement | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768);
@@ -462,27 +438,6 @@ const AdminDashboard = () => {
 
   const dayKeyMemo = useMemo(() => ymdInTZ(currentDate), [currentDate]);
 
-  useEffect(() => {
-    const el = tabsListRef.current;
-    if (!el) return;
-    el.scrollLeft = 0;
-    requestAnimationFrame(() => {
-      centerActiveTab("auto");
-      requestAnimationFrame(() => centerActiveTab("auto"));
-      setTimeout(() => centerActiveTab("auto"), 60);
-    });
-  }, []);
-
-  useEffect(() => {
-    centerActiveTab("smooth");
-  }, [activeTab]);
-
-  useEffect(() => {
-    const onResize = () => centerActiveTab("auto");
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
   const location = useLocation();
   const navigate = useNavigate();
   const centreName = useCentreName();
@@ -506,8 +461,15 @@ const AdminDashboard = () => {
     })();
   }, [activeTab]);
 
+  const go = (v: string) => {
+    setActiveTab(v);
+    const uname = location.pathname.split('/').filter(Boolean)[0] || (localStorage.getItem('authUser') || 'admin');
+    navigate(`/${uname}/${v}`);
+    window.scrollTo(0, 0);
+  };
+
   // Each screen keeps its own state and dialogs in its own file (#147).
-  const scheduleScreen = useScheduleScreen({ currentDate, setCurrentDate, ADMIN_TZ, viewType, ymdInTZ, appointmentsByDate, timeSlots, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, setShowAutoAssign, setShowVerify, dayCheck, exceptionDayKey });
+  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, timeSlots, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, setShowVerify });
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, isMobile, requestDelete });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, isMobile, requestDelete });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, isMobile, requestDelete });
@@ -538,34 +500,7 @@ const AdminDashboard = () => {
 
 
   return (
-    <div className="min-h-screen bg-muted/30 overflow-x-clip">
-      {/* Header */}
-      <header className="bg-card border-b border-border sticky top-0 z-10 shadow-sm">
-        <div className="container mx-auto px-3 py-2 md:px-3 md:py-3">
-          <div className="grid grid-cols-3 items-center">
-            <h1 className="text-sm md:text-lg font-bold justify-self-start">{centreName}</h1>
-            <p className="text-xs md:text-sm font-medium tracking-tight text-center whitespace-nowrap">
-            {new Date().toLocaleString('en-IN', { timeZone: ADMIN_TZ, day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-            </p>
-            <div className="justify-self-end">
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Sign out"
-                className="h-7 w-7"
-                onClick={() => {
-                  localStorage.removeItem("authRole");
-                  toast.success("Signed out");
-                  navigate("/login");
-                }}
-              >
-                <StopCircle className="w-3 h-3" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <div className="min-h-screen bg-background overflow-x-clip pb-28">
       {/* Main Content */}
       <div className="container mx-auto px-3 md:px-4 py-3 md:py-6">
         {undone ? (
@@ -608,76 +543,10 @@ const AdminDashboard = () => {
           </div>
         ) : null}
 
-        <Tabs value={activeTab} onValueChange={(v) => {
-          setActiveTab(v);
-          const uname = location.pathname.split('/').filter(Boolean)[0] || (typeof window !== 'undefined' ? (localStorage.getItem('authUser') || 'admin') : 'admin');
-          const base = `/${uname}`;
-          const path = v === 'schedule' ? `${base}/schedule` : `${base}/${v}`;
-          navigate(path);
-        }} className="space-y-6">
-          <div className="relative h-11">
-            <div className="pointer-events-none absolute inset-0 z-50 md:hidden">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="pointer-events-auto h-3 w-3 absolute left-1 top-1/2 -translate-y-1/2"
-                onClick={prevTab}
-              >
-                <ChevronLeft className="w-2.5 h-2.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="pointer-events-auto h-3 w-3 absolute right-1 top-1/2 -translate-y-1/2"
-                onClick={nextTab}
-              >
-                <ChevronRight className="w-2.5 h-2.5" />
-              </Button>
-            </div>
-            <TabsList ref={tabsListRef} className="flex justify-start md:justify-between w-full h-auto p-1 md:p-1 gap-1 overflow-x-auto md:overflow-x-hidden whitespace-nowrap scroll-smooth">
-              <TabsTrigger value="schedule" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <CalendarIcon className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
-                <span data-testid="tab-schedule">Schedule</span>
-              </TabsTrigger>
-              <TabsTrigger value="staff" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Users className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
-                <span data-testid="tab-staff">Staff</span>
-              </TabsTrigger>
-              <TabsTrigger value="rooms" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Home className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
-                <span data-testid="tab-rooms">Rooms</span>
-              </TabsTrigger>
-              <TabsTrigger value="therapies" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Sparkles className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
-                <span data-testid="tab-therapies">Therapies</span>
-              </TabsTrigger>
-              <TabsTrigger value="diet" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Utensils className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
-                <span data-testid="tab-diet">Diet</span>
-              </TabsTrigger>
-              <TabsTrigger value="timeoff" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <CalendarDays className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
-                <span data-testid="tab-timeoff">Time off</span>
-              </TabsTrigger>
-              <TabsTrigger value="events" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Activity className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
-                <span data-testid="tab-events">Events</span>
-              </TabsTrigger>
-              <TabsTrigger value="patients" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <User className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
-                <span data-testid="tab-patients">Patients</span>
-              </TabsTrigger>
-              <TabsTrigger value="ailments" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <Stethoscope className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
-                <span data-testid="tab-ailments" title="Coming soon">Ailments</span>
-              </TabsTrigger>
-              <TabsTrigger value="settings" className="h-9 md:h-10 text-sm flex items-center justify-center gap-1 px-1 py-2 md:px-2 shrink-0 md:shrink md:flex-1 md:basis-0 min-w-[90px] md:min-w-0 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:border data-[state=active]:border-primary rounded-md">
-                <SettingsIcon className="w-4 h-4 md:hidden xl:block xl:w-5 xl:h-5 shrink-0" />
-                <span data-testid="tab-settings">Settings</span>
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
+        {activeTab !== 'schedule' ? (
+          <button type="button" className="mb-2 h-11 text-base font-semibold text-primary" onClick={() => go('schedule')}>‹ The day</button>
+        ) : null}
+        <Tabs value={activeTab} onValueChange={go} className="space-y-6">
           <TabsContent value="schedule" className="space-y-6">
             {scheduleScreen.tab}
           </TabsContent>
@@ -709,11 +578,6 @@ const AdminDashboard = () => {
             {eventsScreen.tab}
           </TabsContent>
 
-          <TabsContent value="ailments" data-testid="tabpanel-ailments">
-            {/* The form kept ailments only in the browser, so they were lost on refresh. See #34. */}
-            <Card><CardContent className="p-6 text-sm text-muted-foreground"><p className="font-medium text-foreground">Ailments (coming soon)</p><p>A list of conditions and the therapies that suit each. Nothing to set up here yet.</p></CardContent></Card>
-          </TabsContent>
-
           <TabsContent value="settings" data-testid="tabpanel-settings">
             <Settings />
           </TabsContent>
@@ -729,11 +593,37 @@ const AdminDashboard = () => {
         </Tabs>
       </div>
 
+      <BottomBar
+        centreName={centreName}
+        activeTab={activeTab}
+        go={go}
+        signOut={() => {
+          localStorage.removeItem("authRole");
+          toast.success("Signed out");
+          navigate("/login");
+        }}
+        day={dayKeyMemo}
+        today={ymdInTZ(new Date())}
+        now={new Date().toLocaleTimeString("en-GB", { timeZone: ADMIN_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}
+        setDay={(iso) => { const [y, m, d] = iso.split('-').map(Number); setCurrentDate(new Date(y, m - 1, d)); }}
+        printing={!!scheduleScreen.pdfLoading}
+        print={async () => {
+          if (!(await scheduleScreen.printSheet('patient'))) return;
+          // Still prints with problems open: the admin may be printing on purpose.
+          // It just says so (#134). The rota is a second tap, a fresh gesture, so
+          // the phone does not block its tab as a popup.
+          const open = dayCheck.problems.filter((p) => p.problem_class === 'blocking').length;
+          toast(`Resident sheet printed${open ? ` · ${open} still to fix` : ''}`, {
+            action: { label: 'Therapist sheet', onClick: () => scheduleScreen.printSheet('therapist') },
+          });
+        }}
+        book={() => setShowAutoAssign(true)}
+      />
+
       {/* Dialogs */}
       <AutoAssignDialog open={showAutoAssign} onOpenChange={setShowAutoAssign} defaultDateISO={ymdInTZ(currentDate)} onAssigned={async (dates) => {
         const d = dates[0];
         if (d) {
-          setViewType("day");
           setCurrentDate(new Date(d));
           for (const iso of dates) {
             await refreshAppointmentsForDate(iso, true);
@@ -782,7 +672,7 @@ const AdminDashboard = () => {
           });
         }}
         onAssignFor={() => { setShowVerify(false); setShowAutoAssign(true); }}
-        onJumpToDate={(iso) => { setViewType('day'); setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); }}
+        onJumpToDate={(iso) => { setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); }}
         onRefresh={async (datesISO) => {
           for (const iso of datesISO) {
             await refreshAppointmentsForDate(iso, true);

@@ -67,11 +67,12 @@ async function signIn(page: Page) {
 
 const activePanel = (page: Page) => page.locator('[role=tabpanel][data-state=active]');
 
+/** Screens are reached from the bottom bar's menu (#66). A tap while the last screen is still loading can be lost, so retry. */
 async function openTab(page: Page, name: string) {
-  const tab = page.getByRole('tab', { name, exact: true });
   await expect(async () => {
-    await tab.click();
-    await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 1000 });
+    if (await page.getByRole('dialog').count() === 0) await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: new RegExp(`^${name}\\b`) }).click({ timeout: 1000 });
+    await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 1000 });
   }).toPass({ timeout: 15000 });
 }
 
@@ -97,7 +98,7 @@ test('a therapist off: Verify names it, its plan clears the day, and Undo puts t
   await signIn(page);
 
   // Mark her off, the way the admin does.
-  await openTab(page, 'Time off');
+  await openTab(page, 'Leave');
   await page.getByRole('button', { name: 'Add Time Off' }).click();
   const form = page.getByRole('dialog');
   const pick = async (n: number, option: string) => {
@@ -112,11 +113,10 @@ test('a therapist off: Verify names it, its plan clears the day, and Undo puts t
   await form.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('Time off saved')).toBeVisible({ timeout: 15000 });
 
-  await openTab(page, 'Schedule');
-  // Tapping the heading opens the calendar, which carries the date box.
-  await activePanel(page).getByText('Schedule', { exact: true }).click();
-  await activePanel(page).locator('input[type=date]').first().fill(DAY);
-  await expect(activePanel(page)).toContainText('13 Mar', { timeout: 15000 });
+  // The day button on the bottom bar opens the date box, and picking a day shows it.
+  await page.getByRole('button', { name: /^Change day/ }).click();
+  await page.getByRole('dialog').locator('input[type=date]').fill(DAY);
+  await expect(page.getByRole('navigation', { name: 'Main' })).toContainText('13 Mar', { timeout: 15000 });
   // Verify names who is off and whose treatment that leaves stranded.
   await activePanel(page).getByRole('button', { name: 'Verify', exact: true }).click();
   const verify = page.getByRole('dialog');

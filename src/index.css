@@ -9,51 +9,44 @@
 
 @layer base {
   :root {
-    /* Base colors - warm, natural palette */
-    --background: 30 20% 98%;
-    --foreground: 0 0% 13%;
+    /* The phone design's tokens (#143, docs/design/phone.html). Colour means
+       state only: orange is now, red must be fixed, amber was changed by the app. */
+    --background: 96 24% 96%;
+    --foreground: 201 22% 15%;
 
-    /* Card surfaces */
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 13%;
+    --card-foreground: 201 22% 15%;
 
-    /* Popover surfaces */
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 13%;
+    --popover-foreground: 201 22% 15%;
 
-    /* Primary - Ayurvedic deep green */
-    --primary: 142 52% 31%;
+    --primary: 143 27% 33%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 142 52% 25%;
+    --primary-hover: 143 27% 27%;
 
-    /* Secondary - soft earth tone */
-    --secondary: 30 40% 92%;
-    --secondary-foreground: 0 0% 13%;
+    --secondary: 105 24% 90%;
+    --secondary-foreground: 201 22% 15%;
 
-    /* Muted - gentle background accents with AAA contrast */
-    --muted: 30 30% 94%;
-    --muted-foreground: 0 0% 25%;
+    --muted: 105 24% 90%;
+    --muted-foreground: 197 10% 40%;
 
-    /* Accent - warm terracotta */
-    --accent: 24 70% 58%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 105 24% 90%;
+    --accent-foreground: 201 22% 15%;
 
-    /* Destructive - clear warning red */
-    --destructive: 0 72% 51%;
+    --destructive: 16 63% 41%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Borders and inputs */
-    --border: 30 20% 85%;
-    --input: 30 20% 85%;
-    --ring: 142 52% 31%;
+    --border: 100 19% 91%;
+    --input: 135 8% 52%;
+    --ring: 143 27% 33%;
 
-    /* Success state */
-    --success: 142 52% 31%;
+    --success: 143 27% 33%;
     --success-foreground: 0 0% 100%;
 
-    /* Warning state */
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 13%;
+    --warning: 39 62% 45%;
+    --warning-foreground: 0 0% 100%;
+
+    --now: 17 88% 40%;
 
     /* Border radius for accessibility */
     --radius: 0.75rem;

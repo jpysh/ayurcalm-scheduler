@@ -28,19 +28,19 @@ async function passSetupIfShown(page: Page) {
 // Tabs keep the last panel mounted while switching, so ask for the open one.
 const activePanel = (page: Page) => page.locator('[role=tabpanel][data-state=active]');
 
-/** Puts the schedule on a day: tapping the heading opens the calendar, which carries the date box. */
+/** Puts a day on screen from the bottom bar's day button. */
 async function showDay(page: Page, day: string) {
-  await openTab(page, 'Schedule');
-  await activePanel(page).getByText('Schedule', { exact: true }).click();
-  await activePanel(page).locator('input[type=date]').first().fill(day);
+  await page.getByRole('button', { name: /^Change day/ }).click();
+  await page.getByRole('dialog').locator('input[type=date]').fill(day);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
-/** A click while the previous tab is still loading can be lost, so retry until selected. */
+/** Screens are reached from the bottom bar's menu (#66). A tap while the last screen is still loading can be lost, so retry. */
 async function openTab(page: Page, name: string) {
-  const tab = page.getByRole('tab', { name, exact: true });
   await expect(async () => {
-    await tab.click();
-    await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 1000 });
+    if (await page.getByRole('dialog').count() === 0) await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: new RegExp(`^${name}\\b`) }).click({ timeout: 1000 });
+    await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 1000 });
   }).toPass({ timeout: 15000 });
 }
 
@@ -59,22 +59,21 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
   await signIn(page);
   await passSetupIfShown(page);
   for (const [tab, text] of [
-    ['Staff', 'Staff Management'],
+    ['Team', 'Staff Management'],
     ['Rooms', 'Room Management'],
     ['Therapies', 'Therapy Management'],
-    ['Diet', 'Diet Management'],
-    ['Time off', 'Time Off'],
+    ['Diet plans', 'Diet Management'],
+    ['Leave', 'Time Off'],
     ['Events', 'Events'],
-    ['Patients', 'Patient Management'],
-    ['Ailments', 'coming soon'],
+    ['Residents', 'Patient Management'],
     ['Settings', 'Centre details'],
-    ['Schedule', 'Schedule'],
+    ['The day', 'Verify'],
   ]) {
     await openTab(page, tab);
     await expect(activePanel(page)).toContainText(text, { timeout: 15000 });
   }
   // A seeded install has patients; an empty table means the API is not answering.
-  await openTab(page, 'Patients');
+  await openTab(page, 'Residents');
   await expect(activePanel(page).getByRole('row').nth(5)).toBeVisible();
 });
 
@@ -141,8 +140,8 @@ test('an edit to a room is still there after a reload', async ({ page }) => {
 test('the booking dialog offers the slots the API found, and books one', async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  await openTab(page, 'Schedule');
-  await activePanel(page).getByRole('button', { name: 'Assign' }).click();
+  await openTab(page, 'The day');
+  await page.getByRole('button', { name: 'Book a treatment' }).click();
 
   // The centre's clock and the browser's clock are rarely the same one. The
   // dialog used to re-filter the server's slots against the browser's, so a
