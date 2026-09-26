@@ -450,6 +450,7 @@ app.delete('/patients/:id', async (req: Request, res: Response) => {
     const prev = await tx.patient.findUnique({ where: { id } });
     await tx.appointment.deleteMany({ where: { patient_id: id } });
     await tx.dietPlan.deleteMany({ where: { patient_id: id } });
+    await tx.dietPlanSegment.deleteMany({ where: { patient_id: id } });
     await tx.patientStay.deleteMany({ where: { patient_id: id } });
     await tx.timeOff.deleteMany({ where: { entity_type: 'patient', entity_id: id } });
     await tx.patient.delete({ where: { id } });

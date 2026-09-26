@@ -79,6 +79,11 @@ async function main() {
     await call('POST', '/replan/undo', { batch_id: cancelled.batch_id });
     assert.equal((await prisma.appointment.findUnique({ where: { id: after.id } }))?.status, 'pending', 'Undo should put the treatment back');
 
+    // A resident with a plan can still be deleted: the plan goes with them.
+    await prisma.appointment.deleteMany({ where: { patient_id: created.id } });
+    const gone = await fetch(`${API_BASE}/patients/${created.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(gone.status, 204, `deleting a resident with a diet plan failed: ${gone.status}`);
+
     console.log('Resident stay: added in the app, on the sheet with their plan; leaving early cancels what is left, and Undo restores it.');
   } finally {
     await tidy(prisma).catch(() => {});
