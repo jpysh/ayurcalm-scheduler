@@ -308,6 +308,13 @@ open a desktop after setup.
 **The printed day sheet is the product.** A screen change either improves it or
 leaves it alone.
 
+**The app first, the AI second.** Every job the admin has — intake, stays,
+diet, leave, setup, fixing the day — must be doable in the app on a phone with
+no AI at all; many centres will not have one. MCP (#100) is an optional second
+door onto the same server rules, never the only way to do something. Don't
+skip or thin a screen because "the AI will do it", and build a job's screen
+before its MCP tool.
+
 **Out of scope, settled:** patient self-booking, payments, marketplace,
 marketing and loyalty, multi-location, payroll, GST billing. The reasoning is in
 #53 §2 and §5 — read it before proposing any of them again.
