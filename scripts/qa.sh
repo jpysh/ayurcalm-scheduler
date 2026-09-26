@@ -50,6 +50,7 @@ run dayCheckParity     "Verify flags exactly the treatments the app would refuse
 run coTherapist        "A treatment worked by two books both therapists: neither can be booked elsewhere in that hour, and it is never booked short-handed"
 run dayPlan            "Verify's fix for a day is one plan with no clashes, and accepting then undoing it restores the day"
 run daySheet           "The day sheet lists every resident, treatment time and therapist, in its groups, with no empty boxes"
+run unstaffedSheets   "A treatment booked with a therapist who is off shows, marked, on both the patient sheet and the therapist rota"
 run dietOverride       "Editing a diet plan changes it for everyone except what one patient was told specifically"
 run onboarding         "After the setup wizard, the centre has its hours, timezone, therapies, rooms and therapists, and the day sheet prints"
 run mcp                "Claude reads the centre only with the current key: the day, residents, who is free and the day sheet, and reading changes nothing"

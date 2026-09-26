@@ -32,6 +32,7 @@ type ScheduleTabProps = {
   handleGenerateDailyPdf: (kind?: 'patient' | 'therapist') => void;
   setShowAutoAssign: (b: boolean) => void;
   setShowVerify: (b: boolean) => void;
+  verifyOpen: number;
   calendarTriggerRef: RefObject<HTMLButtonElement | null>;
   calendarRef: RefObject<HTMLDivElement | null>;
 };
@@ -83,10 +84,13 @@ const ScheduleTab = ({
   handleGenerateDailyPdf,
   setShowAutoAssign,
   setShowVerify,
+  verifyOpen,
   calendarTriggerRef,
   calendarRef,
   timezone,
 }: ScheduleTabProps) => {
+  // Still prints: the admin may be printing on purpose. It just says so (#134).
+  const openNote = verifyOpen ? ` · ${verifyOpen} open` : "";
   const dateLabel = (() => {
     try {
       // The centre's timezone, so the heading names the day whose appointments
@@ -124,8 +128,8 @@ const ScheduleTab = ({
           <div className="flex flex-wrap items-center justify-center gap-2 md:gap-2">
             <Button variant="secondary" size="sm" className="h-8 px-3" onClick={() => setShowAutoAssign(true)}>Assign</Button>
             <Button variant="secondary" size="sm" className="h-8 px-3" onClick={() => setShowVerify(true)}>Verify</Button>
-            <Button size="sm" className="h-8 px-3" disabled={!!pdfLoading} onClick={() => handleGenerateDailyPdf('patient')}>{pdfLoading === 'patient' ? "Generating…" : "Patient PDF"}</Button>
-            <Button size="sm" variant="outline" className="h-8 px-3" disabled={!!pdfLoading} onClick={() => handleGenerateDailyPdf('therapist')}>{pdfLoading === 'therapist' ? "Generating…" : "Therapist PDF"}</Button>
+            <Button size="sm" className="h-8 px-3" disabled={!!pdfLoading} onClick={() => handleGenerateDailyPdf('patient')}>{pdfLoading === 'patient' ? "Generating…" : `Patient PDF${openNote}`}</Button>
+            <Button size="sm" variant="outline" className="h-8 px-3" disabled={!!pdfLoading} onClick={() => handleGenerateDailyPdf('therapist')}>{pdfLoading === 'therapist' ? "Generating…" : `Therapist PDF${openNote}`}</Button>
           </div>
         </div>
       </CardHeader>
