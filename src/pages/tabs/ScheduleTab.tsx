@@ -5,6 +5,9 @@ import { Calendar } from "@/components/ui/calendar";
 import DayGrid from "@/components/DayGrid";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { RefObject } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { API_BASE } from "@/lib/apiBase";
 
 type ScheduleTabProps = {
   currentDate: Date;
@@ -179,3 +182,123 @@ const ScheduleTab = ({
 };
 
 export default ScheduleTab;
+
+/** The Schedule screen: the day it is on, the calendar and the day sheets, held by the dashboard so they last as long as it does. */
+export function useScheduleScreen({ currentDate, setCurrentDate, ...rest }: Record<string, any> & { currentDate: Date; setCurrentDate: (d: Date) => void }) {
+  const { ADMIN_TZ, viewType, ymdInTZ, appointmentsByDate, timeSlots, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, setShowAutoAssign, setShowVerify, dayCheck, exceptionDayKey } = rest;
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState<'patient' | 'therapist' | null>(null);
+  // Two sheets off the same day: the patient one for the notice board, the
+  // therapist rota for the treatment team.
+  const handleGenerateDailyPdf = async (kind: 'patient' | 'therapist' = 'patient') => {
+    setPdfLoading(kind);
+    // Opened before the await, because a phone browser blocks a window opened
+    // after one: by then the tap is over and it is a popup. The tab sits blank
+    // while the sheet is built, then gets the same blob the download uses.
+    const tab = window.open('', '_blank');
+    try {
+      const y = currentDate.getFullYear();
+      const m = String(currentDate.getMonth() + 1).padStart(2, '0');
+      const d = String(currentDate.getDate()).padStart(2, '0');
+      const iso = `${y}-${m}-${d}`;
+      const res = await fetch(`${API_BASE}/daily-schedule-pdf?date=${iso}${kind === 'therapist' ? '&view=therapist' : ''}`);
+      if (!res.ok) throw new Error('failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      if (tab) tab.location.href = url;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ayurcalm-${kind === 'therapist' ? 'therapist-rota' : 'daily-schedule'}-${iso}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Not revoked: the new tab is still reading this URL. The browser frees it
+      // when the page goes.
+    } catch {
+      tab?.close();
+      toast.error('Failed to generate PDF');
+    } finally {
+      setPdfLoading(null);
+    }
+  };
+
+  const calRange = useMemo(() => {
+    const t = new Date();
+    const min = new Date(t.getFullYear() - 3, t.getMonth(), t.getDate());
+    const max = new Date(t.getFullYear() + 3, t.getMonth(), t.getDate());
+    return { min, max };
+  }, []);
+
+  const calendarRef = useRef<HTMLDivElement | null>(null);
+  const calendarTriggerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!showCalendar) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (calendarRef.current && calendarRef.current.contains(t)) return;
+      if (calendarTriggerRef.current && calendarTriggerRef.current.contains(t)) return;
+      setShowCalendar(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [showCalendar]);
+
+  const goToPreviousWeek = () => {
+    const newDate = new Date(currentDate);
+    newDate.setDate(currentDate.getDate() - 7);
+    setCurrentDate(newDate);
+  };
+
+  const goToNextWeek = () => {
+    const newDate = new Date(currentDate);
+    newDate.setDate(currentDate.getDate() + 7);
+    setCurrentDate(newDate);
+  };
+
+  const goToPreviousDay = () => {
+    const newDate = new Date(currentDate);
+    newDate.setDate(currentDate.getDate() - 1);
+    setCurrentDate(newDate);
+  };
+
+  const goToNextDay = () => {
+    const newDate = new Date(currentDate);
+    newDate.setDate(currentDate.getDate() + 1);
+    setCurrentDate(newDate);
+  };
+
+  const tab = (
+            <ScheduleTab
+              currentDate={currentDate}
+              timezone={ADMIN_TZ}
+              viewType={viewType}
+              setCurrentDate={setCurrentDate}
+              goToPreviousWeek={goToPreviousWeek}
+              goToNextWeek={goToNextWeek}
+              goToPreviousDay={goToPreviousDay}
+              goToNextDay={goToNextDay}
+              showCalendar={showCalendar}
+              setShowCalendar={setShowCalendar}
+              calRange={calRange}
+              ymdInTZ={ymdInTZ}
+              appointmentsByDate={appointmentsByDate}
+              timeSlots={timeSlots}
+              dayKeyMemo={dayKeyMemo}
+              patients={patients}
+              roomsList={roomsList}
+              staff={staff}
+              therapyNameById={therapyNameById}
+              setSelectedAppointment={setSelectedAppointment}
+              pdfLoading={pdfLoading}
+              handleGenerateDailyPdf={handleGenerateDailyPdf}
+              setShowAutoAssign={setShowAutoAssign}
+              setShowVerify={setShowVerify}
+              // Verify's open items apply to today only, the day /day-check reads.
+              verifyOpen={dayKeyMemo === exceptionDayKey ? dayCheck.problems.filter((p) => p.problem_class === 'blocking').length : 0}
+              calendarTriggerRef={calendarTriggerRef}
+              calendarRef={calendarRef}
+            />
+  );
+
+  return { tab };
+}

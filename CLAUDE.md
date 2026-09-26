@@ -40,7 +40,9 @@ sheet".
 src/                    React 18 + Vite + TypeScript + Tailwind + shadcn/ui
   lib/apiBase.ts        THE API base URL. One definition. Do not add another.
   main.tsx              Global fetch wrapper: attaches the JWT, handles 401
-  pages/AdminDashboard  The main screen; tabs live in pages/tabs/
+  pages/AdminDashboard  The shell: shared data, the day's warnings, Verify, tabs
+  pages/tabs/           One file per screen: its tab, dialogs and useXScreen()
+                        state hook. Shared types and helpers: tabs/shared.ts
   pages/SetupWizard     First-run flow, shown until settings.setup_complete
 server/                 Express + Prisma + Zod, serves ../dist in production
   src/index.ts          Middleware order matters — see below
@@ -214,6 +216,10 @@ than the issue implies, stop and say so before expanding scope.
 **Finish with a "check it yourself" list** — at most five steps, each one
 something the maintainer clicks or looks at, never code to read. A session is not
 done until someone who cannot read the diff can confirm it worked.
+
+**Count the taps.** `tests/e2e/tapCount.spec.ts` prints each daily job's taps
+beside the design's target. A session that builds a job states before and after,
+and adds the job to `BLOCKING`.
 
 **Design for the admin's phone.** One operator, one centre, and they may never
 open a desktop after setup.

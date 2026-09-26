@@ -9,6 +9,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useEffect, useRef, useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { API_BASE } from "@/lib/apiBase";
+import { type UiRoom } from "./shared";
 
 const RoomsTab = ({
   roomsList,
@@ -209,3 +214,139 @@ const RoomsTab = ({
 };
 
 export default RoomsTab;
+
+/** The Rooms screen: its state, the Add dialog and the tab, held by the dashboard so they last as long as it does. */
+export function useRoomsScreen({ roomsList, setRoomsList, amenityOptions, isMobile, requestDelete }: {
+  roomsList: UiRoom[]; setRoomsList: React.Dispatch<React.SetStateAction<UiRoom[]>>; amenityOptions: string[]; isMobile: boolean;
+  requestDelete: (kind: "room", id: string, name?: string) => void;
+}) {
+  const [editingRoomId, setEditingRoomId] = useState<string | number | null>(null);
+  const [originalRoomEntry, setOriginalRoomEntry] = useState<UiRoom | null>(null);
+  const [roomAmenityDrafts, setRoomAmenityDrafts] = useState<Record<string | number, string>>({});
+  const [searchRooms, setSearchRooms] = useState("");
+  const [showAddRoom, setShowAddRoom] = useState(false);
+  const [visibleRoomsRows, setVisibleRoomsRows] = useState(isMobile ? 20 : 40);
+  const roomsTotalRef = useRef(0);
+  useEffect(() => { setVisibleRoomsRows(isMobile ? 20 : 40); }, [searchRooms, roomsList, isMobile]);
+  const [newRoom, setNewRoom] = useState({
+    name: "",
+    amenitiesText: "",
+    schedule: "",
+    status: "Active",
+  });
+
+  const toggleRoomAmenity = (roomId: string | number, amenity: string) => {
+    setRoomsList((prev) => prev.map((r) => {
+      if (r.id !== roomId) return r;
+      const has = r.amenities.includes(amenity);
+      const next = has ? r.amenities.filter((x) => x !== amenity) : [...r.amenities, amenity];
+      return { ...r, amenities: [...new Set(next)].sort((a, b) => a.localeCompare(b)) };
+    }));
+  };
+
+  const addAmenityToRoom = (roomId: string | number, raw: string) => {
+    const value = raw.trim();
+    if (!value) return;
+    const existing = amenityOptions.find((o) => o.toLowerCase() === value.toLowerCase()) || value;
+    const current = roomsList.find((r) => r.id === roomId)?.amenities || [];
+    if (current.includes(existing)) { setRoomAmenityDrafts((prev) => ({ ...prev, [roomId]: "" })); return; }
+    setRoomsList((prev) => prev.map((r) => r.id === roomId ? { ...r, amenities: [...new Set([...r.amenities, existing])].sort((a, b) => a.localeCompare(b)) } : r));
+    setRoomAmenityDrafts((prev) => ({ ...prev, [roomId]: "" }));
+  };
+
+  const compareRoomNames = (aName: string, bName: string) => {
+    const ax = String(aName).trim();
+    const bx = String(bName).trim();
+    const am = ax.match(/^rm\s*(\d+)$/i);
+    const bm = bx.match(/^rm\s*(\d+)$/i);
+    if (am && bm) {
+      const an = Number(am[1]);
+      const bn = Number(bm[1]);
+      if (an < bn) return -1;
+      if (an > bn) return 1;
+      return ax.toLowerCase().localeCompare(bx.toLowerCase());
+    }
+    return ax.toLowerCase().localeCompare(bx.toLowerCase());
+  };
+
+  const tab = (
+            <RoomsTab
+              roomsList={roomsList}
+              searchRooms={searchRooms}
+              setSearchRooms={setSearchRooms}
+              visibleRoomsRows={visibleRoomsRows}
+              setVisibleRoomsRows={setVisibleRoomsRows}
+              roomsTotalRef={roomsTotalRef}
+              editingRoomId={editingRoomId}
+              setEditingRoomId={setEditingRoomId}
+              originalRoomEntry={originalRoomEntry}
+              setOriginalRoomEntry={setOriginalRoomEntry}
+              isMobile={isMobile}
+              compareRoomNames={compareRoomNames}
+              amenityOptions={amenityOptions}
+              roomAmenityDrafts={roomAmenityDrafts}
+              setRoomAmenityDrafts={setRoomAmenityDrafts}
+              toggleRoomAmenity={toggleRoomAmenity}
+              addAmenityToRoom={addAmenityToRoom}
+              requestDelete={requestDelete}
+              API_BASE={API_BASE}
+              setRoomsList={setRoomsList}
+              setShowAddRoom={setShowAddRoom}
+            />
+  );
+
+  const dialogs = (
+      <Dialog open={showAddRoom} onOpenChange={setShowAddRoom}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Add Room</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-3">
+            <Label>Room Name</Label>
+            <Input value={newRoom.name} onChange={(e) => setNewRoom({ ...newRoom, name: e.target.value })} />
+            <Label>Amenities (comma-separated)</Label>
+            <Input value={newRoom.amenitiesText} onChange={(e) => setNewRoom({ ...newRoom, amenitiesText: e.target.value })} />
+            <Label>Schedule</Label>
+            <Input value={newRoom.schedule} onChange={(e) => setNewRoom({ ...newRoom, schedule: e.target.value })} />
+            <Label>Status</Label>
+            <Select value={newRoom.status} onValueChange={(v) => setNewRoom({ ...newRoom, status: v })}>
+              <SelectTrigger className="h-12">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Active">Active</SelectItem>
+                <SelectItem value="Maintenance">Maintenance</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowAddRoom(false)}>Cancel</Button>
+              <Button onClick={async () => {
+                const amenities = newRoom.amenitiesText.split(',').map((s) => s.trim()).filter(Boolean);
+                const payload: { name: string; amenities: string[]; weekly_schedule: Record<string, unknown> } = { name: newRoom.name, amenities, weekly_schedule: {} };
+                try {
+                  const res = await fetch(`${API_BASE}/rooms`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                  const created = await res.json();
+                  setRoomsList((prev) => [
+                    ...prev,
+                    {
+                      id: created.id,
+                      name: created.name,
+                      amenities: created.amenities || [],
+                      schedule: newRoom.schedule,
+                      status: created.is_active ? 'Active' : 'Maintenance',
+                    },
+                  ]);
+                  setShowAddRoom(false);
+                  setNewRoom({ name: '', amenitiesText: '', schedule: '', status: 'Active' });
+                } catch {
+                  toast.error('Failed to save room');
+                }
+              }}>Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+  );
+
+  return { tab, dialogs, setVisibleRows: setVisibleRoomsRows, totalRef: roomsTotalRef };
+}

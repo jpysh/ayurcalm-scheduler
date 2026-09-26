@@ -11,9 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
-import { Fragment, useState } from "react";
+import { Fragment, useState, useEffect, useRef } from "react";
 import DayDietDialog from "./DayDietDialog";
 import { toOverrides, saveTemplate, loadTemplates } from "@/lib/dietPlan";
+import { API_BASE } from "@/lib/apiBase";
+import { API_TOKEN, fetchJsonWithTimeout, type Patient as ResidentRow } from "./shared";
 
 type Patient = { id: string; name: string; phone?: string; gender?: string; dietPlan?: string; actualStart?: string; actualEnd?: string };
 type DietPlanTemplate = {
@@ -964,3 +966,467 @@ const DietTab = ({
 };
 
 export default DietTab;
+
+type ApiSegment = { patient_id: string; start_date: string; end_date: string; template_id?: string | null; template_label?: string | null; therapy_ids?: (string | number)[] };
+
+/** The Diet screen: plans, who is on which, the Plans dialog and the tab, held by the dashboard so they last as long as it does. */
+export function useDietScreen({ patients, setPatients, therapies, therapyNameById, ymdInTZ, active, setNewPatientDietPlan }: {
+  patients: ResidentRow[]; setPatients: React.Dispatch<React.SetStateAction<ResidentRow[]>>; therapies: UiTherapy[];
+  therapyNameById: Record<string, string>; ymdInTZ: (d: Date) => string; active: boolean;
+  /** The Add Patient form shows the plan picked for the resident being added. */
+  setNewPatientDietPlan: (label: string) => void;
+}) {
+  type DietPlanTemplate = {
+    id: string;
+    name: string;
+    description?: string;
+    breakfast: string;
+    lunch: string;
+    dinner: string;
+    snacks: string;
+    restBreakfast?: string;
+    restLunch?: string;
+    restDinner?: string;
+    restSnacks?: string;
+    /** How many patients are on this plan; shown before an edit reaches them. */
+    patients?: number;
+    preTherapyNotes?: string;
+    postTherapyNotes?: string;
+    medication?: string;
+    therapyIds: string[];
+    applicability: 'daily' | 'therapyDays';
+  };
+  // Plans are the centre's own content and live in the database; a hardcoded
+  // list could not survive a refresh, let alone a second computer.
+  const [dietTemplates, setDietTemplates] = useState<DietPlanTemplate[]>([]);
+  useEffect(() => {
+    loadTemplates(API_BASE)
+      .then(setDietTemplates)
+      .catch(() => { /* the tab shows an empty list rather than mock plans */ });
+    // The diet tab is about people who are here. Listing all 120 patients ever
+    // registered buried the dozen who are actually staying.
+    fetch(`${API_BASE}/patients?resident_on=${new Date().toISOString().slice(0, 10)}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: { id: string }[]) => setResidentIds(new Set(rows.map((p) => p.id))))
+      .catch(() => setResidentIds(null));
+    // Assignments were only ever held in memory, so the Diet tab forgot every
+    // plan on reload and showed a dash where a patient had one.
+    fetch(`${API_BASE}/dietplans/segments`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: ApiSegment[]) => {
+        const byPatient: Record<string, { start: string; end: string; templateId: string; therapyIds: string[]; label?: string }[]> = {};
+        for (const row of rows) {
+          (byPatient[row.patient_id] ??= []).push({
+            start: (row.start_date || '').slice(0, 10),
+            end: (row.end_date || '').slice(0, 10),
+            templateId: row.template_id || '',
+            therapyIds: (row.therapy_ids || []).map(String),
+            label: row.template_label || undefined,
+          });
+        }
+        setDietSchedules(byPatient);
+      })
+      .catch(() => { /* the tab still works, it just starts empty */ });
+  }, []);
+  const [selectedDietTemplateId, setSelectedDietTemplateId] = useState<string>('');
+  const [dietDraft, setDietDraft] = useState<DietPlanTemplate>(() => ({
+    ...({} as DietPlanTemplate),
+    id: 'new',
+    name: 'Custom Plan',
+    description: '',
+    breakfast: '',
+    lunch: '',
+    dinner: '',
+    snacks: '',
+    preTherapyNotes: '',
+    postTherapyNotes: '',
+    medication: '',
+    therapyIds: [],
+    applicability: 'daily',
+  }));
+  const [patientTherapyTags, setPatientTherapyTags] = useState<Record<string, string[]>>({});
+  const [showAddDietDialog, setShowAddDietDialog] = useState(false);
+  const [editAssignmentPatientId, setEditAssignmentPatientId] = useState<string | null>(null);
+  const [assignmentTemplateId, setAssignmentTemplateId] = useState<string>('tpl-std');
+  const [assignmentTherapyIds, setAssignmentTherapyIds] = useState<string[]>([]);
+  const [showTemplatesDialog, setShowTemplatesDialog] = useState(false);
+  const [dietSchedules, setDietSchedules] = useState<Record<string, { start: string; end: string; templateId: string; therapyIds: string[]; label?: string }[]>>({});
+  const [assignmentSegments, setAssignmentSegments] = useState<{ start: string; end: string; templateId: string }[]>([]);
+  const [addDialogPatientId, setAddDialogPatientId] = useState<string | null>(null);
+  type UiDietPartial = {
+    name?: string;
+    description?: string;
+    breakfast?: string;
+    lunch?: string;
+    dinner?: string;
+    snacks?: string;
+    medication?: string;
+  };
+  type TemplateLike = {
+    name?: string;
+    description?: string;
+    breakfast?: string;
+    lunch?: string;
+    dinner?: string;
+    snacks?: string;
+    preTherapyNotes?: string;
+    postTherapyNotes?: string;
+    medication?: string;
+    therapyIds?: string[];
+    applicability?: 'daily' | 'therapyDays';
+  };
+  type UiSegment = { start: string; end: string; templateId: string; therapyIds: string[]; done?: boolean; expanded?: boolean; locked?: boolean; customTemplate?: UiDietPartial; saveAsTemplate?: boolean };
+  const [addDialogSegments, setAddDialogSegments] = useState<UiSegment[]>([]);
+  const [addDialogPatientOpen, setAddDialogPatientOpen] = useState(false);
+  const [addDialogPatientStays, setAddDialogPatientStays] = useState<{ start_date: string; end_date: string }[]>([]);
+  const [addDialogPatientAppointments, setAddDialogPatientAppointments] = useState<ApiAppointment[]>([]);
+  const [segmentDatePickerOpen, setSegmentDatePickerOpen] = useState<{ idx: number | null; field: 'start' | 'end' | null }>({ idx: null, field: null });
+  const [templateSearch, setTemplateSearch] = useState<string>("");
+  const [templatePickerOpenIdx, setTemplatePickerOpenIdx] = useState<number | null>(null);
+
+  const resetAddDialog = () => {
+    const fromAddPatient = addDialogPatientId === null;
+    if (fromAddPatient) {
+      let label = '';
+      const segs = addDialogSegments;
+      if (segs.length > 1) {
+        label = 'Multiple plans';
+      } else if (segs.length === 1) {
+        const s = segs[0];
+        if (s.templateId) {
+          const tpl = dietTemplates.find((t) => t.id === s.templateId);
+          label = tpl?.name || '';
+        } else if (s.customTemplate?.name) {
+          label = s.customTemplate.name || '';
+        } else if (selectedDietTemplateId) {
+          const tpl = dietTemplates.find((t) => t.id === selectedDietTemplateId);
+          label = tpl?.name || (dietDraft.name || '');
+        } else {
+          label = dietDraft.name || '';
+        }
+      } else {
+        if (selectedDietTemplateId) {
+          const tpl = dietTemplates.find((t) => t.id === selectedDietTemplateId);
+          label = tpl?.name || (dietDraft.name || '');
+        } else {
+          label = dietDraft.name || '';
+        }
+      }
+      if (label) setNewPatientDietPlan(label);
+    }
+    setAddDialogPatientId(null);
+    if (!fromAddPatient) {
+      setAddDialogSegments([]);
+      setSelectedDietTemplateId('');
+      setDietDraft({ id: 'new', name: '', description: '', breakfast: '', lunch: '', dinner: '', snacks: '', preTherapyNotes: '', postTherapyNotes: '', medication: '', therapyIds: [], applicability: 'daily' });
+    }
+    setAddDialogPatientOpen(false);
+    setAddDialogPatientStays([]);
+    setAddDialogPatientAppointments([]);
+    setSegmentDatePickerOpen({ idx: null, field: null });
+  };
+  const applyTemplateToDraft = (tplId: string) => {
+    const tpl = dietTemplates.find((t) => t.id === tplId);
+    if (!tpl) return;
+    setDietDraft({
+      id: tpl.id,
+      name: tpl.name,
+      description: tpl.description || '',
+      breakfast: tpl.breakfast,
+      lunch: tpl.lunch,
+      dinner: tpl.dinner,
+      snacks: tpl.snacks,
+      restBreakfast: tpl.restBreakfast || '',
+      restLunch: tpl.restLunch || '',
+      restDinner: tpl.restDinner || '',
+      restSnacks: tpl.restSnacks || '',
+      patients: tpl.patients ?? 0,
+      preTherapyNotes: tpl.preTherapyNotes || '',
+      postTherapyNotes: tpl.postTherapyNotes || '',
+      medication: tpl.medication || '',
+      therapyIds: tpl.therapyIds || [],
+      applicability: tpl.applicability,
+    });
+    setSelectedDietTemplateId(tplId);
+  };
+  // null means we could not find out, and the tab shows everyone rather than
+  // pretending the centre is empty.
+  const [residentIds, setResidentIds] = useState<Set<string> | null>(null);
+  const blankDietDraft = (): DietPlanTemplate => ({
+    id: 'new', name: '', description: '',
+    breakfast: '', lunch: '', dinner: '', snacks: '',
+    restBreakfast: '', restLunch: '', restDinner: '', restSnacks: '',
+    preTherapyNotes: '', postTherapyNotes: '', medication: '',
+    therapyIds: [], applicability: 'daily',
+  });
+  const resetDietDraft = () => setDietDraft(blankDietDraft());
+  const refreshDietTemplates = async () => setDietTemplates(await loadTemplates(API_BASE));
+  const saveDietTemplate = async () => {
+    if (!dietDraft.name.trim()) { toast.error('Give the plan a name'); return; }
+    try {
+      // Saved on the server, not in this component: a plan nobody else can see
+      // cannot be assigned, and does not survive a refresh.
+      const saved = await saveTemplate(API_BASE, dietDraft, selectedDietTemplateId);
+      await refreshDietTemplates();
+      setSelectedDietTemplateId(saved.id);
+      toast.success('Diet plan saved');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not save the plan');
+    }
+  };
+  const retireDietTemplate = async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/diet-templates/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(res.status === 403 ? 'Only an administrator can remove plans' : 'Could not remove the plan');
+      const body = await res.json();
+      await refreshDietTemplates();
+      if (selectedDietTemplateId === id) setSelectedDietTemplateId('');
+      toast.success(body.retired
+        ? `Retired — ${body.patients} patient(s) are on this plan, so their sheets still print`
+        : 'Plan removed');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not remove the plan');
+    }
+  };
+
+  /** The diet dialog for one resident, from the Patients screen. */
+  const openFor = (patientId: string | number) => {
+        const pid = String(patientId);
+        setAddDialogPatientId(pid);
+        setShowAddDietDialog(true);
+        (async () => {
+          try {
+            const [stays, appts] = await Promise.all([
+              fetchJsonWithTimeout<{ start_date: string; end_date: string }[]>(`${API_BASE}/patients/${pid}/stays`),
+              fetchJsonWithTimeout<any[]>(`${API_BASE}/appointments?patient_id=${pid}`),
+            ]);
+            const listStays = Array.isArray(stays) ? stays : [];
+            setAddDialogPatientStays(listStays);
+            setAddDialogPatientAppointments(Array.isArray(appts) ? appts : []);
+            const toIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate())}`;
+            let startISO = '';
+            let endISO = '';
+            if (listStays.length > 0) {
+              startISO = listStays.map(s => s.start_date).sort()[0] || '';
+              endISO = listStays.map(s => s.end_date).sort().slice(-1)[0] || '';
+            } else {
+              const found = patients.find((x) => String(x.id) === pid);
+              startISO = (found)?.actualStart || '';
+              endISO = (found)?.actualEnd || '';
+            }
+            try {
+              const existing: any[] = await fetchJsonWithTimeout(`${API_BASE}/dietplans/segments?patient_id=${pid}`);
+              if (Array.isArray(existing) && existing.length > 0) {
+                const valid = (v: any) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+                const segments = existing.map((x: any) => ({
+                  start: valid(x.start_date) ? x.start_date : '',
+                  end: valid(x.end_date) ? x.end_date : '',
+                  templateId: '',
+                  therapyIds: Array.isArray(x.therapy_ids) ? x.therapy_ids.map(String) : [],
+                  expanded: false,
+                  locked: true,
+                  saveAsTemplate: false,
+                  customTemplate: x.template ? {
+                    name: x.template.name || x.template_label || '',
+                    description: x.template.description || '',
+                    breakfast: x.template.breakfast || '',
+                    lunch: x.template.lunch || '',
+                    dinner: x.template.dinner || '',
+                    snacks: x.template.snacks || '',
+                    medication: x.template.medication || '',
+                  } : (x.template_label ? { name: x.template_label } : undefined),
+                }));
+                setAddDialogSegments(segments);
+              } else {
+                const segStart = startISO ? toIso(new Date(startISO)) : '';
+                const segEnd = endISO ? toIso(new Date(endISO)) : '';
+                setAddDialogSegments([{ start: segStart, end: segEnd, templateId: '', therapyIds: [], expanded: false, locked: true, saveAsTemplate: false }]);
+              }
+            } catch {
+              const segStart = startISO ? toIso(new Date(startISO)) : '';
+              const segEnd = endISO ? toIso(new Date(endISO)) : '';
+              setAddDialogSegments([{ start: segStart, end: segEnd, templateId: '', therapyIds: [], expanded: false, locked: true, saveAsTemplate: false }]);
+            }
+          } catch {
+            setAddDialogPatientStays([]);
+            setAddDialogPatientAppointments([]);
+          }
+        })();
+  };
+  /** The diet dialog for the resident being added, before they exist. */
+  const openForNewPatient = () => {
+                  setAddDialogPatientId(null);
+                  setAddDialogSegments((prev) => prev.length > 0 ? prev : [{ start: '', end: '', templateId: '', therapyIds: [], expanded: false, locked: true }]);
+                  setShowAddDietDialog(true);
+  };
+
+  const tab = (
+            <DietTab
+              patients={residentIds ? patients.filter((p) => residentIds.has(String(p.id))) : patients}
+              openPlans={() => { setSelectedDietTemplateId(''); resetDietDraft(); setShowTemplatesDialog(true); }}
+              setPatients={setPatients}
+              dietTemplates={dietTemplates}
+              setDietTemplates={setDietTemplates}
+              dietDraft={dietDraft}
+              setDietDraft={setDietDraft}
+              selectedDietTemplateId={selectedDietTemplateId}
+              setSelectedDietTemplateId={setSelectedDietTemplateId}
+              dietSchedules={dietSchedules}
+              setDietSchedules={setDietSchedules}
+              patientTherapyTags={patientTherapyTags}
+              setPatientTherapyTags={setPatientTherapyTags}
+              showAddDietDialog={showAddDietDialog}
+              setShowAddDietDialog={setShowAddDietDialog}
+              addDialogSegments={addDialogSegments}
+              setAddDialogSegments={setAddDialogSegments}
+              addDialogPatientId={addDialogPatientId}
+              setAddDialogPatientId={setAddDialogPatientId}
+              addDialogPatientStays={addDialogPatientStays}
+              setAddDialogPatientStays={setAddDialogPatientStays}
+              addDialogPatientAppointments={addDialogPatientAppointments}
+              setAddDialogPatientAppointments={setAddDialogPatientAppointments}
+              assignmentSegments={assignmentSegments}
+              setAssignmentSegments={setAssignmentSegments}
+              assignmentTemplateId={assignmentTemplateId}
+              setAssignmentTemplateId={setAssignmentTemplateId}
+              assignmentTherapyIds={assignmentTherapyIds}
+              setAssignmentTherapyIds={setAssignmentTherapyIds}
+              editAssignmentPatientId={editAssignmentPatientId}
+              setEditAssignmentPatientId={setEditAssignmentPatientId}
+              API_BASE={API_BASE}
+              API_TOKEN={API_TOKEN}
+              fetchJsonWithTimeout={fetchJsonWithTimeout}
+              therapies={therapies}
+              therapyNameById={therapyNameById}
+              ymdInTZ={ymdInTZ}
+              segmentDatePickerOpen={segmentDatePickerOpen}
+              setSegmentDatePickerOpen={setSegmentDatePickerOpen}
+              templateSearch={templateSearch}
+              setTemplateSearch={setTemplateSearch}
+              templatePickerOpenIdx={templatePickerOpenIdx}
+              setTemplatePickerOpenIdx={setTemplatePickerOpenIdx}
+              resetAddDialog={resetAddDialog}
+              addDialogPatientOpen={addDialogPatientOpen}
+              setAddDialogPatientOpen={setAddDialogPatientOpen}
+              setAddPatientDietPlanLabel={setNewPatientDietPlan}
+              dietTabActive={active}
+            />
+  );
+
+  const dialogs = (
+    <Dialog open={showTemplatesDialog} onOpenChange={setShowTemplatesDialog}>
+      <DialogContent className="max-w-3xl max-h-[85vh] sm:max-h-[90vh] overflow-auto p-4">
+        <DialogHeader>
+          <DialogTitle className="text-base">Diet plans</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="space-y-2">
+            <Button size="sm" variant="outline" className="h-8 w-full" onClick={() => { setSelectedDietTemplateId(''); resetDietDraft(); }}>
+              New plan
+            </Button>
+            <Input placeholder="Search plans" className="h-8" onChange={(e) => {
+              const q = e.target.value.toLowerCase();
+              const first = dietTemplates.find(t => t.name.toLowerCase().includes(q));
+              if (first) applyTemplateToDraft(first.id);
+            }} />
+            <div className="space-y-1 max-h-[320px] overflow-auto">
+              {dietTemplates.map((tpl) => (
+                <Card key={tpl.id} className={`cursor-pointer ${selectedDietTemplateId === tpl.id ? 'border-primary' : ''}`} onClick={() => applyTemplateToDraft(tpl.id)}>
+                  <CardContent className="p-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold text-sm">{tpl.name}</div>
+                        <div className="text-xs text-muted-foreground truncate">{tpl.description || '—'}</div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={(e) => { e.stopPropagation(); applyTemplateToDraft(tpl.id); }}>Edit</Button>
+                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={(e) => { e.stopPropagation(); setAssignmentTemplateId(tpl.id); setAssignmentTherapyIds(tpl.therapyIds || []); }}>Select</Button>
+                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={(e) => { e.stopPropagation(); void retireDietTemplate(tpl.id); }}>Retire</Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium">{selectedDietTemplateId ? 'Edit plan' : 'New plan'}</div>
+              {dietDraft.patients ? (
+                <div className="text-xs text-muted-foreground">
+                  {dietDraft.patients} patient{dietDraft.patients === 1 ? '' : 's'} on this plan
+                </div>
+              ) : null}
+            </div>
+            {(() => {
+              const field = (name: keyof DietPlanTemplate, label: string, placeholder?: string) => (
+                <div>
+                  <Label className="text-xs" htmlFor={`tpl-${String(name)}`}>{label}</Label>
+                  <Input
+                    id={`tpl-${String(name)}`}
+                    className="h-8"
+                    placeholder={placeholder}
+                    value={(dietDraft[name] as string) || ''}
+                    onChange={(e) => setDietDraft((prev) => ({ ...prev, [name]: e.target.value }))}
+                  />
+                </div>
+              );
+              const meals: [keyof DietPlanTemplate, keyof DietPlanTemplate, string][] = [
+                ['breakfast', 'restBreakfast', 'Breakfast'],
+                ['lunch', 'restLunch', 'Lunch'],
+                ['dinner', 'restDinner', 'Dinner'],
+                ['snacks', 'restSnacks', 'Snacks'],
+              ];
+              return (
+                <div className="space-y-2">
+                  {field('name', 'Plan name')}
+                  {field('description', 'Description')}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="text-xs font-semibold">On a day with treatment</div>
+                    <div className="text-xs font-semibold">On a rest day</div>
+                    {meals.map(([therapyName, restName, label]) => (
+                      <Fragment key={label}>
+                        {field(therapyName, label)}
+                        {field(restName, label, (dietDraft[therapyName] as string) || 'Same as the treatment day')}
+                      </Fragment>
+                    ))}
+                  </div>
+                  {field('medication', 'Medication')}
+                  <div className="grid grid-cols-2 gap-2">
+                    {field('preTherapyNotes', 'Before treatment')}
+                    {field('postTherapyNotes', 'After treatment')}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Medication prints in the patient's own row. The two treatment notes print once
+                    under the day sheet, under "Around treatment".
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button size="sm" className="h-8" onClick={() => void saveDietTemplate()}>
+                      {selectedDietTemplateId ? 'Save changes' : 'Create plan'}
+                    </Button>
+                    {selectedDietTemplateId ? (
+                      <Button size="sm" variant="outline" className="h-8" onClick={() => { setSelectedDietTemplateId(''); resetDietDraft(); }}>
+                        New plan
+                      </Button>
+                    ) : null}
+                  </div>
+                  {selectedDietTemplateId && dietDraft.patients ? (
+                    <div className="text-[11px] text-muted-foreground">
+                      Saving changes what {dietDraft.patients === 1 ? 'this patient eats' : `these ${dietDraft.patients} patients eat`} from
+                      their next sheet, except where something was written for one of them specifically.
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" className="h-8" onClick={() => setShowTemplatesDialog(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  return { tab, dialogs, openFor, openForNewPatient };
+}

@@ -9,6 +9,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useEffect, useRef, useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { API_BASE } from "@/lib/apiBase";
+import { API_TOKEN, type UiStaff, type UiTherapy } from "./shared";
 
 const StaffTab = ({
   staff,
@@ -219,3 +224,126 @@ const StaffTab = ({
 };
 
 export default StaffTab;
+
+/** The Staff screen: its state, the Add dialog and the tab, held by the dashboard so they last as long as it does. */
+export function useStaffScreen({ staff, setStaff, therapies, isMobile, requestDelete }: {
+  staff: UiStaff[]; setStaff: React.Dispatch<React.SetStateAction<UiStaff[]>>; therapies: UiTherapy[]; isMobile: boolean;
+  requestDelete: (kind: "staff", id: string, name?: string) => void;
+}) {
+  const [editingStaffId, setEditingStaffId] = useState<string | number | null>(null);
+  const [originalStaffEntry, setOriginalStaffEntry] = useState<UiStaff | null>(null);
+  const [searchStaff, setSearchStaff] = useState("");
+  const [showAddStaff, setShowAddStaff] = useState(false);
+  const [visibleStaffRows, setVisibleStaffRows] = useState(isMobile ? 20 : 40);
+  const staffTotalRef = useRef(0);
+  useEffect(() => { setVisibleStaffRows(isMobile ? 20 : 40); }, [searchStaff, staff, isMobile]);
+  const [newStaff, setNewStaff] = useState({
+    name: "",
+    gender: "Female",
+    specializationsText: "",
+    phone: "",
+    schedule: "",
+    status: "Active" as "Active" | "Inactive",
+  });
+
+  const toggleStaffTherapy = (staffId: string | number, therapyName: string) => {
+    setStaff((prev) => prev.map((s) => {
+      if (s.id !== staffId) return s;
+      const set = new Set<string>(s.specializations);
+      if (set.has(therapyName)) set.delete(therapyName); else set.add(therapyName);
+      return { ...s, specializations: Array.from(set).sort((a,b)=>a.localeCompare(b)) };
+    }));
+  };
+
+  const tab = (
+            <StaffTab
+              staff={staff}
+              therapies={therapies}
+              searchStaff={searchStaff}
+              setSearchStaff={setSearchStaff}
+              visibleStaffRows={visibleStaffRows}
+              setVisibleStaffRows={setVisibleStaffRows}
+              staffTotalRef={staffTotalRef}
+              editingStaffId={editingStaffId}
+              setEditingStaffId={setEditingStaffId}
+              originalStaffEntry={originalStaffEntry}
+              setOriginalStaffEntry={setOriginalStaffEntry}
+              API_BASE={API_BASE}
+              API_TOKEN={API_TOKEN}
+              setShowAddStaff={setShowAddStaff}
+              toggleStaffTherapy={toggleStaffTherapy}
+              requestDelete={requestDelete}
+              setStaff={setStaff}
+            />
+  );
+
+  const dialogs = (
+      <Dialog open={showAddStaff} onOpenChange={setShowAddStaff}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Add Staff</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-3">
+            <Label>Name</Label>
+            <Input value={newStaff.name} onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })} />
+            <Label>Gender</Label>
+            <Select value={newStaff.gender} onValueChange={(v) => setNewStaff({ ...newStaff, gender: v })}>
+              <SelectTrigger className="h-12">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Male">Male</SelectItem>
+                <SelectItem value="Female">Female</SelectItem>
+              </SelectContent>
+            </Select>
+            <Label>Specializations (comma-separated)</Label>
+            <Input value={newStaff.specializationsText} onChange={(e) => setNewStaff({ ...newStaff, specializationsText: e.target.value })} />
+            <Label>Phone</Label>
+            <Input value={newStaff.phone} onChange={(e) => setNewStaff({ ...newStaff, phone: e.target.value })} />
+            <Label>Schedule</Label>
+            <Input value={newStaff.schedule} onChange={(e) => setNewStaff({ ...newStaff, schedule: e.target.value })} />
+            <Label>Status</Label>
+            <Select value={newStaff.status} onValueChange={(v) => setNewStaff({ ...newStaff, status: v as 'Active'|'Inactive' })}>
+              <SelectTrigger className="h-12">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Active">Active</SelectItem>
+                <SelectItem value="Inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowAddStaff(false)}>Cancel</Button>
+              <Button onClick={async () => {
+                const specsInput = newStaff.specializationsText.split(',').map((s) => s.trim()).filter(Boolean);
+                const specIds = specsInput.map((name) => therapies.find((t) => t.name === name)?.id || name);
+                const payload: { name: string; gender: 'male'|'female'|'other'; specializations: (string | number)[]; phone: string; weekly_schedule: Record<string, unknown>; is_active: boolean } = { name: newStaff.name, gender: newStaff.gender.toLowerCase() as 'male'|'female'|'other', specializations: specIds, phone: newStaff.phone || '', weekly_schedule: {}, is_active: newStaff.status === 'Active' };
+                try {
+                  const res = await fetch(`${API_BASE}/staff`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
+                  const created = await res.json();
+                  setStaff((prev) => [
+                    ...prev,
+                    {
+                      id: created.id,
+                      name: created.name,
+                      gender: created.gender === 'male' ? 'Male' : created.gender === 'female' ? 'Female' : 'Other',
+                      specializations: (created.specializations || []).map((id: string) => therapies.find((k) => k.id === id)?.name ?? id),
+                      phone: created.phone || '',
+                      schedule: '',
+                      status: (typeof created.is_active === 'boolean' ? (created.is_active ? 'Active' : 'Inactive') : newStaff.status),
+                    },
+                  ]);
+                  setShowAddStaff(false);
+                  setNewStaff({ name: '', gender: 'Female', specializationsText: '', phone: '', schedule: '', status: 'Active' });
+                } catch {
+                  toast.error('Failed to save staff');
+                }
+              }}>Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+  );
+
+  return { tab, dialogs, setVisibleRows: setVisibleStaffRows, totalRef: staffTotalRef };
+}

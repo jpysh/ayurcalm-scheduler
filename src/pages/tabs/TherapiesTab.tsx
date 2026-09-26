@@ -9,6 +9,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useEffect, useRef, useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { API_BASE } from "@/lib/apiBase";
+import { API_TOKEN, type UiTherapy } from "./shared";
 
 const TherapiesTab = ({
   therapies,
@@ -218,3 +223,128 @@ const TherapiesTab = ({
 };
 
 export default TherapiesTab;
+
+/** The Therapies screen: its state, the Add dialog and the tab, held by the dashboard so they last as long as it does. */
+export function useTherapiesScreen({ therapies, setTherapies, amenityOptions, isMobile, requestDelete }: {
+  therapies: UiTherapy[]; setTherapies: React.Dispatch<React.SetStateAction<UiTherapy[]>>; amenityOptions: string[]; isMobile: boolean;
+  requestDelete: (kind: "therapy", id: string, name?: string) => void;
+}) {
+  const [editingTherapyId, setEditingTherapyId] = useState<string | number | null>(null);
+  const [originalTherapyEntry, setOriginalTherapyEntry] = useState<UiTherapy | null>(null);
+  const [therapyAmenityDrafts, setTherapyAmenityDrafts] = useState<Record<string | number, string>>({});
+  const [searchTherapies, setSearchTherapies] = useState("");
+  const [showAddTherapy, setShowAddTherapy] = useState(false);
+  const [visibleTherapiesRows, setVisibleTherapiesRows] = useState(isMobile ? 20 : 40);
+  const therapiesTotalRef = useRef(0);
+  useEffect(() => { setVisibleTherapiesRows(isMobile ? 20 : 40); }, [searchTherapies, therapies, isMobile]);
+  const [newTherapy, setNewTherapy] = useState({
+    name: "",
+    duration: 60,
+    amenitiesText: "",
+    genderMatch: false,
+    staffRequired: 1,
+  });
+
+  const toggleTherapyAmenity = (therapyId: string | number, amenity: string) => {
+    setTherapies((prev) => prev.map((t) => {
+      if (t.id !== therapyId) return t;
+      const has = t.amenities.includes(amenity);
+      const next = has ? t.amenities.filter((x) => x !== amenity) : [...t.amenities, amenity];
+      return { ...t, amenities: [...new Set(next)].sort((a, b) => a.localeCompare(b)) };
+    }));
+  };
+
+  const addAmenityToTherapy = (therapyId: string | number, raw: string) => {
+    const value = raw.trim();
+    if (!value) return;
+    const existing = amenityOptions.find((o) => o.toLowerCase() === value.toLowerCase()) || value;
+    const current = therapies.find((t) => t.id === therapyId)?.amenities || [];
+    if (current.includes(existing)) { setTherapyAmenityDrafts((prev) => ({ ...prev, [therapyId]: "" })); return; }
+    setTherapies((prev) => prev.map((t) => t.id === therapyId ? { ...t, amenities: [...new Set([...t.amenities, existing])].sort((a, b) => a.localeCompare(b)) } : t));
+    setTherapyAmenityDrafts((prev) => ({ ...prev, [therapyId]: "" }));
+  };
+
+  const tab = (
+            <TherapiesTab
+              therapies={therapies}
+              searchTherapies={searchTherapies}
+              setSearchTherapies={setSearchTherapies}
+              visibleTherapiesRows={visibleTherapiesRows}
+              setVisibleTherapiesRows={setVisibleTherapiesRows}
+              therapiesTotalRef={therapiesTotalRef}
+              editingTherapyId={editingTherapyId}
+              setEditingTherapyId={setEditingTherapyId}
+              originalTherapyEntry={originalTherapyEntry}
+              setOriginalTherapyEntry={setOriginalTherapyEntry}
+              amenityOptions={amenityOptions}
+              therapyAmenityDrafts={therapyAmenityDrafts}
+              setTherapyAmenityDrafts={setTherapyAmenityDrafts}
+              toggleTherapyAmenity={toggleTherapyAmenity}
+              addAmenityToTherapy={addAmenityToTherapy}
+              setTherapies={setTherapies}
+              API_BASE={API_BASE}
+              API_TOKEN={API_TOKEN}
+              isMobile={isMobile}
+              requestDelete={requestDelete}
+              setShowAddTherapy={setShowAddTherapy}
+            />
+  );
+
+  const dialogs = (
+      <Dialog open={showAddTherapy} onOpenChange={setShowAddTherapy}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Add Therapy</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-3">
+            <Label>Therapy Name</Label>
+            <Input value={newTherapy.name} onChange={(e) => setNewTherapy({ ...newTherapy, name: e.target.value })} />
+            <Label>Duration (min)</Label>
+            <Input type="number" min={15} value={String(newTherapy.duration)} onChange={(e) => setNewTherapy({ ...newTherapy, duration: Number(e.target.value) })} />
+            <Label>Required Amenities (comma-separated)</Label>
+            <Input value={newTherapy.amenitiesText} onChange={(e) => setNewTherapy({ ...newTherapy, amenitiesText: e.target.value })} />
+            <Label>Gender Match Required</Label>
+            <Select value={newTherapy.genderMatch ? 'true' : 'false'} onValueChange={(v) => setNewTherapy({ ...newTherapy, genderMatch: v === 'true' })}>
+              <SelectTrigger className="h-12">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="true">Required</SelectItem>
+                <SelectItem value="false">Not Required</SelectItem>
+              </SelectContent>
+            </Select>
+            <Label htmlFor="new-therapy-staff">Therapists needed</Label>
+            <Input id="new-therapy-staff" type="number" min={1} max={6} value={String(newTherapy.staffRequired)} onChange={(e) => setNewTherapy({ ...newTherapy, staffRequired: Math.max(1, Number(e.target.value) || 1) })} />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowAddTherapy(false)}>Cancel</Button>
+              <Button onClick={async () => {
+                const required_amenities = newTherapy.amenitiesText.split(',').map((s) => s.trim()).filter(Boolean);
+                const payload = { name: newTherapy.name, required_amenities, duration_minutes: newTherapy.duration, requires_gender_match: newTherapy.genderMatch, staff_required: newTherapy.staffRequired };
+                try {
+                  const res = await fetch(`${API_BASE}/therapies`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                  const created = await res.json();
+                  setTherapies((prev) => [
+                    ...prev,
+                    {
+                      id: created.id,
+                      name: created.name,
+                      duration: created.duration_minutes,
+                      amenities: created.required_amenities || [],
+                      genderMatch: !!created.requires_gender_match,
+                      staffRequired: created.staff_required ?? 1,
+                    },
+                  ]);
+                  setShowAddTherapy(false);
+                  setNewTherapy({ name: '', duration: 60, amenitiesText: '', genderMatch: false, staffRequired: 1 });
+                } catch {
+                  toast.error('Failed to save therapy');
+                }
+              }}>Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+  );
+
+  return { tab, dialogs, setVisibleRows: setVisibleTherapiesRows, totalRef: therapiesTotalRef };
+}

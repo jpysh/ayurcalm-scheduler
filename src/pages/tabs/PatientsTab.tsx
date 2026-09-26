@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Edit, Trash2, Info, Plus } from "lucide-react";
+import { Edit, Trash2, Info, Plus, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { API_BASE } from "@/lib/apiBase";
+import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiDietPlan, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 // removed dialog import to avoid dev parse error
 
 type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; dietPlan?: string; preferredStaffId?: string | null; requiresPreferredStaff?: boolean };
@@ -373,3 +378,257 @@ const PatientsTab = ({ patients, searchPatients, setSearchPatients, showAddPatie
 };
 
 export default PatientsTab;
+
+/** The Patients screen: the Add and Details dialogs and the tab, held by the dashboard so they last as long as it does. */
+export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, openDietFor, openDietForNewPatient }: {
+  patients: PatientRow[]; setPatients: React.Dispatch<React.SetStateAction<PatientRow[]>>; staff: UiStaff[];
+  therapyNameById: Record<string, string>; timezone: string;
+  openDietFor: (patientId: string | number) => void; openDietForNewPatient: () => void;
+}) {
+  const ADMIN_TZ = timezone;
+  const [showAddPatient, setShowAddPatient] = useState(false);
+  const [newPatient, setNewPatient] = useState<PatientRow>({
+    id: '5',
+    name: "",
+    phone: "",
+    email: "",
+    gender: "Male",
+    dob: "",
+    emergencyContact: "",
+    emergencyPhone: "",
+    address: "",
+    medicalNotes: "",
+    dietPlan: "",
+    actualStart: "",
+    actualEnd: "",
+  });
+  const [searchPatients, setSearchPatients] = useState("");
+  const [infoPatient, setInfoPatient] = useState<PatientRow | null>(null);
+  const [infoDraft, setInfoDraft] = useState<PatientRow | null>(null);
+  const [infoDietPlans, setInfoDietPlans] = useState<ApiDietPlan[]>([]);
+  const [infoAppointments, setInfoAppointments] = useState<ApiAppointment[]>([]);
+  const [infoStays, setInfoStays] = useState<ApiStay[]>([]);
+  const [infoEditing, setInfoEditing] = useState(false);
+  const showPatientInfo = async (p: PatientRow) => {
+    setInfoPatient(p);
+    setInfoDraft({ ...p });
+    try {
+      const [diet, appts, stays] = await Promise.all([
+        fetchJsonWithTimeout<ApiDietPlan[]>(`${API_BASE}/dietplans?patient_id=${p.id}`),
+        fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?patient_id=${p.id}`),
+        fetchJsonWithTimeout<ApiStay[]>(`${API_BASE}/patients/${p.id}/stays`),
+      ]);
+      setInfoDietPlans(Array.isArray(diet) ? diet : []);
+      setInfoAppointments(Array.isArray(appts) ? appts : []);
+      setInfoStays(Array.isArray(stays) ? stays : []);
+    } catch {
+      setInfoDietPlans([]);
+      setInfoAppointments([]);
+      setInfoStays([]);
+    }
+  };
+
+  const toLocalDisplayNoSeconds = (iso?: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleString('en-IN', { timeZone: ADMIN_TZ, year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  };
+
+  const tab = (
+    <PatientsTab
+              staff={staff.map((x) => ({ id: String(x.id), name: x.name }))}
+      patients={patients}
+      searchPatients={searchPatients}
+      setSearchPatients={setSearchPatients}
+      showAddPatient={showAddPatient}
+      setShowAddPatient={setShowAddPatient}
+      onShowInfo={showPatientInfo}
+      onEditDiet={openDietFor}
+    />
+  );
+
+  const dialogs = (
+    <>
+      <Dialog open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) { setNewPatient({ id: '', name: '', phone: '', email: '', gender: 'Male', dob: '', emergencyContact: '', emergencyPhone: '', address: '', medicalNotes: '', dietPlan: '', actualStart: '', actualEnd: '' }); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Add Patient</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-3">
+            <Label>Name</Label>
+            <Input value={newPatient.name} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} />
+            <Label>Phone</Label>
+            <Input value={newPatient.phone} onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })} />
+            <Label>Email</Label>
+            <Input value={newPatient.email} onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })} />
+            <Label>Gender</Label>
+            <Select value={newPatient.gender} onValueChange={(v: string) => setNewPatient({ ...newPatient, gender: v })}>
+              <SelectTrigger className="h-12">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Male">Male</SelectItem>
+                <SelectItem value="Female">Female</SelectItem>
+              </SelectContent>
+            </Select>
+            <Label>Start</Label>
+            <Input type="datetime-local" value={newPatient.actualStart || ""} onChange={(e) => setNewPatient({ ...newPatient, actualStart: e.target.value })} />
+            <Label>End</Label>
+            <Input type="datetime-local" value={newPatient.actualEnd || ""} onChange={(e) => setNewPatient({ ...newPatient, actualEnd: e.target.value })} />
+            <Label>Diet Plan</Label>
+            <div className="flex items-center gap-2">
+              <div className="text-xs text-muted-foreground truncate max-w-[60%]">
+                {newPatient.dietPlan || 'No diet plan selected'}
+              </div>
+              <Button
+                size="sm"
+                className="h-8 px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={openDietForNewPatient}
+                aria-label="Edit Diet Plan"
+              >
+                <Edit className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => { setShowAddPatient(false); setNewPatient({ id: '', name: '', phone: '', email: '', gender: 'Male', dob: '', emergencyContact: '', emergencyPhone: '', address: '', medicalNotes: '', dietPlan: '', actualStart: '', actualEnd: '' }); }}>Cancel</Button>
+              <Button onClick={async () => {
+                const payload: { name: string; gender: 'male'|'female'|'other'; phone: string; email?: string; diet_plan?: string; available_from?: string; available_to?: string } = {
+                  name: newPatient.name,
+                  gender: newPatient.gender.toLowerCase() as 'male'|'female'|'other',
+                  phone: newPatient.phone || '',
+                  email: newPatient.email || undefined,
+                  diet_plan: newPatient.dietPlan || undefined,
+                  available_from: newPatient.actualStart || undefined,
+                  available_to: newPatient.actualEnd || undefined,
+                };
+                try {
+                  const res = await fetch(`${API_BASE}/patients`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                  const created = await res.json();
+                  setPatients((prev) => [
+                    ...prev,
+                    {
+                      id: created.id,
+                      name: created.name,
+                      phone: created.phone || '',
+                      email: created.email || '',
+                      gender: created.gender === 'male' ? 'Male' : created.gender === 'female' ? 'Female' : 'Other',
+                      dob: '', emergencyContact: '', emergencyPhone: '', address: '', medicalNotes: created.medical_notes || '', dietPlan: created.diet_plan || '', actualStart: created.available_from || '', actualEnd: created.available_to || '',
+                    },
+                  ]);
+                  setShowAddPatient(false);
+                  setNewPatient({ id: '', name: '', phone: '', email: '', gender: 'Male', dob: '', emergencyContact: '', emergencyPhone: '', address: '', medicalNotes: '', dietPlan: '', actualStart: '', actualEnd: '' });
+                } catch {
+                  toast.error('Failed to save patient');
+                }
+              }}>Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!infoPatient} onOpenChange={(open) => { if (!open) { setInfoPatient(null); setInfoEditing(false); } }}>
+        <DialogContent hideClose className="max-w-[92vw] sm:max-w-md md:max-w-2xl p-3 sm:p-5 gap-2 sm:gap-4 max-h-[80vh] overflow-y-auto overflow-x-hidden">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">Patient Details</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            <Button variant="outline" size="icon" className="h-8 w-8 justify-self-start" aria-label="Close" onClick={() => { setInfoPatient(null); setInfoEditing(false); }}>
+              <X className="w-4 h-4" />
+            </Button>
+            <div />
+            <div className="justify-self-end"></div>
+          </div>
+          {infoPatient && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input value={infoEditing ? (infoDraft?.name || '') : infoPatient.name} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, name: e.target.value } : prev)} />
+                <Label>Phone</Label>
+                <Input value={infoEditing ? (infoDraft?.phone || '') : (infoPatient.phone || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, phone: e.target.value } : prev)} />
+                <Label>Date of Birth</Label>
+                <Input type="date" value={infoEditing ? (infoDraft?.dob || '') : (infoPatient.dob || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, dob: e.target.value } : prev)} />
+                <Label>Email</Label>
+                <Input value={infoEditing ? (infoDraft?.email || '') : (infoPatient.email || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, email: e.target.value } : prev)} />
+                <Label>Emergency Contact</Label>
+                <Input value={infoEditing ? (infoDraft?.emergencyContact || '') : (infoPatient.emergencyContact || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, emergencyContact: e.target.value } : prev)} />
+                <Label>Emergency Phone</Label>
+                <Input value={infoEditing ? (infoDraft?.emergencyPhone || '') : (infoPatient.emergencyPhone || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, emergencyPhone: e.target.value } : prev)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Medical Notes</Label>
+                <Input value={infoEditing ? (infoDraft?.medicalNotes || '') : (infoPatient.medicalNotes || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, medicalNotes: e.target.value } : prev)} />
+                <Label>Diet Plan</Label>
+                <Input value={infoEditing ? (infoDraft?.dietPlan || '') : (infoPatient.dietPlan || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, dietPlan: e.target.value } : prev)} />
+                <Label>Availability Start</Label>
+                <Input type="datetime-local" value={infoEditing ? toLocalInput(infoDraft?.actualStart) : toLocalInput(infoPatient.actualStart)} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, actualStart: e.target.value } : prev)} />
+                <div className="text-xs text-muted-foreground">{infoEditing ? (infoDraft?.actualStart ? toLocalDisplayNoSeconds(infoDraft.actualStart) : '') : (infoPatient.actualStart ? toLocalDisplayNoSeconds(infoPatient.actualStart) : '')}</div>
+                <Label>Availability End</Label>
+                <Input type="datetime-local" value={infoEditing ? toLocalInput(infoDraft?.actualEnd) : toLocalInput(infoPatient.actualEnd)} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, actualEnd: e.target.value } : prev)} />
+                <div className="text-xs text-muted-foreground">{infoEditing ? (infoDraft?.actualEnd ? toLocalDisplayNoSeconds(infoDraft.actualEnd) : '') : (infoPatient.actualEnd ? toLocalDisplayNoSeconds(infoPatient.actualEnd) : '')}</div>
+              </div>
+              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3 pt-2">
+                <div>
+                  <p className="text-sm font-medium">Diet Plans</p>
+                  <div className="mt-1 space-y-1">
+                    {infoDietPlans.map((dp) => (
+                      <div key={dp.id} className="text-xs">
+                        <span className="font-semibold">{String(dp.meal_time)}</span> • <span>{dp.description}</span>
+                      </div>
+                    ))}
+                    {infoDietPlans.length === 0 && <p className="text-xs text-muted-foreground">No diet plans</p>}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Appointments</p>
+                  <div className="mt-1 space-y-1">
+                    {infoAppointments.map((a) => (
+                      <div key={a.id} className="text-xs">
+                        <span>{new Date(a.scheduled_date).toLocaleDateString('en-IN')}</span> • <span>{a.start_time}</span> • <span>{therapyNameById[String(a.therapy_id)] || a.therapy_id}</span>
+                      </div>
+                    ))}
+                    {infoAppointments.length === 0 && <p className="text-xs text-muted-foreground">No appointments</p>}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Stays</p>
+                  <div className="mt-1 space-y-1">
+                    {infoStays.map((s) => (
+                      <div key={s.id} className="text-xs">
+                        <span>{new Date(s.start_date).toLocaleDateString('en-IN')}</span> – <span>{new Date(s.end_date).toLocaleDateString('en-IN')}</span> • <span>{String(s.duration_days)} days</span>
+                      </div>
+                    ))}
+                    {infoStays.length === 0 && <p className="text-xs text-muted-foreground">No stays</p>}
+                  </div>
+                </div>
+              </div>
+              <div className="md:col-span-2 flex justify-end gap-2 pt-2">
+                {infoEditing ? (
+                  <>
+                    <Button variant="outline" onClick={() => { setInfoEditing(false); setInfoDraft(infoPatient ? { ...infoPatient } : null); }}>Cancel</Button>
+                    <Button onClick={async () => {
+                      if (!infoDraft) return;
+                      try {
+                        const payload = { phone: infoDraft.phone || undefined, email: infoDraft.email || undefined, emergency_contact: infoDraft.emergencyContact || undefined, emergency_phone: infoDraft.emergencyPhone || undefined, medical_notes: infoDraft.medicalNotes || undefined, diet_plan: infoDraft.dietPlan || undefined, available_from: infoDraft.actualStart || undefined, available_to: infoDraft.actualEnd || undefined, date_of_birth: infoDraft.dob || undefined };
+                        const res = await fetch(`${API_BASE}/patients/${infoDraft.id}` , { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
+                        const updated = await res.json();
+                        setPatients((prev) => prev.map((x) => x.id === infoDraft.id ? { ...x, phone: updated.phone || '', email: updated.email || '', emergencyContact: updated.emergency_contact || '', emergencyPhone: updated.emergency_phone || '', medicalNotes: updated.medical_notes || '', dietPlan: updated.diet_plan || '', actualStart: updated.available_from || '', actualEnd: updated.available_to || '', dob: updated.date_of_birth ? new Date(updated.date_of_birth).toISOString().slice(0,10) : '' } : x));
+                        setInfoPatient((prev) => prev ? { ...prev, phone: updated.phone || '', email: updated.email || '', emergencyContact: updated.emergency_contact || '', emergencyPhone: updated.emergency_phone || '', medicalNotes: updated.medical_notes || '', dietPlan: updated.diet_plan || '', actualStart: updated.available_from || '', actualEnd: updated.available_to || '', dob: updated.date_of_birth ? new Date(updated.date_of_birth).toISOString().slice(0,10) : '' } : prev);
+                        toast.success('Patient updated');
+                        setInfoEditing(false);
+                      } catch {
+                        toast.error('Failed to update patient');
+                      }
+                    }}>Save</Button>
+                  </>
+                ) : (
+                  <Button onClick={() => setInfoEditing(true)}>Edit</Button>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+
+  return { tab, dialogs, setNewPatient };
+}

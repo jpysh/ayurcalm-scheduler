@@ -6,6 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Plus, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { API_BASE } from "@/lib/apiBase";
+import { API_TOKEN, toHHMM, toLocalInput, type UiTimeOff, type UiStaff, type UiRoom, type UiTherapy, type Patient } from "./shared";
 
 const TimeOffTab = ({
   timeOffs,
@@ -339,3 +345,290 @@ const TimeOffTab = ({
 };
 
 export default TimeOffTab;
+
+/** The Time off screen: its filters, the Add dialog and the tab, held by the dashboard so they last as long as it does. */
+export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, isMobile, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey }: {
+  timeOffs: UiTimeOff[]; setTimeOffs: React.Dispatch<React.SetStateAction<UiTimeOff[]>>;
+  staff: UiStaff[]; roomsList: UiRoom[]; therapies: UiTherapy[]; patients: Patient[];
+  staffNameById: Record<string, string>; roomNameById: Record<string, string>; therapyNameById: Record<string, string>; patientNameById: Record<string, string>;
+  isMobile: boolean; requestDelete: (kind: "timeoff", id: string, name?: string) => void;
+  loadReplans: () => void; refreshAppointmentsForDate: (iso: string, silent?: boolean) => Promise<void>; todayKey: string;
+}) {
+  const [holidayTypeFilter, setHolidayTypeFilter] = useState<'all' | 'Center' | 'Staff' | 'Room' | 'Therapy' | 'Patient'>('all');
+  const [holidayViewMode, setHolidayViewMode] = useState<'all'|'upcoming'|'past'>('upcoming');
+  const [holidaySelectedDate, setHolidaySelectedDate] = useState<string>('');
+  const [holidayRecurringFilter, setHolidayRecurringFilter] = useState<'all'|'weekly'|'none'>('all');
+  const [holidayFullDayFilter, setHolidayFullDayFilter] = useState<'all'|'full'|'partial'>('all');
+  const [searchHolidays, setSearchHolidays] = useState("");
+  const [showAddTimeOff, setShowAddTimeOff] = useState(false);
+  const [visibleTimeOffRows, setVisibleTimeOffRows] = useState(isMobile ? 20 : 40);
+  const timeoffTotalRef = useRef(0);
+  useEffect(() => { setVisibleTimeOffRows(isMobile ? 20 : 40); }, [searchHolidays, timeOffs, holidayTypeFilter, holidayViewMode, holidayRecurringFilter, holidayFullDayFilter, holidaySelectedDate, isMobile]);
+  const [newTimeOff, setNewTimeOff] = useState({
+    date: "",
+    endDate: "",
+    type: "Center" as "Center" | "Staff" | "Room" | "Therapy" | "Patient",
+    entity: "",
+    fullDay: false,
+    description: "",
+  });
+
+  const [editingTimeOffId, setEditingTimeOffId] = useState<string | null>(null);
+  const [originalTimeOff, setOriginalTimeOff] = useState<UiTimeOff | null>(null);
+
+  const setTimeHM = (iso: string, hh: number, mm: number) => {
+    const d = new Date(iso);
+    d.setHours(hh, mm, 0, 0);
+    return d.toISOString();
+  };
+  const isFullDay = (h: UiTimeOff) => {
+    // A single date with no times is the whole day.
+    if (h.date && !h.startDate && !h.startTime) return true;
+    const sT = h.startTime || toHHMM(h.startDate || h.date);
+    const eT = h.endTime || toHHMM(h.endDate || h.date);
+    return sT === '09:00' && eT === '18:00';
+  };
+  const weeklyLabel = (weekdays?: UiTimeOff['weekdays']) => {
+    if (!weekdays || weekdays.length === 0) return 'none';
+    const map: Record<string, string> = { sunday: 'Sun', monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat' };
+    return `Weekly: ${weekdays.map((w) => map[w] || w).join(', ')}`;
+  };
+
+  const startEditTimeOff = (h: UiTimeOff) => {
+    setEditingTimeOffId(h.id);
+    setOriginalTimeOff({ ...h });
+  };
+
+  const saveEditTimeOff = async () => {
+    if (!editingTimeOffId) return;
+    const h = timeOffs.find((x) => x.id === editingTimeOffId);
+    if (!h) return;
+    const payload = {
+      entity_type: h.type.toLowerCase(),
+      entity_id: h.type === 'Center' ? null : h.entity,
+      date: h.date,
+      start_date: h.startDate,
+      end_date: h.endDate,
+      start_time: toHHMM(h.startDate || h.date),
+      end_time: toHHMM(h.endDate || h.date),
+      recurrence: h.recurrence,
+      weekdays: h.weekdays,
+      description: h.description,
+    };
+    try {
+      const res = await fetch(`${API_BASE}/timeoff/${h.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
+      const updated = await res.json();
+      setTimeOffs((prev) => prev.map((x) => x.id === h.id ? { ...x, date: updated.date ? new Date(updated.date).toISOString() : undefined, startDate: updated.start_date ? new Date(updated.start_date).toISOString() : undefined, endDate: updated.end_date ? new Date(updated.end_date).toISOString() : undefined, startTime: updated.start_time || undefined, endTime: updated.end_time || undefined, recurrence: updated.recurrence || undefined, weekdays: updated.weekdays || undefined } : x));
+      setEditingTimeOffId(null);
+      setOriginalTimeOff(null);
+    } catch {
+      toast.error('Failed to save time off');
+    }
+  };
+
+  const cancelEditTimeOff = () => {
+    if (originalTimeOff) {
+      setTimeOffs((prev) => prev.map((x) => (x.id === originalTimeOff.id ? originalTimeOff : x)));
+    }
+    setEditingTimeOffId(null);
+    setOriginalTimeOff(null);
+  };
+
+  const tab = (
+            <TimeOffTab
+              timeOffs={timeOffs}
+              searchHolidays={searchHolidays}
+              setSearchHolidays={setSearchHolidays}
+              holidayTypeFilter={holidayTypeFilter}
+              setHolidayTypeFilter={setHolidayTypeFilter}
+              holidayViewMode={holidayViewMode}
+              setHolidayViewMode={setHolidayViewMode}
+              holidayRecurringFilter={holidayRecurringFilter}
+              setHolidayRecurringFilter={setHolidayRecurringFilter}
+              holidayFullDayFilter={holidayFullDayFilter}
+              setHolidayFullDayFilter={setHolidayFullDayFilter}
+              holidaySelectedDate={holidaySelectedDate}
+              setHolidaySelectedDate={setHolidaySelectedDate}
+              visibleTimeOffRows={visibleTimeOffRows}
+              timeoffTotalRef={timeoffTotalRef}
+              editingTimeOffId={editingTimeOffId}
+              startEditTimeOff={startEditTimeOff}
+              cancelEditTimeOff={cancelEditTimeOff}
+              saveEditTimeOff={saveEditTimeOff}
+              setTimeOffs={setTimeOffs}
+              staff={staff}
+              roomsList={roomsList}
+              therapies={therapies}
+              patients={patients}
+              staffNameById={staffNameById}
+              roomNameById={roomNameById}
+              therapyNameById={therapyNameById}
+              patientNameById={patientNameById}
+              isFullDay={isFullDay}
+              weeklyLabel={weeklyLabel}
+              toLocalInput={toLocalInput}
+              requestDelete={requestDelete}
+              setShowAddTimeOff={setShowAddTimeOff}
+            />
+  );
+
+  const dialogs = (
+      <Dialog open={showAddTimeOff} onOpenChange={setShowAddTimeOff}>
+        <DialogContent className="max-w-sm p-3">
+          <DialogHeader>
+            <DialogTitle className="text-lg">Add TimeOff</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-2">
+            <Label>Type</Label>
+            <Select value={newTimeOff.type} onValueChange={(v) => setNewTimeOff({ ...newTimeOff, type: v as "Center" | "Staff" | "Room" | "Therapy" | "Patient", entity: v === 'Center' ? 'All' : '' })}>
+              <SelectTrigger className="h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Center">Center</SelectItem>
+                <SelectItem value="Staff">Staff</SelectItem>
+                <SelectItem value="Room">Room</SelectItem>
+                <SelectItem value="Therapy">Therapy</SelectItem>
+                <SelectItem value="Patient">Patient</SelectItem>
+              </SelectContent>
+            </Select>
+            <Label>Entity</Label>
+            {newTimeOff.type === 'Center' ? (
+              <Input className="h-8" value="All" readOnly />
+            ) : newTimeOff.type === 'Staff' ? (
+              <Select value={newTimeOff.entity} onValueChange={(v) => setNewTimeOff({ ...newTimeOff, entity: v })}>
+                <SelectTrigger className="h-8"><SelectValue placeholder="Select staff" /></SelectTrigger>
+                <SelectContent>
+                  {staff.map((s) => (<SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            ) : newTimeOff.type === 'Room' ? (
+              <Select value={newTimeOff.entity} onValueChange={(v) => setNewTimeOff({ ...newTimeOff, entity: v })}>
+                <SelectTrigger className="h-8"><SelectValue placeholder="Select room" /></SelectTrigger>
+                <SelectContent>
+                  {roomsList.map((r) => (<SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            ) : newTimeOff.type === 'Therapy' ? (
+              <Select value={newTimeOff.entity} onValueChange={(v) => setNewTimeOff({ ...newTimeOff, entity: v })}>
+                <SelectTrigger className="h-8"><SelectValue placeholder="Select therapy" /></SelectTrigger>
+                <SelectContent>
+                  {therapies.map((t) => (<SelectItem key={String(t.id ?? t.name)} value={String(t.id ?? t.name)}>{t.name}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Select value={newTimeOff.entity} onValueChange={(v) => setNewTimeOff({ ...newTimeOff, entity: v })}>
+                <SelectTrigger className="h-8"><SelectValue placeholder="Select patient" /></SelectTrigger>
+                <SelectContent>
+                  {patients.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            )}
+            <Label>Full day</Label>
+            <Select value={newTimeOff.fullDay ? 'yes' : 'no'} onValueChange={(v) => setNewTimeOff({ ...newTimeOff, fullDay: v === 'yes' })}>
+              <SelectTrigger className="h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="no">No</SelectItem>
+                <SelectItem value="yes">Yes</SelectItem>
+              </SelectContent>
+            </Select>
+            <Label>Start</Label>
+            {newTimeOff.fullDay ? (
+              <Input type="date" className="h-8" value={newTimeOff.date} onChange={(e) => setNewTimeOff({ ...newTimeOff, date: e.target.value })} />
+            ) : (
+              <Input type="datetime-local" step="60" className="h-8" value={newTimeOff.date} onChange={(e) => setNewTimeOff({ ...newTimeOff, date: e.target.value })} />
+            )}
+            <Label>End</Label>
+            {newTimeOff.fullDay ? (
+              <Input type="date" className="h-8" value={newTimeOff.endDate || newTimeOff.date} onChange={(e) => setNewTimeOff({ ...newTimeOff, endDate: e.target.value })} />
+            ) : (
+              <Input type="datetime-local" step="60" className="h-8" value={newTimeOff.endDate || newTimeOff.date} onChange={(e) => setNewTimeOff({ ...newTimeOff, endDate: e.target.value })} />
+            )}
+            <Label>Recurring</Label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select value={newTimeOff.recurrence || 'none'} onValueChange={(v) => setNewTimeOff({ ...newTimeOff, recurrence: (v === 'none' ? undefined : 'weekly'), weekdays: v === 'weekly' ? (newTimeOff.weekdays || ['sunday']) : undefined })}>
+                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                </SelectContent>
+              </Select>
+              {newTimeOff.recurrence === 'weekly' && (
+                <div className="flex gap-1 flex-wrap">
+                  {(['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const).map((wd) => {
+                    const selected = (newTimeOff.weekdays || []).includes(wd);
+                    return (
+                      <Button key={wd} type="button" variant={selected ? 'default' : 'outline'} className="h-7 px-2 py-0 text-xs"
+                        onClick={() => {
+                          const set = new Set(newTimeOff.weekdays || []);
+                          if (set.has(wd)) set.delete(wd); else set.add(wd);
+                          setNewTimeOff({ ...newTimeOff, weekdays: Array.from(set) as UiTimeOff['weekdays'] });
+                        }}
+                      >
+                        {wd.slice(0,3).toUpperCase()}
+                      </Button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <Label htmlFor="newTimeOffDescription">Description</Label>
+            <Input id="newTimeOffDescription" className="h-8" value={newTimeOff.description} onChange={(e) => setNewTimeOff({ ...newTimeOff, description: e.target.value })} />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowAddTimeOff(false)}>Cancel</Button>
+              <Button onClick={async () => {
+                if (newTimeOff.type !== 'Center' && !newTimeOff.entity) {
+                  toast.error('Select an entity for the chosen type');
+                  return;
+                }
+                const entity_type = newTimeOff.type.toLowerCase();
+                const tempId = `temp-${Date.now()}`;
+                const baseStart = newTimeOff.date;
+                const baseEnd = newTimeOff.endDate || newTimeOff.date;
+                const startIso = newTimeOff.fullDay ? setTimeHM(baseStart, 9, 0) : baseStart;
+                const endIso = newTimeOff.fullDay ? setTimeHM(baseEnd, 18, 0) : baseEnd;
+                const optimistic: UiTimeOff = { id: tempId, startDate: startIso, endDate: endIso, recurrence: newTimeOff.recurrence, weekdays: newTimeOff.weekdays as UiTimeOff['weekdays'], type: newTimeOff.type, entity: newTimeOff.type === 'Center' ? 'All' : (newTimeOff.entity || ''), description: newTimeOff.description };
+                setTimeOffs((prev) => [...prev, optimistic]);
+                setShowAddTimeOff(false);
+                setNewTimeOff({ date: '', endDate: '', type: 'Center', entity: '', fullDay: false, description: '', recurrence: undefined, weekdays: undefined });
+                toast.success('Time off saved');
+                try {
+                  const res = await fetch(`${API_BASE}/timeoff`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      entity_type,
+                      entity_id: optimistic.entity === 'All' ? null : (optimistic.entity || null),
+                      start_date: optimistic.startDate,
+                      end_date: optimistic.endDate,
+                      start_time: newTimeOff.fullDay ? '09:00' : toHHMM(optimistic.startDate),
+                      end_time: newTimeOff.fullDay ? '18:00' : toHHMM(optimistic.endDate),
+                      recurrence: optimistic.recurrence,
+                      weekdays: optimistic.weekdays,
+                      description: optimistic.description,
+                    }),
+                  });
+                  const created = await res.json();
+                  // Marking a therapist off rebuilds their day on the server.
+                  // Show what it did where the admin is looking next.
+                  if (Array.isArray(created.replan) && created.replan.length > 0) {
+                    const total = created.replan.reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0);
+                    toast.success(`${total} treatment${total === 1 ? '' : 's'} rebooked — see the top of the dashboard`);
+                    loadReplans();
+                    refreshAppointmentsForDate(todayKey, true);
+                  }
+                  setTimeOffs((prev) => prev.map((h) => h.id === tempId ? { id: created.id, startDate: created.start_date ? new Date(created.start_date).toISOString() : undefined, endDate: created.end_date ? new Date(created.end_date).toISOString() : undefined, recurrence: created.recurrence || undefined, weekdays: created.weekdays || undefined, type: optimistic.type, entity: created.entity_id ?? optimistic.entity, description: created.description ?? optimistic.description } : h));
+                } catch {
+                  toast.error('Failed to save time off');
+                }
+              }}>Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+  );
+
+  return { tab, dialogs, setVisibleRows: setVisibleTimeOffRows, totalRef: timeoffTotalRef };
+}
