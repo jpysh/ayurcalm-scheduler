@@ -137,7 +137,7 @@ test('an edit to a room is still there after a reload', async ({ page }) => {
   await expect(activePanel(page)).not.toContainText(edited, { timeout: 15000 });
 });
 
-test('the booking dialog offers the slots the API found, and books one', async ({ page }) => {
+test('the booking dialog offers the slots the API found, and books one', async ({ page, request }) => {
   await signIn(page);
   await passSetupIfShown(page);
   await openTab(page, 'The day');
@@ -156,7 +156,11 @@ test('the booking dialog offers the slots the API found, and books one', async (
   await page.getByLabel('Start Date').fill(start.toISOString().slice(0, 10));
   await page.getByLabel('End Date').fill(end.toISOString().slice(0, 10));
   await page.getByRole('button', { name: 'Select patient' }).click();
-  await page.getByPlaceholder('Search patient').fill('Aarav Iyer');
+  // Someone staying tomorrow: a resident is only booked while they are here (#142).
+  const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
+  const staying = await (await request.get(`/api/patients?resident_on=${start.toISOString().slice(0, 10)}`, { headers: { Authorization: `Bearer ${token}` } })).json();
+  expect(staying.length, 'nobody in the demo is staying tomorrow').toBeGreaterThan(0);
+  await page.getByPlaceholder('Search patient').fill(staying[0].name);
   await page.getByRole('option').first().click();
   await page.getByRole('button', { name: /Select therapy/i }).click();
   await page.getByPlaceholder(/Search therapy/i).fill('Abhyanga');
@@ -198,7 +202,7 @@ test("the day's problems are named on the first screen", async ({ page, request 
     const therapist = await call('post', '/staff', { name: `${TAG} Asha`, gender: 'female', specializations: [therapy.id], weekly_schedule: allWeek });
     // Only she may treat this resident, so marking her off cannot quietly move it.
     const resident = await call('post', '/patients', {
-      name: `${TAG} Rekha`, gender: 'female', available_from: '2030-03-01', available_to: '2030-03-31',
+      name: `${TAG} Rekha`, gender: 'female', stay: { start_date: '2030-03-01', end_date: '2030-03-31' },
       preferred_staff_id: therapist.id, requires_preferred_staff: true,
     });
     await call('post', '/appointments', {

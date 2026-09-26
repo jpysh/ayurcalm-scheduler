@@ -377,10 +377,10 @@ const PatientsTab = ({ patients, searchPatients, setSearchPatients, showAddPatie
 export default PatientsTab;
 
 /** The Patients screen: the Add and Details dialogs and the tab, held by the dashboard so they last as long as it does. */
-export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, openDietFor, openDietForNewPatient }: {
+export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, openDietFor }: {
   patients: PatientRow[]; setPatients: React.Dispatch<React.SetStateAction<PatientRow[]>>; staff: UiStaff[];
   therapyNameById: Record<string, string>; timezone: string;
-  openDietFor: (patientId: string | number) => void; openDietForNewPatient: () => void;
+  openDietFor: (patientId: string | number) => void;
 }) {
   const ADMIN_TZ = timezone;
   const [showAddPatient, setShowAddPatient] = useState(false);
@@ -661,5 +661,5 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     </>
   );
 
-  return { tab, dialogs, setNewPatient };
+  return { tab, dialogs };
 }
