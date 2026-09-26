@@ -105,7 +105,7 @@ type AppointmentDetailed = { id: number; time: string; patient: string; therapy:
 type ApiTherapy = { id: string; name: string; required_amenities: string[]; duration_minutes: number; requires_gender_match: boolean; staff_required?: number };
 type ApiStaff = { id: string; name: string; gender: "male" | "female" | "other"; specializations: string[]; phone?: string };
 type ApiRoom = { id: string; name: string; amenities: string[]; is_active: boolean };
-type ApiPatient = { id: string; name: string; gender: "male" | "female" | "other"; phone?: string; email?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; medical_notes?: string | null; diet_plan?: string | null; available_from?: string | null; available_to?: string | null };
+type ApiPatient = { id: string; name: string; gender: "male" | "female" | "other"; phone?: string; email?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; medical_notes?: string | null; diet_plan?: string | null; Stays?: { start_date: string; end_date: string }[] };
 const AdminDashboard = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   // Opening hours drive the schedule's time rows. Defaults match the old
@@ -181,7 +181,7 @@ const AdminDashboard = () => {
         const r: ApiRoom[] = await fetchJsonWithTimeout(`${API_BASE}/rooms`);
         setRoomsList(r.map((x) => ({ id: x.id, name: x.name, amenities: x.amenities, schedule: "", status: x.is_active ? "Active" : "Maintenance" })));
         const p: ApiPatient[] = await fetchJsonWithTimeout(`${API_BASE}/patients`);
-        setPatients(p.map((x) => ({ id: x.id, name: x.name, phone: x.phone ?? "", email: x.email ?? "", gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", dob: x.date_of_birth ? new Date(x.date_of_birth as unknown as string).toISOString().slice(0,10) : "", emergencyContact: x.emergency_contact ?? "", emergencyPhone: x.emergency_phone ?? "", address: "", medicalNotes: x.medical_notes ?? "", dietPlan: x.diet_plan ?? "", actualStart: x.available_from || "", actualEnd: x.available_to || "", preferredStaffId: (x as { preferred_staff_id?: string | null }).preferred_staff_id ?? null, requiresPreferredStaff: !!(x as { requires_preferred_staff?: boolean }).requires_preferred_staff })));
+        setPatients(p.map((x) => ({ id: x.id, name: x.name, phone: x.phone ?? "", email: x.email ?? "", gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", dob: x.date_of_birth ? new Date(x.date_of_birth as unknown as string).toISOString().slice(0,10) : "", emergencyContact: x.emergency_contact ?? "", emergencyPhone: x.emergency_phone ?? "", address: "", medicalNotes: x.medical_notes ?? "", dietPlan: x.diet_plan ?? "", actualStart: x.Stays?.[0]?.start_date || "", actualEnd: x.Stays?.[0]?.end_date || "", preferredStaffId: (x as { preferred_staff_id?: string | null }).preferred_staff_id ?? null, requiresPreferredStaff: !!(x as { requires_preferred_staff?: boolean }).requires_preferred_staff })));
       } catch {
         setTherapies([]);
         setStaff([]);
@@ -475,10 +475,10 @@ const AdminDashboard = () => {
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, isMobile, requestDelete });
   const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, isMobile, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey });
   const eventsScreen = useEventsScreen({ events, setEvents, roomsList, staff, patients, amenityOptions, isMobile, staffNameById, patientNameById });
-  // The Add Patient form and the Diet screen each open the other's dialog.
-  const dietOpeners = useRef<{ openFor: (id: string | number) => void; openForNewPatient: () => void } | null>(null);
-  const patientsScreen = usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ, openDietFor: (id) => dietOpeners.current?.openFor(id), openDietForNewPatient: () => dietOpeners.current?.openForNewPatient() });
-  const dietScreen = useDietScreen({ patients, setPatients, therapies, therapyNameById, ymdInTZ, active: activeTab === 'diet', setNewPatientDietPlan: (label) => patientsScreen.setNewPatient((prev) => ({ ...prev, dietPlan: label })) });
+  // The Residents screen opens the Diet screen's dialog for one resident.
+  const dietOpeners = useRef<{ openFor: (id: string | number) => void } | null>(null);
+  const patientsScreen = usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ, openDietFor: (id) => dietOpeners.current?.openFor(id) });
+  const dietScreen = useDietScreen({ patients, setPatients, therapies, therapyNameById, ymdInTZ, active: activeTab === 'diet' });
   dietOpeners.current = dietScreen;
 
   // The list screens grow as the admin scrolls to the bottom.

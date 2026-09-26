@@ -131,7 +131,6 @@ type DietTabProps = {
   resetAddDialog: () => void;
   addDialogPatientOpen: boolean;
   setAddDialogPatientOpen: (v: boolean) => void;
-  setAddPatientDietPlanLabel: (label: string) => void;
   dietTabActive: boolean;
 };
 const DietTab = ({
@@ -181,7 +180,6 @@ const DietTab = ({
   resetAddDialog,
   addDialogPatientOpen,
   setAddDialogPatientOpen,
-  setAddPatientDietPlanLabel,
   dietTabActive,
 }: DietTabProps) => {
   const [dayDietPatient, setDayDietPatient] = useState<Patient | null>(null);
@@ -803,7 +801,6 @@ const DietTab = ({
                 const segs = addDialogSegments.map((s: any) => ({ ...s, templateId: (s.templateId && s.templateId.length > 0) ? s.templateId : (s.customTemplate ? '' : id) }));
                 const firstTpl = (segs[0]?.templateId ? (dietTemplates.find((t: any) => t.id === segs[0].templateId) || null) : (addDialogSegments[0]?.customTemplate || next)) || next;
                 const label = segs.length > 1 ? 'Multiple plans' : ((firstTpl as any)?.name || next.name);
-                setAddPatientDietPlanLabel(label);
               }
               setShowAddDietDialog(false);
               if (addDialogPatientId) {
@@ -970,11 +967,10 @@ export default DietTab;
 type ApiSegment = { patient_id: string; start_date: string; end_date: string; template_id?: string | null; template_label?: string | null; therapy_ids?: (string | number)[] };
 
 /** The Diet screen: plans, who is on which, the Plans dialog and the tab, held by the dashboard so they last as long as it does. */
-export function useDietScreen({ patients, setPatients, therapies, therapyNameById, ymdInTZ, active, setNewPatientDietPlan }: {
+export function useDietScreen({ patients, setPatients, therapies, therapyNameById, ymdInTZ, active }: {
   patients: ResidentRow[]; setPatients: React.Dispatch<React.SetStateAction<ResidentRow[]>>; therapies: UiTherapy[];
   therapyNameById: Record<string, string>; ymdInTZ: (d: Date) => string; active: boolean;
   /** The Add Patient form shows the plan picked for the resident being added. */
-  setNewPatientDietPlan: (label: string) => void;
 }) {
   type DietPlanTemplate = {
     id: string;
@@ -1085,37 +1081,8 @@ export function useDietScreen({ patients, setPatients, therapies, therapyNameByI
   const [templatePickerOpenIdx, setTemplatePickerOpenIdx] = useState<number | null>(null);
 
   const resetAddDialog = () => {
-    const fromAddPatient = addDialogPatientId === null;
-    if (fromAddPatient) {
-      let label = '';
-      const segs = addDialogSegments;
-      if (segs.length > 1) {
-        label = 'Multiple plans';
-      } else if (segs.length === 1) {
-        const s = segs[0];
-        if (s.templateId) {
-          const tpl = dietTemplates.find((t) => t.id === s.templateId);
-          label = tpl?.name || '';
-        } else if (s.customTemplate?.name) {
-          label = s.customTemplate.name || '';
-        } else if (selectedDietTemplateId) {
-          const tpl = dietTemplates.find((t) => t.id === selectedDietTemplateId);
-          label = tpl?.name || (dietDraft.name || '');
-        } else {
-          label = dietDraft.name || '';
-        }
-      } else {
-        if (selectedDietTemplateId) {
-          const tpl = dietTemplates.find((t) => t.id === selectedDietTemplateId);
-          label = tpl?.name || (dietDraft.name || '');
-        } else {
-          label = dietDraft.name || '';
-        }
-      }
-      if (label) setNewPatientDietPlan(label);
-    }
     setAddDialogPatientId(null);
-    if (!fromAddPatient) {
+    {
       setAddDialogSegments([]);
       setSelectedDietTemplateId('');
       setDietDraft({ id: 'new', name: '', description: '', breakfast: '', lunch: '', dinner: '', snacks: '', preTherapyNotes: '', postTherapyNotes: '', medication: '', therapyIds: [], applicability: 'daily' });
@@ -1253,13 +1220,6 @@ export function useDietScreen({ patients, setPatients, therapies, therapyNameByI
           }
         })();
   };
-  /** The diet dialog for the resident being added, before they exist. */
-  const openForNewPatient = () => {
-                  setAddDialogPatientId(null);
-                  setAddDialogSegments((prev) => prev.length > 0 ? prev : [{ start: '', end: '', templateId: '', therapyIds: [], expanded: false, locked: true }]);
-                  setShowAddDietDialog(true);
-  };
-
   const tab = (
             <DietTab
               patients={residentIds ? patients.filter((p) => residentIds.has(String(p.id))) : patients}
@@ -1308,7 +1268,6 @@ export function useDietScreen({ patients, setPatients, therapies, therapyNameByI
               resetAddDialog={resetAddDialog}
               addDialogPatientOpen={addDialogPatientOpen}
               setAddDialogPatientOpen={setAddDialogPatientOpen}
-              setAddPatientDietPlanLabel={setNewPatientDietPlan}
               dietTabActive={active}
             />
   );
@@ -1428,5 +1387,5 @@ export function useDietScreen({ patients, setPatients, therapies, therapyNameByI
     </Dialog>
   );
 
-  return { tab, dialogs, openFor, openForNewPatient };
+  return { tab, dialogs, openFor };
 }
