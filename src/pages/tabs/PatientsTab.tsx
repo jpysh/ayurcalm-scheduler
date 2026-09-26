@@ -11,11 +11,16 @@ import { Edit, Trash2, Info, Plus, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { BottomSheet } from "@/components/BottomBar";
 import { API_BASE } from "@/lib/apiBase";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiDietPlan, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 // removed dialog import to avoid dev parse error
 
 type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; dietPlan?: string; preferredStaffId?: string | null; requiresPreferredStaff?: boolean };
+
+/** "26 Sep": a stay is whole days, so no time. */
+const stayDay = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '');
+const blankNew = () => ({ name: '', phone: '', gender: 'Male', arriving: '', leaving: '', templateId: '' });
 
 type PatientsTabProps = {
   patients: Patient[];
@@ -328,18 +333,10 @@ const PatientsTab = ({ patients, searchPatients, setSearchPatients, showAddPatie
                   )}
                 </TableCell>
                 <TableCell className="text-xs md:text-sm leading-tight py-0 pl-1.5 pr-1 md:py-0 md:px-3">
-                  {editingPatientId === p.id ? (
-                    <Input type="datetime-local" value={p.actualStart || ''} onChange={(e) => setLocalPatients((prev) => prev.map((x) => (x.id === p.id ? { ...x, actualStart: e.target.value } : x)))} />
-                  ) : (
-                    toLocalDisplayNoSeconds(p.actualStart)
-                  )}
+                  {stayDay(p.actualStart)}
                 </TableCell>
                 <TableCell className="text-xs md:text-sm leading-tight py-0 pl-1.5 pr-1 md:py-0 md:px-3">
-                  {editingPatientId === p.id ? (
-                    <Input type="datetime-local" value={p.actualEnd || ''} onChange={(e) => setLocalPatients((prev) => prev.map((x) => (x.id === p.id ? { ...x, actualEnd: e.target.value } : x)))} />
-                  ) : (
-                    toLocalDisplayNoSeconds(p.actualEnd)
-                  )}
+                  {stayDay(p.actualEnd)}
                 </TableCell>
                 <TableCell className="text-xs md:text-sm leading-tight py-0.5 pl-1.5 pr-1 md:py-3 md:px-3">
                   {calcHotelDays(p.actualStart, p.actualEnd)}
@@ -387,21 +384,82 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
 }) {
   const ADMIN_TZ = timezone;
   const [showAddPatient, setShowAddPatient] = useState(false);
-  const [newPatient, setNewPatient] = useState<PatientRow>({
-    id: '5',
-    name: "",
-    phone: "",
-    email: "",
-    gender: "Male",
-    dob: "",
-    emergencyContact: "",
-    emergencyPhone: "",
-    address: "",
-    medicalNotes: "",
-    dietPlan: "",
-    actualStart: "",
-    actualEnd: "",
+  const [newPatient, setNewPatient] = useState(blankNew);
+  const [templates, setTemplates] = useState<{ id: string; name: string }[]>([]);
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+  // Opening Add fills in the likely stay: arriving today, a fortnight.
+  useEffect(() => {
+    if (!showAddPatient) return;
+    setNewPatient((p) => ({ ...p, arriving: p.arriving || today, leaving: p.leaving || addDays(today, 13) }));
+    fetchJsonWithTimeout<{ id: string; name: string }[]>(`${API_BASE}/diet-templates`).then((t) => setTemplates(Array.isArray(t) ? t : [])).catch(() => setTemplates([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAddPatient]);
+  const toRow = (c: any): PatientRow => ({
+    id: c.id, name: c.name, phone: c.phone || '', email: c.email || '',
+    gender: c.gender === 'male' ? 'Male' : c.gender === 'female' ? 'Female' : 'Other',
+    dob: '', emergencyContact: '', emergencyPhone: '', address: '', medicalNotes: c.medical_notes || '', dietPlan: c.diet_plan || '',
+    actualStart: c.Stays?.[0]?.start_date || '', actualEnd: c.Stays?.[0]?.end_date || '',
   });
+  const saveNewPatient = async () => {
+    if (!newPatient.name.trim()) { toast.error('A name is needed'); return; }
+    if (newPatient.leaving < newPatient.arriving) { toast.error('Leaving must be on or after arriving'); return; }
+    const res = await fetch(`${API_BASE}/patients`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: newPatient.name.trim(), phone: newPatient.phone, gender: newPatient.gender.toLowerCase(),
+        stay: { start_date: newPatient.arriving, end_date: newPatient.leaving },
+        template_id: newPatient.templateId || undefined,
+      }),
+    });
+    if (!res.ok) { toast.error('Could not save the resident'); return; }
+    const created = await res.json();
+    setPatients((prev) => [...prev, toRow(created)]);
+    toast.success(`${created.name} added, ${stayDay(newPatient.arriving)} to ${stayDay(newPatient.leaving)}`);
+    setShowAddPatient(false);
+    setNewPatient(blankNew());
+  };
+
+  // The resident card's stay: one sheet to extend, shorten or end it today.
+  const [stayEdit, setStayEdit] = useState<{ id: string | null; start: string; end: string } | null>(null);
+  const [leftOver, setLeftOver] = useState<ApiAppointment[]>([]);
+  const refreshStays = async (id: string) => {
+    const stays = await fetchJsonWithTimeout<ApiStay[]>(`${API_BASE}/patients/${id}/stays`);
+    setInfoStays(stays);
+    const patch = { actualStart: stays[0]?.start_date || '', actualEnd: stays[0]?.end_date || '' };
+    setPatients((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    setInfoPatient((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+  const saveStay = async () => {
+    if (!infoPatient || !stayEdit) return;
+    if (stayEdit.end < stayEdit.start) { toast.error('Leaving must be on or after arriving'); return; }
+    const body = JSON.stringify({ start_date: stayEdit.start, end_date: stayEdit.end });
+    const headers = { 'Content-Type': 'application/json' };
+    // No stay, or a stay already over: a returning resident gets a new stay, not a new record.
+    const res = stayEdit.id
+      ? await fetch(`${API_BASE}/patients/${infoPatient.id}/stays/${stayEdit.id}`, { method: 'PUT', headers, body })
+      : await fetch(`${API_BASE}/patients/${infoPatient.id}/stays`, { method: 'POST', headers, body });
+    if (!res.ok) { toast.error('Could not save the stay'); return; }
+    const out = await res.json();
+    await refreshStays(infoPatient.id);
+    if (Array.isArray(out.left_over) && out.left_over.length > 0) { setLeftOver(out.left_over); return; }
+    toast.success(`Stay: ${stayDay(stayEdit.start)} to ${stayDay(stayEdit.end)}`);
+    setStayEdit(null);
+  };
+  /** Cancelled, not deleted, as one batch: Undo puts every one back. */
+  const cancelLeftOver = async () => {
+    const res = await fetch(`${API_BASE}/day-check/accept`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: leftOver[0].scheduled_date.slice(0, 10), moves: leftOver.map((a) => ({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: [], room_id: a.room_id, start_time: a.start_time, date: a.scheduled_date.slice(0, 10), cancel: true })) }),
+    });
+    if (!res.ok) { toast.error('Could not cancel the treatments'); return; }
+    const { batch_id, applied } = await res.json();
+    setLeftOver([]);
+    setStayEdit(null);
+    toast(`${applied} treatment${applied === 1 ? '' : 's'} cancelled`, {
+      action: { label: 'Undo', onClick: () => fetch(`${API_BASE}/replan/undo`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batch_id }) }).then(() => toast.success('Put back as they were')) },
+    });
+  };
   const [searchPatients, setSearchPatients] = useState("");
   const [infoPatient, setInfoPatient] = useState<PatientRow | null>(null);
   const [infoDraft, setInfoDraft] = useState<PatientRow | null>(null);
@@ -449,82 +507,49 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
 
   const dialogs = (
     <>
-      <Dialog open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) { setNewPatient({ id: '', name: '', phone: '', email: '', gender: 'Male', dob: '', emergencyContact: '', emergencyPhone: '', address: '', medicalNotes: '', dietPlan: '', actualStart: '', actualEnd: '' }); } }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">Add Patient</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-1 gap-3">
-            <Label>Name</Label>
-            <Input value={newPatient.name} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} />
-            <Label>Phone</Label>
-            <Input value={newPatient.phone} onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })} />
-            <Label>Email</Label>
-            <Input value={newPatient.email} onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })} />
-            <Label>Gender</Label>
-            <Select value={newPatient.gender} onValueChange={(v: string) => setNewPatient({ ...newPatient, gender: v })}>
-              <SelectTrigger className="h-12">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Male">Male</SelectItem>
-                <SelectItem value="Female">Female</SelectItem>
-              </SelectContent>
-            </Select>
-            <Label>Start</Label>
-            <Input type="datetime-local" value={newPatient.actualStart || ""} onChange={(e) => setNewPatient({ ...newPatient, actualStart: e.target.value })} />
-            <Label>End</Label>
-            <Input type="datetime-local" value={newPatient.actualEnd || ""} onChange={(e) => setNewPatient({ ...newPatient, actualEnd: e.target.value })} />
-            <Label>Diet Plan</Label>
-            <div className="flex items-center gap-2">
-              <div className="text-xs text-muted-foreground truncate max-w-[60%]">
-                {newPatient.dietPlan || 'No diet plan selected'}
-              </div>
-              <Button
-                size="sm"
-                className="h-8 px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                onClick={openDietForNewPatient}
-                aria-label="Edit Diet Plan"
-              >
-                <Edit className="w-3.5 h-3.5" />
-              </Button>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => { setShowAddPatient(false); setNewPatient({ id: '', name: '', phone: '', email: '', gender: 'Male', dob: '', emergencyContact: '', emergencyPhone: '', address: '', medicalNotes: '', dietPlan: '', actualStart: '', actualEnd: '' }); }}>Cancel</Button>
-              <Button onClick={async () => {
-                const payload: { name: string; gender: 'male'|'female'|'other'; phone: string; email?: string; diet_plan?: string; available_from?: string; available_to?: string } = {
-                  name: newPatient.name,
-                  gender: newPatient.gender.toLowerCase() as 'male'|'female'|'other',
-                  phone: newPatient.phone || '',
-                  email: newPatient.email || undefined,
-                  diet_plan: newPatient.dietPlan || undefined,
-                  available_from: newPatient.actualStart || undefined,
-                  available_to: newPatient.actualEnd || undefined,
-                };
-                try {
-                  const res = await fetch(`${API_BASE}/patients`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                  const created = await res.json();
-                  setPatients((prev) => [
-                    ...prev,
-                    {
-                      id: created.id,
-                      name: created.name,
-                      phone: created.phone || '',
-                      email: created.email || '',
-                      gender: created.gender === 'male' ? 'Male' : created.gender === 'female' ? 'Female' : 'Other',
-                      dob: '', emergencyContact: '', emergencyPhone: '', address: '', medicalNotes: created.medical_notes || '', dietPlan: created.diet_plan || '', actualStart: created.available_from || '', actualEnd: created.available_to || '',
-                    },
-                  ]);
-                  setShowAddPatient(false);
-                  setNewPatient({ id: '', name: '', phone: '', email: '', gender: 'Male', dob: '', emergencyContact: '', emergencyPhone: '', address: '', medicalNotes: '', dietPlan: '', actualStart: '', actualEnd: '' });
-                } catch {
-                  toast.error('Failed to save patient');
-                }
-              }}>Save</Button>
-            </div>
+      <BottomSheet open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) setNewPatient(blankNew()); }} title="New resident">
+        <div className="grid grid-cols-2 gap-3">
+          <label className="col-span-2 grid gap-1">Name<Input value={newPatient.name} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} /></label>
+          <label className="grid gap-1">Phone<Input type="tel" value={newPatient.phone} onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })} /></label>
+          <label className="grid gap-1">Gender
+            <select className="h-10 rounded-md border border-input bg-background px-2" value={newPatient.gender} onChange={(e) => setNewPatient({ ...newPatient, gender: e.target.value })}>
+              <option>Male</option><option>Female</option><option>Other</option>
+            </select>
+          </label>
+          <label className="grid gap-1">Arriving<Input type="date" value={newPatient.arriving} onChange={(e) => setNewPatient({ ...newPatient, arriving: e.target.value })} /></label>
+          <label className="grid gap-1">Leaving<Input type="date" value={newPatient.leaving} min={newPatient.arriving} onChange={(e) => setNewPatient({ ...newPatient, leaving: e.target.value })} /></label>
+          <label className="col-span-2 grid gap-1">Diet plan
+            <select className="h-10 rounded-md border border-input bg-background px-2" value={newPatient.templateId} onChange={(e) => setNewPatient({ ...newPatient, templateId: e.target.value })}>
+              <option value="">Not decided yet</option>
+              {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </label>
+          <Button className="col-span-2 h-12 rounded-full" onClick={saveNewPatient}>Add resident</Button>
+        </div>
+      </BottomSheet>
+      <BottomSheet open={!!stayEdit} onOpenChange={(open) => { if (!open) { setStayEdit(null); setLeftOver([]); } }} title={stayEdit?.id ? 'Stay' : 'New stay'}>
+        {stayEdit && leftOver.length === 0 ? (
+          <div className="grid grid-cols-2 gap-3">
+            <label className="grid gap-1">Arriving<Input type="date" value={stayEdit.start} onChange={(e) => setStayEdit({ ...stayEdit, start: e.target.value })} /></label>
+            <label className="grid gap-1">Leaving<Input type="date" value={stayEdit.end} min={stayEdit.start} onChange={(e) => setStayEdit({ ...stayEdit, end: e.target.value })} /></label>
+            {stayEdit.id && stayEdit.end > today && stayEdit.start <= today ? (
+              <Button variant="outline" className="h-12 rounded-full" onClick={() => setStayEdit({ ...stayEdit, end: today })}>Leaves today</Button>
+            ) : <span />}
+            <Button className="h-12 rounded-full" onClick={saveStay}>Save</Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        ) : null}
+        {leftOver.length > 0 ? (
+          <div className="grid gap-3">
+            <p>Stay saved. {leftOver.length} treatment{leftOver.length === 1 ? ' is' : 's are'} still booked after they leave:</p>
+            <ul className="text-sm text-muted-foreground">
+              {leftOver.slice(0, 6).map((a) => <li key={a.id}>{stayDay(a.scheduled_date)} {a.start_time} · {therapyNameById[String(a.therapy_id)] || 'Treatment'}</li>)}
+              {leftOver.length > 6 ? <li>and {leftOver.length - 6} more</li> : null}
+            </ul>
+            <Button className="h-12 rounded-full" onClick={cancelLeftOver}>Cancel {leftOver.length === 1 ? 'it' : `all ${leftOver.length}`}</Button>
+            <Button variant="outline" className="h-12 rounded-full" onClick={() => { setLeftOver([]); setStayEdit(null); }}>Keep them</Button>
+          </div>
+        ) : null}
+      </BottomSheet>
       <Dialog open={!!infoPatient} onOpenChange={(open) => { if (!open) { setInfoPatient(null); setInfoEditing(false); } }}>
         <DialogContent hideClose className="max-w-[92vw] sm:max-w-md md:max-w-2xl p-3 sm:p-5 gap-2 sm:gap-4 max-h-[80vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
@@ -558,12 +583,18 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
                 <Input value={infoEditing ? (infoDraft?.medicalNotes || '') : (infoPatient.medicalNotes || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, medicalNotes: e.target.value } : prev)} />
                 <Label>Diet Plan</Label>
                 <Input value={infoEditing ? (infoDraft?.dietPlan || '') : (infoPatient.dietPlan || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, dietPlan: e.target.value } : prev)} />
-                <Label>Availability Start</Label>
-                <Input type="datetime-local" value={infoEditing ? toLocalInput(infoDraft?.actualStart) : toLocalInput(infoPatient.actualStart)} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, actualStart: e.target.value } : prev)} />
-                <div className="text-xs text-muted-foreground">{infoEditing ? (infoDraft?.actualStart ? toLocalDisplayNoSeconds(infoDraft.actualStart) : '') : (infoPatient.actualStart ? toLocalDisplayNoSeconds(infoPatient.actualStart) : '')}</div>
-                <Label>Availability End</Label>
-                <Input type="datetime-local" value={infoEditing ? toLocalInput(infoDraft?.actualEnd) : toLocalInput(infoPatient.actualEnd)} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, actualEnd: e.target.value } : prev)} />
-                <div className="text-xs text-muted-foreground">{infoEditing ? (infoDraft?.actualEnd ? toLocalDisplayNoSeconds(infoDraft.actualEnd) : '') : (infoPatient.actualEnd ? toLocalDisplayNoSeconds(infoPatient.actualEnd) : '')}</div>
+                <Label>Stay</Label>
+                {(() => {
+                  const current = infoStays.find((st) => st.end_date.slice(0, 10) >= today);
+                  return (
+                    <Button variant="outline" className="w-full justify-between h-12" onClick={() => setStayEdit(current
+                      ? { id: current.id, start: current.start_date.slice(0, 10), end: current.end_date.slice(0, 10) }
+                      : { id: null, start: today, end: addDays(today, 13) })}>
+                      {current ? `${stayDay(current.start_date)} → ${stayDay(current.end_date)}` : 'Not staying · add a stay'}
+                      <span aria-hidden>›</span>
+                    </Button>
+                  );
+                })()}
               </div>
               <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3 pt-2">
                 <div>
@@ -607,11 +638,11 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
                     <Button onClick={async () => {
                       if (!infoDraft) return;
                       try {
-                        const payload = { phone: infoDraft.phone || undefined, email: infoDraft.email || undefined, emergency_contact: infoDraft.emergencyContact || undefined, emergency_phone: infoDraft.emergencyPhone || undefined, medical_notes: infoDraft.medicalNotes || undefined, diet_plan: infoDraft.dietPlan || undefined, available_from: infoDraft.actualStart || undefined, available_to: infoDraft.actualEnd || undefined, date_of_birth: infoDraft.dob || undefined };
+                        const payload = { phone: infoDraft.phone || undefined, email: infoDraft.email || undefined, emergency_contact: infoDraft.emergencyContact || undefined, emergency_phone: infoDraft.emergencyPhone || undefined, medical_notes: infoDraft.medicalNotes || undefined, diet_plan: infoDraft.dietPlan || undefined, date_of_birth: infoDraft.dob || undefined };
                         const res = await fetch(`${API_BASE}/patients/${infoDraft.id}` , { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
                         const updated = await res.json();
-                        setPatients((prev) => prev.map((x) => x.id === infoDraft.id ? { ...x, phone: updated.phone || '', email: updated.email || '', emergencyContact: updated.emergency_contact || '', emergencyPhone: updated.emergency_phone || '', medicalNotes: updated.medical_notes || '', dietPlan: updated.diet_plan || '', actualStart: updated.available_from || '', actualEnd: updated.available_to || '', dob: updated.date_of_birth ? new Date(updated.date_of_birth).toISOString().slice(0,10) : '' } : x));
-                        setInfoPatient((prev) => prev ? { ...prev, phone: updated.phone || '', email: updated.email || '', emergencyContact: updated.emergency_contact || '', emergencyPhone: updated.emergency_phone || '', medicalNotes: updated.medical_notes || '', dietPlan: updated.diet_plan || '', actualStart: updated.available_from || '', actualEnd: updated.available_to || '', dob: updated.date_of_birth ? new Date(updated.date_of_birth).toISOString().slice(0,10) : '' } : prev);
+                        setPatients((prev) => prev.map((x) => x.id === infoDraft.id ? { ...x, phone: updated.phone || '', email: updated.email || '', emergencyContact: updated.emergency_contact || '', emergencyPhone: updated.emergency_phone || '', medicalNotes: updated.medical_notes || '', dietPlan: updated.diet_plan || '', dob: updated.date_of_birth ? new Date(updated.date_of_birth).toISOString().slice(0,10) : '' } : x));
+                        setInfoPatient((prev) => prev ? { ...prev, phone: updated.phone || '', email: updated.email || '', emergencyContact: updated.emergency_contact || '', emergencyPhone: updated.emergency_phone || '', medicalNotes: updated.medical_notes || '', dietPlan: updated.diet_plan || '', dob: updated.date_of_birth ? new Date(updated.date_of_birth).toISOString().slice(0,10) : '' } : prev);
                         toast.success('Patient updated');
                         setInfoEditing(false);
                       } catch {

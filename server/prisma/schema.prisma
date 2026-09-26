@@ -22,8 +22,6 @@ model Patient {
   medical_notes     String?
   diet_plan         String?
   created_at        DateTime  @default(now())
-  available_from    DateTime?
-  available_to      DateTime?
   /// The therapist this resident is booked with when there is a choice.
   preferred_staff_id String?
   /// True when that is a condition of their treatment rather than a habit: the
