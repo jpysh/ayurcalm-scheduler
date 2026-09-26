@@ -305,6 +305,14 @@ done until someone who cannot read the diff can confirm it worked.
 **Design for the admin's phone.** One operator, one centre, and they may never
 open a desktop after setup.
 
+**Build to the approved phone design.** `docs/design/phone.html` is the design
+the maintainer approved in #144: open it at phone width and click through it
+before touching a screen. Decisions and the treatment-card stories are in #144's
+comments. The phone layout is the primary one; a desktop widens it (more width
+for the same list and sheets), it never gets a separate design. The old desktop
+screens are not a reference. The mock-up's data, suggested times and planner
+answers are made up: the real ones come from the server.
+
 **The printed day sheet is the product.** A screen change either improves it or
 leaves it alone.
 
