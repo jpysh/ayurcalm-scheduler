@@ -357,10 +357,19 @@ app.delete('/therapies/:id', async (req: Request, res: Response) => {
   }
 });
 
+/** A stay is whole days: arriving and leaving dates, no times. */
+const staySchema = z.object({
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+}).refine((s) => s.end_date >= s.start_date, 'Leaving must be on or after arriving');
+const stayData = (s: z.infer<typeof staySchema>) => {
+  const start_date = new Date(`${s.start_date}T00:00:00.000Z`);
+  const end_date = new Date(`${s.end_date}T00:00:00.000Z`);
+  return { start_date, end_date, duration_days: Math.round((end_date.getTime() - start_date.getTime()) / 86400000) + 1 };
+};
+
 // Patients
 app.get('/patients', async (req: Request, res: Response) => {
-  const from = req.query.from as string | undefined;
-  const to = req.query.to as string | undefined;
   const residentOn = req.query.resident_on as string | undefined;
   const where: Prisma.PatientWhereInput = {};
   if (residentOn) {
@@ -369,16 +378,9 @@ app.get('/patients', async (req: Request, res: Response) => {
     const day = new Date(residentOn);
     where.Stays = { some: { start_date: { lte: day }, end_date: { gte: day } } };
   }
-  if (from || to) {
-    // intersect availability with requested window
-    const fromDate = from ? new Date(from) : undefined;
-    const toDate = to ? new Date(to) : undefined;
-    where.AND = [
-      fromDate ? { OR: [{ available_from: null }, { available_from: { lte: fromDate } }] } : {},
-      toDate ? { OR: [{ available_to: null }, { available_to: { gte: toDate } }] } : {},
-    ];
-  }
-  const data = await prisma.patient.findMany({ where });
+  // Stays come with each resident, newest first: the list, the card and booking
+  // all ask when someone is here, and a stay is the only record of that.
+  const data = await prisma.patient.findMany({ where, include: { Stays: { orderBy: { start_date: 'desc' } } } });
   res.json(data);
 });
 
@@ -393,17 +395,26 @@ app.post('/patients', async (req: Request, res: Response) => {
     emergency_phone: z.string().optional(),
     medical_notes: z.string().optional(),
     diet_plan: z.string().optional(),
-    available_from: z.string().optional(),
-    available_to: z.string().optional(),
     preferred_staff_id: z.string().uuid().nullable().optional(),
     requires_preferred_staff: z.boolean().optional(),
+    /** Arriving and leaving. Without a stay a resident is never "in house" and never on the day sheet (#142). */
+    stay: staySchema.optional(),
+    /** The diet plan they follow for the whole stay. */
+    template_id: z.string().uuid().optional(),
   });
   const body = schema.parse(req.body);
-  const data: any = { name: body.name, gender: body.gender, phone: body.phone, email: body.email, emergency_contact: body.emergency_contact, emergency_phone: body.emergency_phone, medical_notes: body.medical_notes, diet_plan: body.diet_plan };
-  if (body.available_from) data.available_from = new Date(body.available_from);
-  if (body.available_to) data.available_to = new Date(body.available_to);
+  const data: any = { name: body.name, gender: body.gender, phone: body.phone, email: body.email, emergency_contact: body.emergency_contact, emergency_phone: body.emergency_phone, medical_notes: body.medical_notes, diet_plan: body.diet_plan, preferred_staff_id: body.preferred_staff_id, requires_preferred_staff: body.requires_preferred_staff };
   if (body.date_of_birth) data.date_of_birth = new Date(body.date_of_birth);
-  const p = await prisma.patient.create({ data });
+  // One save: the resident, their stay and their diet plan, or none of them.
+  const p = await prisma.$transaction(async (tx) => {
+    const created = await tx.patient.create({ data });
+    if (body.stay) {
+      const stay = stayData(body.stay);
+      await tx.patientStay.create({ data: { patient_id: created.id, ...stay } });
+      if (body.template_id) await tx.dietPlanSegment.create({ data: { patient_id: created.id, start_date: stay.start_date, end_date: stay.end_date, template_id: body.template_id } });
+    }
+    return tx.patient.findUnique({ where: { id: created.id }, include: { Stays: true } });
+  });
   res.status(201).json(p);
 });
 
@@ -419,15 +430,11 @@ app.put('/patients/:id', async (req: Request, res: Response) => {
     emergency_phone: z.string().optional(),
     medical_notes: z.string().optional(),
     diet_plan: z.string().optional(),
-    available_from: z.string().optional(),
-    available_to: z.string().optional(),
     preferred_staff_id: z.string().uuid().nullable().optional(),
     requires_preferred_staff: z.boolean().optional(),
   });
   const body = schema.parse(req.body);
   const data: any = { ...body };
-  if (body.available_from) data.available_from = new Date(body.available_from);
-  if (body.available_to) data.available_to = new Date(body.available_to);
   if (body.date_of_birth) data.date_of_birth = new Date(body.date_of_birth);
   const prev = await prisma.patient.findUnique({ where: { id } });
   const p = await prisma.patient.update({ where: { id }, data });
@@ -443,6 +450,7 @@ app.delete('/patients/:id', async (req: Request, res: Response) => {
     const prev = await tx.patient.findUnique({ where: { id } });
     await tx.appointment.deleteMany({ where: { patient_id: id } });
     await tx.dietPlan.deleteMany({ where: { patient_id: id } });
+    await tx.dietPlanSegment.deleteMany({ where: { patient_id: id } });
     await tx.patientStay.deleteMany({ where: { patient_id: id } });
     await tx.timeOff.deleteMany({ where: { entity_type: 'patient', entity_id: id } });
     await tx.patient.delete({ where: { id } });
@@ -460,17 +468,31 @@ app.get('/patients/:id/stays', async (req: Request, res: Response) => {
 });
 
 app.post('/patients/:id/stays', async (req: Request, res: Response) => {
-  const id = req.params.id;
-  const schema = z.object({ start_date: z.string(), end_date: z.string() });
-  const body = schema.parse(req.body);
-  const start = new Date(body.start_date);
-  const end = new Date(body.end_date);
-  const sDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  const eDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-  const ms = eDay.getTime() - sDay.getTime();
-  const days = Math.max(1, Math.floor(ms / 86400000) + 1);
-  const created = await prisma.patientStay.create({ data: { patient_id: id, start_date: sDay, end_date: eDay, duration_days: days } });
+  const id = String(req.params.id);
+  const created = await prisma.patientStay.create({ data: { patient_id: id, ...stayData(staySchema.parse(req.body)) } });
   res.status(201).json(created);
+});
+
+/**
+ * Extend or shorten a stay. A stay that now ends sooner answers with the
+ * treatments booked after it, so the admin is offered to cancel them — Cancel,
+ * not Delete, through the day-fix batch, so Undo puts them back.
+ */
+app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const stay = await prisma.patientStay.findFirst({ where: { id: String(req.params.stayId), patient_id: id } });
+  if (!stay) { res.status(404).json({ error: 'Stay not found' }); return; }
+  const next = stayData(staySchema.parse(req.body));
+  const updated = await prisma.patientStay.update({ where: { id: stay.id }, data: next });
+  // Only this stay's own treatments: a later stay's bookings are not left over.
+  const later = await prisma.patientStay.findFirst({ where: { patient_id: id, start_date: { gt: stay.end_date } }, orderBy: { start_date: 'asc' } });
+  const left_over = next.end_date < stay.end_date
+    ? await prisma.appointment.findMany({
+      where: { patient_id: id, status: { not: 'cancelled' }, scheduled_date: { gt: next.end_date, ...(later ? { lt: later.start_date } : {}) } },
+      orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }],
+    })
+    : [];
+  res.json({ stay: updated, left_over });
 });
 
 // Maintenance: merge and delete duplicate patients by name
@@ -509,39 +531,6 @@ app.post('/patients/cleanup-duplicates', async (_req: Request, res: Response) =>
     });
   }
   res.json({ groupsProcessed, patientsDeleted, apptsReassigned, dietsReassigned, timeoffsDeleted });
-});
-
-// Maintenance: randomize availability for test purposes over next 3 months
-app.post('/patients/randomize-availability', async (_req: Request, res: Response) => {
-  const patients = await prisma.patient.findMany();
-  const now = new Date();
-  const threeMonths = new Date(now.getFullYear(), now.getMonth() + 3, now.getDate());
-  const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
-  let updated = 0;
-  await prisma.$transaction(async (tx) => {
-    for (const p of patients) {
-      const startOffsetDays = randInt(0, 90);
-      const start = new Date(now);
-      start.setDate(now.getDate() + startOffsetDays);
-      const durationDays = randInt(1, 60);
-      const end = new Date(start);
-      end.setDate(start.getDate() + durationDays);
-      // cap end within three months
-      if (end > threeMonths) {
-        end.setTime(threeMonths.getTime());
-      }
-      await tx.patient.update({ where: { id: p.id }, data: { available_from: start, available_to: end } });
-      updated++;
-    }
-  });
-  res.json({ updated });
-});
-
-// Maintenance: one-time update to set end date for all current patients
-app.post('/patients/set-end-date-2025-12-31-23-59', async (_req: Request, res: Response) => {
-  const target = new Date('2025-12-31T23:59:00');
-  const result = await prisma.patient.updateMany({ data: { available_to: target } });
-  res.json({ updated: result.count, available_to: target.toISOString() });
 });
 
 // TimeOff (with Holidays alias)

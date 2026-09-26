@@ -20,7 +20,7 @@
  * them, so it is put to the admin: only their Accept applies it.
  */
 import { PrismaClient, Prisma } from '@prisma/client';
-import { centreClock, offOnDay, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow } from './availability.js';
+import { centreClock, offOnDay, stayOn, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow } from './availability.js';
 
 /** Which of the tier 4 choices a move is. */
 export type Choice = 'this_time_only' | 'next_free_day' | 'cancel';
@@ -112,7 +112,7 @@ export async function planDay(
     now?: Clock;
   } = {},
 ): Promise<ReplanResult> {
-  const [absent, settings, staff, therapies, rooms, patients, events, timeOff] = await Promise.all([
+  const [absent, settings, staff, therapies, rooms, patients, events, timeOff, stays] = await Promise.all([
     staffId ? prisma.staff.findUnique({ where: { id: staffId } }) : Promise.resolve(null),
     prisma.settings.findUnique({ where: { id: 'singleton' } }),
     prisma.staff.findMany({ where: { is_active: true } }),
@@ -121,6 +121,7 @@ export async function planDay(
     prisma.patient.findMany(),
     prisma.programEvent.findMany() as unknown as Promise<EventRow[]>,
     prisma.timeOff.findMany(),
+    prisma.patientStay.findMany(),
   ]);
 
   const open = toMinutes(settings?.opening_time || '09:00');
@@ -244,6 +245,8 @@ export async function planDay(
     if (pinnedBy.has(appt.id)) continue;
     const therapy = therapyById.get(appt.therapy_id);
     const patient = patientById.get(appt.patient_id);
+    // The last day of the stay they are on: a later day past it is not theirs.
+    const stayEnds = stayOn(stays.filter((s) => s.patient_id === appt.patient_id), date)?.end_date ?? null;
     const duration = appt.duration_minutes;
     const start = toMinutes(appt.start_time);
     const names = {
@@ -328,7 +331,7 @@ export async function planDay(
       for (let i = 1; i <= days; i++) {
         const other = new Date(date);
         other.setDate(date.getDate() + i);
-        if (inStay && patient?.available_to && other > patient.available_to) return null;
+        if (inStay && stayEnds && other > stayEnds) return null;
         const key = ymd(other);
         const otherDay = (laterDays[key] ??= await prisma.appointment.findMany({ where: { scheduled_date: other, status: { not: 'cancelled' } } }));
         const taken = laterTaken.filter((x) => x.date === key);
@@ -413,7 +416,7 @@ export async function planDay(
     // Their own therapist when locked, anyone qualified otherwise. Past the stay
     // too, so the admin sees how far it is rather than nothing.
     const next = await laterSlot(30, false);
-    const inStay = next && (!patient?.available_to || new Date(`${next.date}T00:00:00.000Z`) <= patient.available_to);
+    const inStay = next && (!stayEnds || new Date(`${next.date}T00:00:00.000Z`) <= stayEnds);
     if (next) {
       const n = daysLater(next.date);
       choices.push(moveOf(next, { choice: 'next_free_day', note: `${n} day${n === 1 ? '' : 's'} later${inStay ? '' : ', after their stay ends'}` }));

@@ -20,7 +20,7 @@
     "test:rota": "tsx src/tests/therapistRota.test.ts",
     "test:invariants": "tsx src/tests/scheduleInvariants.test.ts",
     "test": "npm run test:diet && npm run test:pdf && npm run test:rota && npm run test:availability && npm run test:off-hours",
-    "test:all": "npm run test:diet && npm run test:pdf && npm run test:rota && npm run test:availability && npm run test:invariants && npm run test:validation && npm run test:auto-assign && npm run test:replan && npm run test:day-check && npm run test:day-plan && npm run test:day-sheet && npm run test:onboarding && npm run test:mcp",
+    "test:all": "npm run test:diet && npm run test:pdf && npm run test:rota && npm run test:availability && npm run test:invariants && npm run test:validation && npm run test:auto-assign && npm run test:replan && npm run test:day-check && npm run test:day-plan && npm run test:day-sheet && npm run test:onboarding && npm run test:mcp && npm run test:stay",
     "test:availability": "tsx src/tests/availability.test.ts",
     "test:off-hours": "tsx src/tests/offHours.test.ts",
     "test:replan": "tsx src/tests/replanSimulation.test.ts",
@@ -28,7 +28,8 @@
     "test:day-plan": "tsx src/tests/dayPlan.test.ts",
     "test:day-sheet": "tsx src/tests/daySheet.test.ts",
     "test:onboarding": "tsx src/tests/onboarding.test.ts",
-    "test:mcp": "tsx src/tests/mcp.test.ts"
+    "test:mcp": "tsx src/tests/mcp.test.ts",
+    "test:stay": "tsx src/tests/residentStay.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "^2.0.0",

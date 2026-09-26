@@ -59,7 +59,7 @@ const fetchJsonWithTimeout = async <T = unknown>(url: string, ms = 6000): Promis
 };
 type Weekday = 'sunday'|'monday'|'tuesday'|'wednesday'|'thursday'|'friday'|'saturday';
 type WeeklySchedule = Record<Weekday, { start: string; end: string }>;
-type ApiPatient = { id: string; name: string; gender?: 'male'|'female'|'other'; phone?: string | null; available_from?: string | null; available_to?: string | null };
+type ApiPatient = { id: string; name: string; gender?: 'male'|'female'|'other'; phone?: string | null; Stays?: { start_date: string; end_date: string }[] };
 type ApiTherapy = { id: string; name: string; duration_minutes: number; required_amenities?: string[]; requires_gender_match?: boolean };
 type ApiStaff = { id: string; name: string; gender?: 'male'|'female'|'other'; weekly_schedule?: WeeklySchedule };
 type ApiRoom = { id: string; name: string; weekly_schedule?: WeeklySchedule; amenities?: string[] };
@@ -161,7 +161,7 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
         const t = await fetchJsonWithTimeout<ApiTherapy[]>(`${API_BASE}/therapies`);
         const s = await fetchJsonWithTimeout<ApiStaff[]>(`${API_BASE}/staff`);
         const r = await fetchJsonWithTimeout<ApiRoom[]>(`${API_BASE}/rooms`);
-        setPatients((p || []).map((x) => ({ id: x.id, name: x.name, gender: x.gender, phone: x.phone || null, available_from: x.available_from || null, available_to: x.available_to || null })));
+        setPatients((p || []).map((x) => ({ id: x.id, name: x.name, gender: x.gender, phone: x.phone || null, Stays: x.Stays || [] })));
         setTherapies(t || []);
         setStaffMap(Object.fromEntries((s || []).map((x) => [x.id, x.name])));
         setStaff(s || []);
@@ -703,11 +703,10 @@ export const AutoAssignDialog = ({ open, onOpenChange, onAssigned, defaultDateIS
                       const sDay = new Date(formData.startDate);
                       const eDay = new Date(formData.endDate);
                       const dayOnly = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-                      const pf = p.available_from ? dayOnly(new Date(p.available_from)) : null;
-                      const pt = p.available_to ? dayOnly(new Date(p.available_to)) : null;
-                      if (pf && dayOnly(sDay) < pf) return false;
-                      if (pt && dayOnly(eDay) > pt) return false;
-                      return true;
+                      // Anyone staying at some point in the window, or a day visitor with no
+                      // stay at all: the scheduler books only the days they are here.
+                      const stays = p.Stays || [];
+                      return stays.length === 0 || stays.some((st) => dayOnly(new Date(st.start_date)) <= dayOnly(eDay) && dayOnly(new Date(st.end_date)) >= dayOnly(sDay));
                     })].sort((a,b)=>a.name.localeCompare(b.name)).map((patient) => (
                       <CommandItem
                         key={patient.id}

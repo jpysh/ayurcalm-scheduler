@@ -1,6 +1,6 @@
 import { PrismaClient, Appointment, Staff, TherapyRoom } from '@prisma/client';
 import { z } from 'zod';
-import { staffEventBusy, eventBlocking, teamOf, type EventRow } from './availability.js';
+import { staffEventBusy, eventBlocking, teamOf, mayTreatOn, type EventRow } from './availability.js';
 
 const inputSchema = z.object({
   patient_id: z.string().uuid(),
@@ -90,8 +90,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
 
   const patient = await withTimeout(prisma.patient.findUnique({ where: { id: input.patient_id } }), maxMs, 'PATIENT');
   if (!patient) throw new Error('Patient not found');
-  const pAvailFrom = (patient as { available_from?: Date | null }).available_from || null;
-  const pAvailTo = (patient as { available_to?: Date | null }).available_to || null;
+  const stays = await withTimeout(prisma.patientStay.findMany({ where: { patient_id: patient.id } }), maxMs, 'STAYS');
 
   // The whole table: a centre's programme is a handful of rows, and which of
   // them run on a given day is decided in memory a day at a time.
@@ -142,8 +141,8 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
       conflicts.reason = conflicts.reason || 'NO_MATCHING_TIME_SLOTS';
       break;
     }
-    // patient availability: skip dates outside availability window
-    if ((pAvailFrom && new Date(nd.toDateString()) < new Date(pAvailFrom.toDateString())) || (pAvailTo && new Date(nd.toDateString()) > new Date(pAvailTo.toDateString()))) {
+    // A resident is booked only while they are staying.
+    if (!mayTreatOn(stays, nd)) {
       currentDate.setDate(nd.getDate() + 1);
       continue;
     }

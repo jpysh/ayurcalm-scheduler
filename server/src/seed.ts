@@ -483,35 +483,49 @@ async function main() {
   // that would look missing rather than unseeded.
   const today = centreToday();
   const templates = await prisma.dietTemplate.findMany({ orderBy: { name: 'asc' } });
-  // Fifteen-day stays back to back until the bookings end, so every day's sheet
-  // has residents. The first stay holds today's treated patients.
-  let residents: { id: string }[] = [];
-  for (let windowStart = new Date(today.getTime() - 5 * 86400000); windowStart <= end; windowStart = new Date(windowStart.getTime() + 15 * 86400000)) {
-    const windowEnd = new Date(windowStart.getTime() + 14 * 86400000);
-    const anchor = windowStart < today ? today : windowStart;
-    const treated = await prisma.appointment.findMany({
-      // Today's stay takes only today's patients; later ones look a few days
-      // ahead so a stay starting on a weekend still has someone in it.
-      where: { scheduled_date: { gte: anchor, lte: new Date(anchor.getTime() + (anchor === today ? 0 : 2) * 86400000) } },
-      select: { patient_id: true },
-      distinct: ['patient_id'],
+  // A resident's stay spans their own course, so every booking sits inside one:
+  // the app books a resident only while they are here (#142). Bookings more
+  // than three days apart are separate visits.
+  const DAY_MS = 86400000;
+  const booked = await prisma.appointment.findMany({ select: { patient_id: true, scheduled_date: true }, orderBy: { scheduled_date: 'asc' } });
+  const datesOf = new Map<string, Date[]>();
+  for (const a of booked) {
+    if (!datesOf.has(a.patient_id)) datesOf.set(a.patient_id, []);
+    datesOf.get(a.patient_id)!.push(a.scheduled_date);
+  }
+  const residents: { id: string }[] = [];
+  let stayCount = 0;
+  const addStay = async (patient_id: string, start_date: Date, end_date: Date) => {
+    await prisma.patientStay.create({
+      data: { patient_id, start_date, end_date, duration_days: Math.round((end_date.getTime() - start_date.getTime()) / DAY_MS) + 1 },
     });
-    // A couple of residents with no treatment, so the sheet shows what a rest
-    // day looks like: no therapy, meals still theirs.
-    const resting = createdPatients.filter((p) => !treated.some((a) => a.patient_id === p.id)).slice(0, 2);
-    const stay = [...treated.map((a) => ({ id: a.patient_id })), ...resting];
-    if (residents.length === 0) residents = stay;
-    for (const [idx, resident] of stay.entries()) {
-      await prisma.patientStay.create({
-        data: { patient_id: resident.id, start_date: windowStart, end_date: windowEnd, duration_days: 15 },
-      });
-      // Not everyone: a centre always has someone whose plan has not been set yet,
-      // and the sheet should show that honestly rather than inventing one.
-      if (idx % 6 === 5 || templates.length === 0) continue;
+    // Not everyone: a centre always has someone whose plan has not been set yet,
+    // and the sheet should show that honestly rather than inventing one.
+    const planned = stayCount++ % 6 !== 5 && templates.length > 0;
+    if (planned) {
       await prisma.dietPlanSegment.create({
-        data: { patient_id: resident.id, start_date: windowStart, end_date: windowEnd, template_id: templates[idx % templates.length].id },
+        data: { patient_id, start_date, end_date, template_id: templates[stayCount % templates.length].id },
       });
     }
+    if (planned && start_date <= today && today <= end_date) residents.push({ id: patient_id });
+  };
+  for (const [patientId, dates] of datesOf) {
+    let start = dates[0];
+    let last = dates[0];
+    for (const d of dates.slice(1)) {
+      if (d.getTime() - last.getTime() > 3 * DAY_MS) {
+        await addStay(patientId, start, last);
+        start = d;
+      }
+      last = d;
+    }
+    await addStay(patientId, start, last);
+  }
+  // A couple in house today with nothing booked, so the sheet shows what a rest
+  // day looks like: no therapy, meals still theirs.
+  const nearToday = new Set(booked.filter((a) => Math.abs(a.scheduled_date.getTime() - today.getTime()) <= 3 * DAY_MS).map((a) => a.patient_id));
+  for (const p of createdPatients.filter((x) => !nearToday.has(x.id)).slice(0, 2)) {
+    await addStay(p.id, new Date(today.getTime() - 2 * DAY_MS), new Date(today.getTime() + 3 * DAY_MS));
   }
 
   // One patient given something different for one meal today, so the override

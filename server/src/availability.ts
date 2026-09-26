@@ -54,6 +54,14 @@ export const startedBefore = (clock: Clock, day: Date) => {
   return d < clock.date ? Infinity : d > clock.date ? -Infinity : toMinutes(clock.time);
 };
 
+type Stay = { start_date: Date; end_date: Date };
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+/** The stay a resident is on that day, if any. Stays are whole days. */
+export const stayOn = (stays: Stay[], day: Date) =>
+  stays.find((s) => isoDay(s.start_date) <= isoDay(day) && isoDay(day) <= isoDay(s.end_date)) ?? null;
+/** A resident is treated inside a stay; someone with no stay at all is a day visitor, any day. */
+export const mayTreatOn = (stays: Stay[], day: Date) => stays.length === 0 || stayOn(stays, day) !== null;
+
 export const overlaps = (aStart: number, aEnd: number, bStart: number, bEnd: number) =>
   Math.max(aStart, bStart) < Math.min(aEnd, bEnd);
 

@@ -24,6 +24,7 @@ async function tidy(prisma: PrismaClient) {
   await prisma.timeOff.deleteMany({ where: { entity_id: { in: staff.map((s) => s.id) } } });
   const patients = await prisma.patient.findMany({ where: { name: { startsWith: TAG } }, select: { id: true } });
   await prisma.appointment.deleteMany({ where: { patient_id: { in: patients.map((p) => p.id) } } });
+  await prisma.patientStay.deleteMany({ where: { patient_id: { in: patients.map((p) => p.id) } } });
   await prisma.patient.deleteMany({ where: { name: { startsWith: TAG } } });
   await prisma.staff.deleteMany({ where: { name: { startsWith: TAG } } });
   await prisma.therapy.deleteMany({ where: { name: { startsWith: TAG } } });
@@ -45,7 +46,8 @@ async function main() {
       },
     });
     const resident = (name: string) => prisma.patient.create({
-      data: { name: `${TAG} ${name}`, gender: 'male', preferred_staff_id: x.id, requires_preferred_staff: true, available_from: at('2030-03-01'), available_to: at('2030-03-31') },
+      data: { name: `${TAG} ${name}`, gender: 'male', preferred_staff_id: x.id, requires_preferred_staff: true,
+        Stays: { create: { start_date: at('2030-03-01'), end_date: at('2030-03-31'), duration_days: 31 } } },
     });
 
     // Off one day, free the next.

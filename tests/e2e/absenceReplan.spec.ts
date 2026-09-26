@@ -85,7 +85,7 @@ test('a therapist off: Verify names it, its plan clears the day, and Undo puts t
   await call('post', '/rooms', { name: `${TAG} Room`, weekly_schedule: allWeek });
   const therapist = await call('post', '/staff', { name: THERAPIST, gender: 'female', specializations: [therapy.id], weekly_schedule: allWeek });
   const resident = await call('post', '/patients', {
-    name: RESIDENT, gender: 'female', available_from: '2030-03-01', available_to: '2030-03-31',
+    name: RESIDENT, gender: 'female', stay: { start_date: '2030-03-01', end_date: '2030-03-31' },
     preferred_staff_id: therapist.id, requires_preferred_staff: true,
   });
   const booked = await call('post', '/appointments', {
