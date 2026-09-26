@@ -1,0 +1,608 @@
+<meta charset="utf-8">
+<title>AyurCalm Phone Design</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{
+  --text:#1F2A30;--muted:#5B6A70;--faint:#8A979C;--surface:#F4F7F2;--card:#FFFFFF;--sage:#E3ECE0;
+  --primary:#3D6B4F;--on-primary:#FFFFFF;--border:#7A8E7F;--line:#E6ECE3;
+  --alert:#A94A26;--alert-bg:#FBEAE3;--amber:#B8862B;--amber-bg:#FBF0D9;--notice:#6E4A0E;
+  --now:#C2410C;--now-bg:#FFF4EE;--scrim:rgba(20,30,28,.4);
+  /* One colour per therapist, as Apple Calendar colours each calendar. Kept away from red and orange, which mean attention and now. */
+  --t-suresh:#4C7A9E;--t-anjali:#9A5E86;--t-kavya:#5E8A5A;--t-meera:#8C7A5B;--t-ravi:#3E7F86;--t-divya:#7A6AA8;--t-arun:#6B7A8F;--t-leela:#8A8F3E;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{font-size:16px;-webkit-text-size-adjust:100%}
+html,body{height:100%}
+body{margin:0;background:var(--surface);color:var(--text);font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:left;padding:0}
+button:focus-visible,input:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.app{max-width:430px;margin:0 auto;height:100%;display:flex;flex-direction:column;position:relative;overflow:hidden;background:var(--surface)}
+main{flex:1;overflow-y:auto;padding:0 12px 150px;padding-top:env(safe-area-inset-top,0px)}
+.screen{display:flex;flex-direction:column}
+
+/* The day: one continuous list. Finished treatments sit above, dimmed; the screen opens at now. */
+.dayhead{position:sticky;top:0;z-index:3;background:var(--surface);display:flex;justify-content:space-between;align-items:baseline;padding:12px 4px 6px;font-size:13px;color:var(--muted)}
+.dayhead b{font-size:15px;color:var(--text)}
+.row{display:flex;gap:10px;align-items:stretch;width:100%;background:var(--card);padding:10px 12px 10px 0;border-bottom:1px solid var(--line);min-height:58px;position:relative}
+.list{border-radius:12px;overflow:hidden;background:var(--card)}
+.stripe{width:4px;border-radius:0 3px 3px 0;flex:none}
+.time{width:48px;flex:none;font-variant-numeric:tabular-nums;font-size:15px;font-weight:600;line-height:1.25}
+.time small{display:block;font-size:12px;font-weight:400;color:var(--faint)}
+.m{flex:1;min-width:0}
+.n{font-size:16px;font-weight:600}
+.s{font-size:13px;color:var(--muted)}
+.s .ther{font-weight:600}
+.row.past .n,.row.past .time{color:var(--faint);font-weight:500}
+.row.past .s{color:var(--faint)}
+.row.past .stripe{opacity:.35}
+.row.now{background:var(--card)}
+.row.now .time small{color:var(--now);font-weight:700;white-space:nowrap}
+.left{color:var(--now);font-weight:600}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--notice)}
+.tag::before{content:"";width:7px;height:7px;border-radius:4px;background:var(--amber)}
+.row.done .n{text-decoration:line-through;color:var(--faint)}
+.nowline{display:flex;align-items:center;height:22px;background:var(--card);pointer-events:none;scroll-margin-top:200px}
+.nowline b{font-size:11px;font-weight:700;color:#fff;background:var(--now);border-radius:6px;padding:1px 5px;margin-left:8px;font-variant-numeric:tabular-nums}
+.nowline::after{content:"";flex:1;height:2px;background:var(--now)}
+.endday{font-size:13px;color:var(--faint);text-align:center;padding:12px}
+.startday{font-size:13px;color:var(--faint);text-align:center;padding:10px;background:var(--card)}
+
+/* A decision sits where it belongs in the day: the free slot carries the suggestion. */
+.row.decide{background:var(--alert-bg);flex-wrap:wrap}
+.row.decide .n{color:var(--alert)}
+.row.decide .stripe{background:var(--alert)}
+.decide .acts2{display:flex;gap:6px;margin-top:8px}
+.btn{min-height:44px;padding:0 16px;border-radius:22px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;font-size:15px}
+.btn.sm{min-height:36px;padding:0 14px;font-size:14px}
+.btn.p{background:var(--primary);color:var(--on-primary)}
+.btn.o{border:1.5px solid var(--border);background:var(--card)}
+.btn.a{border:1.5px solid var(--alert);color:var(--alert)}
+.btn.q{color:var(--muted)}
+
+/* Attention pill: floats above the bar only while something is waiting; says how many and what kind. */
+.pill{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:5;display:flex;align-items:center;gap:12px;background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:22px;min-height:40px;padding:0 14px;font-size:14px;font-weight:600;box-shadow:0 4px 16px rgba(31,42,48,.25);white-space:nowrap}
+.pill i{width:8px;height:8px;border-radius:4px;display:inline-block;margin-right:5px}
+.pill .r{background:var(--alert)}.pill .y{background:var(--amber)}
+.pill::after{content:'›';color:var(--muted);font-size:18px;margin-left:-4px}
+.pill span{display:inline-flex;align-items:center}
+
+/* One bar: search and menu left, the day in the middle, print and book right. */
+.bar{position:absolute;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:4;display:grid;grid-template-columns:auto auto 1fr auto auto;align-items:center;background:rgba(255,255,255,.94);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:30px;box-shadow:0 4px 18px rgba(31,42,48,.14);padding:4px;height:60px}
+.ib{width:46px;height:46px;border-radius:23px;display:grid;place-items:center;position:relative}
+.ib svg{width:22px;height:22px}
+.ib:active,.datebtn:active{background:var(--sage)}
+.ib.plus{background:var(--primary);color:var(--on-primary);width:50px;height:50px;border-radius:25px}
+.ib.plus svg{width:24px;height:24px}
+.datebtn{height:50px;border-radius:25px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;text-align:center}
+.datebtn .d{font-size:16px;font-weight:650;white-space:nowrap}
+.datebtn .w{font-size:12px;color:var(--muted);white-space:nowrap}
+.datebtn .w.today{color:var(--now);font-weight:650}
+.sbar{grid-template-columns:auto 1fr auto}
+.sico{width:20px;height:20px;margin-left:12px;color:var(--muted)}
+#sq{min-width:0;border:0;background:none;font:inherit;font-size:16px;color:var(--text);padding:0 8px;height:46px;outline:none}
+.cancel{min-height:46px;padding:0 14px;font-weight:600;color:var(--primary);border-radius:23px}
+
+.label{font-size:12px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin:14px 4px 6px;font-weight:600}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chipb{min-height:36px;padding:0 12px;border-radius:18px;border:1.5px solid var(--line);font-size:14px;background:var(--card)}
+.chipb[aria-pressed="true"]{border-color:var(--primary);background:var(--sage);font-weight:600}
+mark{background:#F6E3A8;color:inherit;border-radius:3px;padding:0 1px}
+.ghead{position:sticky;top:0;z-index:2;background:var(--surface);font-size:13px;font-weight:700;padding:12px 4px 6px;display:flex;justify-content:space-between}
+.ghead span{font-weight:500;color:var(--muted)}
+.ghead .bad{color:var(--alert)}
+.viewbar{display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:650;padding:12px 4px 0}
+.link{min-height:36px;padding:0 10px;font-weight:650;border-radius:18px;color:var(--primary)}
+.pagehead{display:flex;align-items:baseline;justify-content:space-between;padding:14px 4px 8px}
+.pagehead h1{font-size:18px;margin:0}
+.pagehead span{font-size:13px;color:var(--muted)}
+.search{min-height:44px;border:1.5px solid var(--border);border-radius:22px;padding:0 16px;font:inherit;font-size:16px;background:var(--card);color:var(--text);width:100%;margin-bottom:8px}
+.plain .row{padding-left:12px}
+
+.scrim{position:absolute;inset:0;background:var(--scrim);display:flex;align-items:flex-end;z-index:8}
+.sheet{background:var(--card);width:100%;border-radius:20px 20px 0 0;padding:8px 16px calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px;max-height:88%;overflow-y:auto}
+.grab{width:36px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 2px}
+.sheet h2{font-size:18px;margin:0}
+.sheet .sub{font-size:13px;color:var(--muted)}
+.acts{display:grid;gap:8px}
+.acts.two{grid-template-columns:1fr 1fr}
+.acts .btn{width:100%}
+.minor{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.minor button{min-height:48px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);font-size:15px}
+.minor button span{color:var(--muted);font-size:13px}
+.pick{display:flex;flex-direction:column;gap:6px}
+.opt{border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;min-height:48px;display:flex;justify-content:space-between;align-items:center;width:100%}
+.opt[aria-pressed="true"]{border-color:var(--primary);background:var(--sage)}
+.chip{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--sage);white-space:nowrap}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:15px;margin:0}
+.kv dt{color:var(--muted);font-variant-numeric:tabular-nums}.kv dd{margin:0}
+.att{display:grid;grid-template-columns:10px 1fr;column-gap:10px;padding:12px 0;border-top:1px solid var(--line)}
+.att:first-of-type{border-top:0}
+.sev{width:10px;height:10px;border-radius:5px;margin-top:5px}
+.sev.a{background:var(--alert)}.sev.n{background:var(--amber)}
+.att .t b{display:block}
+.att .ma{grid-column:2;display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{border:1.5px solid var(--line);border-radius:14px;min-height:60px;padding:10px 12px;display:flex;flex-direction:column;justify-content:center}
+.tile b{font-size:15px}
+.tile span{font-size:12px;color:var(--muted)}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border-radius:12px;padding:3px;gap:3px}
+.seg button{min-height:40px;border-radius:10px;font-size:13px;font-weight:600;text-align:center;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.jump{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.jump .btn{width:100%;padding:0 8px}
+.other{display:flex;justify-content:space-between;align-items:center;min-height:48px;border-top:1px solid var(--line);padding-top:8px;font-weight:600}
+.other input{font:inherit;font-size:16px;min-height:44px;border:1.5px solid var(--border);border-radius:12px;padding:0 10px;background:var(--card);color:var(--text)}
+.toast{position:absolute;z-index:20!important;left:12px;right:12px;bottom:calc(80px + env(safe-area-inset-bottom,0px));background:var(--text);color:var(--card);border-radius:12px;padding:4px 4px 4px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;z-index:9;font-size:15px}
+.toast button{color:#B9E2C6;font-weight:700;min-height:40px;padding:0 10px}
+.taps{font-size:10px;color:var(--notice);text-align:center;padding:4px;font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(40px);opacity:.6}}main{scroll-behavior:smooth}}
+
+/* v8: hour groups for a busy day, resident vs therapist, attention by kind. */
+.hour{position:sticky;top:0;z-index:2;display:flex;align-items:baseline;gap:8px;background:var(--surface);padding:12px 4px 6px;font-variant-numeric:tabular-nums}
+.hour b{font-size:15px}
+.hour span{font-size:12px;color:var(--muted)}
+.hour.past b{color:var(--faint)}
+.hour.nowh b{color:var(--now)}
+.grp{background:var(--card);border-radius:12px;overflow:hidden}
+.grp .row:last-child{border-bottom:0}
+.row{min-height:54px;padding:8px 12px 8px 0}
+.who{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.tdot{width:8px;height:8px;border-radius:4px;display:inline-block;flex:none}
+.tname{font-weight:600}
+.rm{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;align-self:flex-start;padding-top:2px}
+.row.flag{box-shadow:inset 0 0 0 1.5px var(--alert)}
+.fl{flex-basis:100%}
+.row.flag .fl{color:var(--alert);font-weight:600;font-size:12px}
+.row.note .fl{color:var(--notice);font-size:12px}
+.pill .g{background:var(--faint)}
+.att .t small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.sev.k{background:var(--faint)}
+.att h3{grid-column:1/-1;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:4px 0 0}
+.allclear{text-align:center;color:var(--muted);padding:16px}
+
+/* v9 rows */
+.row{padding:10px 14px;gap:12px;min-height:60px;align-items:flex-start}
+.row .top{display:flex;align-items:baseline;gap:8px}
+.row .top .n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .rm{margin:0;padding:0;font-size:12px;color:var(--muted);flex:none;display:inline-flex;align-items:center;gap:3px}
+.door{width:12px;height:12px}
+.who{display:block;font-size:13px;color:var(--muted);margin-top:1px}
+.fl{font-size:12px;font-weight:600;margin-top:3px}
+.fl.fix,.fl.choose{color:var(--alert)}
+.fl.done{color:var(--notice)}
+.fl.know{color:var(--muted)}
+.row.st-fix,.row.st-choose{box-shadow:inset 3px 0 0 var(--alert)}
+
+.time{width:52px}
+.time small{white-space:nowrap;font-variant-numeric:tabular-nums;font-size:13px}
+
+/* v9 treatment card */
+.ev h2{font-size:22px;margin:0}
+.evsub{font-size:15px;color:var(--muted)}
+.facts{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px}
+.facts>div{display:flex;gap:12px;padding:10px 12px;border-top:1px solid var(--line);font-size:15px}
+.facts>div:first-child{border-top:0}
+.facts .k{width:64px;flex:none;color:var(--muted);font-size:13px;padding-top:2px}
+.prob{border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.prob.fix,.prob.choose{background:var(--alert-bg)}
+.prob.fix b,.prob.choose b{color:var(--alert)}
+.prob.know{background:var(--surface)}
+.prob .btn{width:100%;margin-top:4px}
+.minor .danger{color:var(--alert)}
+/* v9 attention */
+.ahead{display:flex;justify-content:space-between;align-items:baseline}
+.ahead span{font-size:13px;color:var(--muted)}
+.ai{border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:4px}
+.ai.fix,.ai.choose{background:var(--alert-bg)}
+.ai.done{background:var(--amber-bg)}
+.ai.know{background:var(--surface)}
+.ah{display:flex;gap:8px;align-items:flex-start;font-size:15px}
+.ah .sev{margin-top:6px;flex:none}
+.ab{font-size:14px;color:var(--muted);padding-left:18px}
+.aa{display:grid;grid-template-columns:1fr auto;gap:8px;padding-left:18px;margin-top:6px}
+.ai.choose .aa{grid-template-columns:1fr}
+.ai.choose .aa .btn.q{justify-self:center}
+.aa .btn{width:100%}
+.aa .btn.q{width:auto}
+.ai.done .aa,.ai.know .aa{display:flex;justify-content:flex-end;gap:4px;margin-top:2px}
+.ai.done .link{color:var(--notice)}.ai.know .link{color:var(--muted)}
+.ai.done,.ai.know{padding-bottom:6px}
+.asep{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:4px}
+.aok{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--sage);color:var(--primary);border-radius:10px;padding:8px 12px;font-size:14px;font-weight:600}
+
+/* v10 */
+.tb{min-height:40px;padding:0 12px;border-radius:20px;font-weight:600;font-size:14px;color:var(--muted)}
+.tb.main{color:var(--primary);font-weight:700}
+.btn.o{color:var(--text)}
+.btn.wide{width:100%}
+.asec{border-radius:16px;padding:4px 12px}
+.asec.act{background:var(--alert-bg)}
+.asec.info{background:var(--surface)}
+.ash{font-size:12px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:var(--muted);padding:10px 0 2px}
+.asec.act .ash{color:var(--alert)}
+.ai{padding:10px 0;border-top:1px solid rgba(0,0,0,.07);border-radius:0;background:none!important;display:flex;flex-direction:column;gap:2px}
+.ash+.ai{border-top:0}
+.ai b{font-size:15px}
+.ab{font-size:14px;color:var(--muted);padding:0}
+.aa{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:2px;padding:0;margin-top:2px}
+.aok{display:flex;justify-content:space-between;align-items:center}
+.ev{display:flex;flex-direction:column;gap:2px}
+.evtop{display:flex}
+.evtop:empty{display:none}
+.stat{font-size:12px;font-weight:700;letter-spacing:.03em;padding:3px 10px;border-radius:12px;background:var(--surface);color:var(--muted)}
+.stat.now{background:var(--now-bg);color:var(--now)}
+.stat.bad{background:var(--alert-bg);color:var(--alert)}
+.evname{font-size:22px;font-weight:700;display:flex;align-items:center;gap:6px;min-height:40px}
+.evname span{color:var(--faint);font-weight:400}
+.facts{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.fact{display:flex;align-items:center;gap:12px;width:100%;padding:0 12px;min-height:50px;border-top:1px solid var(--line);font-size:15px;background:var(--card)}
+.fact:first-child{border-top:0}
+.fact .k{width:74px;flex:none;color:var(--muted);font-size:13px}
+.fact .v{flex:1;min-width:0}
+.fact .c{font-size:0;color:var(--faint)}
+.fact .c::after{content:"›";font-size:20px}
+.fact:disabled{cursor:default}
+.fact .none{color:var(--faint)}
+.prob{border-radius:12px;padding:10px 12px;gap:2px}
+.prob .aa{margin-top:2px}
+.prob .tb{width:auto;margin:0}
+
+/* v11 card */
+.sheet.still{animation:none!important}
+.sheet:has(.nav){min-height:62%}
+.sheet>*{flex-shrink:0}
+.nav{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;margin:-4px -4px 0}
+.nav h2{font-size:17px;text-align:center}
+.backb{min-height:44px;padding:0 8px;color:var(--primary);font-weight:600;font-size:16px;justify-self:start}
+.backb.done{justify-self:end}
+.fact.pr .v{font-size:15px}
+.fact .h{font-size:12px;color:var(--faint);white-space:nowrap}
+.fact.pr .h{color:var(--primary);font-weight:600;font-size:13px}
+.fact.opt2{min-height:52px}
+.fact.opt2:disabled .v{color:var(--muted)}
+.fact.opt2:disabled .h{color:var(--primary);font-weight:700}
+.sug{display:inline-block;margin-left:8px;font-size:11px;font-weight:700;color:var(--primary);background:var(--sage);border-radius:8px;padding:1px 6px;vertical-align:1px}
+.sheet .label{margin:6px 4px -4px}
+
+/* v12 */
+.fact.wrong{min-height:58px;padding-block:8px}
+.fact.wrong .v{font-weight:600;color:var(--alert)}
+.fact.wrong small{display:block;font-weight:400;font-size:12px;color:var(--muted)}
+.fact.hist .v{font-size:14px}
+.fact.hist small{display:block;font-size:12px;color:var(--faint)}
+.fact.hist{min-height:58px;padding-block:8px}
+.log{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:14px}
+.log li{position:relative;display:flex;flex-direction:column;font-size:15px}
+.log li::before{content:"";position:absolute;left:-20px;top:6px;width:10px;height:10px;border-radius:5px;background:var(--card);border:2px solid var(--border)}
+.log li:first-child::before{background:var(--primary);border-color:var(--primary)}
+.log small{font-size:12px;color:var(--muted)}
+</style>
+
+<div class="app">
+  <main id="main">
+    <section class="screen" id="s-home"><div id="day"></div></section>
+    <section class="screen" id="s-page" hidden></section>
+    <section class="screen" id="s-search" hidden></section>
+    <div class="taps" id="taps">mock-up · taps 0</div>
+  </main>
+
+  <button class="pill" id="pill" hidden></button>
+
+  <div class="bar" id="mainbar">
+    <button class="ib" id="menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <button class="ib" id="searchbtn" aria-label="Search treatments"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
+    <button class="datebtn" id="datebtn" aria-label="Change day"><span class="d" id="dd">Sat 26 Sep</span><span class="w today" id="dw">Today · 14:35</span></button>
+    <button class="ib" id="print" aria-label="Print sheets for this day"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg></button>
+    <button class="ib plus" data-act="book" aria-label="Book a treatment"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg></button>
+  </div>
+  <div class="bar sbar" id="searchbar" hidden>
+    <svg class="sico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="sq" type="text" enterkeyhint="search" placeholder="Name, therapy or room" aria-label="Search treatments" autocomplete="off">
+    <button class="cancel" id="searchclose">Cancel</button>
+  </div>
+  <div id="layer"></div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s), layer=$('#layer'), main=$('#main');
+let taps=0;const tick=()=>{$('#taps').textContent='mock-up · taps '+ ++taps};
+const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const NOW=14*60+35;let off=0,page='home',view='time';
+const dateOf=o=>new Date(2026,8,26+o);
+const fmt=d=>DAYS[d.getDay()]+' '+d.getDate()+' '+MON[d.getMonth()];
+const mins=t=>+t.slice(0,2)*60+ +t.slice(3);
+const hm=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+const COL={Suresh:'var(--t-suresh)',Anjali:'var(--t-anjali)',Kavya:'var(--t-kavya)',Meera:'var(--t-meera)',Ravi:'var(--t-ravi)',Divya:'var(--t-divya)',Arun:'var(--t-arun)',Leela:'var(--t-leela)'};
+const stripe=p=>{const c=p.split(' + ').map(x=>COL[x]);return c.length>1?`linear-gradient(${c[0]} 50%,${c[1]} 50%)`:c[0]};
+
+// A busy centre: 10 rooms, 7 therapists in, about 50 treatments from 07:00 to 19:30.
+const RES=['Rahul Mehta','Lata Menon','Alok Singh','Priya Nair','Deepa Iyer','Sanjay Rao','Meena Joshi','Kiran Das','Arjun Pillai','Kavita Shah','Neha Gupta','Vikram Bose','Anita Rao','Farah Khan','Mohan Das','Sita Verma','Ramesh Iyer','Gita Menon','Tara Sen','Nikhil Jain','Usha Nair','Ajay Kumar','Pooja Reddy','Suman Roy','Harish Patel'];
+// The seed's room names (server/src/seed.ts).
+const ROOMS=['Dhanvantari','Nasatya','Dasra','Shiva','Vishnu','Lakshmi','Parvati','Ganesha','Hanuman','Saraswati'];
+const rix=r=>ROOMS.indexOf(r);
+const THER=['Suresh','Anjali','Kavya','Ravi','Divya','Arun','Leela'];
+const TH=[['Abhyanga',60],['Shirodhara',90],['Kizhi',60],['Nasya',45],['Udvartana',60],['Padabhyanga',45],['Kativasti',45],['Pizhichil',75],['Njavarakizhi',90]];
+// Built slot by slot so nobody is in two places: a resident or therapist busy then is skipped.
+function makeDay(seed){let r=seed;const rnd=n=>(r=(r*9301+49297)%233280)%n;const out=[],busy={};
+  const free=(k,s,e)=>!(busy[k]||[]).some(([a,b])=>s<b&&e>a),take=(k,s,e)=>(busy[k]=busy[k]||[]).push([s,e]);
+  const starts=[];for(let room=1;room<=10;room++){let t=7*60+rnd(4)*15;while(t<18*60+30){const k=rnd(TH.length);starts.push([t,room,k]);t+=TH[k][1]+15+rnd(3)*15}}
+  starts.sort((x,y)=>x[0]-y[0]);
+  for(const [t,room,k] of starts){const [th,len]=TH[k],e=t+len,pair=th==='Pizhichil'||th==='Njavarakizhi';
+    const ts=THER.filter(x=>free(x,t,e));const rs=RES.filter(x=>free(x,t,e));if(ts.length<(pair?2:1)||!rs.length)continue;
+    const a=ts[rnd(ts.length)],b2=pair?ts.filter(x=>x!==a)[rnd(ts.length-1)]:null,who=rs[rnd(rs.length)];
+    take(a,t,e);if(b2)take(b2,t,e);take(who,t,e);out.push({t:hm(t),len,who,th,p:b2?a+' + '+b2:a,room:ROOMS[room-1]})}
+  return out.sort((x,y)=>mins(x.t)-mins(y.t)||rix(x.room)-rix(y.room))}
+const DAYDATA={};const dayRows=o=>DAYDATA[o]||(DAYDATA[o]=makeDay(1000+o*37));
+// Today's planted problems, the kinds dayCheck.ts really returns.
+const T=dayRows(0);
+const at=(time,room)=>T.find(x=>x.t===time&&x.room===room)||T.find(x=>mins(x.t)>=mins(time)&&x.room===room);
+T.filter(x=>mins(x.t)>NOW&&x.p.startsWith('Suresh')===false).slice(0,3).forEach(x=>{x.from='Meera'});
+const clashA=T.filter(x=>mins(x.t)>NOW)[6],clashB={...T.filter(x=>mins(x.t)>NOW)[7]};clashB.t=clashA.t;clashB.room=clashA.room;clashB.who=RES.find(n=>!T.some(x=>x.who===n&&Math.abs(mins(x.t)-mins(clashA.t))<120));clashB.th='Kizhi';clashB.len=60;clashB.p='Ravi';T.push(clashB);
+const shortRow=T.find(x=>x.th==='Njavarakizhi'&&mins(x.t)>NOW)||T.filter(x=>mins(x.t)>NOW)[12];shortRow.p=shortRow.p.split(' + ')[0];
+const eventRow=T.filter(x=>mins(x.t)>=16*60+30)[4];
+T.sort((x,y)=>mins(x.t)-mins(y.t)||rix(x.room)-rix(y.room));
+// The room the planner would pick: one with nothing on it for the whole treatment.
+const freeRoom=ROOMS.find(n=>!T.some(x=>x!==clashB&&x.room===n&&mins(x.t)<mins(clashB.t)+clashB.len&&mins(clashB.t)<mins(x.t)+x.len));
+
+/* Attention, by what the admin has to do:
+   fix   blocking, and the app has one plan for it: one tap to accept.
+   choose blocking with no plan (no_fix_reason): the admin picks.
+   done  the app already fixed it (a therapist not in): Undo or OK.
+   know  worth knowing, never a warning (EVENT_OVERLAP): dismiss.
+   A resident with nothing booked is normal (a rest day) and is not shown. */
+const ATT=[
+ {id:'room',kind:'fix',row:clashB,title:`${clashA.room} is booked twice at ${clashA.t}`,body:`${clashA.who} and ${clashB.who}. Move ${clashB.who} to ${freeRoom}, same time and therapist.`,act:'Move to '+freeRoom,short:clashA.room+' booked twice',
+   apply(){clashB.room=freeRoom}},
+ {id:'short',kind:'choose',row:shortRow,title:`${shortRow.who}'s ${shortRow.th} at ${shortRow.t} needs 2 therapists`,body:`Only ${shortRow.p.split(' + ')[0]} is free then, and no time in the next 30 days has two therapists free for it.`,choices:[`Change to Abhyanga with ${shortRow.p.split(' + ')[0]}`,'Cancel it'],short:'Needs 2 therapists',
+   apply(c){if(c.startsWith('Cancel'))shortRow.cancelled=true;else{shortRow.th='Abhyanga';shortRow.len=60}}},
+ {id:'meera',kind:'done',title:'Meera is not in today',body:`Her 3 treatments went to ${[...new Set(T.filter(x=>x.from).map(x=>x.p))].join(', ').replace(/, ([^,]*)$/,' and $1')}, same times.`,act:'OK'},
+ {id:'yoga',kind:'know',row:eventRow,title:`${eventRow.who}'s ${eventRow.th} runs through Evening yoga`,body:'Yoga is 17:00 to 18:00 for all residents. The treatment stays as booked.',act:'OK',short:'Runs through yoga'}];
+const open=()=>ATT.filter(a=>!a.gone);
+clashA.flag=clashB.flag='room';shortRow.flag='short';eventRow.flag='yoga';
+
+function info(x){const st=mins(x.t),en=st+x.len;return {...x,st,en,past:off===0&&en<=NOW,now:off===0&&st<=NOW&&en>NOW,src:x}}
+// Colour means state only: orange now, red must fix, amber changed by the app, grey done.
+// Resident first and bold; the room sits right, where a calendar puts the location; the therapist follows "with".
+const DOOR='<svg class="door" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 14V2.5h7V14M2.5 14h11M9 8.2v.1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+const withText=p=>'with '+p.split(' + ').join(' & ');
+function tRow(x,{name=x.who,line}={}){
+  if(x.cancelled||x.moved)return '';
+  if(x.src?.noshow)name=`<s>${name}</s> <span style="font-size:12px;color:var(--muted);font-weight:500">didn't come</span>`;
+  const a=ATT.find(a=>a.id===x.flag&&!a.gone);
+  const l=line??`${x.th} · ${withText(x.p)}`;
+  const flag=a?`<div class="fl ${a.kind}">${a.short}</div>`:(x.from&&ATT.find(a=>a.id==='meera'&&!a.gone)?`<div class="fl done">Was Meera's</div>`:'');
+  const i=dayRows(off).indexOf(x.src);
+  return `<button class="row${x.past?' past':''}${x.now?' now':''}${a?' st-'+a.kind:x.from&&flag?' st-done':''}" data-i="${i}" data-o="${off}"><span class="time">${x.t}<small>${x.now?(x.en-NOW)+'m left':hm(x.en)}</small></span><span class="m"><div class="top"><span class="n">${name}</span><span class="rm">${DOOR}${x.room}</span></div><div class="who">${l}</div>${flag}</span></button>`}
+
+function render(){
+  const d=dateOf(off),rows=dayRows(off).map(info).filter(x=>!x.cancelled&&!x.moved).sort((x,y)=>x.st-y.st||rix(x.room)-rix(y.room));
+  $('#dd').textContent=fmt(d);
+  const w=$('#dw');w.textContent=off===0?'Today · 14:35':off===1?'Tomorrow':off===-1?'Yesterday':off>1?'In '+off+' days':(-off)+' days ago';
+  w.classList.toggle('today',off===0);pill();
+  let h='';
+  if(view==='time'){
+    h+=`<div class="dayhead"><b>${off===0?'Today':fmt(d)}</b><span>${rows.length} treatments · 10 rooms</span></div>`;
+    // One group per hour. Ten rooms start treatments every few minutes, so the hour is the unit the eye can hold.
+    const hours=[...new Set(rows.map(x=>Math.floor(x.st/60)))];
+    hours.forEach(H=>{const g=rows.filter(x=>Math.floor(x.st/60)===H),past=off===0&&(H+1)*60<=NOW&&g.every(x=>x.past),nowH=off===0&&H===Math.floor(NOW/60);
+      h+=`<div class="hour${past?' past':''}${nowH?' nowh':''}" ${nowH?'id="nowhour"':''}><b>${hm(H*60)}</b><span>${g.length} starting${past?' · done':''}</span></div><div class="grp">`;
+      let lineDone=!nowH;
+      g.forEach(x=>{if(!lineDone&&x.st>NOW){h+='<div class="nowline" id="nowline"><b>14:35</b></div>';lineDone=true}h+=tRow(x)});
+      if(!lineDone)h+='<div class="nowline" id="nowline"><b>14:35</b></div>';
+      h+='</div>'});
+    h+=`<div class="endday">End of the day</div>`;
+  }else{
+    const groups={};
+    rows.forEach(x=>{const keys=view==='therapist'?x.p.split(' + '):view==='room'?[x.room]:[x.who];keys.forEach(k=>(groups[k]=groups[k]||[]).push(x))});
+    if(view==='therapist'&&off===0)groups.Meera=[];
+    h+=`<div class="viewbar">By ${view}<button class="link" data-act="bytime">Back to by time</button></div>`;
+    Object.keys(groups).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).forEach(k=>{const g=groups[k],left=g.filter(x=>!x.past).length,nx=g.find(x=>!x.past);
+      h+=`<div class="ghead">${k}<span>${k==='Meera'?'<span class="bad">not in, all moved</span>':(left?left+' to go':'all done')+(nx?' · next '+nx.t:'')}</span></div><div class="grp">`+
+        g.map(x=>view==='therapist'?tRow(x,{line:`${x.th}${x.p.includes('+')?' · with '+x.p.split(' + ').find(y=>y!==k):''}`}):view==='resident'?tRow(x,{name:x.th,line:withText(x.p)}):tRow(x)).join('')+'</div>'});
+  }
+  $('#day').innerHTML=h;
+}
+function scrollToNow(){const n=$('#nowhour');main.style.scrollBehavior='auto';main.scrollTop=n?Math.max(0,n.offsetTop-110):0;main.style.scrollBehavior=''}
+
+const KIND={fix:['r','to fix'],choose:['r','to decide'],done:['y','done for you'],know:['g','to know']};
+function pill(){const el=$('#pill'),o=off===0?open():[];
+  el.hidden=!o.length||page!=='home'||!$('#s-search').hidden;
+  const red=o.filter(a=>a.kind==='fix'||a.kind==='choose').length,y=o.filter(a=>a.kind==='done').length,g=o.filter(a=>a.kind==='know').length;
+  el.innerHTML=(red?`<span><i class="r"></i>${red} to fix</span>`:'')+(y?`<span><i class="y"></i>${y} done</span>`:'')+(g?`<span><i class="g"></i>${g} note</span>`:'')}
+// Each item: what happened (bold), why in one line, then one primary button that says what it will do.
+// The sheet stays open and updates as items are dealt with, so the next one is right there.
+let lastUndo=null;
+// Two sections styled alike: "For your action" (warm) and "For your information" (neutral).
+// Every item: what (bold), why (one line), then text buttons; the first is the one that does the thing.
+function attention(msg,undo){const o=open();lastUndo=undo||null;
+  if(!o.length){sheet(`<h2>Today</h2><div class="allclear">${msg?msg+'<br>':''}Nothing else needs you.</div>`);setTimeout(close,1600);return}
+  const btns=a=>a.kind==='fix'?[['apply',a.act,1],['show','See it']]:a.kind==='choose'?[...a.choices.map((c,i)=>['choose',c,!i]),['show','See it']]:a.kind==='done'?[['undo','Undo'],['ok','Dismiss']]:[['show','See it'],['ok','Dismiss']];
+  const item=a=>`<div class="ai"><b>${a.title}</b><div class="ab">${a.body}</div><div class="aa">${btns(a).map(([z,l,main])=>`<button class="tb${main?' main':''}" data-z="${z}" data-a="${a.id}"${z==='choose'?` data-c="${l}"`:''}>${l}</button>`).join('')}</div></div>`;
+  const act=o.filter(a=>a.kind==='fix'||a.kind==='choose'),info=o.filter(a=>a.kind==='done'||a.kind==='know');
+  sheet(`<h2>Today</h2>${msg?`<div class="aok"><span>✓ ${msg}</span>${undo?'<button class="tb" data-z="lastundo">Undo</button>':''}</div>`:''}
+    ${act.length?`<section class="asec act"><div class="ash">For your action · ${act.length}</div>${act.map(item).join('')}</section>`:''}
+    ${info.length?`<section class="asec info"><div class="ash">For your information · ${info.length}</div>${info.map(item).join('')}</section>`:''}`);
+  on('[data-z]',x=>{const a=ATT.find(q=>q.id===x.dataset.a),z=x.dataset.z;
+    if(z==='lastundo'){lastUndo();render();attention();return}
+    if(z==='show'){close();view='time';render();const r=[...document.querySelectorAll('.row')].find(r=>+r.dataset.i===T.indexOf(a.row));r?.scrollIntoView({block:'center'});r?.animate?.([{background:'#FBEAE3'},{background:'#fff'}],{duration:1400});return}
+    if(z==='apply'){a.apply();a.gone=true;render();attention(`${clashB.who} moved to ${freeRoom}.`,()=>{a.gone=false;clashB.room=clashA.room})}
+    if(z==='choose'){const before={th:shortRow.th,len:shortRow.len};a.apply(x.dataset.c);a.gone=true;render();attention(x.dataset.c.startsWith('Cancel')?`${shortRow.who}'s treatment at ${shortRow.t} cancelled.`:`${shortRow.who} now has Abhyanga with ${shortRow.p} at ${shortRow.t}.`,()=>{a.gone=false;delete shortRow.cancelled;Object.assign(shortRow,before)})}
+    if(z==='ok'){a.gone=true;render();attention()}
+    if(z==='undo'){a.gone=true;render();attention("Meera's 3 treatments are back on her name.",()=>{a.gone=false})}})}
+
+function go(p){page=p;$('#s-home').hidden=p!=='home';const s=$('#s-page');s.hidden=p==='home';close();
+  if(p==='home'){render();off===0&&view==='time'?scrollToNow():main.scrollTop=0;return}
+  s.innerHTML=PAGES[p];main.scrollTop=0;pill()}
+const PAGES={
+ res:`<div class="pagehead"><h1>Residents</h1><span>25 in house</span></div><input class="search" placeholder="Search all residents" aria-label="Search residents">
+  <div class="grp plain">${RES.slice(0,8).map((r,i)=>`<button class="row" data-r="${r}"><span class="m"><div class="n">${r}</div><div class="who">Room ${i+3} · day ${i+2} of 14</div></span></button>`).join('')}</div>`,
+ team:`<div class="pagehead"><h1>Team and rooms</h1><span>7 in · 1 not in</span></div><div class="grp plain">
+  ${[...THER,'Meera'].map(p=>`<button class="row" data-p="${p}"><span class="m"><div class="n">${p}</div><div class="who">${p==='Meera'?'<span style="color:var(--alert)">Not in today</span>':'Working today'}</div></span></button>`).join('')}</div>
+  <div class="label">Rooms</div><div class="grp plain">${[...Array(10)].map((_,i)=>`<button class="row" data-room="Room ${i+1}"><span class="m"><div class="n">Room ${i+1}</div></span></button>`).join('')}</div>`,
+ other:`<div class="pagehead"><h1>Weekly jobs</h1></div><div class="label">Each is one short sheet, built in #137 and #142. Not in this mock-up.</div>`};
+
+function close(){layer.querySelector('.scrim')?.remove()}
+// Moving between the card and its sub-pages swaps content in place; only a fresh open slides up.
+function sheet(html){const still=!!layer.querySelector('.scrim');close();layer.querySelector('.toast')?.remove();layer.insertAdjacentHTML('beforeend',`<div class="scrim" id="scrim"><div class="sheet${still?' still':''}" role="dialog"><div class="grab"></div>${html}</div></div>`);
+  $('#scrim').onclick=e=>{if(e.target.id==='scrim')close()}}
+let tt;function toast(msg,undo,more,keep){if(!keep)close();clearTimeout(tt);layer.querySelector('.toast')?.remove();const d=document.createElement('div');d.className='toast';
+  d.innerHTML=`<span>${msg}</span><span>${more?'<button data-more>'+more[0]+'</button>':''}${undo?'<button data-undo>Undo</button>':''}</span>`;
+  layer.appendChild(d);$('#pill').hidden=true;if(undo)d.querySelector('[data-undo]').onclick=e=>{e.stopPropagation();undo();d.remove();pill()};
+  if(more)d.querySelector('[data-more]').onclick=e=>{e.stopPropagation();d.remove();more[1]()};tt=setTimeout(()=>{d.remove();pill()},5000)}
+const on=(sel,fn)=>layer.querySelectorAll(sel).forEach(x=>x.onclick=ev=>{ev.stopPropagation();tick();fn(x)});
+
+let sx=null,sy=0;main.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
+main.addEventListener('touchend',e=>{if(sx===null||page!=='home'||!$('#s-search').hidden)return;const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;sx=null;
+  if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.5){off+=dx<0?1:-1;go('home')}});
+
+function menu(){sheet(`<div class="label" style="margin-top:0">Show the day by</div><div class="seg">${['time','therapist','room','resident'].map(v=>`<button data-v="${v}" aria-pressed="${v===view}">${v[0].toUpperCase()+v.slice(1)}</button>`).join('')}</div>
+  <div class="tiles"><button class="tile" data-m="res"><b>Residents</b><span>25 in house</span></button><button class="tile" data-m="team"><b>Team and rooms</b><span>Meera not in</span></button>
+  <button class="tile" data-m="other"><b>Leave</b><span>Future time off</span></button><button class="tile" data-m="other"><b>Diet plans</b><span>Meals by plan</span></button>
+  <button class="tile" data-m="other"><b>Settings</b><span>Centre, therapies</span></button><button class="tile" data-m="home"><b>Back to the day</b><span>${fmt(dateOf(off))}</span></button></div>`);
+  on('[data-v]',x=>{view=x.dataset.v;go('home')});on('[data-m]',x=>go(x.dataset.m))}
+function datePicker(){
+  sheet(`<h2>${fmt(dateOf(off))}</h2><div class="jump"><button class="btn o" data-o="${off-1}">‹ Day before</button><button class="btn p" data-o="0">Today</button><button class="btn o" data-o="${off+1}">Next day ›</button></div>
+  <label class="other">Pick a date <input type="date" id="pickdate" value="2026-09-${String(26+off).padStart(2,'0')}"></label><div class="sub">Or swipe the day left and right.</div>`);
+  on('[data-o]',x=>{off=+x.dataset.o;go('home')});
+  $('#pickdate').onchange=e=>{off=Math.round((new Date(e.target.value+'T00:00')-dateOf(0))/864e5);go('home')}}
+
+// Search every treatment, past and future, as the phone's calendar does.
+const ALL=[];for(let o=-3;o<=5;o++)dayRows(o).forEach((x,i)=>ALL.push({...x,o,i}));
+let scope='upcoming',recent=['Rahul','Shirodhara'];
+function openSearch(){$('#mainbar').hidden=true;$('#searchbar').hidden=false;['s-home','s-page'].forEach(i=>$('#'+i).hidden=true);$('#s-search').hidden=false;$('#pill').hidden=true;$('#sq').value='';searchRender();main.scrollTop=0;$('#sq').focus()}
+function closeSearch(){$('#mainbar').hidden=false;$('#searchbar').hidden=true;$('#s-search').hidden=true;go(page)}
+const esc=q=>q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+// Anything the admin types is escaped before it becomes HTML.
+const safe=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const hl=(t,q)=>{t=safe(t);q=safe(q);return q?t.replace(new RegExp('('+esc(q)+')','ig'),'<mark>$1</mark>'):t};
+function searchRender(){const q=$('#sq').value.trim(),el=$('#s-search');
+  const chips=(l,a)=>`<div class="label">${l}</div><div class="chips">${a.map(r=>`<button class="chipb" data-q="${r}">${r}</button>`).join('')}</div>`;
+  if(!q){el.innerHTML=chips('Recent',recent)+chips('Residents',RES.slice(0,6))+chips('Therapists',THER);return}
+  const ql=q.toLowerCase(),m=ALL.filter(x=>[x.who,x.th,x.p,x.room].some(f=>f.toLowerCase().includes(ql)));
+  const isPast=x=>x.o<0||(x.o===0&&mins(x.t)+x.len<=NOW);
+  let hits=m.filter(x=>scope==='all'||(scope==='past')===isPast(x));if(scope==='past')hits.reverse();
+  let h=`<div class="chips" style="padding-top:12px">${[['upcoming','Upcoming'],['past','Past'],['all','All']].map(([k,v])=>`<button class="chipb" data-scope="${k}" aria-pressed="${k===scope}">${v}</button>`).join('')}</div>`;
+  if(!hits.length)h+=`<div class="endday">No ${scope==='all'?'':scope+' '}treatments match “${safe(q)}”.${m.length?' Try All.':''}</div>`;
+  let last=null;hits.slice(0,30).forEach(x=>{if(x.o!==last){if(last!==null)h+='</div>';const d=dateOf(x.o);h+=`<div class="ghead">${x.o===0?'Today':x.o===1?'Tomorrow':x.o===-1?'Yesterday':fmt(d)}<span>${Math.abs(x.o)<=1?fmt(d):''}</span></div><div class="grp">`;last=x.o}
+    h+=`<button class="row${isPast(x)?' past':''}" data-go="${x.o}" data-i="${x.i}" data-o="${x.o}"><span class="time">${x.t}<small>${hm(mins(x.t)+x.len)}</small></span><span class="m"><div class="top"><span class="n">${hl(x.who,q)}</span><span class="rm">${DOOR}${hl(x.room,q)}</span></div><div class="who">${hl(x.th,q)} · ${hl(withText(x.p),q)}</div></span></button>`});
+  if(last!==null)h+='</div>';el.innerHTML=h}
+$('#sq').addEventListener('input',searchRender);
+$('#s-search').addEventListener('click',e=>{const c=e.target.closest('[data-q],[data-scope]');if(!c)return;e.stopPropagation();tick();
+  if(c.dataset.q)$('#sq').value=c.dataset.q;else scope=c.dataset.scope;searchRender()},true);
+
+/* The treatment card. Admin jobs on one treatment (#136, #62, #63, #144 review):
+   see it · didn't come · running late · wants to cancel · therapist not in · room unusable ·
+   move · change treatment, therapist or room · note · open the resident.
+   Like iOS Calendar and Settings: facts are rows, a row opens a list, tapping a list row applies it
+   and comes back (no confirm button, Undo instead). Every problem sits in one list on the card: one tap each. */
+const SESS=x=>{const n=2+RES.indexOf(x.who.replace(/<[^>]+>/g,''))%5;return `Session ${n} of 7`};
+// Each treatment keeps its own history, newest first. The card shows the latest line; tapping opens the rest.
+const stamp=()=>'Today '+hm(NOW)+' · you';
+function logOf(src,o){if(!src.log){src.log=[{w:'22 Sep · you',t:`Booked: ${SESS(src).toLowerCase()} of a 7-session course`}];
+  if(src.from)src.log.unshift({w:'Today 07:02 · the app',t:`Therapist changed from Meera to ${src.p}. Meera is not in today.`})}return src.log}
+function treatment(b){const o=+b.dataset.o,src=dayRows(o)[+b.dataset.i],x=info({...src});x.src=src;x.past=o<0||(o===0&&x.en<=NOW);
+  const a=ATT.find(q=>q.id===src.flag&&!q.gone),dayName=o===0?'Today':o===1?'Tomorrow':fmt(dateOf(o)),stay=3+RES.indexOf(x.who)%9,first=x.who.split(' ')[0];
+  const status=src.noshow?'<span class="stat bad">Didn\'t come</span>':x.past?'<span class="stat">Finished</span>':x.now?`<span class="stat now">In progress · ${x.en-NOW} min left</span>`:'';
+  const fact=(k,label,val)=>`<button class="fact" data-f="${k}"${x.past?' disabled':''}><span class="k">${label}</span><span class="v">${val}</span>${x.past?'':'<span class="c"></span>'}</button>`;
+  const probs=x.past||src.noshow?[]:[
+    ['noshow',`${first} didn't come`,''],
+    ['late',`${first} is running late`,'Start later ›'],
+    ['cancel',`${first} wants to cancel`,''],
+    ...x.p.split(' + ').map(n=>['staff:'+n,`${n} is not in`,'']),
+    ['room',`Room ${x.room} can't be used`,'']];
+  sheet(`<div class="ev"><div class="evtop">${status}</div><button class="evname" data-f="res">${x.who}<span>›</span></button><div class="evsub">${SESS(x)} · stay day ${stay} of 14</div></div>
+  ${a&&!x.past?`<div class="prob ${a.kind}"><b>${a.short}</b><span>${a.body}</span><div class="aa">${(a.kind==='fix'?[['fix',a.act,1]]:a.kind==='choose'?a.choices.map((c,i)=>['choose',c,!i]):[['gotit','Dismiss']]).map(([z,l,m])=>`<button class="tb${m?' main':''}" data-x="${z}" data-c="${l}">${l}</button>`).join('')}</div></div>`:''}
+  <div class="facts">
+    ${fact('time','When',`${dayName}, ${x.t} to ${hm(x.en)}`)}
+    ${fact('therapy','Treatment',`${x.th} · ${x.len} min`)}
+    ${fact('staff','With',x.p.split(' + ').join(' and '))}
+    ${fact('room','Room',x.room)}
+    ${fact('note','Note',src.note?safe(src.note):'<span class="none">Add a note</span>')}
+  </div>
+  ${x.past||src.noshow?'':`<div class="facts"><button class="fact wrong" data-f="wrong"><span class="v">Something wrong?<small>Didn't come, running late, cancel, staff or room</small></span><span class="c"></span></button></div>`}
+  <div class="facts">
+    <button class="fact hist" data-f="log"><span class="k">History</span><span class="v">${logOf(src,o)[0].t}<small>${logOf(src,o)[0].w}</small></span><span class="c"></span></button>
+  </div>
+  ${b.dataset.go!==undefined?`<button class="btn o wide" data-x="goday">Show this day</button>`:''}
+  ${src.noshow?`<button class="btn o wide" data-x="unno">${first} came after all</button>`:''}`);
+  const back=()=>{render();const r=[...document.querySelectorAll('.row')].find(r=>+r.dataset.i===+b.dataset.i&&+r.dataset.o===o);if(r)treatment(r);else close()};
+  on('[data-f]',y=>{const f=y.dataset.f;if(f==='res')return resident(x.who,back);if(f==='wrong')return wrong(probs,x,src,o,back);if(f==='log')return history(src,o,back);sub(f,x,src,o,back)});
+  on('[data-p]',y=>problem(y.dataset.p,x,src,o,back));
+  on('[data-x]',y=>{const k=y.dataset.x;
+    if(k==='fix'){a.apply();a.gone=true;back();toast(`${clashB.who} moved to ${freeRoom}`,()=>{a.gone=false;clashB.room=clashA.room;render()})}
+    if(k==='choose'){const before={th:src.th,len:src.len};a.apply(y.dataset.c);a.gone=true;back();toast(y.dataset.c.startsWith('Cancel')?'Cancelled':'Changed to Abhyanga',()=>{a.gone=false;delete src.cancelled;Object.assign(src,before);render()})}
+    if(k==='gotit'){a.gone=true;back()}
+    if(k==='goday'){off=o;view='time';$('#mainbar').hidden=false;$('#searchbar').hidden=true;$('#s-search').hidden=true;go('home');return}
+    if(k==='unno'){delete src.noshow;src.log.unshift({w:stamp(),t:'Came after all'});back()}})}
+
+// One row on the card, the list behind it. New kinds of problem join this list, not the card.
+function wrong(probs,x,src,o,back){
+  sheet(`<div class="nav"><button class="backb" id="backb">‹ Back</button><h2>Something wrong?</h2><span></span></div><div class="sub">${x.who} · ${x.t} ${x.th}. Each acts at once; Undo follows.</div>
+  <div class="facts">${probs.map(([k,l,h])=>`<button class="fact pr" data-p="${k}"><span class="v">${l}</span><span class="h">${h}</span></button>`).join('')}</div>`);
+  on('#backb',back);on('[data-p]',y=>problem(y.dataset.p,x,src,o,back))}
+function history(src,o,back){
+  sheet(`<div class="nav"><button class="backb" id="backb">‹ Back</button><h2>History</h2><span></span></div><div class="sub">Everything that changed on this treatment, newest first</div>
+  <ol class="log">${logOf(src,o).map(e=>`<li><span>${e.t}</span><small>${e.w}</small></li>`).join('')}</ol>`);on('#backb',back)}
+function problem(k,x,src,o,back){src.log=logOf(src,o);const first=x.who.split(' ')[0];
+  if(k==='noshow'){src.log.unshift({w:stamp(),t:"Marked didn't come"});src.noshow=true;render();close();toast(`${first}: didn't come. Room and therapist are free.`,()=>{delete src.noshow;render()});return}
+  if(k==='cancel'){src.log.unshift({w:stamp(),t:'Cancelled at the resident\'s request'});src.cancelled=true;render();close();toast(`${first}'s ${x.th} cancelled`,()=>{delete src.cancelled;render()});return}
+  if(k.startsWith('staff:')){const n=k.slice(6);close();toast(`${n} not in from now: 4 treatments moved to others`,()=>{});return}
+  if(k==='room'){close();toast(`${x.room} closed: 2 treatments moved`,()=>{});return}
+  if(k==='late')list(`Start later`,`Same therapist (${x.p.split(' + ').join(' and ')}) and room (${x.room}). Only times where both stay free.`,
+    [15,30,45].map((m,i)=>({l:`${hm(x.st+m)} to ${hm(x.en+m)}`,r:`+${m} min`,best:!i,go(){const old=src.t;src.t=hm(x.st+m);src.log.unshift({w:stamp(),t:`Started ${m} min late: ${old} to ${src.t}`});return [`${first} now starts at ${src.t}`,()=>{src.t=old}]}})),back)}
+
+// A sub-page inside the sheet: Back at top left, rows with the current one ticked and the best one marked.
+// Tapping a row applies it and returns to the card with an Undo.
+function list(title,hint,rows,back,current){
+  sheet(`<div class="nav"><button class="backb" id="backb">‹ Back</button><h2>${title}</h2><span></span></div><div class="sub">${hint}</div>
+  <div class="facts">${rows.map((r,i)=>`<button class="fact opt2" data-v="${i}"${r.cur?' disabled':''}><span class="v">${r.l}${r.best?'<span class="sug">Suggested</span>':''}</span><span class="h">${r.cur?'✓ now':r.r||''}</span></button>`).join('')}</div>`);
+  on('#backb',back);
+  on('[data-v]',y=>{const r=rows[+y.dataset.v];const res=r.go();if(!res)return;back();toast(res[0],()=>{res[1]();back()},null,true)})}
+
+function sub(k,x,src,o,back){const first=x.who.split(' ')[0];
+  const NAMES={t:'Start time',room:'Room',p:'Therapist',th:'Treatment',moved:'Day'};
+  const set=(obj,msg)=>{const old={};for(const f in obj)old[f]=src[f];Object.assign(src,obj);const f=Object.keys(obj)[0];logOf(src,o).unshift({w:stamp(),t:f==='moved'?'Moved to tomorrow':`${NAMES[f]} changed from ${old[f]} to ${obj[f]}`+(obj.room&&f!=='room'?`, room ${obj.room}`:'')});return [msg,()=>{Object.assign(src,old);src.log.shift()}]};
+  if(k==='time')return list(`Move ${first}'s ${x.th}`,`Times when ${first}, ${x.p.split(' + ').join(' and ')} and a room are free.`,[
+    {l:`Today ${x.t}, ${x.room}`,cur:1},
+    {l:`Today ${hm(x.st+75)}, same room`,best:1,go:()=>set({t:hm(x.st+75)},`Moved to ${hm(x.st+75)}`)},
+    {l:`Today ${hm(x.st+150)}, ${ROOMS[(rix(x.room)+1)%10]}`,go:()=>set({t:hm(x.st+150),room:ROOMS[(rix(x.room)+1)%10]},`Moved to ${hm(x.st+150)}`)},
+    {l:`Tomorrow ${x.t}, same room`,go:()=>set({moved:'tomorrow'},'Moved to tomorrow')},
+    {l:'Another day or time…',r:'›',go:()=>{toast('Opens the date and time picker');return null}}],back);
+  if(k==='staff'){const free=THER.filter(n=>!x.p.includes(n)).slice(0,4);return list('Therapist','Free for the whole treatment',[{l:x.p.split(' + ').join(' and '),cur:1},...free.map((n,i)=>({l:n,best:!i,go:()=>set({p:n},`Now with ${n}`)}))],back)}
+  if(k==='room'){const rs=ROOMS.filter(r=>r!==x.room).slice(0,4);return list('Room','Free for the whole treatment, with what it needs',[{l:x.room,cur:1},...rs.map((r,i)=>({l:r,best:!i,go:()=>set({room:r},`Now in ${r}`)}))],back)}
+  if(k==='therapy'){const ts=TH.filter(t=>t[0]!==x.th&&t[1]<=x.len+15).slice(0,4);return list('Treatment','Fits the same time, therapist and room',[{l:`${x.th} · ${x.len} min`,cur:1},...ts.map((t,i)=>({l:`${t[0]} · ${t[1]} min`,go:()=>set({th:t[0],len:t[1]},`Changed to ${t[0]}`)}))],back)}
+  if(k==='note'){sheet(`<div class="nav"><button class="backb" id="backb">‹ Back</button><h2>Note</h2><button class="backb done" id="okn">Save</button></div><div class="sub">Prints on the therapist's sheet</div><textarea id="nt" class="search" rows="3" style="border-radius:12px;padding:10px;height:auto">${safe(src.note||'')}</textarea>`);
+    $('#nt').focus();on('#backb',back);on('#okn',()=>{src.note=$('#nt').value.trim();logOf(src,o).unshift({w:stamp(),t:src.note?'Note: '+safe(src.note):'Note removed'});back()})}
+}
+
+document.addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b||layer.contains(b))return;tick();
+  if(b.id==='menu')return menu();
+  if(b.id==='pill')return attention();
+  if(b.id==='searchbtn')return openSearch();
+  if(b.id==='searchclose')return closeSearch();
+  if(b.id==='datebtn')return datePicker();
+  if(b.id==='print')return toast(`${fmt(dateOf(off))}: resident sheet and therapist sheet opened in 2 tabs`);
+  const a=b.dataset.act;
+  if(a==='bytime'){view='time';go('home');return}
+  if(a==='book')return book();
+  if(b.dataset.i!==undefined)return treatment(b);
+  if(b.dataset.r)return resident(b.dataset.r);
+  if(b.dataset.p){const p=b.dataset.p;sheet(`<h2>${p}</h2><div class="acts"><button class="btn a" data-z>Not in from now</button></div><div class="acts two"><button class="btn o" data-z>In late</button><button class="btn o" data-z>Leaving early</button></div>`);on('[data-z]',()=>toast(`${p}: treatments moved`,()=>{}));return}
+  if(b.dataset.room){const r=b.dataset.room;sheet(`<h2>${r}</h2><div class="acts"><button class="btn a" data-z>Out of use from now</button></div>`);on('[data-z]',()=>toast(`${r} closed: treatments moved`,()=>{}));return}
+});
+function book(){sheet(`<h2>Book a treatment</h2><div class="sub">Next free: 15:30 · Kavya · Room 4 · suggested residents furthest behind on their course</div><div class="pick">
+  <button class="opt" aria-pressed="true" data-y>Kiran Das · Abhyanga<span class="chip">best</span></button><button class="opt" data-y>Rahul Mehta · Nasya</button><button class="opt" data-y>Someone else…</button></div>
+  <button class="btn p" id="ok">Book Kiran Das</button>`);
+  on('[data-y]',o=>{layer.querySelectorAll('[data-y]').forEach(x=>x.setAttribute('aria-pressed',x===o));$('#ok').textContent='Book '+o.firstChild.textContent.split(' · ')[0]});
+  on('#ok',()=>toast('Booked',()=>{}))}
+function resident(n,back){const mine=T.filter(x=>x.who===n&&!x.cancelled).sort((a,b)=>mins(a.t)-mins(b.t));
+  sheet(`${back?'<div class="nav"><button class="backb" id="backb">‹ Back</button><h2></h2><span></span></div>':''}<h2 style="font-size:22px;margin-top:-6px">${n}</h2><div class="sub">Staying in Room ${12+RES.indexOf(n)%20} · 22 Sep to 6 Oct · day 4 of 14</div>
+  <div class="label">Treatments today</div><div class="facts">${mine.map(x=>`<button class="fact" data-i="${T.indexOf(x)}" data-o="0"><span class="k" style="font-variant-numeric:tabular-nums">${x.t}</span><span class="v">${x.th} · ${withText(x.p)}</span><span class="h">${x.room}</span></button>`).join('')||'<div class="fact"><span class="v">Rest day</span></div>'}</div>
+  <div class="label">Meals today · Vata plan</div><div class="facts"><div class="fact"><span class="k">Breakfast</span><span class="v">Rice kanji, no milk</span></div><div class="fact"><span class="k">Lunch</span><span class="v">Treatment-day lunch</span></div><div class="fact"><span class="k">Dinner</span><span class="v">Moong soup, before 19:00</span></div></div>
+  <div class="facts"><button class="fact" data-z><span class="v">Change today's meals</span><span class="c"></span></button><button class="fact" data-z><span class="v">Change stay dates</span><span class="c"></span></button><button class="fact" data-z><span class="v">Book a treatment</span><span class="c"></span></button></div>`);
+  if(back)on('#backb',back);on('.facts [data-i]',y=>treatment(y));on('[data-z]',()=>toast('Opens one short sheet (#137, #142, #136)',null,null,true))}
+render();scrollToNow();
+
+</script>
