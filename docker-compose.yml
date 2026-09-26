@@ -31,6 +31,9 @@ services:
       # Unset in a real install. Raises how many treatments the demo seed books
       # per room per day, for checking the app at a size no demo install has.
       SEED_TREATMENTS_PER_ROOM: ${SEED_TREATMENTS_PER_ROOM:-}
+      # Set to true only when Cloudflare is in front, so the rate limiter can
+      # trust its cf-connecting-ip header.
+      BEHIND_CLOUDFLARE: ${BEHIND_CLOUDFLARE:-}
       NODE_ENV: production
     ports:
       - "${APP_PORT:-8080}:4000"

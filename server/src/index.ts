@@ -75,7 +75,10 @@ function createRateLimiter(windowMs: number, max: number) {
   const store = new Map<string, { count: number; resetAt: number }>();
   return (req: Request, res: Response, next: NextFunction) => {
     const now = Date.now();
-    const ip = String((req.headers['cf-connecting-ip'] as string) || req.ip || req.socket.remoteAddress || '');
+    // cf-connecting-ip is only trustworthy when Cloudflare sits in front and
+    // overwrites it; otherwise any caller could pick a fresh count (#152).
+    const cf = process.env.BEHIND_CLOUDFLARE === 'true' ? (req.headers['cf-connecting-ip'] as string) : '';
+    const ip = String(cf || req.ip || req.socket.remoteAddress || '');
     const entry = store.get(ip);
     if (!entry || entry.resetAt <= now) {
       store.set(ip, { count: 1, resetAt: now + windowMs });
@@ -114,6 +117,9 @@ expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
   return requireAuth(req, res, next);
 });
 expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
+  // The day check is a POST only to carry a body; it writes nothing, and
+  // Verify calls it on every change, so it stays under the global limit (#152).
+  if (req.path === '/day-check') return next();
   if (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') {
     return writeLimiter(req, res, next);
   }

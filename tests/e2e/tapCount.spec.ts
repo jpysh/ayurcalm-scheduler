@@ -30,11 +30,7 @@ const JOBS: [string, number][] = [
 
 const ADMIN = { email: 'admin@example.com', password: 'demo1234' };
 
-// The server allows 40 writes per address in 5 minutes, and counts Verify
-// working out the day (a POST) as one. The walk makes about 23, after the other
-// tests' writes, so each run takes its own count by the header the limiter
-// keys on: a before and an after run within 5 minutes would share one.
-test.use({ viewport: { width: 375, height: 812 }, extraHTTPHeaders: { 'cf-connecting-ip': `tap-count-${Date.now()}` } });
+test.use({ viewport: { width: 375, height: 812 } });
 
 type Row = { job: string; target: number; taps: number | null; scrolls: number; note: string };
 
