@@ -81,10 +81,18 @@ type Report = "staff" | "noshow" | "room";
 /** What was just done, and how to take it back. */
 type Done = { text: string; undo: (() => Promise<boolean>) | null };
 
-const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes() - (d.getMinutes() % 5)).padStart(2, "0")}`;
+/** Today and the minute now on the centre's clock. The phone's is wrong whenever
+ *  the admin is in another timezone, and moved treatments that had finished. */
+const centreNow = (timeZone: string) => {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date()).map((x) => [x.type, x.value]));
+  return { ymd: `${p.year}-${p.month}-${p.day}`, minutes: Number(p.hour) * 60 + Number(p.minute) };
+};
+const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60 - (m % 5)).padStart(2, "0")}`;
 
 export function VerifyDialog({
-  open, onOpenChange, apiBase, currentDate, staff, rooms, treatments, openingTime, closingTime,
+  open, onOpenChange, apiBase, currentDate, timezone, staff, rooms, treatments, openingTime, closingTime,
   onOpenAppointment, onAssignFor, onJumpToDate, onRefresh,
 }: {
   open: boolean;
@@ -92,6 +100,8 @@ export function VerifyDialog({
   apiBase: string;
   /** The day the schedule is on. Verify checks that day and asks no date question. */
   currentDate: Date;
+  /** The centre's timezone, from Settings: "now" is its clock, not the phone's. */
+  timezone: string;
   staff: { id: string; name: string }[];
   rooms: { id: string; name: string }[];
   /** The day's treatments, for picking the one a resident missed. */
@@ -106,7 +116,7 @@ export function VerifyDialog({
 }) {
   const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const dateISO = iso(currentDate);
-  const isToday = dateISO === iso(new Date());
+  const isToday = dateISO === centreNow(timezone).ymd;
 
   const [loading, setLoading] = useState(false);
   const [replanning, setReplanning] = useState(false);
@@ -171,7 +181,7 @@ export function VerifyDialog({
     setReport(kind);
     setNote(null);
     // From now if it is today, else the whole day; until closing either way.
-    const now = hhmm(new Date());
+    const now = hhmm(centreNow(timezone).minutes);
     setForm({ who: "", from: isToday && now > openingTime ? now : openingTime, until: closingTime, reason: "" });
   }
 
@@ -339,7 +349,7 @@ export function VerifyDialog({
 
   // A resident can only miss what has not happened yet. On today that is
   // anything that started in the last two hours or later; another day, all of it.
-  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const nowMin = centreNow(timezone).minutes;
   const missable = treatments
     .filter((t) => t.status !== "cancelled" && t.status !== "completed")
     .filter((t) => !isToday || Number(t.start_time.slice(0, 2)) * 60 + Number(t.start_time.slice(3, 5)) >= nowMin - 120)

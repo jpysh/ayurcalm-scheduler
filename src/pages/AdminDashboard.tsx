@@ -1522,7 +1522,7 @@ const AdminDashboard = () => {
           <div className="grid grid-cols-3 items-center">
             <h1 className="text-sm md:text-lg font-bold justify-self-start">{centreName}</h1>
             <p className="text-xs md:text-sm font-medium tracking-tight text-center whitespace-nowrap">
-            {new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            {new Date().toLocaleString('en-IN', { timeZone: ADMIN_TZ, day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
             </p>
             <div className="justify-self-end">
               <Button
@@ -2312,6 +2312,7 @@ const AdminDashboard = () => {
         onOpenChange={setShowVerify}
         apiBase={API_BASE}
         currentDate={exceptionDay}
+        timezone={ADMIN_TZ}
         staff={staff.filter((s) => s.status === 'Active').map((s) => ({ id: String(s.id), name: s.name }))}
         rooms={roomsList.filter((r) => r.status === 'Active').map((r) => ({ id: String(r.id), name: r.name }))}
         treatments={(Array.isArray(appointmentsByDate[exceptionDayKey]) ? appointmentsByDate[exceptionDayKey] : []).map((a) => ({

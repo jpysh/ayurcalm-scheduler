@@ -397,36 +397,50 @@ async function main() {
   // A therapist who is off today, with treatments still on their name. This is
   // the centre's daily crisis and the case the reassignment exists for, so the
   // dataset carries it on purpose rather than by accident: the bookings were
-  // made before they rang in, which is how it happens. Four, in four different
-  // hours, so a swap has somewhere to go.
-  const absentToday = (await prisma.timeOff.findMany({ where: { entity_type: 'staff', date: centreToday() } }))[0]?.entity_id;
-  if (absentToday) {
-    const todays = await prisma.appointment.findMany({ where: { scheduled_date: centreToday() }, orderBy: { start_time: 'asc' } });
-    const absentGender = staff.find((s) => s.id === absentToday)?.gender;
-    const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
-    const taken: { s: number; e: number }[] = [];
-    const toMove = todays.filter((a) => {
-      // Only single-handed treatments: the case here is one therapist's day, and
-      // the absent one cannot also be the partner already on it.
-      if (a.staff_id === absentToday || a.co_staff_ids.length > 0) return false;
+  // made before they rang in, which is how it happens. Three or four, in
+  // different hours, so a swap has somewhere to go. Whether the therapist on
+  // leave can take any depends on who else the day booked, so if they cannot,
+  // someone else is the one off today: a demo without the case has lost the
+  // first thing it shows (#141).
+  const todays = await prisma.appointment.findMany({ where: { scheduled_date: centreToday() }, orderBy: { start_time: 'asc' } });
+  const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const movableTo = (absent: (typeof staff)[number]) => {
+    // Their own treatments today are already on their name, and one person
+    // cannot give two at once, even the ones they will not be here to give.
+    const own = todays.filter((a) => a.staff_id === absent.id || a.co_staff_ids.includes(absent.id));
+    const taken = own.map((a) => ({ s: mins(a.start_time), e: mins(a.start_time) + a.duration_minutes }));
+    const moved = todays.filter((a) => {
+      if (taken.length >= 4) return false;
+      // Only single-handed treatments: the case here is one therapist's day.
+      if (a.staff_id === absent.id || a.co_staff_ids.length > 0) return false;
       // Only what they could have been booked for: the day is wrong because
-      // they are away, not because the seed broke the gender rule.
+      // they are away, not because the seed broke the gender rule, nor given
+      // a therapy they are not trained in, which left the resident locked to
+      // them impossible to place on any day (#135).
       const th = therapies.find((t) => t.id === a.therapy_id);
       const pt = createdPatients.find((c) => c.id === a.patient_id);
-      if (th?.requires_gender_match && pt?.gender !== absentGender) return false;
-      // Nor a therapy they are not trained in: that made the resident locked to
-      // them impossible to place on any day (#135).
-      if (!staff.find((x) => x.id === absentToday)?.specializations.includes(a.therapy_id)) return false;
+      if (th?.requires_gender_match && pt?.gender !== absent.gender) return false;
+      if (!absent.specializations.includes(a.therapy_id)) return false;
       const s = mins(a.start_time);
       const e = s + a.duration_minutes;
-      // One person cannot give two treatments at once, even the ones they will
-      // not be here to give: the day has to be wrong in the way a real day is.
-      if (taken.some((b) => Math.max(b.s, s) < Math.min(b.e, e))) return false;
+      if (taken.some((b) => overlaps(b.s, b.e, s, e))) return false;
       taken.push({ s, e });
       return true;
-    }).slice(0, 4);
-    for (const a of toMove) {
-      await prisma.appointment.update({ where: { id: a.id }, data: { staff_id: absentToday } });
+    });
+    return { own, moved };
+  };
+  // The one already on leave first; then whoever has least booked today and
+  // runs no event, so their being away does not also empty the yoga room.
+  const candidates = [onLeaveToday, ...staff
+    .filter((s) => s.id !== onLeaveToday.id && s.id !== yogaStaff.id && s.id !== prayerStaff.id && !offTodayIds.has(s.id))
+    .sort((a, b) => todays.filter((t) => t.staff_id === a.id).length - todays.filter((t) => t.staff_id === b.id).length)];
+  const absent = candidates.find((c) => { const { own, moved } = movableTo(c); const n = own.length + moved.length; return n >= 3 && n <= 4; });
+  if (absent) {
+    if (absent.id !== onLeaveToday.id) {
+      await prisma.timeOff.updateMany({ where: { entity_type: 'staff', entity_id: onLeaveToday.id, date: centreToday() }, data: { entity_id: absent.id } });
+    }
+    for (const a of movableTo(absent).moved) {
+      await prisma.appointment.update({ where: { id: a.id }, data: { staff_id: absent.id } });
     }
   }
 
