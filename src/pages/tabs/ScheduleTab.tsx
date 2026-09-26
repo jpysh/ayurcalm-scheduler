@@ -158,7 +158,10 @@ const ScheduleTab = ({
         </div>
       )}
       <CardContent className="pt-0 p-2">
+        {/* Keyed on the timezone: "Who is free" picks its time once, and the
+            centre's timezone arrives after the first render (#141). */}
         <DayGrid
+          key={timezone}
           dayAppointments={Array.isArray(appointmentsByDate?.[dayKeyMemo]) ? appointmentsByDate[dayKeyMemo] : []}
           dayKey={dayKeyMemo}
           isToday={dayKeyMemo === ymdInTZ(new Date())}

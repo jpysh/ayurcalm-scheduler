@@ -20,13 +20,14 @@ const toMinutes = (t: string) => {
 const overlaps = (aS: number, aE: number, bS: number, bE: number) => Math.max(aS, bS) < Math.min(aE, bE);
 
 const main = async () => {
-  const [appts, therapies, rooms, patients, staff, events] = await Promise.all([
+  const [appts, therapies, rooms, patients, staff, events, leave] = await Promise.all([
     prisma.appointment.findMany(),
     prisma.therapy.findMany(),
     prisma.therapyRoom.findMany(),
     prisma.patient.findMany(),
     prisma.staff.findMany(),
     prisma.programEvent.findMany(),
+    prisma.timeOff.findMany({ where: { entity_type: 'staff' } }),
   ]);
   const therapyById = new Map(therapies.map((t) => [t.id, t]));
   const roomById = new Map(rooms.map((r) => [r.id, r]));
@@ -132,6 +133,16 @@ const main = async () => {
       const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
       const distinct = new Set((byDay.get(today) || []).map((a) => a.patient_id));
       assert.ok(distinct.size >= 30, `only ${distinct.size} patients booked today`);
+    }],
+
+    ['today has a therapist off with treatments still on their name', () => {
+      // The demo opens on this, and every walk through Verify tests against it
+      // (#141). A day already fixed in the app fails here too: reset the demo.
+      const tz = process.env.ADMIN_TZ || 'Asia/Kolkata';
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      const off = new Set(leave.filter((h) => h.date?.toISOString().slice(0, 10) === today).map((h) => h.entity_id));
+      const stranded = (byDay.get(today) || []).filter((a) => a.status !== 'cancelled' && [a.staff_id, ...a.co_staff_ids].some((id) => id && off.has(id)));
+      assert.ok(stranded.length >= 3, `only ${stranded.length} of today's treatments are on a therapist who is off; Settings → Reset demo data, then run again`);
     }],
   ];
 

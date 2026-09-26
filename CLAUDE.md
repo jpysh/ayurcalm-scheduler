@@ -129,7 +129,7 @@ answer: on a laptop behind the centre after 18:30 UTC, a UTC "today" put the
 seeded absence on yesterday and headed the 17th's schedule with the 16th.
 
 **The seeded day carries its problems on purpose.** A therapist on leave with
-four treatments still on their name, spaced so a swap has somewhere to go, and
+three or four treatments still on their name, spaced so a swap has somewhere to go, and
 a resident who may only be treated by one therapist. They are what the
 reassignment exists for, so a seed change that quietly fixes the day has broken
 the dataset.
