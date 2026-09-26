@@ -169,6 +169,20 @@ async function main() {
       assert.equal(a.room_id, was.room_id, 'Undo did not put the room back');
     }
 
+    // --- what already happened stays as it happened (#149) ---
+    // At 10:30 the 09:00 is over and the 10:00 is under way: only the 11:00 is
+    // still to fix, and it is not moved to a time already gone.
+    const midMorning = await checkDay(day, prisma, { now: { date: '2030-01-16', time: '10:30' } });
+    const flagged = midMorning.problems.map((p) => p.appointment_id);
+    assert.ok(!flagged.includes(first.id), 'a treatment already over was raised as a problem');
+    assert.ok(!flagged.includes(second.id), 'a treatment in progress was raised as a problem');
+    assert.ok(flagged.includes(third.id), 'the treatment still to come should be raised');
+    assert.deepEqual(midMorning.plan.map((f) => f.appointment_id), [third.id], 'only the treatment still to come should be planned');
+    assert.ok(toMinutes(midMorning.plan[0].start_time) >= toMinutes('10:30'), 'the plan moved a treatment into the past');
+    // The next day, nothing on this one has started: it is planned whole.
+    const dayBefore = await checkDay(day, prisma, { now: { date: '2030-01-15', time: '17:00' } });
+    assert.ok(dayBefore.plan.length >= 3, 'a future day should be planned whole');
+
     // --- a room cannot be double-booked through the API ---
     // The scheduler never creates one; this is the other route, an edit.
     const ctx = await loadDay(day, prisma);

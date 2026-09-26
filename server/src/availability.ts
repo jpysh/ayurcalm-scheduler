@@ -31,6 +31,29 @@ export const toMinutes = (t: string) => {
   return h * 60 + m;
 };
 
+/**
+ * The centre's date and time now, read in its own timezone (Settings.timezone),
+ * never the server's or the phone's.
+ */
+export const centreClock = (timeZone: string, at = new Date()) => {
+  const part = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-CA', { timeZone, ...o }).format(at);
+  return {
+    date: part({ year: 'numeric', month: '2-digit', day: '2-digit' }),
+    time: part({ hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }),
+  };
+};
+export type Clock = ReturnType<typeof centreClock>;
+
+/**
+ * A treatment starting before this minute of `day` has started, or is over, and
+ * stays as it is (#149): all of a past day, none of a future one, and today up to
+ * the centre's clock. One in progress stays with whoever is on it.
+ */
+export const startedBefore = (clock: Clock, day: Date) => {
+  const d = day.toISOString().slice(0, 10);
+  return d < clock.date ? Infinity : d > clock.date ? -Infinity : toMinutes(clock.time);
+};
+
 export const overlaps = (aStart: number, aEnd: number, bStart: number, bEnd: number) =>
   Math.max(aStart, bStart) < Math.min(aEnd, bEnd);
 
