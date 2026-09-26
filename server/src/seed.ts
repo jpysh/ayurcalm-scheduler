@@ -414,6 +414,9 @@ async function main() {
       const th = therapies.find((t) => t.id === a.therapy_id);
       const pt = createdPatients.find((c) => c.id === a.patient_id);
       if (th?.requires_gender_match && pt?.gender !== absentGender) return false;
+      // Nor a therapy they are not trained in: that made the resident locked to
+      // them impossible to place on any day (#135).
+      if (!staff.find((x) => x.id === absentToday)?.specializations.includes(a.therapy_id)) return false;
       const s = mins(a.start_time);
       const e = s + a.duration_minutes;
       // One person cannot give two treatments at once, even the ones they will

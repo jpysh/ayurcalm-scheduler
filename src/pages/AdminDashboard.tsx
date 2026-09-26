@@ -1415,6 +1415,7 @@ const AdminDashboard = () => {
       .catch(() => setDayCheck({ problems: [], headline: null }));
   }, [exceptionDayKey]);
   useEffect(() => { loadDayCheck(); }, [loadDayCheck, appointmentsByDate]);
+  const fixReady = dayCheck.problems.filter((p) => p.problem_class === 'blocking' && p.fix).length;
 
   const compareRoomNames = (aName: string, bName: string) => {
     const ax = String(aName).trim();
@@ -1560,7 +1561,7 @@ const AdminDashboard = () => {
                 </span>
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => undoReplanBatch(batch)}>Undo</Button>
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowVerify(true)}>
-                  <AlertCircle className="w-3 h-3 mr-1 text-amber-600" />Verify
+                  <AlertCircle className="w-3 h-3 mr-1 text-amber-600" />Fix
                 </Button>
                 <button type="button" className="text-xs text-muted-foreground ml-auto" onClick={() => dismissReplan(batch.batch_id)}>Done with this</button>
               </div>
@@ -1576,8 +1577,9 @@ const AdminDashboard = () => {
             <div className="flex flex-wrap items-center gap-2">
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
               <p className="text-sm font-semibold">{dayCheck.headline}</p>
+              {/* Says what tapping gets you: the plan is ready, Accept all applies it. */}
               <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowVerify(true)}>
-                Verify
+                {fixReady ? `Fix · ${fixReady} ready` : 'Fix'}
               </Button>
             </div>
           </div>

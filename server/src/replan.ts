@@ -9,20 +9,35 @@
  *
  *   1. same time, same room, another pair of hands   — applied
  *   2. same day, another time                        — applied
- *   3. another day                                   — proposed, never applied
+ *   3. a resident locked to the absent therapist: that therapist's first free
+ *      slot in the next 3 days, inside the stay      — proposed, in the plan
+ *   4. otherwise ask: up to three choices, the best one selected (#135) —
+ *      another therapist this time only, the next day their own therapist is
+ *      free, or cancel the treatment
  *
- * Tiers 1 and 2 are recoveries. Moving a treatment to another day changes which
- * side of the diet plan the resident eats from and where they are in their
- * course, so it is put to the admin rather than done to them.
+ * Tiers 1 and 2 are recoveries. Anything else changes which side of the diet
+ * plan the resident eats from, where they are in their course, or who treats
+ * them, so it is put to the admin: only their Accept applies it.
  */
 import { PrismaClient, Prisma } from '@prisma/client';
 import { offOnDay, overlaps, staffEventBusy, teamOf, toMinutes, type EventRow } from './availability.js';
+
+/** Which of the tier 4 choices a move is. */
+export type Choice = 'this_time_only' | 'next_free_day' | 'cancel';
 
 export type Move = {
   appointment_id: string;
   patient_name: string;
   therapy_name: string;
   tier: 1 | 2 | 3;
+  /** Set on a tier 4 answer: what kind of choice this is. */
+  choice?: Choice;
+  /** A few words after the label: "their own therapist", "9 days later". */
+  note?: string;
+  /** Cancel the treatment instead of moving it. Kept as cancelled; Undo restores it. */
+  cancel?: boolean;
+  /** Tier 4: every choice for this row, the selected one included. */
+  choices?: Move[];
   from: { staff_name: string; start_time: string; date: string };
   /** `staff_id` leads; `co_staff_ids` is everyone else on the treatment. */
   to: { staff_id: string | null; co_staff_ids: string[]; staff_name: string; start_time: string; date: string; room_id: string | null };
@@ -38,6 +53,7 @@ export type Pin = {
   start_time: string;
   date: string;
   room_id: string | null;
+  cancel?: boolean;
 };
 
 export type Unplaced = {
@@ -46,6 +62,8 @@ export type Unplaced = {
   therapy_name: string;
   start_time: string;
   reason: string;
+  /** Tier 4 with nothing selected: what the admin can still pick. */
+  choices?: Move[];
 };
 
 export type ReplanResult = {
@@ -163,11 +181,15 @@ export async function planDay(
   const teamName = (ids: (string | null)[]) =>
     ids.filter(Boolean).map((id) => staffById.get(id as string)?.name || 'Unknown').join(' and ') || 'Unassigned';
   const beforeOf = (a: (typeof dayAppointments)[number]) => ({
+    status: a.status,
     staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id, start_time: a.start_time, scheduled_date: a.scheduled_date.toISOString(),
   });
 
   const moved: Move[] = [];
   const proposed: Move[] = [];
+  // Later days, read once each, and the slots this plan has already taken on them.
+  const laterDays: Record<string, Awaited<ReturnType<typeof prisma.appointment.findMany>>> = {};
+  const laterTaken: { date: string; team: string[]; room: string; patient: string; s: number; e: number }[] = [];
   const unplaced: Unplaced[] = [];
   const writes: { appointment_id: string; before: Record<string, unknown>; after: Record<string, unknown> }[] = [];
 
@@ -181,7 +203,7 @@ export async function planDay(
     const s = toMinutes(pin.start_time);
     const e = s + appt.duration_minutes;
     const pinCo = pin.co_staff_ids || [];
-    if (pin.date === ymd(date)) {
+    if (pin.date === ymd(date) && !pin.cancel) {
       for (const id of teamOf({ staff_id: pin.staff_id, co_staff_ids: pinCo })) addBusy(staffBusy, id, s, e);
       addBusy(roomBusy, pin.room_id, s, e);
       addBusy(patientBusy, appt.patient_id, s, e);
@@ -201,12 +223,13 @@ export async function planDay(
         room_id: pin.room_id,
       },
       pinned: true,
+      cancel: pin.cancel || undefined,
     };
     moved.push(move);
     writes.push({
       appointment_id: appt.id,
       before: beforeOf(appt),
-      after: { staff_id: pin.staff_id, co_staff_ids: pinCo, room_id: pin.room_id, start_time: pin.start_time, scheduled_date: new Date(`${pin.date}T00:00:00.000Z`).toISOString() },
+      after: pin.cancel ? { ...beforeOf(appt), status: 'cancelled' } : { staff_id: pin.staff_id, co_staff_ids: pinCo, room_id: pin.room_id, start_time: pin.start_time, scheduled_date: new Date(`${pin.date}T00:00:00.000Z`).toISOString() },
     });
   }
 
@@ -225,8 +248,9 @@ export async function planDay(
     const mustKeepTherapist = patient?.requires_preferred_staff && !opts.relaxPreferredStaff ? patient.preferred_staff_id : null;
     const needed = Math.max(1, therapy?.staff_required ?? 1);
 
-    const qualified = (s: (typeof staff)[number]) => {
-      if (s.id === staffId) return false;
+    /** `today` false: a later day, where the absent therapist may be back. */
+    const qualified = (s: (typeof staff)[number], today = true) => {
+      if (today && s.id === staffId) return false;
       if (opts.excludeStaffIds?.includes(s.id)) return false;
       if (!s.specializations.includes(appt.therapy_id)) return false;
       if (enforceGender && therapy?.requires_gender_match && patient && s.gender !== patient.gender) return false;
@@ -235,7 +259,7 @@ export async function planDay(
     // The resident's own therapist first when they have one; the least busy
     // otherwise, so a swap does not pile the day onto one person.
     const candidates = staff
-      .filter(qualified)
+      .filter((s) => qualified(s))
       .sort((a, b) => {
         const pref = (s: string) => (patient?.preferred_staff_id === s ? -1 : 0);
         return pref(a.id) - pref(b.id) || (staffBusy[a.id]?.length || 0) - (staffBusy[b.id]?.length || 0);
@@ -244,17 +268,19 @@ export async function planDay(
     /**
      * A full team for one slot, or null. Whoever is on the treatment already
      * and can stay, stays: a therapist off replaces one seat, not the pair.
-     * `isFree` says whether someone can work that slot.
+     * `isFree` says whether someone can work that slot. `relax` drops the
+     * resident's own-therapist lock, for "another therapist this time only".
      */
-    const teamFor = (isFree: (sid: string) => boolean): string[] | null => {
+    const teamFor = (isFree: (sid: string) => boolean, today = true, relax = false): string[] | null => {
       const ok = (sid: string, team: string[]) => {
         const s = staffById.get(sid);
-        return Boolean(s && qualified(s) && isFree(sid) && !team.includes(sid));
+        return Boolean(s && qualified(s, today) && isFree(sid) && !team.includes(sid));
       };
       const team: string[] = [];
-      if (mustKeepTherapist) {
-        if (!ok(mustKeepTherapist, team)) return null;
-        team.push(mustKeepTherapist);
+      const lock = relax ? null : mustKeepTherapist;
+      if (lock) {
+        if (!ok(lock, team)) return null;
+        team.push(lock);
       }
       for (const sid of teamOf(appt)) if (team.length < needed && ok(sid, team)) team.push(sid);
       for (const s of candidates) if (team.length < needed && ok(s.id, team)) team.push(s.id);
@@ -270,76 +296,137 @@ export async function planDay(
       return alt?.id ?? null;
     };
 
-    const take = (team: string[], startMin: number, roomId: string | null, tier: 1 | 2) => {
-      const end = startMin + duration;
-      for (const sid of team) addBusy(staffBusy, sid, startMin, end);
-      addBusy(roomBusy, roomId, startMin, end);
-      addBusy(patientBusy, appt.patient_id, startMin, end);
-      const [lead, ...co] = team;
-      moved.push({
+    type Slot = { team: string[]; start: number; room: string; tier: 1 | 2 | 3; date: string };
+    /** Tier 1, else tier 2: this day, first the same time and then any time. */
+    const sameDay = (relax: boolean): Slot | null => {
+      const team = teamFor((sid) => canTake(sid, start, start + duration), true, relax);
+      const room = team && roomFor(start, start + duration);
+      if (team && room) return { team, start, room, tier: 1, date: ymd(date) };
+      for (let t = open; t + duration <= close; t += 30) {
+        if (!free(patientBusy[appt.patient_id], t, t + duration)) continue;
+        const r = roomFor(t, t + duration);
+        if (!r) continue;
+        const tm = teamFor((sid) => canTake(sid, t, t + duration), true, relax);
+        if (tm) return { team: tm, start: t, room: r, tier: 2, date: ymd(date) };
+      }
+      return null;
+    };
+    /**
+     * The first later day and time, within `days`, where the team, a room and
+     * the resident are all free. Any time in the centre's hours, not only the
+     * same one, and never on top of the resident's own day. `inStay` stops at
+     * the end of the resident's stay.
+     */
+    const laterSlot = async (days: number, inStay: boolean): Promise<Slot | null> => {
+      for (let i = 1; i <= days; i++) {
+        const other = new Date(date);
+        other.setDate(date.getDate() + i);
+        if (inStay && patient?.available_to && other > patient.available_to) return null;
+        const key = ymd(other);
+        const otherDay = (laterDays[key] ??= await prisma.appointment.findMany({ where: { scheduled_date: other, status: { not: 'cancelled' } } }));
+        const taken = laterTaken.filter((x) => x.date === key);
+        const hits = (a: { start_time: string; duration_minutes: number }, s: number, e: number) =>
+          overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, s, e);
+        for (let t = open; t + duration <= close; t += 30) {
+          const e = t + duration;
+          const patientFree = !otherDay.some((a) => a.patient_id === appt.patient_id && a.id !== appt.id && hits(a, t, e)) &&
+            !taken.some((x) => x.patient === appt.patient_id && overlaps(x.s, x.e, t, e));
+          if (!patientFree) continue;
+          const busyThen = (sid: string) =>
+            otherDay.some((a) => a.id !== appt.id && teamOf(a).includes(sid) && hits(a, t, e)) ||
+            taken.some((x) => x.team.includes(sid) && overlaps(x.s, x.e, t, e)) ||
+            staffEventBusy(events, sid, other).some((b) => overlaps(b.s, b.e, t, e)) ||
+            offOnDay(timeOff, 'staff', sid, other).some((b) => overlaps(b.s, b.e, t, e));
+          const team = teamFor((sid) => !busyThen(sid), false);
+          if (!team) continue;
+          const room = rooms.find(
+            (r) =>
+              (therapy?.required_amenities || []).every((a) => r.amenities.includes(a)) &&
+              !otherDay.some((a) => a.id !== appt.id && a.room_id === r.id && hits(a, t, e)) &&
+              !taken.some((x) => x.room === r.id && overlaps(x.s, x.e, t, e)) &&
+              !offOnDay(timeOff, 'room', r.id, other).some((b) => overlaps(b.s, b.e, t, e)),
+          );
+          if (room) return { team, start: t, room: room.id, tier: 3, date: key };
+        }
+      }
+      return null;
+    };
+
+    const moveOf = (slot: Slot, extra: Partial<Move> = {}): Move => {
+      const [lead, ...co] = slot.team;
+      return {
         appointment_id: appt.id,
         ...names,
-        tier,
-        to: { staff_id: lead, co_staff_ids: co, staff_name: teamName(team), start_time: minutesToTime(startMin), date: ymd(date), room_id: roomId },
-      });
+        tier: slot.tier,
+        to: { staff_id: lead, co_staff_ids: co, staff_name: teamName(slot.team), start_time: minutesToTime(slot.start), date: slot.date, room_id: slot.room },
+        ...extra,
+      };
+    };
+    /** Hold the slot in the running picture, so no later answer takes it too. */
+    const hold = (slot: Slot) => {
+      const end = slot.start + duration;
+      if (slot.date !== ymd(date)) {
+        laterTaken.push({ date: slot.date, team: slot.team, room: slot.room, patient: appt.patient_id, s: slot.start, e: end });
+        return;
+      }
+      for (const sid of slot.team) addBusy(staffBusy, sid, slot.start, end);
+      addBusy(roomBusy, slot.room, slot.start, end);
+      addBusy(patientBusy, appt.patient_id, slot.start, end);
+    };
+
+    // Tiers 1 and 2 — this day, applied.
+    const here = sameDay(false);
+    if (here) {
+      hold(here);
+      moved.push(moveOf(here));
       writes.push({
         appointment_id: appt.id,
         before: beforeOf(appt),
-        after: { staff_id: lead, co_staff_ids: co, room_id: roomId, start_time: minutesToTime(startMin) },
+        after: { staff_id: here.team[0], co_staff_ids: here.team.slice(1), room_id: here.room, start_time: minutesToTime(here.start) },
       });
-    };
-
-    // Tier 1 — same time, another pair of hands where one is missing.
-    const sameTime = teamFor((sid) => canTake(sid, start, start + duration));
-    const sameTimeRoom = sameTime && roomFor(start, start + duration);
-    if (sameTime && sameTimeRoom) {
-      take(sameTime, start, sameTimeRoom, 1);
       continue;
     }
 
-    // Tier 2 — same day, another time, with the whole team free then.
-    let placed = false;
-    for (let t = open; t + duration <= close && !placed; t += 30) {
-      if (!free(patientBusy[appt.patient_id], t, t + duration)) continue;
-      const room = roomFor(t, t + duration);
-      if (!room) continue;
-      const team = teamFor((sid) => canTake(sid, t, t + duration));
-      if (!team) continue;
-      take(team, t, room, 2);
-      placed = true;
-    }
-    if (placed) continue;
-
-    // Tier 3 — another day, same time, proposed only.
-    let proposal: Move | null = null;
-    for (let i = 1; i <= 7 && !proposal; i++) {
-      const other = new Date(date);
-      other.setDate(date.getDate() + i);
-      if (patient?.available_to && other > patient.available_to) break;
-      const otherDay = await prisma.appointment.findMany({ where: { scheduled_date: other, status: { not: 'cancelled' } } });
-      const busyThen = (sid: string) =>
-        otherDay.some((a) => teamOf(a).includes(sid) && overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, start, start + duration)) ||
-        staffEventBusy(events, sid, other).some((b) => overlaps(b.s, b.e, start, start + duration)) ||
-        offOnDay(timeOff, 'staff', sid, other).some((b) => overlaps(b.s, b.e, start, start + duration));
-      const team = teamFor((sid) => !busyThen(sid));
-      const roomFree = rooms.find(
-        (r) =>
-          (therapy?.required_amenities || []).every((a) => r.amenities.includes(a)) &&
-          !otherDay.some((a) => a.room_id === r.id && overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, start, start + duration)) &&
-          !offOnDay(timeOff, 'room', r.id, other).some((b) => overlaps(b.s, b.e, start, start + duration)),
-      );
-      if (team && roomFree) {
-        const [lead, ...co] = team;
-        proposal = {
-          appointment_id: appt.id,
-          ...names,
-          tier: 3,
-          to: { staff_id: lead, co_staff_ids: co, staff_name: teamName(team), start_time: appt.start_time, date: ymd(other), room_id: roomFree.id },
-        };
+    const ownName = staffById.get(mustKeepTherapist || '')?.name || 'their therapist';
+    // Tier 3 — locked to one therapist: that therapist's next free slot, soon.
+    if (mustKeepTherapist) {
+      const soon = await laterSlot(3, true);
+      if (soon) {
+        hold(soon);
+        proposed.push(moveOf(soon, { note: 'their own therapist' }));
+        continue;
       }
     }
-    if (proposal) {
-      proposed.push(proposal);
+
+    // Tier 4 — ask. Up to three choices, the best one selected.
+    const daysLater = (d: string) => Math.round((Date.parse(d) - Date.parse(ymd(date))) / 86400000);
+    const choices: Move[] = [];
+    const thisTime = mustKeepTherapist ? sameDay(true) : null;
+    if (thisTime) choices.push(moveOf(thisTime, { choice: 'this_time_only', note: `this time only; ${ownName} stays their therapist` }));
+    // Their own therapist when locked, anyone qualified otherwise. Past the stay
+    // too, so the admin sees how far it is rather than nothing.
+    const next = await laterSlot(30, false);
+    const inStay = next && (!patient?.available_to || new Date(`${next.date}T00:00:00.000Z`) <= patient.available_to);
+    if (next) {
+      const n = daysLater(next.date);
+      choices.push(moveOf(next, { choice: 'next_free_day', note: `${n} day${n === 1 ? '' : 's'} later${inStay ? '' : ', after their stay ends'}` }));
+    }
+    choices.push({
+      appointment_id: appt.id,
+      ...names,
+      tier: 2,
+      choice: 'cancel',
+      cancel: true,
+      note: 'kept as cancelled, can be undone',
+      to: { staff_id: appt.staff_id, co_staff_ids: appt.co_staff_ids, staff_name: '', start_time: appt.start_time, date: ymd(date), room_id: appt.room_id },
+    });
+    const nextMove = choices.find((c) => c.choice === 'next_free_day');
+    const thisMove = choices.find((c) => c.choice === 'this_time_only');
+    // Cancel is never picked for the admin.
+    const pick = next && inStay && daysLater(next.date) <= 3 ? nextMove : thisMove || nextMove;
+    if (pick) {
+      hold(pick === thisMove ? thisTime! : next!);
+      proposed.push({ ...pick, choices });
       continue;
     }
 
@@ -361,11 +448,10 @@ export async function planDay(
       patient_name: names.patient_name,
       therapy_name: names.therapy_name,
       start_time: appt.start_time,
-      reason: mustKeepTherapist
-        ? `${patientById.get(appt.patient_id)?.name || 'This resident'} is only treated by ${staffById.get(mustKeepTherapist)?.name || 'one therapist'}, who is not free this week.`
-        : candidates.length === 0
-          ? `No other therapist is trained in ${names.therapy_name}${enforceGender && therapy?.requires_gender_match ? ` and matches the resident's gender` : ''}.`
-          : `Every therapist trained in ${names.therapy_name} is booked for the rest of the day.`,
+      choices,
+      reason: candidates.length === 0
+        ? `No other therapist is trained in ${names.therapy_name}${enforceGender && therapy?.requires_gender_match ? ` and matches the resident's gender` : ''}. It can be cancelled.`
+        : `Every therapist trained in ${names.therapy_name} is booked for the next 30 days. It can be cancelled.`,
     });
   }
 
@@ -382,6 +468,7 @@ export async function planDay(
           // A pinned row can be on another day; everything the planner decides
           // by itself stays on this one.
           scheduled_date: w.after.scheduled_date ? new Date(w.after.scheduled_date as string) : undefined,
+          status: w.after.status === 'cancelled' ? 'cancelled' : undefined,
         },
       });
     }
@@ -409,20 +496,25 @@ export async function planDay(
  * whole point of the guard, not a surprise.
  */
 export async function applyPlan(
-  moves: { appointment_id: string; staff_id: string | null; co_staff_ids?: string[]; room_id: string | null; start_time: string; date: string }[],
+  moves: { appointment_id: string; staff_id: string | null; co_staff_ids?: string[]; room_id: string | null; start_time: string; date: string; cancel?: boolean }[],
   prisma: PrismaClient,
 ): Promise<{ batch_id: string; applied: number }> {
   const writes: { appointment_id: string; before: Record<string, unknown>; after: Record<string, unknown> }[] = [];
   for (const m of moves) {
     const before = await prisma.appointment.findUnique({ where: { id: m.appointment_id } });
     if (!before) continue;
-    await prisma.appointment.update({
-      where: { id: m.appointment_id },
-      data: { staff_id: m.staff_id, co_staff_ids: m.co_staff_ids ?? [], room_id: m.room_id, start_time: m.start_time, scheduled_date: new Date(`${m.date}T00:00:00.000Z`) },
-    });
+    if (m.cancel) {
+      // Kept, not deleted: Undo puts it back as it was.
+      await prisma.appointment.update({ where: { id: m.appointment_id }, data: { status: 'cancelled' } });
+    } else {
+      await prisma.appointment.update({
+        where: { id: m.appointment_id },
+        data: { staff_id: m.staff_id, co_staff_ids: m.co_staff_ids ?? [], room_id: m.room_id, start_time: m.start_time, scheduled_date: new Date(`${m.date}T00:00:00.000Z`) },
+      });
+    }
     writes.push({
       appointment_id: m.appointment_id,
-      before: { staff_id: before.staff_id, co_staff_ids: before.co_staff_ids, room_id: before.room_id, start_time: before.start_time, scheduled_date: before.scheduled_date.toISOString() },
+      before: { status: before.status, staff_id: before.staff_id, co_staff_ids: before.co_staff_ids, room_id: before.room_id, start_time: before.start_time, scheduled_date: before.scheduled_date.toISOString() },
       after: { staff_id: m.staff_id, co_staff_ids: m.co_staff_ids ?? [], room_id: m.room_id, start_time: m.start_time, scheduled_date: `${m.date}T00:00:00.000Z` },
     });
   }
@@ -465,6 +557,8 @@ export async function undoReplan(batchId: string, prisma: PrismaClient) {
         room_id: (w.before.room_id as string | null) ?? null,
         start_time: w.before.start_time as string,
         scheduled_date: new Date(w.before.scheduled_date as string),
+        // Older batches did not record it; they never changed it.
+        ...(w.before.status ? { status: w.before.status as 'pending' } : {}),
       },
     });
   }

@@ -46,6 +46,10 @@ export type Fix = {
   room_id: string | null;
   start_time: string;
   date: string;
+  /** Tier 4: which choice this is, and every choice for the row (#135). */
+  choice?: 'this_time_only' | 'next_free_day' | 'cancel';
+  cancel?: boolean;
+  choices?: Fix[];
 };
 
 export type DayProblem = {
@@ -66,6 +70,8 @@ export type DayProblem = {
   /** True when the resident's own-therapist rule is what leaves them stuck. */
   blocked_by_preferred_staff: boolean;
   fix: Fix | null;
+  /** Tier 4: what the admin can pick from, the fix among them when one is selected. */
+  choices: Fix[];
   /** Why there is no fix, when there is none. */
   no_fix_reason: string | null;
 };
@@ -129,13 +135,18 @@ const dayName = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 const fixFromMove = (m: Move, sameDay: boolean): Fix => ({
-  label: m.tier === 1
-    ? `${m.to.staff_name}, same time`
-    : sameDay
-      ? `${m.to.start_time} with ${m.to.staff_name}`
-      : `${dayName(m.to.date)}, ${m.to.start_time} with ${m.to.staff_name}`,
+  label: (m.cancel
+    ? 'Cancel this treatment'
+    : m.tier === 1
+      ? `${m.to.staff_name}, same time`
+      : sameDay
+        ? `${m.to.start_time} with ${m.to.staff_name}`
+        : `${dayName(m.to.date)}, ${m.to.start_time} with ${m.to.staff_name}`) + (m.note ? ` (${m.note})` : ''),
   tier: m.tier,
-  cost_note: sameDay ? null : "changes the resident's diet day",
+  choice: m.choice,
+  cancel: m.cancel,
+  choices: m.choices?.map((c) => fixFromMove(c, c.to.date === m.from.date)),
+  cost_note: sameDay || m.cancel ? null : "changes the resident's diet day",
   pinned: Boolean(m.pinned),
   appointment_id: m.appointment_id,
   staff_id: m.to.staff_id,
@@ -180,6 +191,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
       patient_name: nameOfPatient(a.patient_id),
       blocked_by_preferred_staff: false,
       fix: null,
+      choices: [],
       no_fix_reason: null,
     };
 
@@ -271,6 +283,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
       staff_id: null,
       blocked_by_preferred_staff: false,
       fix: null,
+      choices: [],
       no_fix_reason: null,
       cost: COST.IDLE_RESIDENT,
     });
@@ -294,6 +307,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
         byAppointment.set(m.appointment_id, fixFromMove(m, m.to.date === ymd(day)));
       }
       const unplacedBy = new Map(result.unplaced.map((u) => [u.appointment_id, u.reason]));
+      const choicesBy = new Map(result.unplaced.map((u) => [u.appointment_id, (u.choices || []).map((c) => fixFromMove(c, c.to.date === ymd(day)))]));
       for (const p of raw) {
         if (!p.appointment_id) continue;
         const appt = appointments.find((a) => a.id === p.appointment_id);
@@ -305,8 +319,9 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
           fix.start_time === appt.start_time && fix.room_id === appt.room_id,
         );
         p.fix = noop ? null : fix;
-        p.no_fix_reason = p.fix ? null : unplacedBy.get(p.appointment_id) || 'Nothing free anywhere this week.';
-        p.blocked_by_preferred_staff = Boolean(p.no_fix_reason && /only treated by/i.test(p.no_fix_reason));
+        p.choices = p.fix?.choices || choicesBy.get(p.appointment_id) || [];
+        p.no_fix_reason = p.fix ? null : unplacedBy.get(p.appointment_id) || 'Nothing free in the next 30 days. It can be cancelled.';
+        p.blocked_by_preferred_staff = false;
         if (p.fix) plan.push(p.fix);
       }
     }
