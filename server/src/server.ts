@@ -673,6 +673,7 @@ const pinSchema = z.object({
   room_id: z.string().uuid().nullable(),
   start_time: z.string(),
   date: z.string(),
+  cancel: z.boolean().optional(),
 });
 
 /**
@@ -748,6 +749,8 @@ app.get('/day-check/options', async (req: Request, res: Response) => {
 app.post('/day-check/accept', async (req: Request, res: Response) => {
   const body = z.object({ date: z.string(), moves: z.array(pinSchema) }).parse(req.body);
   for (const m of body.moves) {
+    // Cancelling frees a slot; there is nothing for the guard to refuse.
+    if (m.cancel) continue;
     const appt = await prisma.appointment.findUnique({ where: { id: m.appointment_id } });
     if (!appt) { res.status(404).json({ error: 'Appointment not found' }); return; }
     const ctx = await loadDay(new Date(m.date), prisma);

@@ -49,6 +49,7 @@ run replanSimulation   "When a therapist is absent, their day moves to others wi
 run dayCheckParity     "Verify flags exactly the treatments the app would refuse to save, co-therapists included"
 run coTherapist        "A treatment worked by two books both therapists: neither can be booked elsewhere in that hour, and it is never booked short-handed"
 run dayPlan            "Verify's fix for a day is one plan with no clashes, and accepting then undoing it restores the day"
+run ownTherapist       "A resident kept to their own therapist goes to that therapist's next free day when it is soon, and otherwise the admin is asked with three choices"
 run daySheet           "The day sheet lists every resident, treatment time and therapist, in its groups, with no empty boxes"
 run dietOverride       "Editing a diet plan changes it for everyone except what one patient was told specifically"
 run onboarding         "After the setup wizard, the centre has its hours, timezone, therapies, rooms and therapists, and the day sheet prints"

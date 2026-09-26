@@ -37,6 +37,8 @@ export type Fix = {
   room_id: string | null;
   start_time: string;
   date: string;
+  choice?: "this_time_only" | "next_free_day" | "cancel";
+  cancel?: boolean;
 };
 
 export type DayProblem = {
@@ -53,6 +55,8 @@ export type DayProblem = {
   staff_id: string | null;
   blocked_by_preferred_staff: boolean;
   fix: Fix | null;
+  /** When the server asks: every choice for the row, the selected one among them. */
+  choices: Fix[];
   no_fix_reason: string | null;
 };
 
@@ -65,7 +69,7 @@ type ProblemGroup = {
 };
 
 type DayCheck = { date: string; problems: DayProblem[]; groups: ProblemGroup[]; plan: Fix[]; headline: string | null };
-type Pin = { appointment_id: string; staff_id: string | null; co_staff_ids: string[]; room_id: string | null; start_time: string; date: string };
+type Pin = { appointment_id: string; staff_id: string | null; co_staff_ids: string[]; room_id: string | null; start_time: string; date: string; cancel?: boolean };
 type UpcomingDay = { date: string; count: number; headline: string | null };
 
 const dateLabel = (iso: string) =>
@@ -108,12 +112,12 @@ export function VerifyDialog({
   const [replanning, setReplanning] = useState(false);
   const [check, setCheck] = useState<DayCheck | null>(null);
   const [pins, setPins] = useState<Pin[]>([]);
-  const [relaxPreferred, setRelaxPreferred] = useState(false);
+  // The lock is relaxed per row now, by the "this time only" choice (#135).
+  const relaxPreferred = false;
   const [done, setDone] = useState<Done | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [changing, setChanging] = useState<string | null>(null);
   const [options, setOptions] = useState<Record<string, Fix[]>>({});
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [upcoming, setUpcoming] = useState<UpcomingDay[] | null>(null);
   const [upcomingLoading, setUpcomingLoading] = useState(false);
@@ -146,11 +150,9 @@ export function VerifyDialog({
   useEffect(() => {
     if (!open) return;
     setPins([]);
-    setRelaxPreferred(false);
     setDone(null);
     setChanging(null);
     setOptions({});
-    setConfirmDelete(null);
     setNote(null);
     setUpcoming(null);
     setShowNotes(false);
@@ -242,7 +244,7 @@ export function VerifyDialog({
         body: JSON.stringify({
           date: dateISO,
           moves: check.plan.map((f) => ({
-            appointment_id: f.appointment_id, staff_id: f.staff_id, co_staff_ids: f.co_staff_ids || [], room_id: f.room_id, start_time: f.start_time, date: f.date,
+            appointment_id: f.appointment_id, staff_id: f.staff_id, co_staff_ids: f.co_staff_ids || [], room_id: f.room_id, start_time: f.start_time, date: f.date, cancel: f.cancel,
           })),
         }),
       });
@@ -300,7 +302,7 @@ export function VerifyDialog({
   async function pick(fix: Fix) {
     const next = [
       ...pins.filter((p) => p.appointment_id !== fix.appointment_id),
-      { appointment_id: fix.appointment_id, staff_id: fix.staff_id, co_staff_ids: fix.co_staff_ids || [], room_id: fix.room_id, start_time: fix.start_time, date: fix.date },
+      { appointment_id: fix.appointment_id, staff_id: fix.staff_id, co_staff_ids: fix.co_staff_ids || [], room_id: fix.room_id, start_time: fix.start_time, date: fix.date, cancel: fix.cancel },
     ];
     setPins(next);
     setChanging(null);
@@ -308,27 +310,12 @@ export function VerifyDialog({
     await load(next, relaxPreferred, true);
   }
 
-  async function useAnyone() {
-    setRelaxPreferred(true);
-    setOptions({});
-    await load(pins, true, true);
-  }
-
-  async function removeAppointment(problem: DayProblem) {
-    if (!problem.appointment_id) return;
-    setBusy(problem.id);
-    try {
-      const res = await fetch(`${apiBase}/appointments/${problem.appointment_id}`, { method: "DELETE" });
-      if (!res.ok) { setNote("That could not be deleted."); return; }
-      const remaining = pins.filter((x) => x.appointment_id !== problem.appointment_id);
-      setConfirmDelete(null);
-      setPins(remaining);
-      await onRefresh([dateISO]);
-      await load(remaining, relaxPreferred, true);
-    } finally {
-      setBusy(null);
-    }
-  }
+  /** Cancel is a choice in the plan like any other: Accept applies it, Undo restores it. */
+  const cancelRow = (problem: DayProblem) => pick({
+    label: "Cancel this treatment", tier: 2, cost_note: null, pinned: true, cancel: true, choice: "cancel",
+    appointment_id: problem.appointment_id!, staff_id: problem.staff_id, co_staff_ids: [], staff_name: "",
+    room_id: null, start_time: problem.start_time || "", date: dateISO,
+  });
 
   async function loadUpcoming() {
     setUpcomingLoading(true);
@@ -381,7 +368,23 @@ export function VerifyDialog({
         </div>
 
         <div className="pl-14 space-y-1.5">
-          {fix ? (
+          {problem.choices.length > 1 ? (
+            // The server is asking. Every choice is on the row, the best one
+            // already selected, so Accept all works without opening anything.
+            <div className="space-y-1.5" role="radiogroup" aria-label="Choose one">
+              {!fix ? <p className="text-[13px] text-amber-800">{problem.no_fix_reason}</p> : null}
+              {problem.choices.map((c) => {
+                const on = Boolean(fix && fix.choice === c.choice);
+                return (
+                  <button key={c.choice} type="button" role="radio" aria-checked={on} disabled={working || replanning} onClick={() => pick(c)}
+                    className={`flex min-h-11 w-full items-start gap-2 rounded-md border px-2.5 py-2 text-left text-[13px] ${on ? "border-emerald-700 bg-emerald-50 font-medium dark:bg-emerald-950/30" : "bg-card"}`}>
+                    <span className={`mt-[3px] h-3.5 w-3.5 shrink-0 rounded-full border ${on ? "border-[4px] border-emerald-700" : "border-muted-foreground"}`} />
+                    <span>{c.label}{c.cost_note ? <span className="block font-normal text-muted-foreground">{c.cost_note}</span> : null}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : fix ? (
             <p className="flex items-start gap-1.5 text-[13px]">
               <ArrowRight className="mt-[3px] h-3.5 w-3.5 shrink-0 text-emerald-700" />
               <span className={fix.pinned ? "font-medium" : undefined}>
@@ -393,27 +396,16 @@ export function VerifyDialog({
           ) : (
             <div className="text-[13px] text-amber-800">
               <p>{problem.no_fix_reason || "Nothing free to move it to."}</p>
-              {/* The one negotiable rule, as a sentence where it matters rather
-                  than a switch in a panel of things that cannot be switched. */}
-              {problem.blocked_by_preferred_staff && !relaxPreferred ? (
-                <button type="button" className="min-h-9 font-medium underline" onClick={useAnyone}>Let anyone treat them</button>
-              ) : null}
             </div>
           )}
 
           <div className="flex items-center gap-2">
             <Button type="button" variant="outline" size="sm" className="h-9 text-[13px]" disabled={working} onClick={() => openChange(problem)}>
-              {isChanging ? "Close" : "Change"}
+              {isChanging ? "Hide choices" : "Change"}
             </Button>
-            {confirmDelete === problem.id ? (
-              <span className="ml-auto flex items-center gap-3 text-[13px]">
-                Delete it?
-                <button type="button" className="min-h-9 text-red-600 underline" disabled={working} onClick={() => removeAppointment(problem)}>Yes</button>
-                <button type="button" className="min-h-9 underline" onClick={() => setConfirmDelete(null)}>No</button>
-              </span>
-            ) : (
-              /* Delete sits behind a menu: next to every row it was the loudest
-                 thing on the sheet, one stray thumb from a mistake. */
+            {(
+              /* Cancel, not Delete: it goes into the plan and Undo brings it
+                 back. Deleting lives in the appointment itself (Open). */
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button type="button" aria-label="More" className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-muted">
@@ -422,7 +414,7 @@ export function VerifyDialog({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onSelect={() => onOpenAppointment(problem.appointment_id!)}>Open</DropdownMenuItem>
-                  <DropdownMenuItem className="text-red-600" onSelect={() => setConfirmDelete(problem.id)}>Delete</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => cancelRow(problem)}>Cancel this treatment</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
