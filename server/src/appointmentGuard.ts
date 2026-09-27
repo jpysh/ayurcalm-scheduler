@@ -6,7 +6,7 @@
  * was sent, so any rule could be walked around by dragging a treatment. This is
  * that check, on the server, where it cannot be skipped.
  */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Prisma } from '@prisma/client';
 import { offOnDay, overlaps, staffEventBusy, teamOf, toMinutes, type EventRow } from './availability.js';
 
 export type Conflict = { reason: string; message: string; details?: Record<string, unknown> };
@@ -27,10 +27,18 @@ export type Candidate = {
 const minutesToTime = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
 
+/**
+ * The treatments that take a therapist, a room and the resident's time: not
+ * cancelled, and not a no-show, whose slot is free again (#136, #161). Every
+ * read that decides who is busy uses this, so the guard, the planner and the
+ * scheduler cannot disagree about a cancelled slot.
+ */
+export const HAPPENING: Prisma.AppointmentWhereInput = { status: { notIn: ['cancelled', 'no_show'] } };
+
 /** Everything a day's worth of checks needs, read once. */
 export async function loadDay(day: Date, prisma: PrismaClient) {
   const [appointments, timeOff, events, staff, rooms, settings, patients, therapies] = await Promise.all([
-    prisma.appointment.findMany({ where: { scheduled_date: day, status: { notIn: ['cancelled', 'no_show'] } } }),
+    prisma.appointment.findMany({ where: { scheduled_date: day, ...HAPPENING } }),
     prisma.timeOff.findMany(),
     prisma.programEvent.findMany() as unknown as Promise<EventRow[]>,
     prisma.staff.findMany(),

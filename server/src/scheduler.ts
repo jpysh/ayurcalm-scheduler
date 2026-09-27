@@ -1,6 +1,7 @@
 import { PrismaClient, Appointment, Staff, TherapyRoom } from '@prisma/client';
 import { z } from 'zod';
 import { staffEventBusy, eventBlocking, teamOf, mayTreatOn, type EventRow } from './availability.js';
+import { HAPPENING } from './appointmentGuard.js';
 
 const inputSchema = z.object({
   patient_id: z.string().uuid(),
@@ -253,7 +254,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
 
     // prefetch all appointments on date for conflict checks and workloads
     const appointmentsOnDate = await withTimeout(prisma.appointment.findMany({
-      where: { scheduled_date: nd },
+      where: { scheduled_date: nd, ...HAPPENING },
       select: { start_time: true, duration_minutes: true, room_id: true, staff_id: true, co_staff_ids: true, patient_id: true, therapy_id: true },
     }), maxMs, 'APPTS_prefetch');
     const roomBusy: Record<string, { s: number; e: number }[]> = {};
