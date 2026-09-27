@@ -164,7 +164,7 @@
     margin-bottom: 8px; padding: 10px 12px; border: 0; border-radius: 16px; background: hsl(var(--card));
   }
   .cards-sm td { display: block; padding: 0 !important; border: 0; font-size: 13px; color: hsl(var(--muted-foreground)); text-align: left; }
-  .cards-sm td:empty { display: none; }
+  .cards-sm td:empty, .cards-sm td.hidden { display: none; }
   .cards-sm td:first-child, .cards-sm td[data-first] { font-size: 16px; font-weight: 600; color: hsl(var(--foreground)); }
   .cards-sm td[data-first] { order: -1; }
   .cards-sm tr:has(td[data-first]) td:first-child { font-size: 13px; font-weight: 400; color: hsl(var(--muted-foreground)); }
