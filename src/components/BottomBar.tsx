@@ -11,16 +11,20 @@ import { Input } from "@/components/ui/input";
  */
 
 export const SCREENS = [
-  ["schedule", "The day", "Treatments, hour by hour"],
   ["patients", "Residents", "Who is staying"],
+  ["team", "Team and rooms", "Who is in today"],
+  ["timeoff", "Leave", "Future time off"],
   ["diet", "Diet plans", "Meals by plan"],
-  ["staff", "Team", "Therapists"],
-  ["rooms", "Rooms", "And what they have"],
-  ["therapies", "Therapies", "Lengths and needs"],
-  ["timeoff", "Leave", "Time off, closures"],
-  ["events", "Events", "Classes, talks, meals"],
   ["settings", "Settings", "Centre, users, AI"],
+  ["schedule", "The day", "Back to the list"],
+  // Reached from Team and rooms, not the menu (#137).
+  ["staff", "Therapists", ""],
+  ["rooms", "Rooms", ""],
+  ["therapies", "Therapies", ""],
+  ["events", "Events", ""],
 ] as const;
+/** The menu's tiles, as the design (#137): the rest open from Team and rooms. */
+const MENU = SCREENS.filter(([, , hint]) => hint);
 
 export function BottomSheet({ open, onOpenChange, title, children }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; children: ReactNode }) {
   return (
@@ -113,7 +117,7 @@ export function BottomBar({ centreName, activeTab, go, signOut, day, today, now,
           ))}
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {SCREENS.map(([key, name, hint]) => (
+          {MENU.map(([key, name, hint]) => (
             <button key={key} type="button" aria-current={activeTab === key ? "page" : undefined}
               className="min-h-[60px] rounded-xl border-2 px-3 py-2 text-left aria-[current=page]:border-primary"
               onClick={() => { go(key); setSheet(null); }}>
