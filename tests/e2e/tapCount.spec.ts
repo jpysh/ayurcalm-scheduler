@@ -159,7 +159,12 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
   const beforeRows = [...await rowsOf(today), ...await rowsOf(day)];
   const restore = async () => {
     for (const batch of accepted) await call.post('/replan/undo', { batch_id: batch });
-    for (const h of (await call.get('/timeoff')) as { id: string }[]) if (!before.day.off.includes(String(h.id))) await call.del(`/timeoff/${h.id}`);
+    for (const h of (await call.get('/timeoff')) as { id: string }[]) {
+      if (before.day.off.includes(String(h.id))) continue;
+      const res = await call.del(`/timeoff/${h.id}`);
+      // Said, not swallowed: a restore refused (the write limit) leaves the centre changed.
+      if (!res.ok()) console.log(`restore: DELETE /timeoff/${h.id} -> ${res.status()}`);
+    }
     // A booking the walk made, and any treatment it changed, put back.
     const was = new Set(beforeRows.map((a) => a.id));
     const now = new Map([...await rowsOf(today), ...await rowsOf(day)].map((a) => [a.id, a]));
