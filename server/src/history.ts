@@ -26,9 +26,31 @@ export async function historyOf(appointmentId: string, prisma: PrismaClient): Pr
     prisma.therapyRoom.findMany({ select: { id: true, name: true } }),
     prisma.therapy.findMany({ select: { id: true, name: true } }),
   ]);
+  const describe = describer(staff, rooms, therapies);
+
+  const entries: Entry[] = [];
+  for (const r of rows) {
+    const at = r.timestamp.toISOString();
+    if (r.action === 'update') {
+      for (const text of describe((r.old_value || {}) as Snapshot, (r.new_value || {}) as Snapshot)) entries.push({ at, who: 'you', text });
+      continue;
+    }
+    const writes = (((r.old_value || {}) as { writes?: { appointment_id: string; before: Snapshot; after: Snapshot }[] }).writes || [])
+      .filter((w) => w.appointment_id === appointmentId);
+    const why = r.action === 'replan' ? ` (${((r.new_value || {}) as { staff_name?: string }).staff_name || 'a therapist'} not in)` : " (Verify's plan)";
+    for (const w of writes) for (const text of describe(w.before || {}, w.after || {})) entries.push({ at, who: 'the app', text: text + why });
+  }
+  entries.push({ at: appt.created_at.toISOString(), who: appt.assignment_type === 'auto' ? 'the app' : 'you', text: `Booked: session ${appt.session_number} of ${appt.total_sessions}` });
+  return entries;
+}
+
+type Named = { id: string; name: string }[];
+
+/** A change to a treatment, in the words the card and the Log both show. */
+export function describer(staff: Named, rooms: Named, therapies: Named) {
   const nameIn = (list: { id: string; name: string }[], id: unknown) => list.find((x) => x.id === id)?.name || 'nobody';
 
-  const describe = (before: Snapshot, after: Snapshot): string[] => {
+  return (before: Snapshot, after: Snapshot): string[] => {
     const out: string[] = [];
     if (after.status !== undefined && after.status !== before.status) {
       if (after.status === 'no_show') out.push("Marked didn't come");
@@ -46,19 +68,4 @@ export async function historyOf(appointmentId: string, prisma: PrismaClient): Pr
     if (after.notes !== undefined && (after.notes || '') !== (before.notes || '')) out.push(after.notes ? `Note: ${after.notes}` : 'Note removed');
     return out;
   };
-
-  const entries: Entry[] = [];
-  for (const r of rows) {
-    const at = r.timestamp.toISOString();
-    if (r.action === 'update') {
-      for (const text of describe((r.old_value || {}) as Snapshot, (r.new_value || {}) as Snapshot)) entries.push({ at, who: 'you', text });
-      continue;
-    }
-    const writes = (((r.old_value || {}) as { writes?: { appointment_id: string; before: Snapshot; after: Snapshot }[] }).writes || [])
-      .filter((w) => w.appointment_id === appointmentId);
-    const why = r.action === 'replan' ? ` (${((r.new_value || {}) as { staff_name?: string }).staff_name || 'a therapist'} not in)` : " (Verify's plan)";
-    for (const w of writes) for (const text of describe(w.before || {}, w.after || {})) entries.push({ at, who: 'the app', text: text + why });
-  }
-  entries.push({ at: appt.created_at.toISOString(), who: appt.assignment_type === 'auto' ? 'the app' : 'you', text: `Booked: session ${appt.session_number} of ${appt.total_sessions}` });
-  return entries;
 }
