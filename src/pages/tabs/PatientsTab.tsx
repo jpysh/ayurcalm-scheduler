@@ -16,6 +16,7 @@ import { API_BASE } from "@/lib/apiBase";
 import type { CardAppt } from "@/components/TreatmentCard";
 import DayDietDialog from "./DayDietDialog";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiDietPlan, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
+import PageHead from "@/components/PageHead";
 // removed dialog import to avoid dev parse error
 
 type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; preferredStaffId?: string | null; requiresPreferredStaff?: boolean };
@@ -66,10 +67,7 @@ function ResidentsList({ patients, today, onOpen, onAdd }: { patients: Patient[]
   const inHouseIds = new Set(people.map((x) => x.p.id));
   return (
     <div>
-      <div className="flex items-baseline justify-between px-1 pb-2 pt-1">
-        <h1 className="text-[22px] font-semibold">Residents</h1>
-        <span className="text-[13px] text-muted-foreground">{inHouse === null ? '' : `${people.length} in house`}</span>
-      </div>
+      <PageHead title="Residents" note={inHouse === null ? '' : `${people.length} in house`} />
       <input className="mb-2 min-h-11 w-full rounded-full border-[1.5px] border-border bg-card px-4 text-base outline-none" placeholder="Search all residents" aria-label="Search residents"
         value={q} onChange={(e) => setQ(e.target.value)} />
       {ql ? (

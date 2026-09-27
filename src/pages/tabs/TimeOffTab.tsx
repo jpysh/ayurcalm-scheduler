@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { API_TOKEN, leaveWhen, toHHMM, toLocalInput, type UiTimeOff, type UiStaff, type UiRoom, type UiTherapy, type Patient } from "./shared";
+import PageHead from "@/components/PageHead";
 
 const TimeOffTab = ({
   timeOffs,
@@ -49,10 +50,11 @@ const TimeOffTab = ({
   setShowAddTimeOff,
 }: any) => {
   return (
+    <>
+    <PageHead title="Leave" />
     <Card>
       <CardHeader className="px-2 md:px-4 pt-2 md:pt-4 pb-1 md:pb-2">
         <div className="flex items-center justify-center gap-2">
-          <CardTitle className="text-base md:text-xl font-semibold">Time Off (including Holidays)</CardTitle>
           <Button size="sm" className="min-h-11 rounded-full px-4" onClick={() => setShowAddTimeOff(true)}>
             <Plus className="mr-1 h-4 w-4" />Add leave
           </Button>
@@ -341,6 +343,7 @@ const TimeOffTab = ({
         </Table>
       </CardContent>
     </Card>
+    </>
   );
 };
 

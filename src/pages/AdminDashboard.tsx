@@ -21,6 +21,7 @@ import { useScheduleScreen } from "./tabs/ScheduleTab";
 import Settings from "./Settings";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout, API_TOKEN, type ApiAppointment, type ApiProgramEvent, type Patient, type UiRoom, type UiStaff, type UiTherapy, type UiTimeOff } from "./tabs/shared";
+import PageHead from "@/components/PageHead";
 
 /** Builds the schedule's time rows from the centre's opening hours. */
 const buildTimeSlots = (openingTime: string, closingTime: string, slotMinutes: number) => {
@@ -525,9 +526,6 @@ const AdminDashboard = () => {
       {/* Main Content */}
       {/* The phone design widened on a desktop, never a second layout (#67): one centred column. */}
       <div className="mx-auto w-full max-w-4xl px-3 md:px-4 py-3 md:py-6">
-        {activeTab !== 'schedule' ? (
-          <button type="button" className="mb-2 h-11 text-base font-semibold text-primary" onClick={() => go('schedule')}>‹ The day</button>
-        ) : null}
         <Tabs value={activeTab} onValueChange={go} className="space-y-6">
           {/* Swipe the day left and right, as the date sheet says (#67). */}
           <TabsContent value="schedule" className="space-y-6"

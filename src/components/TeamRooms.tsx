@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { BottomSheet } from "@/components/BottomBar";
 import { API_BASE } from "@/lib/apiBase";
+import PageHead from "@/components/PageHead";
 
 type Named = { id: string | number; name: string; is_active?: boolean; status?: string };
 type Pick = { kind: "staff" | "room"; id: string; name: string } | null;
@@ -72,10 +73,7 @@ export function TeamRooms({ staff, rooms, today, nowHM, opening, closing, refres
 
   return (
     <div>
-      <div className="flex items-baseline justify-between px-1 pb-2 pt-1">
-        <h1 className="text-[22px] font-semibold">Team and rooms</h1>
-        <span className="text-[13px] text-muted-foreground">{team.length - notIn.length} in{notIn.length ? ` · ${notIn.length} not in` : ""}</span>
-      </div>
+      <PageHead title="Team and rooms" note={`${team.length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}`} />
       <div className="overflow-hidden rounded-2xl bg-card">
         {team.map((s) => row(String(s.id), s.name,
           offToday[String(s.id)] ? <span className="text-destructive">Not in today</span> : "Working today",

@@ -70,8 +70,8 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
     ['Therapists', 'Staff Management'],
     ['Rooms', 'Room Management'],
     ['Therapies', 'Therapy Management'],
-    ['Diet plans', 'Diet Management'],
-    ['Leave', 'Time Off'],
+    ['Diet plans', 'Active Assignments'],
+    ['Leave', 'Add leave'],
     ['Events', 'Events'],
     ['Residents', 'in house'],
     ['Settings', 'Centre details'],
@@ -79,6 +79,12 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
   ]) {
     await openTab(page, tab);
     await expect(activePanel(page)).toContainText(text, { timeout: 15000 });
+  }
+  // A page has one header line, as the design's (#193): its name, and no "‹ The day" line above it.
+  for (const [tab, title] of [['Residents', 'Residents'], ['Team and rooms', 'Team and rooms'], ['Leave', 'Leave'], ['Diet plans', 'Diet'], ['Settings', 'Settings']]) {
+    await openTab(page, tab);
+    await expect(activePanel(page).getByRole('heading', { level: 1 })).toHaveText(title);
+    await expect(page.getByRole('button', { name: '‹ The day' })).toHaveCount(0);
   }
   // The Log opens from Settings with the demo's own changes in words (#130).
   await openTab(page, 'Settings');

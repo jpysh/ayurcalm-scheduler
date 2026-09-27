@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { UsersSection, ChangePasswordCard } from "@/components/UsersSection";
 import { AssistantSection } from "@/components/AssistantSection";
+import PageHead from "@/components/PageHead";
 
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
 const SLOT_OPTIONS = [15, 20, 30, 60];
@@ -148,7 +149,8 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
   }
 
   return (
-    <div className="container mx-auto px-3 md:px-4 py-3 md:py-6 space-y-4 max-w-3xl">
+    <div className="space-y-4">
+      <PageHead title="Settings" />
       {/* Here rather than on the menu, as the design has it (#67). */}
       {openLog ? (
         <button type="button" className="flex min-h-12 w-full items-center rounded-2xl bg-card px-4 text-left" onClick={openLog}>
