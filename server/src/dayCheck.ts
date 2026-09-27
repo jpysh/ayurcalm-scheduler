@@ -138,7 +138,10 @@ const fixFromMove = (m: Move, sameDay: boolean): Fix => ({
   label: (m.cancel
     ? 'Cancel this treatment'
     : m.tier === 1
-      ? `${m.to.staff_name}, same time`
+      // Name what changes, the therapist, the room or both (#187).
+      ? m.to.room_id === m.from.room_id ? `${m.to.staff_name}, same time`
+        : m.to.staff_name === m.from.staff_name ? `Move to ${m.to.room_name}, same time`
+        : `${m.to.staff_name} in ${m.to.room_name}, same time`
       : sameDay
         ? `${m.to.start_time} with ${m.to.staff_name}`
         : `${dayName(m.to.date)}, ${m.to.start_time} with ${m.to.staff_name}`) + (m.note ? ` (${m.note})` : ''),

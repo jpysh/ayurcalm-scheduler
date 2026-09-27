@@ -39,9 +39,9 @@ export type Move = {
   cancel?: boolean;
   /** Tier 4: every choice for this row, the selected one included. */
   choices?: Move[];
-  from: { staff_name: string; start_time: string; date: string };
+  from: { staff_name: string; start_time: string; date: string; room_id: string | null };
   /** `staff_id` leads; `co_staff_ids` is everyone else on the treatment. */
-  to: { staff_id: string | null; co_staff_ids: string[]; staff_name: string; start_time: string; date: string; room_id: string | null };
+  to: { staff_id: string | null; co_staff_ids: string[]; staff_name: string; start_time: string; date: string; room_id: string | null; room_name: string };
   /** True when the admin chose this row themselves and the plan must keep it. */
   pinned?: boolean;
 };
@@ -176,6 +176,7 @@ export async function planDay(
     for (const b of offOnDay(timeOff, 'staff', s.id, date)) addBusy(staffBusy, s.id, b.s, b.e);
   }
   for (const r of rooms) for (const b of offOnDay(timeOff, 'room', r.id, date)) addBusy(roomBusy, r.id, b.s, b.e);
+  const roomName = (id: string | null) => rooms.find((r) => r.id === id)?.name || '';
   for (const a of mine) {
     // The resident still owes this hour to the treatment being rehoused, so
     // their own slot is only busy for the others.
@@ -222,7 +223,7 @@ export async function planDay(
       patient_name: patient?.name || 'Unknown',
       therapy_name: therapy?.name || 'Treatment',
       tier: pin.date === ymd(date) ? (pin.start_time === appt.start_time ? 1 : 2) : 3,
-      from: { staff_name: staffById.get(appt.staff_id || '')?.name || 'Unassigned', start_time: appt.start_time, date: ymd(date) },
+      from: { staff_name: staffById.get(appt.staff_id || '')?.name || 'Unassigned', start_time: appt.start_time, date: ymd(date), room_id: appt.room_id },
       to: {
         staff_id: pin.staff_id,
         co_staff_ids: pinCo,
@@ -230,6 +231,7 @@ export async function planDay(
         start_time: pin.start_time,
         date: pin.date,
         room_id: pin.room_id,
+        room_name: roomName(pin.room_id),
       },
       pinned: true,
       cancel: pin.cancel || undefined,
@@ -253,7 +255,7 @@ export async function planDay(
     const names = {
       patient_name: patient?.name || 'Unknown',
       therapy_name: therapy?.name || 'Treatment',
-      from: { staff_name: absent?.name || staffById.get(appt.staff_id || '')?.name || 'Unassigned', start_time: appt.start_time, date: ymd(date) },
+      from: { staff_name: absent?.name || staffById.get(appt.staff_id || '')?.name || 'Unassigned', start_time: appt.start_time, date: ymd(date), room_id: appt.room_id },
     };
 
     const mustKeepTherapist = patient?.requires_preferred_staff && !opts.relaxPreferredStaff ? patient.preferred_staff_id : null;
@@ -369,7 +371,7 @@ export async function planDay(
         appointment_id: appt.id,
         ...names,
         tier: slot.tier,
-        to: { staff_id: lead, co_staff_ids: co, staff_name: teamName(slot.team), start_time: minutesToTime(slot.start), date: slot.date, room_id: slot.room },
+        to: { staff_id: lead, co_staff_ids: co, staff_name: teamName(slot.team), start_time: minutesToTime(slot.start), date: slot.date, room_id: slot.room, room_name: roomName(slot.room) },
         ...extra,
       };
     };
@@ -429,7 +431,7 @@ export async function planDay(
       choice: 'cancel',
       cancel: true,
       note: 'kept as cancelled, can be undone',
-      to: { staff_id: appt.staff_id, co_staff_ids: appt.co_staff_ids, staff_name: '', start_time: appt.start_time, date: ymd(date), room_id: appt.room_id },
+      to: { staff_id: appt.staff_id, co_staff_ids: appt.co_staff_ids, staff_name: '', start_time: appt.start_time, date: ymd(date), room_id: appt.room_id, room_name: roomName(appt.room_id) },
     });
     const nextMove = choices.find((c) => c.choice === 'next_free_day');
     const thisMove = choices.find((c) => c.choice === 'this_time_only');

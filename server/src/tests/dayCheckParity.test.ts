@@ -135,6 +135,18 @@ async function main() {
     assert.equal(blockingById.get(pairTreatment.id)?.kind, 'STAFF_BUSY', 'the pair treatment does not see its co-therapist booked elsewhere');
     assert.equal(blockingById.get(shortHanded.id)?.kind, 'STAFF_SHORT', 'a pair treatment with one therapist was not refused');
 
+    // A fix that moves the room names the room it goes to (#187); it used to name only the therapist.
+    let roomMoves = 0;
+    for (const p of check.problems) {
+      const f = p.fix;
+      const appt = appointments.find((a) => a.id === f?.appointment_id);
+      if (!f || !appt || f.tier !== 1 || !f.room_id || f.room_id === appt.room_id) continue;
+      const room = await prisma.therapyRoom.findUnique({ where: { id: f.room_id } });
+      assert.ok(room && f.label.includes(room.name), `a room move for ${p.who} does not name the room: ${f.label}`);
+      roomMoves += 1;
+    }
+    assert.ok(roomMoves > 0, 'the double-booked room should be fixed by a move to another room');
+
     // A fix that is offered must be one the write would accept: the card's
     // button cannot hand the admin a refusal.
     for (const p of check.problems) {
