@@ -21,6 +21,7 @@
  */
 import { PrismaClient, Prisma } from '@prisma/client';
 import { centreClock, offOnDay, stayOn, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow } from './availability.js';
+import { HAPPENING } from './appointmentGuard.js';
 
 /** Which of the tier 4 choices a move is. */
 export type Choice = 'this_time_only' | 'next_free_day' | 'cancel';
@@ -136,7 +137,7 @@ export async function planDay(
   const staffById = new Map(staff.map((s) => [s.id, s]));
 
   const dayAppointments = await prisma.appointment.findMany({
-    where: { scheduled_date: date, status: { notIn: ['cancelled', 'no_show'] } },
+    where: { scheduled_date: date, ...HAPPENING },
   });
   // The treatments being rehoused: a therapist's whole day, or the single
   // session Verify is fixing.
@@ -333,7 +334,7 @@ export async function planDay(
         other.setDate(date.getDate() + i);
         if (inStay && stayEnds && other > stayEnds) return null;
         const key = ymd(other);
-        const otherDay = (laterDays[key] ??= await prisma.appointment.findMany({ where: { scheduled_date: other, status: { notIn: ['cancelled', 'no_show'] } } }));
+        const otherDay = (laterDays[key] ??= await prisma.appointment.findMany({ where: { scheduled_date: other, ...HAPPENING } }));
         const taken = laterTaken.filter((x) => x.date === key);
         const hits = (a: { start_time: string; duration_minutes: number }, s: number, e: number) =>
           overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, s, e);

@@ -238,7 +238,8 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
     prisma.patient.findMany(),
     prisma.therapy.findMany(),
     prisma.staff.findMany(),
-    prisma.appointment.findMany({ where: { scheduled_date: day } }),
+    // A cancelled treatment is not on paper (#161); a no-show still is, marked (#94).
+    prisma.appointment.findMany({ where: { scheduled_date: day, status: { not: 'cancelled' } } }),
     prisma.programEvent.findMany({ where: { OR: [{ date: day }, { AND: [{ start_date: { lte: day } }, { end_date: { gte: day } }] }] } }),
     prisma.programEvent.findMany({ where: { recurrence: 'weekly' } }),
     prisma.timeOff.findMany({ where: { entity_type: 'staff' } }),

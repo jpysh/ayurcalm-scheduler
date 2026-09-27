@@ -24,6 +24,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { generateDailySchedulePdf } from '../pdf/dailySchedulePdf.js';
+import { generateTherapistRotaPdf } from '../pdf/therapistRotaPdf.js';
 import { requireDemoData } from './demoGuard.js';
 
 const TAG = 'Sheettest';
@@ -126,12 +127,28 @@ async function main() {
       expected.push({ name: patient.name, group, appts: appts.sort((a, b) => a.time.localeCompare(b.time)) });
     }
 
+    // A cancelled treatment is not on either sheet: a therapist would go to it (#161).
+    const cancelled = await prisma.therapy.create({ data: { name: `${TAG} Nasyacancel`, required_amenities: [], duration_minutes: 30 } });
+    const firstResident = await prisma.patient.findFirstOrThrow({ where: { name: expected[0].name } });
+    await prisma.appointment.create({
+      data: {
+        patient_id: firstResident.id, therapy_id: cancelled.id, staff_id: therapists[0].id, room_id: room.id,
+        scheduled_date: day, start_time: '12:00', duration_minutes: 30,
+        session_number: 1, total_sessions: 1, status: 'cancelled', assignment_type: 'manual',
+      },
+    });
+    const rotaPath = join(dir, 'rota.pdf');
+    writeFileSync(rotaPath, await generateTherapistRotaPdf(DAY, prisma));
+    assert.ok(!execFileSync('pdftotext', ['-raw', rotaPath, '-']).toString().includes('Nasyacancel'), 'A cancelled treatment printed on the therapist sheet');
+
     const pdfPath = join(dir, 'sheet.pdf');
     writeFileSync(pdfPath, await generateDailySchedulePdf(DAY, prisma));
 
     // Text in the order it is drawn, so a treatment wrapped onto two lines of
     // its cell still reads as one run of words.
     const text = execFileSync('pdftotext', ['-raw', pdfPath, '-']).toString().replace(/\s+/g, ' ');
+
+    assert.ok(!text.includes('Nasyacancel'), 'A cancelled treatment printed on the day sheet');
 
     const pages = Number(execFileSync('pdfinfo', [pdfPath]).toString().match(/Pages:\s+(\d+)/)![1]);
     assert.ok(pages >= 2, `Expected the test centre to need more than one page, got ${pages}`);

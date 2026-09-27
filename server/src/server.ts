@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { autoSchedule } from './scheduler.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import { generateTherapistRotaPdf } from './pdf/therapistRotaPdf.js';
-import { findConflict, loadDay, nearestFreeTime, staffDay } from './appointmentGuard.js';
+import { findConflict, HAPPENING, loadDay, nearestFreeTime, staffDay } from './appointmentGuard.js';
 import { replanStaffDay, applyPlan, undoReplan, type Pin } from './replan.js';
 import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
 import { eventClashes, type EventRow } from './availability.js';
@@ -491,7 +491,7 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
   const later = await prisma.patientStay.findFirst({ where: { patient_id: id, start_date: { gt: stay.end_date } }, orderBy: { start_date: 'asc' } });
   const left_over = next.end_date < stay.end_date
     ? await prisma.appointment.findMany({
-      where: { patient_id: id, status: { notIn: ['cancelled', 'no_show'] }, scheduled_date: { gt: next.end_date, ...(later ? { lt: later.start_date } : {}) } },
+      where: { patient_id: id, ...HAPPENING, scheduled_date: { gt: next.end_date, ...(later ? { lt: later.start_date } : {}) } },
       orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }],
     })
     : [];
@@ -941,7 +941,7 @@ app.get('/program-events', async (req: Request, res: Response) => {
  */
 async function eventClashRefusal(next: EventRow, before: EventRow | null): Promise<{ error: string; clashes: unknown[] } | null> {
   const today = new Date(new Date().toDateString());
-  const appts = await prisma.appointment.findMany({ where: { scheduled_date: { gte: today }, status: { notIn: ['cancelled', 'no_show'] } } });
+  const appts = await prisma.appointment.findMany({ where: { scheduled_date: { gte: today }, ...HAPPENING } });
   const old = new Set(before ? eventClashes(before, appts).map((a) => a.id) : []);
   const clashes = eventClashes(next, appts).filter((a) => !old.has(a.id));
   if (clashes.length === 0) return null;
