@@ -57,17 +57,28 @@ async function main() {
     const mine = await book(rekha.id, asha.id, roomA.id);
     const theirs = await book(sita.id, bina.id, roomB.id);
 
-    const choices = async (kind: string) => (await call('GET', `/appointments/${mine.id}/choices?kind=${kind}`)).choices as { label: string; change: Record<string, unknown> }[];
-    const staffNames = async () => (await choices('staff')).map((c) => c.label);
+    const choices = async (kind: string) => (await call('GET', `/appointments/${mine.id}/choices?kind=${kind}`)).choices as { label: string; now?: boolean; change: Record<string, unknown> }[];
+    const staffNames = async () => (await choices('staff')).filter((c) => !c.now).map((c) => c.label);
     assert.ok(!(await staffNames()).includes(bina.name), 'a therapist busy at that time was offered');
+
+    // Every list starts with the treatment as it stands, marked now (#201).
+    for (const kind of ['time', 'staff', 'room', 'therapy']) {
+      const [first] = (await choices(kind)) as { now?: boolean; label: string }[];
+      assert.ok(first?.now, `${kind}'s first row is not the current one: ${first?.label}`);
+    }
+    // When offers another room and another day, not only later in the same room (#201).
+    const when = await choices('time');
+    assert.ok(when.some((c) => c.change.room_id), 'When offers no other room');
+    assert.ok(when.some((c) => c.change.scheduled_date), 'When offers no other day');
+    assert.ok(!when.some((c) => String(c.change.scheduled_date || '') > '2030-04-20'), 'When offers a day after the stay ends');
 
     // Every option saves: the list and the guard agree.
     for (const kind of ['time', 'room']) {
       const list = await choices(kind);
-      assert.ok(list.length > 0, `no ${kind} offered on an empty day`);
+      assert.ok(list.length > 1, `no ${kind} offered on an empty day`);
       for (const c of list) {
         await call('PUT', `/appointments/${mine.id}`, c.change);
-        await call('PUT', `/appointments/${mine.id}`, { start_time: '10:00', room_id: roomA.id });
+        await call('PUT', `/appointments/${mine.id}`, { scheduled_date: DAY, start_time: '10:00', room_id: roomA.id });
       }
     }
 

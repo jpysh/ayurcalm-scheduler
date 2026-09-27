@@ -8,7 +8,8 @@ import type { PrismaClient } from '@prisma/client';
 import { findConflict, loadDay, type Candidate } from './appointmentGuard.js';
 
 export type Kind = 'time' | 'staff' | 'room' | 'therapy';
-export type Choice = { label: string; hint?: string; best?: boolean; change: Record<string, unknown> };
+/** `now` marks the treatment as it stands, listed first so the admin sees what they change from (#201). */
+export type Choice = { label: string; hint?: string; best?: boolean; now?: boolean; change: Record<string, unknown> };
 
 const toM = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
@@ -23,6 +24,9 @@ const works = (weekly: unknown, day: Date, start: number, minutes: number) => {
 
 /** How many rows a list shows: enough to choose, few enough to read on a phone. */
 const MAX = 5;
+const DAY_MS = 86400000;
+/** "Tue 29 Sep", for an option on another day. */
+const dayLabel = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 export async function cardChoices(appointmentId: string, kind: Kind, nowMinutes: number | null, prisma: PrismaClient): Promise<Choice[] | null> {
   const a = await prisma.appointment.findUnique({ where: { id: appointmentId } });
@@ -35,24 +39,67 @@ export async function cardChoices(appointmentId: string, kind: Kind, nowMinutes:
   const fits = (c: Partial<Candidate>) => !findConflict({ ...base, ...c }, ctx);
   const out: Choice[] = [];
 
+  const nameOf = (list: { id: string; name: string }[], id: string | null) => list.find((x) => x.id === id)?.name || '';
+  const start = toM(a.start_time);
+
   if (kind === 'time') {
-    // Later the same day, same therapist and room: what "running late" and
-    // "move" need most. From now on today, never into the past.
+    out.push({ label: `${a.start_time} to ${hm(start + a.duration_minutes)}`, now: true, change: {} });
     const open = toM(ctx.settings?.opening_time || '09:00');
     const close = toM(ctx.settings?.closing_time || '18:00');
-    const from = Math.max(open, nowMinutes ?? open);
-    for (let t = Math.ceil(from / 15) * 15; t + a.duration_minutes <= close && out.length < MAX; t += 15) {
-      if (t === toM(a.start_time)) continue;
-      const team = ctx.staff.filter((x) => x.id === a.staff_id || a.co_staff_ids.includes(x.id));
-      const room = ctx.rooms.find((x) => x.id === a.room_id);
-      if (!team.every((x) => works(x.weekly_schedule, a.scheduled_date, t, a.duration_minutes)) || (room && !works(room.weekly_schedule, a.scheduled_date, t, a.duration_minutes))) continue;
-      if (fits({ start_time: hm(t) })) {
-        const diff = t - toM(a.start_time);
-        out.push({ label: `${hm(t)} to ${hm(t + a.duration_minutes)}`, hint: diff > 0 ? `+${diff} min` : `${diff} min`, best: out.length === 0, change: { start_time: hm(t) } });
+    const team = ctx.staff.filter((x) => x.id === a.staff_id || a.co_staff_ids.includes(x.id));
+    const rooms = ctx.rooms.filter((r) => r.is_active);
+    /** The first times from `from` on `day` that fit, in `roomIds`, as options. */
+    const scan = (day: Date, dayCtx: typeof ctx, from: number, roomIds: (string | null)[], limit: number, label: (t: number, room: string | null) => string) => {
+      const found: Choice[] = [];
+      for (let t = Math.ceil(from / 15) * 15; t + a.duration_minutes <= close && found.length < limit; t += 15) {
+        if (!team.every((x) => works(x.weekly_schedule, day, t, a.duration_minutes))) continue;
+        for (const roomId of roomIds) {
+          const room = rooms.find((x) => x.id === roomId);
+          if (room && !works(room.weekly_schedule, day, t, a.duration_minutes)) continue;
+          const change: Record<string, unknown> = { start_time: hm(t) };
+          if (roomId !== a.room_id) change.room_id = roomId;
+          if (day.getTime() !== a.scheduled_date.getTime()) change.scheduled_date = day.toISOString().slice(0, 10);
+          if (day.getTime() === a.scheduled_date.getTime() && t === start && roomId === a.room_id) continue;
+          if (findConflict({ ...base, scheduled_date: day, start_time: hm(t), room_id: roomId }, dayCtx)) continue;
+          found.push({ label: label(t, roomId), change });
+          break;
+        }
       }
+      return found;
+    };
+    // Later the same day, same therapist and room: what "running late" and "move" need most.
+    // From now on today, never into the past.
+    const from = Math.max(open, nowMinutes ?? open);
+    const sameRoom = scan(a.scheduled_date, ctx, from, [a.room_id], 3, (t) => `${hm(t)} to ${hm(t + a.duration_minutes)}`)
+      .map((c) => { const diff = toM(String(c.change.start_time)) - start; return { ...c, hint: diff > 0 ? `+${diff} min` : `${diff} min` }; });
+    // Another room today, for when this one is the problem (#201).
+    const taken = new Set(sameRoom.map((c) => c.change.start_time));
+    const otherRooms = scan(a.scheduled_date, ctx, from, rooms.map((r) => r.id).filter((id) => id !== a.room_id), 4, (t, r) => `Today ${hm(t)}, ${nameOf(rooms, r)}`)
+      .filter((c) => !taken.has(c.change.start_time)).slice(0, 2);
+    // The next days the same therapist and room are free at a similar hour.
+    // Only while the resident is staying: the scheduler never books outside a stay (#142).
+    const stays = await prisma.patientStay.findMany({ where: { patient_id: a.patient_id } });
+    const later: Choice[] = [];
+    for (let d = 1; d <= 7 && later.length < 2; d++) {
+      const day = new Date(a.scheduled_date.getTime() + d * DAY_MS);
+      if (stays.length && !stays.some((x) => x.start_date <= day && day <= x.end_date)) continue;
+      const dayCtx = await loadDay(day, prisma);
+      const [c] = scan(day, dayCtx, Math.max(open, start - 60), [a.room_id], 1, (t) => `${dayLabel(day)}, ${hm(t)}`);
+      if (c) later.push(c);
     }
-    return out;
+    const options = [...sameRoom, ...otherRooms, ...later];
+    if (options.length) options[0].best = true;
+    return [...out, ...options];
   }
+
+  // The list's first row: the treatment as it stands (#201).
+  if (kind === 'staff') out.push({ label: [a.staff_id, ...a.co_staff_ids].map((id) => nameOf(ctx.staff, id)).filter(Boolean).join(' and ') || 'No therapist', now: true, change: {} });
+  if (kind === 'room') out.push({ label: nameOf(ctx.rooms, a.room_id) || 'No room', now: true, change: {} });
+  if (kind === 'therapy') {
+    const t = ctx.therapies.find((x) => x.id === a.therapy_id);
+    out.push({ label: `${t?.name || 'Treatment'} · ${a.duration_minutes} min`, now: true, change: {} });
+  }
+  const offered = () => out.length - 1;
 
   if (kind === 'staff') {
     for (const s of ctx.staff) {
@@ -60,8 +107,8 @@ export async function cardChoices(appointmentId: string, kind: Kind, nowMinutes:
       // Only someone trained for it, when the centre has said who is.
       if (s.specializations.length && !s.specializations.includes(a.therapy_id)) continue;
       if (!works(s.weekly_schedule, a.scheduled_date, toM(a.start_time), a.duration_minutes)) continue;
-      if (fits({ staff_id: s.id })) out.push({ label: s.name, best: out.length === 0, change: { staff_id: s.id } });
-      if (out.length >= MAX) break;
+      if (fits({ staff_id: s.id })) out.push({ label: s.name, best: offered() === 0, change: { staff_id: s.id } });
+      if (offered() >= MAX) break;
     }
     return out;
   }
@@ -70,8 +117,8 @@ export async function cardChoices(appointmentId: string, kind: Kind, nowMinutes:
     for (const r of ctx.rooms) {
       if (!r.is_active || r.id === a.room_id) continue;
       if (!works(r.weekly_schedule, a.scheduled_date, toM(a.start_time), a.duration_minutes)) continue;
-      if (fits({ room_id: r.id })) out.push({ label: r.name, best: out.length === 0, change: { room_id: r.id } });
-      if (out.length >= MAX) break;
+      if (fits({ room_id: r.id })) out.push({ label: r.name, best: offered() === 0, change: { room_id: r.id } });
+      if (offered() >= MAX) break;
     }
     return out;
   }
@@ -87,7 +134,7 @@ export async function cardChoices(appointmentId: string, kind: Kind, nowMinutes:
     if (fits({ therapy_id: t.id, duration_minutes: t.duration_minutes })) {
       out.push({ label: `${t.name} · ${t.duration_minutes} min`, change: { therapy_id: t.id, duration_minutes: t.duration_minutes } });
     }
-    if (out.length >= MAX) break;
+    if (offered() >= MAX) break;
   }
   return out;
 }
