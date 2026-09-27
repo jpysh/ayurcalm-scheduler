@@ -427,6 +427,19 @@ const AdminDashboard = () => {
       .catch(() => setDayCheck({ problems: [], headline: null }));
   }, [exceptionDayKey]);
   useEffect(() => { loadDayCheck(); }, [loadDayCheck, appointmentsByDate]);
+  // Time off saved on another phone or tab, or on another screen here, leaves the
+  // pill and row flags stale: re-read on coming back to the app and after any save (#188).
+  useEffect(() => {
+    const again = () => { if (document.visibilityState === 'visible') { loadDayCheck(); loadReplans(); } };
+    window.addEventListener('focus', again);
+    document.addEventListener('visibilitychange', again);
+    window.addEventListener('timeoff-changed', again);
+    return () => {
+      window.removeEventListener('focus', again);
+      document.removeEventListener('visibilitychange', again);
+      window.removeEventListener('timeoff-changed', again);
+    };
+  }, [loadDayCheck, loadReplans]);
   const fixReady = dayCheck.problems.filter((p) => p.problem_class === 'blocking' && p.fix).length;
 
   const dayKeyMemo = useMemo(() => ymdInTZ(currentDate), [currentDate]);
