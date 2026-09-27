@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
-import { API_TOKEN, toHHMM, toLocalInput, type UiTimeOff, type UiStaff, type UiRoom, type UiTherapy, type Patient } from "./shared";
+import { API_TOKEN, leaveWhen, toHHMM, toLocalInput, type UiTimeOff, type UiStaff, type UiRoom, type UiTherapy, type Patient } from "./shared";
 
 const TimeOffTab = ({
   timeOffs,
@@ -198,14 +198,14 @@ const TimeOffTab = ({
                     {editingTimeOffId === holiday.id ? (
                       <Input type="datetime-local" step="60" value={toLocalInput(holiday.startDate || holiday.date)} onChange={(e: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, startDate: e.target.value } : h)))} />
                     ) : (
-                      new Date(holiday.startDate || holiday.date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', ...(isFullDay(holiday) && !holiday.startDate ? {} : { hour: '2-digit', minute: '2-digit' }) })
+                      leaveWhen(holiday, isFullDay(holiday))
                     )}
                   </TableCell>
                   <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
                     {editingTimeOffId === holiday.id ? (
                       <Input type="datetime-local" step="60" value={toLocalInput(holiday.endDate || holiday.date)} onChange={(e: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, endDate: e.target.value } : h)))} />
                     ) : (
-                      new Date(holiday.endDate || holiday.date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', ...(isFullDay(holiday) && !holiday.startDate ? {} : { hour: '2-digit', minute: '2-digit' }) })
+                      null
                     )}
                   </TableCell>
                   <TableCell className="text-xs md:text-sm leading-tight py-0.5 pl-1.5 pr-1 md:py-3 md:px-3">

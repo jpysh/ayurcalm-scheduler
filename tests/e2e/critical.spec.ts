@@ -277,3 +277,14 @@ test('a search match inside a room name keeps the name in one piece (#193)', asy
   const parents = await page.locator('mark').evaluateAll((ms) => ms.map((m) => getComputedStyle(m.parentElement!).display));
   expect(parents.filter((d) => d.includes('flex'))).toEqual([]);
 });
+
+test('a room out for some hours reads as the day and those hours in Leave (#189)', async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  await openTab(page, 'Leave');
+  // The seed takes a room out from 14:00 to 20:00 (a plumbing repair). It used to read
+  // "27 Sept 2026, 05:30 am": UTC midnight on an Indian clock, with the hours lost.
+  const line = activePanel(page).locator('tr').filter({ hasText: 'Plumbing repair' });
+  await expect(line).toContainText(/\d{1,2} \w{3,4}, 14:00–20:00/, { timeout: 15000 });
+  await expect(line).not.toContainText('05:30');
+});
