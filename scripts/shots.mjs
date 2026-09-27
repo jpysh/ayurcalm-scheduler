@@ -65,6 +65,11 @@ const STEPS = [
   ['25-leave', (p) => menuTo(p, /^Leave/)],
   ['26-diet', (p) => menuTo(p, /^Diet/)],
   ['27-settings', (p) => menuTo(p, /^Settings/)],
+  // Edit sheets (#178): the design has no mock-up for these, so its side reads "missing".
+  ['25b-leave-edit', async (p) => { await menuTo(p, /^Leave/); await tap(p.locator('[role=tabpanel][data-state=active] tbody tr').first()); }],
+  ['26b-diet-edit', async (p) => { await menuTo(p, /^Diet/); await tap(p.locator('[role=tabpanel][data-state=active] tbody tr').first()); }],
+  ['27b-settings-hours', async (p) => { await menuTo(p, /^Settings/); await tap(btn(p, /^Opening hours/)); }],
+  ['22b-therapist-edit', async (p) => { await menuTo(p, /^Team/); await tap(btn(p, /^Therapists$/)); await tap(p.locator('[role=tabpanel][data-state=active] tbody tr').first()); }],
   ['28-log', async (p) => { await menuTo(p, /^Settings/); await tap(btn(p, /Log/)); }],
   ['29-date-sheet', (p) => tap(btn(p, /^Change day/))],
   ['30-toast', (p) => tap(btn(p, /^Print/))],

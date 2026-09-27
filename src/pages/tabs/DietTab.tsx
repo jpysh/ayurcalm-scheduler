@@ -187,9 +187,71 @@ const DietTab = ({
   const [dayDietPatient, setDayDietPatient] = useState<Patient | null>(null);
   // Found by typing, not by scrolling a list of everyone (#137).
   const [q, setQ] = useState('');
+  // One tap on a resident opens their plan; the day's meals and removing the plan are inside it (#178).
+  const openEdit = (p: Patient) => {
+                            setAddDialogPatientId(p.id);
+                            setShowAddDietDialog(true);
+                            (async () => {
+                              try {
+                                const [stays, appts] = await Promise.all([
+                                  fetchJsonWithTimeout<ApiStay[]>(`${API_BASE}/patients/${p.id}/stays`),
+                                  fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?patient_id=${p.id}`),
+                                ]);
+                                const listStays = Array.isArray(stays) ? stays : [];
+                                setAddDialogPatientStays(listStays);
+                                setAddDialogPatientAppointments(Array.isArray(appts) ? appts : []);
+                                const toIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate())}`;
+                                let startISO = '';
+                                let endISO = '';
+                                if (listStays.length > 0) {
+                                  startISO = listStays.map(s => s.start_date).sort()[0] || '';
+                                  endISO = listStays.map(s => s.end_date).sort().slice(-1)[0] || '';
+                                } else {
+                                  const found = patients.find((x) => x.id === p.id);
+                                  startISO = (found)?.actualStart || '';
+                                  endISO = (found)?.actualEnd || '';
+                                }
+                                try {
+                                  const existing: ApiDietSegment[] = await fetchJsonWithTimeout(`${API_BASE}/dietplans/segments?patient_id=${p.id}`);
+                                  if (Array.isArray(existing) && existing.length > 0) {
+                                    setAddDialogSegments(existing.map((x) => segmentToEditorRow(x, dietTemplates)) as any);
+                                  } else {
+                                    const segStart = startISO ? toIso(new Date(startISO)) : '';
+                                    const segEnd = endISO ? toIso(new Date(endISO)) : '';
+                                    setAddDialogSegments([{ start: segStart, end: segEnd, templateId: '', therapyIds: (patientTherapyTags[p.id] || []), expanded: false, locked: true, saveAsTemplate: false }]);
+                                  }
+                                } catch {
+                                  const segStart = startISO ? toIso(new Date(startISO)) : '';
+                                  const segEnd = endISO ? toIso(new Date(endISO)) : '';
+                                  setAddDialogSegments([{ start: segStart, end: segEnd, templateId: '', therapyIds: (patientTherapyTags[p.id] || []), expanded: false, locked: true, saveAsTemplate: false }]);
+                                }
+                              } catch {
+                                setAddDialogPatientStays([]);
+                                setAddDialogPatientAppointments([]);
+                              }
+                            })();
+  };
+  const clearPlan = async (p: Patient) => {
+                            if (!(await confirmSheet(`Remove ${p.name}'s diet plan?\n\nTheir per-day entries stay.`, "Remove"))) return;
+                            try {
+                              const existing: { id: string }[] = await fetchJsonWithTimeout(`${API_BASE}/dietplans/segments?patient_id=${p.id}`);
+                              const results = await Promise.all([
+                                ...existing.map((seg) => fetch(`${API_BASE}/dietplans/segments/${seg.id}`, { method: 'DELETE' })),
+                              ]);
+                              if (results.some((r) => !r.ok)) throw new Error('clear failed');
+                            } catch {
+                              toast.error('Could not clear the plan — reload to see what was kept');
+                              return;
+                            }
+                            setPatientTherapyTags((prev: any) => { const next = { ...prev }; delete next[p.id]; return next; });
+                            setDietSchedules((prev: any) => { const next = { ...prev }; delete next[p.id]; return next; });
+    resetAddDialog();
+    setShowAddDietDialog(false);
+  };
   return (
     <>
-      <DayDietDialog patient={dayDietPatient} onClose={() => setDayDietPatient(null)} />
+      <DayDietDialog patient={dayDietPatient} onClose={() => setDayDietPatient(null)}
+        onChangePlan={() => { const p = dayDietPatient; setDayDietPatient(null); if (p) openEdit(p); }} />
       {dietTabActive && (
         <>
           <div className="flex items-center justify-between">
@@ -278,65 +340,9 @@ const DietTab = ({
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex flex-wrap items-center justify-end gap-1">
-                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setDayDietPatient(p)}>Day</Button>
-                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => {
-                            setAddDialogPatientId(p.id);
-                            setShowAddDietDialog(true);
-                            (async () => {
-                              try {
-                                const [stays, appts] = await Promise.all([
-                                  fetchJsonWithTimeout<ApiStay[]>(`${API_BASE}/patients/${p.id}/stays`),
-                                  fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?patient_id=${p.id}`),
-                                ]);
-                                const listStays = Array.isArray(stays) ? stays : [];
-                                setAddDialogPatientStays(listStays);
-                                setAddDialogPatientAppointments(Array.isArray(appts) ? appts : []);
-                                const toIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate())}`;
-                                let startISO = '';
-                                let endISO = '';
-                                if (listStays.length > 0) {
-                                  startISO = listStays.map(s => s.start_date).sort()[0] || '';
-                                  endISO = listStays.map(s => s.end_date).sort().slice(-1)[0] || '';
-                                } else {
-                                  const found = patients.find((x) => x.id === p.id);
-                                  startISO = (found)?.actualStart || '';
-                                  endISO = (found)?.actualEnd || '';
-                                }
-                                try {
-                                  const existing: ApiDietSegment[] = await fetchJsonWithTimeout(`${API_BASE}/dietplans/segments?patient_id=${p.id}`);
-                                  if (Array.isArray(existing) && existing.length > 0) {
-                                    setAddDialogSegments(existing.map((x) => segmentToEditorRow(x, dietTemplates)) as any);
-                                  } else {
-                                    const segStart = startISO ? toIso(new Date(startISO)) : '';
-                                    const segEnd = endISO ? toIso(new Date(endISO)) : '';
-                                    setAddDialogSegments([{ start: segStart, end: segEnd, templateId: '', therapyIds: (patientTherapyTags[p.id] || []), expanded: false, locked: true, saveAsTemplate: false }]);
-                                  }
-                                } catch {
-                                  const segStart = startISO ? toIso(new Date(startISO)) : '';
-                                  const segEnd = endISO ? toIso(new Date(endISO)) : '';
-                                  setAddDialogSegments([{ start: segStart, end: segEnd, templateId: '', therapyIds: (patientTherapyTags[p.id] || []), expanded: false, locked: true, saveAsTemplate: false }]);
-                                }
-                              } catch {
-                                setAddDialogPatientStays([]);
-                                setAddDialogPatientAppointments([]);
-                              }
-                            })();
-                          }}>Edit</Button>
-                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={async () => {
-                            if (!(await confirmSheet(`Remove ${p.name}'s diet plan?\n\nTheir per-day entries stay.`, "Remove"))) return;
-                            try {
-                              const existing: { id: string }[] = await fetchJsonWithTimeout(`${API_BASE}/dietplans/segments?patient_id=${p.id}`);
-                              const results = await Promise.all([
-                                ...existing.map((seg) => fetch(`${API_BASE}/dietplans/segments/${seg.id}`, { method: 'DELETE' })),
-                              ]);
-                              if (results.some((r) => !r.ok)) throw new Error('clear failed');
-                            } catch {
-                              toast.error('Could not clear the plan — reload to see what was kept');
-                              return;
-                            }
-                            setPatientTherapyTags((prev: any) => { const next = { ...prev }; delete next[p.id]; return next; });
-                            setDietSchedules((prev: any) => { const next = { ...prev }; delete next[p.id]; return next; });
-                          }}>Clear</Button>
+                          {/* A tap on the row opens the day (table.tsx: data-row-tap); the plan is inside it. */}
+                          <Button data-row-tap variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setDayDietPatient(p)}>Day</Button>
+                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => openEdit(p)}>Edit</Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -727,6 +733,14 @@ const DietTab = ({
               </div>
             </div>
           </div>
+          {(() => {
+            const who = patients.find((x: Patient) => x.id === addDialogPatientId);
+            return who ? (
+              <div className="flex gap-2">
+                {(dietSchedules[who.id] || []).length ? <Button variant="outline" className="min-h-11 flex-1 rounded-full text-destructive" onClick={() => clearPlan(who)}>Remove plan</Button> : null}
+              </div>
+            ) : null;
+          })()}
           <DialogFooter>
             <Button variant="outline" size="sm" className="h-8" onClick={() => { resetAddDialog(); setShowAddDietDialog(false); }}>Cancel</Button>
             <Button size="sm" className="h-8" onClick={async () => {

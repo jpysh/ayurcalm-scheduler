@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { confirmSheet } from "@/components/ConfirmSheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { UsersSection, ChangePasswordCard } from "@/components/UsersSection";
 import { AssistantSection } from "@/components/AssistantSection";
+import { BottomSheet } from "@/components/BottomBar";
 import PageHead from "@/components/PageHead";
 
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
@@ -37,6 +38,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [openSheet, setOpenSheet] = useState<string | null>(null);
   const isAdmin = typeof window !== "undefined" && localStorage.getItem("authRole") === "Admin";
 
   useEffect(() => {
@@ -144,6 +146,21 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
     }
   };
 
+  // The design's pattern (#178): a plain list of rows; each opens its form in a bottom sheet.
+  const rowClass = "flex min-h-14 w-full items-center border-b border-border px-4 py-2 text-left last:border-b-0";
+  const row = (key: string, title: string, hint: string) => (
+    <button key={key} type="button" className={rowClass} onClick={() => setOpenSheet(key)}>
+      <span className="flex-1"><b className="block text-[16px]">{title}</b><span className="block text-[13px] text-muted-foreground">{hint}</span></span>
+      <span className="text-muted-foreground">›</span>
+    </button>
+  );
+  // The section's own card loses its frame and heading inside the sheet, which names it already.
+  const sheet = (key: string, title: string, content: ReactNode) => (
+    <BottomSheet open={openSheet === key} onOpenChange={(o) => setOpenSheet(o ? key : null)} title={title}>
+      <div className="max-h-[75dvh] space-y-3 overflow-y-auto [&_.rounded-lg.border]:border-0 [&_.rounded-lg.border]:shadow-none [&_h3]:hidden [&_.p-6]:px-0">{content}</div>
+    </BottomSheet>
+  );
+
   if (!settings) {
     return <div className="container mx-auto p-6 text-sm text-muted-foreground">Loading settings…</div>;
   }
@@ -158,7 +175,18 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
           <span className="text-muted-foreground">›</span>
         </button>
       ) : null}
-      {signOut ? <Button variant="outline" className="w-full rounded-full" onClick={signOut}>Sign out</Button> : null}
+      <div className="overflow-hidden rounded-2xl bg-card">
+      {row("centre", "Centre details", settings.centre_name || "Name, address and logo")}
+      {row("hours", "Opening hours", `${settings.opening_time}–${settings.closing_time}`)}
+      {row("support", "Support contacts", settings.support_whatsapp ? "WhatsApp button shown" : "No WhatsApp button")}
+      {row("password", "Your password", "Change it")}
+      {isAdmin ? row("assistant", "Your AI assistant", "Optional: connect Claude") : null}
+      {isAdmin ? row("people", "People with access", "Who can sign in") : null}
+      {settings.demo_data && isAdmin ? row("demo", "Demo data", "Clear it, or reset it from today") : null}
+      </div>
+      {signOut ? <Button variant="outline" className="min-h-11 w-full rounded-full" onClick={signOut}>Sign out</Button> : null}
+
+      {sheet("centre", "Centre details", <>
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base md:text-lg">Centre details</CardTitle>
@@ -208,54 +236,15 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
           </div>
         </CardContent>
       </Card>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base md:text-lg">Support contacts</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Two WhatsApp numbers, shown as a button in the corner to different people.
-            International format, no plus sign or leading zero. Leave one empty to hide
-            its button.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="support_whatsapp">Help with this app — for you and your staff</Label>
-            <Input
-              id="support_whatsapp"
-              className="max-w-xs"
-              value={settings.support_whatsapp ?? ""}
-              onChange={(e) => update("support_whatsapp", e.target.value)}
-              placeholder="420777558262"
-              disabled={!isAdmin}
-            />
-            <p className="text-xs text-muted-foreground">
-              Whoever supports the software itself — bugs, questions, how something works.
-              Shown to signed-in administrators and staff. Set to the project maintainer by
-              default; change it if your organisation has its own IT support.
-            </p>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="patient_support_whatsapp">Contact for patients — your reception</Label>
-            <Input
-              id="patient_support_whatsapp"
-              className="max-w-xs"
-              value={settings.patient_support_whatsapp ?? ""}
-              onChange={(e) => update("patient_support_whatsapp", e.target.value)}
-              placeholder="420777558262"
-              disabled={!isAdmin}
-            />
-            <p className="text-xs text-muted-foreground">
-              Kept for the patient schedule link, which is not built yet, so this number
-              is not shown anywhere today.
-              <strong className="font-medium"> Set it to your own centre's number</strong> —
-              patients asking about their appointment should reach you, not the software
-              maintainer.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
+      {isAdmin && (
+        <div className="flex justify-end">
+          <Button onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save settings"}
+          </Button>
+        </div>
+      )}
+      </>)}
+      {sheet("hours", "Opening hours", <>
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base md:text-lg">Opening hours</CardTitle>
@@ -346,7 +335,6 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
           </div>
         </CardContent>
       </Card>
-
       {isAdmin && (
         <div className="flex justify-end">
           <Button onClick={save} disabled={saving}>
@@ -354,13 +342,66 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
           </Button>
         </div>
       )}
-
-      <ChangePasswordCard />
-
-      {isAdmin && <AssistantSection />}
-      {isAdmin && <UsersSection />}
-
-      {settings.demo_data && isAdmin && (
+      </>)}
+      {sheet("support", "Support contacts", <>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base md:text-lg">Support contacts</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Two WhatsApp numbers, shown as a button in the corner to different people.
+            International format, no plus sign or leading zero. Leave one empty to hide
+            its button.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="support_whatsapp">Help with this app — for you and your staff</Label>
+            <Input
+              id="support_whatsapp"
+              className="max-w-xs"
+              value={settings.support_whatsapp ?? ""}
+              onChange={(e) => update("support_whatsapp", e.target.value)}
+              placeholder="420777558262"
+              disabled={!isAdmin}
+            />
+            <p className="text-xs text-muted-foreground">
+              Whoever supports the software itself — bugs, questions, how something works.
+              Shown to signed-in administrators and staff. Set to the project maintainer by
+              default; change it if your organisation has its own IT support.
+            </p>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="patient_support_whatsapp">Contact for patients — your reception</Label>
+            <Input
+              id="patient_support_whatsapp"
+              className="max-w-xs"
+              value={settings.patient_support_whatsapp ?? ""}
+              onChange={(e) => update("patient_support_whatsapp", e.target.value)}
+              placeholder="420777558262"
+              disabled={!isAdmin}
+            />
+            <p className="text-xs text-muted-foreground">
+              Kept for the patient schedule link, which is not built yet, so this number
+              is not shown anywhere today.
+              <strong className="font-medium"> Set it to your own centre's number</strong> —
+              patients asking about their appointment should reach you, not the software
+              maintainer.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+      {isAdmin && (
+        <div className="flex justify-end">
+          <Button onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save settings"}
+          </Button>
+        </div>
+      )}
+      </>)}
+      {sheet("password", "Your password", <ChangePasswordCard />)}
+      {sheet("assistant", "Your AI assistant", <AssistantSection />)}
+      {sheet("people", "People with access", <UsersSection />)}
+      {sheet("demo", "Demo data", <>
         <Card className="border-destructive/40">
           <CardHeader className="pb-2">
             <CardTitle className="text-base md:text-lg">Demo data</CardTitle>
@@ -380,7 +421,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
             </Button>
           </CardContent>
         </Card>
-      )}
+      </>)}
 
       {!isAdmin && (
         <p className="text-xs text-muted-foreground">

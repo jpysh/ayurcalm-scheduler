@@ -318,3 +318,30 @@ test('the day by therapist starts where the by-time view does (#193)', async ({ 
   expect(byTime).toBeLessThan(20);
   expect(await top(back)).toBeLessThan(20);
 });
+
+test('on a phone, lists are plain rows and a tap opens the edit sheet (#178)', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signIn(page);
+  await passSetupIfShown(page);
+  // Leave: no raw "No" / "none" fields, and the row opens as a sheet with Delete in it.
+  await openTab(page, 'Leave');
+  const leave = activePanel(page).locator('tbody tr').first();
+  await expect(leave).toBeVisible({ timeout: 15000 });
+  await expect(activePanel(page).locator('tbody td', { hasText: /^(No|Yes|none)$/ })).toHaveCount(0);
+  await leave.click();
+  await expect(leave).toHaveCSS('position', 'fixed');
+  await expect(leave.getByRole('button', { name: 'Delete' })).toBeVisible();
+  await leave.getByRole('button', { name: 'Cancel' }).click();
+  // Diet: one tap opens the resident's day; the plan, and Remove plan, are inside it, not on the row.
+  await openTab(page, 'Diet plans');
+  const diet = activePanel(page).locator('tbody tr').first();
+  await expect(diet.getByRole('button', { name: 'Clear' })).toHaveCount(0);
+  await diet.click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Change plan…' }).click();
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Remove plan' })).toBeVisible({ timeout: 15000 });
+  await page.keyboard.press('Escape');
+  // Settings: a row opens its form in a sheet.
+  await openTab(page, 'Settings');
+  await activePanel(page).getByRole('button', { name: /^Opening hours/ }).click();
+  await expect(page.getByRole('dialog')).toContainText('Opens');
+});

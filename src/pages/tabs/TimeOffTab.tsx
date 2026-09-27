@@ -124,13 +124,13 @@ const TimeOffTab = ({
         <Table className="cards-sm" data-testid="timeoff-table">
           <TableHeader>
             <TableRow>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Type</TableHead>
-              <TableHead className="h-7 py-0 text-xs md:text-sm font-normal">Start</TableHead>
-              <TableHead className="h-7 py-0 text-xs md:text-sm font-normal">End</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Description</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Full Day</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Recurring</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Entity</TableHead>
+              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">For</TableHead>
+              <TableHead className="h-7 py-0 text-xs md:text-sm font-normal">From</TableHead>
+              <TableHead className="h-7 py-0 text-xs md:text-sm font-normal">To</TableHead>
+              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Why</TableHead>
+              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">All day</TableHead>
+              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Repeats</TableHead>
+              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Who or what</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -237,9 +237,7 @@ const TimeOffTab = ({
                           <SelectItem value="yes">Yes</SelectItem>
                         </SelectContent>
                       </Select>
-                    ) : (
-                      isFullDay(holiday) ? 'Yes' : 'No'
-                    )}
+                    ) : null /* The hours are already in the date line (#178). */}
                   </TableCell>
                   <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
                     {editingTimeOffId === holiday.id ? (
@@ -272,7 +270,7 @@ const TimeOffTab = ({
                         )}
                       </div>
                     ) : (
-                      holiday.recurrence === 'weekly' ? weeklyLabel(holiday.weekdays) : 'none'
+                      holiday.recurrence === 'weekly' ? weeklyLabel(holiday.weekdays) : null
                     )}
                   </TableCell>
                   <TableCell data-first className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
@@ -321,6 +319,7 @@ const TimeOffTab = ({
                     <div className="flex gap-2 justify-end">
                       {editingTimeOffId === holiday.id ? (
                         <>
+                          <Button variant="outline" size="sm" className="h-10" aria-label="Delete" onClick={() => { cancelEditTimeOff(); requestDelete('timeoff', holiday.id, holiday.description); }}>Delete</Button>
                           <Button variant="outline" size="sm" className="h-10" onClick={cancelEditTimeOff}>Cancel</Button>
                           <Button size="sm" className="h-10" onClick={saveEditTimeOff}>Save</Button>
                         </>
