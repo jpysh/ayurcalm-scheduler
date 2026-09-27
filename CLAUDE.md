@@ -161,14 +161,23 @@ users). CI from a fresh database is the gate; don't repeat it locally.
 - Always: front-end `tsc` (52 errors or fewer) and the tests for the area changed.
 - Screen change: `npm run test:e2e -- --grep-invert "a therapist off"` locally,
   because CI skips e2e when `server/` is untouched; then drive the screen at 375px.
+  Start the stack for it as CI does (`npm run qa` first, or
+  `RATE_LIMIT_WRITES=1000 docker compose up -d --build`): on `dev:up`'s default
+  write limit the suite's clean-ups are refused and it fails on nothing real.
+- Screenshots come from Playwright at 375×812, the design served on :8765
+  beside the app, not from the browser pane.
 - Scheduler, planner or day sheet change: `npm run qa` locally too, and read the PDF.
 - Every bug fix leaves one test that would have caught it.
+- A test joins `BLOCKING` only if it cannot depend on the hour or on where the
+  pointer rests: build its own problem on its own day. One that did broke CI for
+  every pull request after 15:00 (#173).
 - Screens still being rebuilt get a `BLOCKING` tap count and one "opens with real
   data" check; full walks only for the day sheet and booking until #67, when
   every screen gets one.
 - A large issue (a screen plus new server endpoints) goes in parts, merged in
   order: server with its test, then the screen with its tap counts, then any
-  leftovers. The issue is ticked in #70 when its last part merges.
+  leftovers. The issue is ticked in #70 when its last part merges. Merge a part
+  before building on it; never stack more than one open PR.
 - A failure unrelated to the change: fix it in the same PR if it blocks the merge
   and takes under 15 minutes; otherwise note it in the PR and open a small issue
   in #70's order.
@@ -255,7 +264,8 @@ leaves it alone.
 
 **The app first, the AI second.** Every admin job must work in the app on a
 phone with no AI. MCP (#100) is an optional second door onto the same server
-rules, built after the job's screen, and waits until #70's admin list is done.
+rules, built after the job's screen, and waits until a real centre is live on
+the app and has given feedback (#194).
 
 **Out of scope, settled:** patient self-booking, payments, marketplace,
 marketing and loyalty, multi-location, payroll, GST billing. The reasoning is in
