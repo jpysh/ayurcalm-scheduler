@@ -51,9 +51,11 @@ type Props = {
   roomOut: (roomId: string, name: string) => Promise<void>;
   /** The full edit form, which keeps Delete. */
   editAll: (a: CardAppt) => void;
+  /** Set when opened from search: go to the treatment's day. */
+  onShowDay?: () => void;
 };
 
-export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, staff, roomsList, therapyNameById, refresh, staffNotIn, roomOut, editAll }: Props) {
+export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, staff, roomsList, therapyNameById, refresh, staffNotIn, roomOut, editAll, onShowDay }: Props) {
   const [page, setPage] = useState<Page>("card");
   const [choices, setChoices] = useState<Choice[] | null>(null);
   const [history, setHistory] = useState<Entry[] | null>(null);
@@ -163,6 +165,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
             <span className="text-muted-foreground">›</span>
           </button>
         </div>
+        {onShowDay ? <button type="button" className="min-h-11 rounded-full border-2 font-semibold" onClick={onShowDay}>Show this day</button> : null}
         {noShow ? <button type="button" className="min-h-11 rounded-full border-2 font-semibold" disabled={busy} onClick={() => apply({ status: "pending" }, `${first} came after all`)}>{first} came after all</button> : null}
         <button type="button" className="min-h-11 font-semibold text-muted-foreground" onClick={() => editAll(appt)}>Edit everything</button>
       </>

@@ -1,5 +1,6 @@
 import DayList, { type DayView } from "@/components/DayList";
 import { BookSheet, TreatmentCard, type CardAppt } from "@/components/TreatmentCard";
+import { SearchScreen } from "@/components/SearchScreen";
 import { useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
@@ -24,9 +25,13 @@ const nowInTZ = (timeZone: string) => {
 };
 
 /** The Schedule screen, and the day sheets the bottom bar prints for the day it is on. */
-export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, closingTime, refreshDay, openFullBooking, movedFrom, problems }: Record<string, any>) {
+export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, closingTime, refreshDay, openFullBooking, movedFrom, problems, showDay }: Record<string, any>) {
   const [view, setView] = useState<DayView>("time");
   const [query, setQuery] = useState("");
+  // Search is its own screen over every day (#165); the day list does not filter.
+  const [searching, setSearching] = useState(false);
+  // Opened from search: the card's day is the treatment's, not the one on screen.
+  const [fromSearch, setFromSearch] = useState(false);
   const [card, setCard] = useState<CardAppt | null>(null);
   const [booking, setBooking] = useState(false);
   const [pdfLoading, setPdfLoading] = useState<'patient' | 'therapist' | null>(null);
@@ -98,14 +103,26 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
   const notIn = (staffId: string, name: string) => takeOut("staff", staffId, name);
 
   // The day, the print buttons, booking and search are on the bottom bar (#66, #62).
-  const tab = (
+  const todayISO = ymdInTZ(new Date());
+  const tab = searching ? (
+    <SearchScreen
+      query={query}
+      setQuery={setQuery}
+      today={todayISO}
+      nowMinutes={now}
+      residents={[...new Set((Array.isArray(appointmentsByDate?.[todayISO]) ? appointmentsByDate[todayISO] : [])
+        .map((a: { patient_id: string }) => nameIn(patients, a.patient_id)).filter(Boolean) as string[])]}
+      therapists={staff.filter((s: { status?: string }) => s.status !== 'Inactive').map((s: { name: string }) => s.name.split(' ')[0])}
+      onOpen={(h) => { setFromSearch(true); setCard(h); }}
+    />
+  ) : (
     <DayList
       appointments={Array.isArray(appointmentsByDate?.[dayKeyMemo]) ? appointmentsByDate[dayKeyMemo] : []}
       isToday={isToday}
       nowMinutes={now}
       view={view}
       setView={setView}
-      query={query}
+      query=""
       patients={patients}
       roomsList={roomsList}
       staff={staff}
@@ -118,17 +135,19 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
     />
   );
 
+  const cardDay = card ? String(card.scheduled_date).slice(0, 10) : dayKeyMemo;
   const cardSheet = (
     <TreatmentCard
       appt={card}
-      onClose={() => setCard(null)}
-      isToday={isToday}
+      onClose={() => { setCard(null); setFromSearch(false); }}
+      isToday={cardDay === todayISO}
       nowMinutes={now}
       patients={patients}
       staff={staff}
       roomsList={roomsList}
       therapyNameById={therapyNameById}
-      refresh={() => refreshDay(dayKeyMemo)}
+      refresh={() => refreshDay(cardDay)}
+      onShowDay={fromSearch ? () => { setCard(null); setFromSearch(false); setSearching(false); setQuery(""); setView("time"); showDay(cardDay); } : undefined}
       staffNotIn={notIn}
       roomOut={(id, name) => takeOut("room", id, name)}
       editAll={(a) => { setCard(null); openEdit(a); }}
@@ -140,5 +159,5 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
       refresh={() => refreshDay(dayKeyMemo)} other={openFullBooking} />
   );
 
-  return { tab: <>{tab}{cardSheet}{bookSheet}</>, openBook: () => setBooking(true), printSheet, pdfLoading, view, setView, query, setQuery };
+  return { tab: <>{tab}{cardSheet}{bookSheet}</>, openBook: () => setBooking(true), printSheet, pdfLoading, view, setView, query, setQuery, searching, setSearching };
 }

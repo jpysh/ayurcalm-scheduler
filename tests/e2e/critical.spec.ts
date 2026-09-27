@@ -233,3 +233,19 @@ test("the day's problems are named on the first screen", async ({ page, request 
     await tidy();
   }
 });
+
+test('search finds a resident on other days and opens the card with Show this day', async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  // Search covers every day, not the one on screen (#165): a resident from the
+  // chips has treatments listed under day headings, and a result opens its card.
+  await page.getByRole('button', { name: 'Search treatments' }).click();
+  await expect(page.getByText('Residents', { exact: true })).toBeVisible({ timeout: 15000 });
+  // A resident chip is a full name; therapist chips are first names.
+  await page.getByRole('button', { name: /^\S+ \S+/ }).first().click();
+  await page.getByRole('button', { name: 'All', exact: true }).click();
+  const result = page.getByRole('button', { name: /^\d\d:\d\d/ }).first();
+  await expect(result).toBeVisible({ timeout: 15000 });
+  await result.click();
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Show this day' })).toBeVisible();
+});
