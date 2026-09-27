@@ -29,7 +29,7 @@ async function api(request: APIRequestContext) {
   expect(login.ok()).toBeTruthy();
   const { token } = await login.json();
   const headers = { Authorization: `Bearer ${token}` };
-  const call = async (method: 'get' | 'post' | 'delete', path: string, data?: unknown) => {
+  const call = async (method: 'get' | 'post' | 'put' | 'delete', path: string, data?: unknown) => {
     const res = await request[method](`/api${path}`, { headers, data });
     expect(res.ok(), `${method} ${path}: ${res.status()} ${await res.text()}`).toBeTruthy();
     // Some deletes answer with no body.
@@ -91,7 +91,7 @@ async function build(call: Call) {
   });
   expect(booked.appointments?.[0]?.scheduled_date).toContain(DAY);
 
-  return { therapist };
+  return { therapist, resident };
 }
 
 test('a therapist off: the pill names it, its fix clears the day, and Undo puts the day back', async ({ page, request }) => {
@@ -185,4 +185,28 @@ test('the card counts the stay that holds the treatment, not the newest one (#19
   await expect(page.getByRole('dialog')).toContainText('stay day 13 of 31');
 
   await tidy(call);
+});
+
+test("a no-show's card stays open, and moving it puts it back on the day (#193)", async ({ page, request }) => {
+  test.setTimeout(120000);
+  const call = await api(request);
+  await tidy(call);
+  try {
+    const { resident } = await build(call);
+    const mine = (await call('get', `/appointments?date=${DAY}`)).find((a: { patient_id: string }) => a.patient_id === resident.id);
+    await call('put', `/appointments/${mine.id}`, { status: 'no_show' });
+
+    await signIn(page);
+    await page.getByRole('button', { name: /^Change day/ }).click();
+    await page.getByRole('dialog').locator('input[type=date]').fill(DAY);
+    await page.getByRole('button', { name: /^\d\d:\d\d/ }).filter({ hasText: "didn't come" }).first().click();
+    const card = page.getByRole('dialog');
+    await card.getByRole('button', { name: /^When/ }).click();
+    await card.getByRole('button', { name: /^\d\d:\d\d/ }).first().click();
+    await expect(page.locator('[data-sonner-toast]')).toBeVisible({ timeout: 20000 });
+    const after = (await call('get', `/appointments?date=${DAY}`)).find((a: { id: string }) => a.id === mine.id);
+    expect(after?.status).toBe('pending');
+  } finally {
+    await tidy(call);
+  }
 });

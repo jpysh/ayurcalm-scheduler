@@ -83,10 +83,13 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
   const past = isToday && en <= nowMinutes;
   const now = isToday && st <= nowMinutes && en > nowMinutes;
   const noShow = appt.status === "no_show";
-  const locked = past || noShow || appt.status === "cancelled";
+  // A no-show stays open, as the design has it (#193): the admin moves the missed treatment straight away,
+  // and moving it puts it back on the day (see apply).
+  const locked = (past && !noShow) || appt.status === "cancelled";
 
   /** Applies a change, closes the card and offers Undo with the fields it replaced. */
   const apply = async (change: Record<string, unknown>, message: string) => {
+    if (noShow && !("status" in change) && !("notes" in change)) change = { ...change, status: "pending" };
     setBusy(true);
     try {
       const before = Object.fromEntries(Object.keys(change).map((k) => [k, (appt as Record<string, unknown>)[k] ?? (k === "notes" ? "" : null)]));
@@ -183,7 +186,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
             {[appt.total_sessions ? `Session ${appt.session_number} of ${appt.total_sessions}` : "", stayDay].filter(Boolean).join(" · ")}
           </div>
         </div>
-        {problem && !locked ? (
+        {problem && !locked && !noShow ? (
           <div className={`flex flex-col gap-0.5 rounded-xl px-3 py-2.5 text-sm ${problem.blocking ? "bg-[#FBEAE3]" : "bg-background"}`}>
             <b className={problem.blocking ? "text-destructive" : undefined}>{problem.short}</b>
             <span>{problem.what}</span>
@@ -202,7 +205,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
           <Fact label="Room" value={nameIn(roomsList, appt.room_id) || "No room"} onClick={() => open("room")} />
           <Fact label="Note" value={appt.notes || <span className="text-muted-foreground">Add a note</span>} onClick={() => setPage("note")} />
         </div>
-        {locked ? null : (
+        {locked || noShow ? null : (
           <div className={box}>
             <button type="button" className={row} onClick={() => setPage("wrong")}>
               <span className="flex-1 font-semibold text-destructive">Something wrong?<small className="block text-[13px] font-normal text-muted-foreground">Didn't come, running late, cancel, therapist or room</small></span>
