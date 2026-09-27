@@ -103,10 +103,13 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
     }
   };
 
-  // "Stay day 4 of 14", from the resident's stay that holds this treatment.
-  const stayOf = (patients.find((p) => String(p.id) === String(appt.patient_id)) as { actualStart?: string; actualEnd?: string } | undefined);
+  // "Stay day 4 of 14", from the resident's stay that holds this treatment,
+  // which is not always their newest: a stay can be booked for next month (#190).
   const dayMs = (iso?: string) => (iso ? Date.parse(iso.slice(0, 10)) : NaN);
   const at = dayMs(appt.scheduled_date);
+  const resident = patients.find((p) => String(p.id) === String(appt.patient_id)) as { stays?: { start_date: string; end_date: string }[] } | undefined;
+  const holding = resident?.stays?.find((s) => at >= dayMs(s.start_date) && at <= dayMs(s.end_date));
+  const stayOf = holding && { actualStart: holding.start_date, actualEnd: holding.end_date };
   const stayDay = stayOf && at >= dayMs(stayOf.actualStart) && at <= dayMs(stayOf.actualEnd)
     ? `stay day ${Math.round((at - dayMs(stayOf.actualStart)) / 86400000) + 1} of ${Math.round((dayMs(stayOf.actualEnd) - dayMs(stayOf.actualStart)) / 86400000) + 1}` : "";
 
