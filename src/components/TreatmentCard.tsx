@@ -248,10 +248,11 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
       <>
         <Back title="History" />
         <div className="text-[13px] text-muted-foreground">Everything that changed on this treatment, newest first</div>
-        <ol className={box}>
+        {/* A timeline, as the design's .log: a line down the left and a dot per change, the newest filled. */}
+        <ol aria-label="Changes" className="ml-1 mt-1 flex list-none flex-col gap-3.5 border-l-2 border-border pl-3.5">
           {(history || []).map((e, i) => (
-            <li key={i} className="border-b border-border py-2.5 last:border-b-0">{e.text}
-              <small className="block text-[13px] text-muted-foreground">{new Date(e.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {e.who}</small>
+            <li key={i} className="relative flex flex-col text-[15px] before:absolute before:-left-5 before:top-1.5 before:size-2.5 before:rounded-full before:border-2 before:border-border before:bg-card before:content-[''] first:before:border-primary first:before:bg-primary">{e.text}
+              <small className="block text-xs text-muted-foreground">{new Date(e.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {e.who}</small>
             </li>
           ))}
         </ol>
