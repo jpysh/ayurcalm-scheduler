@@ -104,8 +104,8 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
   return (
     <BottomSheet open={!!id} onOpenChange={(o) => { if (!o) onClose(); }} title={d?.name || 'Resident'}>
       {d ? (
-        <div className="max-h-[70dvh] overflow-y-auto">
-          <div className="-mt-2 text-[13px] text-muted-foreground">
+        <div className="-mt-2 max-h-[70dvh] overflow-y-auto">
+          <div className="text-[13px] text-muted-foreground">
             {d.stay ? `Staying ${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)} · day ${d.stay.day} of ${d.stay.days}` : 'Not staying today'}
           </div>
           <div className={label}>Treatments today</div>

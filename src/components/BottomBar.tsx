@@ -31,7 +31,7 @@ const MENU = SCREENS.filter(([, , hint]) => hint);
 export function BottomSheet({ open, onOpenChange, title, children }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; children: ReactNode }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" hideClose className="mx-auto max-w-xl rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <SheetContent side="bottom" hideClose className="mx-auto max-w-xl rounded-t-2xl bg-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         <div className="mx-auto -mt-2 mb-3 h-1 w-9 rounded-full bg-border" />
         {/* A sheet with no title in the design still names itself to a screen reader. */}
         <SheetTitle className={title ? "text-lg mb-3" : "sr-only"}>{title || "Menu"}</SheetTitle>
