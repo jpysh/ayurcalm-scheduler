@@ -95,7 +95,9 @@ test('day sheet PDF prints for today', async ({ page, request }) => {
   // here.
   const count = Number(/\/Count (\d+)/.exec(body.toString('latin1'))?.[1]);
   expect(count).toBeGreaterThan(0);
-  expect(count).toBeLessThanOrEqual(4);
+  // Reads today's demo day, whose size moves with the date: 5 pages since #142
+  // put more residents in house. Replaced by a fixed 2030 day in #159.
+  expect(count).toBeLessThanOrEqual(6);
 });
 
 test('an edit to a room is still there after a reload', async ({ page }) => {
