@@ -11,6 +11,7 @@ import { eventClashes, type EventRow } from './availability.js';
 import { bookingSuggestions, cardChoices } from './cardChoices.js';
 import { historyOf } from './history.js';
 import { searchTreatments } from './search.js';
+import { residentDay } from './residentDay.js';
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:5433/ayurcalm_dev?schema=public';
@@ -462,6 +463,14 @@ app.delete('/patients/:id', async (req: Request, res: Response) => {
     } catch {}
   });
   res.status(204).end();
+});
+
+// The resident card (#63): the stay, today's treatments and meals.
+app.get('/patients/:id/day', async (req: Request, res: Response) => {
+  const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.query.date);
+  const out = await residentDay(String(req.params.id), date, prisma);
+  if (!out) { res.status(404).json({ error: 'Patient not found' }); return; }
+  res.json(out);
 });
 
 app.get('/patients/:id/stays', async (req: Request, res: Response) => {
