@@ -246,7 +246,8 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     });
 
     // The treatment card (#136): a treatment still to come on the walk's day.
-    const upcoming = () => activePanel(page).getByRole('button', { name: /^\d\d:\d\d/ }).first();
+    // Not a no-show: its card has no "Something wrong?" (#211), and scripts/shots.mjs leaves one behind.
+    const upcoming = () => activePanel(page).getByRole('button', { name: /^\d\d:\d\d/ }).filter({ hasNotText: "didn't come" }).first();
     await job(page, rows, "Resident didn't come", async (tap) => {
       await showDay(page, day);
       await tap(upcoming());

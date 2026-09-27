@@ -525,8 +525,9 @@ const AdminDashboard = () => {
     <div className="min-h-screen bg-background overflow-x-clip pb-28">
       {/* Main Content */}
       {/* The phone design widened on a desktop, never a second layout (#67): one centred column. */}
-      <div className="mx-auto w-full max-w-4xl px-3 md:px-4 py-3 md:py-6">
-        <Tabs value={activeTab} onValueChange={go} className="space-y-6">
+      {/* No top padding: each screen's own header carries the design's 12–14px (#193). */}
+      <div className="mx-auto w-full max-w-4xl px-3 md:px-4 pb-3 md:pb-6">
+        <Tabs value={activeTab} onValueChange={go} className="space-y-6 [&>[role=tabpanel]]:mt-0">
           {/* Swipe the day left and right, as the date sheet says (#67). */}
           <TabsContent value="schedule" className="space-y-6"
             onTouchStart={(e) => { swipe.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}

@@ -302,3 +302,19 @@ test('a room out for some hours reads as the day and those hours in Leave (#189)
   await expect(line).toContainText(/\d{1,2} \w{3,4}, 14:00–20:00/, { timeout: 15000 });
   await expect(line).not.toContainText('05:30');
 });
+
+test('the day by therapist starts where the by-time view does (#193)', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signIn(page);
+  await passSetupIfShown(page);
+  await showDay(page, '2030-03-13');
+  const top = async (l: ReturnType<Page['getByText']>) => (await l.boundingBox())!.y;
+  const byTime = await top(page.getByText(/ treatments/).first());
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Therapist', exact: true }).click();
+  const back = page.getByRole('button', { name: 'Back to by time' });
+  await expect(back).toBeVisible();
+  // The design puts both headers 12px under the top of the screen; the page used to add 20px more.
+  expect(byTime).toBeLessThan(20);
+  expect(await top(back)).toBeLessThan(20);
+});
