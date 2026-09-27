@@ -160,6 +160,12 @@ test('the booking dialog offers the slots the API found, and books one', async (
   const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
   const staying = await (await request.get(`/api/patients?resident_on=${start.toISOString().slice(0, 10)}`, { headers: { Authorization: `Bearer ${token}` } })).json();
   expect(staying.length, 'nobody in the demo is staying tomorrow').toBeGreaterThan(0);
+  // The booking is removed afterwards, so repeated runs on one stack don't fill
+  // the window and leave "No slots available" (#153).
+  const headers = { Authorization: `Bearer ${token}` };
+  const bookingsOf = async () => ((await (await request.get(`/api/appointments?patient_id=${staying[0].id}`, { headers })).json()) as { id: string }[]).map((a) => a.id);
+  const before = new Set(await bookingsOf());
+  try {
   await page.getByPlaceholder('Search patient').fill(staying[0].name);
   await page.getByRole('option').first().click();
   await page.getByRole('button', { name: /Select therapy/i }).click();
@@ -172,6 +178,9 @@ test('the booking dialog offers the slots the API found, and books one', async (
   await page.getByText(/^Option 1$/).click();
   await page.getByRole('button', { name: 'Confirm Selected Slot' }).click();
   await expect(page.getByText('Selected slot confirmed')).toBeVisible({ timeout: 20000 });
+  } finally {
+    for (const id of await bookingsOf()) if (!before.has(id)) await request.delete(`/api/appointments/${id}`, { headers });
+  }
 });
 
 test("the day's problems are named on the first screen", async ({ page, request }) => {
