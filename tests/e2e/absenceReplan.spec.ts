@@ -65,7 +65,6 @@ async function signIn(page: Page) {
   await page.waitForURL(/\/admin/);
 }
 
-const activePanel = (page: Page) => page.locator('[role=tabpanel][data-state=active]');
 
 /** Screens are reached from the bottom bar's menu (#66). A tap while the last screen is still loading can be lost, so retry. */
 async function openTab(page: Page, name: string) {
@@ -117,8 +116,8 @@ test('a therapist off: Verify names it, its plan clears the day, and Undo puts t
   await page.getByRole('button', { name: /^Change day/ }).click();
   await page.getByRole('dialog').locator('input[type=date]').fill(DAY);
   await expect(page.getByRole('navigation', { name: 'Main' })).toContainText('13 Mar', { timeout: 15000 });
-  // Verify names who is off and whose treatment that leaves stranded.
-  await activePanel(page).getByRole('button', { name: 'Verify', exact: true }).click();
+  // The pill opens Verify, which names who is off and whose treatment that leaves stranded.
+  await page.getByRole('button', { name: /to fix/ }).click();
   const verify = page.getByRole('dialog');
   await expect(verify).toContainText(THERAPIST, { timeout: 20000 });
   await expect(verify).toContainText(RESIDENT);

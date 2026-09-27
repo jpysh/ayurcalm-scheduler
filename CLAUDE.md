@@ -166,6 +166,9 @@ users). CI from a fresh database is the gate; don't repeat it locally.
 - Screens still being rebuilt get a `BLOCKING` tap count and one "opens with real
   data" check; full walks only for the day sheet and booking until #67, when
   every screen gets one.
+- A large issue (a screen plus new server endpoints) goes in parts, merged in
+  order: server with its test, then the screen with its tap counts, then any
+  leftovers. The issue is ticked in #70 when its last part merges.
 - A failure unrelated to the change: fix it in the same PR if it blocks the merge
   and takes under 15 minutes; otherwise note it in the PR and open a small issue
   in #70's order.

@@ -13,7 +13,7 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '@
  * Everything a job changes is undone, and the two days it touches are
  * compared back through the API.
  */
-const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Resident didn't come", 'Resident late → move one treatment', 'Book one treatment']);
+const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Resident didn't come", 'Resident late → move one treatment', 'Book one treatment', 'Room out of use']);
 
 /** The design's order, which is the order the table prints in. */
 const JOBS: [string, number][] = [
@@ -24,7 +24,8 @@ const JOBS: [string, number][] = [
   ['Resident late → move one treatment', 3],
   // The design's 2 assumes the day is already by therapist; from by time it is 3 (#62).
   ['Therapist not in', 3],
-  ['Room out of use', 2],
+  // Row, Something wrong?, the room: the design's 2 starts from the card open.
+  ['Room out of use', 3],
   ['Book one treatment', 2],
   ["A resident's meals today", 2],
   ["Print today's sheets", 1],
@@ -142,9 +143,6 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
   expect(day, 'no working day in the next week to walk the jobs on').not.toBe('');
   const before = { today: await snapshot(call, today), day: await snapshot(call, day) };
   const staff = (await call.get('/staff')) as { id: string; name: string; is_active: boolean }[];
-  const rooms = (await call.get('/rooms')) as { id: string; name: string; is_active: boolean }[];
-  // A room out of use only records the time off.
-  const room = rooms.find((r) => r.is_active)!;
 
   // Whatever a job leaves behind, even one that broke halfway, is put back
   // through the API before the days are compared.
@@ -260,17 +258,15 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await activePanel(page).getByRole('button', { name: 'Back to by time' }).click();
     });
 
+    // From a treatment in that room: Something wrong? → the room can't be used.
     await job(page, rows, 'Room out of use', async (tap) => {
       await showDay(page, day);
-      await tap(activePanel(page).getByRole('button', { name: 'Verify', exact: true }));
-      const verify = page.getByRole('dialog');
-      await tap(verify.getByRole('button', { name: 'Room out of use' }));
-      await tap(verify.getByRole('combobox'));
-      await tap(page.getByRole('option', { name: room.name, exact: true }));
-      await tap(verify.getByRole('button', { name: 'Find other rooms' }));
-      await expect(verify).toContainText(`${room.name} out of use`, { timeout: 20000 });
-      await verify.getByRole('button', { name: 'Undo', exact: true }).click();
-      await expect(verify).toContainText('Put back as it was.', { timeout: 20000 });
+      await tap(upcoming());
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Something wrong/ }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /can't be used/ }));
+      const note = page.locator('[data-sonner-toast]').filter({ hasText: 'out of use' });
+      await expect(note).toBeVisible({ timeout: 20000 });
+      await note.getByRole('button', { name: 'Undo' }).click();
     });
   } finally {
     await restore();

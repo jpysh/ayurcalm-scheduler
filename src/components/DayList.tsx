@@ -5,6 +5,7 @@
  * Everything shown comes from the server's appointments; the list only sorts.
  */
 import { useEffect } from "react";
+import { DoorClosed } from "lucide-react";
 
 type Appt = {
   id: string;
@@ -45,9 +46,15 @@ type Props = {
   /** A therapist heading's action: not in from now (or all day, on another day), with Undo. */
   onNotIn?: (staffId: string, name: string) => void;
   headerAction?: React.ReactNode;
+  /** Treatments the app moved off an absent therapist today: id → their name. */
+  movedFrom?: Record<string, string>;
+  /** The centre's rooms, for the day's heading. */
+  roomCount?: number;
+  /** The day check's problems on a treatment, shown on its row. */
+  flags?: Record<string, { text: string; blocking: boolean }>;
 };
 
-export default function DayList({ appointments, isToday, nowMinutes: NOW, view, setView, query, patients, roomsList, staff, therapyNameById, onOpen, onNotIn, headerAction }: Props) {
+export default function DayList({ appointments, isToday, nowMinutes: NOW, view, setView, query, patients, roomsList, staff, therapyNameById, onOpen, onNotIn, headerAction, movedFrom = {}, roomCount, flags = {} }: Props) {
   const name = (list: Named[], id: string | null) => list.find((x) => String(x.id) === String(id))?.name || "";
   const colourOf = (id: string) => COLOURS[Math.max(0, staff.findIndex((s) => String(s.id) === id)) % COLOURS.length];
   const q = query.trim().toLowerCase();
@@ -68,8 +75,10 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
   // Opens at now, with the morning above: the next treatment is on the first screen.
   useEffect(() => {
     if (view !== "time" || q) return;
-    const el = document.getElementById("nowhour");
-    window.scrollTo({ top: el ? Math.max(0, el.getBoundingClientRect().top + window.scrollY - 110) : 0 });
+    // Opens on what is happening: the earliest treatment in progress, with the
+    // line at now below it; with nothing in progress, the line itself.
+    const el = document.querySelector("[data-now]") || document.getElementById("nowline");
+    window.scrollTo({ top: el ? Math.max(0, el.getBoundingClientRect().top + window.scrollY - 130) : 0 });
   }, [view, q, isToday, appointments.length]);
 
   const withText = (r: Row, except?: string) => {
@@ -79,23 +88,29 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
 
   const rowEl = (r: Row, top = r.who, line = `${r.therapy} · ${withText(r)}`) => {
     const p = past(r), n = now(r);
+    const flag = flags[r.a.id];
     const stripe = r.team.length > 1 ? `linear-gradient(${r.team[0].colour} 50%, ${r.team[1].colour} 50%)` : r.team[0]?.colour || "#8A979C";
     return (
-      <button key={`${r.a.id}-${top}`} type="button" onClick={() => onOpen(r.a)}
-        className="flex w-full gap-2.5 items-stretch min-h-[54px] py-2 pr-3 border-b border-border last:border-b-0 bg-card text-left">
+      <button key={`${r.a.id}-${top}`} type="button" onClick={() => onOpen(r.a)} data-now={n || undefined}
+        className={`flex w-full gap-2.5 items-stretch min-h-[54px] py-2 pr-3 border-b border-border last:border-b-0 bg-card text-left ${flag?.blocking ? "shadow-[inset_0_0_0_1.5px_hsl(var(--destructive))]" : ""}`}>
         <span className={`w-1 rounded-r flex-none ${p ? "opacity-35" : ""}`} style={{ background: stripe }} />
         <span className={`w-12 flex-none tabular-nums text-[15px] leading-tight ${p ? "text-muted-foreground font-medium" : "font-semibold"}`}>
           {hm(r.st)}
-          <small className={`block text-xs whitespace-nowrap ${n ? "text-now font-bold" : "font-normal text-muted-foreground"}`}>{n ? `${r.en - NOW}m left` : hm(r.en)}</small>
+          {/* The end, always: a countdown in its place read as the treatment's length. */}
+          <small className={`block text-xs whitespace-nowrap ${n ? "text-now font-semibold" : "font-normal text-muted-foreground"}`}>{hm(r.en)}</small>
         </span>
         <span className="flex-1 min-w-0">
           <span className="flex items-start gap-2">
             <span className={`text-[16px] ${p ? "text-muted-foreground font-medium" : "font-semibold"}`}>
               {r.a.status === "no_show" ? <><s>{top}</s> <span className="text-xs font-medium text-muted-foreground">didn't come</span></> : top}
             </span>
-            <span className="ml-auto pt-0.5 text-xs text-muted-foreground whitespace-nowrap">{r.room}</span>
+            <span className="ml-auto pt-0.5 text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1"><DoorClosed className="h-3 w-3" aria-hidden />{r.room}</span>
           </span>
           <span className="block text-[13px] text-muted-foreground">{line}</span>
+          {flag ? <span className={`block text-xs ${flag.blocking ? "font-semibold text-destructive" : "text-[#6E4A0E]"}`}>{flag.text}</span> : null}
+          {movedFrom[r.a.id] ? (
+            <span className="flex items-center gap-1 text-xs text-[#6E4A0E]"><i className="h-[7px] w-[7px] rounded-full bg-warning" />Was {movedFrom[r.a.id].split(" ")[0]}'s</span>
+          ) : null}
         </span>
       </button>
     );
@@ -110,6 +125,10 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
   let body: React.ReactNode;
   if (view === "time") {
     const hours = [...new Set(rows.map((r) => Math.floor(r.st / 60)))];
+    // The line sits between what has started and what has not. When nothing
+    // starts in the current hour it goes before the next hour, not nowhere.
+    const nowHour = Math.floor(NOW / 60);
+    const lineBefore = isToday && !hours.includes(nowHour) ? hours.find((H) => H > nowHour) ?? null : undefined;
     body = hours.map((H) => {
       const g = rows.filter((r) => Math.floor(r.st / 60) === H);
       const done = isToday && (H + 1) * 60 <= NOW && g.every(past);
@@ -123,6 +142,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
       if (!lineDone) items.push(nowLine);
       return (
         <section key={H}>
+          {lineBefore === H ? <div className="mt-3 overflow-hidden rounded-xl">{nowLine}</div> : null}
           <div id={nowH ? "nowhour" : undefined} className={sticky}>
             <b className={`text-[15px] tabular-nums ${done ? "text-muted-foreground" : nowH ? "text-now" : ""}`}>{hm(H * 60)}</b>
             <span className="text-xs text-muted-foreground">{g.length} starting{done ? " · done" : ""}</span>
@@ -131,6 +151,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
         </section>
       );
     });
+    if (lineBefore === null) body = [...(body as React.ReactNode[]), <div key="end-now" className="mt-3 overflow-hidden rounded-xl">{nowLine}</div>];
   } else {
     const groups = new Map<string, { label: string; id?: string; rows: Row[] }>();
     const add = (key: string, label: string, r: Row, id?: string) => { if (!groups.has(key)) groups.set(key, { label, id, rows: [] }); groups.get(key)!.rows.push(r); };
@@ -167,7 +188,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
       {view === "time" ? (
         <div className="sticky top-0 z-[3] bg-background flex justify-between items-baseline px-1 pt-3 pb-1.5 text-[13px] text-muted-foreground">
           <b className="text-[15px] text-foreground">{isToday ? "Today" : "The day"}</b>
-          <span className="flex items-center gap-2">{rows.length} treatments{headerAction}</span>
+          <span className="flex items-center gap-2">{rows.length} treatments{roomCount ? ` · ${roomCount} rooms` : ""}{headerAction}</span>
         </div>
       ) : (
         <div className="flex justify-between items-center px-1 pt-3 text-sm font-semibold">

@@ -363,6 +363,7 @@ clashA.flag=clashB.flag='room';shortRow.flag='short';eventRow.flag='yoga';
 
 function info(x){const st=mins(x.t),en=st+x.len;return {...x,st,en,past:off===0&&en<=NOW,now:off===0&&st<=NOW&&en>NOW,src:x}}
 // Colour means state only: orange now, red must fix, amber changed by the app, grey done.
+// In progress: the end time turns orange, never a countdown in its place ("8m left" read as the treatment's length, 2026-09-27).
 // Resident first and bold; the room sits right, where a calendar puts the location; the therapist follows "with".
 const DOOR='<svg class="door" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 14V2.5h7V14M2.5 14h11M9 8.2v.1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
 const withText=p=>'with '+p.split(' + ').join(' & ');
@@ -373,7 +374,7 @@ function tRow(x,{name=x.who,line}={}){
   const l=line??`${x.th} · ${withText(x.p)}`;
   const flag=a?`<div class="fl ${a.kind}">${a.short}</div>`:(x.from&&ATT.find(a=>a.id==='meera'&&!a.gone)?`<div class="fl done">Was Meera's</div>`:'');
   const i=dayRows(off).indexOf(x.src);
-  return `<button class="row${x.past?' past':''}${x.now?' now':''}${a?' st-'+a.kind:x.from&&flag?' st-done':''}" data-i="${i}" data-o="${off}"><span class="time">${x.t}<small>${x.now?(x.en-NOW)+'m left':hm(x.en)}</small></span><span class="m"><div class="top"><span class="n">${name}</span><span class="rm">${DOOR}${x.room}</span></div><div class="who">${l}</div>${flag}</span></button>`}
+  return `<button class="row${x.past?' past':''}${x.now?' now':''}${a?' st-'+a.kind:x.from&&flag?' st-done':''}" data-i="${i}" data-o="${off}"><span class="time">${x.t}<small>${hm(x.en)}</small></span><span class="m"><div class="top"><span class="n">${name}</span><span class="rm">${DOOR}${x.room}</span></div><div class="who">${l}</div>${flag}</span></button>`}
 
 function render(){
   const d=dateOf(off),rows=dayRows(off).map(info).filter(x=>!x.cancelled&&!x.moved).sort((x,y)=>x.st-y.st||rix(x.room)-rix(y.room));

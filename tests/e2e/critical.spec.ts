@@ -67,7 +67,7 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
     ['Events', 'Events'],
     ['Residents', 'Patient Management'],
     ['Settings', 'Centre details'],
-    ['The day', 'Verify'],
+    ['The day', 'treatments'],
   ]) {
     await openTab(page, tab);
     await expect(activePanel(page)).toContainText(text, { timeout: 15000 });
