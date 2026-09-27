@@ -98,7 +98,7 @@ test('a therapist off: the pill names it, its fix clears the day, and Undo puts 
 
   // Mark her off, the way the admin does.
   await openTab(page, 'Leave');
-  await page.getByRole('button', { name: 'Add Time Off' }).click();
+  await page.getByRole('button', { name: 'Add leave' }).click();
   const form = page.getByRole('dialog');
   const pick = async (n: number, option: string) => {
     await form.getByRole('combobox').nth(n).click();
