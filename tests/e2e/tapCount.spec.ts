@@ -190,10 +190,14 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Diet plans/ }));
       const dayButtons = activePanel(page).getByRole('button', { name: 'Day', exact: true });
       await dayButtons.first().waitFor();
-      // Someone from the middle of the list: nobody the admin looks for is first.
-      await tap(dayButtons.nth(Math.floor((await dayButtons.count()) / 2)));
+      // Someone from the middle of the list, found by typing their name (#137).
+      // By element, not role: on a phone the table's rows are cards (#137).
+      const rowsWithDay = activePanel(page).locator('tr').filter({ has: page.getByRole('button', { name: 'Day', exact: true }) });
+      const name = (await rowsWithDay.nth(Math.floor((await rowsWithDay.count()) / 2)).locator('td').first().innerText()).trim();
+      await activePanel(page).getByRole('textbox', { name: 'Search residents' }).fill(name);
+      await tap(dayButtons.first());
       await expect(page.getByRole('dialog')).toContainText(/Diet for one day/);
-      return 'no search; the list is scrolled by hand';
+      return 'the name is typed, not tapped';
     });
 
     await job(page, rows, "Print today's sheets", async (tap) => {

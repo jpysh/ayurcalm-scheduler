@@ -183,6 +183,8 @@ const DietTab = ({
   dietTabActive,
 }: DietTabProps) => {
   const [dayDietPatient, setDayDietPatient] = useState<Patient | null>(null);
+  // Found by typing, not by scrolling a list of everyone (#137).
+  const [q, setQ] = useState('');
   return (
     <>
       <DayDietDialog patient={dayDietPatient} onClose={() => setDayDietPatient(null)} />
@@ -208,7 +210,8 @@ const DietTab = ({
               </div>
             </CardHeader>
             <CardContent className="pt-0 p-2">
-              <Table>
+              <Input placeholder="Search residents" aria-label="Search residents" value={q} onChange={(e) => setQ(e.target.value)} className="mb-2 h-11 rounded-full text-base" />
+              <Table className="cards-sm">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-xs md:text-sm">Patient</TableHead>
@@ -219,18 +222,23 @@ const DietTab = ({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {patients.map((p: Patient) => (
+                  {patients.filter((p: Patient) => p.name.toLowerCase().includes(q.trim().toLowerCase())).map((p: Patient) => (
                     <TableRow key={p.id}>
                       <TableCell className="text-xs md:text-sm">{p.name}</TableCell>
                       <TableCell className="text-xs md:text-sm">{(() => {
                         const segs = dietSchedules[p.id] || [];
                         if (segs.length === 0) return p.dietPlan || '—';
+                        // Today's plan first: a resident on several over their stay is
+                        // asked about for what they eat now (#137).
+                        const today = new Date().toLocaleDateString('en-CA');
+                        const now = segs.find((x) => x.start <= today && today <= x.end);
                         const uniqueTpls = new Set(segs.map((s) => s.templateId));
-                        if (uniqueTpls.size > 1) return 'Multiple plans';
-                        const tpl = dietTemplates.find((t) => t.id === segs[0].templateId);
+                        if (!now && uniqueTpls.size > 1) return 'Multiple plans';
+                        const seg = now || segs[0];
+                        const tpl = dietTemplates.find((t) => t.id === seg.templateId);
                         // A retired plan is gone from the list but still assigned,
                         // and a bespoke segment never had one — fall back to its label.
-                        return tpl?.name || segs[0].label || 'Plan set for this patient';
+                        return `${tpl?.name || seg.label || 'Plan set for this patient'}${now && uniqueTpls.size > 1 ? ' today' : ''}`;
                       })()}</TableCell>
                       <TableCell className="hidden md:table-cell text-xs md:text-sm">
                         <div className="flex flex-wrap gap-1">
