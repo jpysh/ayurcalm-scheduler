@@ -52,10 +52,13 @@
     --radius: 0.75rem;
 
     /* Typography scale - extra large for accessibility */
-    --font-size-base: 20px;
-    --font-size-large: 24px;
-    --font-size-xlarge: 28px;
-    --font-size-heading: 32px;
+    /* The design's scale (docs/design/phone.html, #67): names 16px, body 15px,
+       page and sheet titles 18px. The root was 20px, which made every rem in
+       the app a quarter larger than the design. */
+    --font-size-base: 16px;
+    --font-size-large: 18px;
+    --font-size-xlarge: 22px;
+    --font-size-heading: 28px;
 
     /* Spacing for touch targets */
     --touch-target-min: 44px;
@@ -119,7 +122,8 @@
       sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    line-height: 1.6;
+    font-size: 15px;
+    line-height: 1.35;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -127,16 +131,12 @@
     line-height: 1.2;
   }
 
-  h1 {
-    font-size: var(--font-size-heading);
-  }
-
-  h2 {
-    font-size: var(--font-size-xlarge);
+  h1, h2 {
+    font-size: var(--font-size-large);
   }
 
   h3 {
-    font-size: var(--font-size-large);
+    font-size: var(--font-size-base);
   }
 
   /* Ensure minimum touch target sizes */

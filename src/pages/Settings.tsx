@@ -31,7 +31,7 @@ type Settings = {
   enforce_gender_match: boolean;
 };
 
-const Settings = () => {
+const Settings = ({ signOut }: { signOut?: () => void }) => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -148,6 +148,8 @@ const Settings = () => {
 
   return (
     <div className="container mx-auto px-3 md:px-4 py-3 md:py-6 space-y-4 max-w-3xl">
+      {/* Here rather than on the menu, as the design has it (#67). */}
+      {signOut ? <Button variant="outline" className="w-full rounded-full" onClick={signOut}>Sign out</Button> : null}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base md:text-lg">Centre details</CardTitle>

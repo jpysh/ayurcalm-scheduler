@@ -75,7 +75,7 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
     ['Events', 'Events'],
     ['Residents', 'in house'],
     ['Settings', 'Centre details'],
-    ['The day', 'treatments'],
+    ['Back to the day', 'treatments'],
   ]) {
     await openTab(page, tab);
     await expect(activePanel(page)).toContainText(text, { timeout: 15000 });
@@ -146,7 +146,7 @@ test('an edit to a room is still there after a reload', async ({ page }) => {
 test('the booking dialog offers the slots the API found, and books one', async ({ page, request }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  await openTab(page, 'The day');
+  await openTab(page, 'Back to the day');
   await page.getByRole('button', { name: 'Book a treatment' }).click();
   // + suggests one booking (#136); the full form, for a course, is "Someone else…".
   await page.getByRole('dialog').getByRole('button', { name: 'Someone else…' }).click();

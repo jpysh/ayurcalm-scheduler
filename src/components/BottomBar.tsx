@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { API_BASE } from "@/lib/apiBase";
 import { Menu, Plus, Printer, Search } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ export const SCREENS = [
   ["timeoff", "Leave", "Future time off"],
   ["diet", "Diet plans", "Meals by plan"],
   ["settings", "Settings", "Centre, users, AI"],
-  ["schedule", "The day", "Back to the list"],
+  ["schedule", "Back to the day", "The list"],
   // Reached from Team and rooms, not the menu (#137).
   ["staff", "Therapists", ""],
   ["rooms", "Rooms", ""],
@@ -29,9 +30,10 @@ const MENU = SCREENS.filter(([, , hint]) => hint);
 export function BottomSheet({ open, onOpenChange, title, children }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; children: ReactNode }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="mx-auto max-w-xl rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-        <div className="mx-auto -mt-2 mb-2 h-1 w-9 rounded-full bg-border" />
-        <SheetTitle className="text-lg mb-3">{title}</SheetTitle>
+      <SheetContent side="bottom" hideClose className="mx-auto max-w-xl rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <div className="mx-auto -mt-2 mb-3 h-1 w-9 rounded-full bg-border" />
+        {/* A sheet with no title in the design still names itself to a screen reader. */}
+        <SheetTitle className={title ? "text-lg mb-3" : "sr-only"}>{title || "Menu"}</SheetTitle>
         {children}
       </SheetContent>
     </Sheet>
@@ -39,10 +41,8 @@ export function BottomSheet({ open, onOpenChange, title, children }: { open: boo
 }
 
 type Props = {
-  centreName: string;
   activeTab: string;
   go: (tab: string) => void;
-  signOut: () => void;
   /** The day on screen and today, both YYYY-MM-DD on the centre's clock. */
   day: string;
   today: string;
@@ -67,8 +67,25 @@ const label = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 const shift = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
 
-export function BottomBar({ centreName, activeTab, go, signOut, day, today, now, setDay, print, printing, book, view, setView, query, setQuery, searching, setSearching, attention }: Props) {
+export function BottomBar({ activeTab, go, day, today, now, setDay, print, printing, book, view, setView, query, setQuery, searching, setSearching, attention }: Props) {
   const [sheet, setSheet] = useState<"menu" | "day" | null>(null);
+  // Live subtitles, read when the menu opens (#67): who is in house, who is not in.
+  const [hints, setHints] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (sheet !== "menu") return;
+    Promise.all([
+      fetch(`${API_BASE}/patients?resident_on=${today}`).then((r) => (r.ok ? r.json() : [])),
+      fetch(`${API_BASE}/staff-day?date=${today}`).then((r) => (r.ok ? r.json() : [])),
+      fetch(`${API_BASE}/staff`).then((r) => (r.ok ? r.json() : [])),
+    ]).then(([residents, days, staff]: [unknown[], { staff_id: string; off: string | null }[], { id: string; name: string }[]]) => {
+      const out = days.filter((d) => d.off).map((d) => staff.find((s) => s.id === d.staff_id)?.name.split(" ")[0]).filter(Boolean);
+      setHints({
+        patients: `${residents.length} in house`,
+        team: out.length === 0 ? "Everyone in" : out.length === 1 ? `${out[0]} not in` : `${out.length} not in`,
+        schedule: label(day),
+      });
+    }).catch(() => setHints({}));
+  }, [sheet, today, day]);
   const endSearch = () => { setSearching(false); setQuery(""); };
   const diff = Math.round((Date.parse(day) - Date.parse(today)) / 86400000);
   const when = diff === 0 ? `Today · ${now}` : diff === 1 ? "Tomorrow" : diff === -1 ? "Yesterday" : diff > 0 ? `In ${diff} days` : `${-diff} days ago`;
@@ -105,7 +122,7 @@ export function BottomBar({ centreName, activeTab, go, signOut, day, today, now,
       </nav>
       )}
 
-      <BottomSheet open={sheet === "menu"} onOpenChange={(o) => setSheet(o ? "menu" : null)} title={centreName}>
+      <BottomSheet open={sheet === "menu"} onOpenChange={(o) => setSheet(o ? "menu" : null)} title="">
         <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Show the day by</div>
         <div className="mb-3 grid grid-cols-4 gap-1 rounded-xl bg-background p-1">
           {(["time", "therapist", "room", "resident"] as const).map((v) => (
@@ -118,16 +135,14 @@ export function BottomBar({ centreName, activeTab, go, signOut, day, today, now,
         </div>
         <div className="grid grid-cols-2 gap-2">
           {MENU.map(([key, name, hint]) => (
-            <button key={key} type="button" aria-current={activeTab === key ? "page" : undefined}
-              className="min-h-[60px] rounded-xl border-2 px-3 py-2 text-left aria-[current=page]:border-primary"
+            <button key={key} type="button"
+              className="min-h-[60px] rounded-xl border-2 px-3 py-2 text-left"
               onClick={() => { go(key); setSheet(null); }}>
               <b className="block text-base">{name}</b>
-              <span className="block text-xs text-muted-foreground">{hint}</span>
+              <span className="block text-xs text-muted-foreground">{hints[key] || hint}</span>
             </button>
           ))}
-          <button type="button" className="min-h-[60px] rounded-xl border-2 px-3 py-2 text-left text-muted-foreground" onClick={signOut}>
-            <b className="block text-base">Sign out</b>
-          </button>
+
         </div>
       </BottomSheet>
 
