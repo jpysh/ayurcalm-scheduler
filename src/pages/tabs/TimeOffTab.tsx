@@ -119,7 +119,7 @@ const TimeOffTab = ({
         </div>
       </CardHeader>
       <CardContent className="pt-0 p-1 md:p-2">
-        <Table data-testid="timeoff-table">
+        <Table className="cards-sm" data-testid="timeoff-table">
           <TableHeader>
             <TableRow>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Type</TableHead>
@@ -273,7 +273,7 @@ const TimeOffTab = ({
                       holiday.recurrence === 'weekly' ? weeklyLabel(holiday.weekdays) : 'none'
                     )}
                   </TableCell>
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
+                  <TableCell data-first className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
                     {editingTimeOffId === holiday.id ? (
                       holiday.type === 'Center' ? (
                         <Input value="All" readOnly />

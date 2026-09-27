@@ -48,7 +48,7 @@ const StaffTab = ({
         </div>
       </CardHeader>
       <CardContent className="pt-0 p-1 md:p-2">
-        <Table data-testid="staff-table">
+        <Table className="cards-sm" data-testid="staff-table">
           <TableHeader>
             <TableRow>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Name</TableHead>
