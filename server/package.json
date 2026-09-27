@@ -30,7 +30,8 @@
     "test:onboarding": "tsx src/tests/onboarding.test.ts",
     "test:mcp": "tsx src/tests/mcp.test.ts",
     "test:stay": "tsx src/tests/residentStay.test.ts",
-    "test:card": "tsx src/tests/treatmentCard.test.ts"
+    "test:card": "tsx src/tests/treatmentCard.test.ts",
+    "test:search": "tsx src/tests/search.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "^2.0.0",

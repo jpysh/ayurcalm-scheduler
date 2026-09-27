@@ -10,6 +10,7 @@ import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
 import { eventClashes, type EventRow } from './availability.js';
 import { bookingSuggestions, cardChoices } from './cardChoices.js';
 import { historyOf } from './history.js';
+import { searchTreatments } from './search.js';
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:5433/ayurcalm_dev?schema=public';
@@ -1318,6 +1319,17 @@ app.get('/appointments/:id/choices', async (req: Request, res: Response) => {
   const choices = await cardChoices(req.params.id, kind, now, prisma);
   if (!choices) { res.status(404).json({ error: 'Appointment not found' }); return; }
   res.json({ choices });
+});
+
+// Search across days (#165). A window either side of the day asked about, so
+// "Upcoming" and "Past" are the screen's filter, not a second request.
+app.get('/appointments/search', async (req: Request, res: Response) => {
+  const query = z.object({
+    q: z.string().trim().min(1).max(100),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  }).parse(req.query);
+  res.json({ hits: await searchTreatments(query.q, new Date(query.from), new Date(query.to), prisma) });
 });
 
 // The + button's suggestions: who to book next, when, with whom, where (#136).
