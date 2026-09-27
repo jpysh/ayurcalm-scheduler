@@ -11,7 +11,7 @@ cd "$(dirname "$0")/.."
 PORT="${APP_PORT:-8080}"
 
 echo "Starting the app (or bringing it up to date)..."
-RATE_LIMIT_WRITES=1000 docker compose up -d --build >/dev/null 2>&1 || { echo "Could not start the app with Docker. Is Docker running?"; exit 1; }
+RATE_LIMIT_WRITES=1000 RATE_LIMIT_CALLS=10000 docker compose up -d --build >/dev/null 2>&1 || { echo "Could not start the app with Docker. Is Docker running?"; exit 1; }
 i=0
 until curl -sf "http://localhost:$PORT/api/health" >/dev/null; do
   i=$((i + 1))
