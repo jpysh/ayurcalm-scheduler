@@ -75,7 +75,7 @@ async function openTab(page: Page, name: string) {
   }).toPass({ timeout: 15000 });
 }
 
-test('a therapist off: Verify names it, its plan clears the day, and Undo puts the day back', async ({ page, request }) => {
+test('a therapist off: the pill names it, its fix clears the day, and Undo puts the day back', async ({ page, request }) => {
   test.setTimeout(120000);
   const call = await api(request);
   await tidy(call);
@@ -116,16 +116,16 @@ test('a therapist off: Verify names it, its plan clears the day, and Undo puts t
   await page.getByRole('button', { name: /^Change day/ }).click();
   await page.getByRole('dialog').locator('input[type=date]').fill(DAY);
   await expect(page.getByRole('navigation', { name: 'Main' })).toContainText('13 Mar', { timeout: 15000 });
-  // The pill opens Verify, which names who is off and whose treatment that leaves stranded.
+  // The pill opens its sheet, which names who is off and whose treatment that leaves stranded.
   await page.getByRole('button', { name: /to fix/ }).click();
   const verify = page.getByRole('dialog');
   await expect(verify).toContainText(THERAPIST, { timeout: 20000 });
   await expect(verify).toContainText(RESIDENT);
 
   const before = await snapshot(call);
-  await verify.getByRole('button', { name: /^Accept the plan — 1 change$/ }).click();
-  await expect(verify).toContainText('1 change made.', { timeout: 20000 });
-  await expect(verify).toContainText('Nothing to fix');
+  await verify.locator('[data-main]').first().click();
+  await expect(verify).toContainText('✓', { timeout: 20000 });
+  await expect(verify).not.toContainText('For your action');
   const accepted = await snapshot(call);
   expect(accepted).not.toEqual(before);
   expect((await call('get', `/day-check?date=${DAY}`)).problems).toEqual([]);

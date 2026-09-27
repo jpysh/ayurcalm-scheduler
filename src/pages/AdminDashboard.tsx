@@ -3,10 +3,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useLocation, useNavigate } from "react-router-dom";
-import { AlertCircle } from "lucide-react";
 import { BottomBar, SCREENS } from "@/components/BottomBar";
 import { AutoAssignDialog } from "@/components/AutoAssignDialog";
-import { VerifyDialog } from "@/components/VerifyDialog";
+import { AttentionSheet, type DayProblem, type ReplanBatch } from "@/components/AttentionSheet";
 import { AppointmentDialog } from "@/components/AppointmentDialog";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useStaffScreen } from "./tabs/StaffTab";
@@ -127,7 +126,7 @@ const AdminDashboard = () => {
   }, []);
   const [activeTab, setActiveTab] = useState("schedule");
   const [showAutoAssign, setShowAutoAssign] = useState(false);
-  const [showVerify, setShowVerify] = useState(false);
+  const [showAttention, setShowAttention] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentDetailed | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<{ kind: 'staff'|'room'|'therapy'|'patient'|'timeoff'|'appointment'; id: string; name?: string; counts?: Record<string, number> } | null>(null);
@@ -382,8 +381,6 @@ const AdminDashboard = () => {
   // What the replan did when a therapist was marked off, in the words the admin
   // would use. It is the only place those moves are reported, so it is dismissed
   // per day rather than switched off: mark someone else off and it comes back.
-  type ReplanMove = { patient_name: string; therapy_name: string; tier: 1 | 2 | 3; appointment_id: string; from: { staff_name: string; start_time: string }; to: { staff_id: string | null; staff_name: string; start_time: string; date: string; room_id: string | null } };
-  type ReplanBatch = { batch_id: string; staff_name: string; moved: ReplanMove[]; proposed: ReplanMove[]; unplaced: { patient_name: string; therapy_name: string; start_time: string; reason: string }[] };
   const [replans, setReplans] = useState<ReplanBatch[]>([]);
   // The centre's day, not the machine's. The warnings read appointments keyed
   // by the centre's timezone and absences by the machine's local date, which on
@@ -391,8 +388,9 @@ const AdminDashboard = () => {
   // as absent on a day they are working. Both sides use the centre's day.
   const exceptionDayKey = todayKey;
   const exceptionDay = useMemo(() => new Date(`${todayKey}T00:00:00`), [todayKey]);
-  const [replanDismissed, setReplanDismissed] = useState<string[]>([]);
-  const [undone, setUndone] = useState<string | null>(null);
+  // Dismissed per day, in this browser: dismiss a note today and it is gone
+  // today; mark someone else off and their move shows as new.
+  const [dismissed, setDismissed] = useState<string[]>([]);
   const loadReplans = useCallback(() => {
     fetch(`${API_BASE}/replan/summary?date=${exceptionDayKey}`)
       .then((r) => (r.ok ? r.json() : []))
@@ -401,31 +399,25 @@ const AdminDashboard = () => {
   }, [exceptionDayKey]);
   useEffect(() => { loadReplans(); }, [loadReplans]);
   useEffect(() => {
-    try { setReplanDismissed(JSON.parse(localStorage.getItem(`replanDismissed:${exceptionDayKey}`) || '[]')); } catch { setReplanDismissed([]); }
+    try { setDismissed(JSON.parse(localStorage.getItem(`attentionDismissed:${exceptionDayKey}`) || '[]')); } catch { setDismissed([]); }
   }, [exceptionDayKey]);
-  const dismissReplan = (id: string) => {
-    const next = [...replanDismissed, id];
-    setReplanDismissed(next);
-    try { localStorage.setItem(`replanDismissed:${exceptionDayKey}`, JSON.stringify(next)); } catch { /* private window */ }
+  const dismiss = (id: string) => {
+    const next = [...dismissed, id];
+    setDismissed(next);
+    try { localStorage.setItem(`attentionDismissed:${exceptionDayKey}`, JSON.stringify(next)); } catch { /* private window */ }
   };
   const undoReplanBatch = async (batch: ReplanBatch) => {
     const res = await fetch(`${API_BASE}/replan/undo`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batch_id: batch.batch_id }) });
-    if (!res.ok) return;
-    const out = await res.json().catch(() => ({ restored: batch.moved.length }));
-    setUndone(`Undone: ${batch.staff_name} reinstated, ${out.restored} treatment${out.restored === 1 ? '' : 's'} back as they were.`);
+    if (!res.ok) return false;
     loadReplans();
-    refreshAppointmentsForDate(todayKey, true);
+    await refreshAppointmentsForDate(todayKey, true);
+    return true;
   };
-  const visibleReplans = replans.filter((r) => !replanDismissed.includes(r.batch_id));
+  const visibleReplans = replans.filter((r) => !dismissed.includes(r.batch_id));
 
   // What is wrong with the day comes from the server, which is the same code
   // that refuses a booking. Two screens used to work this out in the browser and
   // both disagreed with it; #88 deleted them.
-  type DayProblem = {
-    id: string; kind: string; problem_class: 'blocking' | 'worth_knowing'; who: string; what: string;
-    appointment_id: string | null; patient_id: string | null; patient_name: string; staff_id: string | null;
-    fix: unknown; no_fix_reason: string | null;
-  };
   const [dayCheck, setDayCheck] = useState<{ problems: DayProblem[]; headline: string | null }>({ problems: [], headline: null });
   const loadDayCheck = useCallback(() => {
     fetch(`${API_BASE}/day-check?date=${exceptionDayKey}`)
@@ -476,7 +468,7 @@ const AdminDashboard = () => {
   useEffect(() => { const t = setInterval(() => setMinute((m) => m + 1), 60000); return () => clearInterval(t); }, []);
 
   // Each screen keeps its own state and dialogs in its own file (#147).
-  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, setShowVerify, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), openFullBooking: () => setShowAutoAssign(true), movedFrom, problems: dayCheck.problems });
+  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), openFullBooking: () => setShowAutoAssign(true), movedFrom, problems: dayCheck.problems });
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, isMobile, requestDelete });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, isMobile, requestDelete });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, isMobile, requestDelete });
@@ -510,29 +502,6 @@ const AdminDashboard = () => {
     <div className="min-h-screen bg-background overflow-x-clip pb-28">
       {/* Main Content */}
       <div className="container mx-auto px-3 md:px-4 py-3 md:py-6">
-        {undone ? (
-          <div className="mb-2 rounded-md border bg-card px-3 py-2 text-sm">{undone}</div>
-        ) : null}
-        {visibleReplans.map((batch) => {
-          const needsDecision = batch.proposed.length + batch.unplaced.length;
-          return (
-            <div key={batch.batch_id} className="mb-2 rounded-md border bg-card px-3 py-2">
-              {/* One line and Undo. Everything else about the day — what moved,
-                  what still needs a decision, giving a whole day away — is
-                  Verify's, so the admin has one place to act. */}
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="font-semibold">
-                  {batch.staff_name} is off — {batch.moved.length} rebooked{needsDecision > 0 ? `, ${needsDecision} needs a decision` : ''}
-                </span>
-                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => undoReplanBatch(batch)}>Undo</Button>
-                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowVerify(true)}>
-                  <AlertCircle className="w-3 h-3 mr-1 text-amber-600" />Fix
-                </Button>
-                <button type="button" className="text-xs text-muted-foreground ml-auto" onClick={() => dismissReplan(batch.batch_id)}>Done with this</button>
-              </div>
-            </div>
-          );
-        })}
         {activeTab !== 'schedule' ? (
           <button type="button" className="mb-2 h-11 text-base font-semibold text-primary" onClick={() => go('schedule')}>‹ The day</button>
         ) : null}
@@ -617,8 +586,9 @@ const AdminDashboard = () => {
           fix: dayCheck.problems.filter((p) => p.problem_class === 'blocking').length,
           // What the app already fixed for the admin: a therapist's day moved.
           done: visibleReplans.length,
-          note: dayCheck.problems.filter((p) => p.problem_class === 'worth_knowing' && p.kind !== 'IDLE_RESIDENT').length,
-          open: () => setShowVerify(true),
+          note: dayCheck.problems.filter((p) => p.problem_class === 'worth_knowing' && p.kind !== 'IDLE_RESIDENT' && !dismissed.includes(p.id)).length,
+          // Checked again on opening: a booking made since can have taken the answer's slot.
+          open: () => { loadDayCheck(); loadReplans(); setShowAttention(true); },
         }}
       />
 
@@ -632,55 +602,27 @@ const AdminDashboard = () => {
           }
         }
       }} />
-      {/* Verify works out its own dates from currentDate in the browser's
-          timezone, so it is handed the centre's day rather than the machine's. */}
-      {/* Verify checks the day the schedule is on — no date question, and the
-          centre's day rather than the machine's. */}
-      <VerifyDialog
-        open={showVerify}
-        onOpenChange={setShowVerify}
+      <AttentionSheet
+        open={showAttention}
+        onOpenChange={setShowAttention}
         apiBase={API_BASE}
-        currentDate={exceptionDay}
-        timezone={ADMIN_TZ}
-        staff={staff.filter((s) => s.status === 'Active').map((s) => ({ id: String(s.id), name: s.name }))}
-        rooms={roomsList.filter((r) => r.status === 'Active').map((r) => ({ id: String(r.id), name: r.name }))}
-        treatments={(Array.isArray(appointmentsByDate[exceptionDayKey]) ? appointmentsByDate[exceptionDayKey] : []).map((a) => ({
-          id: String(a.id), start_time: a.start_time, status: a.status || 'pending', notes: a.notes ?? null,
-          label: `${patients.find((p) => p.id === a.patient_id)?.name || 'Resident'} — ${therapyNameById[a.therapy_id] || 'Treatment'}`,
-        }))}
-        openingTime={centreHours.opening_time}
-        closingTime={centreHours.closing_time}
-        onOpenAppointment={(appointmentId) => {
-          const a = (Array.isArray(appointmentsByDate[exceptionDayKey]) ? appointmentsByDate[exceptionDayKey] : []).find((x) => String(x.id) === String(appointmentId));
-          if (!a) return;
-          const roomInfo = roomsList.find((r) => r.id === a.room_id);
-          const patientInfo = patients.find((p) => p.id === a.patient_id);
-          setShowVerify(false);
-          setSelectedAppointment({
-            id: a.id,
-            scheduledDate: a.scheduled_date,
-            time: a.start_time,
-            duration: a.duration_minutes,
-            patientId: a.patient_id,
-            therapyId: a.therapy_id,
-            staffId: a.staff_id,
-            roomId: a.room_id,
-            patient: patientInfo?.name || a.patient_id,
-            therapy: therapyNameById[a.therapy_id] || a.therapy_id,
-            staff: staff.find((x) => x.id === a.staff_id)?.name || a.staff_id,
-            room: roomInfo?.name || a.room_id,
-            roomAmenities: roomInfo?.amenities || [],
-            patientDetails: patientInfo,
-          });
-        }}
-        onAssignFor={() => { setShowVerify(false); setShowAutoAssign(true); }}
-        onJumpToDate={(iso) => { setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); }}
-        onRefresh={async (datesISO) => {
-          for (const iso of datesISO) {
-            await refreshAppointmentsForDate(iso, true);
-          }
-          loadDayCheck();
-          loadReplans();
+        day={exceptionDayKey}
+        problems={dayCheck.problems}
+        replans={visibleReplans}
+        dismissed={dismissed}
+        dismiss={dismiss}
+        undoReplan={undoReplanBatch}
+        onChanged={async () => { await refreshAppointmentsForDate(exceptionDayKey, true); loadDayCheck(); loadReplans(); }}
+        seeIt={(id) => {
+          setShowAttention(false);
+          scheduleScreen.setView('time');
+          scheduleScreen.setQuery('');
+          // After the sheet has closed and the list has drawn by time.
+          setTimeout(() => {
+            const row = document.querySelector(`[data-appt="${id}"]`);
+            row?.scrollIntoView({ block: 'center' });
+            row?.animate?.([{ background: '#FBEAE3' }, { background: '#fff' }], { duration: 1400 });
+          }, 350);
         }}
       />
       <AppointmentDialog 
