@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
+import PageHead from "@/components/PageHead";
 
 type Entry = { id: string; at: string; who: "you" | "the app"; text: string; undo: string | null; undone: boolean };
 
@@ -40,10 +41,7 @@ export function LogScreen({ timezone, refresh }: { timezone: string; refresh: ()
 
   return (
     <div>
-      <div className="flex items-baseline justify-between px-1 pb-2 pt-1">
-        <h1 className="text-[22px] font-semibold">Log</h1>
-        <span className="text-[13px] text-muted-foreground">Last 30 days</span>
-      </div>
+      <PageHead title="Log" note="Last 30 days" />
       {entries === null ? <div className="py-6 text-center text-muted-foreground">…</div>
         : entries.length === 0 ? <div className="py-6 text-center text-muted-foreground">Nothing has changed in the last 30 days.</div>
         : days.map(([day, list]) => (

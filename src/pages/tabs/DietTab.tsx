@@ -17,6 +17,7 @@ import DayDietDialog from "./DayDietDialog";
 import { toOverrides, saveTemplate, loadTemplates } from "@/lib/dietPlan";
 import { API_BASE } from "@/lib/apiBase";
 import { API_TOKEN, fetchJsonWithTimeout, type Patient as ResidentRow } from "./shared";
+import PageHead from "@/components/PageHead";
 
 type Patient = { id: string; name: string; phone?: string; gender?: string; actualStart?: string; actualEnd?: string };
 type DietPlanTemplate = {
@@ -192,7 +193,7 @@ const DietTab = ({
       {dietTabActive && (
         <>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base md:text-xl font-semibold">Diet Management</CardTitle>
+            <PageHead title="Diet" />
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" className="h-7 px-3" onClick={openPlans}>Plans</Button>
               <Button size="sm" className="h-7 px-3" onClick={() => {
