@@ -1,4 +1,5 @@
 import { Toaster } from "@/components/ui/toaster";
+import { ConfirmHost } from "@/components/ConfirmSheet";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useState } from "react";
@@ -108,6 +109,7 @@ const App = () => {
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <ConfirmHost />
         <div className="min-h-screen flex flex-col">
           {!serverOk && (
             <div className="border-b border-destructive/40 bg-destructive/10">

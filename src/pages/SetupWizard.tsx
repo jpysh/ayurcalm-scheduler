@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { confirmSheet } from "@/components/ConfirmSheet";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -163,7 +164,7 @@ const SetupWizard = () => {
                 <Button
                   variant="secondary"
                   className="border border-border bg-background hover:bg-muted text-foreground"
-                  onClick={() => { if (window.confirm("Delete all the example patients, staff, rooms, therapies and appointments? This cannot be undone.")) finish(false); }}
+                  onClick={async () => { if (await confirmSheet("Delete all the example patients, staff, rooms, therapies and appointments?\n\nThis cannot be undone.", "Delete")) finish(false); }}
                   disabled={busy}
                 >
                   Clear it and start with my own centre

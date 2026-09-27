@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { confirmSheet } from "@/components/ConfirmSheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,7 +86,7 @@ export const UsersSection = () => {
   };
 
   const remove = async (user: User) => {
-    if (!window.confirm(`Delete ${user.email}? This cannot be undone.`)) return;
+    if (!(await confirmSheet(`Delete ${user.email}?\n\nThis cannot be undone.`, "Delete"))) return;
     const res = await fetch(`${API_BASE}/users/${user.id}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {

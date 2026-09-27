@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { confirmSheet } from "@/components/ConfirmSheet";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -321,7 +322,7 @@ const DietTab = ({
                             })();
                           }}>Edit</Button>
                           <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={async () => {
-                            if (!window.confirm(`Remove ${p.name}'s diet plan? Their per-day entries stay.`)) return;
+                            if (!(await confirmSheet(`Remove ${p.name}'s diet plan?\n\nTheir per-day entries stay.`, "Remove"))) return;
                             try {
                               // The free-text diet is emptied too: with no segment the day
                               // sheet falls back to it, and would print stale wording.

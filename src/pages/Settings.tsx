@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { confirmSheet } from "@/components/ConfirmSheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,10 +103,10 @@ const Settings = ({ signOut }: { signOut?: () => void }) => {
   };
 
   const clearDemoData = async () => {
-    if (!window.confirm(
+    if (!(await confirmSheet(
       "Delete all demo patients, staff, rooms, therapies and appointments?\n\n" +
-      "Your account and centre settings are kept. This cannot be undone."
-    )) return;
+      "Your account and centre settings are kept. This cannot be undone.", "Delete"
+    ))) return;
     setClearing(true);
     try {
       const res = await fetch(`${API_BASE}/settings/clear-demo-data`, { method: "POST" });
@@ -123,10 +124,10 @@ const Settings = ({ signOut }: { signOut?: () => void }) => {
   };
 
   const resetDemoData = async () => {
-    if (!window.confirm(
+    if (!(await confirmSheet(
       "Replace the demo data with a fresh four months starting today?\n\n" +
-      "Any changes made to demo patients and bookings are lost. Your account and centre settings are kept."
-    )) return;
+      "Any changes made to demo patients and bookings are lost. Your account and centre settings are kept.", "Replace"
+    ))) return;
     setClearing(true);
     try {
       const res = await fetch(`${API_BASE}/settings/reset-demo-data`, { method: "POST" });
