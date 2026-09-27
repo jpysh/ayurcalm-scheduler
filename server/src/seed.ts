@@ -168,6 +168,10 @@ async function main() {
     return;
   }
 
+  // Gender follows the first name: 'Aarav Gupta (f)' in the booking picker read
+  // as a broken demo (#67). Every other first name in these lists is a woman's.
+  const MEN = new Set(['Aarav','Vivaan','Aditya','Vihaan','Arjun','Sai','Krishna','Venkatasubramanian','Raj','Kumar','Ravi','Suresh','Arvind','Kiran','Alok','Manish','Rohit','Dev']);
+  const isMale = (name: string) => MEN.has(name.split(' ')[0]);
   const patients: string[] = [];
   const surnames = ['Sharma','Verma','Iyer','Nair','Reddy','Patel','Singh','Gupta','Joshi','Chatterjee','Das','Banerjee','Mishra','Yadav','Khan'];
   const firstNames = ['Aarav','Vivaan','Aditya','Vihaan','Arjun','Sai','Krishna','Ananya','Diya','Aarohi','Ishita','Sneha','Riya','Nisha','Meera'];
@@ -177,7 +181,7 @@ async function main() {
   patients[7] = 'Venkatasubramanian Raghunathan';
 
   const createdPatients = await Promise.all(patients.map((name, idx) => prisma.patient.create({
-    data: { name, gender: idx % 2 === 0 ? 'male' : 'female', phone: `+91-9${Math.floor(100000000 + random()*899999999)}` },
+    data: { name, gender: isMale(name) ? 'male' : 'female', phone: `+91-9${Math.floor(100000000 + random()*899999999)}` },
   })));
 
   const therapies = await Promise.all(therapyDefs.map(t => prisma.therapy.create({
@@ -200,7 +204,7 @@ async function main() {
   const staff = await Promise.all(staffNames.map((n, idx) => prisma.staff.create({
     data: {
       name: `${n} ${randomOf(surnames)}`,
-      gender: idx % 2 === 0 ? 'female' : 'male',
+      gender: isMale(n) ? 'male' : 'female',
       phone: `+91-8${Math.floor(100000000 + random()*899999999)}`,
       specializations: therapies.filter((_, j) => j % (idx % 3 + 2) === 0).map(t => t.id),
       weekly_schedule: scheduleStd,

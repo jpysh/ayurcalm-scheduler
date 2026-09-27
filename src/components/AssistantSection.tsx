@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { confirmSheet } from "@/components/ConfirmSheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -45,7 +46,7 @@ export const AssistantSection = () => {
   };
 
   const revoke = async () => {
-    if (!window.confirm("Disconnect Claude? It stops working until you download the extension again.")) return;
+    if (!(await confirmSheet("Disconnect Claude?\n\nIt stops working until you download the extension again.", "Disconnect"))) return;
     const res = await fetch(`${API_BASE}/mcp-key`, { method: "DELETE" });
     if (res.ok) { toast.success("Disconnected"); load(); } else toast.error("Could not disconnect");
   };
