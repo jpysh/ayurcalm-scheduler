@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { BottomSheet } from "@/components/BottomBar";
 import { API_BASE } from "@/lib/apiBase";
+import type { CardAppt } from "@/components/TreatmentCard";
+import DayDietDialog from "./DayDietDialog";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiDietPlan, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 // removed dialog import to avoid dev parse error
 
@@ -22,365 +24,124 @@ type Patient = { id: string | number; name: string; phone?: string; gender: stri
 const stayDay = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '');
 const blankNew = () => ({ name: '', phone: '', gender: 'Male', arriving: '', leaving: '', templateId: '' });
 
-type PatientsTabProps = {
-  patients: Patient[];
-  searchPatients: string;
-  setSearchPatients: (v: string) => void;
-  showAddPatient: boolean;
-  setShowAddPatient: (v: boolean) => void;
-  onShowInfo: (p: Patient) => void;
-  onEditDiet: (patientId: string | number) => void;
-  staff: { id: string | number; name: string }[];
+type InHouse = { id: string; name: string; Stays: { id: string; start_date: string; end_date: string }[] };
+type ResidentDay = {
+  id: string; name: string;
+  stay: { id: string; start_date: string; end_date: string; day: number; days: number } | null;
+  treatments: (CardAppt & { therapy_name: string; room_name: string | null; staff_names: string[] })[];
+  plan_name: string; meals: { meal: string; text: string }[];
 };
+const DAY_MS = 86400000;
 
-const PatientsTab = ({ patients, searchPatients, setSearchPatients, showAddPatient, setShowAddPatient, onShowInfo, onEditDiet, staff }: PatientsTabProps) => {
-  const [localPatients, setLocalPatients] = useState<Patient[]>(patients);
-  const [editingPatientId, setEditingPatientId] = useState<string | number | null>(null);
-  const [originalPatient, setOriginalPatient] = useState<Patient | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Array<string | number>>([]);
-  // removed info dialog state to avoid dev parse error
-
-  const [genderFilter, setGenderFilter] = useState<'all'|'Male'|'Female'|'Other'>('all');
-  const [dietFilter, setDietFilter] = useState<'all'|'has'|'none'>('all');
-  const [selectedDate, setSelectedDate] = useState<string>('');
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const [sortField, setSortField] = useState<'name'|'gender'|'start'|'end'>('name');
-  const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('asc');
-
-  const filterActive = genderFilter !== 'all' || dietFilter !== 'all' || !!selectedDate;
-  const sortActive = !(sortField === 'name' && sortOrder === 'asc');
-
-  const toLocalDisplayNoSeconds = (iso?: string) => {
-    if (!iso) return "";
-    const d = new Date(iso);
-    const opts: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' };
-    return d.toLocaleString('en-IN', opts);
-  };
-
-  const calcHotelDays = (start?: string, end?: string) => {
-    if (!start || !end) return '';
-    const s = new Date(start).getTime();
-    const e = new Date(end).getTime();
-    if (!Number.isFinite(s) || !Number.isFinite(e) || e < s) return '';
-    const msPerDay = 24 * 60 * 60 * 1000;
-    return Math.max(1, Math.round((e - s) / msPerDay));
-  };
-
+/**
+ * Residents (#63, docs/design/phone.html): who is in house today, arriving,
+ * staying and leaving, from their stays. Search finds anyone, in house or not.
+ */
+function ResidentsList({ patients, today, onOpen, onAdd }: { patients: Patient[]; today: string; onOpen: (id: string) => void; onAdd: () => void }) {
+  const [inHouse, setInHouse] = useState<InHouse[] | null>(null);
+  const [q, setQ] = useState('');
   useEffect(() => {
-    setLocalPatients(patients);
-  }, [patients]);
-
-  const filteredSorted = useMemo(() => {
-    const q = (searchPatients || '').trim().toLowerCase();
-    const bySearch = (p: Patient) => !q || p.name.toLowerCase().includes(q) || (p.phone || '').toLowerCase().includes(q) || p.gender.toLowerCase().includes(q);
-    const byGender = (p: Patient) => genderFilter === 'all' || p.gender === genderFilter;
-    const byDiet = (p: Patient) => dietFilter === 'all' || (dietFilter === 'has' ? !!p.dietPlan : !p.dietPlan);
-    const byDate = (p: Patient) => {
-      if (!selectedDate) return true;
-      const d = new Date(selectedDate);
-      const start = p.actualStart ? new Date(p.actualStart) : null;
-      const end = p.actualEnd ? new Date(p.actualEnd) : null;
-      const covers = start && end ? start <= d && end >= d : start && !end ? start <= d : false;
-      return covers;
-    };
-    const list = localPatients.filter((p) => bySearch(p) && byGender(p) && byDiet(p) && byDate(p));
-    const sorted = [...list].sort((a, b) => {
-      let result = 0;
-      if (sortField === 'name') result = a.name.localeCompare(b.name);
-      else if (sortField === 'gender') result = a.gender.localeCompare(b.gender);
-      else if (sortField === 'start') {
-        const av = a.actualStart ? new Date(a.actualStart).getTime() : 0;
-        const bv = b.actualStart ? new Date(b.actualStart).getTime() : 0;
-        result = av - bv;
-      } else if (sortField === 'end') {
-        const av = a.actualEnd ? new Date(a.actualEnd).getTime() : 0;
-        const bv = b.actualEnd ? new Date(b.actualEnd).getTime() : 0;
-        result = av - bv;
-      }
-      return sortOrder === 'asc' ? result : -result;
-    });
-    return sorted;
-  }, [localPatients, searchPatients, genderFilter, dietFilter, selectedDate, sortField, sortOrder]);
-
-  const startEditPatient = (p: Patient) => {
-    setEditingPatientId(p.id);
-    setOriginalPatient({ ...p });
+    fetchJsonWithTimeout<InHouse[]>(`${API_BASE}/patients?resident_on=${today}`).then((r) => setInHouse(Array.isArray(r) ? r : [])).catch(() => setInHouse([]));
+  }, [today, patients.length]);
+  const stayOf = (p: InHouse) => p.Stays.find((s) => s.start_date.slice(0, 10) <= today && s.end_date.slice(0, 10) >= today);
+  const dayOf = (s: { start_date: string; end_date: string }) => {
+    const n = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(s.start_date)) / DAY_MS) + 1;
+    const of = Math.round((Date.parse(s.end_date) - Date.parse(s.start_date)) / DAY_MS) + 1;
+    return `${stayDay(s.start_date)} to ${stayDay(s.end_date)} · day ${n} of ${of}`;
   };
-  const cancelEditPatient = () => {
-    if (editingPatientId && originalPatient) {
-      setLocalPatients((prev) => prev.map((x) => (x.id === editingPatientId ? { ...originalPatient } : x)));
-    }
-    setEditingPatientId(null);
-    setOriginalPatient(null);
-  };
-  const saveEditPatient = () => {
-    setEditingPatientId(null);
-    setOriginalPatient(null);
-  };
-
-  return (
-    <>
-    <Card>
-      <CardHeader className="px-2 md:px-4 pt-2 md:pt-4 pb-1 md:pb-2">
-        <div className="flex items-center justify-center gap-2">
-          <CardTitle className="text-base md:text-xl font-semibold">Patient Management</CardTitle>
-          <Button size="icon" className="h-[19px] w-[19px] min-w-0 min-h-0 p-0 leading-none [&_svg]:size-[19px]" aria-label="Add Patient" onClick={() => setShowAddPatient(true)}>
-            <Plus />
-          </Button>
-        </div>
-        <div className="mt-0.5 flex items-center justify-center gap-2">
-          <Input placeholder="Search patients" value={searchPatients} onChange={(e) => setSearchPatients(e.target.value)} className="h-8 md:h-10 text-center max-w-xs" />
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className={`h-8 px-2 text-xs ${filterActive ? 'bg-emerald-600 text-white hover:bg-emerald-700 border-transparent' : ''}`}>Filter</Button>
-            </PopoverTrigger>
-            <PopoverContent className="p-2 w-[320px] md:w-[520px]">
-              <div className="flex items-center gap-1 flex-nowrap">
-                <Select value={genderFilter} onValueChange={(v: 'all'|'Male'|'Female'|'Other') => setGenderFilter(v)}>
-                  <SelectTrigger className="h-8 px-2 text-xs w-[92px] truncate"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Genders</SelectItem>
-                    <SelectItem value="Male">Male</SelectItem>
-                    <SelectItem value="Female">Female</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={dietFilter} onValueChange={(v: 'all'|'has'|'none') => setDietFilter(v)}>
-                  <SelectTrigger className="h-8 px-2 text-xs w-[116px] truncate"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Diet Plans</SelectItem>
-                    <SelectItem value="has">Has Diet Plan</SelectItem>
-                    <SelectItem value="none">No Diet Plan</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-                  <PopoverTrigger asChild>
-                    <Input
-                      type="date"
-                      lang="en-IN"
-                      value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
-                      onFocus={() => setDatePickerOpen(true)}
-                      onClick={() => setDatePickerOpen(true)}
-                      className="h-8 text-xs w-[140px]"
-                    />
-                  </PopoverTrigger>
-                  <PopoverContent side="bottom" align="start" sideOffset={4} collisionPadding={8} className="p-1 w-fit max-w-[calc(100vw-1rem)]">
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate ? new Date(selectedDate) : undefined}
-                      onSelect={(d) => { setSelectedDate(d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : ''); setDatePickerOpen(false); }}
-                      showOutsideDays={false}
-                      className="p-0"
-                    />
-                  </PopoverContent>
-                </Popover>
-                <Button variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={() => { setGenderFilter('all'); setDietFilter('all'); setSelectedDate(''); }}>Clear</Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className={`h-8 px-2 text-xs ${sortActive ? 'bg-emerald-600 text-white hover:bg-emerald-700 border-transparent' : ''}`}>Sort</Button>
-            </PopoverTrigger>
-            <PopoverContent className="p-2 w-64">
-              <div className="grid grid-cols-2 gap-1">
-                <div>
-                  <Select value={sortField} onValueChange={(v: 'name'|'gender'|'start'|'end') => setSortField(v)}>
-                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="name">Name</SelectItem>
-                      <SelectItem value="gender">Gender</SelectItem>
-                      <SelectItem value="start">Start</SelectItem>
-                      <SelectItem value="end">End</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Select value={sortOrder} onValueChange={(v: 'asc'|'desc') => setSortOrder(v)}>
-                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="asc">Ascending</SelectItem>
-                      <SelectItem value="desc">Descending</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0 p-1 md:p-2">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">
-                <Checkbox
-                  checked={(() => {
-                    const visibleIds = filteredSorted.map((p) => p.id);
-                    return visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
-                  })()}
-                  onCheckedChange={(v) => {
-                    const visibleIds = filteredSorted.map((p) => p.id);
-                    setSelectedIds((prev) => {
-                      const set = new Set(prev);
-                      if (v) visibleIds.forEach((id) => set.add(id));
-                      else visibleIds.forEach((id) => set.delete(id));
-                      return Array.from(set);
-                    });
-                  }}
-                  className="h-6 w-6"
-                />
-              </TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Name</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Phone</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Gender</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Therapist</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Diet Plan</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Start</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">End</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Duration (days)</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredSorted.map((p) => (
-              <TableRow key={p.id}>
-                <TableCell className="text-xs md:text-sm leading-tight py-0 pl-1 pr-1 md:py-0 md:px-3 w-7">
-                  <Checkbox
-                    checked={selectedIds.includes(p.id)}
-                    onCheckedChange={(v) => {
-                      setSelectedIds((prev) => {
-                        const set = new Set(prev);
-                        if (v) set.add(p.id); else set.delete(p.id);
-                        return Array.from(set);
-                      });
-                    }}
-                    className="h-6 w-6"
-                  />
-                </TableCell>
-                <TableCell className="text-xs md:text-sm leading-tight py-0 pl-1.5 pr-1 md:py-0 md:px-3">
-                  {editingPatientId === p.id ? (
-                    <Input value={p.name} onChange={(e) => setLocalPatients((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
-                  ) : (
-                    p.name
-                  )}
-                </TableCell>
-                <TableCell className="text-xs md:text-sm leading-tight py-0 pl-1.5 pr-1 md:py-0 md:px-3">
-                  {editingPatientId === p.id ? (
-                    <Input value={p.phone || ''} onChange={(e) => setLocalPatients((prev) => prev.map((x) => (x.id === p.id ? { ...x, phone: e.target.value } : x)))} />
-                  ) : (
-                    p.phone || ''
-                  )}
-                </TableCell>
-                <TableCell className="text-xs md:text-sm leading-tight py-0 pl-1.5 pr-1 md:py-0 md:px-3">
-                  {editingPatientId === p.id ? (
-                    <Select value={p.gender} onValueChange={(v) => setLocalPatients((prev) => prev.map((x) => (x.id === p.id ? { ...x, gender: v as typeof p.gender } : x)))}>
-                      <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Male">Male</SelectItem>
-                        <SelectItem value="Female">Female</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    p.gender
-                  )}
-                </TableCell>
-                <TableCell className="text-xs md:text-sm leading-tight py-0 pl-1.5 pr-1 md:py-0 md:px-3">
-                  {editingPatientId === p.id ? (
-                    <div className="space-y-1">
-                      <Select value={p.preferredStaffId || 'none'} onValueChange={(v) => setLocalPatients((prev) => prev.map((x) => (x.id === p.id ? { ...x, preferredStaffId: v === 'none' ? null : v, requiresPreferredStaff: v === 'none' ? false : x.requiresPreferredStaff } : x)))}>
-                        <SelectTrigger className="h-8"><SelectValue placeholder="Anyone" /></SelectTrigger>
-                        <SelectContent className="max-h-[45vh]">
-                          <SelectItem value="none">Anyone</SelectItem>
-                          {staff.map((sm) => (<SelectItem key={String(sm.id)} value={String(sm.id)}>{sm.name}</SelectItem>))}
-                        </SelectContent>
-                      </Select>
-                      {p.preferredStaffId ? (
-                        <label className="flex items-center gap-1.5 text-[11px]">
-                          <Checkbox
-                            className="h-4 w-4"
-                            checked={!!p.requiresPreferredStaff}
-                            onCheckedChange={(v) => setLocalPatients((prev) => prev.map((x) => (x.id === p.id ? { ...x, requiresPreferredStaff: !!v } : x)))}
-                          />
-                          Must be this therapist
-                        </label>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <span className="text-[11px] md:text-sm text-muted-foreground">
-                      {p.preferredStaffId ? `${staff.find((sm) => String(sm.id) === String(p.preferredStaffId))?.name || ''}${p.requiresPreferredStaff ? ' (only)' : ''}` : ''}
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell className="text-xs md:text-sm leading-tight py-0 pl-1.5 pr-1 md:py-0 md:px-3">
-                  {editingPatientId === p.id ? (
-                    <div
-                      className="text-[11px] md:text-sm truncate cursor-pointer"
-                      title={p.dietPlan || 'No diet plan selected'}
-                      onClick={() => onEditDiet(p.id)}
-                    >
-                      {p.dietPlan || 'No diet plan selected'}
-                    </div>
-                  ) : (
-                    <div
-                      className="text-[11px] md:text-sm text-muted-foreground truncate"
-                      title={p.dietPlan || ''}
-                    >
-                      {p.dietPlan || ''}
-                    </div>
-                  )}
-                </TableCell>
-                <TableCell className="text-xs md:text-sm leading-tight py-0 pl-1.5 pr-1 md:py-0 md:px-3">
-                  {stayDay(p.actualStart)}
-                </TableCell>
-                <TableCell className="text-xs md:text-sm leading-tight py-0 pl-1.5 pr-1 md:py-0 md:px-3">
-                  {stayDay(p.actualEnd)}
-                </TableCell>
-                <TableCell className="text-xs md:text-sm leading-tight py-0.5 pl-1.5 pr-1 md:py-3 md:px-3">
-                  {calcHotelDays(p.actualStart, p.actualEnd)}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex gap-2 justify-end">
-                    {editingPatientId === p.id ? (
-                      <>
-                        <Button variant="outline" size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={cancelEditPatient}>Cancel</Button>
-                        <Button size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={saveEditPatient}>Save</Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button variant="outline" size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={() => onShowInfo(p)}>
-                          <Info className="w-3 h-3 md:w-4 md:h-4" />
-                        </Button>
-                        <Button variant="outline" size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={() => startEditPatient(p)}>
-                          <Edit className="w-3 h-3 md:w-4 md:h-4" />
-                        </Button>
-                        <Button variant="outline" size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={() => setLocalPatients((prev) => prev.filter((x) => x.id !== p.id))}>
-                          <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-    {/* info dialog removed for dev stability */}
-    </>
+  const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
+  const people = (inHouse || []).map((p) => ({ p, s: stayOf(p) })).filter((x) => x.s).sort((a, b) => byName(a.p, b.p));
+  const groups: [string, typeof people][] = [
+    ['Arriving today', people.filter((x) => x.s!.start_date.slice(0, 10) === today)],
+    ['Leaving today', people.filter((x) => x.s!.end_date.slice(0, 10) === today && x.s!.start_date.slice(0, 10) !== today)],
+    ['Staying', people.filter((x) => x.s!.start_date.slice(0, 10) !== today && x.s!.end_date.slice(0, 10) !== today)],
+  ];
+  const row = (id: string | number, name: string, sub: string) => (
+    <button key={id} type="button" onClick={() => onOpen(String(id))} className="flex w-full min-h-[54px] flex-col justify-center border-b border-border px-3 py-2 text-left last:border-b-0">
+      <span className="text-[16px] font-semibold">{name}</span>
+      {sub ? <span className="text-[13px] text-muted-foreground">{sub}</span> : null}
+    </button>
   );
-};
+  const ql = q.trim().toLowerCase();
+  const inHouseIds = new Set(people.map((x) => x.p.id));
+  return (
+    <div>
+      <div className="flex items-baseline justify-between px-1 pb-2 pt-1">
+        <h1 className="text-[22px] font-semibold">Residents</h1>
+        <span className="text-[13px] text-muted-foreground">{inHouse === null ? '' : `${people.length} in house`}</span>
+      </div>
+      <input className="mb-2 min-h-11 w-full rounded-full border-[1.5px] border-border bg-card px-4 text-base outline-none" placeholder="Search all residents" aria-label="Search residents"
+        value={q} onChange={(e) => setQ(e.target.value)} />
+      {ql ? (
+        <div className="overflow-hidden rounded-2xl bg-card">
+          {patients.filter((p) => p.name.toLowerCase().includes(ql)).sort(byName).slice(0, 40)
+            .map((p) => row(p.id, p.name, inHouseIds.has(String(p.id)) ? 'In house' : p.actualEnd ? `Last stay to ${stayDay(p.actualEnd)}` : ''))}
+        </div>
+      ) : groups.filter(([, list]) => list.length).map(([title, list]) => (
+        <section key={title}>
+          <div className="flex justify-between px-1 pb-1.5 pt-3 text-[13px] font-bold">{title}<span className="font-normal text-muted-foreground">{list.length}</span></div>
+          <div className="overflow-hidden rounded-2xl bg-card">{list.map(({ p, s }) => row(p.id, p.name, dayOf(s!)))}</div>
+        </section>
+      ))}
+      <Button variant="outline" className="mt-3 h-12 w-full rounded-full" onClick={onAdd}><Plus className="mr-1 h-4 w-4" />New resident</Button>
+    </div>
+  );
+}
 
-export default PatientsTab;
+/** One resident: the stay, today's treatments, today's meals, and what to change. */
+function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeStay, book, details }: {
+  id: string | null; today: string; onClose: () => void;
+  openTreatment: (a: CardAppt) => void; changeMeals: (p: { id: string; name: string }) => void;
+  changeStay: (p: ResidentDay) => void; book: () => void; details: (id: string) => void;
+}) {
+  const [d, setD] = useState<ResidentDay | null>(null);
+  useEffect(() => {
+    setD(null);
+    if (id) fetchJsonWithTimeout<ResidentDay>(`${API_BASE}/patients/${id}/day?date=${today}`).then(setD).catch(() => setD(null));
+  }, [id, today]);
+  const fact = "flex w-full min-h-11 items-center gap-3 border-b border-border px-3 py-2.5 text-left last:border-b-0";
+  const label = "mx-1 mb-1.5 mt-3.5 text-xs font-semibold uppercase tracking-[.05em] text-muted-foreground";
+  return (
+    <BottomSheet open={!!id} onOpenChange={(o) => { if (!o) onClose(); }} title={d?.name || 'Resident'}>
+      {d ? (
+        <div className="max-h-[70dvh] overflow-y-auto">
+          <div className="-mt-2 text-[13px] text-muted-foreground">
+            {d.stay ? `Staying ${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)} · day ${d.stay.day} of ${d.stay.days}` : 'Not staying today'}
+          </div>
+          <div className={label}>Treatments today</div>
+          <div className="overflow-hidden rounded-xl border">
+            {d.treatments.length ? d.treatments.map((t) => (
+              <button key={t.id} type="button" className={fact} onClick={() => openTreatment(t)}>
+                <span className="w-12 flex-none tabular-nums text-muted-foreground">{t.start_time}</span>
+                <span className="flex-1">{t.status === 'no_show' ? <s>{t.therapy_name}</s> : t.therapy_name} · {t.staff_names.length ? `with ${t.staff_names.join(' & ')}` : 'no therapist'}</span>
+                <span className="text-[13px] text-muted-foreground">{t.room_name}</span>
+              </button>
+            )) : <div className={fact}>Rest day</div>}
+          </div>
+          <div className={label}>Meals today{d.plan_name ? ` · ${d.plan_name}` : ''}</div>
+          <div className="overflow-hidden rounded-xl border">
+            {d.meals.length ? d.meals.map((m) => (
+              <div key={m.meal} className={fact}><span className="w-20 flex-none text-muted-foreground">{m.meal}</span><span className="flex-1">{m.text}</span></div>
+            )) : <div className={fact}>No diet plan yet</div>}
+          </div>
+          <div className="mt-3 overflow-hidden rounded-xl border">
+            {([["Change today's meals", () => changeMeals(d)], ['Change stay dates', () => changeStay(d)], ['Book a treatment', book], ['Details', () => details(d.id)]] as const).map(([t, go]) => (
+              <button key={t} type="button" className={fact} onClick={go}><span className="flex-1">{t}</span><span className="text-muted-foreground">›</span></button>
+            ))}
+          </div>
+        </div>
+      ) : <div className="py-6 text-center text-muted-foreground">…</div>}
+    </BottomSheet>
+  );
+}
 
 /** The Patients screen: the Add and Details dialogs and the tab, held by the dashboard so they last as long as it does. */
-export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, openDietFor }: {
+export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, openTreatment, book }: {
   patients: PatientRow[]; setPatients: React.Dispatch<React.SetStateAction<PatientRow[]>>; staff: UiStaff[];
   therapyNameById: Record<string, string>; timezone: string;
-  openDietFor: (patientId: string | number) => void;
+  /** A treatment on the resident card opens the treatment card, on its day. */
+  openTreatment: (a: CardAppt) => void;
+  book: () => void;
 }) {
   const ADMIN_TZ = timezone;
   const [showAddPatient, setShowAddPatient] = useState(false);
@@ -492,17 +253,24 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     return d.toLocaleString('en-IN', { timeZone: ADMIN_TZ, year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
   };
 
+  const [cardId, setCardId] = useState<string | null>(null);
+  const [mealsFor, setMealsFor] = useState<{ id: string; name: string } | null>(null);
   const tab = (
-    <PatientsTab
-              staff={staff.map((x) => ({ id: String(x.id), name: x.name }))}
-      patients={patients}
-      searchPatients={searchPatients}
-      setSearchPatients={setSearchPatients}
-      showAddPatient={showAddPatient}
-      setShowAddPatient={setShowAddPatient}
-      onShowInfo={showPatientInfo}
-      onEditDiet={openDietFor}
-    />
+    <>
+      <ResidentsList patients={patients} today={today} onOpen={setCardId} onAdd={() => setShowAddPatient(true)} />
+      <ResidentCard id={cardId} today={today} onClose={() => setCardId(null)}
+        openTreatment={(a) => { setCardId(null); openTreatment(a); }}
+        changeMeals={(p) => { setCardId(null); setMealsFor(p); }}
+        changeStay={(d) => {
+          const row = patients.find((x) => String(x.id) === d.id);
+          if (row) setInfoPatient(row);
+          setCardId(null);
+          setStayEdit(d.stay ? { id: d.stay.id, start: d.stay.start_date, end: d.stay.end_date } : { id: null, start: today, end: addDays(today, 13) });
+        }}
+        book={() => { setCardId(null); book(); }}
+        details={(id) => { const row = patients.find((x) => String(x.id) === id); setCardId(null); if (row) showPatientInfo(row); }} />
+      <DayDietDialog patient={mealsFor} onClose={() => setMealsFor(null)} />
+    </>
   );
 
   const dialogs = (

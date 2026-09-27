@@ -65,16 +65,20 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
     ['Diet plans', 'Diet Management'],
     ['Leave', 'Time Off'],
     ['Events', 'Events'],
-    ['Residents', 'Patient Management'],
+    ['Residents', 'in house'],
     ['Settings', 'Centre details'],
     ['The day', 'treatments'],
   ]) {
     await openTab(page, tab);
     await expect(activePanel(page)).toContainText(text, { timeout: 15000 });
   }
-  // A seeded install has patients; an empty table means the API is not answering.
+  // A seeded install has residents in house, and one opens on a card with
+  // today's meals (#63); an empty list means the API is not answering.
   await openTab(page, 'Residents');
-  await expect(activePanel(page).getByRole('row').nth(5)).toBeVisible();
+  const resident = activePanel(page).getByRole('button', { name: / · day \d+ of \d+$/ });
+  await expect(resident.nth(5)).toBeVisible();
+  await resident.first().click();
+  await expect(page.getByRole('dialog')).toContainText('Meals today', { timeout: 15000 });
 });
 
 test('day sheet PDF prints for today', async ({ page, request }) => {
