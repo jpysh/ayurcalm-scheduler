@@ -2,7 +2,7 @@ declare module 'pdfkit';
 import { teamOf } from '../availability.js';
 import PDFDocument from 'pdfkit';
 import { PrismaClient } from '@prisma/client';
-import { addHeader, shortenWords, toMinutes, durationBetween } from './dailySchedulePdf.js';
+import { addHeader, shortenWords, toMinutes, eventWindow } from './dailySchedulePdf.js';
 
 const MIDDAY = 12 * 60;
 const AFTERNOON_END = 16 * 60;
@@ -64,7 +64,7 @@ export const formatBooked = (min: number) => {
 export const buildRota = (input: {
   day: Date;
   staff: { id: string; name: string; is_active: boolean }[];
-  appts: { staff_id: string | null; co_staff_ids?: string[]; patient_id: string; therapy_id: string; room_id: string | null; start_time: string; duration_minutes: number }[];
+  appts: { status?: string; staff_id: string | null; co_staff_ids?: string[]; patient_id: string; therapy_id: string; room_id: string | null; start_time: string; duration_minutes: number }[];
   events: { start_time: string; end_time: string; activity_name: string; staff_id: string | null; staff_scope: string | null; staff_ids: string[] }[];
   timeOff: TimeOffRow[];
   patientById: Record<string, string>;
@@ -158,8 +158,12 @@ export const buildRota = (input: {
           return [
             {
               t: a.start_time,
-              bold: true,
+              // The therapist is free: greyed and marked rather than dropped,
+              // so nobody wonders where the treatment went (#94).
+              bold: a.status !== 'no_show',
+              grey: a.status === 'no_show',
               text: [
+                a.status === 'no_show' ? "DIDN'T COME" : '',
                 `${therapyById[a.therapy_id] || a.therapy_id} ${a.duration_minutes || 0}m`,
                 patientById[a.patient_id] || a.patient_id,
                 a.room_id ? roomById[a.room_id] || a.room_id : '',
@@ -174,7 +178,7 @@ export const buildRota = (input: {
         ...myEvents.filter((e) => inSlot(e.start_time)).map((e) => ({
           t: e.start_time,
           bold: false,
-          text: `${e.activity_name} ${durationBetween(e.start_time, e.end_time)}m`,
+          text: eventWindow(e),
         })),
         // Part-day leave is greyed in the hours it covers rather than moving the
         // whole row: the therapist is in for the rest of the day.
@@ -198,7 +202,7 @@ export const buildRota = (input: {
     // Assisting counts the same as leading: the assistant is just as busy.
     // Overlaps are merged, so a treatment running into an event counts once.
     const spans = [
-      ...mine.map((a) => [toMinutes(a.start_time), toMinutes(a.start_time) + (a.duration_minutes || 0)]),
+      ...mine.filter((a) => a.status !== 'no_show').map((a) => [toMinutes(a.start_time), toMinutes(a.start_time) + (a.duration_minutes || 0)]),
       ...myEvents.map((e) => [toMinutes(e.start_time), toMinutes(e.end_time)]),
     ].sort((m, n) => m[0] - n[0]);
     let booked = 0;

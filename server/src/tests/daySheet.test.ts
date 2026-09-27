@@ -137,9 +137,20 @@ async function main() {
         session_number: 1, total_sessions: 1, status: 'cancelled', assignment_type: 'manual',
       },
     });
+    // A resident who didn't come prints, marked, on both (#94).
+    const noShow = await prisma.therapy.create({ data: { name: `${TAG} Shirodhara`, required_amenities: [], duration_minutes: 30 } });
+    await prisma.appointment.create({
+      data: {
+        patient_id: firstResident.id, therapy_id: noShow.id, staff_id: therapists[1].id, room_id: room.id,
+        scheduled_date: day, start_time: '18:00', duration_minutes: 30,
+        session_number: 1, total_sessions: 1, status: 'no_show', assignment_type: 'manual',
+      },
+    });
     const rotaPath = join(dir, 'rota.pdf');
     writeFileSync(rotaPath, await generateTherapistRotaPdf(DAY, prisma));
-    assert.ok(!execFileSync('pdftotext', ['-raw', rotaPath, '-']).toString().includes('Nasyacancel'), 'A cancelled treatment printed on the therapist sheet');
+    const rotaText = execFileSync('pdftotext', ['-raw', rotaPath, '-']).toString().replace(/\s+/g, ' ');
+    assert.ok(!rotaText.includes('Nasyacancel'), 'A cancelled treatment printed on the therapist sheet');
+    assert.match(rotaText, /DIDN'T COME · Sheettest Shirodhara/, "A no-show is not marked on the therapist sheet");
 
     const pdfPath = join(dir, 'sheet.pdf');
     writeFileSync(pdfPath, await generateDailySchedulePdf(DAY, prisma));
@@ -149,6 +160,9 @@ async function main() {
     const text = execFileSync('pdftotext', ['-raw', pdfPath, '-']).toString().replace(/\s+/g, ' ');
 
     assert.ok(!text.includes('Nasyacancel'), 'A cancelled treatment printed on the day sheet');
+    assert.match(text, /18:00 DIDN'T COME · Sheettest Shirodhara/, 'A no-show is not marked on the day sheet');
+    // The events line is everything before the table's first heading.
+    assert.doesNotMatch(text.split(' Patient ')[0], /\d+m\b/, 'An event for everyone still prints as a length, not its window');
 
     const pages = Number(execFileSync('pdfinfo', [pdfPath]).toString().match(/Pages:\s+(\d+)/)![1]);
     assert.ok(pages >= 2, `Expected the test centre to need more than one page, got ${pages}`);

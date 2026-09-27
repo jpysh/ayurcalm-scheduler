@@ -39,7 +39,9 @@ export const toMinutes = (t: string) => {
   const [hh, mm] = t.split(':').map((n) => parseInt(n, 10));
   return hh * 60 + mm;
 };
-export const durationBetween = (start: string, end: string) => Math.max(0, toMinutes(end) - toMinutes(start));
+/** 'Breakfast 08:00–12:00'. An event prints as its window: a meal is a window
+ *  the resident eats in, and 'Breakfast 240m' read as a four-hour meal (#94). */
+export const eventWindow = (e: { activity_name: string; start_time: string; end_time: string }) => `${e.activity_name} ${e.start_time}\u2013${e.end_time}`;
 
 export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaClient): Promise<Buffer> {
   const margin = 36;
@@ -152,7 +154,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     .sort((a, b) => a.start - b.start);
   const everyoneLine = [...sharedEvents]
     .sort((a, b) => a.start_time.localeCompare(b.start_time))
-    .map((e) => `${e.start_time} ${e.activity_name} ${durationBetween(e.start_time, e.end_time)}m`)
+    .map(eventWindow)
     .join('  \u00b7  ');
 
   const dietByPatient = new Map(displayPatients.map((p) => [p.id, diets.dietFor(p, (apptsByPatient.get(p.id) || []).length > 0)] as const));
@@ -217,7 +219,12 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     if (key === '\u0000resident') return { key, ids, plan: NO_PLAN, qualifier: '', body: '', title: `No diet plan \u2014 ${n} resident${n === 1 ? '' : 's'}` };
     if (key === '\u0000outpatient') return { key, ids, plan: OUTPATIENT, qualifier: '', body: '', title: `Outpatients \u2014 not staying \u2014 ${n} ${n === 1 ? 'person' : 'people'}` };
     const plan = dietByPatient.get(ids[0])?.planName || '';
-    const body = plan && key.startsWith(`${plan}: `) ? key.slice(plan.length + 2) : key;
+    // Each meal with the window it is served in, from the centre's own meal events.
+    const body = (plan && key.startsWith(`${plan}: `) ? key.slice(plan.length + 2) : key)
+      .replace(/\b(Breakfast|Lunch|Dinner|Snacks): /g, (m, meal: string) => {
+        const e = sharedEvents.find((x) => x.activity_name.toLowerCase() === meal.toLowerCase());
+        return e ? `${meal} ${e.start_time}\u2013${e.end_time}: ` : m;
+      });
     const qualifier = ids.every((id) => hasOverrideToday(id)) ? 'changed for today'
       : ids.every((id) => !hasTherapyToday(id)) ? 'rest day'
       : '';
@@ -265,8 +272,10 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
         return [
           ...apptList.filter((a) => inSlot(a.start_time)).map((a) => ({
             t: a.start_time,
-            bold: true,
+            // Marked, not dropped: a sheet reprinted mid-day says who didn't come (#94).
+            bold: a.status !== 'no_show',
             text: [
+              a.status === 'no_show' ? "DIDN'T COME" : '',
               teamOf(a).some((id) => isOff(id, a)) ? 'NO THERAPIST' : '',
               `${therapyById[a.therapy_id] || a.therapy_id} ${a.duration_minutes || 0}m`,
               // Everyone working it, so a resident knows two people are coming.
@@ -277,7 +286,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
           ...ownEvents.filter((e) => inSlot(e.start_time) && eventAppliesToPatient(e, id)).map((e) => ({
             t: e.start_time,
             bold: false,
-            text: `${e.activity_name} ${durationBetween(e.start_time, e.end_time)}m`,
+            text: eventWindow(e),
           })),
         ].sort((m, n) => m.t.localeCompare(n.t));
       });
