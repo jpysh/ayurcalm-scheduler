@@ -167,3 +167,22 @@ test('time off saved elsewhere shows in the pill when the app is back in view (#
 
   await tidy(call);
 });
+
+test('the card counts the stay that holds the treatment, not the newest one (#190)', async ({ page, request }) => {
+  test.setTimeout(120000);
+  const call = await api(request);
+  await tidy(call);
+  await build(call);
+  const resident = (await call('get', '/patients')).find((p: { name: string }) => p.name === RESIDENT);
+  // A second stay booked for later: the newest, but not the one 13 March is in.
+  await call('post', `/patients/${resident.id}/stays`, { start_date: '2030-05-01', end_date: '2030-05-10' });
+
+  await signIn(page);
+  await page.getByRole('button', { name: /^Change day/ }).click();
+  await page.getByRole('dialog').locator('input[type=date]').fill(DAY);
+  await expect(page.getByRole('navigation', { name: 'Main' })).toContainText('13 Mar', { timeout: 15000 });
+  await page.getByRole('button', { name: new RegExp(RESIDENT) }).first().click();
+  await expect(page.getByRole('dialog')).toContainText('stay day 13 of 31');
+
+  await tidy(call);
+});
