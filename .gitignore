@@ -38,3 +38,6 @@ nginx-staging.conf
 
 # Working material that must never reach a public repo — scans, photos, notes.
 private/
+
+# Screenshots from scripts/shots.mjs (#193)
+docs/design/shots/
