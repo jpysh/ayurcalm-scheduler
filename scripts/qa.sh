@@ -54,6 +54,7 @@ run daySheet           "The day sheet lists every resident, treatment time and t
 run unstaffedSheets   "A treatment booked with a therapist who is off shows, marked, on both the patient sheet and the therapist rota"
 run residentStay     "A resident added in the app, with a stay and a diet plan, is on the day sheet; leaving early cancels what is left, and Undo restores it"
 run treatmentCard    "Every time and room a treatment card offers saves, a busy therapist is not offered, a no-show frees theirs, and History says what changed"
+run search           "Search finds a resident's treatments on every day in the window, in order, by name, room or any therapist, and leaves out cancelled ones"
 run dietOverride       "Editing a diet plan changes it for everyone except what one patient was told specifically"
 run onboarding         "After the setup wizard, the centre has its hours, timezone, therapies, rooms and therapists, and the day sheet prints"
 run mcp                "Claude reads the centre only with the current key: the day, residents, who is free and the day sheet, and reading changes nothing"
