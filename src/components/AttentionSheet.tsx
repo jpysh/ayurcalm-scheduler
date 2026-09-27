@@ -53,11 +53,13 @@ type Done = { text: string; undo: (() => Promise<boolean>) | null };
 const listed = (names: string[]) => names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 const first = (name: string) => name.split(" ")[0];
 
-export function AttentionSheet({ open, onOpenChange, apiBase, day, problems, replans, dismissed, dismiss, undoReplan, onChanged, seeIt }: {
+export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, replans, dismissed, dismiss, undoReplan, onChanged, seeIt }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   apiBase: string;
+  /** The day on screen and today, YYYY-MM-DD on the centre's clock. */
   day: string;
+  today: string;
   problems: DayProblem[];
   replans: ReplanBatch[];
   /** Notes and replans the admin has dismissed today. */
@@ -156,8 +158,10 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, problems, rep
     return item(p.id, p.what, [at, p.no_fix_reason].filter(Boolean).join(". "), see);
   };
 
+  // The sheet opens on whatever day is on screen, so it names that day (#193).
+  const dayName = day === today ? "Today" : new Date(day).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange} title="Today">
+    <BottomSheet open={open} onOpenChange={onOpenChange} title={dayName}>
       <div className="max-h-[70dvh] space-y-3 overflow-y-auto">
         {done ? (
           <div className="flex items-center justify-between gap-2 rounded-[10px] bg-secondary px-3 py-2 text-sm font-semibold text-primary">
@@ -176,7 +180,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, problems, rep
         {didForYou.length + notes.length ? (
           <section className="rounded-2xl bg-background px-3 py-1">
             <div className="pb-0.5 pt-2.5 text-xs font-bold uppercase tracking-[.05em] text-muted-foreground">For your information · {didForYou.length + notes.length}</div>
-            {didForYou.map((b) => item(b.batch_id, `${b.staff_name} is not in today`,
+            {didForYou.map((b) => item(b.batch_id, `${b.staff_name} is not in ${day === today ? "today" : `on ${dayName}`}`,
               b.moved.length
                 ? `${first(b.staff_name)}'s ${b.moved.length} treatment${b.moved.length === 1 ? "" : "s"} went to ${listed([...new Set(b.moved.map((m) => first(m.to.staff_name)))])}.`
                 : "Nothing of theirs could be moved by itself.", <>

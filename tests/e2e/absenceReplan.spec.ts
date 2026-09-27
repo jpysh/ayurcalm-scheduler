@@ -161,5 +161,9 @@ test('time off saved elsewhere shows in the pill when the app is back in view (#
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page.getByRole('button', { name: /to fix/ })).toBeVisible({ timeout: 15000 });
 
+  // The sheet is about the day on screen, not today (#193).
+  await page.getByRole('button', { name: /to fix/ }).click();
+  await expect(page.getByRole('dialog').getByRole('heading').first()).toHaveText('Wed 13 Mar');
+
   await tidy(call);
 });

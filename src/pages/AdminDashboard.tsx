@@ -647,6 +647,7 @@ const AdminDashboard = () => {
         onOpenChange={setShowAttention}
         apiBase={API_BASE}
         day={exceptionDayKey}
+        today={ymdInTZ(new Date())}
         problems={dayCheck.problems}
         replans={visibleReplans}
         dismissed={dismissed}
