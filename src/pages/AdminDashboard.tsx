@@ -6,6 +6,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { BottomBar, SCREENS } from "@/components/BottomBar";
 import { AutoAssignDialog } from "@/components/AutoAssignDialog";
 import { TeamRooms } from "@/components/TeamRooms";
+import { LogScreen } from "@/components/LogScreen";
 import { AttentionSheet, type DayProblem, type ReplanBatch } from "@/components/AttentionSheet";
 import { AppointmentDialog } from "@/components/AppointmentDialog";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -532,6 +533,10 @@ const AdminDashboard = () => {
 
     {dietScreen.dialogs}
 
+          <TabsContent value="log" data-testid="tabpanel-log">
+            <LogScreen timezone={ADMIN_TZ} refresh={() => refreshAppointmentsForDate(dayKeyMemo, true)} />
+          </TabsContent>
+
           <TabsContent value="team" data-testid="tabpanel-team">
             <TeamRooms staff={staff} rooms={roomsList} today={ymdInTZ(new Date())}
               nowHM={new Date().toLocaleTimeString("en-GB", { timeZone: ADMIN_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}
@@ -563,7 +568,7 @@ const AdminDashboard = () => {
           </TabsContent>
 
           <TabsContent value="settings" data-testid="tabpanel-settings">
-            <Settings signOut={signOut} />
+            <Settings signOut={signOut} openLog={() => go("log")} />
           </TabsContent>
 
           <TabsContent value="diet" className="space-y-6" forceMount>
