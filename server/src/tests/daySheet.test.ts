@@ -28,6 +28,7 @@ import { requireDemoData } from './demoGuard.js';
 
 const TAG = 'Sheettest';
 const DAY = '2030-01-16';
+const PEOPLE_PER_PAGE = 8;
 const allDay = Object.fromEntries(
   ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].map((d) => [d, { start: '09:00', end: '20:00' }]),
 );
@@ -134,6 +135,11 @@ async function main() {
 
     const pages = Number(execFileSync('pdfinfo', [pdfPath]).toString().match(/Pages:\s+(\d+)/)![1]);
     assert.ok(pages >= 2, `Expected the test centre to need more than one page, got ${pages}`);
+    // The sheet went from seven pages to three by grouping on plan (#59); a
+    // layout fault that makes it grow again, or print a blank page, shows here
+    // as fewer people per page. Moved from the e2e test, which read today's
+    // demo day and so changed its answer with the date (#159).
+    assert.ok(expected.length / pages >= PEOPLE_PER_PAGE, `${expected.length} people took ${pages} pages`);
 
     // Everyone, in group order, each with every treatment between their name
     // and the next person's.

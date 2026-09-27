@@ -528,6 +528,43 @@ async function main() {
     await addStay(p.id, new Date(today.getTime() - 2 * DAY_MS), new Date(today.getTime() + 3 * DAY_MS));
   }
 
+  // Someone arriving today and someone leaving, so the day list and the sheet
+  // show both without waiting for the calendar to line one up.
+  const unbooked = createdPatients.filter((x) => !nearToday.has(x.id)).slice(2, 4);
+  if (unbooked[0]) await addStay(unbooked[0].id, today, new Date(today.getTime() + 6 * DAY_MS));
+  if (unbooked[1]) await addStay(unbooked[1].id, new Date(today.getTime() - 5 * DAY_MS), today);
+
+  // The rest of an ordinary day's changes, each once, so every row flag and
+  // History line in the design has real data behind it (#159). Taken from
+  // today's treatments that neither the therapist off nor the resident locked
+  // to one therapist depend on, so the day's planned problems stay as they are.
+  const adminId = (await prisma.user.findUnique({ where: { email: DEFAULT_ADMIN_EMAIL }, select: { id: true } }))?.id ?? 'seed';
+  const spare = (await prisma.appointment.findMany({ where: { scheduled_date: today, status: 'pending' }, orderBy: { start_time: 'asc' } }))
+    .filter((a) => !(a.staff_id && offToday.has(a.staff_id)) && a.patient_id !== loyal?.patient_id);
+  const [noShow, cancelled, noted, moved] = [spare[0], spare[Math.floor(spare.length / 3)], spare[Math.floor(spare.length / 2)], spare[spare.length - 1]];
+  const change = async (a: (typeof spare)[number] | undefined, data: Record<string, unknown>) => {
+    if (!a) return;
+    const after = await prisma.appointment.update({ where: { id: a.id }, data });
+    await prisma.auditLog.create({ data: { admin_id: adminId, action: 'update', entity_type: 'appointment', entity_id: a.id, old_value: a as any, new_value: after as any } });
+  };
+  await change(noShow, { status: 'no_show' });
+  if (cancelled !== noShow) await change(cancelled, { status: 'cancelled' });
+  if (noted !== cancelled) await change(noted, { notes: 'Prefers a lighter touch on the shoulders' });
+  // Moved from yesterday: the History line is what shows it was moved.
+  if (moved && moved !== noted) {
+    const yesterday = new Date(today.getTime() - DAY_MS);
+    await prisma.appointment.update({ where: { id: moved.id }, data: { scheduled_date: yesterday } });
+    await change({ ...moved, scheduled_date: yesterday }, { scheduled_date: today });
+  }
+  // A room out of use for the afternoon, chosen among rooms with nothing booked
+  // then, so it shows as closed without adding a problem Verify must solve.
+  const afternoon = (t: string) => t >= '14:00';
+  const bookedAfternoon = new Set(spare.filter((a) => afternoon(a.start_time)).map((a) => a.room_id));
+  const idleRoom = rooms.find((r) => !bookedAfternoon.has(r.id) && !todaysBookings.some((a) => a.room_id === r.id && afternoon(a.start_time)));
+  if (idleRoom) {
+    await prisma.timeOff.create({ data: { entity_type: 'room', entity_id: idleRoom.id, date: today, start_time: '14:00', end_time: '20:00', description: 'Plumbing repair' } });
+  }
+
   // One patient given something different for one meal today, so the override
   // that a template edit must not overwrite is visible in the demo.
   const overridden = residents[0];
