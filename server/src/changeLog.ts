@@ -44,7 +44,10 @@ export async function changeLog(days: number, prisma: PrismaClient): Promise<Log
     return `${who}'s ${name(therapies, a.therapy_id) || 'treatment'}`;
   };
 
-  const out: LogEntry[] = rows.map((r) => {
+  // An edit to a treatment deleted since says nothing the deletion's own line
+  // does not: its record holds only the fields it changed, not whose it was.
+  const shown = rows.filter((r) => !(r.action === 'update' && r.entity_type === 'appointment' && !apptById.has(r.entity_id)));
+  const out: LogEntry[] = shown.map((r) => {
     const undone = r.action === 'replan_undone';
     const batch = r.action === 'replan' || r.action === 'dayfix' || undone;
     let text = '';
@@ -56,7 +59,7 @@ export async function changeLog(days: number, prisma: PrismaClient): Promise<Log
       text = `${whose(r.entity_id, a)} at ${a.start_time || ''} on ${String(a.scheduled_date || '').slice(0, 10)} deleted`;
     } else if (r.action === 'update') {
       const lines = describe((r.old_value || {}) as Snap, (r.new_value || {}) as Snap);
-      text = `${whose(r.entity_id, r.old_value as Snap)}: ${lines.join('; ') || 'changed'}`;
+      text = `${whose(r.entity_id)}: ${lines.join('; ') || 'changed'}`;
     } else if (r.entity_type === 'staff') {
       // A therapist not in: what the app did with their day.
       const s = (r.new_value || {}) as ReplanSummary;
@@ -78,7 +81,7 @@ export async function changeLog(days: number, prisma: PrismaClient): Promise<Log
     };
   });
   // Undo on the newest change only, and only when it is a batch the app can put back.
-  const newest = rows[0];
+  const newest = shown[0];
   if (newest && (newest.action === 'replan' || newest.action === 'dayfix')) out[0].undo = newest.id;
   return out;
 }
