@@ -172,7 +172,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
           {noShow ? <span className="text-sm font-semibold text-destructive">Didn't come</span>
             : past ? <span className="text-sm text-muted-foreground">Finished</span>
             : now ? <span className="text-sm font-semibold text-now">In progress · {en - nowMinutes} min left</span> : null}
-          <button type="button" className="text-left text-[22px] font-semibold leading-tight disabled:opacity-100" disabled={!openResident} onClick={() => openResident?.(appt.patient_id)}>
+          <button type="button" className="block text-left text-[22px] font-semibold leading-tight disabled:opacity-100" disabled={!openResident} onClick={() => openResident?.(appt.patient_id)}>
             {who}{openResident ? <span className="ml-1 text-muted-foreground">›</span> : null}
           </button>
           <div className="text-[13px] text-muted-foreground">

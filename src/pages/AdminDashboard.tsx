@@ -509,7 +509,8 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen bg-background overflow-x-clip pb-28">
       {/* Main Content */}
-      <div className="container mx-auto px-3 md:px-4 py-3 md:py-6">
+      {/* The phone design widened on a desktop, never a second layout (#67): one centred column. */}
+      <div className="mx-auto w-full max-w-4xl px-3 md:px-4 py-3 md:py-6">
         {activeTab !== 'schedule' ? (
           <button type="button" className="mb-2 h-11 text-base font-semibold text-primary" onClick={() => go('schedule')}>‹ The day</button>
         ) : null}
