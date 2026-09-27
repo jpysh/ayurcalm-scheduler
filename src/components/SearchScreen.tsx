@@ -124,7 +124,7 @@ export function SearchScreen({ query, setQuery, today, nowMinutes, residents, th
                         <span className={`text-[16px] ${p ? "text-muted-foreground font-medium" : "font-semibold"}`}>
                           {h.status === "no_show" ? <s>{marked(h.patient_name, q)}</s> : marked(h.patient_name, q)}
                         </span>
-                        <span className="ml-auto pt-0.5 text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1"><DoorClosed className="h-3 w-3" aria-hidden />{marked(h.room_name || "No room", q)}</span>
+                        <span className="ml-auto pt-0.5 text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1"><DoorClosed className="h-3 w-3" aria-hidden /><span>{marked(h.room_name || "No room", q)}</span></span>
                       </span>
                       <span className="block text-[13px] text-muted-foreground">
                         {marked(h.therapy_name, q)} · {others.length ? <>with {others.map((n, i) => <span key={i}>{i ? " & " : ""}{marked(n, q)}</span>)}</> : "no therapist"}
