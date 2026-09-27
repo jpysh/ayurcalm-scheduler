@@ -25,7 +25,8 @@ export type CardAppt = {
   notes?: string | null;
 };
 type Named = { id: string | number; name: string };
-type Choice = { label: string; hint?: string; best?: boolean; change: Record<string, unknown> };
+/** `now` is the treatment as it stands, listed first (#201). */
+type Choice = { label: string; hint?: string; best?: boolean; now?: boolean; change: Record<string, unknown> };
 type Entry = { at: string; who: string; text: string };
 type Page = "card" | "time" | "staff" | "room" | "therapy" | "note" | "wrong" | "history";
 
@@ -163,7 +164,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
   const box = "rounded-xl border px-3";
 
   const TITLES: Record<string, [string, string]> = {
-    time: [`Move ${first}'s treatment`, `Later today, with the same therapist and room. Only times where everyone stays free.`],
+    time: [`Move ${first}'s treatment`, `Times when ${first}, the therapist and a room are free.`],
     staff: ["Therapist", "Free for the whole treatment, and trained for it"],
     room: ["Room", "Free for the whole treatment, with what it needs"],
     therapy: ["Treatment", "Fits the same time, therapist and room"],
@@ -277,13 +278,20 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
         <div className="text-[13px] text-muted-foreground">{hint}</div>
         <div className={box}>
           {choices === null ? <div className="py-3 text-muted-foreground">Finding what fits…</div>
-            : choices.length === 0 ? <div className="py-3 text-muted-foreground">Nothing fits. Try Edit everything for another day.</div>
             : choices.map((c) => (
-              <button key={c.label} type="button" className={row} disabled={busy} onClick={() => apply(c.change, `${NAMES[page]} ${page === "time" ? c.label.split(" ")[0] : c.label}`)}>
+              // The current one reads at full strength, marked "✓ now", and cannot be picked (#201).
+              <button key={c.label} type="button" className={c.now ? row.replace("disabled:opacity-60", "") : row} disabled={busy || c.now}
+                onClick={() => apply(c.change, `${NAMES[page]} ${page === "time" ? c.label.replace(/ to \d\d:\d\d$/, "") : c.label}`)}>
                 <span className="flex-1">{c.label}{c.best ? <span className="ml-2 rounded-full bg-secondary px-2 py-0.5 text-xs">Suggested</span> : null}</span>
-                <span className="text-[13px] text-muted-foreground">{c.hint}</span>
+                <span className={`text-[13px] ${c.now ? "font-semibold text-primary" : "text-muted-foreground"}`}>{c.now ? "✓ now" : c.hint}</span>
               </button>
             ))}
+          {choices !== null && !choices.some((c) => !c.now) ? <div className="py-3 text-muted-foreground">Nothing else fits.</div> : null}
+          {page === "time" && choices !== null ? (
+            <button type="button" className={row} onClick={() => editAll(appt)}>
+              <span className="flex-1">Another day or time…</span><span className="text-muted-foreground">›</span>
+            </button>
+          ) : null}
         </div>
       </>
     );
