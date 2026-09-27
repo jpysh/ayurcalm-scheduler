@@ -476,7 +476,7 @@ const AdminDashboard = () => {
   useEffect(() => { const t = setInterval(() => setMinute((m) => m + 1), 60000); return () => clearInterval(t); }, []);
 
   // Each screen keeps its own state and dialogs in its own file (#147).
-  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, setShowVerify, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), openFullBooking: () => setShowAutoAssign(true), movedFrom, problems: dayCheck.problems });
+  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, setShowVerify, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), openFullBooking: () => setShowAutoAssign(true), movedFrom, problems: dayCheck.problems, showDay: (iso: string) => { setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); } });
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, isMobile, requestDelete });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, isMobile, requestDelete });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, isMobile, requestDelete });
@@ -612,6 +612,8 @@ const AdminDashboard = () => {
         setView={scheduleScreen.setView}
         query={scheduleScreen.query}
         setQuery={scheduleScreen.setQuery}
+        searching={scheduleScreen.searching}
+        setSearching={scheduleScreen.setSearching}
         // A resident with nothing booked is a rest day, not a note (#144).
         attention={{
           fix: dayCheck.problems.filter((p) => p.problem_class === 'blocking').length,

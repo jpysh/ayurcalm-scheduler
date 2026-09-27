@@ -5,7 +5,8 @@
  */
 import type { PrismaClient } from '@prisma/client';
 
-export type Hit = {
+/** The appointment as the treatment card reads it, with the names the list shows. */
+export type Hit = Record<string, unknown> & {
   id: string; date: string; start_time: string; duration_minutes: number; status: string;
   patient_name: string; therapy_name: string; room_name: string | null; staff_names: string[];
 };
@@ -35,15 +36,12 @@ export async function searchTreatments(q: string, from: Date, to: Date, prisma: 
   });
   const team = [...new Set(rows.flatMap((a) => [a.staff_id, ...a.co_staff_ids]).filter((x): x is string => Boolean(x)))];
   const names = new Map((await prisma.staff.findMany({ where: { id: { in: team } }, select: { id: true, name: true } })).map((s) => [s.id, s.name]));
-  return rows.map((a) => ({
-    id: a.id,
+  return rows.map(({ Patient, Therapy, Room, ...a }) => ({
+    ...a,
     date: a.scheduled_date.toISOString().slice(0, 10),
-    start_time: a.start_time,
-    duration_minutes: a.duration_minutes,
-    status: a.status,
-    patient_name: a.Patient.name,
-    therapy_name: a.Therapy.name,
-    room_name: a.Room?.name ?? null,
+    patient_name: Patient.name,
+    therapy_name: Therapy.name,
+    room_name: Room?.name ?? null,
     staff_names: [a.staff_id, ...a.co_staff_ids].filter((x): x is string => Boolean(x)).map((id) => names.get(id) || ''),
   }));
 }

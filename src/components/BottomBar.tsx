@@ -53,6 +53,8 @@ type Props = {
   setView: (v: "time" | "therapist" | "room" | "resident") => void;
   query: string;
   setQuery: (q: string) => void;
+  searching: boolean;
+  setSearching: (on: boolean) => void;
   /** The attention pill: what is waiting on the day, and where tapping goes. */
   attention?: { fix: number; done: number; note: number; open: () => void } | null;
 };
@@ -61,9 +63,8 @@ const label = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 const shift = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
 
-export function BottomBar({ centreName, activeTab, go, signOut, day, today, now, setDay, print, printing, book, view, setView, query, setQuery, attention }: Props) {
+export function BottomBar({ centreName, activeTab, go, signOut, day, today, now, setDay, print, printing, book, view, setView, query, setQuery, searching, setSearching, attention }: Props) {
   const [sheet, setSheet] = useState<"menu" | "day" | null>(null);
-  const [searching, setSearching] = useState(false);
   const endSearch = () => { setSearching(false); setQuery(""); };
   const diff = Math.round((Date.parse(day) - Date.parse(today)) / 86400000);
   const when = diff === 0 ? `Today · ${now}` : diff === 1 ? "Tomorrow" : diff === -1 ? "Yesterday" : diff > 0 ? `In ${diff} days` : `${-diff} days ago`;
