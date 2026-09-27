@@ -469,7 +469,7 @@ const AdminDashboard = () => {
   };
 
   // Each screen keeps its own state and dialogs in its own file (#147).
-  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, timeSlots, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, setShowVerify });
+  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, setShowVerify, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true) });
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, isMobile, requestDelete });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, isMobile, requestDelete });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, isMobile, requestDelete });
@@ -526,23 +526,6 @@ const AdminDashboard = () => {
             </div>
           );
         })}
-        {/* Only what must be fixed. A clear day shows nothing: phone space is
-            short, and notes (a resident with nothing booked) live in Verify. */}
-        {dayCheck.headline ? (
-          <div className="mb-3 md:mb-6 rounded-md border bg-card px-3 py-2">
-            {/* The worst problem by name, with the residents in it: a count tells
-               the admin to open something, a name tells them what happened. */}
-            <div className="flex flex-wrap items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              <p className="text-sm font-semibold">{dayCheck.headline}</p>
-              {/* Says what tapping gets you: the plan is ready, Accept all applies it. */}
-              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowVerify(true)}>
-                {fixReady ? `Fix · ${fixReady} ready` : 'Fix'}
-              </Button>
-            </div>
-          </div>
-        ) : null}
-
         {activeTab !== 'schedule' ? (
           <button type="button" className="mb-2 h-11 text-base font-semibold text-primary" onClick={() => go('schedule')}>‹ The day</button>
         ) : null}
@@ -618,6 +601,16 @@ const AdminDashboard = () => {
           });
         }}
         book={() => setShowAutoAssign(true)}
+        view={scheduleScreen.view}
+        setView={scheduleScreen.setView}
+        query={scheduleScreen.query}
+        setQuery={scheduleScreen.setQuery}
+        // A resident with nothing booked is a rest day, not a note (#144).
+        attention={{
+          fix: dayCheck.problems.filter((p) => p.problem_class === 'blocking').length,
+          note: dayCheck.problems.filter((p) => p.problem_class === 'worth_knowing' && p.kind !== 'IDLE_RESIDENT').length,
+          open: () => setShowVerify(true),
+        }}
       />
 
       {/* Dialogs */}

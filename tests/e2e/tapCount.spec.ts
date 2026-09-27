@@ -13,7 +13,7 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '@
  * Everything a job changes is undone, and the two days it touches are
  * compared back through the API.
  */
-const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets"]);
+const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in']);
 
 /** The design's order, which is the order the table prints in. */
 const JOBS: [string, number][] = [
@@ -21,7 +21,8 @@ const JOBS: [string, number][] = [
   ['Warning → fixed day', 2],
   ["Resident didn't come", 3],
   ['Resident late → move one treatment', 2],
-  ['Therapist not in', 2],
+  // The design's 2 assumes the day is already by therapist; from by time it is 3 (#62).
+  ['Therapist not in', 3],
   ['Room out of use', 2],
   ['Book one treatment', 2],
   ["A resident's meals today", 2],
@@ -143,9 +144,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
   const staff = (await call.get('/staff')) as { id: string; name: string; is_active: boolean }[];
   const rooms = (await call.get('/rooms')) as { id: string; name: string; is_active: boolean }[];
   const patients = (await call.get('/patients')) as { id: string; name: string }[];
-  // Someone with nothing booked that day: marking them off moves nothing, so
-  // the Undo restores everything. A room out of use only records the time off.
-  const idleTherapist = staff.find((s) => s.is_active && !booked.some((a) => a.staff_id === s.id || a.co_staff_ids?.includes(s.id)))!;
+  // A room out of use only records the time off.
   const room = rooms.find((r) => r.is_active)!;
   // Someone staying that week, so the booking has days to go to.
   const walkIn = patients.find((p) => p.id === booked[0].patient_id)!;
@@ -179,8 +178,9 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
   await signIn(page);
   try {
     await job(page, rows, 'See today at a glance', async (_tap, swipe) => {
-      const first = activePanel(page).getByRole('button', { name: /\d\d:\d\d–\d\d:\d\d/ }).first();
-      await first.waitFor();
+      // The line at now, or the first treatment on a day that has not started.
+      await activePanel(page).getByRole('button', { name: /^\d\d:\d\d/ }).first().waitFor();
+      const first = (await page.locator('#nowline').count()) ? page.locator('#nowline') : activePanel(page).getByRole('button', { name: /^\d\d:\d\d/ }).first();
       if (!(await first.evaluate((el) => el.getBoundingClientRect().top < innerHeight))) {
         swipe();
         return 'the first treatment is below the fold';
@@ -226,7 +226,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
 
     await job(page, rows, 'Warning → fixed day', async (tap) => {
       await showDay(page, today);
-      await tap(page.getByRole('button', { name: /^Fix/ }));
+      await tap(page.getByRole('button', { name: /to fix/ }));
       const verify = page.getByRole('dialog');
       await tap(verify.getByRole('button', { name: /^Accept the plan/ }));
       await expect(verify).toContainText(/changes? made/, { timeout: 20000 });
@@ -251,17 +251,16 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     // text: one treatment cannot be moved to another time (#136).
     rows.push({ job: 'Resident late → move one treatment', target: 2, taps: null, scrolls: 0, note: 'no path: the edit form cannot change the time' });
 
+    // From the day grouped by therapist (#62): the heading's "Not in".
     await job(page, rows, 'Therapist not in', async (tap) => {
       await showDay(page, day);
-      await tap(activePanel(page).getByRole('button', { name: 'Verify', exact: true }));
-      const verify = page.getByRole('dialog');
-      await tap(verify.getByRole('button', { name: 'Therapist not in' }));
-      await tap(verify.getByRole('combobox'));
-      await tap(page.getByRole('option', { name: idleTherapist.name, exact: true }));
-      await tap(verify.getByRole('button', { name: 'Move their treatments' }));
-      await expect(verify).toContainText(`${idleTherapist.name} not in`, { timeout: 20000 });
-      await verify.getByRole('button', { name: 'Undo', exact: true }).click();
-      await expect(verify).toContainText('Put back as it was.', { timeout: 20000 });
+      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: 'Therapist', exact: true }));
+      await tap(activePanel(page).getByRole('button', { name: / not in$/ }).first());
+      const note = page.locator('[data-sonner-toast]');
+      await expect(note).toContainText('not in all day', { timeout: 20000 });
+      await note.getByRole('button', { name: 'Undo' }).click();
+      await activePanel(page).getByRole('button', { name: 'Back to by time' }).click();
     });
 
     await job(page, rows, 'Room out of use', async (tap) => {

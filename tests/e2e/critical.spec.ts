@@ -224,13 +224,15 @@ test("the day's problems are named on the first screen", async ({ page, request 
     await signIn(page);
     await passSetupIfShown(page);
     await showDay(page, DAY);
-    // The line names the worst problem and the resident in it, because a count
-    // only tells the admin to open something. It comes from the same server
-    // check that refuses a booking — the header has no rules of its own.
-    await expect(page.getByText(new RegExp(`is not in on this day.*—.*${TAG} Rekha`))).toBeVisible({ timeout: 20000 });
-    // Notes (a resident with nothing booked) stay in Verify: the header is only
-    // for what must be fixed.
-    await expect(page.getByText(/nothing booked/)).toHaveCount(0);
+    // The attention pill counts what must be fixed (#62, the phone design), and
+    // one tap names it with the resident in it. The count comes from the same
+    // server check that refuses a booking — the pill has no rules of its own.
+    // A resident with nothing booked is a rest day, not a note.
+    const pill = page.getByRole('button', { name: /1 to fix/ });
+    await expect(pill).toBeVisible({ timeout: 20000 });
+    await expect(pill).not.toContainText('note');
+    await pill.click();
+    await expect(page.getByRole('dialog')).toContainText(`${TAG} Rekha`, { timeout: 20000 });
   } finally {
     await tidy();
   }
