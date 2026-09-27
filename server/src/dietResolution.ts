@@ -34,8 +34,6 @@ export type ResolveDietInput = {
   hasTherapyToday: boolean;
   /** Which meals the sheet has a column for; the rest go to the notes. */
   mealsWithColumn: Set<MealKey>;
-  /** The free-text field on the patient, used only when nothing else applies. */
-  freeText?: string | null;
   /** Names a bespoke plan that follows no template. */
   segmentLabel?: string | null;
 };
@@ -85,9 +83,6 @@ export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
     ? [field('pre_therapy_notes'), field('post_therapy_notes')].filter(Boolean).join('; ')
     : '';
 
-  const free = (input.freeText || '').trim();
-  if (free && Object.keys(meals).length === 0) noteParts.unshift(free);
-
   const label = (template?.name || input.segmentLabel || '').toString();
   const notes = noteParts.join('; ');
   return {
@@ -127,7 +122,7 @@ export async function loadDietsForDay(day: Date, prisma: PrismaClient) {
   }
   // Meals no longer take columns on the sheet, so every meal resolves as text.
   const mealsWithColumn = new Set<MealKey>();
-  const dietFor = (patient: { id: string; diet_plan: string | null }, hasTherapyToday: boolean) => {
+  const dietFor = (patient: { id: string }, hasTherapyToday: boolean) => {
     const seg = segmentByPatient.get(patient.id);
     return resolveDiet({
       template: seg?.Template ?? null,
@@ -135,7 +130,6 @@ export async function loadDietsForDay(day: Date, prisma: PrismaClient) {
       dayMeals: dayMealsByPatient.get(patient.id) || {},
       hasTherapyToday,
       mealsWithColumn,
-      freeText: patient.diet_plan,
       segmentLabel: seg?.template_label,
     });
   };

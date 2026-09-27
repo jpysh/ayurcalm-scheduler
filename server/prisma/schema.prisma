@@ -20,7 +20,6 @@ model Patient {
   emergency_contact String?
   emergency_phone   String?
   medical_notes     String?
-  diet_plan         String?
   created_at        DateTime  @default(now())
   /// The therapist this resident is booked with when there is a choice.
   preferred_staff_id String?

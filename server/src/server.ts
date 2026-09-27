@@ -399,7 +399,6 @@ app.post('/patients', async (req: Request, res: Response) => {
     emergency_contact: z.string().optional(),
     emergency_phone: z.string().optional(),
     medical_notes: z.string().optional(),
-    diet_plan: z.string().optional(),
     preferred_staff_id: z.string().uuid().nullable().optional(),
     requires_preferred_staff: z.boolean().optional(),
     /** Arriving and leaving. Without a stay a resident is never "in house" and never on the day sheet (#142). */
@@ -408,7 +407,7 @@ app.post('/patients', async (req: Request, res: Response) => {
     template_id: z.string().uuid().optional(),
   });
   const body = schema.parse(req.body);
-  const data: any = { name: body.name, gender: body.gender, phone: body.phone, email: body.email, emergency_contact: body.emergency_contact, emergency_phone: body.emergency_phone, medical_notes: body.medical_notes, diet_plan: body.diet_plan, preferred_staff_id: body.preferred_staff_id, requires_preferred_staff: body.requires_preferred_staff };
+  const data: any = { name: body.name, gender: body.gender, phone: body.phone, email: body.email, emergency_contact: body.emergency_contact, emergency_phone: body.emergency_phone, medical_notes: body.medical_notes, preferred_staff_id: body.preferred_staff_id, requires_preferred_staff: body.requires_preferred_staff };
   if (body.date_of_birth) data.date_of_birth = new Date(body.date_of_birth);
   // One save: the resident, their stay and their diet plan, or none of them.
   const p = await prisma.$transaction(async (tx) => {
@@ -434,7 +433,6 @@ app.put('/patients/:id', async (req: Request, res: Response) => {
     emergency_contact: z.string().optional(),
     emergency_phone: z.string().optional(),
     medical_notes: z.string().optional(),
-    diet_plan: z.string().optional(),
     preferred_staff_id: z.string().uuid().nullable().optional(),
     requires_preferred_staff: z.boolean().optional(),
   });

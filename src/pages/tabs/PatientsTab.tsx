@@ -18,7 +18,7 @@ import DayDietDialog from "./DayDietDialog";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiDietPlan, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 // removed dialog import to avoid dev parse error
 
-type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; dietPlan?: string; preferredStaffId?: string | null; requiresPreferredStaff?: boolean };
+type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; preferredStaffId?: string | null; requiresPreferredStaff?: boolean };
 
 /** "26 Sep": a stay is whole days, so no time. */
 const stayDay = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '');
@@ -159,7 +159,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const toRow = (c: any): PatientRow => ({
     id: c.id, name: c.name, phone: c.phone || '', email: c.email || '',
     gender: c.gender === 'male' ? 'Male' : c.gender === 'female' ? 'Female' : 'Other',
-    dob: '', emergencyContact: '', emergencyPhone: '', address: '', medicalNotes: c.medical_notes || '', dietPlan: c.diet_plan || '',
+    dob: '', emergencyContact: '', emergencyPhone: '', address: '', medicalNotes: c.medical_notes || '',
     actualStart: c.Stays?.[0]?.start_date || '', actualEnd: c.Stays?.[0]?.end_date || '',
   });
   const saveNewPatient = async () => {
@@ -350,8 +350,6 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
               <div className="space-y-2">
                 <Label>Medical Notes</Label>
                 <Input value={infoEditing ? (infoDraft?.medicalNotes || '') : (infoPatient.medicalNotes || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, medicalNotes: e.target.value } : prev)} />
-                <Label>Diet Plan</Label>
-                <Input value={infoEditing ? (infoDraft?.dietPlan || '') : (infoPatient.dietPlan || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, dietPlan: e.target.value } : prev)} />
                 <Label>Stay</Label>
                 {(() => {
                   const current = infoStays.find((st) => st.end_date.slice(0, 10) >= today);
@@ -407,11 +405,11 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
                     <Button onClick={async () => {
                       if (!infoDraft) return;
                       try {
-                        const payload = { phone: infoDraft.phone || undefined, email: infoDraft.email || undefined, emergency_contact: infoDraft.emergencyContact || undefined, emergency_phone: infoDraft.emergencyPhone || undefined, medical_notes: infoDraft.medicalNotes || undefined, diet_plan: infoDraft.dietPlan || undefined, date_of_birth: infoDraft.dob || undefined };
+                        const payload = { phone: infoDraft.phone || undefined, email: infoDraft.email || undefined, emergency_contact: infoDraft.emergencyContact || undefined, emergency_phone: infoDraft.emergencyPhone || undefined, medical_notes: infoDraft.medicalNotes || undefined, date_of_birth: infoDraft.dob || undefined };
                         const res = await fetch(`${API_BASE}/patients/${infoDraft.id}` , { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
                         const updated = await res.json();
-                        setPatients((prev) => prev.map((x) => x.id === infoDraft.id ? { ...x, phone: updated.phone || '', email: updated.email || '', emergencyContact: updated.emergency_contact || '', emergencyPhone: updated.emergency_phone || '', medicalNotes: updated.medical_notes || '', dietPlan: updated.diet_plan || '', dob: updated.date_of_birth ? new Date(updated.date_of_birth).toISOString().slice(0,10) : '' } : x));
-                        setInfoPatient((prev) => prev ? { ...prev, phone: updated.phone || '', email: updated.email || '', emergencyContact: updated.emergency_contact || '', emergencyPhone: updated.emergency_phone || '', medicalNotes: updated.medical_notes || '', dietPlan: updated.diet_plan || '', dob: updated.date_of_birth ? new Date(updated.date_of_birth).toISOString().slice(0,10) : '' } : prev);
+                        setPatients((prev) => prev.map((x) => x.id === infoDraft.id ? { ...x, phone: updated.phone || '', email: updated.email || '', emergencyContact: updated.emergency_contact || '', emergencyPhone: updated.emergency_phone || '', medicalNotes: updated.medical_notes || '', dob: updated.date_of_birth ? new Date(updated.date_of_birth).toISOString().slice(0,10) : '' } : x));
+                        setInfoPatient((prev) => prev ? { ...prev, phone: updated.phone || '', email: updated.email || '', emergencyContact: updated.emergency_contact || '', emergencyPhone: updated.emergency_phone || '', medicalNotes: updated.medical_notes || '', dob: updated.date_of_birth ? new Date(updated.date_of_birth).toISOString().slice(0,10) : '' } : prev);
                         toast.success('Patient updated');
                         setInfoEditing(false);
                       } catch {

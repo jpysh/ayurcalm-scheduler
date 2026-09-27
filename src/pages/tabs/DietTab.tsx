@@ -18,7 +18,7 @@ import { toOverrides, saveTemplate, loadTemplates } from "@/lib/dietPlan";
 import { API_BASE } from "@/lib/apiBase";
 import { API_TOKEN, fetchJsonWithTimeout, type Patient as ResidentRow } from "./shared";
 
-type Patient = { id: string; name: string; phone?: string; gender?: string; dietPlan?: string; actualStart?: string; actualEnd?: string };
+type Patient = { id: string; name: string; phone?: string; gender?: string; actualStart?: string; actualEnd?: string };
 type DietPlanTemplate = {
   id: string;
   name: string;
@@ -228,7 +228,7 @@ const DietTab = ({
                       <TableCell className="text-xs md:text-sm">{p.name}</TableCell>
                       <TableCell className="text-xs md:text-sm">{(() => {
                         const segs = dietSchedules[p.id] || [];
-                        if (segs.length === 0) return p.dietPlan || '—';
+                        if (segs.length === 0) return '—';
                         // Today's plan first: a resident on several over their stay is
                         // asked about for what they eat now (#137).
                         const today = new Date().toLocaleDateString('en-CA');
@@ -324,19 +324,15 @@ const DietTab = ({
                           <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={async () => {
                             if (!(await confirmSheet(`Remove ${p.name}'s diet plan?\n\nTheir per-day entries stay.`, "Remove"))) return;
                             try {
-                              // The free-text diet is emptied too: with no segment the day
-                              // sheet falls back to it, and would print stale wording.
                               const existing: { id: string }[] = await fetchJsonWithTimeout(`${API_BASE}/dietplans/segments?patient_id=${p.id}`);
                               const results = await Promise.all([
                                 ...existing.map((seg) => fetch(`${API_BASE}/dietplans/segments/${seg.id}`, { method: 'DELETE' })),
-                                fetch(`${API_BASE}/patients/${p.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ diet_plan: '' }) }),
                               ]);
                               if (results.some((r) => !r.ok)) throw new Error('clear failed');
                             } catch {
                               toast.error('Could not clear the plan — reload to see what was kept');
                               return;
                             }
-                            setPatients((prev: any[]) => prev.map((x) => x.id === p.id ? { ...x, dietPlan: '' } : x));
                             setPatientTherapyTags((prev: any) => { const next = { ...prev }; delete next[p.id]; return next; });
                             setDietSchedules((prev: any) => { const next = { ...prev }; delete next[p.id]; return next; });
                           }}>Clear</Button>
@@ -792,10 +788,6 @@ const DietTab = ({
                       if (!res.ok) throw new Error('Save failed');
                     }
                   }
-                  const firstTpl = (segs[0]?.templateId ? (dietTemplates.find((t: any) => t.id === segs[0].templateId) || null) : (addDialogSegments[0]?.customTemplate || next)) || next;
-                  const label = segs.length > 1 ? 'Multiple plans' : ((firstTpl as any)?.name || next.name);
-                  await fetch(`${API_BASE}/patients/${pid}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify({ diet_plan: label }) });
-                  setPatients((prev: any[]) => prev.map((x) => x.id === pid ? { ...x, dietPlan: label } : x));
                   setDietSchedules((prev: any) => ({
                     ...prev,
                     [pid]: datedSegs.map((s: any) => ({ start: s.start, end: s.end, templateId: s.templateId || id, therapyIds: s.therapyIds || [] })),
@@ -806,10 +798,6 @@ const DietTab = ({
                   toast.error('Failed to save segments');
                   return;
                 }
-              } else {
-                const segs = addDialogSegments.map((s: any) => ({ ...s, templateId: (s.templateId && s.templateId.length > 0) ? s.templateId : (s.customTemplate ? '' : id) }));
-                const firstTpl = (segs[0]?.templateId ? (dietTemplates.find((t: any) => t.id === segs[0].templateId) || null) : (addDialogSegments[0]?.customTemplate || next)) || next;
-                const label = segs.length > 1 ? 'Multiple plans' : ((firstTpl as any)?.name || next.name);
               }
               setShowAddDietDialog(false);
               if (addDialogPatientId) {
@@ -954,9 +942,6 @@ const DietTab = ({
                   const res = await fetch(`${API_BASE}/dietplans/segments`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
                   if (!res.ok) throw new Error('Save failed');
                 }
-                const label = segs.length > 1 ? 'Multiple plans' : (dietTemplates.find((t: any) => t.id === (segs[0]?.templateId || ''))?.name || '');
-                await fetch(`${API_BASE}/patients/${pid}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify({ diet_plan: label }) });
-                setPatients((prev: any[]) => prev.map((x) => x.id === pid ? { ...x, dietPlan: label } : x));
                 setPatientTherapyTags((prev: any) => ({ ...prev, [pid]: assignmentTherapyIds }));
                 setEditAssignmentPatientId(null);
                 toast.success('Assignment updated');
@@ -1165,70 +1150,6 @@ export function useDietScreen({ patients, setPatients, therapies, therapyNameByI
     }
   };
 
-  /** The diet dialog for one resident, from the Patients screen. */
-  const openFor = (patientId: string | number) => {
-        const pid = String(patientId);
-        setAddDialogPatientId(pid);
-        setShowAddDietDialog(true);
-        (async () => {
-          try {
-            const [stays, appts] = await Promise.all([
-              fetchJsonWithTimeout<{ start_date: string; end_date: string }[]>(`${API_BASE}/patients/${pid}/stays`),
-              fetchJsonWithTimeout<any[]>(`${API_BASE}/appointments?patient_id=${pid}`),
-            ]);
-            const listStays = Array.isArray(stays) ? stays : [];
-            setAddDialogPatientStays(listStays);
-            setAddDialogPatientAppointments(Array.isArray(appts) ? appts : []);
-            const toIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate())}`;
-            let startISO = '';
-            let endISO = '';
-            if (listStays.length > 0) {
-              startISO = listStays.map(s => s.start_date).sort()[0] || '';
-              endISO = listStays.map(s => s.end_date).sort().slice(-1)[0] || '';
-            } else {
-              const found = patients.find((x) => String(x.id) === pid);
-              startISO = (found)?.actualStart || '';
-              endISO = (found)?.actualEnd || '';
-            }
-            try {
-              const existing: any[] = await fetchJsonWithTimeout(`${API_BASE}/dietplans/segments?patient_id=${pid}`);
-              if (Array.isArray(existing) && existing.length > 0) {
-                const valid = (v: any) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
-                const segments = existing.map((x: any) => ({
-                  start: valid(x.start_date) ? x.start_date : '',
-                  end: valid(x.end_date) ? x.end_date : '',
-                  templateId: '',
-                  therapyIds: Array.isArray(x.therapy_ids) ? x.therapy_ids.map(String) : [],
-                  expanded: false,
-                  locked: true,
-                  saveAsTemplate: false,
-                  customTemplate: x.template ? {
-                    name: x.template.name || x.template_label || '',
-                    description: x.template.description || '',
-                    breakfast: x.template.breakfast || '',
-                    lunch: x.template.lunch || '',
-                    dinner: x.template.dinner || '',
-                    snacks: x.template.snacks || '',
-                    medication: x.template.medication || '',
-                  } : (x.template_label ? { name: x.template_label } : undefined),
-                }));
-                setAddDialogSegments(segments);
-              } else {
-                const segStart = startISO ? toIso(new Date(startISO)) : '';
-                const segEnd = endISO ? toIso(new Date(endISO)) : '';
-                setAddDialogSegments([{ start: segStart, end: segEnd, templateId: '', therapyIds: [], expanded: false, locked: true, saveAsTemplate: false }]);
-              }
-            } catch {
-              const segStart = startISO ? toIso(new Date(startISO)) : '';
-              const segEnd = endISO ? toIso(new Date(endISO)) : '';
-              setAddDialogSegments([{ start: segStart, end: segEnd, templateId: '', therapyIds: [], expanded: false, locked: true, saveAsTemplate: false }]);
-            }
-          } catch {
-            setAddDialogPatientStays([]);
-            setAddDialogPatientAppointments([]);
-          }
-        })();
-  };
   const tab = (
             <DietTab
               patients={residentIds ? patients.filter((p) => residentIds.has(String(p.id))) : patients}
@@ -1396,5 +1317,5 @@ export function useDietScreen({ patients, setPatients, therapies, therapyNameByI
     </Dialog>
   );
 
-  return { tab, dialogs, openFor };
+  return { tab, dialogs };
 }

@@ -31,7 +31,7 @@ interface Appointment {
     emergencyPhone: string;
     address: string;
     medicalNotes: string;
-    dietPlan: string;
+   
   };
 }
 
@@ -375,7 +375,6 @@ export const AppointmentDialog = ({ appointment, open, onOpenChange, onOpenAssig
                 <div><span className="text-muted-foreground">Emergency Phone:</span> {(isEditing ? selectedPatient?.emergencyPhone : appointment.patientDetails?.emergencyPhone) || ""}</div>
                 <div className="md:col-span-2"><span className="text-muted-foreground">Address:</span> {(isEditing ? selectedPatient?.address : appointment.patientDetails?.address) || ""}</div>
                 <div className="md:col-span-2"><span className="text-muted-foreground">Medical Notes:</span> {(isEditing ? selectedPatient?.medicalNotes : appointment.patientDetails?.medicalNotes) || ""}</div>
-                <div className="md:col-span-2"><span className="text-muted-foreground">Diet Plan:</span> {(isEditing ? selectedPatient?.dietPlan : appointment.patientDetails?.dietPlan) || ""}</div>
               </div>
             </div>
           )}
