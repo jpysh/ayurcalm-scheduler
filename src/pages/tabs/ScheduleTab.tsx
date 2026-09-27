@@ -4,6 +4,15 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 
+// A problem on a row, in a few words: the pill's sheet says the rest.
+const SHORT: Record<string, string> = {
+  STAFF_OFF: "Therapist not in", ROOM_OFF: "Room out of use", STAFF_BUSY: "Therapist booked twice", STAFF_IN_EVENT: "Therapist in an event",
+  GENDER_MISMATCH: "Therapist must match", STAFF_SHORT: "Needs 2 therapists", PATIENT_BUSY: "Resident booked twice",
+  ROOM_BUSY: "Room booked twice", AMENITIES_MISSING: "Room lacks what it needs", NO_THERAPIST: "Needs a therapist", EVENT_OVERLAP: "Runs through an event",
+};
+const flagsFor = (problems: { appointment_id: string | null; kind: string; problem_class: string }[]) =>
+  Object.fromEntries(problems.filter((p) => p.appointment_id).map((p) => [p.appointment_id!, { text: SHORT[p.kind] || "Needs a look", blocking: p.problem_class === "blocking" }]));
+
 /** Minutes past midnight now, on the centre's clock. */
 const nowInTZ = (timeZone: string) => {
   try {
@@ -15,7 +24,7 @@ const nowInTZ = (timeZone: string) => {
 };
 
 /** The Schedule screen, and the day sheets the bottom bar prints for the day it is on. */
-export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, setShowVerify, closingTime, refreshDay, openFullBooking }: Record<string, any>) {
+export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, closingTime, refreshDay, openFullBooking, movedFrom, problems }: Record<string, any>) {
   const [view, setView] = useState<DayView>("time");
   const [query, setQuery] = useState("");
   const [card, setCard] = useState<CardAppt | null>(null);
@@ -103,7 +112,9 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
       therapyNameById={therapyNameById}
       onOpen={setCard}
       onNotIn={notIn}
-      headerAction={<button type="button" className="min-h-9 px-2 font-semibold text-primary" onClick={() => setShowVerify(true)}>Verify</button>}
+      movedFrom={movedFrom}
+      roomCount={roomsList.filter((r: { is_active?: boolean }) => r.is_active !== false).length}
+      flags={flagsFor(problems || [])}
     />
   );
 

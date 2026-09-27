@@ -468,8 +468,15 @@ const AdminDashboard = () => {
     window.scrollTo(0, 0);
   };
 
+  // Treatments the app moved off an absent therapist, for the list's "Was X's".
+  const movedFrom = useMemo(() => Object.fromEntries(visibleReplans.flatMap((b) => b.moved.map((m) => [m.appointment_id, m.from.staff_name]))), [visibleReplans]);
+  // The day is read against the clock: a redraw each minute moves the line
+  // at now and the bar's time. Nothing is fetched.
+  const [, setMinute] = useState(0);
+  useEffect(() => { const t = setInterval(() => setMinute((m) => m + 1), 60000); return () => clearInterval(t); }, []);
+
   // Each screen keeps its own state and dialogs in its own file (#147).
-  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, setShowVerify, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), openFullBooking: () => setShowAutoAssign(true) });
+  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, setShowVerify, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), openFullBooking: () => setShowAutoAssign(true), movedFrom, problems: dayCheck.problems });
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, isMobile, requestDelete });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, isMobile, requestDelete });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, isMobile, requestDelete });
@@ -608,6 +615,8 @@ const AdminDashboard = () => {
         // A resident with nothing booked is a rest day, not a note (#144).
         attention={{
           fix: dayCheck.problems.filter((p) => p.problem_class === 'blocking').length,
+          // What the app already fixed for the admin: a therapist's day moved.
+          done: visibleReplans.length,
           note: dayCheck.problems.filter((p) => p.problem_class === 'worth_knowing' && p.kind !== 'IDLE_RESIDENT').length,
           open: () => setShowVerify(true),
         }}

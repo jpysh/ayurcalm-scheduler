@@ -54,7 +54,7 @@ type Props = {
   query: string;
   setQuery: (q: string) => void;
   /** The attention pill: what is waiting on the day, and where tapping goes. */
-  attention?: { fix: number; note: number; open: () => void } | null;
+  attention?: { fix: number; done: number; note: number; open: () => void } | null;
 };
 
 const label = (iso: string) =>
@@ -72,10 +72,11 @@ export function BottomBar({ centreName, activeTab, go, signOut, day, today, now,
 
   return (
     <>
-      {attention && (attention.fix || attention.note) && activeTab === "schedule" && !searching ? (
+      {attention && (attention.fix || attention.done || attention.note) && activeTab === "schedule" && !searching ? (
         <button type="button" onClick={attention.open}
           className="fixed left-1/2 -translate-x-1/2 bottom-[calc(80px+env(safe-area-inset-bottom))] z-40 flex items-center gap-3 min-h-10 px-3.5 rounded-full border bg-card text-sm font-semibold shadow-lg whitespace-nowrap after:content-['›'] after:text-lg after:text-muted-foreground after:-ml-1">
           {attention.fix ? <span className="inline-flex items-center"><i className="mr-1.5 h-2 w-2 rounded-full bg-destructive" />{attention.fix} to fix</span> : null}
+          {attention.done ? <span className="inline-flex items-center"><i className="mr-1.5 h-2 w-2 rounded-full bg-warning" />{attention.done} done</span> : null}
           {attention.note ? <span className="inline-flex items-center"><i className="mr-1.5 h-2 w-2 rounded-full bg-muted-foreground/60" />{attention.note} note</span> : null}
         </button>
       ) : null}
