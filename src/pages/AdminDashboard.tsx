@@ -19,7 +19,6 @@ import { usePatientsScreen } from "./tabs/PatientsTab";
 import { useScheduleScreen } from "./tabs/ScheduleTab";
 import Settings from "./Settings";
 import { API_BASE } from "@/lib/apiBase";
-import { useCentreName } from "@/lib/centreName";
 import { fetchJsonWithTimeout, API_TOKEN, type ApiAppointment, type ApiProgramEvent, type Patient, type UiRoom, type UiStaff, type UiTherapy, type UiTimeOff } from "./tabs/shared";
 
 /** Builds the schedule's time rows from the centre's opening hours. */
@@ -433,7 +432,6 @@ const AdminDashboard = () => {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const centreName = useCentreName();
   useServerHealth(API_BASE);
   useEffect(() => {
     const segs = location.pathname.split('/').filter(Boolean);
@@ -498,6 +496,12 @@ const AdminDashboard = () => {
   }, [activeTab, isMobile]);
 
 
+  const signOut = () => {
+    localStorage.removeItem("authRole");
+    toast.success("Signed out");
+    navigate("/login");
+  };
+
   return (
     <div className="min-h-screen bg-background overflow-x-clip pb-28">
       {/* Main Content */}
@@ -545,7 +549,7 @@ const AdminDashboard = () => {
           </TabsContent>
 
           <TabsContent value="settings" data-testid="tabpanel-settings">
-            <Settings />
+            <Settings signOut={signOut} />
           </TabsContent>
 
           <TabsContent value="diet" className="space-y-6" forceMount>
@@ -560,14 +564,8 @@ const AdminDashboard = () => {
       </div>
 
       <BottomBar
-        centreName={centreName}
         activeTab={activeTab}
         go={go}
-        signOut={() => {
-          localStorage.removeItem("authRole");
-          toast.success("Signed out");
-          navigate("/login");
-        }}
         day={dayKeyMemo}
         today={ymdInTZ(new Date())}
         now={new Date().toLocaleTimeString("en-GB", { timeZone: ADMIN_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}

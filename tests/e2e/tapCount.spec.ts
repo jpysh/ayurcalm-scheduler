@@ -91,7 +91,7 @@ async function job(page: Page, rows: Row[], name: string, walk: Walk) {
   await expect(page.locator('[data-sonner-toast]')).toHaveCount(0, { timeout: 15000 });
   if (!page.url().endsWith('/schedule')) {
     await page.getByRole('button', { name: 'Menu', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: /^The day/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /^Back to the day/ }).click();
     await expect(page).toHaveURL(/\/schedule$/);
   }
 
