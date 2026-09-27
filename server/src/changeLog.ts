@@ -56,7 +56,7 @@ export async function changeLog(days: number, prisma: PrismaClient): Promise<Log
       text = `${whose(r.entity_id, a)} at ${a.start_time || ''} on ${String(a.scheduled_date || '').slice(0, 10)} deleted`;
     } else if (r.action === 'update') {
       const lines = describe((r.old_value || {}) as Snap, (r.new_value || {}) as Snap);
-      text = `${whose(r.entity_id)}: ${lines.join('; ') || 'changed'}`;
+      text = `${whose(r.entity_id, r.old_value as Snap)}: ${lines.join('; ') || 'changed'}`;
     } else if (r.entity_type === 'staff') {
       // A therapist not in: what the app did with their day.
       const s = (r.new_value || {}) as ReplanSummary;

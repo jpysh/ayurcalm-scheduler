@@ -80,7 +80,11 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
     await openTab(page, tab);
     await expect(activePanel(page)).toContainText(text, { timeout: 15000 });
   }
-  // A seeded install has residents in house, and one opens on a card with
+  // The Log opens from Settings with the demo's own changes in words (#130).
+  await openTab(page, 'Settings');
+  await activePanel(page).getByRole('button', { name: /^Log Everything/ }).click();
+  await expect(activePanel(page)).toContainText(/Today|Yesterday/, { timeout: 15000 });
+    // A seeded install has residents in house, and one opens on a card with
   // today's meals (#63); an empty list means the API is not answering.
   await openTab(page, 'Residents');
   const resident = activePanel(page).getByRole('button', { name: / · day \d+ of \d+$/ });
