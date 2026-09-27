@@ -13,14 +13,15 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '@
  * Everything a job changes is undone, and the two days it touches are
  * compared back through the API.
  */
-const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in']);
+const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Resident didn't come", 'Resident late → move one treatment', 'Book one treatment']);
 
 /** The design's order, which is the order the table prints in. */
 const JOBS: [string, number][] = [
   ['See today at a glance', 0],
   ['Warning → fixed day', 2],
   ["Resident didn't come", 3],
-  ['Resident late → move one treatment', 2],
+  // Row, When, a time: the design's 2 starts from the card already open (#136).
+  ['Resident late → move one treatment', 3],
   // The design's 2 assumes the day is already by therapist; from by time it is 3 (#62).
   ['Therapist not in', 3],
   ['Room out of use', 2],
@@ -140,14 +141,10 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
   }
   expect(day, 'no working day in the next week to walk the jobs on').not.toBe('');
   const before = { today: await snapshot(call, today), day: await snapshot(call, day) };
-  const booked = (await call.get(`/appointments?date=${day}`)) as { staff_id: string | null; co_staff_ids?: string[]; room_id: string | null; patient_id: string }[];
   const staff = (await call.get('/staff')) as { id: string; name: string; is_active: boolean }[];
   const rooms = (await call.get('/rooms')) as { id: string; name: string; is_active: boolean }[];
-  const patients = (await call.get('/patients')) as { id: string; name: string }[];
   // A room out of use only records the time off.
   const room = rooms.find((r) => r.is_active)!;
-  // Someone staying that week, so the booking has days to go to.
-  const walkIn = patients.find((p) => p.id === booked[0].patient_id)!;
 
   // Whatever a job leaves behind, even one that broke halfway, is put back
   // through the API before the days are compared.
@@ -160,17 +157,20 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
   page.on('request', (req) => {
     if (req.url().includes('/replan/undo')) accepted.delete(JSON.parse(req.postData() || '{}').batch_id);
   });
-  const rowsOf = async (d: string) => (await call.get(`/appointments?date=${d}`)) as { id: string; status: string; notes: string | null }[];
+  const rowsOf = async (d: string) => (await call.get(`/appointments?date=${d}`)) as { id: string; status: string; notes: string | null; start_time: string; staff_id: string | null; room_id: string | null }[];
   const beforeRows = [...await rowsOf(today), ...await rowsOf(day)];
-  const walkInBefore = new Set(((await call.get(`/appointments?patient_id=${walkIn.id}`)) as { id: string }[]).map((a) => a.id));
   const restore = async () => {
     for (const batch of accepted) await call.post('/replan/undo', { batch_id: batch });
     for (const h of (await call.get('/timeoff')) as { id: string }[]) if (!before.day.off.includes(String(h.id))) await call.del(`/timeoff/${h.id}`);
-    for (const a of (await call.get(`/appointments?patient_id=${walkIn.id}`)) as { id: string }[]) if (!walkInBefore.has(a.id)) await call.del(`/appointments/${a.id}`);
+    // A booking the walk made, and any treatment it changed, put back.
+    const was = new Set(beforeRows.map((a) => a.id));
     const now = new Map([...await rowsOf(today), ...await rowsOf(day)].map((a) => [a.id, a]));
+    for (const a of now.values()) if (!was.has(a.id)) await call.del(`/appointments/${a.id}`);
     for (const a of beforeRows) {
       const n = now.get(a.id);
-      if (n && (n.status !== a.status || n.notes !== a.notes)) await call.put(`/appointments/${a.id}`, { status: a.status, notes: a.notes ?? '' });
+      if (n && (n.status !== a.status || n.notes !== a.notes || n.start_time !== a.start_time || n.staff_id !== a.staff_id || n.room_id !== a.room_id)) {
+        await call.put(`/appointments/${a.id}`, { status: a.status, notes: a.notes ?? '', start_time: a.start_time, staff_id: a.staff_id, room_id: a.room_id });
+      }
     }
   };
 
@@ -206,22 +206,14 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       return 'the therapist rota is a second tap, on the note that follows';
     });
 
+    // + offers the server's next free time for the residents furthest behind (#136).
     await job(page, rows, 'Book one treatment', async (tap) => {
+      await showDay(page, day);
       await tap(page.getByRole('button', { name: 'Book a treatment' }));
-      await page.getByLabel('Start Date').fill(day);
-      await page.getByLabel('End Date').fill(ymd(new Date(Date.parse(day) + 7 * 86400000)));
-      await tap(page.getByRole('button', { name: 'Select patient' }));
-      await page.getByPlaceholder('Search patient').fill(walkIn.name);
-      await tap(page.getByRole('option').first());
-      await tap(page.getByRole('button', { name: /Select therapy/i }));
-      await page.getByPlaceholder(/Search therapy/i).fill('Abhyanga');
-      await tap(page.getByRole('option').first());
-      await tap(page.getByRole('button', { name: 'Auto-Assign' }));
-      await expect(page.getByText(/suggested slot/)).toBeVisible({ timeout: 20000 });
-      await tap(page.getByText(/^Option 1$/));
-      await tap(page.getByRole('button', { name: 'Confirm Selected Slot' }));
-      await expect(page.getByText('Selected slot confirmed')).toBeVisible({ timeout: 20000 });
-      return '+ typing the resident and the therapy';
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Book / }));
+      const note = page.locator('[data-sonner-toast]').filter({ hasText: /^Booked/ });
+      await expect(note).toBeVisible({ timeout: 20000 });
+      await note.getByRole('button', { name: 'Undo' }).click();
     });
 
     await job(page, rows, 'Warning → fixed day', async (tap) => {
@@ -234,24 +226,29 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await expect(verify).toContainText('Put back as it was.', { timeout: 20000 });
     });
 
+    // The treatment card (#136): a treatment still to come on the walk's day.
+    const upcoming = () => activePanel(page).getByRole('button', { name: /^\d\d:\d\d/ }).first();
     await job(page, rows, "Resident didn't come", async (tap) => {
       await showDay(page, day);
-      await tap(activePanel(page).getByRole('button', { name: 'Verify', exact: true }));
-      const verify = page.getByRole('dialog');
-      await tap(verify.getByRole('button', { name: "Resident didn't come" }));
-      await tap(verify.getByRole('combobox'));
-      await tap(page.getByRole('option').first());
-      await tap(verify.getByRole('button', { name: 'Mark as no-show' }));
-      await expect(verify).toContainText('marked as no-show', { timeout: 20000 });
-      await verify.getByRole('button', { name: 'Undo', exact: true }).click();
-      await expect(verify).toContainText('Put back as it was.', { timeout: 20000 });
+      await tap(upcoming());
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Something wrong/ }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /didn't come$/ }));
+      const note = page.locator('[data-sonner-toast]').filter({ hasText: "didn't come" });
+      await expect(note).toBeVisible({ timeout: 20000 });
+      await note.getByRole('button', { name: 'Undo' }).click();
     });
 
-    // A treatment's card offers Edit, and the edit form shows the time as
-    // text: one treatment cannot be moved to another time (#136).
-    rows.push({ job: 'Resident late → move one treatment', target: 2, taps: null, scrolls: 0, note: 'no path: the edit form cannot change the time' });
+    await job(page, rows, 'Resident late → move one treatment', async (tap) => {
+      await showDay(page, day);
+      await tap(upcoming());
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^When/ }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /Suggested/ }));
+      const note = page.locator('[data-sonner-toast]').filter({ hasText: 'Moved to' });
+      await expect(note).toBeVisible({ timeout: 20000 });
+      await note.getByRole('button', { name: 'Undo' }).click();
+      return 'the design counts the card as open';
+    });
 
-    // From the day grouped by therapist (#62): the heading's "Not in".
     await job(page, rows, 'Therapist not in', async (tap) => {
       await showDay(page, day);
       await tap(page.getByRole('button', { name: 'Menu', exact: true }));

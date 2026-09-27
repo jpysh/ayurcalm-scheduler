@@ -34,6 +34,8 @@ services:
       # Set to true only when Cloudflare is in front, so the rate limiter can
       # trust its cf-connecting-ip header.
       BEHIND_CLOUDFLARE: ${BEHIND_CLOUDFLARE:-}
+      # Writes per address in 5 minutes. Unset in a real install (40); qa raises it.
+      RATE_LIMIT_WRITES: ${RATE_LIMIT_WRITES:-}
       NODE_ENV: production
     ports:
       - "${APP_PORT:-8080}:4000"

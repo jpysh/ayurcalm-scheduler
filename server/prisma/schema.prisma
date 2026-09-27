@@ -214,6 +214,9 @@ enum AppointmentStatus {
   completed
   cancelled
   rescheduled
+  /// The resident did not come (#136). Frees the room and therapist like a
+  /// cancellation, but prints and counts as a no-show.
+  no_show
 }
 
 enum AssignmentType {

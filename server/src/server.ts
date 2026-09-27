@@ -8,6 +8,8 @@ import { findConflict, loadDay, nearestFreeTime, staffDay } from './appointmentG
 import { replanStaffDay, applyPlan, undoReplan, type Pin } from './replan.js';
 import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
 import { eventClashes, type EventRow } from './availability.js';
+import { bookingSuggestions, cardChoices } from './cardChoices.js';
+import { historyOf } from './history.js';
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:5433/ayurcalm_dev?schema=public';
@@ -488,7 +490,7 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
   const later = await prisma.patientStay.findFirst({ where: { patient_id: id, start_date: { gt: stay.end_date } }, orderBy: { start_date: 'asc' } });
   const left_over = next.end_date < stay.end_date
     ? await prisma.appointment.findMany({
-      where: { patient_id: id, status: { not: 'cancelled' }, scheduled_date: { gt: next.end_date, ...(later ? { lt: later.start_date } : {}) } },
+      where: { patient_id: id, status: { notIn: ['cancelled', 'no_show'] }, scheduled_date: { gt: next.end_date, ...(later ? { lt: later.start_date } : {}) } },
       orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }],
     })
     : [];
@@ -938,7 +940,7 @@ app.get('/program-events', async (req: Request, res: Response) => {
  */
 async function eventClashRefusal(next: EventRow, before: EventRow | null): Promise<{ error: string; clashes: unknown[] } | null> {
   const today = new Date(new Date().toDateString());
-  const appts = await prisma.appointment.findMany({ where: { scheduled_date: { gte: today }, status: { not: 'cancelled' } } });
+  const appts = await prisma.appointment.findMany({ where: { scheduled_date: { gte: today }, status: { notIn: ['cancelled', 'no_show'] } } });
   const old = new Set(before ? eventClashes(before, appts).map((a) => a.id) : []);
   const clashes = eventClashes(next, appts).filter((a) => !old.has(a.id));
   if (clashes.length === 0) return null;
@@ -1263,7 +1265,7 @@ app.put('/appointments/:id', async (req: Request, res: Response) => {
     staff_id: z.string().uuid().nullable().optional(),
     co_staff_ids: z.array(z.string().uuid()).optional(),
     room_id: z.string().uuid().nullable().optional(),
-    status: z.enum(['pending','confirmed','completed','cancelled','rescheduled']).optional(),
+    status: z.enum(['pending','confirmed','completed','cancelled','rescheduled','no_show']).optional(),
     notes: z.string().optional(),
     patient_id: z.string().uuid().optional(),
     therapy_id: z.string().uuid().optional(),
@@ -1286,7 +1288,7 @@ app.put('/appointments/:id', async (req: Request, res: Response) => {
 
   // Cancelling or completing a treatment moves nobody, so it is never refused.
   const movesIt = body.scheduled_date || body.start_time || body.duration_minutes || body.staff_id !== undefined || body.co_staff_ids !== undefined || body.room_id !== undefined;
-  if (movesIt && body.status !== 'cancelled') {
+  if (movesIt && body.status !== 'cancelled' && body.status !== 'no_show') {
     const ctx = await loadDay(candidate.scheduled_date, prisma);
     const conflict = findConflict(candidate, ctx);
     if (conflict) {
@@ -1302,7 +1304,53 @@ app.put('/appointments/:id', async (req: Request, res: Response) => {
       scheduled_date: body.scheduled_date ? new Date(body.scheduled_date) : undefined,
     },
   });
+  // What changed, for the treatment's History (#136): only the fields sent.
+  const before = Object.fromEntries(Object.keys(body).map((k) => [k, (existing as Record<string, unknown>)[k]]));
+  await prisma.auditLog.create({ data: { admin_id: 'admin', action: 'update', entity_type: 'appointment', entity_id: id, old_value: before as Prisma.InputJsonValue, new_value: body as Prisma.InputJsonValue } });
   res.json(appt);
+});
+
+// The treatment card's lists: what this treatment could change to, each option
+// already through the booking guard (#136).
+app.get('/appointments/:id/choices', async (req: Request, res: Response) => {
+  const kind = z.enum(['time', 'staff', 'room', 'therapy']).parse(req.query.kind);
+  const now = typeof req.query.now === 'string' && /^\d\d:\d\d$/.test(req.query.now) ? Number(req.query.now.slice(0, 2)) * 60 + Number(req.query.now.slice(3)) : null;
+  const choices = await cardChoices(req.params.id, kind, now, prisma);
+  if (!choices) { res.status(404).json({ error: 'Appointment not found' }); return; }
+  res.json({ choices });
+});
+
+// The + button's suggestions: who to book next, when, with whom, where (#136).
+app.get('/appointments/suggest', async (req: Request, res: Response) => {
+  const date = String(req.query.date || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { res.status(400).json({ error: 'date required' }); return; }
+  const now = typeof req.query.now === 'string' && /^\d\d:\d\d$/.test(req.query.now) ? Number(req.query.now.slice(0, 2)) * 60 + Number(req.query.now.slice(3)) : null;
+  res.json({ suggestions: await bookingSuggestions(date, now, prisma) });
+});
+
+// Book one treatment at an exact time, therapist and room: what the + sheet
+// offered. Put through the same guard as every edit, so it saves only if it fits.
+app.post('/appointments/one', async (req: Request, res: Response) => {
+  const b = z.object({
+    patient_id: z.string().uuid(), therapy_id: z.string().uuid(), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    start_time: z.string().regex(/^\d\d:\d\d$/), staff_id: z.string().uuid(), room_id: z.string().uuid(),
+  }).parse(req.body);
+  const therapy = await prisma.therapy.findUnique({ where: { id: b.therapy_id } });
+  if (!therapy) { res.status(404).json({ error: 'Therapy not found' }); return; }
+  const scheduled_date = new Date(`${b.date}T00:00:00.000Z`);
+  const stay = await prisma.patientStay.findFirst({ where: { patient_id: b.patient_id, start_date: { lte: scheduled_date }, end_date: { gte: scheduled_date } } });
+  if (!stay) { res.status(409).json({ reason: 'NOT_STAYING', message: 'This resident is not staying on that day.' }); return; }
+  const candidate = { scheduled_date, start_time: b.start_time, duration_minutes: therapy.duration_minutes, staff_id: b.staff_id, co_staff_ids: [], room_id: b.room_id, patient_id: b.patient_id, therapy_id: b.therapy_id };
+  const conflict = findConflict(candidate, await loadDay(scheduled_date, prisma));
+  if (conflict) { res.status(409).json(conflict); return; }
+  const appt = await prisma.appointment.create({ data: { ...candidate, session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
+  res.status(201).json(appt);
+});
+
+app.get('/appointments/:id/history', async (req: Request, res: Response) => {
+  const entries = await historyOf(req.params.id, prisma);
+  if (!entries) { res.status(404).json({ error: 'Appointment not found' }); return; }
+  res.json({ entries });
 });
 
 app.delete('/appointments/:id', async (req: Request, res: Response) => {

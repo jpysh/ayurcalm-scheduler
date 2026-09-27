@@ -30,7 +30,7 @@ const minutesToTime = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '
 /** Everything a day's worth of checks needs, read once. */
 export async function loadDay(day: Date, prisma: PrismaClient) {
   const [appointments, timeOff, events, staff, rooms, settings, patients, therapies] = await Promise.all([
-    prisma.appointment.findMany({ where: { scheduled_date: day, status: { not: 'cancelled' } } }),
+    prisma.appointment.findMany({ where: { scheduled_date: day, status: { notIn: ['cancelled', 'no_show'] } } }),
     prisma.timeOff.findMany(),
     prisma.programEvent.findMany() as unknown as Promise<EventRow[]>,
     prisma.staff.findMany(),

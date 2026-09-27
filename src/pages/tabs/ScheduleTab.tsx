@@ -1,4 +1,5 @@
 import DayList, { type DayView } from "@/components/DayList";
+import { BookSheet, TreatmentCard, type CardAppt } from "@/components/TreatmentCard";
 import { useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
@@ -14,9 +15,11 @@ const nowInTZ = (timeZone: string) => {
 };
 
 /** The Schedule screen, and the day sheets the bottom bar prints for the day it is on. */
-export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, setShowVerify, closingTime, refreshDay }: Record<string, any>) {
+export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, setShowVerify, closingTime, refreshDay, openFullBooking }: Record<string, any>) {
   const [view, setView] = useState<DayView>("time");
   const [query, setQuery] = useState("");
+  const [card, setCard] = useState<CardAppt | null>(null);
+  const [booking, setBooking] = useState(false);
   const [pdfLoading, setPdfLoading] = useState<'patient' | 'therapist' | null>(null);
   // Two sheets off the same day: the patient one for the notice board, the
   // therapist rota for the treatment team.
@@ -65,24 +68,25 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
     });
   };
 
-  // "Not in from now" on a therapist's heading: the same time off Verify
-  // records, so the server moves their treatments at once; Undo removes it.
-  const notIn = async (staffId: string, name: string) => {
-    // Today, from now; any other day, the whole day.
+  // "Not in from now" (a therapist) and "out of use from now" (a room): the
+  // same time off Verify records, so the server moves the treatments at once;
+  // Undo removes it. Today from now, any other day the whole day.
+  const takeOut = async (entity_type: "staff" | "room", id: string, name: string) => {
     const from = isToday ? `${String(Math.floor(now / 60)).padStart(2, "0")}:${String(now % 60).padStart(2, "0")}` : null;
     const res = await fetch(`${API_BASE}/timeoff`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entity_type: "staff", entity_id: staffId, date: dayKeyMemo, start_time: from, end_time: from ? closingTime : null, description: "Not in" }),
+      body: JSON.stringify({ entity_type, entity_id: id, date: dayKeyMemo, start_time: from, end_time: from ? closingTime : null, description: entity_type === "staff" ? "Not in" : "Out of use" }),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) { toast.error(body.error || "That could not be saved."); return; }
     await refreshDay(dayKeyMemo);
     const moved = (body.replan || []).reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0);
-    toast(`${name} not in ${from ? `from ${from}` : "all day"}${moved ? ` · ${moved} moved` : ""}`, {
+    toast(`${name} ${entity_type === "staff" ? "not in" : "out of use"} ${from ? `from ${from}` : "all day"}${moved ? ` · ${moved} moved` : ""}`, {
       duration: 8000,
       action: { label: "Undo", onClick: async () => { await fetch(`${API_BASE}/timeoff/${body.id}`, { method: "DELETE" }); await refreshDay(dayKeyMemo); } },
     });
   };
+  const notIn = (staffId: string, name: string) => takeOut("staff", staffId, name);
 
   // The day, the print buttons, booking and search are on the bottom bar (#66, #62).
   const tab = (
@@ -97,11 +101,33 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
       roomsList={roomsList}
       staff={staff}
       therapyNameById={therapyNameById}
-      onOpen={openEdit}
+      onOpen={setCard}
       onNotIn={notIn}
       headerAction={<button type="button" className="min-h-9 px-2 font-semibold text-primary" onClick={() => setShowVerify(true)}>Verify</button>}
     />
   );
 
-  return { tab, printSheet, pdfLoading, view, setView, query, setQuery };
+  const cardSheet = (
+    <TreatmentCard
+      appt={card}
+      onClose={() => setCard(null)}
+      isToday={isToday}
+      nowMinutes={now}
+      patients={patients}
+      staff={staff}
+      roomsList={roomsList}
+      therapyNameById={therapyNameById}
+      refresh={() => refreshDay(dayKeyMemo)}
+      staffNotIn={notIn}
+      roomOut={(id, name) => takeOut("room", id, name)}
+      editAll={(a) => { setCard(null); openEdit(a); }}
+    />
+  );
+
+  const bookSheet = (
+    <BookSheet open={booking} onClose={() => setBooking(false)} day={dayKeyMemo} isToday={isToday} nowMinutes={now}
+      refresh={() => refreshDay(dayKeyMemo)} other={openFullBooking} />
+  );
+
+  return { tab: <>{tab}{cardSheet}{bookSheet}</>, openBook: () => setBooking(true), printSheet, pdfLoading, view, setView, query, setQuery };
 }
