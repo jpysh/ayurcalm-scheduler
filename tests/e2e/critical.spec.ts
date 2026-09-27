@@ -265,3 +265,15 @@ test('search finds a resident on other days and opens the card with Show this da
   await result.click();
   await expect(page.getByRole('dialog').getByRole('button', { name: 'Show this day' })).toBeVisible();
 });
+
+test('a search match inside a room name keeps the name in one piece (#193)', async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  await page.getByRole('button', { name: 'Search treatments' }).click();
+  await page.getByPlaceholder('Name, therapy or room').fill('ra');
+  const mark = page.locator('mark').first();
+  await expect(mark).toBeVisible({ timeout: 15000 });
+  // In a flex box each highlighted piece became its own item, with a gap between: "Na ra da".
+  const parents = await page.locator('mark').evaluateAll((ms) => ms.map((m) => getComputedStyle(m.parentElement!).display));
+  expect(parents.filter((d) => d.includes('flex'))).toEqual([]);
+});
