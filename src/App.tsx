@@ -134,6 +134,7 @@ const App = () => {
               <Route path="/:username/therapies" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/:username/diet" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/:username/timeoff" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+              <Route path="/:username/team" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/:username/events" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/:username/patients" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/:username/settings" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />

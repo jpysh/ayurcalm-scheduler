@@ -37,6 +37,13 @@ async function showDay(page: Page, day: string) {
 
 /** Screens are reached from the bottom bar's menu (#66). A tap while the last screen is still loading can be lost, so retry. */
 async function openTab(page: Page, name: string) {
+  // The editors for the lists open from Team and rooms, not the menu (#137).
+  const fromTeam: Record<string, string> = { Therapists: 'Therapists', Rooms: 'Rooms', Therapies: 'Therapies', Events: 'Classes and events' };
+  if (fromTeam[name]) {
+    await openTab(page, 'Team and rooms');
+    await activePanel(page).getByRole('button', { name: fromTeam[name], exact: true }).click();
+    return;
+  }
   await expect(async () => {
     if (await page.getByRole('dialog').count() === 0) await page.getByRole('button', { name: 'Menu', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: new RegExp(`^${name}\\b`) }).click({ timeout: 1000 });
@@ -59,7 +66,8 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
   await signIn(page);
   await passSetupIfShown(page);
   for (const [tab, text] of [
-    ['Team', 'Staff Management'],
+    ['Team and rooms', 'Working today'],
+    ['Therapists', 'Staff Management'],
     ['Rooms', 'Room Management'],
     ['Therapies', 'Therapy Management'],
     ['Diet plans', 'Diet Management'],

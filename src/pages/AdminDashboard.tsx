@@ -5,6 +5,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useLocation, useNavigate } from "react-router-dom";
 import { BottomBar, SCREENS } from "@/components/BottomBar";
 import { AutoAssignDialog } from "@/components/AutoAssignDialog";
+import { TeamRooms } from "@/components/TeamRooms";
 import { AttentionSheet, type DayProblem, type ReplanBatch } from "@/components/AttentionSheet";
 import { AppointmentDialog } from "@/components/AppointmentDialog";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -512,6 +513,13 @@ const AdminDashboard = () => {
           {eventsScreen.dialogs}
 
     {dietScreen.dialogs}
+
+          <TabsContent value="team" data-testid="tabpanel-team">
+            <TeamRooms staff={staff} rooms={roomsList} today={ymdInTZ(new Date())}
+              nowHM={new Date().toLocaleTimeString("en-GB", { timeZone: ADMIN_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}
+              opening={centreHours.opening_time} closing={centreHours.closing_time}
+              refresh={() => refreshAppointmentsForDate(ymdInTZ(new Date()), true)} edit={go} />
+          </TabsContent>
 
           {/* Staff Tab */}
           <TabsContent value="staff" data-testid="tabpanel-staff">
