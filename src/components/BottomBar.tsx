@@ -23,6 +23,7 @@ export const SCREENS = [
   ["rooms", "Rooms", ""],
   ["therapies", "Therapies", ""],
   ["events", "Events", ""],
+  ["log", "Log", ""],
 ] as const;
 /** The menu's tiles, as the design (#137): the rest open from Team and rooms. */
 const MENU = SCREENS.filter(([, , hint]) => hint);

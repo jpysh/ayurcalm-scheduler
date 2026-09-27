@@ -32,7 +32,7 @@ type Settings = {
   enforce_gender_match: boolean;
 };
 
-const Settings = ({ signOut }: { signOut?: () => void }) => {
+const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => void }) => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -150,6 +150,12 @@ const Settings = ({ signOut }: { signOut?: () => void }) => {
   return (
     <div className="container mx-auto px-3 md:px-4 py-3 md:py-6 space-y-4 max-w-3xl">
       {/* Here rather than on the menu, as the design has it (#67). */}
+      {openLog ? (
+        <button type="button" className="flex min-h-12 w-full items-center rounded-2xl bg-card px-4 text-left" onClick={openLog}>
+          <span className="flex-1"><b className="block text-[16px]">Log</b><span className="block text-[13px] text-muted-foreground">Everything that changed, and who changed it</span></span>
+          <span className="text-muted-foreground">›</span>
+        </button>
+      ) : null}
       {signOut ? <Button variant="outline" className="w-full rounded-full" onClick={signOut}>Sign out</Button> : null}
       <Card>
         <CardHeader className="pb-2">
