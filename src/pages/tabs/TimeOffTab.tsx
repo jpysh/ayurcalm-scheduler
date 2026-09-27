@@ -324,7 +324,7 @@ const TimeOffTab = ({
                         </>
                       ) : (
                         <>
-                          <Button variant="outline" size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={() => startEditTimeOff(holiday)}>
+                          <Button aria-label="Edit" variant="outline" size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={() => startEditTimeOff(holiday)}>
                             <Edit className="w-2 h-2 md:w-4 md:h-4" />
                           </Button>
                           <Button variant="outline" size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={() => requestDelete('timeoff', holiday.id, holiday.description)}>
