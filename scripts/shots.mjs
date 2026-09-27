@@ -21,10 +21,16 @@ const dlg = (p) => p.getByRole('dialog').last();
 const btn = (p, name) => p.getByRole('button', { name }).first();
 const tap = async (l) => { await l.click({ timeout: 4000 }); await l.page().waitForTimeout(400); };
 const esc = async (p) => { await p.keyboard.press('Escape'); await p.waitForTimeout(300); };
-const row = (p) => p.getByRole('button', { name: /^\d\d:\d\d/ });
+// A no-show from an earlier run stays, so ordinary cards skip it and the no-show step reuses it.
+const row = (p) => p.getByRole('button', { name: /^\d\d:\d\d/ }).filter({ hasNotText: "didn't come" });
+const noshowRow = (p) => p.getByRole('button', { name: /^\d\d:\d\d/ }).filter({ hasText: "didn't come" });
 const menuTo = async (p, name) => { await tap(btn(p, /^Menu$/)); await tap(dlg(p).getByRole('button', { name })); };
 const card = async (p, pick) => { await tap(pick(row(p))); };
-const fact = (label) => async (p) => { await card(p, (r) => r.last()); await tap(dlg(p).getByRole('button', { name: label })); };
+// Cards that can still change are shot on tomorrow: late in the day every row today has finished.
+// The pill and flags are on tomorrow in the app only: the app's seeded problems are gone by evening,
+// and the design shows its pill on today alone.
+const tomorrow = async (p) => { await tap(btn(p, /^Change day/)); await tap(dlg(p).getByRole('button', { name: /^Next day/ })); };
+const fact = (label) => async (p) => { await tomorrow(p); await card(p, (r) => r.first()); await tap(dlg(p).getByRole('button', { name: label })); };
 
 // name, what to do from the day (freshly loaded), per side when they differ.
 const STEPS = [
@@ -32,10 +38,10 @@ const STEPS = [
   ['02-day-therapist', (p) => menuTo(p, /^Therapist$/)],
   ['03-day-room', (p) => menuTo(p, /^Room$/)],
   ['04-day-resident', (p) => menuTo(p, /^Resident$/)],
-  ['05-pill-sheet', (p) => tap(btn(p, /to fix|done|note/))],
-  ['06-card-plain', (p) => card(p, (r) => r.last())],
+  ['05-pill-sheet', async (p, side) => { if (side === 'app') await tomorrow(p); await tap(btn(p, /to fix|done|note/)); }],
+  ['06-card-plain', async (p) => { await tomorrow(p); await card(p, (r) => r.first()); }],
   ['07-card-finished', (p) => card(p, (r) => r.first())],
-  ['08-card-flagged', (p) => tap(p.locator('button.row[class*=" st-"], button[class*="inset_0_0_0_1.5px"]').first())],
+  ['08-card-flagged', async (p, side) => { if (side === 'app') await tomorrow(p); await tap(p.locator('button.row[class*=" st-"], button[class*="inset_0_0_0_1.5px"]').or(row(p).filter({ hasText: /Was \S+'s/ })).first()); }],
   ['09-list-when', fact(/^When/)],
   ['10-list-with', fact(/^With/)],
   ['11-list-room', fact(/^Room/)],
@@ -43,7 +49,11 @@ const STEPS = [
   ['13-list-note', fact(/^Note/)],
   ['14-list-wrong', fact(/^Something wrong/)],
   ['15-list-history', fact(/^History/)],
-  ['16-card-noshow', async (p) => { await fact(/^Something wrong/)(p); await tap(dlg(p).getByRole('button', { name: /didn't come$/ })); await card(p, (r) => r.last()); }],
+  ['16-card-noshow', async (p) => {
+    await tomorrow(p);
+    if (!(await noshowRow(p).count())) { await card(p, (r) => r.first()); await tap(dlg(p).getByRole('button', { name: /^Something wrong/ })); await tap(dlg(p).getByRole('button', { name: /didn't come$/ })); await esc(p); }
+    await tap(noshowRow(p).first());
+  }],
   ['17-search-empty', (p) => tap(btn(p, /^Search/))],
   ['18-search-results', async (p) => { await tap(btn(p, /^Search/)); await p.keyboard.type('Ra'); await p.waitForTimeout(600); }],
   ['19-menu', (p) => tap(btn(p, /^Menu$/))],
@@ -55,7 +65,7 @@ const STEPS = [
   ['25-leave', (p) => menuTo(p, /^Leave/)],
   ['26-diet', (p) => menuTo(p, /^Diet/)],
   ['27-settings', (p) => menuTo(p, /^Settings/)],
-  ['28-log', async (p) => { await menuTo(p, /^Team/); await tap(btn(p, /^Log/)); }],
+  ['28-log', async (p) => { await menuTo(p, /^Settings/); await tap(btn(p, /Log/)); }],
   ['29-date-sheet', (p) => tap(btn(p, /^Change day/))],
   ['30-toast', (p) => tap(btn(p, /^Print/))],
   ['31-book', (p) => tap(btn(p, /^Book a treatment/))],
@@ -81,10 +91,10 @@ async function side(label, base, signIn) {
     const file = `${OUT}/${name}-${label}.png`;
     try {
       await page.goto('/'); await page.waitForTimeout(900);
-      await act(page); await page.waitForTimeout(400);
+      await act(page, label); await page.waitForTimeout(400);
       await page.screenshot({ path: file });
     } catch (e) {
-      miss.push(name); if (process.env.DEBUG) console.log(name, e.message);
+      miss.push(name); if (process.env.DEBUG) console.log(name, page.url(), e.message);
       await page.setContent(`<body style="font:20px sans-serif;padding:40px;color:#b00">missing: ${name}<br><small>${String(e.message).split('\n')[0]}</small>`);
       await page.screenshot({ path: file });
     }

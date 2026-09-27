@@ -139,9 +139,10 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
   };
 
   const row = "flex w-full min-h-12 items-center gap-3 border-b border-border px-1 py-2.5 text-left text-[15px] last:border-b-0 disabled:opacity-60";
+  // A finished card still reads at full strength: it is locked, not greyed out (#193).
   const Fact = ({ label, value, onClick }: { label: string; value: ReactNode; onClick: () => void }) => (
-    <button type="button" className={row} disabled={locked || busy} onClick={onClick}>
-      <span className="w-20 flex-none text-muted-foreground">{label}</span>
+    <button type="button" className={`${row} disabled:opacity-100`} disabled={locked || busy} onClick={onClick}>
+      <span className="w-20 flex-none text-[13px] text-muted-foreground">{label}</span>
       <span className="flex-1 min-w-0">{value}</span>
       {locked ? null : <span className="text-muted-foreground">›</span>}
     </button>
@@ -169,9 +170,9 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
     body = (
       <>
         <div>
-          {noShow ? <span className="text-sm font-semibold text-destructive">Didn't come</span>
-            : past ? <span className="text-sm text-muted-foreground">Finished</span>
-            : now ? <span className="text-sm font-semibold text-now">In progress · {en - nowMinutes} min left</span> : null}
+          {noShow ? <span className="rounded-full px-2.5 py-[3px] text-xs font-bold tracking-[.03em] bg-[#FBEAE3] text-destructive">Didn't come</span>
+            : past ? <span className="rounded-full px-2.5 py-[3px] text-xs font-bold tracking-[.03em] bg-secondary text-muted-foreground">Finished</span>
+            : now ? <span className="rounded-full px-2.5 py-[3px] text-xs font-bold tracking-[.03em] bg-[#FFF4EE] text-now">In progress · {en - nowMinutes} min left</span> : null}
           <button type="button" className="block text-left text-[22px] font-semibold leading-tight disabled:opacity-100" disabled={!openResident} onClick={() => openResident?.(appt.patient_id)}>
             {who}{openResident ? <span className="ml-1 text-muted-foreground">›</span> : null}
           </button>
@@ -201,14 +202,14 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
         {locked ? null : (
           <div className={box}>
             <button type="button" className={row} onClick={() => setPage("wrong")}>
-              <span className="flex-1">Something wrong?<small className="block text-[13px] text-muted-foreground">Didn't come, running late, cancel, therapist or room</small></span>
+              <span className="flex-1 font-semibold text-destructive">Something wrong?<small className="block text-[13px] font-normal text-muted-foreground">Didn't come, running late, cancel, therapist or room</small></span>
               <span className="text-muted-foreground">›</span>
             </button>
           </div>
         )}
         <div className={box}>
           <button type="button" className={row} onClick={() => setPage("history")}>
-            <span className="w-20 flex-none text-muted-foreground">History</span>
+            <span className="w-20 flex-none text-[13px] text-muted-foreground">History</span>
             <span className="flex-1 min-w-0">{latest ? <>{latest.text}<small className="block text-[13px] text-muted-foreground">{new Date(latest.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {latest.who}</small></> : "…"}</span>
             <span className="text-muted-foreground">›</span>
           </button>
