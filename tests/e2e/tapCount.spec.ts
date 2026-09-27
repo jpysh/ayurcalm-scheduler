@@ -88,6 +88,9 @@ async function job(page: Page, rows: Row[], name: string, walk: Walk) {
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   // A note from the last job fades by itself; the admin would not be mid-note.
+  // Not while the pointer rests on it: a hovered toast never fades, which is
+  // how this wait broke on CI after a job's last tap near the bottom.
+  await page.mouse.move(0, 0);
   await expect(page.locator('[data-sonner-toast]')).toHaveCount(0, { timeout: 15000 });
   if (!page.url().endsWith('/schedule')) {
     await page.getByRole('button', { name: 'Menu', exact: true }).click();
