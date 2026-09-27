@@ -274,6 +274,10 @@ test('search finds a resident on other days and opens the card with Show this da
   await result.click();
   await expect(page.getByRole('dialog').getByRole('button', { name: 'Show this day' })).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('recentSearches') || '[]'))).toEqual([searched, 'q1', 'q2', 'q3', 'q4']);
+  // History is the design's timeline (#193): a line down the left, one dot per change.
+  await page.getByRole('dialog').getByRole('button', { name: /^History/ }).click();
+  const changes = page.getByRole('dialog').getByRole('list', { name: 'Changes' });
+  await expect(changes).toHaveCSS('border-left-width', '2px');
 });
 
 test('a search match inside a room name keeps the name in one piece (#193)', async ({ page }) => {
