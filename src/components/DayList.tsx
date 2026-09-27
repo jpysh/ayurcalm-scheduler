@@ -91,7 +91,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
     const flag = flags[r.a.id];
     const stripe = r.team.length > 1 ? `linear-gradient(${r.team[0].colour} 50%, ${r.team[1].colour} 50%)` : r.team[0]?.colour || "#8A979C";
     return (
-      <button key={`${r.a.id}-${top}`} type="button" onClick={() => onOpen(r.a)} data-now={n || undefined}
+      <button key={`${r.a.id}-${top}`} type="button" onClick={() => onOpen(r.a)} data-now={n || undefined} data-appt={r.a.id}
         className={`flex w-full gap-2.5 items-stretch min-h-[54px] py-2 pr-3 border-b border-border last:border-b-0 bg-card text-left ${flag?.blocking ? "shadow-[inset_0_0_0_1.5px_hsl(var(--destructive))]" : ""}`}>
         <span className={`w-1 rounded-r flex-none ${p ? "opacity-35" : ""}`} style={{ background: stripe }} />
         <span className={`w-12 flex-none tabular-nums text-[15px] leading-tight ${p ? "text-muted-foreground font-medium" : "font-semibold"}`}>

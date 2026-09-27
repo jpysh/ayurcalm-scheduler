@@ -13,7 +13,7 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '@
  * Everything a job changes is undone, and the two days it touches are
  * compared back through the API.
  */
-const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Resident didn't come", 'Resident late → move one treatment', 'Book one treatment', 'Room out of use']);
+const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Resident didn't come", 'Resident late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day']);
 
 /** The design's order, which is the order the table prints in. */
 const JOBS: [string, number][] = [
@@ -217,11 +217,12 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     await job(page, rows, 'Warning → fixed day', async (tap) => {
       await showDay(page, today);
       await tap(page.getByRole('button', { name: /to fix/ }));
-      const verify = page.getByRole('dialog');
-      await tap(verify.getByRole('button', { name: /^Accept the plan/ }));
-      await expect(verify).toContainText(/changes? made/, { timeout: 20000 });
-      await verify.getByRole('button', { name: 'Undo', exact: true }).click();
-      await expect(verify).toContainText('Put back as it was.', { timeout: 20000 });
+      const sheet = page.getByRole('dialog');
+      // The first action row's own button: the one that does the thing (#164).
+      await tap(sheet.locator('[data-main]').first());
+      await expect(sheet).toContainText('✓', { timeout: 20000 });
+      await sheet.getByRole('button', { name: 'Undo', exact: true }).first().click();
+      await expect(sheet).toContainText('Put back as it was.', { timeout: 20000 });
     });
 
     // The treatment card (#136): a treatment still to come on the walk's day.

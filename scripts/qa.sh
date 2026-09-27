@@ -62,10 +62,10 @@ run mcp                "Claude reads the centre only with the current key: the d
 # A browser walk, run from the checkout against the stack: it needs Chromium
 # (npx playwright install chromium) on the machine running this.
 if E2E_BASE_URL="http://localhost:$PORT" npx playwright test absenceReplan >"$log" 2>&1; then
-  echo "  PASS  In the browser: a therapist marked off shows in Verify, its plan clears the day, and Undo puts the day back"
+  echo "  PASS  In the browser: a therapist marked off shows in the pill's sheet, its fix clears the day, and Undo puts the day back"
   passed=$((passed + 1))
 else
-  echo "  FAIL  In the browser: a therapist marked off shows in Verify, its plan clears the day, and Undo puts the day back"
+  echo "  FAIL  In the browser: a therapist marked off shows in the pill's sheet, its fix clears the day, and Undo puts the day back"
   sed 's/^/        /' "$log" | tail -15
   failed=$((failed + 1))
 fi
