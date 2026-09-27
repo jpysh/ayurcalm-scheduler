@@ -4,23 +4,38 @@ import { cn } from "@/lib/utils";
 
 /**
  * A list shown as cards on a phone (`cards-sm`, #137) edits by tapping the
- * card: the tap goes to the row's own Edit button, unless it landed on a
+ * card: the tap goes to the row's own Edit button (or the one marked
+ * data-row-tap), unless it landed on a
  * control of its own (#178).
  */
 const tapCardToEdit = (e: React.MouseEvent<HTMLTableElement>) => {
   if (window.innerWidth >= 640) return;
   const target = e.target as HTMLElement;
   if (target.closest("button, a, input, select, textarea, [role=combobox], [role=checkbox]")) return;
-  target.closest("tr")?.querySelector<HTMLButtonElement>('button[aria-label="Edit"]')?.click();
+  target.closest("tr")?.querySelector<HTMLButtonElement>('button[data-row-tap], button[aria-label="Edit"]')?.click();
+};
+
+/** Each cell carries its column's name, so a card's edit sheet can label its fields (index.css). */
+const labelCells = (table: HTMLTableElement | null) => {
+  if (!table) return;
+  const names = [...table.querySelectorAll("thead th")].map((th) => th.textContent?.trim() || "");
+  table.querySelectorAll("tbody tr").forEach((tr) => [...tr.children].forEach((td, i) => { if (names[i]) td.setAttribute("data-label", names[i]); }));
 };
 
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
-  ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto">
-      <table ref={ref} className={cn("w-full caption-bottom text-sm", className)}
-        onClick={className?.includes("cards-sm") ? tapCardToEdit : undefined} {...props} />
-    </div>
-  ),
+  ({ className, ...props }, ref) => {
+    const own = React.useRef<HTMLTableElement | null>(null);
+    const cards = className?.includes("cards-sm");
+    // After every render: rows come and go with the list's filters.
+    React.useLayoutEffect(() => { if (cards) labelCells(own.current); });
+    return (
+      <div className="relative w-full overflow-auto">
+        <table ref={(el) => { own.current = el; if (typeof ref === "function") ref(el); else if (ref) ref.current = el; }}
+          className={cn("w-full caption-bottom text-sm", className)}
+          onClick={cards ? tapCardToEdit : undefined} {...props} />
+      </div>
+    );
+  },
 );
 Table.displayName = "Table";
 

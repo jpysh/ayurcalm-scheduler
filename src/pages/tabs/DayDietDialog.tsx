@@ -22,7 +22,7 @@ const localToday = () => {
  * What the physician said for one patient on one day. Each filled meal beats the
  * patient's plan on the printed sheet; emptying it hands the meal back to the plan.
  */
-export default function DayDietDialog({ patient, onClose }: { patient: { id: string; name: string } | null; onClose: () => void }) {
+export default function DayDietDialog({ patient, onClose, onChangePlan }: { patient: { id: string; name: string } | null; onClose: () => void; onChangePlan?: () => void }) {
   const [date, setDate] = useState(localToday);
   const [saved, setSaved] = useState<Texts>(empty);
   const [texts, setTexts] = useState<Texts>(empty);
@@ -98,6 +98,8 @@ export default function DayDietDialog({ patient, onClose }: { patient: { id: str
             </div>
           ))}
         </div>
+        {/* The plan itself is one step further in (#178): the day is the daily job. */}
+        {onChangePlan ? <Button variant="outline" className="min-h-11 w-full rounded-full" onClick={onChangePlan}>Change plan…</Button> : null}
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
           <Button size="sm" disabled={busy || !date} onClick={save}>{busy ? "Saving…" : "Save"}</Button>
