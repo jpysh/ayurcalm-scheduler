@@ -61,7 +61,7 @@ const STEPS = [
   ['31-book', (p) => tap(btn(p, /^Book a treatment/))],
 ];
 
-const only = process.argv[2] ? new RegExp(process.argv[2]) : null;
+const only = process.argv.slice(2);
 const browser = await chromium.launch();
 const ctx = { viewport: { width: 375, height: 812 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
 
@@ -77,7 +77,7 @@ async function side(label, base, signIn) {
   }
   const miss = [];
   for (const [name, act] of STEPS) {
-    if (only && !only.test(name)) continue;
+    if (only.length && !only.some((w) => name.includes(w))) continue;
     const file = `${OUT}/${name}-${label}.png`;
     try {
       await page.goto('/'); await page.waitForTimeout(900);
@@ -104,7 +104,7 @@ const designMiss = await side('design', DESIGN);
 await browser.close();
 server.close();
 
-const names = STEPS.map(([n]) => n).filter((n) => !only || only.test(n));
+const names = STEPS.map(([n]) => n).filter((n) => !only.length || only.some((w) => n.includes(w)));
 writeFileSync(`${OUT}/contact.html`, `<!doctype html><meta charset=utf-8><title>App vs design</title>
 <style>body{font:14px sans-serif;margin:16px}div{display:inline-block;margin:0 24px 24px 0;vertical-align:top}img{width:250px;border:1px solid #ccc;margin-right:4px}</style>
 <p>Left: app. Right: design. 375×812.</p>${names.map((n) => `<div><b>${n}</b><br><img src="${n}-app.png"><img src="${n}-design.png"></div>`).join('')}`);
