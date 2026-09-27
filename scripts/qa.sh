@@ -68,7 +68,8 @@ if E2E_BASE_URL="http://localhost:$PORT" npx playwright test absenceReplan >"$lo
   passed=$((passed + 1))
 else
   echo "  FAIL  In the browser: a therapist marked off shows in the pill's sheet, its fix clears the day, and Undo puts the day back"
-  sed 's/^/        /' "$log" | tail -15
+  # The reason is at the top of Playwright's report, not in its last lines.
+  grep -E -A12 "Error:|›" "$log" | sed 's/^/        /' | head -40
   failed=$((failed + 1))
 fi
 
