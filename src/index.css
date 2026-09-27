@@ -151,3 +151,23 @@
     outline-offset: 2px;
   }
 }
+
+/* The list screens on a phone (#137): one shared pattern. Below 640px a table
+   is a stack of cards, the name first and the facts under it, so nothing that
+   matters sits in a column off the side of the screen. The row's own edit and
+   delete controls stay, and are big enough to tap. */
+@media (max-width: 639px) {
+  .cards-sm thead { display: none; }
+  .cards-sm, .cards-sm tbody { display: block; }
+  .cards-sm tr {
+    display: flex; flex-direction: column; gap: 2px; height: auto !important;
+    margin-bottom: 8px; padding: 10px 12px; border: 0; border-radius: 16px; background: hsl(var(--card));
+  }
+  .cards-sm td { display: block; padding: 0 !important; border: 0; font-size: 13px; color: hsl(var(--muted-foreground)); text-align: left; }
+  .cards-sm td:empty { display: none; }
+  .cards-sm td:first-child, .cards-sm td[data-first] { font-size: 16px; font-weight: 600; color: hsl(var(--foreground)); }
+  .cards-sm td[data-first] { order: -1; }
+  .cards-sm tr:has(td[data-first]) td:first-child { font-size: 13px; font-weight: 400; color: hsl(var(--muted-foreground)); }
+  .cards-sm td:last-child { display: flex; justify-content: flex-end; gap: 4px; }
+  .cards-sm td:last-child button { min-width: 44px; min-height: 44px; }
+}

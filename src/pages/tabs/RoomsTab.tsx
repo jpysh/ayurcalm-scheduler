@@ -52,7 +52,7 @@ const RoomsTab = ({
         </div>
       </CardHeader>
       <CardContent className="pt-0 p-1 md:p-2">
-        <Table data-testid="rooms-table">
+        <Table className="cards-sm" data-testid="rooms-table">
           <TableHeader>
             <TableRow>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Room Name</TableHead>

@@ -57,7 +57,7 @@ const EventsTab = ({
         </div>
       </CardHeader>
       <CardContent className="pt-0 p-1 md:p-2 space-y-2">
-        <Table>
+        <Table className="cards-sm">
           <TableHeader>
             <TableRow>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Activity</TableHead>
@@ -75,7 +75,8 @@ const EventsTab = ({
           </TableHeader>
           <TableBody>
             {(() => {
-              const rows = events.sort((a: any, b: any) => (a.activity_name || '').localeCompare(b.activity_name || ''));
+              // By time of day, as the day is read (#137).
+              const rows = [...events].sort((a: any, b: any) => (a.start_time || '').localeCompare(b.start_time || '') || (a.activity_name || '').localeCompare(b.activity_name || ''));
               eventsTotalRef.current = rows.length;
               const shown = rows.slice(0, visibleEventsRows);
               return shown.map((ev: any) => (

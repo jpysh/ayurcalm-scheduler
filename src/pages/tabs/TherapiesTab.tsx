@@ -52,7 +52,7 @@ const TherapiesTab = ({
         </div>
       </CardHeader>
       <CardContent className="pt-0 p-1 md:p-2">
-        <Table data-testid="therapies-table">
+        <Table className="cards-sm" data-testid="therapies-table">
           <TableHeader>
             <TableRow>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Therapy Name</TableHead>
