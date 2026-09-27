@@ -198,14 +198,22 @@ const TimeOffTab = ({
                   </TableCell>
                   <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
                     {editingTimeOffId === holiday.id ? (
-                      <Input type="datetime-local" step="60" value={toLocalInput(holiday.startDate || holiday.date)} onChange={(e: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, startDate: e.target.value } : h)))} />
+                      <div className="flex gap-2">
+                        {/* The stored day and HH:MM as they are, never through the phone's clock (#214, as #189). */}
+                        <Input type="date" value={(holiday.startDate || holiday.date || '').slice(0, 10)} onChange={(e: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, startDate: `${e.target.value}T00:00:00.000Z` } : h)))} />
+                        {isFullDay(holiday) ? null : <Input type="time" className="w-32" value={holiday.startTime || ''} onChange={(e: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, startTime: e.target.value } : h)))} />}
+                      </div>
                     ) : (
                       leaveWhen(holiday, isFullDay(holiday))
                     )}
                   </TableCell>
                   <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
                     {editingTimeOffId === holiday.id ? (
-                      <Input type="datetime-local" step="60" value={toLocalInput(holiday.endDate || holiday.date)} onChange={(e: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, endDate: e.target.value } : h)))} />
+                      <div className="flex gap-2">
+                        {/* The stored day and HH:MM as they are, never through the phone's clock (#214, as #189). */}
+                        <Input type="date" value={(holiday.endDate || holiday.date || '').slice(0, 10)} onChange={(e: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, endDate: `${e.target.value}T00:00:00.000Z` } : h)))} />
+                        {isFullDay(holiday) ? null : <Input type="time" className="w-32" value={holiday.endTime || ''} onChange={(e: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, endTime: e.target.value } : h)))} />}
+                      </div>
                     ) : (
                       null
                     )}
@@ -412,8 +420,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
       date: h.date,
       start_date: h.startDate,
       end_date: h.endDate,
-      start_time: toHHMM(h.startDate || h.date),
-      end_time: toHHMM(h.endDate || h.date),
+      start_time: h.startTime ?? toHHMM(h.startDate || h.date),
+      end_time: h.endTime ?? toHHMM(h.endDate || h.date),
       recurrence: h.recurrence,
       weekdays: h.weekdays,
       description: h.description,
