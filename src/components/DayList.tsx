@@ -13,6 +13,7 @@ type Appt = {
   staff_id: string | null;
   co_staff_ids?: string[];
   room_id: string | null;
+  scheduled_date: string;
   start_time: string;
   duration_minutes: number;
   status?: string;
@@ -89,7 +90,9 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
         </span>
         <span className="flex-1 min-w-0">
           <span className="flex items-start gap-2">
-            <span className={`text-[16px] ${p ? "text-muted-foreground font-medium" : "font-semibold"}`}>{top}</span>
+            <span className={`text-[16px] ${p ? "text-muted-foreground font-medium" : "font-semibold"}`}>
+              {r.a.status === "no_show" ? <><s>{top}</s> <span className="text-xs font-medium text-muted-foreground">didn't come</span></> : top}
+            </span>
             <span className="ml-auto pt-0.5 text-xs text-muted-foreground whitespace-nowrap">{r.room}</span>
           </span>
           <span className="block text-[13px] text-muted-foreground">{line}</span>

@@ -11,7 +11,7 @@ cd "$(dirname "$0")/.."
 PORT="${APP_PORT:-8080}"
 
 echo "Starting the app (or bringing it up to date)..."
-docker compose up -d --build >/dev/null 2>&1 || { echo "Could not start the app with Docker. Is Docker running?"; exit 1; }
+RATE_LIMIT_WRITES=1000 docker compose up -d --build >/dev/null 2>&1 || { echo "Could not start the app with Docker. Is Docker running?"; exit 1; }
 i=0
 until curl -sf "http://localhost:$PORT/api/health" >/dev/null; do
   i=$((i + 1))
@@ -53,6 +53,7 @@ run ownTherapist       "A resident kept to their own therapist goes to that ther
 run daySheet           "The day sheet lists every resident, treatment time and therapist, in its groups, with no empty boxes"
 run unstaffedSheets   "A treatment booked with a therapist who is off shows, marked, on both the patient sheet and the therapist rota"
 run residentStay     "A resident added in the app, with a stay and a diet plan, is on the day sheet; leaving early cancels what is left, and Undo restores it"
+run treatmentCard    "Every time and room a treatment card offers saves, a busy therapist is not offered, a no-show frees theirs, and History says what changed"
 run dietOverride       "Editing a diet plan changes it for everyone except what one patient was told specifically"
 run onboarding         "After the setup wizard, the centre has its hours, timezone, therapies, rooms and therapists, and the day sheet prints"
 run mcp                "Claude reads the centre only with the current key: the day, residents, who is free and the day sheet, and reading changes nothing"

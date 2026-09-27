@@ -136,7 +136,7 @@ export async function planDay(
   const staffById = new Map(staff.map((s) => [s.id, s]));
 
   const dayAppointments = await prisma.appointment.findMany({
-    where: { scheduled_date: date, status: { not: 'cancelled' } },
+    where: { scheduled_date: date, status: { notIn: ['cancelled', 'no_show'] } },
   });
   // The treatments being rehoused: a therapist's whole day, or the single
   // session Verify is fixing.
@@ -333,7 +333,7 @@ export async function planDay(
         other.setDate(date.getDate() + i);
         if (inStay && stayEnds && other > stayEnds) return null;
         const key = ymd(other);
-        const otherDay = (laterDays[key] ??= await prisma.appointment.findMany({ where: { scheduled_date: other, status: { not: 'cancelled' } } }));
+        const otherDay = (laterDays[key] ??= await prisma.appointment.findMany({ where: { scheduled_date: other, status: { notIn: ['cancelled', 'no_show'] } } }));
         const taken = laterTaken.filter((x) => x.date === key);
         const hits = (a: { start_time: string; duration_minutes: number }, s: number, e: number) =>
           overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, s, e);

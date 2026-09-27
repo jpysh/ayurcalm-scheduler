@@ -95,7 +95,9 @@ test('day sheet PDF prints for today', async ({ page, request }) => {
   // here.
   const count = Number(/\/Count (\d+)/.exec(body.toString('latin1'))?.[1]);
   expect(count).toBeGreaterThan(0);
-  expect(count).toBeLessThanOrEqual(4);
+  // Reads today's demo day, whose size moves with the date: 5 pages since #142
+  // put more residents in house. Replaced by a fixed 2030 day in #159.
+  expect(count).toBeLessThanOrEqual(6);
 });
 
 test('an edit to a room is still there after a reload', async ({ page }) => {
@@ -142,6 +144,8 @@ test('the booking dialog offers the slots the API found, and books one', async (
   await passSetupIfShown(page);
   await openTab(page, 'The day');
   await page.getByRole('button', { name: 'Book a treatment' }).click();
+  // + suggests one booking (#136); the full form, for a course, is "Someone else…".
+  await page.getByRole('dialog').getByRole('button', { name: 'Someone else…' }).click();
 
   // The centre's clock and the browser's clock are rarely the same one. The
   // dialog used to re-filter the server's slots against the browser's, so a
