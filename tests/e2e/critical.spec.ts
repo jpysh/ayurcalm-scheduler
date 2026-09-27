@@ -302,6 +302,16 @@ test('a room out for some hours reads as the day and those hours in Leave (#189)
   const line = activePanel(page).locator('tr').filter({ hasText: 'Plumbing repair' });
   await expect(line).toContainText(/\d{1,2} \w{3,4}, 14:00–20:00/, { timeout: 15000 });
   await expect(line).not.toContainText('05:30');
+  // Its edit fields read the same day and hours, not the phone's clock (#214).
+  const shown = await line.innerText();
+  await line.getByRole('button', { name: 'Edit' }).click();
+  // Once open, the description is an input, so the row is found by its fields.
+  const form = activePanel(page).locator('tr:has(input[type=date])');
+  await expect(form.locator('input[type=time]').first()).toHaveValue('14:00');
+  await expect(form.locator('input[type=time]').last()).toHaveValue('20:00');
+  const day = await form.locator('input[type=date]').first().inputValue();
+  expect(shown).toContain(new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }));
+  await form.getByRole('button', { name: 'Cancel' }).click();
 });
 
 test('the day by therapist starts where the by-time view does (#193)', async ({ page }) => {
