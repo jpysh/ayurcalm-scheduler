@@ -475,11 +475,10 @@ const AdminDashboard = () => {
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, isMobile, requestDelete });
   const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, isMobile, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey });
   const eventsScreen = useEventsScreen({ events, setEvents, roomsList, staff, patients, amenityOptions, isMobile, staffNameById, patientNameById });
-  // The Residents screen opens the Diet screen's dialog for one resident.
-  const dietOpeners = useRef<{ openFor: (id: string | number) => void } | null>(null);
-  const patientsScreen = usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ, openDietFor: (id) => dietOpeners.current?.openFor(id) });
+  const patientsScreen = usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ,
+    openTreatment: (a) => { go('schedule'); scheduleScreen.openCard(a); },
+    book: () => { go('schedule'); scheduleScreen.openBook(); } });
   const dietScreen = useDietScreen({ patients, setPatients, therapies, therapyNameById, ymdInTZ, active: activeTab === 'diet' });
-  dietOpeners.current = dietScreen;
 
   // The list screens grow as the admin scrolls to the bottom.
   const listScreens: Record<string, { setVisibleRows: React.Dispatch<React.SetStateAction<number>>; totalRef: React.MutableRefObject<number> }> = {

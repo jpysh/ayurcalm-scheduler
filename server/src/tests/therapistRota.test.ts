@@ -58,7 +58,7 @@ const off = (over: Record<string, unknown>) => ({
   const { slots, rows } = buildRota(base);
   const priya = rows.find((r) => r.name === 'Priya Menon')!;
   const at730 = slots.findIndex((s) => s.start <= 450 && s.end > 450);
-  assert.equal(priya.cells[at730][0].text, 'Yoga 60m');
+  assert.equal(priya.cells[at730][0].text, 'Yoga 07:30–08:30');
   assert.equal(priya.cells[at730][0].bold, false, 'an event is not a treatment');
 }
 

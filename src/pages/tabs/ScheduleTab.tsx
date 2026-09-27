@@ -159,5 +159,5 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
       refresh={() => refreshDay(dayKeyMemo)} other={openFullBooking} />
   );
 
-  return { tab: <>{tab}{cardSheet}{bookSheet}</>, openBook: () => setBooking(true), printSheet, pdfLoading, view, setView, query, setQuery, searching, setSearching };
+  return { tab: <>{tab}{cardSheet}{bookSheet}</>, openBook: () => setBooking(true), openCard: setCard, printSheet, pdfLoading, view, setView, query, setQuery, searching, setSearching };
 }
