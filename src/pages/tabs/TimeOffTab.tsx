@@ -53,8 +53,8 @@ const TimeOffTab = ({
       <CardHeader className="px-2 md:px-4 pt-2 md:pt-4 pb-1 md:pb-2">
         <div className="flex items-center justify-center gap-2">
           <CardTitle className="text-base md:text-xl font-semibold">Time Off (including Holidays)</CardTitle>
-          <Button size="icon" className="h-[19px] w-[19px] min-w-0 min-h-0 p-0 leading-none [&_svg]:size-[19px]" aria-label="Add Time Off" onClick={() => setShowAddTimeOff(true)}>
-            <Plus />
+          <Button size="sm" className="min-h-11 rounded-full px-4" onClick={() => setShowAddTimeOff(true)}>
+            <Plus className="mr-1 h-4 w-4" />Add leave
           </Button>
         </div>
         <div className="mt-0.5 flex justify-center">
@@ -364,12 +364,13 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
   const [visibleTimeOffRows, setVisibleTimeOffRows] = useState(isMobile ? 20 : 40);
   const timeoffTotalRef = useRef(0);
   useEffect(() => { setVisibleTimeOffRows(isMobile ? 20 : 40); }, [searchHolidays, timeOffs, holidayTypeFilter, holidayViewMode, holidayRecurringFilter, holidayFullDayFilter, holidaySelectedDate, isMobile]);
+  // Most leave is a therapist's whole day, starting today (#137).
   const [newTimeOff, setNewTimeOff] = useState({
-    date: "",
-    endDate: "",
-    type: "Center" as "Center" | "Staff" | "Room" | "Therapy" | "Patient",
+    date: todayKey,
+    endDate: todayKey,
+    type: "Staff" as "Center" | "Staff" | "Room" | "Therapy" | "Patient",
     entity: "",
-    fullDay: false,
+    fullDay: true,
     description: "",
   });
 
@@ -476,7 +477,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
       <Dialog open={showAddTimeOff} onOpenChange={setShowAddTimeOff}>
         <DialogContent className="max-w-sm p-3">
           <DialogHeader>
-            <DialogTitle className="text-lg">Add TimeOff</DialogTitle>
+            <DialogTitle className="text-lg">Add leave</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 gap-2">
             <Label>Type</Label>
@@ -492,7 +493,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
                 <SelectItem value="Patient">Patient</SelectItem>
               </SelectContent>
             </Select>
-            <Label>Entity</Label>
+            <Label>Who</Label>
             {newTimeOff.type === 'Center' ? (
               <Input className="h-8" value="All" readOnly />
             ) : newTimeOff.type === 'Staff' ? (
@@ -592,7 +593,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
                 const optimistic: UiTimeOff = { id: tempId, startDate: startIso, endDate: endIso, recurrence: newTimeOff.recurrence, weekdays: newTimeOff.weekdays as UiTimeOff['weekdays'], type: newTimeOff.type, entity: newTimeOff.type === 'Center' ? 'All' : (newTimeOff.entity || ''), description: newTimeOff.description };
                 setTimeOffs((prev) => [...prev, optimistic]);
                 setShowAddTimeOff(false);
-                setNewTimeOff({ date: '', endDate: '', type: 'Center', entity: '', fullDay: false, description: '', recurrence: undefined, weekdays: undefined });
+                setNewTimeOff({ date: todayKey, endDate: todayKey, type: 'Staff', entity: '', fullDay: true, description: '', recurrence: undefined, weekdays: undefined });
                 toast.success('Time off saved');
                 try {
                   const res = await fetch(`${API_BASE}/timeoff`, {
