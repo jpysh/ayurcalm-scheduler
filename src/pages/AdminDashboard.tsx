@@ -467,15 +467,19 @@ const AdminDashboard = () => {
   useEffect(() => { const t = setInterval(() => setMinute((m) => m + 1), 60000); return () => clearInterval(t); }, []);
 
   // Each screen keeps its own state and dialogs in its own file (#147).
-  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), openFullBooking: () => setShowAutoAssign(true), movedFrom, problems: dayCheck.problems, showDay: (iso: string) => { setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); } });
+  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), openFullBooking: () => setShowAutoAssign(true), movedFrom, problems: dayCheck.problems, showDay: (iso: string) => { setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id) });
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, isMobile, requestDelete });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, isMobile, requestDelete });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, isMobile, requestDelete });
   const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, isMobile, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey });
   const eventsScreen = useEventsScreen({ events, setEvents, roomsList, staff, patients, amenityOptions, isMobile, staffNameById, patientNameById });
+  // The treatment card opens the resident card, which the Residents screen holds.
+  const residentOpener = useRef<((id: string) => void) | null>(null);
+  const swipe = useRef<{ x: number; y: number } | null>(null);
   const patientsScreen = usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ,
     openTreatment: (a) => { go('schedule'); scheduleScreen.openCard(a); },
     book: () => { go('schedule'); scheduleScreen.openBook(); } });
+  residentOpener.current = patientsScreen.openResident;
   const dietScreen = useDietScreen({ patients, setPatients, therapies, therapyNameById, ymdInTZ, active: activeTab === 'diet' });
 
   // The list screens grow as the admin scrolls to the bottom.
@@ -510,7 +514,17 @@ const AdminDashboard = () => {
           <button type="button" className="mb-2 h-11 text-base font-semibold text-primary" onClick={() => go('schedule')}>‹ The day</button>
         ) : null}
         <Tabs value={activeTab} onValueChange={go} className="space-y-6">
-          <TabsContent value="schedule" className="space-y-6">
+          {/* Swipe the day left and right, as the date sheet says (#67). */}
+          <TabsContent value="schedule" className="space-y-6"
+            onTouchStart={(e) => { swipe.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
+            onTouchEnd={(e) => {
+              const s = swipe.current; swipe.current = null;
+              if (!s || scheduleScreen.searching) return;
+              const dx = e.changedTouches[0].clientX - s.x, dy = e.changedTouches[0].clientY - s.y;
+              if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+                setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + (dx < 0 ? 1 : -1)));
+              }
+            }}>
             {scheduleScreen.tab}
           </TabsContent>
 

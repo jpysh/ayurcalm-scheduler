@@ -25,7 +25,7 @@ const nowInTZ = (timeZone: string) => {
 };
 
 /** The Schedule screen, and the day sheets the bottom bar prints for the day it is on. */
-export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, closingTime, refreshDay, openFullBooking, movedFrom, problems, showDay }: Record<string, any>) {
+export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, closingTime, refreshDay, openFullBooking, movedFrom, problems, showDay, openResident }: Record<string, any>) {
   const [view, setView] = useState<DayView>("time");
   const [query, setQuery] = useState("");
   // Search is its own screen over every day (#165); the day list does not filter.
@@ -147,6 +147,18 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
       roomsList={roomsList}
       therapyNameById={therapyNameById}
       refresh={() => refreshDay(cardDay)}
+      openResident={openResident ? (id: string) => { setCard(null); openResident(id); } : undefined}
+      problem={(() => {
+        type P = { appointment_id: string | null; kind: string; problem_class: string; what: string; fix: Fix | null; choices: Fix[] };
+        type Fix = { label: string; appointment_id: string; staff_id: string | null; co_staff_ids?: string[]; room_id: string | null; start_time: string; date: string; cancel?: boolean };
+        const p = card ? (problems || []).find((x: P) => x.appointment_id === card.id && x.kind !== 'IDLE_RESIDENT') as P | undefined : undefined;
+        if (!p) return null;
+        const fixes = (p.choices.length > 1 ? p.choices : p.fix ? [p.fix] : []).map((f) => ({
+          label: f.label,
+          move: { appointment_id: f.appointment_id, staff_id: f.staff_id, co_staff_ids: f.co_staff_ids || [], room_id: f.room_id, start_time: f.start_time, date: f.date, cancel: f.cancel },
+        }));
+        return { what: p.what, short: SHORT[p.kind] || 'Needs a look', blocking: p.problem_class === 'blocking', fixes };
+      })()}
       onShowDay={fromSearch ? () => { setCard(null); setFromSearch(false); setSearching(false); setQuery(""); setView("time"); showDay(cardDay); } : undefined}
       staffNotIn={notIn}
       roomOut={(id, name) => takeOut("room", id, name)}

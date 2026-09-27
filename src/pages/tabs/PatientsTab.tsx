@@ -258,6 +258,12 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const tab = (
     <>
       <ResidentsList patients={patients} today={today} onOpen={setCardId} onAdd={() => setShowAddPatient(true)} />
+      <DayDietDialog patient={mealsFor} onClose={() => setMealsFor(null)} />
+    </>
+  );
+
+  const dialogs = (
+    <>
       <ResidentCard id={cardId} today={today} onClose={() => setCardId(null)}
         openTreatment={(a) => { setCardId(null); openTreatment(a); }}
         changeMeals={(p) => { setCardId(null); setMealsFor(p); }}
@@ -269,12 +275,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         }}
         book={() => { setCardId(null); book(); }}
         details={(id) => { const row = patients.find((x) => String(x.id) === id); setCardId(null); if (row) showPatientInfo(row); }} />
-      <DayDietDialog patient={mealsFor} onClose={() => setMealsFor(null)} />
-    </>
-  );
 
-  const dialogs = (
-    <>
       <BottomSheet open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) setNewPatient(blankNew()); }} title="New resident">
         <div className="grid grid-cols-2 gap-3">
           <label className="col-span-2 grid gap-1">Name<Input value={newPatient.name} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} /></label>
@@ -429,5 +430,5 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     </>
   );
 
-  return { tab, dialogs };
+  return { tab, dialogs, openResident: setCardId };
 }

@@ -53,9 +53,13 @@ type Props = {
   editAll: (a: CardAppt) => void;
   /** Set when opened from search: go to the treatment's day. */
   onShowDay?: () => void;
+  /** The resident's name opens their card (#63). */
+  openResident?: (patientId: string) => void;
+  /** What the day check says is wrong with this treatment, with its fix (#67). */
+  problem?: { what: string; short: string; blocking: boolean; fixes: { label: string; move: Record<string, unknown> }[] } | null;
 };
 
-export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, staff, roomsList, therapyNameById, refresh, staffNotIn, roomOut, editAll, onShowDay }: Props) {
+export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, staff, roomsList, therapyNameById, refresh, staffNotIn, roomOut, editAll, onShowDay, openResident, problem }: Props) {
   const [page, setPage] = useState<Page>("card");
   const [choices, setChoices] = useState<Choice[] | null>(null);
   const [history, setHistory] = useState<Entry[] | null>(null);
@@ -94,6 +98,34 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
         await fetch(`${API_BASE}/appointments/${appt.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(before) });
         await refresh();
       } } });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // "Stay day 4 of 14", from the resident's stay that holds this treatment.
+  const stayOf = (patients.find((p) => String(p.id) === String(appt.patient_id)) as { actualStart?: string; actualEnd?: string } | undefined);
+  const dayMs = (iso?: string) => (iso ? Date.parse(iso.slice(0, 10)) : NaN);
+  const at = dayMs(appt.scheduled_date);
+  const stayDay = stayOf && at >= dayMs(stayOf.actualStart) && at <= dayMs(stayOf.actualEnd)
+    ? `stay day ${Math.round((at - dayMs(stayOf.actualStart)) / 86400000) + 1} of ${Math.round((dayMs(stayOf.actualEnd) - dayMs(stayOf.actualStart)) / 86400000) + 1}` : "";
+
+  /** The day check's own fix for this treatment, accepted alone, with Undo. */
+  const fixIt = async (f: { label: string; move: Record<string, unknown> }) => {
+    setBusy(true);
+    try {
+      const res = await fetch(`${API_BASE}/day-check/accept`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: String(appt.scheduled_date).slice(0, 10), moves: [f.move] }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(body.message || "The day changed; open the card again for a new answer."); return; }
+      onClose();
+      await refresh();
+      toast(`${first}: ${f.label}`, { duration: 8000, action: body.batch_id ? { label: "Undo", onClick: async () => {
+        await fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batch_id: body.batch_id }) });
+        await refresh();
+      } } : undefined });
     } finally {
       setBusy(false);
     }
@@ -140,9 +172,25 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
           {noShow ? <span className="text-sm font-semibold text-destructive">Didn't come</span>
             : past ? <span className="text-sm text-muted-foreground">Finished</span>
             : now ? <span className="text-sm font-semibold text-now">In progress · {en - nowMinutes} min left</span> : null}
-          <div className="text-[22px] font-semibold leading-tight">{who}</div>
-          {appt.total_sessions ? <div className="text-[13px] text-muted-foreground">Session {appt.session_number} of {appt.total_sessions}</div> : null}
+          <button type="button" className="text-left text-[22px] font-semibold leading-tight disabled:opacity-100" disabled={!openResident} onClick={() => openResident?.(appt.patient_id)}>
+            {who}{openResident ? <span className="ml-1 text-muted-foreground">›</span> : null}
+          </button>
+          <div className="text-[13px] text-muted-foreground">
+            {[appt.total_sessions ? `Session ${appt.session_number} of ${appt.total_sessions}` : "", stayDay].filter(Boolean).join(" · ")}
+          </div>
         </div>
+        {problem && !locked ? (
+          <div className={`flex flex-col gap-0.5 rounded-xl px-3 py-2.5 text-sm ${problem.blocking ? "bg-[#FBEAE3]" : "bg-background"}`}>
+            <b className={problem.blocking ? "text-destructive" : undefined}>{problem.short}</b>
+            <span>{problem.what}</span>
+            <div className="mt-0.5 flex flex-wrap justify-end gap-1">
+              {problem.fixes.map((f, i) => (
+                <button key={f.label} type="button" disabled={busy} className={`min-h-10 rounded-full px-3 text-sm ${i === 0 ? "font-bold text-primary" : "font-semibold text-muted-foreground"}`}
+                  onClick={() => fixIt(f)}>{f.label}</button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div className={box}>
           <Fact label="When" value={`${dayLabel(appt.scheduled_date, isToday)}, ${appt.start_time} to ${hm(en)}`} onClick={() => open("time")} />
           <Fact label="Treatment" value={`${therapyNameById[appt.therapy_id] || "Treatment"} · ${appt.duration_minutes} min`} onClick={() => open("therapy")} />
@@ -234,7 +282,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
   }
 
   return (
-    <BottomSheet open={!!appt} onOpenChange={(o) => { if (!o) onClose(); }} title={page === "card" ? "Treatment" : ""}>
+    <BottomSheet open={!!appt} onOpenChange={(o) => { if (!o) onClose(); }} title="">
       <div className="flex max-h-[75vh] flex-col gap-3 overflow-y-auto">{body}</div>
     </BottomSheet>
   );
