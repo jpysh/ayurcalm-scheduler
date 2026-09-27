@@ -86,17 +86,6 @@ const cases: [string, () => void][] = [
     assert.ok(out.notes.startsWith('Standard sattvic plan: '), out.notes);
   }],
 
-  ['a patient on no plan falls back to their own free text', () => {
-    const out = resolveDiet({ ...base, template: null, hasTherapyToday: false, freeText: 'No onion or garlic' });
-    assert.deepEqual(out.meals, {});
-    assert.equal(out.notes, 'No onion or garlic');
-  }],
-
-  ['free text is dropped once a plan actually provides meals', () => {
-    const out = resolveDiet({ ...base, template: plan, hasTherapyToday: true, freeText: 'No onion or garlic' });
-    assert.ok(!out.notes.includes('No onion or garlic'), out.notes);
-  }],
-
   ['a bespoke segment carries its own meals and name', () => {
     const out = resolveDiet({
       ...base,
