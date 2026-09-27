@@ -14,6 +14,19 @@ export type ApiProgramEvent = { id: string; date?: string | null; start_date?: s
 export type ApiDietPlan = { id: string; patient_id: string; date: string; meal_time: 'breakfast'|'lunch'|'dinner'|'snacks'; description: string; instructions?: string };
 export type ApiStay = { id: string; patient_id: string; start_date: string; end_date: string; duration_days: number };
 
+/**
+ * When a leave line applies, as the admin would say it: "27 Sept, 14:00–20:00".
+ * Dates are the stored calendar day and times the stored HH:MM, never passed
+ * through a clock: UTC midnight in India read as 05:30 (#189).
+ */
+export function leaveWhen(h: Pick<UiTimeOff, 'date' | 'startDate' | 'endDate' | 'startTime' | 'endTime'>, fullDay: boolean): string {
+  const day = (iso?: string) => iso ? new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '';
+  const from = day(h.startDate || h.date), to = day(h.endDate || h.startDate || h.date);
+  const hours = !fullDay && h.startTime && h.endTime ? `${h.startTime}–${h.endTime}` : '';
+  if (from === to) return [from, hours].filter(Boolean).join(', ');
+  return hours ? `${from} ${h.startTime} to ${to} ${h.endTime}` : `${from} to ${to}`;
+}
+
 export const blankPatient = (): Patient => ({ id: '', name: '', phone: '', email: '', gender: 'Male', dob: '', emergencyContact: '', emergencyPhone: '', address: '', medicalNotes: '', dietPlan: '', actualStart: '', actualEnd: '' });
 
 export const API_TOKEN = (import.meta as any).env?.VITE_API_TOKEN || '';
