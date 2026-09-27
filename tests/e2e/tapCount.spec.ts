@@ -214,8 +214,14 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await note.getByRole('button', { name: 'Undo' }).click();
     });
 
+    // On the walk's day with a room taken out first: today's own problem has
+    // started by the afternoon, and then there is nothing left to fix.
     await job(page, rows, 'Warning → fixed day', async (tap) => {
+      const booked = (await rowsOf(day)).find((a) => a.room_id && a.status === 'pending');
+      await call.post('/timeoff', { entity_type: 'room', entity_id: booked!.room_id, date: day, description: 'Tap count: out of use' });
+      // Arrive at the day afresh, so the app checks it after the room went out.
       await showDay(page, today);
+      await showDay(page, day);
       await tap(page.getByRole('button', { name: /to fix/ }));
       const sheet = page.getByRole('dialog');
       // The first action row's own button: the one that does the thing (#164).
