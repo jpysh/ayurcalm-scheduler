@@ -94,7 +94,8 @@ function createRateLimiter(windowMs: number, max: number) {
   };
 }
 
-const globalLimiter = createRateLimiter(15 * 60 * 1000, 1200);
+// The test suite (qa, then the browser walk) reads more than an admin ever does; it raises this (scripts/qa.sh).
+const globalLimiter = createRateLimiter(15 * 60 * 1000, Number(process.env.RATE_LIMIT_CALLS) || 1200);
 // 40 writes per address in 5 minutes guards the admin's screens; the test
 // suite, which writes far more from one address, raises it (scripts/qa.sh).
 const writeLimiter = createRateLimiter(5 * 60 * 1000, Number(process.env.RATE_LIMIT_WRITES) || 40);

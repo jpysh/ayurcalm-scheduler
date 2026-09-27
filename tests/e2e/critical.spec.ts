@@ -103,7 +103,8 @@ test('day sheet PDF prints for today', async ({ page, request }) => {
   await signIn(page);
   await passSetupIfShown(page);
   const token = await page.evaluate(() => localStorage.getItem('authToken'));
-  const today = new Date().toISOString().slice(0, 10);
+  // The centre's today, not UTC's: after 18:30 UTC that is still yesterday in India, an unseeded day (#208).
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const res = await request.get(`/api/daily-schedule-pdf?date=${today}`, { headers: { Authorization: `Bearer ${token}` } });
   expect(res.status()).toBe(200);
   expect(res.headers()['content-type']).toContain('application/pdf');

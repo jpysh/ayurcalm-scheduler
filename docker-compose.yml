@@ -36,6 +36,7 @@ services:
       BEHIND_CLOUDFLARE: ${BEHIND_CLOUDFLARE:-}
       # Writes per address in 5 minutes. Unset in a real install (40); qa raises it.
       RATE_LIMIT_WRITES: ${RATE_LIMIT_WRITES:-}
+      RATE_LIMIT_CALLS: ${RATE_LIMIT_CALLS:-}
       NODE_ENV: production
     ports:
       - "${APP_PORT:-8080}:4000"
