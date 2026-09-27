@@ -2,10 +2,23 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
+/**
+ * A list shown as cards on a phone (`cards-sm`, #137) edits by tapping the
+ * card: the tap goes to the row's own Edit button, unless it landed on a
+ * control of its own (#178).
+ */
+const tapCardToEdit = (e: React.MouseEvent<HTMLTableElement>) => {
+  if (window.innerWidth >= 640) return;
+  const target = e.target as HTMLElement;
+  if (target.closest("button, a, input, select, textarea, [role=combobox], [role=checkbox]")) return;
+  target.closest("tr")?.querySelector<HTMLButtonElement>('button[aria-label="Edit"]')?.click();
+};
+
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
     <div className="relative w-full overflow-auto">
-      <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
+      <table ref={ref} className={cn("w-full caption-bottom text-sm", className)}
+        onClick={className?.includes("cards-sm") ? tapCardToEdit : undefined} {...props} />
     </div>
   ),
 );
