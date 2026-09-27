@@ -160,22 +160,24 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
   });
   const rowsOf = async (d: string) => (await call.get(`/appointments?date=${d}`)) as { id: string; status: string; notes: string | null; start_time: string; staff_id: string | null; room_id: string | null }[];
   const beforeRows = [...await rowsOf(today), ...await rowsOf(day)];
+  // Each clean-up step that is refused (the write limit answers 429), with its status.
+  // Checked before the centre is compared, so the cause is the first line of the failure (#192).
+  const refused: string[] = [];
+  const must = async (what: string, res: { ok(): boolean; status(): number }) => { if (!res.ok()) refused.push(`${what} -> ${res.status()}`); };
   const restore = async () => {
-    for (const batch of accepted) await call.post('/replan/undo', { batch_id: batch });
+    for (const batch of accepted) await must(`POST /replan/undo ${batch}`, await call.post('/replan/undo', { batch_id: batch }));
     for (const h of (await call.get('/timeoff')) as { id: string }[]) {
       if (before.day.off.includes(String(h.id))) continue;
-      const res = await call.del(`/timeoff/${h.id}`);
-      // Said, not swallowed: a restore refused (the write limit) leaves the centre changed.
-      if (!res.ok()) console.log(`restore: DELETE /timeoff/${h.id} -> ${res.status()}`);
+      await must(`DELETE /timeoff/${h.id}`, await call.del(`/timeoff/${h.id}`));
     }
     // A booking the walk made, and any treatment it changed, put back.
     const was = new Set(beforeRows.map((a) => a.id));
     const now = new Map([...await rowsOf(today), ...await rowsOf(day)].map((a) => [a.id, a]));
-    for (const a of now.values()) if (!was.has(a.id)) await call.del(`/appointments/${a.id}`);
+    for (const a of now.values()) if (!was.has(a.id)) await must(`DELETE /appointments/${a.id}`, await call.del(`/appointments/${a.id}`));
     for (const a of beforeRows) {
       const n = now.get(a.id);
       if (n && (n.status !== a.status || n.notes !== a.notes || n.start_time !== a.start_time || n.staff_id !== a.staff_id || n.room_id !== a.room_id)) {
-        await call.put(`/appointments/${a.id}`, { status: a.status, notes: a.notes ?? '', start_time: a.start_time, staff_id: a.staff_id, room_id: a.room_id });
+        await must(`PUT /appointments/${a.id}`, await call.put(`/appointments/${a.id}`, { status: a.status, notes: a.notes ?? '', start_time: a.start_time, staff_id: a.staff_id, room_id: a.room_id }));
       }
     }
   };
@@ -290,6 +292,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
   } finally {
     await restore();
   }
+  expect(refused, 'the walk could not put the centre back: a clean-up was refused').toEqual([]);
   // The walk leaves the centre as it found it.
   expect(await snapshot(call, today)).toEqual(before.today);
   expect(await snapshot(call, day)).toEqual(before.day);
