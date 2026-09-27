@@ -268,8 +268,12 @@ test('search finds a resident on other days and opens the card with Show this da
   await page.getByRole('button', { name: 'All', exact: true }).click();
   const result = page.getByRole('button', { name: /^\d\d:\d\d/ }).first();
   await expect(result).toBeVisible({ timeout: 15000 });
+  // Five earlier searches are kept; opening a result puts this one first and drops the oldest (#193).
+  await page.evaluate(() => localStorage.setItem('recentSearches', JSON.stringify(['q1', 'q2', 'q3', 'q4', 'q5'])));
+  const searched = await page.getByPlaceholder('Name, therapy or room').inputValue();
   await result.click();
   await expect(page.getByRole('dialog').getByRole('button', { name: 'Show this day' })).toBeVisible();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('recentSearches') || '[]'))).toEqual([searched, 'q1', 'q2', 'q3', 'q4']);
 });
 
 test('a search match inside a room name keeps the name in one piece (#193)', async ({ page }) => {
