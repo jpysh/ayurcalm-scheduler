@@ -18,6 +18,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 import { requireDemoData } from './demoGuard.js';
+import { wipeDemo } from '../demoData.js';
 
 const API_BASE = process.env.API_BASE || `http://127.0.0.1:${process.env.PORT || 4100}/api`;
 const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || 'admin@example.com';
@@ -71,7 +72,22 @@ async function main() {
     const text = execFileSync('pdftotext', ['-', '-'], { input: Buffer.from(await sheet.arrayBuffer()) }).toString();
     assert.match(text, /Onboarding Test Centre/, 'The day sheet does not carry the centre\'s name');
 
-    console.log('Onboarding: settings kept, setup complete, centre has what it needs, day sheet prints.');
+    // The wizard's recommended start (#60): the example people and bookings go, its therapies
+    // and rooms stay, so the centre can book as soon as it adds a therapist and a resident.
+    // Run inside a transaction that is rolled back: the other tests need the demo centre.
+    const ROLLBACK = new Error('rollback');
+    await prisma.$transaction(async (tx) => {
+      await wipeDemo(tx, true);
+      assert.equal(await tx.patient.count(), 0, 'Starting your own centre kept the example residents');
+      assert.equal(await tx.staff.count(), 0, 'Starting your own centre kept the example therapists');
+      assert.equal(await tx.appointment.count(), 0, 'Starting your own centre kept the example bookings');
+      assert.ok(await tx.therapy.count() > 0, 'Starting your own centre lost the example therapies');
+      assert.ok(await tx.therapyRoom.count() > 0, 'Starting your own centre lost the example rooms');
+      throw ROLLBACK;
+    }, { timeout: 120000 }).catch((e) => { if (e !== ROLLBACK) throw e; });
+    assert.ok(await prisma.patient.count() > 0, 'The rollback did not put the demo centre back');
+
+    console.log('Onboarding: settings kept, setup complete, centre has what it needs, day sheet prints; starting your own centre keeps the therapies and rooms.');
   } finally {
     const { centre_name, address, timezone, opening_time, closing_time, slot_minutes, working_days, logo, setup_complete } = before;
     await api('/settings', {
