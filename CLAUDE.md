@@ -156,6 +156,20 @@ runs `qa` plus `npm run test:e2e` (sign-in, every tab, the day sheet, in
 Chromium) on any pull request that touches `server/` or the Docker files, and on
 every merge; other pull requests get the builds and the database-free tests only.
 
+**What to run before a pull request** (agreed 2026-09-27, while there are no
+users). CI from a fresh database is the gate; don't repeat it locally.
+- Always: front-end `tsc` (52 errors or fewer) and the tests for the area changed.
+- Screen change: `npm run test:e2e -- --grep-invert "a therapist off"` locally,
+  because CI skips e2e when `server/` is untouched; then drive the screen at 375px.
+- Scheduler, planner or day sheet change: `npm run qa` locally too, and read the PDF.
+- Every bug fix leaves one test that would have caught it.
+- Screens still being rebuilt get a `BLOCKING` tap count and one "opens with real
+  data" check; full walks only for the day sheet and booking until #67, when
+  every screen gets one.
+- A failure unrelated to the change: fix it in the same PR if it blocks the merge
+  and takes under 15 minutes; otherwise note it in the PR and open a small issue
+  in #70's order.
+
 A test that needs a date builds its own fixed day in 2030, as `daySheet.test.ts`
 does, never `new Date()` or the seeded day, which moves with today.
 
