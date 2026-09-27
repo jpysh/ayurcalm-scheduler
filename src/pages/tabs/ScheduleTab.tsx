@@ -1,37 +1,7 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import DayGrid from "@/components/DayGrid";
+import DayList, { type DayView } from "@/components/DayList";
 import { useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
-
-type ScheduleTabProps = {
-  /** The centre's timezone, from Settings. */
-  timezone: string;
-  ymdInTZ: (d: Date) => string;
-  appointmentsByDate: Record<string, ApiAppointment[]>;
-  timeSlots: string[];
-  dayKeyMemo: string;
-  patients: { id: string | number; name: string }[];
-  roomsList: { id: string | number; name: string }[];
-  staff: { id: string | number; name: string }[];
-  therapyNameById: Record<string, string>;
-  setSelectedAppointment: (v: ApiAppointment) => void;
-  setShowVerify: (b: boolean) => void;
-};
-
-type ApiAppointment = {
-  id: string;
-  patient_id: string;
-  therapy_id: string;
-  staff_id: string | null;
-  co_staff_ids?: string[];
-  room_id: string | null;
-  scheduled_date: string;
-  start_time: string;
-  duration_minutes: number;
-  status?: "pending" | "confirmed" | "completed" | "cancelled" | "rescheduled";
-};
 
 /** Minutes past midnight now, on the centre's clock. */
 const nowInTZ = (timeZone: string) => {
@@ -43,49 +13,10 @@ const nowInTZ = (timeZone: string) => {
   }
 };
 
-// The day, the print buttons and booking are on the bottom bar (#66); the
-// screen itself is the grid.
-const ScheduleTab = ({
-  ymdInTZ,
-  appointmentsByDate,
-  timeSlots,
-  dayKeyMemo,
-  patients,
-  roomsList,
-  staff,
-  therapyNameById,
-  setSelectedAppointment,
-  setShowVerify,
-  timezone,
-}: ScheduleTabProps) => (
-  <Card>
-    <div className="flex justify-end px-2 pt-2">
-      <Button variant="secondary" size="sm" className="h-8 px-3" onClick={() => setShowVerify(true)}>Verify</Button>
-    </div>
-    <CardContent className="pt-0 p-2">
-      {/* Keyed on the timezone: "Who is free" picks its time once, and the
-          centre's timezone arrives after the first render (#141). */}
-      <DayGrid
-        key={timezone}
-        dayAppointments={Array.isArray(appointmentsByDate?.[dayKeyMemo]) ? appointmentsByDate[dayKeyMemo] : []}
-        dayKey={dayKeyMemo}
-        isToday={dayKeyMemo === ymdInTZ(new Date())}
-        nowMinutes={nowInTZ(timezone)}
-        timeSlots={timeSlots}
-        patients={patients}
-        roomsList={roomsList}
-        staff={staff}
-        therapyNameById={therapyNameById}
-        setSelectedAppointment={setSelectedAppointment}
-      />
-    </CardContent>
-  </Card>
-);
-
-export default ScheduleTab;
-
 /** The Schedule screen, and the day sheets the bottom bar prints for the day it is on. */
-export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, timeSlots, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, setShowVerify }: Record<string, any>) {
+export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, setShowVerify, closingTime, refreshDay }: Record<string, any>) {
+  const [view, setView] = useState<DayView>("time");
+  const [query, setQuery] = useState("");
   const [pdfLoading, setPdfLoading] = useState<'patient' | 'therapist' | null>(null);
   // Two sheets off the same day: the patient one for the notice board, the
   // therapist rota for the treatment team.
@@ -119,21 +50,58 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, timeS
     }
   };
 
+  const isToday = dayKeyMemo === ymdInTZ(new Date());
+  const now = nowInTZ(ADMIN_TZ);
+
+  // The edit dialog's shape. #136 replaces this with the treatment card.
+  const nameIn = (list: { id: string | number; name: string }[], id: unknown) => list.find((x) => String(x.id) === String(id))?.name;
+  const openEdit = (a: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any -- the dashboard's edit-dialog shape
+    const room = roomsList.find((r: { id: unknown }) => String(r.id) === String(a.room_id));
+    setSelectedAppointment({
+      ...a, time: a.start_time, duration: a.duration_minutes, co_staff_ids: a.co_staff_ids || [],
+      patient: nameIn(patients, a.patient_id) || "Patient", therapy: therapyNameById[String(a.therapy_id)] || "Therapy",
+      staff: [a.staff_id, ...(a.co_staff_ids || [])].map((id: unknown) => nameIn(staff, id)).filter(Boolean).join(" & "),
+      room: room ? String(room.name) : String(a.room_id || ""), roomAmenities: room?.amenities || [],
+    });
+  };
+
+  // "Not in from now" on a therapist's heading: the same time off Verify
+  // records, so the server moves their treatments at once; Undo removes it.
+  const notIn = async (staffId: string, name: string) => {
+    // Today, from now; any other day, the whole day.
+    const from = isToday ? `${String(Math.floor(now / 60)).padStart(2, "0")}:${String(now % 60).padStart(2, "0")}` : null;
+    const res = await fetch(`${API_BASE}/timeoff`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entity_type: "staff", entity_id: staffId, date: dayKeyMemo, start_time: from, end_time: from ? closingTime : null, description: "Not in" }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) { toast.error(body.error || "That could not be saved."); return; }
+    await refreshDay(dayKeyMemo);
+    const moved = (body.replan || []).reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0);
+    toast(`${name} not in ${from ? `from ${from}` : "all day"}${moved ? ` · ${moved} moved` : ""}`, {
+      duration: 8000,
+      action: { label: "Undo", onClick: async () => { await fetch(`${API_BASE}/timeoff/${body.id}`, { method: "DELETE" }); await refreshDay(dayKeyMemo); } },
+    });
+  };
+
+  // The day, the print buttons, booking and search are on the bottom bar (#66, #62).
   const tab = (
-    <ScheduleTab
-      timezone={ADMIN_TZ}
-      ymdInTZ={ymdInTZ}
-      appointmentsByDate={appointmentsByDate}
-      timeSlots={timeSlots}
-      dayKeyMemo={dayKeyMemo}
+    <DayList
+      appointments={Array.isArray(appointmentsByDate?.[dayKeyMemo]) ? appointmentsByDate[dayKeyMemo] : []}
+      isToday={isToday}
+      nowMinutes={now}
+      view={view}
+      setView={setView}
+      query={query}
       patients={patients}
       roomsList={roomsList}
       staff={staff}
       therapyNameById={therapyNameById}
-      setSelectedAppointment={setSelectedAppointment}
-      setShowVerify={setShowVerify}
+      onOpen={openEdit}
+      onNotIn={notIn}
+      headerAction={<button type="button" className="min-h-9 px-2 font-semibold text-primary" onClick={() => setShowVerify(true)}>Verify</button>}
     />
   );
 
-  return { tab, printSheet, pdfLoading };
+  return { tab, printSheet, pdfLoading, view, setView, query, setQuery };
 }
