@@ -75,11 +75,8 @@ async function openTab(page: Page, name: string) {
   }).toPass({ timeout: 15000 });
 }
 
-test('a therapist off: the pill names it, its fix clears the day, and Undo puts the day back', async ({ page, request }) => {
-  test.setTimeout(120000);
-  const call = await api(request);
-  await tidy(call);
-
+/** A therapist with one treatment on DAY that only she may give, so her absence is a problem nothing else fixes. */
+async function build(call: Call) {
   const therapy = await call('post', '/therapies', { name: `${TAG} Abhyanga`, duration_minutes: 60 });
   await call('post', '/rooms', { name: `${TAG} Room`, weekly_schedule: allWeek });
   const therapist = await call('post', '/staff', { name: THERAPIST, gender: 'female', specializations: [therapy.id], weekly_schedule: allWeek });
@@ -93,6 +90,16 @@ test('a therapist off: the pill names it, its fix clears the day, and Undo puts 
     preferred_staff_id: therapist.id, now: '2030-01-01T00:00:00.000Z',
   });
   expect(booked.appointments?.[0]?.scheduled_date).toContain(DAY);
+
+  return { therapist };
+}
+
+test('a therapist off: the pill names it, its fix clears the day, and Undo puts the day back', async ({ page, request }) => {
+  test.setTimeout(120000);
+  const call = await api(request);
+  await tidy(call);
+
+  const { therapist } = await build(call);
 
   await signIn(page);
 
@@ -133,6 +140,26 @@ test('a therapist off: the pill names it, its fix clears the day, and Undo puts 
   await verify.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(verify).toContainText('Put back as it was.', { timeout: 20000 });
   expect(await snapshot(call)).toEqual(before);
+
+  await tidy(call);
+});
+
+test('time off saved elsewhere shows in the pill when the app is back in view (#188)', async ({ page, request }) => {
+  test.setTimeout(120000);
+  const call = await api(request);
+  await tidy(call);
+  const { therapist } = await build(call);
+
+  await signIn(page);
+  await page.getByRole('button', { name: /^Change day/ }).click();
+  await page.getByRole('dialog').locator('input[type=date]').fill(DAY);
+  await expect(page.getByRole('navigation', { name: 'Main' })).toContainText('13 Mar', { timeout: 15000 });
+  await expect(page.getByRole('button', { name: /to fix/ })).toHaveCount(0);
+
+  // Another phone marks her off; this one only hears of it when it is looked at again.
+  await call('post', '/timeoff', { entity_type: 'staff', entity_id: therapist.id, start_date: DAY, end_date: DAY });
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('button', { name: /to fix/ })).toBeVisible({ timeout: 15000 });
 
   await tidy(call);
 });

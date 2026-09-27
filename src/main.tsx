@@ -23,6 +23,10 @@ if (typeof window !== "undefined") {
       localStorage.removeItem("authUser");
       window.location.assign("/login");
     }
+    // Time off changes what is wrong with the day, wherever it was saved (#188).
+    if (isApiCall && res.ok && /\/api\/(timeoff|holidays)/.test(url) && (init.method || "GET").toUpperCase() !== "GET") {
+      window.dispatchEvent(new Event("timeoff-changed"));
+    }
     return res;
   };
 }
