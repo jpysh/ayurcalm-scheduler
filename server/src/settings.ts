@@ -1,6 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from './server.js';
+import { wipeDemo } from './demoData.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { dirname } from 'node:path';
@@ -116,36 +117,11 @@ settingsRouter.put('/', requireAdmin, async (req: Request, res: Response) => {
   res.json(saved);
 });
 
-/**
- * Deletes everything a centre would consider "the demo", leaving user accounts
- * and settings intact so the operator stays signed in. Order matters: rows that
- * reference others go first.
- */
-const clearDemoData = () =>
-  prisma.$transaction(async (tx) => {
-    const appointments = await tx.appointment.deleteMany({});
-    await tx.dietPlanSegment.deleteMany({});
-    await tx.dietPlan.deleteMany({});
-    await tx.programEvent.deleteMany({});
-    await tx.timeOff.deleteMany({});
-    await tx.patientStay.deleteMany({});
-    const patients = await tx.patient.deleteMany({});
-    const therapies = await tx.therapy.deleteMany({});
-    const rooms = await tx.therapyRoom.deleteMany({});
-    const staff = await tx.staff.deleteMany({});
-    await tx.auditLog.deleteMany({});
-    await tx.settings.update({ where: { id: SINGLETON_ID }, data: { demo_data: false } });
-    return {
-      appointments: appointments.count,
-      patients: patients.count,
-      staff: staff.count,
-      rooms: rooms.count,
-      therapies: therapies.count,
-    };
-  });
+const clearDemoData = (keepTemplates = false) => prisma.$transaction((tx) => wipeDemo(tx, keepTemplates), { timeout: 120000 });
 
-settingsRouter.post('/clear-demo-data', requireAdmin, async (_req: Request, res: Response) => {
-  res.json({ ok: true, deleted: await clearDemoData() });
+settingsRouter.post('/clear-demo-data', requireAdmin, async (req: Request, res: Response) => {
+  const { keep } = z.object({ keep: z.enum(['templates']).optional() }).parse(req.body ?? {});
+  res.json({ ok: true, deleted: await clearDemoData(keep === 'templates') });
 });
 
 /**

@@ -120,6 +120,8 @@ const AdminDashboard = () => {
     fetch(`${API_BASE}/settings`)
       .then((r) => (r.ok ? r.json() : null))
       .then((s) => {
+        // Setup is a gate, not a suggestion (#60): an admin who never finished it goes back to it.
+        if (s?.setup_complete === false && localStorage.getItem("authRole") === "Admin") { navigate("/setup"); return; }
         if (s?.opening_time && s?.closing_time) {
           setCentreHours({ opening_time: s.opening_time, closing_time: s.closing_time, slot_minutes: s.slot_minutes ?? 30, timezone: s.timezone || "Asia/Kolkata" });
         }
@@ -539,6 +541,19 @@ const AdminDashboard = () => {
                 setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + (dx < 0 ? 1 : -1)));
               }
             }}>
+            {/* A new centre's first steps, until it can book (#60): each row opens the screen that adds it. */}
+            {staff.length === 0 || roomsList.length === 0 || patients.length === 0 ? (
+              <div className="mt-3 overflow-hidden rounded-2xl bg-card" aria-label="Get started">
+                <div className="px-4 pt-3 text-[13px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Get started</div>
+                {([["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first resident", patients.length]] as const).map(([tab, label, n]) => (
+                  <button key={tab} type="button" className="flex min-h-14 w-full items-center gap-3 border-b border-border px-4 text-left last:border-b-0" onClick={() => go(tab)}>
+                    <span className={n ? "text-primary" : "text-muted-foreground"}>{n ? "✓" : "○"}</span>
+                    <span className="flex-1 text-[16px]">{label}</span><span className="text-muted-foreground">›</span>
+                  </button>
+                ))}
+                <div className="px-4 py-3 text-[13px] text-muted-foreground">Then tap + to book the first treatment.</div>
+              </div>
+            ) : null}
             {scheduleScreen.tab}
           </TabsContent>
 

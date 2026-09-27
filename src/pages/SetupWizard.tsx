@@ -42,7 +42,8 @@ const SetupWizard = () => {
       ? form.working_days.filter((d) => d !== day)
       : [...form.working_days, day]);
 
-  const finish = async (keepDemoData: boolean) => {
+  /** all: keep the whole example centre; templates: keep its therapies and rooms only; none: start empty. */
+  const finish = async (keep: "all" | "templates" | "none") => {
     setBusy(true);
     try {
       const res = await fetch(`${API_BASE}/settings`, {
@@ -56,8 +57,8 @@ const SetupWizard = () => {
         setStep(2);
         return;
       }
-      if (!keepDemoData) {
-        const clear = await fetch(`${API_BASE}/settings/clear-demo-data`, { method: "POST" });
+      if (keep !== "all") {
+        const clear = await fetch(`${API_BASE}/settings/clear-demo-data`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(keep === "templates" ? { keep: "templates" } : {}) });
         if (!clear.ok) {
           toast.error("Saved your details, but could not clear the demo data");
         }
@@ -105,7 +106,7 @@ const SetupWizard = () => {
 
           {step === 2 && (
             <>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="w_open">Opens</Label>
                   <Input id="w_open" type="time" value={form.opening_time}
@@ -116,8 +117,8 @@ const SetupWizard = () => {
                   <Input id="w_close" type="time" value={form.closing_time}
                     onChange={(e) => set("closing_time", e.target.value)} />
                 </div>
-                <div className="space-y-1">
-                  <Label>Slot</Label>
+                <div className="col-span-2 space-y-1">
+                  <Label>Booking slots</Label>
                   <Select value={String(form.slot_minutes)} onValueChange={(v) => set("slot_minutes", Number(v))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -154,20 +155,22 @@ const SetupWizard = () => {
           {step === 3 && (
             <>
               <p className="text-sm text-muted-foreground">
-                This install came with an example centre — patients, therapists, rooms, therapies
-                and three months of appointments — so you could see how it works.
+                This install came with an example centre: residents, therapists, rooms, therapies
+                and three months of bookings, so you could see how it works.
               </p>
+              {/* The recommended start comes first: a real centre edits the example therapies and rooms
+                  rather than typing them, and only the example people and bookings are in its way (#60). */}
               <div className="grid gap-2">
-                <Button onClick={() => finish(true)} disabled={busy}>
-                  {busy ? "Setting up…" : "Keep the example data for now"}
+                <Button className="h-auto min-h-12 whitespace-normal py-2" onClick={() => finish("templates")} disabled={busy}>
+                  {busy ? "Setting up…" : "Start my own centre, with the example therapies and rooms"}
                 </Button>
-                <Button
-                  variant="secondary"
-                  className="border border-border bg-background hover:bg-muted text-foreground"
-                  onClick={async () => { if (await confirmSheet("Delete all the example patients, staff, rooms, therapies and appointments?\n\nThis cannot be undone.", "Delete")) finish(false); }}
-                  disabled={busy}
-                >
-                  Clear it and start with my own centre
+                <Button variant="outline" className="h-auto min-h-12 whitespace-normal py-2" onClick={() => finish("all")} disabled={busy}>
+                  Keep the example data for now
+                </Button>
+                <Button variant="ghost" className="h-auto min-h-12 whitespace-normal py-2 text-destructive"
+                  onClick={async () => { if (await confirmSheet("Delete all the example residents, therapists, rooms, therapies and bookings?\n\nThis cannot be undone.", "Delete")) finish("none"); }}
+                  disabled={busy}>
+                  Start completely empty
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">

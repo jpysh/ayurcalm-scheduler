@@ -346,3 +346,21 @@ test('on a phone, lists are plain rows and a tap opens the edit sheet (#178)', a
   await activePanel(page).getByRole('button', { name: /^Opening hours/ }).click();
   await expect(page.getByRole('dialog')).toContainText('Opens');
 });
+
+test('an admin who never finished setup is sent back to it (#60)', async ({ page, request }) => {
+  const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
+  const headers = { Authorization: `Bearer ${token}` };
+  const s = await (await request.get('/api/settings', { headers })).json();
+  const { centre_name, address, timezone, opening_time, closing_time, slot_minutes, working_days, logo } = s;
+  const put = (setup_complete: boolean) => request.put('/api/settings', { headers, data: { centre_name, address, timezone, opening_time, closing_time, slot_minutes, working_days, logo, setup_complete } });
+  expect((await put(false)).ok()).toBeTruthy();
+  try {
+    await signIn(page);
+    await page.waitForURL(/\/setup/);
+    // Straight to the day: the wizard used to be a suggestion, skipped by typing the address.
+    await page.goto('/admin/schedule');
+    await page.waitForURL(/\/setup/, { timeout: 15000 });
+  } finally {
+    await put(true);
+  }
+});
