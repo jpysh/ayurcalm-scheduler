@@ -12,6 +12,7 @@ import { bookingSuggestions, cardChoices } from './cardChoices.js';
 import { historyOf } from './history.js';
 import { searchTreatments } from './search.js';
 import { residentDay } from './residentDay.js';
+import { changeLog } from './changeLog.js';
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:5433/ayurcalm_dev?schema=public';
@@ -463,6 +464,12 @@ app.delete('/patients/:id', async (req: Request, res: Response) => {
     } catch {}
   });
   res.status(204).end();
+});
+
+// The Log (#130): the last month's changes, newest first.
+app.get('/log', async (req: Request, res: Response) => {
+  const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
+  res.json({ entries: await changeLog(days, prisma) });
 });
 
 // The resident card (#63): the stay, today's treatments and meals.
