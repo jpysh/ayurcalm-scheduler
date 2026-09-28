@@ -52,6 +52,7 @@ run coTherapist        "A treatment worked by two books both therapists: neither
 run dayPlan            "Verify's fix for a day is one plan with no clashes, and accepting then undoing it restores the day"
 run ownTherapist       "A resident kept to their own therapist goes to that therapist's next free day when it is soon, and otherwise the admin is asked with three choices"
 run therapyLibrary     "The therapy library adds a therapy once, as edited, never twice under the same name"
+run printedSheets      "Printing a day keeps one copy of each sheet, replaced by the next print, and copies older than 90 days are removed"
 run discharge          "A discharge summary is written from the doctor's link and the card, numbered once, closed to the link when final, and prints on two A4 pages"
 run doctors            "A doctor and their consultations print on the doctor rota, not the therapist rota"
 run daySheet           "The day sheet lists every resident, treatment time and therapist, in its groups, with no empty boxes"
