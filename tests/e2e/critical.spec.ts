@@ -416,6 +416,8 @@ test('after a consultation, the note on the day opens the resident\'s meals in o
   await diet.first().click();
   // The meals sheet lived inside the Residents screen, so from the day it never showed.
   await expect(page.getByRole('dialog').getByText(/^Diet for one day/)).toBeVisible();
+});
+
 test('Therapies offers the standard library, and a seeded centre already has all of it (#219)', async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
