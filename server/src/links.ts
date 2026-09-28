@@ -10,6 +10,8 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { centreClock, teamOf } from './availability.js';
+import { dischargeOf, saveDischarge } from './discharge.js';
+import { renderDischarge } from './pdf/dischargePdf.js';
 
 const prisma = new PrismaClient();
 export const newLinkToken = () => randomBytes(18).toString('base64url');
@@ -117,4 +119,45 @@ linkRouter.post('/:token/issues', async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Not one of your treatments.' }); return;
   }
   res.status(201).json(await prisma.linkIssue.create({ data: { staff_id: who.id, kind: body.kind, note: body.note || null, appointment_id: body.appointment_id ?? null } }));
+});
+
+// The doctor writes the discharge summary from their link (#194): residents
+// leaving within three days either side of today. Once the admin marks one
+// final it reads but no longer saves.
+const DAY_MS = 86400000;
+async function doctorOf(req: Request, res: Response) {
+  const who = await personOf(String(req.params.token));
+  if (!who) { gone(res); return null; }
+  if (who.kind !== 'doctor') { res.status(403).json({ error: 'Only a doctor writes discharge summaries.' }); return null; }
+  return who;
+}
+linkRouter.get('/:token/discharges', async (req: Request, res: Response) => {
+  if (!(await doctorOf(req, res))) return;
+  const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  const today = new Date(`${centreClock(settings?.timezone || 'Asia/Kolkata').date}T00:00:00.000Z`);
+  const stays = await prisma.patientStay.findMany({
+    where: { end_date: { gte: new Date(today.getTime() - 3 * DAY_MS), lte: new Date(today.getTime() + 3 * DAY_MS) } },
+    orderBy: { end_date: 'asc' }, include: { Patient: { select: { name: true } } },
+  });
+  res.json(stays.map((s) => ({ stay_id: s.id, name: s.Patient.name, to: s.end_date.toISOString().slice(0, 10), saved: !!s.discharge, final: !!(s.discharge as { final?: boolean } | null)?.final })));
+});
+linkRouter.get('/:token/discharges/:stayId', async (req: Request, res: Response) => {
+  if (!(await doctorOf(req, res))) return;
+  const v = await dischargeOf(String(req.params.stayId), prisma);
+  if (!v) { res.status(404).json({ error: 'Stay not found' }); return; }
+  res.json(v);
+});
+linkRouter.put('/:token/discharges/:stayId', async (req: Request, res: Response) => {
+  if (!(await doctorOf(req, res))) return;
+  const out = await saveDischarge(String(req.params.stayId), req.body, 'doctor', prisma);
+  if ('error' in out) { res.status(out.error ?? 404).json({ error: out.error === 409 ? 'The centre has made this summary final. Ask them to change it.' : 'Stay not found' }); return; }
+  res.json(await dischargeOf(String(req.params.stayId), prisma));
+});
+linkRouter.get('/:token/discharges/:stayId/pdf', async (req: Request, res: Response) => {
+  if (!(await doctorOf(req, res))) return;
+  const out = await renderDischarge(String(req.params.stayId), prisma);
+  if (!out) { res.status(404).json({ error: 'Stay not found' }); return; }
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(out.filename)}"`);
+  res.send(out.pdf);
 });

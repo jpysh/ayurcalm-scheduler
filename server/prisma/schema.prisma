@@ -51,6 +51,10 @@ model PatientStay {
   concerns      String?
   /// External tests the doctor asked for (blood work, scans).
   tests         String?
+  /// The discharge summary (#194): written by the doctor from their link or by
+  /// the admin on the card; `final` is the admin's last word and locks the link.
+  /// Shape is `Discharge` in src/discharge.ts.
+  discharge     Json?
 
   Patient Patient @relation(fields: [patient_id], references: [id])
 }
@@ -68,6 +72,11 @@ model Staff {
   role            String   @default("therapist")
   /// The private link to their own day (#219): no sign-in, reissued to revoke.
   link_token      String?  @unique
+  /// Printed under a doctor's signature on the discharge summary.
+  qualification   String?
+  reg_no          String?
+  /// Signature image as a data: URI, kept in the row so backups keep it.
+  signature       String?
 
   Appointments Appointment[]
 }
@@ -311,6 +320,10 @@ model Settings {
   /// Whether a therapy marked as needing a gender match is allowed to be booked
   /// without one. On by default; a centre that asks residents turns it off.
   enforce_gender_match     Boolean  @default(true)
+  /// The discharge summary's letterhead: seal logo, second-language name,
+  /// registration and accreditation lines, phones, email, website, footer and
+  /// the discharge number format. Shape is `Letterhead` in src/discharge.ts.
+  letterhead               Json?
   updated_at               DateTime @updatedAt
 }
 

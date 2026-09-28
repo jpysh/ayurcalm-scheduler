@@ -6,6 +6,8 @@ import { staffEventBusy } from './availability.js';
 import bcrypt from 'bcrypt';
 import { DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD } from './auth.js';
 import { indiaHolidays } from "./indiaHolidays.js";
+import { readFileSync } from 'node:fs';
+import { saveDischarge } from './discharge.js';
 
 const prisma = new PrismaClient();
 
@@ -185,7 +187,7 @@ async function main() {
   const dayTimes = ['09:00','10:00','11:00','14:00','15:00','16:00','17:00','18:00'];
   // One knob, not a second dataset: a stress fixture kept beside the demo one
   // drifts from it, and then a test passes on data no install has.
-  const treatmentsPerRoom = Math.max(1, Math.min(dayTimes.length, Number(process.env.SEED_TREATMENTS_PER_ROOM) || 3));
+  const treatmentsPerRoom = Math.max(1, Math.min(dayTimes.length, Number(process.env.SEED_TREATMENTS_PER_ROOM) || 4));
   // Patients are taken in rotation rather than at random so a day's bookings
   // land on ~40 different people. A real centre of this size treats most of its
   // residents each day, and picking at random gave the same dozen names twice
@@ -236,8 +238,9 @@ async function main() {
     for (const r of rooms) {
       const rDay = (scheduleStd as any)[['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][weekday]];
       if (!rDay) continue;
-      // Three treatments per room per day: a resident on a course has two or
+      // Four treatments per room per day: a resident on a course has two or
       // three a day, and about forty are in house, which the day sheet must hold.
+      // Three left some days with under thirty residents treated.
       // SEED_TREATMENTS_PER_ROOM raises that for checking how the sheet and the
       // screens behave at a size no demo install has.
       let slotsCreatedForRoom = 0;
@@ -499,6 +502,72 @@ async function main() {
     if (consulted) await prisma.patient.update({ where: { id: stay.patient_id }, data: { doctor_plan: randomOf(plans) } });
   }
 
+
+  // The discharge summary (#194): a made-up centre's letterhead, the doctors'
+  // credentials and signatures, BP on the treatment records, and a complete
+  // summary for everyone leaving between a week ago and the day after tomorrow.
+  const png = (f: string) => `data:image/png;base64,${readFileSync(new URL(`../assets/${f}`, import.meta.url)).toString('base64')}`;
+  const letterhead = {
+    seal_logo: png('demo-seal.png'), name_local: 'हिमालय आयुर्वेद रिट्रीट',
+    registration_line: 'Registered under the Societies Registration Act, No. S-00000 of 2010',
+    accreditation_line: 'Accreditation No. DEMO-2024-0001',
+    phones: '+91 5966 000000, +91 90000 00000', email: 'care@himalaya-retreat.example', website: 'himalaya-retreat.example',
+    footer_line: 'Himalaya Ayurveda Retreat · a demo centre, not a real place', discharge_format: 'HAR/{YYYY}/{N}',
+  };
+  // Before the summaries, so their numbers follow the centre's format.
+  // The demo is one made-up centre whatever CENTRE_NAME says; the setup wizard renames a real one.
+  const centre = { centre_name: 'Himalaya Ayurveda Retreat', address: 'Near the golf course, Ranikhet, Uttarakhand', logo: png('demo-logo.png') };
+  await prisma.settings.upsert({ where: { id: 'singleton' }, update: { letterhead, ...centre }, create: { id: 'singleton', letterhead, ...centre, opening_time: '09:00', closing_time: '20:00' } });
+  await Promise.all(doctors.map((d, i) => prisma.staff.update({ where: { id: d.id }, data: {
+    qualification: ['BAMS, MD (Panchakarma)', 'BAMS, MD (Kayachikitsa)', 'BAMS'][i], reg_no: `UK-AY-${2100 + i * 37}`, signature: png(`sig-${i + 1}.png`),
+  } })));
+  const diagnoses: Record<string, [string, string]> = {
+    'Lower back pain, poor sleep': ['Kati shool (lumbar spondylosis) with Anidra', 'Vata Kapha'],
+    'Stress and fatigue': ['Manasika shrama (stress-related fatigue)', 'Vata Pitta'],
+    'Joint stiffness in the mornings': ['Amavata (early inflammatory arthritis)', 'Kapha Vata'],
+    'Digestion, acidity': ['Amlapitta (hyperacidity)', 'Pitta'],
+    'Weight and energy': ['Sthaulya (obesity) with low energy', 'Kapha'],
+    'Recovery after illness': ['Post-viral debility', 'Vata'],
+  };
+  const med = (name: string, dose: string, timing = 'after food', days = '') => ({ name, dose, timing, from: '', days });
+  const leaving = await prisma.patientStay.findMany({
+    where: { end_date: { gte: new Date(today.getTime() - 7 * DAY_MS), lte: new Date(today.getTime() + 2 * DAY_MS) }, start_date: { lt: today } },
+    include: { Patient: true },
+  });
+  for (const [i, st] of leaving.entries()) {
+    const appts = await prisma.appointment.findMany({ where: { patient_id: st.patient_id, scheduled_date: { gte: st.start_date, lte: st.end_date < today ? st.end_date : today } }, orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }] });
+    const seen = new Set<string>();
+    for (const [k, a] of appts.entries()) {
+      const day = a.scheduled_date.toISOString().slice(0, 10);
+      if (seen.has(day)) continue;
+      seen.add(day);
+      await prisma.appointment.update({ where: { id: a.id }, data: { record: { vitals: { bp: `${136 - Math.min(k, 12) - (i % 4)}/${88 - Math.min(k, 8) + (i % 3)}` } } } });
+    }
+    await prisma.patient.update({ where: { id: st.patient_id }, data: {
+      date_of_birth: new Date(Date.UTC(1958 + (i * 7) % 40, i % 12, 1 + (i * 3) % 27)),
+      email: `${st.Patient.name.toLowerCase().replace(/[^a-z]+/g, '.')}@example.com`,
+    } });
+    const [diagnosis, dosha] = diagnoses[st.concerns || ''] || ['General rejuvenation (Rasayana)', 'Vata Pitta'];
+    const weeks = Math.max(1, Math.round((st.end_date.getTime() - st.start_date.getTime()) / DAY_MS / 7));
+    await saveDischarge(st.id, {
+      registration_no: String(16000 + i * 13), address: `${12 + i} Mall Road, ${['Dehradun', 'Pune', 'Bengaluru', 'Kochi', 'Delhi'][i % 5]}`,
+      country: i % 5 === 3 ? 'Germany' : 'India', passport: i % 5 === 3 ? `C${4021870 + i}` : '',
+      ...(i % 2 ? { payment_amount: `Rs. ${(weeks * 31500).toLocaleString('en-IN')}.00`, payment_mode: 'Bank transfer', payment_date: st.end_date.toISOString().slice(0, 10) } : {}),
+      weight: `${58 + (i * 5) % 30} kg`, bowel: 'Regular', appetite: 'Normal', sleep: i % 3 ? 'Normal' : 'Improved, 6–7 hours',
+      menstrual: st.Patient.gender === 'female' ? 'Regular' : 'NA', dosha,
+      diagnosis, reason: `${st.concerns}. Came for a ${weeks}-week course.`,
+      investigations: st.tests ? `${st.tests}: report attached separately.` : 'None.',
+      meds_stay: [med('Dashmool Kwath', '10 ml twice daily', 'after food', String(weeks * 7 - 3)), med('Tab. Yograj Guggulu', '1-X-1', 'after food', '10'), med('Cap. Ashwagandha', 'X-X-1', 'at bedtime', '10')],
+      meds_home: [med('Tab. Yograj Guggulu', '1-X-1'), med('Cap. Ashwagandha', 'X-X-1', 'at bedtime'), med('Triphala churna', '1 tsp', 'warm water at night')],
+      meds_home_for: '1 month',
+      instructions: 'Avoid fried and oily food, curd at night, cold drinks and ice cream. Yoga and meditation 20–30 minutes a day, or walk 30 minutes.',
+      follow_up: 'Please contact the centre for a consultation after 30 days.',
+      urgent_when: 'Any new pain, fever, breathlessness, or if you feel unwell.',
+      urgent_how: `Call the centre on ${letterhead.phones.split(',')[0]} or WhatsApp the duty doctor.`,
+      final: st.end_date < today,
+    }, 'admin', prisma);
+  }
+
   // One patient given something different for one meal today, so the override
   // that a template edit must not overwrite is visible in the demo.
   const overridden = residents[0];
@@ -523,8 +592,7 @@ async function main() {
     where: { id: 'singleton' },
     update: { demo_data: true, setup_complete: true },
     create: {
-      id: 'singleton', demo_data: true, setup_complete: true,
-      centre_name: process.env.CENTRE_NAME || 'Wellness Centre',
+      id: 'singleton', demo_data: true, setup_complete: true, ...centre,
       // The modelled centre treats into the evening, and the Schedule grid is
       // built from these, so a 19:00 treatment is invisible without them.
       opening_time: '09:00', closing_time: '20:00',

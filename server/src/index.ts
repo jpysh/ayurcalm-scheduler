@@ -40,7 +40,8 @@ expressApp.use(cors({
 // Settings carries a logo data: URI, so it gets a larger body limit than the
 // rest of the API, which stays tight at 100kb.
 expressApp.use((req: Request, res: Response, next: NextFunction) => {
-  if (req.path.startsWith('/api/settings')) return express.json({ limit: '2mb' })(req, res, next);
+  // Logos and a doctor's signature travel as data: URIs.
+  if (req.path.startsWith('/api/settings') || req.path.startsWith('/api/staff')) return express.json({ limit: '2mb' })(req, res, next);
   return express.json({ limit: '100kb' })(req, res, next);
 });
 

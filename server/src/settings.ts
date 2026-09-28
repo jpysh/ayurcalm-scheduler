@@ -2,6 +2,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { z } from 'zod';
 import { prisma } from './server.js';
 import { wipeDemo } from './demoData.js';
+import { letterheadSchema } from './discharge.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { dirname } from 'node:path';
@@ -53,6 +54,7 @@ const settingsSchema = z.object({
   patient_support_whatsapp: z.string().trim().regex(/^\d{8,15}$/, 'Use international format with no + or leading zero, e.g. 420777558262').or(z.literal('')).nullish(),
   setup_complete: z.boolean().optional(),
   enforce_gender_match: z.boolean().optional(),
+  letterhead: letterheadSchema.optional(),
 }).refine(
   v => toMinutes(v.closing_time) > toMinutes(v.opening_time),
   { message: 'Closing time must be after opening time', path: ['closing_time'] },

@@ -109,11 +109,11 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
   };
   const summary = async () => {
     if (!d?.stay) return;
-    const res = await fetch(`${API_BASE}/patients/${d.id}/stays/${d.stay.id}/summary-pdf`);
-    if (!res.ok) { toast.error("The summary could not be made."); return; }
+    const res = await fetch(`${API_BASE}/patients/${d.id}/stays/${d.stay.id}/discharge-pdf`);
+    if (!res.ok) { toast.error("The discharge summary could not be made."); return; }
     const a = document.createElement("a");
     a.href = URL.createObjectURL(await res.blob());
-    a.download = `${d.name} - stay summary.pdf`;
+    a.download = `${d.name} - discharge summary.pdf`;
     a.click();
   };
   const savePlan = async () => {
@@ -196,7 +196,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
               </button>
               <button type="button" className={fact} onClick={summary}>
                 <span className="w-5 flex-none">↓</span>
-                <span className="flex-1">Summary for {d.name.split(' ')[0]} (PDF)</span>
+                <span className="flex-1">Discharge summary for {d.name.split(' ')[0]} (PDF)</span>
               </button>
             </div>
           </>) : null}
