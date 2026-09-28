@@ -474,6 +474,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
                     {infoAppointments.map((a) => (
                       <div key={a.id} className="text-xs">
                         {longDay(a.scheduled_date)} · {a.start_time} · {therapyNameById[String(a.therapy_id)] || a.therapy_id}
+                        {recordLine(a) ? <div className="text-muted-foreground">{recordLine(a)}</div> : null}
                       </div>
                     ))}
                     {infoAppointments.length === 0 && <p className="text-xs text-muted-foreground">No treatments</p>}
@@ -523,3 +524,15 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
 
   return { tab, dialogs, openResident: setCardId, openMeals: setMealsFor };
 }
+
+/** What the links recorded on a treatment (#219), in a line: records only, beside the therapy. */
+const recordLine = (a: ApiAppointment) => {
+  const r = a.record;
+  if (!r) return '';
+  const checks = Object.values(r.checklist || {});
+  return [
+    Object.entries(r.vitals || {}).filter(([, v]) => v).map(([k, v]) => `${k === 'bp' ? 'BP' : k} ${v}`).join(', '),
+    checks.length ? `${checks.filter(Boolean).length} checks ticked` : '',
+    r.feedback ? `${r.feedback === 'up' ? '👍' : '👎'}${r.feedback_note ? ` ${r.feedback_note}` : ''}` : '',
+  ].filter(Boolean).join(' · ');
+};
