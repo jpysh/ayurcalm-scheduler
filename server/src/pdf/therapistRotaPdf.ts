@@ -222,7 +222,10 @@ export const buildRota = (input: {
  * page, time across. The centre sheet is read by a resident looking for their
  * own row; this one is read by the team and whoever is running the day.
  */
-export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaClient, staffId?: string): Promise<Buffer> {
+export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaClient, staffId?: string, role: 'therapist' | 'doctor' = 'therapist'): Promise<Buffer> {
+  // The doctor rota is this sheet with the doctors on it (#219): one layout to
+  // keep right, not two. A single person asked for by id prints whatever their role.
+  const Person = role === 'doctor' ? 'Doctor' : 'Therapist';
   // 1cm all round. The rota is read off a board, so the page is worth more
   // than the white edge around it.
   const margin = 28.35;
@@ -241,7 +244,7 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
     prisma.therapyRoom.findMany(),
     prisma.patient.findMany(),
     prisma.therapy.findMany(),
-    prisma.staff.findMany(),
+    prisma.staff.findMany(staffId ? undefined : { where: { role } }),
     // A cancelled treatment is not on paper (#161); a no-show still is, marked (#94).
     prisma.appointment.findMany({ where: { scheduled_date: day, status: { not: 'cancelled' } } }),
     prisma.programEvent.findMany({ where: { OR: [{ date: day }, { AND: [{ start_date: { lte: day } }, { end_date: { gte: day } }] }] } }),
@@ -270,16 +273,16 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
     onlyStaffId: staffId,
   });
 
-  addHeader(doc, dateISO, `${centreName} — Therapist rota`);
+  addHeader(doc, dateISO, `${centreName} — ${Person} rota`);
   const startY = doc.y + 2;
 
   if (rota.rows.length === 0) {
-    doc.fontSize(12).text('No therapists on record for this date.', x, startY + 8);
+    doc.fontSize(12).text(`No ${Person.toLowerCase()}s on record for this date.`, x, startY + 8);
     doc.end();
     return await done;
   }
 
-  const headers = ['Therapist', ...rota.slots.map((s) => s.label)];
+  const headers = [Person, ...rota.slots.map((s) => s.label)];
   const colWidths = headers.map((_, k) => (k === 0 ? NAME_W : (w - NAME_W) / Math.max(1, rota.slots.length)));
   const colX = headers.map((_, k) => x + colWidths.slice(0, k).reduce((a, b) => a + b, 0));
 

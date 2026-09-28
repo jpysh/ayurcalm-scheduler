@@ -26,6 +26,10 @@ model Patient {
   /// True when that is a condition of their treatment rather than a habit: the
   /// replan offers them a different time rather than different hands.
   requires_preferred_staff Boolean @default(false)
+  /// The doctor's current plan for this resident, written after a consultation
+  /// and read on the resident's card. One note, not a history: each
+  /// consultation's own note stays on that appointment.
+  doctor_plan String?
 
   DietPlans        DietPlan[]
   DietPlanSegments DietPlanSegment[]
@@ -51,6 +55,9 @@ model Staff {
   phone           String?
   weekly_schedule Json
   is_active       Boolean  @default(true)
+  /// "therapist" or "doctor". A doctor is booked for consultations, which are
+  /// therapies with is_consultation set, through the same scheduler and guard.
+  role            String   @default("therapist")
 
   Appointments Appointment[]
 }
@@ -74,6 +81,9 @@ model Therapy {
   /// How many therapists the treatment needs. A rule the guard enforces, not a
   /// choice made per booking: a four-hand Pizhichil always needs two.
   staff_required        Int      @default(1)
+  /// A doctor's consultation rather than a treatment: given by a doctor, printed
+  /// on the doctor rota, and followed by a prompt to review diet and therapies.
+  is_consultation       Boolean  @default(false)
   // Rest for the patient and cleanup for the room after an oil or steam
   // therapy. One number because no centre has asked to tell the two apart.
   description           String?

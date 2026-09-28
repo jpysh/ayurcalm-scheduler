@@ -218,6 +218,7 @@ app.post('/staff', async (req: Request, res: Response) => {
     specializations: z.array(z.string()).default([]),
     phone: z.string().optional(),
     weekly_schedule: z.record(z.string(), z.any()).default({}),
+    role: z.enum(['therapist', 'doctor']).default('therapist'),
   });
   const body = schema.parse(req.body);
   const s = await prisma.staff.create({ data: { ...body, name: body.name.trim(), is_active: true } });
@@ -233,6 +234,7 @@ app.put('/staff/:id', async (req: Request, res: Response) => {
     phone: z.string().optional(),
     weekly_schedule: z.record(z.string(), z.any()).optional(),
     is_active: z.boolean().optional(),
+    role: z.enum(['therapist', 'doctor']).optional(),
   });
   const body = schema.parse(req.body);
   const data = { ...body } as any;
@@ -322,6 +324,7 @@ app.post('/therapies', async (req: Request, res: Response) => {
     requires_gender_match: z.boolean().default(false),
     staff_required: z.number().int().min(1).max(6).default(1),
     description: z.string().optional(),
+    is_consultation: z.boolean().default(false),
   });
   const body = schema.parse(req.body);
   const t = await prisma.therapy.create({ data: body });
@@ -337,6 +340,7 @@ app.put('/therapies/:id', async (req: Request, res: Response) => {
     requires_gender_match: z.boolean().optional(),
     staff_required: z.number().int().min(1).max(6).optional(),
     description: z.string().optional(),
+    is_consultation: z.boolean().optional(),
   });
   const body = schema.parse(req.body);
   const t = await prisma.therapy.update({ where: { id }, data: body });
@@ -435,6 +439,7 @@ app.put('/patients/:id', async (req: Request, res: Response) => {
     medical_notes: z.string().optional(),
     preferred_staff_id: z.string().uuid().nullable().optional(),
     requires_preferred_staff: z.boolean().optional(),
+    doctor_plan: z.string().max(4000).nullable().optional(),
   });
   const body = schema.parse(req.body);
   const data: any = { ...body };
@@ -1102,14 +1107,15 @@ app.delete('/program-events/:id', async (req: Request, res: Response) => {
 app.get('/daily-schedule-pdf', async (req: Request, res: Response) => {
   const date = req.query.date as string | undefined;
   const staffId = typeof req.query.staff_id === 'string' && req.query.staff_id ? req.query.staff_id : undefined;
-  const rota = staffId != null || req.query.view === 'therapist';
+  const doctors = req.query.view === 'doctor';
+  const rota = staffId != null || req.query.view === 'therapist' || doctors;
   if (!date) { res.status(400).json({ error: 'Missing date' }); return; }
   try {
     const pdf = rota
-      ? await generateTherapistRotaPdf(date, prisma, staffId)
+      ? await generateTherapistRotaPdf(date, prisma, staffId, doctors ? 'doctor' : 'therapist')
       : await generateDailySchedulePdf(date, prisma);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="ayurcalm-${rota ? 'therapist-rota' : 'daily-schedule'}-${date}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="ayurcalm-${doctors ? 'doctor-rota' : rota ? 'therapist-rota' : 'daily-schedule'}-${date}.pdf"`);
     res.send(pdf);
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Failed to generate PDF';
