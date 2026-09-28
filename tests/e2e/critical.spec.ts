@@ -434,8 +434,8 @@ test('leave for a day ahead is marked from Team, and a whole day carries no hour
   const sheet = page.getByRole('dialog');
   await sheet.getByRole('button', { name: 'Away another day' }).click();
   // A fixed day far ahead, so the demo's own days are never touched.
-  await sheet.getByLabel('From').fill('2030-03-04');
-  await sheet.getByLabel('To').fill('2030-03-05');
+  await sheet.getByLabel('From', { exact: true }).fill('2030-03-04');
+  await sheet.getByLabel('To', { exact: true }).fill('2030-03-05');
   const [req] = await Promise.all([
     page.waitForRequest((r) => r.url().endsWith('/timeoff') && r.method() === 'POST'),
     sheet.getByRole('button', { name: /Mark leave/ }).click(),
@@ -526,4 +526,34 @@ test('a therapist\'s private link opens their own day with no sign-in, and a tic
   await expect(page.getByText('Feedback', { exact: true })).toHaveCount(0);
   await page.goto('/l/not-a-real-link-token-000000');
   await expect(page.getByText('This link is no longer valid.', { exact: false })).toBeVisible({ timeout: 15000 });
+});
+
+test('an event is added, edited and deleted from one labelled sheet (#227)', async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  await openTab(page, 'Events');
+  const name = `E2E Walk ${Date.now()}`;
+  await activePanel(page).getByRole('button', { name: 'Add event' }).click();
+  const sheet = page.getByRole('dialog').last();
+  await sheet.getByLabel('Name', { exact: true }).fill(name);
+  await sheet.getByLabel('From', { exact: true }).fill('06:00');
+  await sheet.getByLabel('To', { exact: true }).fill('06:30');
+  await sheet.getByRole('button', { name: 'Some days' }).click();
+  await sheet.getByRole('button', { name: 'sunday' }).click();
+  await sheet.getByRole('button', { name: 'Optional' }).click();
+  await sheet.getByRole('button', { name: 'Add', exact: true }).click();
+  const row = activePanel(page).getByRole('button', { name: new RegExp(name) });
+  await expect(row).toContainText('Sun');
+  await expect(row).toContainText('optional');
+  // Nothing in the sheet is wider than the phone.
+  await row.click();
+  const edit = page.getByRole('dialog').last();
+  await expect(edit.getByLabel('Name', { exact: true })).toHaveValue(name);
+  expect(await edit.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  await edit.getByLabel('To', { exact: true }).fill('06:45');
+  await edit.getByRole('button', { name: 'Save' }).click();
+  await expect(row).toContainText('06:00–06:45');
+  await row.click();
+  await page.getByRole('dialog').last().getByRole('button', { name: 'Delete' }).click();
+  await expect(row).toHaveCount(0);
 });

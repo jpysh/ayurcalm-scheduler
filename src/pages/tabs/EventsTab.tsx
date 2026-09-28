@@ -1,673 +1,179 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandGroup, CommandInput, CommandItem, CommandList, CommandEmpty } from "@/components/ui/command";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { Edit, Plus, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import { useRef, useState } from "react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
+import { BottomSheet } from "@/components/BottomBar";
+import PageHead from "@/components/PageHead";
 import { API_TOKEN, type ApiProgramEvent, type UiStaff, type UiRoom, type Patient } from "./shared";
 
-const EventsTab = ({
-  events,
-  visibleEventsRows,
-  eventsTotalRef,
-  editingEventId,
-  setEditingEventId,
-  originalEvent,
-  setOriginalEvent,
-  scheduleEventAutosave,
-  roomsList,
-  staff,
-  patients,
-  amenityOptions,
-  eventAmenityDrafts,
-  setEventAmenityDrafts,
-  toggleEventAmenity,
-  addAmenityToEvent,
-  isMobile,
-  staffNameById,
-  patientNameById,
-  API_BASE,
-  API_TOKEN,
-  setShowAddEvent,
-  setEvents,
-}: any) => {
-  const formatIndianDate = (iso?: string) => {
-    if (!iso) return "";
-    const d = new Date(iso);
-    return d.toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "2-digit" });
-  };
+/**
+ * Classes and events (#227): a list, and one labelled form for adding and
+ * editing, as the Leave sheet has: name, time, days, who runs it, room, and
+ * whether residents are expected. The old inline table edit overflowed at 375px.
+ */
+const WEEK = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
+type Form = {
+  id?: string; activity_name: string; start_time: string; end_time: string;
+  days: "daily" | "weekdays" | "once"; weekdays: string[]; date: string;
+  staff_ids: string[]; room_id: string; is_optional: boolean;
+  /** What the form does not show (who among residents, amenities), kept as it was. */
+  raw?: ApiProgramEvent & { patients_scope?: string | null; patient_ids?: string[] };
+};
+const blank = (): Form => ({ activity_name: "", start_time: "07:00", end_time: "08:00", days: "daily", weekdays: [], date: "", staff_ids: [], room_id: "", is_optional: false });
 
-  return (
-    <Card>
-      <CardHeader className="px-2 md:px-4 pt-2 md:pt-4 pb-1 md:pb-2">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base md:text-xl font-semibold">Events</CardTitle>
-          <Button size="sm" className="min-h-11 rounded-full px-4" onClick={() => setShowAddEvent(true)}>
-            <Plus className="mr-1 h-4 w-4" />Add event
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0 p-1 md:p-2 space-y-2">
-        <Table className="cards-sm">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Activity</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Time</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Start Date</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">End Date</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Room</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Staff</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Req. Amenities</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Patients</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Attendance</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Recurring</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(() => {
-              // By time of day, as the day is read (#137).
-              const once = (x: any) => (x.recurrence === 'weekly' && (x.weekdays || []).length ? '' : String(x.date || x.start_date || ''));
-              // The daily round first, then one-off events by their day.
-              const rows = [...events].sort((a: any, b: any) => once(a).localeCompare(once(b)) || (a.start_time || '').localeCompare(b.start_time || '') || (a.activity_name || '').localeCompare(b.activity_name || ''));
-              eventsTotalRef.current = rows.length;
-              const shown = rows.slice(0, visibleEventsRows);
-              return shown.map((ev: any) => (
-                <TableRow key={ev.id} className="h-7">
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
-                    {editingEventId === ev.id ? (
-                      <Input value={ev.activity_name} onChange={(e) => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, activity_name: e.target.value } : x)); }} onBlur={() => scheduleEventAutosave(ev.id, 'Activity')} />
-                    ) : (
-                      ev.activity_name
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
-                    {editingEventId === ev.id ? (
-                      <div className="flex gap-1">
-                        <div className="flex gap-1 items-center">
-                          <Input type="time" step="900" value={ev.start_time || ''} onChange={(e) => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, start_time: e.target.value } : x)); }} onBlur={() => scheduleEventAutosave(ev.id, 'Time')} />
-                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, start_time: '' } : x)); scheduleEventAutosave(ev.id, 'Time'); }}>Clear</Button>
-                        </div>
-                        <div className="flex gap-1 items-center">
-                          <Input type="time" step="900" value={ev.end_time || ''} onChange={(e) => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, end_time: e.target.value } : x)); }} onBlur={() => scheduleEventAutosave(ev.id, 'Time')} />
-                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, end_time: '' } : x)); scheduleEventAutosave(ev.id, 'Time'); }}>Clear</Button>
-                        </div>
-                      </div>
-                    ) : (
-                      `${ev.start_time}–${ev.end_time}`
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
-                    {editingEventId === ev.id ? (
-                      <Input type="date" value={(ev.start_date || ev.date || '')?.slice(0,10) || ''} onChange={(e) => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, start_date: e.target.value } : x)); }} onBlur={() => scheduleEventAutosave(ev.id, 'Start Date')} />
-                    ) : (
-                      (() => { const d = ev.start_date || ev.date || ''; return d ? formatIndianDate(d) : ''; })()
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
-                    {editingEventId === ev.id ? (
-                      <Input type="date" value={(ev.end_date || '')?.slice(0,10) || ''} onChange={(e) => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, end_date: e.target.value } : x)); }} onBlur={() => scheduleEventAutosave(ev.id, 'End Date')} />
-                    ) : (
-                      (() => { const d = ev.end_date || ''; return d ? formatIndianDate(d) : ''; })()
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
-                    {editingEventId === ev.id ? (
-                      <Select value={String(ev.room_id || '')} onValueChange={(v) => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, room_id: v } : x)); scheduleEventAutosave(ev.id, 'Room'); }}>
-                        <SelectTrigger className="h-7"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {roomsList.filter((r: any) => ((ev.required_amenities || []) as string[]).every((a: any) => r.amenities.includes(a))).map((r: any) => (<SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      (() => { const r = roomsList.find((r: any) => String(r.id) === String(ev.room_id)); return r ? r.name : '—'; })()
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
-                    {editingEventId === ev.id ? (
-                      <Popover onOpenChange={(open) => { if (!open) scheduleEventAutosave(ev.id, 'Staff'); }}>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
-                            {(() => {
-                              const scope = (ev as any).staff_scope || 'none';
-                              const count = Array.isArray((ev as any).staff_ids) ? (ev as any).staff_ids.length : 0;
-                              if (scope === 'all') return 'All';
-                              if (scope === 'none') return count > 0 ? `${count} staff` : 'None';
-                              return count > 0 ? `${count} staff` : 'Select…';
-                            })()}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="p-0 w-72">
-                          <Command>
-                            <CommandInput placeholder="Search staff" />
-                            <CommandList>
-                              <CommandGroup>
-                                <CommandItem onSelect={() => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, staff_scope: 'all', staff_ids: [], staff_id: null } as any : x)); }}>All</CommandItem>
-                                <CommandItem onSelect={() => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, staff_scope: 'none', staff_ids: [], staff_id: null } as any : x)); }}>None</CommandItem>
-                              </CommandGroup>
-                              <CommandGroup heading="Staff">
-                                {staff.map((s: any) => {
-                                  const selected = Array.isArray((ev as any).staff_ids) && (ev as any).staff_ids.includes(String(s.id));
-                                  return (
-                                    <CommandItem key={s.id} onSelect={() => { setEvents((prev: any[]) => prev.map((x: any) => {
-                                        if (x.id !== ev.id) return x;
-                                        const set = new Set<string>(Array.isArray((x as any).staff_ids) ? (x as any).staff_ids : []);
-                                        if (set.has(String(s.id))) set.delete(String(s.id)); else set.add(String(s.id));
-                                        const arr = Array.from(set);
-                                        return { ...x, staff_scope: arr.length ? 'custom' : 'none', staff_ids: arr, staff_id: arr[0] || null } as any;
-                                    })); }}>
-                                        <span className="mr-2">{selected ? '☑︎' : '☐'}</span>{s.name}
-                                    </CommandItem>
-                                  );
-                                })}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                    ) : (
-                      (() => { const scope = (ev as any).staff_scope || 'none'; const ids = Array.isArray((ev as any).staff_ids) ? (ev as any).staff_ids : []; if (scope === 'all') return 'All'; if (scope === 'none') return ids.length ? ids.map((id: string) => staffNameById[id] || id).join(', ') : '—'; return ids.length ? ids.map((id: string) => staffNameById[id] || id).join(', ') : 'Custom'; })()
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
-                    {editingEventId === ev.id ? (
-                      <div className="space-y-1">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs">Select Required Amenities</Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="p-2 w-72">
-                            <Command>
-                              <CommandInput placeholder="Search amenities" />
-                              <CommandList>
-                                <CommandEmpty>No results</CommandEmpty>
-                                <CommandGroup heading="Amenities">
-                                  {amenityOptions.map((opt: any) => (
-                                    <CommandItem key={opt} onSelect={() => toggleEventAmenity(ev.id, opt)}>
-                                      <Checkbox size="sm" checked={(ev.required_amenities || []).includes(opt)} className="mr-2" />
-                                      <span>{opt}</span>
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                            <div className="mt-2 flex gap-2">
-                              <Input placeholder="Add amenity" className="h-8" value={eventAmenityDrafts[ev.id] || ""} onChange={(e) => setEventAmenityDrafts((prev: any) => ({ ...prev, [ev.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') addAmenityToEvent(ev.id, eventAmenityDrafts[ev.id] || ""); }} />
-                              <Button size="sm" className="h-8" onClick={() => { addAmenityToEvent(ev.id, eventAmenityDrafts[ev.id] || ""); }}>Add</Button>
-                              <Button size="sm" variant="secondary" className="h-8" onClick={() => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, required_amenities: [] } : x)); }}>Clear</Button>
-                            </div>
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {(ev.required_amenities || []).map((amenity: string, index: number) => (
-                                <Badge key={index} variant="secondary" className="text-sm">{amenity}</Badge>
-                              ))}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    ) : (
-                      (() => { const list = (ev.required_amenities || []) as string[]; return isMobile ? (list.length ? `${list.length}` : "—") : list.join(', '); })()
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
-                    {editingEventId === ev.id ? (
-                      <Popover onOpenChange={(open) => { if (!open) scheduleEventAutosave(ev.id, 'Patients'); }}>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
-                            {(() => {
-                              const scope = (ev as any).patients_scope || 'all';
-                              const count = Array.isArray((ev as any).patient_ids) ? (ev as any).patient_ids.length : 0;
-                              if (scope === 'all') return 'All';
-                              if (scope === 'none') return count > 0 ? `${count} patients` : 'None';
-                              return count > 0 ? `${count} patients` : 'Select…';
-                            })()}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="p-0 w-72">
-                          <Command>
-                            <CommandInput placeholder="Search patients" />
-                            <CommandList>
-                              <CommandGroup>
-                                <CommandItem onSelect={() => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, patients_scope: 'all', patient_ids: [] } as any : x)); }}>All</CommandItem>
-                                <CommandItem onSelect={() => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, patients_scope: 'none', patient_ids: [] } as any : x)); }}>None</CommandItem>
-                              </CommandGroup>
-                              <CommandGroup heading="Patients">
-                                {patients.map((p: any) => {
-                                  const selected = Array.isArray((ev as any).patient_ids) && (ev as any).patient_ids.includes(String(p.id));
-                                  return (
-                                    <CommandItem key={p.id} onSelect={() => { setEvents((prev: any[]) => prev.map((x: any) => {
-                                        if (x.id !== ev.id) return x;
-                                        const set = new Set<string>(Array.isArray((x as any).patient_ids) ? (x as any).patient_ids : []);
-                                        if (set.has(String(p.id))) set.delete(String(p.id)); else set.add(String(p.id));
-                                        const arr = Array.from(set);
-                                        return { ...x, patients_scope: arr.length ? 'custom' : 'none', patient_ids: arr } as any;
-                                    })); }}>
-                                        <span className="mr-2">{selected ? '☑︎' : '☐'}</span>{p.name}
-                                    </CommandItem>
-                                  );
-                                })}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                    ) : (
-                      (() => { const scope = (ev as any).patients_scope || 'all'; const ids = Array.isArray((ev as any).patient_ids) ? (ev as any).patient_ids : []; if (scope === 'all') return 'All'; if (scope === 'none') return ids.length ? ids.map((id: string) => patientNameById[id] || id).join(', ') : 'None'; return ids.length ? ids.map((id: string) => patientNameById[id] || id).join(', ') : 'Custom'; })()
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
-                    {editingEventId === ev.id ? (
-                      <Select value={(ev as any).is_optional ? 'optional' : 'required'} onValueChange={(v) => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, is_optional: v === 'optional' } : x)); scheduleEventAutosave(ev.id, 'Attendance'); }}>
-                        <SelectTrigger className="h-7"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="required">Required</SelectItem>
-                          <SelectItem value="optional">Optional</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      (ev as any).is_optional ? 'Optional' : 'Required'
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
-                    {editingEventId === ev.id ? (
-                      <Popover onOpenChange={(open) => { if (!open) scheduleEventAutosave(ev.id, 'Recurring'); }}>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
-                            {(() => {
-                              const d = (ev.weekdays || []);
-                              if (d.length === 0) return 'None';
-                              if (d.length === 7) return 'All';
-                              return d.map((w: string) => w.slice(0,3).toUpperCase()).join(',');
-                            })()}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="p-2 w-64">
-                          <div className="flex flex-col gap-1">
-                            <Button variant="ghost" className="justify-start h-7 text-xs" onClick={() => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, weekdays: [], recurrence: null } : x)); }}>
-                              None
-                            </Button>
-                            <Button variant="ghost" className="justify-start h-7 text-xs" onClick={() => { setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, weekdays: ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'], recurrence: 'weekly' } : x)); }}>
-                              All
-                            </Button>
-                            {(['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const).map((wd) => {
-                              const selected = (ev.weekdays || []).includes(wd);
-                              return (
-                                <Button key={wd} variant="ghost" className="justify-start h-7 text-xs" onClick={() => {
-                                  const nextDays = (() => {
-                                    const set = new Set(ev.weekdays || []);
-                                    if (set.has(wd)) set.delete(wd); else set.add(wd);
-                                    return Array.from(set);
-                                  })();
-                                  setEvents((prev: any[]) => prev.map((x: any) => x.id === ev.id ? { ...x, weekdays: nextDays, recurrence: nextDays.length ? 'weekly' : null } : x));
-                                }}>
-                                  <span className="mr-2">{selected ? '☑︎' : '☐'}</span>{wd.slice(0,3).toUpperCase()}
-                                </Button>
-                              );
-                            })}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    ) : (
-                      (() => { const d = (ev.weekdays || []); if ((ev.recurrence !== 'weekly') || d.length === 0) return 'Once'; if (d.length === 7) return 'Daily'; return d.map((w: string) => w[0].toUpperCase() + w.slice(1, 3)).join(', '); })()
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
-                    <div className="flex items-center justify-end gap-1">
-                      {editingEventId === ev.id ? (
-                        <Button variant="outline" size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={() => { scheduleEventAutosave(ev.id, 'updated'); setEditingEventId(null); setOriginalEvent(null); }}>Done</Button>
-                      ) : (
-                        <Button aria-label="Edit" variant="outline" size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={() => { setEditingEventId(ev.id); setOriginalEvent({ ...ev }); }}>
-                          <Edit className="w-2 h-2 md:w-4 md:h-4" />
-                        </Button>
-                      )}
-                      <Button variant="outline" size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={async () => {
-                        const res = await fetch(`${API_BASE}/program-events/${ev.id}`, { method: 'DELETE', headers: { ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) } });
-                        if (!res.ok) return;
-                        setEvents((prev: any[]) => prev.filter((x: any) => x.id !== ev.id));
-                      }}>
-                        <Trash2 className="w-2 h-2 md:w-4 md:h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ));
-            })()}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  );
+const daysOf = (ev: ApiProgramEvent) => {
+  const d = ev.weekdays || [];
+  if (ev.recurrence !== "weekly" || d.length === 0) {
+    const on = ev.date || ev.start_date;
+    return on ? new Date(on).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }) : "Once";
+  }
+  return d.length === 7 ? "Daily" : WEEK.filter((w) => d.includes(w)).map((w) => w[0].toUpperCase() + w.slice(1, 3)).join(", ");
 };
 
-export default EventsTab;
+const formOf = (ev: ApiProgramEvent): Form => {
+  const d = ev.weekdays || [];
+  const weekly = ev.recurrence === "weekly" && d.length > 0;
+  const x = ev as ApiProgramEvent & { staff_ids?: string[]; is_optional?: boolean };
+  return {
+    id: String(ev.id), activity_name: ev.activity_name, start_time: ev.start_time || "", end_time: ev.end_time || "",
+    days: !weekly ? "once" : d.length === 7 ? "daily" : "weekdays", weekdays: weekly ? d : [],
+    date: String(ev.date || ev.start_date || "").slice(0, 10),
+    staff_ids: x.staff_ids?.length ? x.staff_ids : ev.staff_id ? [String(ev.staff_id)] : [],
+    room_id: ev.room_id ? String(ev.room_id) : "", is_optional: !!x.is_optional, raw: ev,
+  };
+};
 
-/** The Events screen: its state, the Add dialog and the tab, held by the dashboard so they last as long as it does. */
-export function useEventsScreen({ events, setEvents, roomsList, staff, patients, amenityOptions, isMobile, staffNameById, patientNameById }: {
+export function useEventsScreen({ events, setEvents, roomsList, staff, staffNameById }: {
   events: ApiProgramEvent[]; setEvents: React.Dispatch<React.SetStateAction<ApiProgramEvent[]>>;
   roomsList: UiRoom[]; staff: UiStaff[]; patients: Patient[]; amenityOptions: string[]; isMobile: boolean;
   staffNameById: Record<string, string>; patientNameById: Record<string, string>;
 }) {
-  const [eventAmenityDrafts, setEventAmenityDrafts] = useState<Record<string | number, string>>({});
-  const [newEventAmenityDraft, setNewEventAmenityDraft] = useState<string>("");
-  const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const [originalEvent, setOriginalEvent] = useState<ApiProgramEvent | null>(null);
-  const [newEvent, setNewEvent] = useState<{ date: string; start_time: string; end_time: string; activity_name: string; room_id: string; staff_id: string; required_amenities: string[]; notes: string; recurrence: string | null; weekdays: string[]; audience: string | null }>({ date: '', start_time: '07:30', end_time: '08:30', activity_name: '', room_id: '', staff_id: '', required_amenities: [], notes: '', recurrence: 'weekly', weekdays: ['monday'], audience: 'all' });
-  const [showAddEvent, setShowAddEvent] = useState(false);
-  const [visibleEventsRows, setVisibleEventsRows] = useState(isMobile ? 20 : 40);
-  const eventsTotalRef = useRef(0);
-  useEffect(() => { setVisibleEventsRows(isMobile ? 20 : 40); }, [events, isMobile]);
-  const toggleEventAmenity = (eventId: string | number, amenity: string) => {
-    setEvents((prev) => prev.map((e) => {
-      if (e.id !== eventId) return e;
-      const current = Array.isArray(e.required_amenities) ? e.required_amenities : [];
-      const has = current.includes(amenity);
-      const next = has ? current.filter((x) => x !== amenity) : [...current, amenity];
-      const sorted = [...new Set(next)].sort((a, b) => a.localeCompare(b));
-      const eligibleRoomIds = roomsList.filter((r) => sorted.every((a) => r.amenities.includes(a))).map((r) => String(r.id));
-      const roomOk = e.room_id ? eligibleRoomIds.includes(String(e.room_id)) : true;
-      return { ...e, required_amenities: sorted, room_id: roomOk ? e.room_id : '' } as any;
-    }));
+  const [form, setForm] = useState<Form | null>(null);
+  const [busy, setBusy] = useState(false);
+  const totalRef = useRef(0);
+  const set = (patch: Partial<Form>) => setForm((f) => (f ? { ...f, ...patch } : f));
+  const headers = { "Content-Type": "application/json", ...(API_TOKEN ? { "x-api-key": API_TOKEN } : {}) };
+
+  const save = async () => {
+    if (!form) return;
+    if (!form.activity_name.trim()) { toast.error("Give it a name"); return; }
+    if (!form.start_time || !form.end_time || form.end_time <= form.start_time) { toast.error("The end must be after the start"); return; }
+    if (form.days === "once" && !form.date) { toast.error("Choose the day"); return; }
+    if (form.days === "weekdays" && !form.weekdays.length) { toast.error("Choose at least one day"); return; }
+    const weekdays = form.days === "daily" ? [...WEEK] : form.days === "weekdays" ? form.weekdays : [];
+    const payload = {
+      activity_name: form.activity_name.trim(), start_time: form.start_time, end_time: form.end_time,
+      recurrence: weekdays.length ? "weekly" : null, weekdays,
+      date: form.days === "once" ? form.date : null, start_date: null, end_date: null,
+      room_id: form.room_id || null,
+      staff_scope: form.staff_ids.length ? "custom" : "none", staff_ids: form.staff_ids, staff_id: form.staff_ids[0] || null,
+      patients_scope: form.raw?.patients_scope || "all", patient_ids: form.raw?.patient_ids || [], is_optional: form.is_optional,
+      required_amenities: form.raw?.required_amenities || [],
+    };
+    setBusy(true);
+    const res = await fetch(`${API_BASE}/program-events${form.id ? `/${form.id}` : ""}`, { method: form.id ? "PUT" : "POST", headers, body: JSON.stringify(payload) }).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) { const j = await res?.json().catch(() => ({})); toast.error(j?.error || "Not saved", { duration: 10000 }); return; }
+    setEvents(await fetch(`${API_BASE}/program-events`).then((r) => r.json()));
+    toast.success(form.id ? "Saved" : `${payload.activity_name} added`);
+    setForm(null);
+  };
+  const remove = async () => {
+    if (!form?.id) return;
+    const res = await fetch(`${API_BASE}/program-events/${form.id}`, { method: "DELETE", headers });
+    if (!res.ok) { toast.error("Not deleted"); return; }
+    setEvents((prev) => prev.filter((x) => String(x.id) !== form.id));
+    setForm(null);
   };
 
-  const addAmenityToEvent = (eventId: string | number, raw: string) => {
-    const value = raw.trim();
-    if (!value) return;
-    const existing = amenityOptions.find((o) => o.toLowerCase() === value.toLowerCase()) || value;
-    setEvents((prev) => prev.map((e) => {
-      if (e.id !== eventId) return e;
-      const current = Array.isArray(e.required_amenities) ? e.required_amenities : [];
-      if (current.includes(existing)) { setEventAmenityDrafts((d) => ({ ...d, [eventId]: "" })); return e; }
-      const next = [...new Set([...current, existing])].sort((a, b) => a.localeCompare(b));
-      const eligibleRoomIds = roomsList.filter((r) => next.every((a) => r.amenities.includes(a))).map((r) => String(r.id));
-      const roomOk = e.room_id ? eligibleRoomIds.includes(String(e.room_id)) : true;
-      setEventAmenityDrafts((d) => ({ ...d, [eventId]: "" }));
-      return { ...e, required_amenities: next, room_id: roomOk ? e.room_id : '' } as any;
-    }));
+  // The daily round first, by time of day, then one-off events by their day (#137).
+  const once = (x: ApiProgramEvent) => (x.recurrence === "weekly" && (x.weekdays || []).length ? "" : String(x.date || x.start_date || ""));
+  const rows = [...events].sort((a, b) => once(a).localeCompare(once(b)) || (a.start_time || "").localeCompare(b.start_time || "") || a.activity_name.localeCompare(b.activity_name));
+  totalRef.current = rows.length;
+  const who = (ev: ApiProgramEvent) => {
+    const ids = (ev as ApiProgramEvent & { staff_ids?: string[] }).staff_ids?.length ? (ev as ApiProgramEvent & { staff_ids: string[] }).staff_ids : ev.staff_id ? [String(ev.staff_id)] : [];
+    return ids.map((id) => staffNameById[id] || "").filter(Boolean).join(", ");
   };
-
-  const autosaveTimers = useRef<Record<string, number>>({});
-  const scheduleEventAutosave = (id: string | number, columnLabel: string = 'updated', entityLabel: string = 'Event') => {
-    const key = String(id);
-    const t = autosaveTimers.current[key];
-    if (t) {
-      clearTimeout(t);
-    }
-    autosaveTimers.current[key] = window.setTimeout(async () => {
-      delete autosaveTimers.current[key];
-      const curr = events.find((x) => String(x.id) === key);
-      if (!curr) return;
-      const payload: any = {
-        activity_name: curr.activity_name,
-        start_time: curr.start_time || null,
-        end_time: curr.end_time || null,
-        date: curr.date || null,
-        start_date: curr.start_date || null,
-        end_date: curr.end_date || null,
-        room_id: curr.room_id || null,
-        staff_id: curr.staff_id || null,
-        required_amenities: curr.required_amenities || [],
-        patients_scope: (curr as any).patients_scope || null,
-        patient_ids: (curr as any).patient_ids || [],
-        staff_scope: (curr as any).staff_scope || null,
-        staff_ids: (curr as any).staff_ids || [],
-        recurrence: (curr.weekdays && curr.weekdays.length) ? 'weekly' : null,
-        weekdays: curr.weekdays || [],
-        is_optional: !!(curr as any).is_optional,
-      };
-      try {
-        const res = await fetch(`${API_BASE}/program-events/${curr.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
-        // A refused save must say so: the row still shows the edit, which is not saved.
-        if (!res.ok) { const j = await res.json().catch(() => ({})); toast.error(j.error || 'Not saved', { duration: 10000 }); return; }
-        // Do not mutate local events on autosave to avoid clearing in-progress inputs
-      } catch {}
-    }, 400);
-  };
+  const roomName = (id?: string | null) => roomsList.find((r) => String(r.id) === String(id))?.name;
 
   const tab = (
-            <EventsTab
-              events={events}
-              visibleEventsRows={visibleEventsRows}
-              eventsTotalRef={eventsTotalRef}
-              editingEventId={editingEventId}
-              setEditingEventId={setEditingEventId}
-              originalEvent={originalEvent}
-              setOriginalEvent={setOriginalEvent}
-              scheduleEventAutosave={scheduleEventAutosave}
-              roomsList={roomsList}
-              staff={staff}
-              patients={patients}
-              amenityOptions={amenityOptions}
-              eventAmenityDrafts={eventAmenityDrafts}
-              setEventAmenityDrafts={setEventAmenityDrafts}
-              toggleEventAmenity={toggleEventAmenity}
-              addAmenityToEvent={addAmenityToEvent}
-              isMobile={isMobile}
-              staffNameById={staffNameById}
-              patientNameById={patientNameById}
-              API_BASE={API_BASE}
-              API_TOKEN={API_TOKEN}
-              setShowAddEvent={setShowAddEvent}
-              setEvents={setEvents}
-            />
+    <div>
+      <PageHead title="Events" note={`${rows.length}`} />
+      <div className="overflow-hidden rounded-2xl bg-card">
+        {rows.map((ev) => (
+          <button key={ev.id} type="button" className="flex min-h-[54px] w-full items-center gap-3 border-b border-border px-3 py-2 text-left last:border-b-0" onClick={() => setForm(formOf(ev))}>
+            <span className="w-24 flex-none tabular-nums text-[14px] text-muted-foreground">{ev.start_time}–{ev.end_time}</span>
+            <span className="flex-1">
+              <b className="block text-[16px] font-semibold">{ev.activity_name}</b>
+              <span className="block text-[13px] text-muted-foreground">{[daysOf(ev), who(ev), roomName(ev.room_id), (ev as ApiProgramEvent & { is_optional?: boolean }).is_optional ? "optional" : null].filter(Boolean).join(" · ")}</span>
+            </span>
+            <span className="text-muted-foreground">›</span>
+          </button>
+        ))}
+      </div>
+      <button type="button" className="mt-3 flex h-12 w-full items-center justify-center rounded-full border font-semibold" onClick={() => setForm(blank())}><Plus className="mr-1 h-4 w-4" />Add event</button>
+    </div>
   );
 
+  const label = "grid gap-1 text-[13px] text-muted-foreground";
+  const field = "min-h-11 w-full rounded-lg border bg-background px-2 text-[16px] text-foreground";
+  const chip = (on: boolean) => `min-h-11 rounded-full border px-3 text-[15px] font-semibold ${on ? "border-primary bg-primary text-primary-foreground" : "border-border"}`;
   const dialogs = (
-          <Dialog open={showAddEvent} onOpenChange={setShowAddEvent}>
-            <DialogContent className="sm:max-w-[520px]">
-              <DialogHeader>
-                <DialogTitle>Add Event</DialogTitle>
-                <DialogDescription>Add a program event. Fields marked optional can be left blank.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-2">
-                <Input placeholder="Activity" value={newEvent.activity_name} onChange={(e) => setNewEvent({ ...newEvent, activity_name: e.target.value })} />
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex gap-1 items-center">
-                    <Input placeholder="Start" type="time" step="900" value={newEvent.start_time} onChange={(e) => setNewEvent({ ...newEvent, start_time: e.target.value })} />
-                    <Button variant="outline" size="sm" className="h-10" onClick={() => setNewEvent({ ...newEvent, start_time: '' })}>Clear</Button>
-                  </div>
-                  <div className="flex gap-1 items-center">
-                    <Input placeholder="End" type="time" step="900" value={newEvent.end_time} onChange={(e) => setNewEvent({ ...newEvent, end_time: e.target.value })} />
-                    <Button variant="outline" size="sm" className="h-10" onClick={() => setNewEvent({ ...newEvent, end_time: '' })}>Clear</Button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Input placeholder="Start Date (optional)" type="date" value={newEvent.date} onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })} />
-                  <Input placeholder="End Date (optional)" type="date" value={(newEvent as any).end_date || ''} onChange={(e) => setNewEvent({ ...newEvent, end_date: e.target.value } as any)} />
-                </div>
-                <div className="grid grid-cols-1 gap-2">
-                  <Select value={newEvent.room_id} onValueChange={(v) => setNewEvent({ ...newEvent, room_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="Room" /></SelectTrigger>
-                    <SelectContent>
-                      {roomsList.filter((r) => (newEvent.required_amenities || []).every((a) => r.amenities.includes(a))).map(r => (<SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-7 px-2 text-xs">Select Required Amenities</Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="p-2 w-72">
-                      <Command>
-                        <CommandInput placeholder="Search amenities" />
-                        <CommandList>
-                          <CommandEmpty>No results</CommandEmpty>
-                          <CommandGroup heading="Amenities">
-                            {amenityOptions.map((opt) => (
-                              <CommandItem key={opt} onSelect={() => setNewEvent({ ...newEvent, required_amenities: (newEvent.required_amenities || []).includes(opt) ? newEvent.required_amenities.filter((x) => x !== opt) : [...new Set([...(newEvent.required_amenities || []), opt])].sort((a,b)=>a.localeCompare(b)) })}>
-                                <Checkbox size="sm" checked={(newEvent.required_amenities || []).includes(opt)} className="mr-2" />
-                                <span>{opt}</span>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                      <div className="mt-2 flex gap-2">
-                        <Input placeholder="Add amenity" className="h-8" value={newEventAmenityDraft} onChange={(e) => setNewEventAmenityDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') {
-                          const value = (newEventAmenityDraft || '').trim();
-                          if (!value) return;
-                          const existing = amenityOptions.find((o) => o.toLowerCase() === value.toLowerCase()) || value;
-                          if ((newEvent.required_amenities || []).includes(existing)) { setNewEventAmenityDraft(''); return; }
-                          const next = [...new Set([...(newEvent.required_amenities || []), existing])].sort((a,b)=>a.localeCompare(b));
-                          setNewEvent({ ...newEvent, required_amenities: next });
-                          setNewEventAmenityDraft('');
-                        } }} />
-                        <Button size="sm" className="h-8" onClick={() => {
-                          const value = (newEventAmenityDraft || '').trim();
-                          if (!value) return;
-                          const existing = amenityOptions.find((o) => o.toLowerCase() === value.toLowerCase()) || value;
-                          if ((newEvent.required_amenities || []).includes(existing)) { setNewEventAmenityDraft(''); return; }
-                          const next = [...new Set([...(newEvent.required_amenities || []), existing])].sort((a,b)=>a.localeCompare(b));
-                          setNewEvent({ ...newEvent, required_amenities: next });
-                          setNewEventAmenityDraft('');
-                        }}>Add</Button>
-                        <Button size="sm" variant="secondary" className="h-8" onClick={() => { setNewEvent({ ...newEvent, required_amenities: [] }); }}>Clear</Button>
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {(newEvent.required_amenities || []).map((amenity, index) => (
-                          <Badge key={index} variant="secondary" className="text-sm">{amenity}</Badge>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <Input placeholder="Notes (optional)" value={newEvent.notes} onChange={(e) => setNewEvent({ ...newEvent, notes: e.target.value })} />
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="justify-between">
-                      {(() => {
-                        const d = (newEvent.weekdays || []);
-                        if (d.length === 0) return 'None';
-                        if (d.length === 7) return 'All';
-                        return d.map(w => w.slice(0,3).toUpperCase()).join(',');
-                      })()}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="p-2 w-64">
-                    <div className="flex flex-col gap-1">
-                      <Button variant="ghost" className="justify-start h-7 text-xs" onClick={() => setNewEvent({ ...newEvent, weekdays: [], recurrence: null })}>None</Button>
-                      <Button variant="ghost" className="justify-start h-7 text-xs" onClick={() => setNewEvent({ ...newEvent, weekdays: ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'], recurrence: 'weekly' })}>All</Button>
-                      {(['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const).map((wd) => {
-                        const selected = (newEvent.weekdays || []).includes(wd);
-                        return (
-                          <Button key={wd} variant="ghost" className="justify-start h-7 text-xs"
-                            onClick={() => {
-                              const set = new Set(newEvent.weekdays);
-                              if (set.has(wd)) set.delete(wd); else set.add(wd);
-                              const arr = Array.from(set);
-                              setNewEvent({ ...newEvent, weekdays: arr, recurrence: arr.length ? 'weekly' : null });
-                            }}
-                          >
-                            <span className="mr-2">{selected ? '☑︎' : '☐'}</span>{wd.slice(0,3).toUpperCase()}
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                <div className="grid grid-cols-2 gap-2 items-start">
-                  <div className="space-y-2">
-                    <span className="text-xs font-medium">Patients</span>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className="justify-between">
-                          {(() => { const scope = (newEvent as any).patients_scope || 'all'; if (scope === 'all') return 'All'; if (scope === 'none') return 'None'; const pid = Array.isArray((newEvent as any).patient_ids) ? (newEvent as any).patient_ids[0] : undefined; const p = patients.find(pp => String(pp.id) === String(pid)); return p ? p.name : 'Select…'; })()}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="p-0 w-64">
-                        <Command>
-                          <CommandInput placeholder="Search patients" />
-                          <CommandList>
-                            <CommandGroup>
-                              <CommandItem onSelect={() => setNewEvent({ ...newEvent, patients_scope: 'all', patient_ids: [] } as any)}>All</CommandItem>
-                              <CommandItem onSelect={() => setNewEvent({ ...newEvent, patients_scope: 'none', patient_ids: [] } as any)}>None</CommandItem>
-                            </CommandGroup>
-                            <CommandGroup heading="Patients">
-                              {patients.map(p => (
-                                <CommandItem key={p.id} onSelect={() => setNewEvent({ ...newEvent, patients_scope: 'custom', patient_ids: [String(p.id)] } as any)}>
-                                  {p.name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="space-y-2">
-                    <span className="text-xs font-medium">Staff</span>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className="justify-between">
-                          {(() => { const scope = (newEvent as any).staff_scope || 'none'; if (scope === 'all') return 'All'; if (scope === 'none') { const host = staff.find(s => String(s.id) === String(newEvent.staff_id)); return host ? `Host: ${host.name}` : 'None'; } const sid = Array.isArray((newEvent as any).staff_ids) ? (newEvent as any).staff_ids[0] : undefined; const s = staff.find(ss => String(ss.id) === String(sid)); return s ? s.name : 'Select…'; })()}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="p-0 w-64">
-                        <Command>
-                          <CommandInput placeholder="Search staff" />
-                          <CommandList>
-                            <CommandGroup>
-                              <CommandItem onSelect={() => setNewEvent({ ...newEvent, staff_scope: 'all', staff_ids: [], staff_id: '' } as any)}>All</CommandItem>
-                              <CommandItem onSelect={() => setNewEvent({ ...newEvent, staff_scope: 'none', staff_ids: [], staff_id: '' } as any)}>None</CommandItem>
-                            </CommandGroup>
-                            <CommandGroup heading="Staff">
-                              {staff.map(s => (
-                                <CommandItem key={s.id} onSelect={() => setNewEvent({ ...newEvent, staff_scope: 'none', staff_ids: [], staff_id: String(s.id) } as any)}>
-                                  {s.name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
+    <BottomSheet open={!!form} onOpenChange={(o) => { if (!o) setForm(null); }} title={form?.id ? "Edit event" : "Add event"}>
+      {form ? (
+        <div className="-mt-2 grid max-h-[75dvh] gap-3 overflow-y-auto pb-1">
+          <label className={label}>Name<input className={field} placeholder="Morning Yoga" value={form.activity_name} onChange={(e) => set({ activity_name: e.target.value })} /></label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className={label}>From<input type="time" step={900} className={field} value={form.start_time} onChange={(e) => set({ start_time: e.target.value })} /></label>
+            <label className={label}>To<input type="time" step={900} className={field} value={form.end_time} onChange={(e) => set({ end_time: e.target.value })} /></label>
+          </div>
+          <fieldset className="grid gap-2">
+            <legend className="mb-1 text-[13px] text-muted-foreground">Days</legend>
+            <div className="flex flex-wrap gap-2">
+              {([["daily", "Every day"], ["weekdays", "Some days"], ["once", "One day"]] as const).map(([k, t]) => (
+                <button key={k} type="button" aria-pressed={form.days === k} className={chip(form.days === k)} onClick={() => set({ days: k })}>{t}</button>
+              ))}
+            </div>
+            {form.days === "weekdays" ? (
+              <div className="flex flex-wrap gap-1.5">
+                {WEEK.map((w) => (
+                  <button key={w} type="button" aria-pressed={form.weekdays.includes(w)} aria-label={w} className={chip(form.weekdays.includes(w))}
+                    onClick={() => set({ weekdays: form.weekdays.includes(w) ? form.weekdays.filter((x) => x !== w) : [...form.weekdays, w] })}>{w[0].toUpperCase() + w.slice(1, 3)}</button>
+                ))}
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowAddEvent(false)}>Cancel</Button>
-                <Button onClick={async () => {
-                  const st = (newEvent.start_time || '').trim();
-                  const et = (newEvent.end_time || '').trim();
-                  if (!st || !et) { toast.error('Please enter start and end time'); return; }
-                  const payload: any = {
-                    activity_name: newEvent.activity_name,
-                    start_time: st,
-                    end_time: et,
-                    date: newEvent.date || undefined,
-                    end_date: (newEvent as any).end_date || undefined,
-                    room_id: newEvent.room_id || undefined,
-                    staff_id: newEvent.staff_id || undefined,
-                    required_amenities: newEvent.required_amenities,
-                    notes: newEvent.notes || undefined,
-                    recurrence: (newEvent.weekdays && newEvent.weekdays.length) ? 'weekly' : null,
-                    weekdays: newEvent.weekdays,
-                    patients_scope: (newEvent as any).patients_scope || 'all',
-                    patient_ids: (newEvent as any).patient_ids || [],
-                    staff_scope: (newEvent as any).staff_scope || 'none',
-                    staff_ids: (newEvent as any).staff_ids || [],
-                  };
-                  const res = await fetch(`${API_BASE}/program-events`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
-                  if (!res.ok) { const j = await res.json().catch(() => ({})); toast.error(j.error || 'Failed to add', { duration: 10000 }); return; }
-                  const all = await fetch(`${API_BASE}/program-events`).then(r => r.json());
-                  setEvents(all);
-                  const name = (newEvent.activity_name || '').trim();
-                  toast.success(name ? `Event ${name} added` : 'Event added');
-                  setShowAddEvent(false);
-                  setNewEvent({ date: '', start_time: '07:30', end_time: '08:30', activity_name: '', room_id: '', staff_id: '', required_amenities: [], notes: '', recurrence: 'weekly', weekdays: ['monday'], audience: 'all' });
-                }}>Add</Button>
-              </DialogFooter>
-            </DialogContent>
-  </Dialog>
+            ) : null}
+            {form.days === "once" ? <label className={label}>On<input type="date" className={field} value={form.date} onChange={(e) => set({ date: e.target.value })} /></label> : null}
+          </fieldset>
+          <label className={label}>Run by
+            <select className={field} value={form.staff_ids[0] || ""} onChange={(e) => set({ staff_ids: e.target.value ? [e.target.value, ...form.staff_ids.slice(1).filter((x) => x !== e.target.value)] : [] })}>
+              <option value="">Nobody from the team</option>
+              {staff.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
+            </select>
+          </label>
+          <label className={label}>Room
+            <select className={field} value={form.room_id} onChange={(e) => set({ room_id: e.target.value })}>
+              <option value="">No room (outdoors, the hall)</option>
+              {roomsList.map((r) => <option key={r.id} value={String(r.id)}>{r.name}</option>)}
+            </select>
+          </label>
+          <fieldset className="grid gap-1">
+            <legend className="mb-1 text-[13px] text-muted-foreground">Residents</legend>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" aria-pressed={!form.is_optional} className={chip(!form.is_optional)} onClick={() => set({ is_optional: false })}>Everyone attends</button>
+              <button type="button" aria-pressed={form.is_optional} className={chip(form.is_optional)} onClick={() => set({ is_optional: true })}>Optional</button>
+            </div>
+            <span className="text-[12px] text-muted-foreground">No treatment is booked across an event everyone attends.</span>
+          </fieldset>
+          <div className="sticky bottom-0 flex gap-2 bg-card pt-2">
+            {form.id ? <button type="button" className="min-h-11 rounded-full px-4 font-semibold text-destructive" onClick={remove}>Delete</button> : null}
+            <span className="flex-1" />
+            <button type="button" className="min-h-11 rounded-full px-4 font-semibold" onClick={() => setForm(null)}>Cancel</button>
+            <button type="button" className="min-h-11 rounded-full bg-primary px-5 font-semibold text-primary-foreground" disabled={busy} onClick={save}>{form.id ? "Save" : "Add"}</button>
+          </div>
+        </div>
+      ) : null}
+    </BottomSheet>
   );
 
-  return { tab, dialogs, setVisibleRows: setVisibleEventsRows, totalRef: eventsTotalRef };
+  return { tab, dialogs, setVisibleRows: (_n: number) => {}, totalRef };
 }
