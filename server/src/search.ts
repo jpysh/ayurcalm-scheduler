@@ -20,20 +20,25 @@ export async function searchTreatments(q: string, from: Date, to: Date, prisma: 
     ids(prisma.therapyRoom.findMany({ where: { name: like }, select: { id: true } })),
     ids(prisma.staff.findMany({ where: { name: like }, select: { id: true } })),
   ]);
-  // ponytail: capped at 300 rows; a centre searching a common word over a year sees the nearest 300.
-  const rows = await prisma.appointment.findMany({
-    where: {
-      scheduled_date: { gte: from, lte: to },
-      status: { not: 'cancelled' },
-      OR: [
-        { patient_id: { in: patients } }, { therapy_id: { in: therapies } }, { room_id: { in: rooms } },
-        { staff_id: { in: staff } }, { co_staff_ids: { hasSome: staff } },
-      ],
-    },
-    orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }],
-    take: 300,
-    include: { Patient: { select: { name: true } }, Therapy: { select: { name: true } }, Room: { select: { name: true } } },
-  });
+  // ponytail: capped at 150 rows each side of the window's middle (the screen
+  // sends today ± the same number of days), so a common word finds the nearest
+  // treatments both ways. Taking the earliest 300 lost every upcoming one once
+  // a busy window passed 300 matches.
+  const middle = new Date((from.getTime() + to.getTime()) / 2);
+  middle.setUTCHours(0, 0, 0, 0);
+  const match = {
+    status: { not: 'cancelled' as const },
+    OR: [
+      { patient_id: { in: patients } }, { therapy_id: { in: therapies } }, { room_id: { in: rooms } },
+      { staff_id: { in: staff } }, { co_staff_ids: { hasSome: staff } },
+    ],
+  };
+  const include = { Patient: { select: { name: true } }, Therapy: { select: { name: true } }, Room: { select: { name: true } } };
+  const [later, earlier] = await Promise.all([
+    prisma.appointment.findMany({ where: { ...match, scheduled_date: { gte: middle, lte: to } }, orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }], take: 150, include }),
+    prisma.appointment.findMany({ where: { ...match, scheduled_date: { gte: from, lt: middle } }, orderBy: [{ scheduled_date: 'desc' }, { start_time: 'desc' }], take: 150, include }),
+  ]);
+  const rows = [...earlier.reverse(), ...later];
   const team = [...new Set(rows.flatMap((a) => [a.staff_id, ...a.co_staff_ids]).filter((x): x is string => Boolean(x)))];
   const names = new Map((await prisma.staff.findMany({ where: { id: { in: team } }, select: { id: true, name: true } })).map((s) => [s.id, s.name]));
   return rows.map(({ Patient, Therapy, Room, ...a }) => ({
