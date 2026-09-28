@@ -15,13 +15,14 @@ import { BottomSheet } from "@/components/BottomBar";
 import { API_BASE } from "@/lib/apiBase";
 import type { CardAppt } from "@/components/TreatmentCard";
 import DayDietDialog from "./DayDietDialog";
-import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiDietPlan, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
+import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
 // removed dialog import to avoid dev parse error
 
 type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; preferredStaffId?: string | null; requiresPreferredStaff?: boolean };
 
 /** "26 Sep": a stay is whole days, so no time. */
+const longDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const stayDay = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '');
 const blankNew = () => ({ name: '', phone: '', gender: 'Male', arriving: '', leaving: '', templateId: '' });
 
@@ -222,7 +223,6 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const [searchPatients, setSearchPatients] = useState("");
   const [infoPatient, setInfoPatient] = useState<PatientRow | null>(null);
   const [infoDraft, setInfoDraft] = useState<PatientRow | null>(null);
-  const [infoDietPlans, setInfoDietPlans] = useState<ApiDietPlan[]>([]);
   const [infoAppointments, setInfoAppointments] = useState<ApiAppointment[]>([]);
   const [infoStays, setInfoStays] = useState<ApiStay[]>([]);
   const [infoEditing, setInfoEditing] = useState(false);
@@ -230,16 +230,13 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     setInfoPatient(p);
     setInfoDraft({ ...p });
     try {
-      const [diet, appts, stays] = await Promise.all([
-        fetchJsonWithTimeout<ApiDietPlan[]>(`${API_BASE}/dietplans?patient_id=${p.id}`),
+      const [appts, stays] = await Promise.all([
         fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?patient_id=${p.id}`),
         fetchJsonWithTimeout<ApiStay[]>(`${API_BASE}/patients/${p.id}/stays`),
       ]);
-      setInfoDietPlans(Array.isArray(diet) ? diet : []);
       setInfoAppointments(Array.isArray(appts) ? appts : []);
       setInfoStays(Array.isArray(stays) ? stays : []);
     } catch {
-      setInfoDietPlans([]);
       setInfoAppointments([]);
       setInfoStays([]);
     }
@@ -320,7 +317,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
       <Dialog open={!!infoPatient} onOpenChange={(open) => { if (!open) { setInfoPatient(null); setInfoEditing(false); } }}>
         <DialogContent hideClose className="max-w-[92vw] sm:max-w-md md:max-w-2xl p-3 sm:p-5 gap-2 sm:gap-4 max-h-[80vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">Patient Details</DialogTitle>
+            <DialogTitle className="text-base sm:text-lg">{infoPatient?.name}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-3 gap-2 mb-2">
             <Button variant="outline" size="icon" className="h-8 w-8 justify-self-start" aria-label="Close" onClick={() => { setInfoPatient(null); setInfoEditing(false); }}>
@@ -350,7 +347,8 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
                 <Input value={infoEditing ? (infoDraft?.medicalNotes || '') : (infoPatient.medicalNotes || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, medicalNotes: e.target.value } : prev)} />
                 <Label>Stay</Label>
                 {(() => {
-                  const current = infoStays.find((st) => st.end_date.slice(0, 10) >= today);
+                  // The API does not order stays: the one under way or next is the earliest that has not ended.
+                  const current = [...infoStays].sort((a, b) => a.start_date.localeCompare(b.start_date)).find((st) => st.end_date.slice(0, 10) >= today);
                   return (
                     <Button variant="outline" className="w-full justify-between h-12" onClick={() => setStayEdit(current
                       ? { id: current.id, start: current.start_date.slice(0, 10), end: current.end_date.slice(0, 10) }
@@ -361,27 +359,16 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
                   );
                 })()}
               </div>
-              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3 pt-2">
+              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 pt-2">
                 <div>
-                  <p className="text-sm font-medium">Diet Plans</p>
-                  <div className="mt-1 space-y-1">
-                    {infoDietPlans.map((dp) => (
-                      <div key={dp.id} className="text-xs">
-                        <span className="font-semibold">{String(dp.meal_time)}</span> • <span>{dp.description}</span>
-                      </div>
-                    ))}
-                    {infoDietPlans.length === 0 && <p className="text-xs text-muted-foreground">No diet plans</p>}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Appointments</p>
+                  <p className="text-sm font-medium">Treatments</p>
                   <div className="mt-1 space-y-1">
                     {infoAppointments.map((a) => (
                       <div key={a.id} className="text-xs">
-                        <span>{new Date(a.scheduled_date).toLocaleDateString('en-IN')}</span> • <span>{a.start_time}</span> • <span>{therapyNameById[String(a.therapy_id)] || a.therapy_id}</span>
+                        {longDay(a.scheduled_date)} · {a.start_time} · {therapyNameById[String(a.therapy_id)] || a.therapy_id}
                       </div>
                     ))}
-                    {infoAppointments.length === 0 && <p className="text-xs text-muted-foreground">No appointments</p>}
+                    {infoAppointments.length === 0 && <p className="text-xs text-muted-foreground">No treatments</p>}
                   </div>
                 </div>
                 <div>
@@ -389,7 +376,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
                   <div className="mt-1 space-y-1">
                     {infoStays.map((s) => (
                       <div key={s.id} className="text-xs">
-                        <span>{new Date(s.start_date).toLocaleDateString('en-IN')}</span> – <span>{new Date(s.end_date).toLocaleDateString('en-IN')}</span> • <span>{String(s.duration_days)} days</span>
+                        {stayDay(s.start_date)} → {stayDay(s.end_date)} · {String(s.duration_days)} days
                       </div>
                     ))}
                     {infoStays.length === 0 && <p className="text-xs text-muted-foreground">No stays</p>}
