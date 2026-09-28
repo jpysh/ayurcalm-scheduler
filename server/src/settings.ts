@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { dirname, join } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
+import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'node:url';
 
 const SINGLETON_ID = 'singleton';
@@ -165,11 +166,13 @@ async function backupFiles() {
   const names = (await readdir(BACKUPS).catch(() => [] as string[])).filter((n) => /^ayurcalm-\d{8}-\d{4}\.sql\.gz$/.test(n)).sort().reverse();
   return Promise.all(names.map(async (name) => ({ name, ...(({ size, mtime }) => ({ size, at: mtime }))(await stat(join(BACKUPS, name))) })));
 }
-settingsRouter.get('/backups', requireAdmin, async (_req: Request, res: Response) => {
+// A backup is the whole database: a handful of downloads an hour is plenty.
+const backupLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 60 });
+settingsRouter.get('/backups', backupLimiter, requireAdmin, async (_req: Request, res: Response) => {
   const files = await backupFiles();
   res.json({ count: files.length, latest: files[0] ?? null });
 });
-settingsRouter.get('/backups/latest', requireAdmin, async (_req: Request, res: Response) => {
+settingsRouter.get('/backups/latest', backupLimiter, requireAdmin, async (_req: Request, res: Response) => {
   const [latest] = await backupFiles();
   if (!latest) { res.status(404).json({ error: 'No backup yet' }); return; }
   res.setHeader('Content-Type', 'application/gzip');
