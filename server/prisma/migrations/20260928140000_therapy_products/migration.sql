@@ -1,0 +1,1 @@
+ALTER TABLE "Therapy" ADD COLUMN "products" TEXT[] DEFAULT ARRAY[]::TEXT[];

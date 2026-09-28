@@ -1,3 +1,4 @@
+import { therapyLibrary } from './therapyLibrary.js';
 import 'dotenv/config';
 import { ensureStarterDietTemplates } from './dietTemplateSeed.js';
 import { PrismaClient } from '@prisma/client';
@@ -14,75 +15,9 @@ const ayurvedaRoomNames = [
 
 const amenitiesSet = ['massage_table','shower','steam','herbal_oil','shirodhara_stand','dhara_stand','rice_boluses','herbal_paste'];
 
-const therapyDefs = [
-  { name: 'Abhyanga', req: ['massage_table','herbal_oil'], dur: 60, gender: false },
-  { name: 'Shirodhara', req: ['shirodhara_stand','massage_table'], dur: 90, gender: true },
-  { name: 'Panchakarma', req: ['steam','massage_table','shower'], dur: 120, gender: true },
-  { name: 'Nasya', req: ['massage_table'], dur: 45, gender: false },
-  // Worked by two therapists at once, one each side of the resident.
-  { name: 'Pizhichil', req: ['massage_table','shower'], dur: 75, gender: true, staff: 2 },
-  { name: 'Udvartana', req: ['massage_table','herbal_paste'], dur: 60, gender: false },
-  { name: 'Njavarakizhi', req: ['massage_table','rice_boluses'], dur: 90, gender: true, staff: 2 },
-  { name: 'Kizhi', req: ['massage_table','rice_boluses'], dur: 60, gender: false },
-  { name: 'Takradhara', req: ['dhara_stand','massage_table'], dur: 60, gender: true },
-  { name: 'Padabhyanga', req: ['massage_table','herbal_oil'], dur: 45, gender: false },
-  { name: 'Mukha Lepam', req: ['herbal_paste'], dur: 45, gender: false },
-  { name: 'Karna Poorna', req: ['herbal_oil'], dur: 30, gender: false },
-  { name: 'Netra Tarpana', req: ['herbal_paste'], dur: 30, gender: false },
-  { name: 'Kativasti', req: ['herbal_paste','massage_table'], dur: 45, gender: false },
-  { name: 'Greeva Vasti', req: ['herbal_paste','massage_table'], dur: 45, gender: false },
-  { name: 'Janu Vasti', req: ['herbal_paste','massage_table'], dur: 45, gender: false },
-  { name: 'Uro Vasti', req: ['herbal_paste','massage_table'], dur: 45, gender: false },
-  { name: 'Dhanyamladhara', req: ['dhara_stand','massage_table'], dur: 60, gender: false },
-  { name: 'Basti Therapy', req: ['massage_table'], dur: 30, gender: false },
-  { name: 'Snehana', req: ['herbal_oil','massage_table'], dur: 60, gender: false },
-  { name: 'Marma Therapy', req: ['massage_table'], dur: 60, gender: false },
-  { name: 'Kaya Seka', req: ['massage_table','herbal_oil'], dur: 75, gender: false },
-  { name: 'Pinda Sweda', req: ['massage_table','rice_boluses'], dur: 60, gender: false },
-  { name: 'Chakra Basti', req: ['herbal_paste','massage_table'], dur: 45, gender: false },
-  { name: 'Hridaya Basti', req: ['herbal_paste','massage_table'], dur: 45, gender: false },
-  { name: 'Nabhi Basti', req: ['herbal_paste','massage_table'], dur: 45, gender: false },
-  { name: 'Agnikarma', req: ['herbal_oil'], dur: 30, gender: false },
-  { name: 'Patra Pinda Sweda', req: ['massage_table','rice_boluses'], dur: 60, gender: false },
-  { name: 'Shiro Abhyanga', req: ['massage_table','herbal_oil'], dur: 45, gender: false },
-  { name: 'Nasyam', req: ['massage_table'], dur: 30, gender: false },
-  { name: 'Gandusha', req: ['herbal_oil'], dur: 20, gender: false },
-  { name: 'Kavala', req: ['herbal_oil'], dur: 20, gender: false },
-  { name: 'Lepam', req: ['herbal_paste'], dur: 40, gender: false },
-  { name: 'Anna Lepam', req: ['herbal_paste'], dur: 40, gender: false },
-  { name: 'Udvartanam', req: ['massage_table','herbal_paste'], dur: 60, gender: false },
-  { name: 'Thalapothichil', req: ['herbal_paste'], dur: 60, gender: false },
-  { name: 'Sirovasti', req: ['shirodhara_stand'], dur: 60, gender: true },
-  { name: 'Ksheeradhara', req: ['dhara_stand'], dur: 60, gender: false },
-  { name: 'Jambira Pinda Sweda', req: ['massage_table','rice_boluses'], dur: 60, gender: false },
-  { name: 'Avagaha Sweda', req: ['steam'], dur: 45, gender: false },
-  { name: 'Tarpana', req: ['herbal_paste'], dur: 30, gender: false },
-  { name: 'Netra Basti', req: ['herbal_paste'], dur: 30, gender: false },
-  { name: 'Ardha Abhyanga', req: ['massage_table','herbal_oil'], dur: 40, gender: false },
-  { name: 'Pada Kizhi', req: ['massage_table','rice_boluses'], dur: 45, gender: false },
-  { name: 'Spinal Basti', req: ['herbal_paste','massage_table'], dur: 45, gender: false },
-  { name: 'Udaravasti', req: ['herbal_paste','massage_table'], dur: 45, gender: false },
-  { name: 'Nadi Sweda', req: ['steam'], dur: 30, gender: false },
-  { name: 'Bhasti', req: ['massage_table'], dur: 30, gender: false },
-  { name: 'Talam', req: ['herbal_paste'], dur: 30, gender: false },
-  { name: 'Pizhichil Deluxe', req: ['massage_table','shower'], dur: 90, gender: true },
-];
 
-/**
- * Rest for the patient and cleanup for the room after a therapy, derived from
- * what the therapy needs rather than listed per therapy: steam and oil are what
- * make a room take time to turn round and a patient take time to get up.
- * Panchakarma centres commonly allow half an hour after swedana or a full-body
- * oil therapy, and the room needs wiping down before the next oil treatment.
- * A centre tunes these per therapy in the Therapies tab; these are the defaults
- * a fresh install starts from.
- */
-const cleaningFor = (req: string[]) => {
-  if (req.includes('steam') || req.includes('shower')) return 30;
-  if (req.includes('herbal_oil') || req.includes('dhara_stand') || req.includes('shirodhara_stand')) return 20;
-  if (req.includes('rice_boluses') || req.includes('herbal_paste')) return 15;
-  return 10;
-};
+
+
 
 const indianHolidays2025 = [
   { date: '2025-01-26', desc: 'Republic Day' },
@@ -184,11 +119,13 @@ async function main() {
     data: { name, gender: isMale(name) ? 'male' : 'female', phone: `+91-9${Math.floor(100000000 + random()*899999999)}` },
   })));
 
-  const therapies = await Promise.all(therapyDefs.map(t => prisma.therapy.create({
-    // One number per therapy: hands-on time plus the room's cleaning time, which
-    // is what the day sheet prints and what the slot actually costs.
-    data: { name: t.name, required_amenities: t.req, duration_minutes: t.dur + cleaningFor(t.req), requires_gender_match: t.gender, staff_required: (t as { staff?: number }).staff ?? 1 },
-  })));
+  // The library is the demo's treatment list (#219): the same one a new centre
+  // imports from, so the demo shows what a centre gets.
+  const allTherapies = await Promise.all(therapyLibrary.map((t) => prisma.therapy.create({ data: {
+    name: t.name, description: t.description, duration_minutes: t.minutes, staff_required: t.staff,
+    required_amenities: t.amenities, products: t.products, requires_gender_match: t.gender, is_consultation: Boolean(t.consultation),
+  } })));
+  const therapies = allTherapies.filter((t) => !t.is_consultation);
 
   const scheduleStd = { sunday: { start: '09:00', end: '20:00' }, monday: { start: '09:00', end: '20:00' }, tuesday: { start: '09:00', end: '20:00' }, wednesday: { start: '09:00', end: '20:00' }, thursday: { start: '09:00', end: '20:00' }, friday: { start: '09:00', end: '20:00' }, saturday: { start: '09:00', end: '20:00' } };
 
@@ -572,10 +509,7 @@ async function main() {
   // Doctors (#219): three, sharing two consultation rooms that no treatment
   // needs. Each stay opens with a consultation and has one a week after it, so
   // the card shows a last and a next, and the doctor rota has a morning on it.
-  const consultation = await prisma.therapy.create({ data: {
-    name: 'Consultation', required_amenities: ['bp_monitor', 'examination_bed'], duration_minutes: 20,
-    is_consultation: true, description: 'Pulse, BP and a talk with the doctor; the plan is reviewed.',
-  } });
+  const consultation = allTherapies.find((t) => t.is_consultation)!;
   const consultRooms = await Promise.all(['Charaka', 'Sushruta'].map((name) => prisma.therapyRoom.create({
     data: { name, amenities: ['bp_monitor', 'examination_bed'], weekly_schedule: scheduleStd, is_active: true },
   })));

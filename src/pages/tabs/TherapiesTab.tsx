@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { API_BASE } from "@/lib/apiBase";
 import { API_TOKEN, type UiTherapy } from "./shared";
+import { TherapyLibrarySheet } from "@/components/TherapyLibrarySheet";
 
 const TherapiesTab = ({
   therapies,
@@ -37,6 +38,7 @@ const TherapiesTab = ({
   isMobile,
   requestDelete,
   setShowAddTherapy,
+  setShowLibrary,
 }: any) => {
   return (
     <Card>
@@ -46,6 +48,7 @@ const TherapiesTab = ({
           <Button size="sm" className="min-h-11 rounded-full px-4" onClick={() => setShowAddTherapy(true)}>
             <Plus className="mr-1 h-4 w-4" />Add therapy
           </Button>
+          <Button size="sm" variant="outline" className="min-h-11 rounded-full px-4" onClick={() => setShowLibrary(true)}>From library</Button>
         </div>
         <div className="mt-0.5">
           <Input placeholder="Search therapies" value={searchTherapies} onChange={(e: any) => setSearchTherapies(e.target.value)} className="h-8 md:h-10 text-center" />
@@ -234,6 +237,11 @@ export function useTherapiesScreen({ therapies, setTherapies, amenityOptions, is
   const [therapyAmenityDrafts, setTherapyAmenityDrafts] = useState<Record<string | number, string>>({});
   const [searchTherapies, setSearchTherapies] = useState("");
   const [showAddTherapy, setShowAddTherapy] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const reloadTherapies = async () => {
+    const t = await fetch(`${API_BASE}/therapies`).then((r) => r.json()).catch(() => null);
+    if (Array.isArray(t)) setTherapies(t.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match, staffRequired: x.staff_required ?? 1 })));
+  };
   const [visibleTherapiesRows, setVisibleTherapiesRows] = useState(isMobile ? 20 : 40);
   const therapiesTotalRef = useRef(0);
   useEffect(() => { setVisibleTherapiesRows(isMobile ? 20 : 40); }, [searchTherapies, therapies, isMobile]);
@@ -287,10 +295,12 @@ export function useTherapiesScreen({ therapies, setTherapies, amenityOptions, is
               isMobile={isMobile}
               requestDelete={requestDelete}
               setShowAddTherapy={setShowAddTherapy}
+              setShowLibrary={setShowLibrary}
             />
   );
 
-  const dialogs = (
+  const dialogs = (<>
+      <TherapyLibrarySheet open={showLibrary} onOpenChange={setShowLibrary} onImported={reloadTherapies} />
       <Dialog open={showAddTherapy} onOpenChange={setShowAddTherapy}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -343,7 +353,7 @@ export function useTherapiesScreen({ therapies, setTherapies, amenityOptions, is
             </div>
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog></>
   );
 
   return { tab, dialogs, setVisibleRows: setVisibleTherapiesRows, totalRef: therapiesTotalRef };
