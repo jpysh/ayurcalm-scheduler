@@ -468,6 +468,12 @@ test('a resident leaving today has a departure section and a summary to take hom
   await expect(card.getByText('Departure', { exact: true })).toBeVisible({ timeout: 15000 });
   const [download] = await Promise.all([page.waitForEvent('download'), card.getByRole('button', { name: /^↓ ?Discharge summary for/ }).click()]);
   expect(download.suggestedFilename()).toMatch(/discharge summary\.pdf$/);
+  // The form opens with what the app knows filled in, and saves.
+  await card.getByRole('button', { name: /Write the discharge summary/ }).click();
+  const form = page.getByRole('dialog').last();
+  await expect(form.getByLabel('Condition at discharge')).not.toHaveValue('', { timeout: 15000 });
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 });
 
 test('a resident arriving today has the arrival steps still to do (#219)', async ({ page }) => {

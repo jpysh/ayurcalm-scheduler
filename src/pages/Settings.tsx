@@ -32,7 +32,19 @@ type Settings = {
   patient_support_whatsapp: string | null;
   setup_complete: boolean;
   enforce_gender_match: boolean;
+  letterhead: Letterhead | null;
 };
+type Letterhead = { seal_logo: string; name_local: string; registration_line: string; accreditation_line: string; phones: string; email: string; website: string; footer_line: string; discharge_format: string };
+const LETTERHEAD: [keyof Letterhead, string, string][] = [
+  ["name_local", "Name in a second language", "हिमालय आयुर्वेद रिट्रीट"],
+  ["registration_line", "Registration line", "Registered under the Societies Registration Act…"],
+  ["accreditation_line", "Accreditation line", "NABH Accreditation No. …"],
+  ["phones", "Phones", "+91 5966 000000, +91 90000 00000"],
+  ["email", "Email", "care@yourcentre.in"],
+  ["website", "Website", "yourcentre.in"],
+  ["footer_line", "Footer line", "Corporate office: …"],
+  ["discharge_format", "Discharge number", "DS/{YYYY}/{N}"],
+];
 
 const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => void }) => {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -70,6 +82,35 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
     reader.readAsDataURL(file);
   };
 
+  // The doctors' own lines under their signature: kept on each staff record.
+  type Doc = { id: string; name: string; role: string; qualification: string | null; reg_no: string | null; signature: string | null };
+  const [doctors, setDoctors] = useState<Doc[]>([]);
+  useEffect(() => {
+    if (openSheet !== "letterhead") return;
+    fetch(`${API_BASE}/staff`).then((r) => r.json()).then((all: Doc[]) => setDoctors(all.filter((x) => x.role === "doctor"))).catch(() => setDoctors([]));
+  }, [openSheet]);
+  const saveDoctor = async (d: Doc, patch: Partial<Doc>) => {
+    setDoctors((all) => all.map((x) => (x.id === d.id ? { ...x, ...patch } : x)));
+    const res = await fetch(`${API_BASE}/staff/${d.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+    if (!res.ok) toast.error(`${d.name} was not saved`);
+  };
+  const onSignaturePicked = (d: Doc, file: File | undefined) => {
+    if (!file) return;
+    if (file.size > 250 * 1024) { toast.error("Signature must be under 250KB"); return; }
+    const reader = new FileReader();
+    reader.onload = () => saveDoctor(d, { signature: String(reader.result) });
+    reader.readAsDataURL(file);
+  };
+  const lh = (settings?.letterhead || {}) as Partial<Letterhead>;
+  const setLh = (k: keyof Letterhead, v: string) => update("letterhead", { ...lh, [k]: v } as Letterhead);
+  const onSealPicked = (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > MAX_LOGO_BYTES) { toast.error("Seal must be under 500KB"); return; }
+    const reader = new FileReader();
+    reader.onload = () => setLh("seal_logo", String(reader.result));
+    reader.readAsDataURL(file);
+  };
+
   const save = async () => {
     if (!settings) return;
     setSaving(true);
@@ -89,6 +130,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
           support_whatsapp: settings.support_whatsapp ?? "",
           patient_support_whatsapp: settings.patient_support_whatsapp ?? "",
           enforce_gender_match: settings.enforce_gender_match !== false,
+          ...(settings.letterhead ? { letterhead: settings.letterhead } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -177,6 +219,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
       ) : null}
       <div className="overflow-hidden rounded-2xl bg-card">
       {row("centre", "Centre details", settings.centre_name || "Name, address and logo")}
+      {row("letterhead", "Discharge letterhead", lh.discharge_format ? `Numbers like ${lh.discharge_format}` : "Seal, phones, registration, footer")}
       {row("hours", "Opening hours", `${settings.opening_time}–${settings.closing_time}`)}
       {row("support", "Support contacts", settings.support_whatsapp ? "WhatsApp button shown" : "No WhatsApp button")}
       {row("password", "Your password", "Change it")}
@@ -223,7 +266,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
               <Input
                 id="logo"
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpeg"
                 className="max-w-xs"
                 onChange={(e) => onLogoPicked(e.target.files?.[0])}
                 disabled={!isAdmin}
@@ -243,6 +286,42 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
           </Button>
         </div>
       )}
+      </>)}
+      {sheet("letterhead", "Discharge letterhead", <>
+      <div className="space-y-3">
+        <p className="text-xs text-muted-foreground">Printed at the top of every discharge summary, under the centre name, address and logo from Centre details. {"{YYYY}"} in the number is the year, {"{N}"} counts summaries.</p>
+        <div className="space-y-1">
+          <Label htmlFor="seal_logo">Right-hand logo or seal (optional)</Label>
+          <div className="flex items-center gap-3">
+            {lh.seal_logo ? <img src={lh.seal_logo} alt="Seal" className="h-10 w-auto rounded border" /> : null}
+            <Input id="seal_logo" type="file" accept="image/png,image/jpeg" className="max-w-xs" onChange={(e) => onSealPicked(e.target.files?.[0])} disabled={!isAdmin} />
+            {lh.seal_logo && isAdmin ? <Button variant="ghost" size="sm" onClick={() => setLh("seal_logo", "")}>Remove</Button> : null}
+          </div>
+        </div>
+        {LETTERHEAD.map(([k, label, hint]) => (
+          <div key={k} className="space-y-1">
+            <Label htmlFor={`lh_${k}`}>{label}</Label>
+            <Input id={`lh_${k}`} placeholder={hint} value={lh[k] ?? ""} onChange={(e) => setLh(k, e.target.value)} disabled={!isAdmin} />
+          </div>
+        ))}
+        {isAdmin ? <div className="flex justify-end"><Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save letterhead"}</Button></div> : null}
+        {doctors.map((d) => (
+          <div key={d.id} className="space-y-2 rounded-xl border p-3" aria-label={`Doctor ${d.name}`}>
+            <div className="font-semibold">{d.name}</div>
+            <p className="text-xs text-muted-foreground">Printed under their signature. Saved as you leave each box.</p>
+            <div className="space-y-1"><Label htmlFor={`q_${d.id}`}>Qualification</Label>
+              <Input id={`q_${d.id}`} placeholder="BAMS, MD (Panchakarma)" defaultValue={d.qualification ?? ""} disabled={!isAdmin} onBlur={(e) => e.target.value !== (d.qualification ?? "") && saveDoctor(d, { qualification: e.target.value })} /></div>
+            <div className="space-y-1"><Label htmlFor={`r_${d.id}`}>Registration no.</Label>
+              <Input id={`r_${d.id}`} defaultValue={d.reg_no ?? ""} disabled={!isAdmin} onBlur={(e) => e.target.value !== (d.reg_no ?? "") && saveDoctor(d, { reg_no: e.target.value })} /></div>
+            <div className="space-y-1"><Label htmlFor={`s_${d.id}`}>Signature (photo, optional)</Label>
+              <div className="flex items-center gap-3">
+                {d.signature ? <img src={d.signature} alt={`${d.name}'s signature`} className="h-10 w-auto rounded border bg-white" /> : null}
+                <Input id={`s_${d.id}`} type="file" accept="image/png,image/jpeg" className="max-w-xs" disabled={!isAdmin} onChange={(e) => onSignaturePicked(d, e.target.files?.[0])} />
+                {d.signature && isAdmin ? <Button variant="ghost" size="sm" onClick={() => saveDoctor(d, { signature: null })}>Remove</Button> : null}
+              </div></div>
+          </div>
+        ))}
+      </div>
       </>)}
       {sheet("hours", "Opening hours", <>
       <Card>

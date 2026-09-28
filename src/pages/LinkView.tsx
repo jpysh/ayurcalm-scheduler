@@ -8,6 +8,7 @@ import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
+import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 
 type Check = { text: string; required: boolean; done: boolean };
 type Item = {
@@ -32,6 +33,23 @@ export default function LinkView() {
   const [gone, setGone] = useState(false);
   const [raise, setRaise] = useState<{ appointment_id?: string } | null>(null);
   const [issueNote, setIssueNote] = useState("");
+  // A doctor writes the discharge summaries of residents leaving around today (#194).
+  const [leaving, setLeaving] = useState<{ stay_id: string; name: string; to: string; saved: boolean; final: boolean }[]>([]);
+  const [discharge, setDischarge] = useState<DischargeView | null>(null);
+  const isDoctor = day?.who.kind === "doctor";
+  useEffect(() => {
+    if (isDoctor) fetch(`${API_BASE}/public/link/${token}/discharges`).then((r) => r.json()).then((l: typeof leaving) => setLeaving([...l].sort((a, b) => Number(a.final) - Number(b.final) || a.to.localeCompare(b.to)))).catch(() => setLeaving([]));
+  }, [isDoctor, token, discharge]);
+  const openDischarge = async (stayId: string) => {
+    const res = await fetch(`${API_BASE}/public/link/${token}/discharges/${stayId}`).catch(() => null);
+    if (res?.ok) setDischarge(await res.json()); else toast.error("Could not open it. Check the connection.");
+  };
+  const saveDischarge = async (body: Record<string, unknown>) => {
+    const res = await fetch(`${API_BASE}/public/link/${token}/discharges/${discharge!.stay_id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+    if (!res?.ok) { toast.error(res?.status === 409 ? "The centre has made this final." : "Not saved. Check the connection and try again."); return null; }
+    toast.success("Saved");
+    return (await res.json()) as DischargeView;
+  };
 
   const load = useCallback(async () => {
     const res = await fetch(`${API_BASE}/public/link/${token}${date ? `?date=${date}` : ""}`).catch(() => null);
@@ -139,6 +157,24 @@ export default function LinkView() {
           );
         })}
       </div>
+
+      {isDoctor && leaving.length ? (
+        <section className="mt-4" aria-label="Discharge summaries">
+          <h2 className="mb-1.5 px-1 text-[13px] font-bold">Discharge summaries</h2>
+          <div className="overflow-hidden rounded-2xl bg-card">
+            {leaving.map((l) => (
+              <button key={l.stay_id} type="button" className="flex min-h-12 w-full items-center gap-3 border-b border-border px-3 text-left last:border-b-0" onClick={() => openDischarge(l.stay_id)}>
+                <span className="flex-1"><b className="block">{l.name}</b><span className="text-[13px] text-muted-foreground">Leaves {new Date(`${l.to}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}</span></span>
+                <span className="text-[13px] text-muted-foreground">{l.final ? "Final" : l.saved ? "Draft" : "To write"}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <BottomSheet open={!!discharge} onOpenChange={(o) => { if (!o) setDischarge(null); }} title={`Discharge summary · ${discharge?.name ?? ""}`}>
+        {discharge ? <div className="-mt-2 max-h-[75dvh] overflow-y-auto"><DischargeForm view={discharge} admin={false} onSave={saveDischarge} onPdf={() => window.open(`${API_BASE}/public/link/${token}/discharges/${discharge.stay_id}/pdf`, "_blank")} /></div> : null}
+      </BottomSheet>
 
       {staff ? <button type="button" className={`${chip} mt-4 w-full border-destructive text-destructive`} onClick={() => setRaise({})}>Raise an issue or SOS</button> : null}
 

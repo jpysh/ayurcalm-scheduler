@@ -16,6 +16,7 @@ import { BottomSheet } from "@/components/BottomBar";
 import { API_BASE } from "@/lib/apiBase";
 import type { CardAppt } from "@/components/TreatmentCard";
 import DayDietDialog from "./DayDietDialog";
+import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
 // removed dialog import to avoid dev parse error
@@ -116,6 +117,17 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
     a.download = `${d.name} - discharge summary.pdf`;
     a.click();
   };
+  const [discharge, setDischarge] = useState<DischargeView | null>(null);
+  const openDischarge = async () => {
+    if (!d?.stay) return;
+    setDischarge(await fetchJsonWithTimeout<DischargeView>(`${API_BASE}/patients/${d.id}/stays/${d.stay.id}/discharge`).catch(() => null));
+  };
+  const saveDischarge = async (body: Record<string, unknown>) => {
+    const res = await fetch(`${API_BASE}/patients/${d!.id}/stays/${d!.stay!.id}/discharge`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!res.ok) { toast.error("The discharge summary was not saved."); return null; }
+    toast.success("Saved");
+    return (await res.json()) as DischargeView;
+  };
   const savePlan = async () => {
     if (!d || plan === null) return;
     const res = await fetch(`${API_BASE}/patients/${d.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doctor_plan: plan.trim() || null }) });
@@ -194,6 +206,11 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
                 <span className="w-5 flex-none">{d.next_consultation ? '✓' : '○'}</span>
                 <span className="flex-1">{d.next_consultation ? `Closing consultation ${visitDay(d.next_consultation.date)} ${d.next_consultation.start_time}` : 'Book the closing consultation'}</span>
               </button>
+              <button type="button" className={fact} onClick={openDischarge}>
+                <span className="w-5 flex-none">✎</span>
+                <span className="flex-1">Write the discharge summary</span>
+                <span className="text-muted-foreground">›</span>
+              </button>
               <button type="button" className={fact} onClick={summary}>
                 <span className="w-5 flex-none">↓</span>
                 <span className="flex-1">Discharge summary for {d.name.split(' ')[0]} (PDF)</span>
@@ -237,6 +254,9 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
           </div>
         </div>
       ) : <div className="py-6 text-center text-muted-foreground">…</div>}
+      <BottomSheet open={!!discharge} onOpenChange={(o) => { if (!o) setDischarge(null); }} title={`Discharge summary · ${d?.name ?? ''}`}>
+        {discharge ? <div className="-mt-2 max-h-[75dvh] overflow-y-auto"><DischargeForm view={discharge} admin onSave={saveDischarge} onPdf={summary} /></div> : null}
+      </BottomSheet>
     </BottomSheet>
   );
 }
