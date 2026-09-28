@@ -32,7 +32,11 @@ type ResidentDay = {
   stay: { id: string; start_date: string; end_date: string; day: number; days: number } | null;
   treatments: (CardAppt & { therapy_name: string; room_name: string | null; staff_names: string[] })[];
   plan_name: string; meals: { meal: string; text: string }[];
+  doctor_plan: string | null;
+  last_consultation: Visit | null; next_consultation: Visit | null;
 };
+type Visit = { id: string; date: string; start_time: string; doctor: string | null; note: string | null };
+const visitDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 const DAY_MS = 86400000;
 
 /**
@@ -94,8 +98,14 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
   changeStay: (p: ResidentDay) => void; book: () => void; details: (id: string) => void;
 }) {
   const [d, setD] = useState<ResidentDay | null>(null);
+  const [plan, setPlan] = useState<string | null>(null);
+  const savePlan = async () => {
+    if (!d || plan === null) return;
+    const res = await fetch(`${API_BASE}/patients/${d.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doctor_plan: plan.trim() || null }) });
+    if (res.ok) { setD({ ...d, doctor_plan: plan.trim() || null }); setPlan(null); }
+  };
   useEffect(() => {
-    setD(null);
+    setD(null); setPlan(null);
     if (id) fetchJsonWithTimeout<ResidentDay>(`${API_BASE}/patients/${id}/day?date=${today}`).then(setD).catch(() => setD(null));
   }, [id, today]);
   const fact = "flex w-full min-h-11 items-center gap-3 border-b border-border px-3 py-2.5 text-left last:border-b-0";
@@ -116,6 +126,30 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
                 <span className="text-[13px] text-muted-foreground">{t.room_name}</span>
               </button>
             )) : <div className={fact}>Rest day</div>}
+          </div>
+          <div className={label}>Doctor</div>
+          <div className="overflow-hidden rounded-xl border">
+            {([['Last', d.last_consultation], ['Next', d.next_consultation]] as const).map(([k, v]) => (
+              <div key={k} className={fact}>
+                <span className="w-12 flex-none text-muted-foreground">{k}</span>
+                <span className="flex-1">{v ? `${visitDay(v.date)}${k === 'Next' ? ` ${v.start_time}` : ''}${v.doctor ? ` · ${v.doctor}` : ''}` : k === 'Last' ? 'Not seen yet' : 'None booked'}</span>
+              </div>
+            ))}
+            {plan === null ? (
+              <button type="button" className={fact} onClick={() => setPlan(d.doctor_plan || '')}>
+                <span className="w-12 flex-none text-muted-foreground">Plan</span>
+                <span className="flex-1">{d.doctor_plan || 'No plan written yet'}</span>
+                <span className="text-muted-foreground">›</span>
+              </button>
+            ) : (
+              <div className="flex flex-col gap-2 p-3">
+                <textarea aria-label="Doctor's plan" autoFocus rows={4} className="w-full rounded-lg border p-2 text-[16px]" value={plan} onChange={(e) => setPlan(e.target.value)} />
+                <div className="flex justify-end gap-2">
+                  <button type="button" className="min-h-11 rounded-full px-4 font-semibold text-muted-foreground" onClick={() => setPlan(null)}>Cancel</button>
+                  <button type="button" className="min-h-11 rounded-full bg-primary px-5 font-semibold text-primary-foreground" onClick={savePlan}>Save plan</button>
+                </div>
+              </div>
+            )}
           </div>
           <div className={label}>Meals today{d.plan_name ? ` · ${d.plan_name}` : ''}</div>
           <div className="overflow-hidden rounded-xl border">
@@ -253,12 +287,13 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const tab = (
     <>
       <ResidentsList patients={patients} today={today} onOpen={setCardId} onAdd={() => setShowAddPatient(true)} />
-      <DayDietDialog patient={mealsFor} onClose={() => setMealsFor(null)} />
     </>
   );
 
   const dialogs = (
     <>
+      {/* With the dialogs, not the Residents tab: a card opened from the day changes meals too. */}
+      <DayDietDialog patient={mealsFor} onClose={() => setMealsFor(null)} />
       <ResidentCard id={cardId} today={today} onClose={() => setCardId(null)}
         openTreatment={(a) => { setCardId(null); openTreatment(a); }}
         changeMeals={(p) => { setCardId(null); setMealsFor(p); }}
@@ -413,5 +448,5 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     </>
   );
 
-  return { tab, dialogs, openResident: setCardId };
+  return { tab, dialogs, openResident: setCardId, openMeals: setMealsFor };
 }

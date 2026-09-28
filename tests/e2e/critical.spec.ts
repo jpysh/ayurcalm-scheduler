@@ -388,3 +388,32 @@ test("a resident's details show the stay under way, not the first one on file (#
   // The old per-resident meal list is gone; the card's plan is the one place meals are read.
   await expect(details.getByText('Diet Plans')).toHaveCount(0);
 });
+
+test("a resident's card shows the doctor's last and next consultation and a plan that can be edited (#219)", async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  await openTab(page, 'Residents');
+  await activePanel(page).getByRole('button', { name: /day \d+ of/ }).first().click();
+  const card = page.getByRole('dialog').last();
+  await expect(card.getByText('Doctor', { exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(card.getByText('Next', { exact: true })).toBeVisible();
+  await card.getByRole('button', { name: /^Plan/ }).click();
+  await expect(card.getByLabel("Doctor's plan")).toBeVisible();
+  await card.getByRole('button', { name: 'Cancel' }).click();
+  await expect(card.getByLabel("Doctor's plan")).toHaveCount(0);
+});
+
+test('after a consultation, the note on the day opens the resident\'s meals in one tap (#219)', async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  // Consultations are seeded from 09:00; before the first has ended there is no note yet.
+  const pill = page.getByText(/\d+ notes?$/);
+  await expect(page.getByText(/treatments ·/)).toBeVisible({ timeout: 15000 });
+  test.skip(!(await pill.count()), 'no consultation has ended yet today');
+  await pill.click();
+  const diet = page.getByRole('dialog').getByRole('button', { name: 'Diet', exact: true });
+  test.skip(!(await diet.count()), 'no consultation note today');
+  await diet.first().click();
+  // The meals sheet lived inside the Residents screen, so from the day it never showed.
+  await expect(page.getByRole('dialog').getByText(/^Diet for one day/)).toBeVisible();
+});

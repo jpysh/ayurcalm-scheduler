@@ -53,7 +53,7 @@ type Done = { text: string; undo: (() => Promise<boolean>) | null };
 const listed = (names: string[]) => names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 const first = (name: string) => name.split(" ")[0];
 
-export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, replans, dismissed, dismiss, undoReplan, onChanged, seeIt }: {
+export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, replans, dismissed, dismiss, undoReplan, onChanged, seeIt, afterConsultation }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   apiBase: string;
@@ -68,6 +68,8 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   undoReplan: (b: ReplanBatch) => Promise<boolean>;
   onChanged: () => Promise<void>;
   seeIt: (appointmentId: string) => void;
+  /** After a consultation (#219): straight into the resident's meals or their card, to book. */
+  afterConsultation: (p: DayProblem, what: "diet" | "treatments") => void;
 }) {
   const [done, setDone] = useState<Done | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -192,7 +194,11 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
                 }}>Undo</button>
                 <button type="button" className={tb()} onClick={() => dismiss(b.batch_id)}>Dismiss</button>
               </>))}
-            {notes.map((p) => item(p.id, [p.start_time, p.who].filter(Boolean).join(" · "), p.what, <>
+            {notes.map((p) => item(p.id, [p.start_time, p.who].filter(Boolean).join(" · "), p.what, p.kind === "CONSULTED" ? <>
+              <button type="button" className={tb(true)} onClick={() => afterConsultation(p, "diet")}>Diet</button>
+              <button type="button" className={tb(true)} onClick={() => afterConsultation(p, "treatments")}>Treatments</button>
+              <button type="button" className={tb()} onClick={() => dismiss(p.id)}>Dismiss</button>
+            </> : <>
               {p.appointment_id ? <button type="button" className={tb()} onClick={() => seeIt(p.appointment_id!)}>See it</button> : null}
               <button type="button" className={tb()} onClick={() => dismiss(p.id)}>Dismiss</button>
             </>))}

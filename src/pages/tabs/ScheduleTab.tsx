@@ -12,7 +12,7 @@ const SHORT: Record<string, string> = {
   ROOM_BUSY: "Room booked twice", AMENITIES_MISSING: "Room lacks what it needs", NO_THERAPIST: "Needs a therapist", EVENT_OVERLAP: "Runs through an event",
 };
 const flagsFor = (problems: { appointment_id: string | null; kind: string; problem_class: string }[]) =>
-  Object.fromEntries(problems.filter((p) => p.appointment_id).map((p) => [p.appointment_id!, { text: SHORT[p.kind] || "Needs a look", blocking: p.problem_class === "blocking" }]));
+  Object.fromEntries(problems.filter((p) => p.appointment_id && p.kind !== "CONSULTED").map((p) => [p.appointment_id!, { text: SHORT[p.kind] || "Needs a look", blocking: p.problem_class === "blocking" }]));
 
 /** Minutes past midnight now, on the centre's clock. */
 const nowInTZ = (timeZone: string) => {
@@ -34,10 +34,10 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
   const [fromSearch, setFromSearch] = useState(false);
   const [card, setCard] = useState<CardAppt | null>(null);
   const [booking, setBooking] = useState(false);
-  const [pdfLoading, setPdfLoading] = useState<'patient' | 'therapist' | null>(null);
+  const [pdfLoading, setPdfLoading] = useState<'patient' | 'therapist' | 'doctor' | null>(null);
   // Two sheets off the same day: the patient one for the notice board, the
   // therapist rota for the treatment team.
-  const printSheet = async (kind: 'patient' | 'therapist' = 'patient') => {
+  const printSheet = async (kind: 'patient' | 'therapist' | 'doctor' = 'patient') => {
     setPdfLoading(kind);
     // Opened before the await, because a phone browser blocks a window opened
     // after one: by then the tap is over and it is a popup. The tab sits blank
@@ -45,13 +45,13 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
     const tab = window.open('', '_blank');
     try {
       const iso = dayKeyMemo;
-      const res = await fetch(`${API_BASE}/daily-schedule-pdf?date=${iso}${kind === 'therapist' ? '&view=therapist' : ''}`);
+      const res = await fetch(`${API_BASE}/daily-schedule-pdf?date=${iso}${kind === 'patient' ? '' : `&view=${kind}`}`);
       if (!res.ok) throw new Error('failed');
       const url = URL.createObjectURL(await res.blob());
       if (tab) tab.location.href = url;
       const a = document.createElement('a');
       a.href = url;
-      a.download = `ayurcalm-${kind === 'therapist' ? 'therapist-rota' : 'daily-schedule'}-${iso}.pdf`;
+      a.download = `ayurcalm-${kind === 'patient' ? 'daily-schedule' : `${kind}-rota`}-${iso}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -151,7 +151,7 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
       problem={(() => {
         type P = { appointment_id: string | null; kind: string; problem_class: string; what: string; fix: Fix | null; choices: Fix[] };
         type Fix = { label: string; appointment_id: string; staff_id: string | null; co_staff_ids?: string[]; room_id: string | null; start_time: string; date: string; cancel?: boolean };
-        const p = card ? (problems || []).find((x: P) => x.appointment_id === card.id && x.kind !== 'IDLE_RESIDENT') as P | undefined : undefined;
+        const p = card ? (problems || []).find((x: P) => x.appointment_id === card.id && x.kind !== 'IDLE_RESIDENT' && x.kind !== 'CONSULTED') as P | undefined : undefined;
         if (!p) return null;
         const fixes = (p.choices.length > 1 ? p.choices : p.fix ? [p.fix] : []).map((f) => ({
           label: f.label,

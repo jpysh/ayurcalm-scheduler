@@ -629,6 +629,8 @@ const AdminDashboard = () => {
           const open = dayCheck.problems.filter((p) => p.problem_class === 'blocking').length;
           toast(`Resident sheet printed${open ? ` · ${open} still to fix` : ''}`, {
             action: { label: 'Therapist sheet', onClick: () => scheduleScreen.printSheet('therapist') },
+            // The doctors' sheet (#219) sits beside it: sonner's second button.
+            cancel: { label: 'Doctor sheet', onClick: () => scheduleScreen.printSheet('doctor') },
           });
         }}
         book={() => { go('schedule'); scheduleScreen.openBook(); }}
@@ -670,6 +672,12 @@ const AdminDashboard = () => {
         dismissed={dismissed}
         dismiss={dismiss}
         undoReplan={undoReplanBatch}
+        afterConsultation={(p, what) => {
+          setShowAttention(false);
+          dismiss(p.id);
+          if (what === 'diet') patientsScreen.openMeals({ id: p.patient_id!, name: p.patient_name });
+          else patientsScreen.openResident(p.patient_id!);
+        }}
         onChanged={async () => { await refreshAppointmentsForDate(exceptionDayKey, true); loadDayCheck(); loadReplans(); }}
         seeIt={(id) => {
           setShowAttention(false);

@@ -221,6 +221,8 @@ app.post('/staff', async (req: Request, res: Response) => {
     role: z.enum(['therapist', 'doctor']).default('therapist'),
   });
   const body = schema.parse(req.body);
+  // A doctor gives consultations and nothing else, whatever the form sent.
+  if (body.role === 'doctor') body.specializations = (await prisma.therapy.findMany({ where: { is_consultation: true }, select: { id: true } })).map((t) => t.id);
   const s = await prisma.staff.create({ data: { ...body, name: body.name.trim(), is_active: true } });
   res.status(201).json(s);
 });
