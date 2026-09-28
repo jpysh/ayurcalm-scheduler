@@ -190,6 +190,26 @@ to run unless it is marked as demo data. Point `DATABASE_URL` at a test install,
 or set `ALLOW_TEST_WRITES=1` if you are certain. CI runs all of them inside the
 compose stack it has already started.
 
+## Backups and restoring
+
+`docker compose up -d` also starts a backup service. It saves the whole
+database, logos and signatures included, when it starts and every night at
+02:30 India time, into the `backups` folder beside `docker-compose.yml`, and
+keeps the newest 14. Settings → Backups shows when the last one ran and
+downloads it, so you can keep a copy off the machine.
+
+To restore, pick a file from `backups/` and run these two commands in the
+folder with `docker-compose.yml`:
+
+```bash
+docker compose stop app
+gunzip -c backups/ayurcalm-YYYYMMDD-HHMM.sql.gz | docker compose exec -T db psql -q -U ayurcalm ayurcalm && docker compose start app
+```
+
+`npm run qa` restores the newest backup into a scratch database and checks
+every table comes back with the same number of rows, so the restore is tested
+on every change.
+
 ## If you are locked out
 
 An administrator can set a new password for anyone from **Settings → People with

@@ -5,7 +5,9 @@ import { wipeDemo, KEEPABLE, type Keep } from './demoData.js';
 import { letterheadSchema } from './discharge.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
+import { readdir, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const SINGLETON_ID = 'singleton';
@@ -154,4 +156,23 @@ publicSettingsRouter.get('/support', async (_req: Request, res: Response) => {
     centre_name: settings.centre_name,
     patient_support_whatsapp: settings.patient_support_whatsapp,
   });
+});
+
+// Backups (#236): the backup service writes into /backups; the admin sees the
+// newest and can take a copy off the machine from their phone.
+const BACKUPS = process.env.BACKUP_PATH || '/backups';
+async function backupFiles() {
+  const names = (await readdir(BACKUPS).catch(() => [] as string[])).filter((n) => /^ayurcalm-\d{8}-\d{4}\.sql\.gz$/.test(n)).sort().reverse();
+  return Promise.all(names.map(async (name) => ({ name, ...(({ size, mtime }) => ({ size, at: mtime }))(await stat(join(BACKUPS, name))) })));
+}
+settingsRouter.get('/backups', requireAdmin, async (_req: Request, res: Response) => {
+  const files = await backupFiles();
+  res.json({ count: files.length, latest: files[0] ?? null });
+});
+settingsRouter.get('/backups/latest', requireAdmin, async (_req: Request, res: Response) => {
+  const [latest] = await backupFiles();
+  if (!latest) { res.status(404).json({ error: 'No backup yet' }); return; }
+  res.setHeader('Content-Type', 'application/gzip');
+  res.setHeader('Content-Disposition', `attachment; filename="${latest.name}"`);
+  createReadStream(join(BACKUPS, latest.name)).pipe(res);
 });

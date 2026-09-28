@@ -17,6 +17,22 @@ services:
       timeout: 5s
       retries: 10
 
+  # Nightly database backups into ./backups (#236); restore is in the README.
+  backup:
+    image: postgres:16
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGUSER: ${POSTGRES_USER:-ayurcalm}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-ayurcalm}
+      PGDATABASE: ${POSTGRES_DB:-ayurcalm}
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
+      - ./scripts/backup-loop.sh:/backup-loop.sh:ro
+    entrypoint: ["sh", "/backup-loop.sh"]
+
   app:
     build: .
     restart: unless-stopped
@@ -38,6 +54,9 @@ services:
       RATE_LIMIT_WRITES: ${RATE_LIMIT_WRITES:-}
       RATE_LIMIT_CALLS: ${RATE_LIMIT_CALLS:-}
       NODE_ENV: production
+    volumes:
+      # Read-only: Settings shows the last backup and offers it for download.
+      - ${BACKUP_DIR:-./backups}:/backups:ro
     ports:
       - "${APP_PORT:-8080}:4000"
 
