@@ -22,8 +22,10 @@ const PARAS: [string, string][] = [["condition", "Condition at discharge"], ["di
 const AFTER: [string, string][] = [["instructions", "Special instructions"], ["follow_up", "Follow-up"], ["urgent_when", "When to obtain urgent care"], ["urgent_how", "How to obtain urgent care"]];
 const blank = (): Med => ({ name: "", dose: "", timing: "", from: "", days: "" });
 
-export default function DischargeForm({ view, admin, onSave, onPdf }: {
+export default function DischargeForm({ view, admin, onSave, onPdf, doctors }: {
   view: DischargeView; admin: boolean;
+  /** The admin chooses who signs; from a doctor's link it is that doctor. */
+  doctors?: { id: string; name: string }[];
   onSave: (body: Record<string, unknown>) => Promise<DischargeView | null>;
   onPdf: () => void;
 }) {
@@ -102,6 +104,14 @@ export default function DischargeForm({ view, admin, onSave, onPdf }: {
       {AFTER.map(([k, t]) => (
         <label key={k} className={label}>{t}<textarea rows={2} className={`${field} py-2`} value={String(d[k] ?? "")} disabled={locked} onChange={(e) => set(k, e.target.value)} /></label>
       ))}
+      {doctors?.length ? (
+        <label className={label}>Signed by
+          <select className={field} value={String(d.doctor_id ?? "")} disabled={locked} onChange={(e) => set("doctor_id", e.target.value || null)}>
+            <option value="">No doctor</option>
+            {doctors.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          </select>
+        </label>
+      ) : null}
       <label className={label}>Signed on (date and time)<input className={field} placeholder="2026-10-01 11:00" value={String(d.signed_at ?? "")} disabled={locked} onChange={(e) => set("signed_at", e.target.value)} /></label>
       <div className="sticky bottom-0 mt-2 flex flex-wrap justify-end gap-2 bg-background py-2">
         <button type="button" className="min-h-11 rounded-full border px-4 font-semibold" disabled={busy} onClick={async () => { if (locked || (await save())) onPdf(); }}>PDF</button>

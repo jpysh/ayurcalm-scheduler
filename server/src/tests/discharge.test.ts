@@ -69,6 +69,11 @@ async function main() {
     assert.equal(r.status, 409);
     assert.equal((await (await call('GET', `/patients/${p.id}/stays/${stay.id}/discharge`)).json()).draft.diagnosis, 'Kati shool with sciatica');
 
+    // A stay with no consultation has no signer until a doctor writes it from their link.
+    const bare = await prisma.patientStay.create({ data: { patient_id: p.id, start_date: new Date('2030-05-01T00:00:00Z'), end_date: new Date('2030-05-03T00:00:00Z'), duration_days: 3 } });
+    r = await call('PUT', `/public/link/${link}/discharges/${bare.id}`, { doctor_id: null, diagnosis: 'x' }, false);
+    assert.equal((await r.json()).draft.doctor_id, doctor.id, 'the doctor who writes it signs it');
+
     // Signed out, nothing.
     assert.equal((await call('GET', `/patients/${p.id}/stays/${stay.id}/discharge`, undefined, false)).status, 401);
 

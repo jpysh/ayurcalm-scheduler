@@ -110,13 +110,15 @@ export type DischargeView = NonNullable<Awaited<ReturnType<typeof dischargeOf>>>
  * and never changes. A summary the admin has marked final is closed to the
  * doctor's link: the admin has the last word.
  */
-export async function saveDischarge(stayId: string, body: unknown, by: 'admin' | 'doctor', prisma: PrismaClient) {
+export async function saveDischarge(stayId: string, body: unknown, by: 'admin' | 'doctor', prisma: PrismaClient, doctorId?: string) {
   const stay = await prisma.patientStay.findUnique({ where: { id: stayId } });
   if (!stay) return { error: 404 as const };
   const before = (stay.discharge || {}) as Partial<Discharge>;
   if (by === 'doctor' && before.final) return { error: 409 as const };
   const input = dischargeSchema.partial().extend({ final: z.boolean().optional() }).strict().parse(body);
   if (by === 'doctor') delete input.final;
+  // A doctor writing a summary no one has signed yet signs it.
+  if (by === 'doctor' && doctorId && !before.doctor_id && !input.doctor_id) input.doctor_id = doctorId;
   let no = before.no;
   if (!no) {
     const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
@@ -126,7 +128,7 @@ export async function saveDischarge(stayId: string, body: unknown, by: 'admin' |
       .replace('{N}', String(count + 1).padStart(4, '0'));
   }
   // A field the caller did not send is left as it is.
-  const sent = Object.fromEntries(Object.entries(input).filter(([k]) => k in (body as object)));
+  const sent = Object.fromEntries(Object.entries(input).filter(([k]) => k in (body as object) || (k === 'doctor_id' && input.doctor_id)));
   const next = { ...before, ...sent, no, final: input.final ?? before.final ?? false };
   await prisma.patientStay.update({ where: { id: stayId }, data: { discharge: next as Prisma.InputJsonValue } });
   return { ok: true as const };

@@ -557,3 +557,26 @@ test('an event is added, edited and deleted from one labelled sheet (#227)', asy
   await page.getByRole('dialog').last().getByRole('button', { name: 'Delete' }).click();
   await expect(row).toHaveCount(0);
 });
+
+test('editing an event in the sheet keeps the dates it runs between (#227)', async ({ page, request }) => {
+  const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
+  const headers = { Authorization: `Bearer ${token}` };
+  const name = `E2E Range ${Date.now()}`;
+  const made = await request.post('/api/program-events', { headers, data: { activity_name: name, start_time: '05:00', end_time: '05:30', recurrence: 'weekly', weekdays: ['monday'], start_date: '2030-01-01', end_date: '2030-02-01' } });
+  expect(made.ok()).toBeTruthy();
+  const { id } = await made.json();
+  try {
+    await signIn(page);
+    await passSetupIfShown(page);
+    await openTab(page, 'Events');
+    await activePanel(page).getByRole('button', { name: new RegExp(name) }).click();
+    await page.getByRole('dialog').last().getByLabel('To', { exact: true }).fill('05:45');
+    await page.getByRole('dialog').last().getByRole('button', { name: 'Save' }).click();
+    await expect(activePanel(page).getByRole('button', { name: new RegExp(name) })).toContainText('05:00–05:45');
+    const ev = ((await (await request.get('/api/program-events', { headers })).json()) as { id: string; start_date: string; end_date: string }[]).find((e) => e.id === id)!;
+    expect(ev.start_date.slice(0, 10)).toBe('2030-01-01');
+    expect(ev.end_date.slice(0, 10)).toBe('2030-02-01');
+  } finally {
+    await request.delete(`/api/program-events/${id}`, { headers });
+  }
+});

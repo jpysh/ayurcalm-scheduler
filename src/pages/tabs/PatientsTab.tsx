@@ -118,9 +118,15 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
     a.click();
   };
   const [discharge, setDischarge] = useState<DischargeView | null>(null);
+  const [doctors, setDoctors] = useState<{ id: string; name: string }[]>([]);
   const openDischarge = async () => {
     if (!d?.stay) return;
-    setDischarge(await fetchJsonWithTimeout<DischargeView>(`${API_BASE}/patients/${d.id}/stays/${d.stay.id}/discharge`).catch(() => null));
+    const [view, team] = await Promise.all([
+      fetchJsonWithTimeout<DischargeView>(`${API_BASE}/patients/${d.id}/stays/${d.stay.id}/discharge`).catch(() => null),
+      fetchJsonWithTimeout<{ id: string; name: string; role?: string }[]>(`${API_BASE}/staff`).catch(() => []),
+    ]);
+    setDoctors(team.filter((x) => x.role === "doctor"));
+    setDischarge(view);
   };
   const saveDischarge = async (body: Record<string, unknown>) => {
     const res = await fetch(`${API_BASE}/patients/${d!.id}/stays/${d!.stay!.id}/discharge`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -255,7 +261,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
         </div>
       ) : <div className="py-6 text-center text-muted-foreground">…</div>}
       <BottomSheet open={!!discharge} onOpenChange={(o) => { if (!o) setDischarge(null); }} title={`Discharge summary · ${d?.name ?? ''}`}>
-        {discharge ? <div className="-mt-2 max-h-[75dvh] overflow-y-auto"><DischargeForm view={discharge} admin onSave={saveDischarge} onPdf={summary} /></div> : null}
+        {discharge ? <div className="-mt-2 max-h-[75dvh] overflow-y-auto"><DischargeForm view={discharge} admin doctors={doctors} onSave={saveDischarge} onPdf={summary} /></div> : null}
       </BottomSheet>
     </BottomSheet>
   );
