@@ -184,10 +184,12 @@ async function main() {
   // nothing in it let the rota's evening column go untested for a release.
   // A couple of half-hour starts because a real day has them and the sheets
   // have to place them correctly.
-  const dayTimes = ['09:00','10:00','11:00','14:00','15:00','16:00','17:00','18:00'];
+  // Starts every half hour, so a 40-minute treatment does not leave its
+  // therapist idle until the next hour: the demo books about half their time.
+  const dayTimes = ['09:00','09:30','10:00','10:30','11:00','11:30','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30'];
   // One knob, not a second dataset: a stress fixture kept beside the demo one
   // drifts from it, and then a test passes on data no install has.
-  const treatmentsPerRoom = Math.max(1, Math.min(dayTimes.length, Number(process.env.SEED_TREATMENTS_PER_ROOM) || 4));
+  const treatmentsPerRoom = Math.max(1, Math.min(dayTimes.length, Number(process.env.SEED_TREATMENTS_PER_ROOM) || 10));
   // Patients are taken in rotation rather than at random so a day's bookings
   // land on ~40 different people. A real centre of this size treats most of its
   // residents each day, and picking at random gave the same dozen names twice
@@ -205,7 +207,7 @@ async function main() {
     while (cursor <= end) {
       const days = randomOf([7, 10, 14, 14, 21]);
       list.push({ s: new Date(cursor), e: new Date(cursor.getTime() + (days - 1) * DAY) });
-      cursor = new Date(cursor.getTime() + (days + 5 + Math.floor(random() * 30)) * DAY);
+      cursor = new Date(cursor.getTime() + (days + 3 + Math.floor(random() * 14)) * DAY);
     }
     staysOf.set(p.id, list);
   });
@@ -238,9 +240,7 @@ async function main() {
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const weekday = d.getDay();
     const dateKey = d.toISOString().slice(0,10);
-    // Skip weekends, except today — a fresh install seeded on a Saturday
-    // would otherwise open on an empty schedule.
-    if ((weekday === 0 || weekday === 6) && dateKey !== todayKey) continue;
+    // A residential centre treats every day of the week; weekends are not skipped.
     if (centerHolidays.some(h => h.date && h.date.toISOString().slice(0,10) === dateKey)) continue;
     busy[dateKey] ??= {
       staff: Object.fromEntries(staff.map((s) => [s.id, staffEventBusy(seededEvents, s.id, new Date(dateKey)).map((b) => ({ s: b.s, e: b.e }))])),
@@ -263,58 +263,63 @@ async function main() {
       for (let ti = 0; ti < dayTimes.length; ti++) {
         const time = dayTimes[(firstTime + ti) % dayTimes.length];
         if (slotsCreatedForRoom >= treatmentsPerRoom) break;
-        const th = randomOf(therapies);
-        if (!th.required_amenities.every(a => r.amenities.includes(a))) continue;
-        // Next patient in rotation who is free at this time, so one person's
-        // clash does not cost the slot.
-        const slotS = toMinutes(time);
-        const slotE = slotS + th.duration_minutes;
-        // The treatment itself must finish before the room closes; the buffer
-        // after it is the patient's rest, not the room's next booking.
-        if (slotS < toMinutes(rDay.start) || slotS + th.duration_minutes > toMinutes(rDay.end)) continue;
-        const p = createdPatients
-          .map((_, k) => createdPatients[(patientCursor + k) % createdPatients.length])
-          .find((c) => inStay(c.id, dateKey) && ![...meals, ...(busy[dateKey].patient[c.id] || [])].some(b => overlaps(b.s, b.e, slotS, slotE)));
-        if (!p) continue;
-        patientCursor++;
-        const sCandidates = staff.filter(s => s.specializations.includes(th.id) && (!th.requires_gender_match || s.gender === p.gender));
-        // The first qualified therapist who is neither on leave nor already
-        // busy. Taking the first qualified one and giving up when they were
-        // booked was losing most of the day's slots to one person's diary.
-        const staffOnLeave = staffHolidaysByDay[dateKey] || new Set<string>();
-        // As many as the therapy needs, or the slot goes to something else.
-        const team = sCandidates.filter(sc => !staffOnLeave.has(sc.id) &&
-          !(busy[dateKey].staff[sc.id] || []).some(b => overlaps(b.s, b.e, slotS, slotE))).slice(0, th.staff_required);
-        if (team.length < th.staff_required) continue;
-        const [s, ...co] = team;
-        const sMin = toMinutes(time);
-        // Busy intervals carry the buffer, so the seed obeys the same rest and
-        // cleanup rule the scheduler enforces.
-        const eMin = sMin + th.duration_minutes;
-        const rBusy = busy[dateKey].room[r.id] ??= [];
-        const sBusy = busy[dateKey].staff[s.id] ??= [];
-        const pBusy = busy[dateKey].patient[p.id] ??= [];
-        const conflict = rBusy.some(b => overlaps(b.s, b.e, sMin, eMin)) || sBusy.some(b => overlaps(b.s, b.e, sMin, eMin)) || pBusy.some(b => overlaps(b.s, b.e, sMin, eMin));
-        if (conflict) continue;
-        for (const c of co) (busy[dateKey].staff[c.id] ??= []).push({ s: sMin, e: eMin });
-        await prisma.appointment.create({ data: {
-          patient_id: p.id,
-          therapy_id: th.id,
-          staff_id: s.id,
-          co_staff_ids: co.map((c) => c.id),
-          room_id: r.id,
-          scheduled_date: new Date(dateKey),
-          start_time: time,
-          duration_minutes: th.duration_minutes,
-          session_number: 1,
-          total_sessions: 1,
-          status: dateKey < todayKey ? 'completed' : 'pending',
-          assignment_type: 'auto',
-        } });
-        rBusy.push({ s: sMin, e: eMin });
-        sBusy.push({ s: sMin, e: eMin });
-        pBusy.push({ s: sMin, e: eMin });
-        slotsCreatedForRoom++;
+        // A few therapies tried per slot: one that does not fit the room or
+        // finds no free therapist should not cost the room its hour.
+        for (let attempt = 0; attempt < 15; attempt++) {
+          const th = randomOf(therapies);
+          if (!th.required_amenities.every(a => r.amenities.includes(a))) continue;
+          // Next patient in rotation who is free at this time, so one person's
+          // clash does not cost the slot.
+          const slotS = toMinutes(time);
+          const slotE = slotS + th.duration_minutes;
+          // The treatment itself must finish before the room closes; the buffer
+          // after it is the patient's rest, not the room's next booking.
+          if (slotS < toMinutes(rDay.start) || slotS + th.duration_minutes > toMinutes(rDay.end)) continue;
+          const p = createdPatients
+            .map((_, k) => createdPatients[(patientCursor + k) % createdPatients.length])
+            .find((c) => inStay(c.id, dateKey) && ![...meals, ...(busy[dateKey].patient[c.id] || [])].some(b => overlaps(b.s, b.e, slotS, slotE)));
+          if (!p) continue;
+          patientCursor++;
+          const sCandidates = staff.filter(s => s.specializations.includes(th.id) && (!th.requires_gender_match || s.gender === p.gender));
+          // The first qualified therapist who is neither on leave nor already
+          // busy. Taking the first qualified one and giving up when they were
+          // booked was losing most of the day's slots to one person's diary.
+          const staffOnLeave = staffHolidaysByDay[dateKey] || new Set<string>();
+          // As many as the therapy needs, or the slot goes to something else.
+          const team = sCandidates.filter(sc => !staffOnLeave.has(sc.id) &&
+            !(busy[dateKey].staff[sc.id] || []).some(b => overlaps(b.s, b.e, slotS, slotE))).slice(0, th.staff_required);
+          if (team.length < th.staff_required) continue;
+          const [s, ...co] = team;
+          const sMin = toMinutes(time);
+          // Busy intervals carry the buffer, so the seed obeys the same rest and
+          // cleanup rule the scheduler enforces.
+          const eMin = sMin + th.duration_minutes;
+          const rBusy = busy[dateKey].room[r.id] ??= [];
+          const sBusy = busy[dateKey].staff[s.id] ??= [];
+          const pBusy = busy[dateKey].patient[p.id] ??= [];
+          const conflict = rBusy.some(b => overlaps(b.s, b.e, sMin, eMin)) || sBusy.some(b => overlaps(b.s, b.e, sMin, eMin)) || pBusy.some(b => overlaps(b.s, b.e, sMin, eMin));
+          if (conflict) continue;
+          for (const c of co) (busy[dateKey].staff[c.id] ??= []).push({ s: sMin, e: eMin });
+          await prisma.appointment.create({ data: {
+            patient_id: p.id,
+            therapy_id: th.id,
+            staff_id: s.id,
+            co_staff_ids: co.map((c) => c.id),
+            room_id: r.id,
+            scheduled_date: new Date(dateKey),
+            start_time: time,
+            duration_minutes: th.duration_minutes,
+            session_number: 1,
+            total_sessions: 1,
+            status: dateKey < todayKey ? 'completed' : 'pending',
+            assignment_type: 'auto',
+          } });
+          rBusy.push({ s: sMin, e: eMin });
+          sBusy.push({ s: sMin, e: eMin });
+          pBusy.push({ s: sMin, e: eMin });
+          slotsCreatedForRoom++;
+          break;
+        }
       }
     }
   }
