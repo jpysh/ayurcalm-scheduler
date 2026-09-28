@@ -209,6 +209,18 @@ async function main() {
     }
     staysOf.set(p.id, list);
   });
+  // A few leave every day in a real centre, so today always has departures to
+  // write discharge summaries for: two stays running past today end today.
+  {
+    const t = centreYmd(new Date());
+    const ymdOf = (d: Date) => d.toISOString().slice(0, 10);
+    const all = [...staysOf.values()].flat();
+    let short = 2 - all.filter((x) => ymdOf(x.e) === t && ymdOf(x.s) < t).length;
+    for (const x of all) {
+      if (short <= 0) break;
+      if (ymdOf(x.s) < t && ymdOf(x.e) > t) { x.e = new Date(`${t}T00:00:00.000Z`); short--; }
+    }
+  }
   const inStay = (patientId: string, dateKey: string) => (staysOf.get(patientId) || []).some((x) => x.s.toISOString().slice(0, 10) <= dateKey && dateKey <= x.e.toISOString().slice(0, 10));
   // Required meals are the resident's own time: no treatment runs through one.
   const meals = seededEvents.filter((e) => !e.is_optional && e.activity_name !== 'Temple Havan Ritual').map((e) => ({ s: toMinutes(e.start_time), e: toMinutes(e.end_time) }));
