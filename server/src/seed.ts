@@ -187,7 +187,7 @@ async function main() {
   const dayTimes = ['09:00','10:00','11:00','14:00','15:00','16:00','17:00','18:00'];
   // One knob, not a second dataset: a stress fixture kept beside the demo one
   // drifts from it, and then a test passes on data no install has.
-  const treatmentsPerRoom = Math.max(1, Math.min(dayTimes.length, Number(process.env.SEED_TREATMENTS_PER_ROOM) || 3));
+  const treatmentsPerRoom = Math.max(1, Math.min(dayTimes.length, Number(process.env.SEED_TREATMENTS_PER_ROOM) || 4));
   // Patients are taken in rotation rather than at random so a day's bookings
   // land on ~40 different people. A real centre of this size treats most of its
   // residents each day, and picking at random gave the same dozen names twice
@@ -238,8 +238,9 @@ async function main() {
     for (const r of rooms) {
       const rDay = (scheduleStd as any)[['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][weekday]];
       if (!rDay) continue;
-      // Three treatments per room per day: a resident on a course has two or
+      // Four treatments per room per day: a resident on a course has two or
       // three a day, and about forty are in house, which the day sheet must hold.
+      // Three left some days with under thirty residents treated.
       // SEED_TREATMENTS_PER_ROOM raises that for checking how the sheet and the
       // screens behave at a size no demo install has.
       let slotsCreatedForRoom = 0;
