@@ -9,6 +9,7 @@ import { app } from './server.js';
 import { prisma } from './server.js';
 import { authRouter, requireAuth, warnIfDefaultAdminUnchanged, loadJwtSecret } from './auth.js';
 import { settingsRouter, publicSettingsRouter } from './settings.js';
+import { linkRouter } from './links.js';
 import { usersRouter, accountRouter } from './users.js';
 import { dietTemplatesRouter } from './dietTemplates.js';
 import { mcpRouter, mcpKeyRouter } from './mcp.js';
@@ -113,6 +114,8 @@ expressApp.use('/mcp', globalLimiter, mcpRouter);
 // requires a valid session token, reads included — appointment and patient
 // data is not public.
 expressApp.use('/api/auth', authRouter);
+// Private links (#219) carry their own key in the path, like the public settings.
+expressApp.use('/api/public/link', linkRouter);
 expressApp.use('/api/public', publicSettingsRouter);
 expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
   const p = req.path || '';
