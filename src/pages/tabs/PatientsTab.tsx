@@ -29,8 +29,8 @@ const blankNew = () => ({ name: '', phone: '', gender: 'Male', arriving: '', lea
 type InHouse = { id: string; name: string; Stays: { id: string; start_date: string; end_date: string }[] };
 type ResidentDay = {
   id: string; name: string;
-  stay: { id: string; start_date: string; end_date: string; day: number; days: number } | null;
-  treatments: (CardAppt & { therapy_name: string; room_name: string | null; staff_names: string[] })[];
+  stay: { id: string; start_date: string; end_date: string; day: number; days: number; vitals: string | null; concerns: string | null; tests: string | null } | null;
+  treatments: (CardAppt & { therapy_name: string; consultation: boolean; room_name: string | null; staff_names: string[] })[];
   plan_name: string; meals: { meal: string; text: string }[];
   doctor_plan: string | null;
   last_consultation: Visit | null; next_consultation: Visit | null;
@@ -99,13 +99,29 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
 }) {
   const [d, setD] = useState<ResidentDay | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
+  const [intake, setIntake] = useState<{ vitals: string; concerns: string; tests: string } | null>(null);
+  const saveIntake = async () => {
+    if (!d?.stay || !intake) return;
+    const body = { vitals: intake.vitals.trim() || null, concerns: intake.concerns.trim() || null, tests: intake.tests.trim() || null };
+    const res = await fetch(`${API_BASE}/patients/${d.id}/stays/${d.stay.id}/arrival`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (res.ok) { setD({ ...d, stay: { ...d.stay, ...body } }); setIntake(null); } else toast.error("That could not be saved.");
+  };
+  const summary = async () => {
+    if (!d?.stay) return;
+    const res = await fetch(`${API_BASE}/patients/${d.id}/stays/${d.stay.id}/summary-pdf`);
+    if (!res.ok) { toast.error("The summary could not be made."); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(await res.blob());
+    a.download = `${d.name} - stay summary.pdf`;
+    a.click();
+  };
   const savePlan = async () => {
     if (!d || plan === null) return;
     const res = await fetch(`${API_BASE}/patients/${d.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doctor_plan: plan.trim() || null }) });
     if (res.ok) { setD({ ...d, doctor_plan: plan.trim() || null }); setPlan(null); }
   };
   useEffect(() => {
-    setD(null); setPlan(null);
+    setD(null); setPlan(null); setIntake(null);
     if (id) fetchJsonWithTimeout<ResidentDay>(`${API_BASE}/patients/${id}/day?date=${today}`).then(setD).catch(() => setD(null));
   }, [id, today]);
   const fact = "flex w-full min-h-11 items-center gap-3 border-b border-border px-3 py-2.5 text-left last:border-b-0";
@@ -127,6 +143,62 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
               </button>
             )) : <div className={fact}>Rest day</div>}
           </div>
+          {/* Arrival (#219): the first days, until the intake is written. Then the plan follows from the consultation. */}
+          {d.stay && (d.stay.day <= 3 || !d.stay.vitals) ? (<>
+            <div className={label}>Arrival</div>
+            {intake === null ? (
+              <div className="overflow-hidden rounded-xl border">
+                <button type="button" className={fact} onClick={() => setIntake({ vitals: d.stay!.vitals || '', concerns: d.stay!.concerns || '', tests: d.stay!.tests || '' })}>
+                  <span className="w-5 flex-none">{d.stay.vitals && d.stay.concerns ? '✓' : '○'}</span>
+                  <span className="flex-1">{d.stay.vitals || d.stay.concerns ? [d.stay.vitals, d.stay.concerns].filter(Boolean).join(' · ') : 'Vitals and concerns'}</span>
+                  <span className="text-muted-foreground">›</span>
+                </button>
+                <button type="button" className={fact} onClick={d.last_consultation || d.next_consultation ? undefined : book}>
+                  <span className="w-5 flex-none">{d.last_consultation ? '✓' : '○'}</span>
+                  <span className="flex-1">{d.last_consultation || d.next_consultation ? `First consultation ${visitDay((d.last_consultation || d.next_consultation)!.date)}` : 'Book the first consultation'}</span>
+                </button>
+                <button type="button" className={fact} onClick={() => changeMeals(d)}>
+                  <span className="w-5 flex-none">{d.plan_name ? '✓' : '○'}</span>
+                  <span className="flex-1">{d.plan_name ? `Diet: ${d.plan_name}` : 'Choose a diet'}</span>
+                  <span className="text-muted-foreground">›</span>
+                </button>
+                <button type="button" className={fact} onClick={book}>
+                  <span className="w-5 flex-none">{d.treatments.some((t) => !t.consultation && t.status !== 'no_show') ? '✓' : '○'}</span>
+                  <span className="flex-1">Book their therapies</span>
+                  <span className="text-muted-foreground">›</span>
+                </button>
+                <button type="button" className={fact} onClick={() => setIntake({ vitals: d.stay!.vitals || '', concerns: d.stay!.concerns || '', tests: d.stay!.tests || '' })}>
+                  <span className="w-5 flex-none">{d.stay.tests ? '✓' : '○'}</span>
+                  <span className="flex-1">{d.stay.tests ? `Tests: ${d.stay.tests}` : 'External tests, if any'}</span>
+                  <span className="text-muted-foreground">›</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 rounded-xl border p-3 text-[13px] text-muted-foreground">
+                <label className="grid gap-1">Vitals<input autoFocus className="min-h-11 rounded-lg border px-2 text-[16px] text-foreground" placeholder="BP 130/85, pulse 72, weight 68 kg" value={intake.vitals} onChange={(e) => setIntake({ ...intake, vitals: e.target.value })} /></label>
+                <label className="grid gap-1">What they came about<textarea rows={2} className="rounded-lg border p-2 text-[16px] text-foreground" value={intake.concerns} onChange={(e) => setIntake({ ...intake, concerns: e.target.value })} /></label>
+                <label className="grid gap-1">External tests<input className="min-h-11 rounded-lg border px-2 text-[16px] text-foreground" placeholder="Blood sugar, thyroid" value={intake.tests} onChange={(e) => setIntake({ ...intake, tests: e.target.value })} /></label>
+                <div className="flex justify-end gap-2">
+                  <button type="button" className="min-h-11 rounded-full px-4 font-semibold" onClick={() => setIntake(null)}>Cancel</button>
+                  <button type="button" className="min-h-11 rounded-full bg-primary px-5 font-semibold text-primary-foreground" onClick={saveIntake}>Save</button>
+                </div>
+              </div>
+            )}
+          </>) : null}
+          {/* Departure (#219): the last two days, a closing consultation and the resident's summary. */}
+          {d.stay && d.stay.day >= d.stay.days - 1 ? (<>
+            <div className={label}>Departure</div>
+            <div className="overflow-hidden rounded-xl border">
+              <button type="button" className={fact} onClick={d.next_consultation ? undefined : book}>
+                <span className="w-5 flex-none">{d.next_consultation ? '✓' : '○'}</span>
+                <span className="flex-1">{d.next_consultation ? `Closing consultation ${visitDay(d.next_consultation.date)} ${d.next_consultation.start_time}` : 'Book the closing consultation'}</span>
+              </button>
+              <button type="button" className={fact} onClick={summary}>
+                <span className="w-5 flex-none">↓</span>
+                <span className="flex-1">Summary for {d.name.split(' ')[0]} (PDF)</span>
+              </button>
+            </div>
+          </>) : null}
           <div className={label}>Doctor</div>
           <div className="overflow-hidden rounded-xl border">
             {([['Last', d.last_consultation], ['Next', d.next_consultation]] as const).map(([k, v]) => (

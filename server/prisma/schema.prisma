@@ -43,6 +43,12 @@ model PatientStay {
   start_date    DateTime
   end_date      DateTime
   duration_days Int
+  /// Taken on arrival (#219): the first reading, free text ("BP 130/85, pulse 72").
+  vitals        String?
+  /// What the resident came about, in their words.
+  concerns      String?
+  /// External tests the doctor asked for (blood work, scans).
+  tests         String?
 
   Patient Patient @relation(fields: [patient_id], references: [id])
 }

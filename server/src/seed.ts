@@ -399,9 +399,12 @@ async function main() {
   const DAY_MS = 86400000;
   const residents: { id: string }[] = [];
   let stayCount = 0;
+  const concernsSeed = ['Lower back pain, poor sleep', 'Stress and fatigue', 'Joint stiffness in the mornings', 'Digestion, acidity', 'Weight and energy', 'Recovery after illness'];
   const addStay = async (patient_id: string, start_date: Date, end_date: Date) => {
     await prisma.patientStay.create({
-      data: { patient_id, start_date, end_date, duration_days: Math.round((end_date.getTime() - start_date.getTime()) / DAY_MS) + 1 },
+      data: { patient_id, start_date, end_date, duration_days: Math.round((end_date.getTime() - start_date.getTime()) / DAY_MS) + 1,
+        // Taken on arrival, so today's arrivals are the ones still to do (#219).
+        ...(start_date < today ? { vitals: `BP ${118 + (stayCount * 7) % 30}/${76 + (stayCount * 3) % 14}, pulse ${66 + (stayCount * 5) % 18}`, concerns: concernsSeed[stayCount % concernsSeed.length], tests: stayCount % 4 === 0 ? 'Blood sugar (fasting), lipid profile' : null } : {}) },
     });
     // Not everyone: a centre always has someone whose plan has not been set yet,
     // and the sheet should show that honestly rather than inventing one.

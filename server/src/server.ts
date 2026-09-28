@@ -4,10 +4,12 @@ import { z } from 'zod';
 import { autoSchedule } from './scheduler.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import { generateTherapistRotaPdf } from './pdf/therapistRotaPdf.js';
+import { staySummary, generateStaySummaryPdf } from './pdf/staySummaryPdf.js';
+import { staffWeek } from './staffWeek.js';
 import { findConflict, HAPPENING, loadDay, nearestFreeTime, staffDay } from './appointmentGuard.js';
 import { replanStaffDay, applyPlan, undoReplan, type Pin } from './replan.js';
 import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
-import { eventClashes, type EventRow } from './availability.js';
+import { centreClock, eventClashes, type EventRow } from './availability.js';
 import { bookingSuggestions, cardChoices } from './cardChoices.js';
 import { historyOf } from './history.js';
 import { searchTreatments } from './search.js';
@@ -516,6 +518,25 @@ app.get('/patients/:id/day', async (req: Request, res: Response) => {
   res.json(out);
 });
 
+// Arrival (#219): the first reading, what they came about, tests asked for.
+app.patch('/patients/:id/stays/:stayId/arrival', async (req: Request, res: Response) => {
+  const text = z.string().max(2000).nullable().optional();
+  const body = z.object({ vitals: text, concerns: text, tests: text }).parse(req.body);
+  const stay = await prisma.patientStay.findFirst({ where: { id: String(req.params.stayId), patient_id: String(req.params.id) } });
+  if (!stay) { res.status(404).json({ error: 'Stay not found' }); return; }
+  res.json(await prisma.patientStay.update({ where: { id: stay.id }, data: body }));
+});
+
+// Departure (#219): the resident's own summary of the stay, to take home.
+app.get('/patients/:id/stays/:stayId/summary-pdf', async (req: Request, res: Response) => {
+  const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  const s = await staySummary(String(req.params.id), String(req.params.stayId), prisma, centreClock(settings?.timezone || 'Asia/Kolkata').date);
+  if (!s) { res.status(404).json({ error: 'Stay not found' }); return; }
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="stay-summary-${s.from}.pdf"`);
+  res.send(await generateStaySummaryPdf(s, settings?.centre_name || 'Wellness Centre'));
+});
+
 app.get('/patients/:id/stays', async (req: Request, res: Response) => {
   const id = req.params.id;
   const stays = await prisma.patientStay.findMany({ where: { patient_id: id }, orderBy: { start_date: 'desc' } });
@@ -742,6 +763,12 @@ app.post('/day-check', async (req: Request, res: Response) => {
 });
 
 /** Who is on leave, and when each therapist is tied up, for the schedule's "who is free". */
+// Team → This week (#219): a week from start, booked hours against hours in.
+app.get('/staff-week', async (req: Request, res: Response) => {
+  const start = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.query.start);
+  res.json(await staffWeek(start, prisma));
+});
+
 app.get('/staff-day', async (req: Request, res: Response) => {
   const date = String(req.query.date || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { res.status(400).json({ error: 'date=YYYY-MM-DD required' }); return; }
