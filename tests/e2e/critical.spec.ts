@@ -67,9 +67,9 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
   await passSetupIfShown(page);
   for (const [tab, text] of [
     ['Team and rooms', 'Working today'],
-    ['Therapists', 'Staff Management'],
-    ['Rooms', 'Room Management'],
-    ['Therapies', 'Therapy Management'],
+    ['Therapists', 'Add therapist'],
+    ['Rooms', 'Add room'],
+    ['Therapies', 'Add therapy'],
     ['Diet plans', 'Active Assignments'],
     ['Leave', 'Add leave'],
     ['Events', 'Events'],
@@ -373,4 +373,18 @@ test('an admin who never finished setup is sent back to it (#60)', async ({ page
   } finally {
     await put(true);
   }
+});
+
+test("a resident's details show the stay under way, not the first one on file (#220)", async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  await openTab(page, 'Residents');
+  // Someone arriving today: their stay starts today, and they have older and later stays in the seed.
+  await activePanel(page).getByRole('button', { name: /day 1 of/ }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Details' }).click();
+  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+  const details = page.getByRole('dialog').last();
+  await expect(details.getByRole('button', { name: new RegExp(`^${today} →`) })).toBeVisible();
+  // The old per-resident meal list is gone; the card's plan is the one place meals are read.
+  await expect(details.getByText('Diet Plans')).toHaveCount(0);
 });

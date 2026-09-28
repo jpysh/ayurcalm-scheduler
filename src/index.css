@@ -171,6 +171,17 @@
   .cards-sm td:last-child { display: flex; justify-content: flex-end; gap: 4px; }
   .cards-sm td:last-child button { min-width: 44px; min-height: 44px; }
 
+  /* A card's facts sit on one wrapped line under the name, each after its
+     column's name: a bare "80 · 2" means nothing without its header (#220). */
+  .cards-sm tr:not(:has(input, textarea, [role=combobox])) { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 12px; }
+  .cards-sm tr:not(:has(input, textarea, [role=combobox])) :is(td[data-first], tr:not(:has(td[data-first])) > td:first-child) { flex-basis: 100%; }
+  .cards-sm tr:not(:has(input, textarea, [role=combobox])) td[data-label]:not([data-first]):not(tr:not(:has(td[data-first])) > td:first-child)::before {
+    content: attr(data-label) " "; color: hsl(var(--muted-foreground) / 0.8);
+  }
+  .cards-sm tr:not(:has(input, textarea, [role=combobox])) td:not([data-first]) * {
+    display: inline; width: auto; height: auto; min-width: 0; padding: 0; border: 0; background: none; font: inherit; color: hsl(var(--foreground));
+  }
+
   /* A card is a plain row, as the design's lists: tapping it opens its edit
      sheet (table.tsx), where Save, Cancel and Delete are (#178). */
   .cards-sm tr:not(:has(input, textarea, [role=combobox])) td:last-child { display: none; }

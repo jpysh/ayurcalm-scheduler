@@ -74,7 +74,7 @@ const TimeOffTab = ({
                     <SelectTrigger className="h-7"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Types</SelectItem>
-                      <SelectItem value="Center">Center</SelectItem>
+                      <SelectItem value="Center">Centre</SelectItem>
                       <SelectItem value="Staff">Staff</SelectItem>
                       <SelectItem value="Room">Room</SelectItem>
                       <SelectItem value="Therapy">Therapy</SelectItem>
@@ -185,7 +185,7 @@ const TimeOffTab = ({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Center">Center</SelectItem>
+                          <SelectItem value="Center">Centre</SelectItem>
                           <SelectItem value="Staff">Staff</SelectItem>
                           <SelectItem value="Room">Room</SelectItem>
                           <SelectItem value="Therapy">Therapy</SelectItem>
@@ -193,7 +193,7 @@ const TimeOffTab = ({
                         </SelectContent>
                       </Select>
                     ) : (
-                      <Badge variant={holiday.type === "Center" ? "default" : "secondary"}>{holiday.type}</Badge>
+                      <Badge variant={holiday.type === "Center" ? "default" : "secondary"}>{holiday.type === "Center" ? "Centre" : holiday.type}</Badge>
                     )}
                   </TableCell>
                   <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
@@ -496,7 +496,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Center">Center</SelectItem>
+                <SelectItem value="Center">Centre</SelectItem>
                 <SelectItem value="Staff">Staff</SelectItem>
                 <SelectItem value="Room">Room</SelectItem>
                 <SelectItem value="Therapy">Therapy</SelectItem>

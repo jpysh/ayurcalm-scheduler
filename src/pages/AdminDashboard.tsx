@@ -133,6 +133,8 @@ const AdminDashboard = () => {
   const [showAttention, setShowAttention] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentDetailed | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
+  // Until the first load lands, an empty list means "not yet", not "a new centre" (#220).
+  const [loaded, setLoaded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ kind: 'staff'|'room'|'therapy'|'patient'|'timeoff'|'appointment'; id: string; name?: string; counts?: Record<string, number> } | null>(null);
 
   const TAB_ORDER = SCREENS.map(([key]) => key as string);
@@ -204,6 +206,7 @@ const AdminDashboard = () => {
       const map: Record<string, ApiAppointment[]> = {};
       weekDates.forEach((d, i) => { map[d] = appts[i]; });
       setAppointmentsByDate(map);
+      setLoaded(true);
       try {
         type ApiTimeOff = { id?: string; entity_type: 'center'|'staff'|'room'|'therapy'|'patient'; entity_id?: string | null; date?: string | null; start_date?: string | null; end_date?: string | null; start_time?: string | null; end_time?: string | null; recurrence?: 'weekly' | null; weekdays?: string[] | null; description?: string | null };
         const [tOff, hol] = await Promise.all([
@@ -542,7 +545,7 @@ const AdminDashboard = () => {
               }
             }}>
             {/* A new centre's first steps, until it can book (#60): each row opens the screen that adds it. */}
-            {staff.length === 0 || roomsList.length === 0 || patients.length === 0 ? (
+            {!loaded ? null : staff.length === 0 || roomsList.length === 0 || patients.length === 0 ? (
               <div className="mt-3 overflow-hidden rounded-2xl bg-card" aria-label="Get started">
                 <div className="px-4 pt-3 text-[13px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Get started</div>
                 {([["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first resident", patients.length]] as const).map(([tab, label, n]) => (
@@ -554,7 +557,7 @@ const AdminDashboard = () => {
                 <div className="px-4 py-3 text-[13px] text-muted-foreground">Then tap + to book the first treatment.</div>
               </div>
             ) : null}
-            {scheduleScreen.tab}
+            {loaded && scheduleScreen.tab}
           </TabsContent>
 
           {eventsScreen.dialogs}
