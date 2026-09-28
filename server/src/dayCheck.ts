@@ -294,7 +294,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
   // 👎. Notes to read, never a fix: the admin decides, and Dismiss clears them.
   const key = day.toISOString().slice(0, 10);
   // A day either side in UTC covers the centre's day in any time zone; the date check below picks it out.
-  const issues = await prisma.linkIssue.findMany({ where: { seen: false, created_at: { gte: new Date(day.getTime() - 86400000), lt: new Date(day.getTime() + 2 * 86400000) } }, orderBy: { created_at: 'asc' } });
+  const issues = await prisma.linkIssue.findMany({ where: { seen: false, OR: [{ appointment_id: { in: appointments.map((a) => a.id) } }, { appointment_id: null, created_at: { gte: new Date(day.getTime() - 86400000), lt: new Date(day.getTime() + 2 * 86400000) } }] }, orderBy: { created_at: 'asc' } });
   const ISSUE: Record<string, string> = { room: 'Room not usable', co_therapist: 'Co-therapist not here', patient_absent: 'Resident not here', permission: 'Needs permission', note: 'A note', sos: 'SOS: needs help now' };
   for (const i of issues) {
     const a = i.appointment_id ? appointments.find((x) => x.id === i.appointment_id) : null;
