@@ -135,7 +135,12 @@ test('a therapist off: the pill names it, its fix clears the day, and Undo puts 
   await expect(verify).not.toContainText('For your action');
   const accepted = await snapshot(call);
   expect(accepted).not.toEqual(before);
-  expect((await call('get', `/day-check?date=${DAY}`)).problems).toEqual([]);
+  // She is off the whole day, so it goes to the next day. It used to land at 18:00
+  // the same day: whole-day leave was saved as 09:00–18:00 (#219).
+  expect(accepted[0].scheduled_date).toContain(NEXT);
+  // Left: only the note that the resident has nothing booked today, which is true.
+  const left = (await call('get', `/day-check?date=${DAY}`)).problems;
+  expect(left.filter((p: { kind: string }) => p.kind !== 'IDLE_RESIDENT')).toEqual([]);
 
   await verify.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(verify).toContainText('Put back as it was.', { timeout: 20000 });
