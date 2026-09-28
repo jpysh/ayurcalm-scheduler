@@ -272,6 +272,24 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
     }
   }
 
+  // A consultation that has ended today may have changed the plan (#219): the
+  // admin is asked, once, to look at the resident's diet and treatments.
+  if (Number.isFinite(cutoff)) {
+    for (const a of appointments) {
+      const t = ctx.therapies.find((x) => x.id === a.therapy_id);
+      if (!t?.is_consultation || a.status === 'cancelled' || a.status === 'no_show') continue;
+      if (toMinutes(a.start_time) + a.duration_minutes > cutoff) continue;
+      raw.push({
+        id: `CONSULTED:${a.id}`, kind: 'CONSULTED', problem_class: 'worth_knowing',
+        who: nameOfPatient(a.patient_id), start_time: a.start_time,
+        what: `Seen by ${nameOfStaff(a.staff_id)}. Update their diet or treatments?`,
+        group_key: 'CONSULTED', group_label: 'Consultations to act on',
+        appointment_id: a.id, patient_id: a.patient_id, patient_name: nameOfPatient(a.patient_id), staff_id: a.staff_id,
+        blocked_by_preferred_staff: false, fix: null, choices: [], no_fix_reason: null, cost: COST.IDLE_RESIDENT,
+      });
+    }
+  }
+
   // A resident is paying to be treated. A day with nothing booked is the
   // failure the centre hears about from the resident.
   const booked = new Set(appointments.map((a) => a.patient_id));
@@ -304,7 +322,9 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
   // answers take the same room at the same minute.
   const plan: Fix[] = [];
   if (withFixes) {
-    const movable = raw.filter((p) => p.appointment_id).map((p) => p.appointment_id as string);
+    // A consultation note points at an appointment that is over and fine: nothing to move.
+    const toPlan = raw.filter((p) => p.appointment_id && p.kind !== 'CONSULTED');
+    const movable = toPlan.map((p) => p.appointment_id as string);
     if (movable.length > 0) {
       const result = await planDay(null, day, prisma, {
         appointmentIds: movable,
@@ -318,7 +338,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
       }
       const unplacedBy = new Map(result.unplaced.map((u) => [u.appointment_id, u.reason]));
       const choicesBy = new Map(result.unplaced.map((u) => [u.appointment_id, (u.choices || []).map((c) => fixFromMove(c, c.to.date === ymd(day)))]));
-      for (const p of raw) {
+      for (const p of toPlan) {
         if (!p.appointment_id) continue;
         const appt = appointments.find((a) => a.id === p.appointment_id);
         const fix = byAppointment.get(p.appointment_id) || null;
@@ -358,7 +378,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
     if (g.key.startsWith('STAFF_OFF:')) {
       const first = raw.find((x) => x.id === g.problem_ids[0]);
       g.label = `${nameOfStaff(first?.staff_id ?? null)} is off — ${n} treatment${n === 1 ? '' : 's'}`;
-    } else if (n > 1 && g.key !== 'IDLE_RESIDENT' && g.key !== 'NO_THERAPIST') {
+    } else if (n > 1 && g.key !== 'IDLE_RESIDENT' && g.key !== 'NO_THERAPIST' && g.key !== 'CONSULTED') {
       g.label = `${g.label} (${n} treatments)`;
     }
   }

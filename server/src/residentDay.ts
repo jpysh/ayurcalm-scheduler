@@ -6,6 +6,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { loadDietsForDay, mealLabel, mealOrder } from './dietResolution.js';
+import { centreClock, startedBefore, toMinutes } from './availability.js';
 
 const DAY_MS = 86400000;
 
@@ -23,6 +24,22 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
     }),
     loadDietsForDay(day, prisma),
   ]);
+  // The doctor's side of the card (#219): the last consultation before today,
+  // the next one from today, and the plan the last one left.
+  const consult = { patient_id: patientId, status: { notIn: ['cancelled', 'no_show'] as ('cancelled' | 'no_show')[] }, Therapy: { is_consultation: true } };
+  const include = { Staff: { select: { name: true } } };
+  // Split at the centre's clock, so this morning's consultation is the last one by the afternoon.
+  const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  const cut = startedBefore(centreClock(settings?.timezone || 'Asia/Kolkata'), day);
+  const visits = await prisma.appointment.findMany({ where: consult, orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }], include });
+  const held = (a: (typeof visits)[number]) => {
+    const d = a.scheduled_date.toISOString().slice(0, 10);
+    return d < date || (d === date && toMinutes(a.start_time) + a.duration_minutes <= cut);
+  };
+  const past = visits.filter(held);
+  const last = past[past.length - 1] ?? null;
+  const next = visits.find((a) => !held(a)) ?? null;
+  const visit = (a: (typeof visits)[number] | null) => a && { id: a.id, date: a.scheduled_date.toISOString().slice(0, 10), start_time: a.start_time, doctor: a.Staff?.name ?? null, note: a.notes };
   const team = [...new Set(appts.flatMap((a) => [a.staff_id, ...a.co_staff_ids]).filter((x): x is string => Boolean(x)))];
   const names = new Map((await prisma.staff.findMany({ where: { id: { in: team } }, select: { id: true, name: true } })).map((s) => [s.id, s.name]));
   const diet = diets.dietFor(patient, appts.some((a) => a.status !== 'no_show'));
@@ -42,6 +59,9 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
       room_name: Room?.name ?? null,
       staff_names: [a.staff_id, ...a.co_staff_ids].filter((x): x is string => Boolean(x)).map((id) => names.get(id) || ''),
     })),
+    doctor_plan: patient.doctor_plan,
+    last_consultation: visit(last),
+    next_consultation: visit(next),
     plan_name: diet.planName,
     meals: mealOrder.filter((m) => diet.meals[m]).map((m) => ({ meal: mealLabel[m], text: diet.meals[m]! })),
   };

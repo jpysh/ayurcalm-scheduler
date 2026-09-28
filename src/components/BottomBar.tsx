@@ -100,7 +100,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
           className="fixed left-1/2 -translate-x-1/2 bottom-[calc(80px+env(safe-area-inset-bottom))] z-40 flex items-center gap-3 min-h-10 px-3.5 rounded-full border bg-card text-sm font-semibold shadow-lg whitespace-nowrap after:content-['›'] after:text-lg after:text-muted-foreground after:-ml-1">
           {attention.fix ? <span className="inline-flex items-center"><i className="mr-1.5 h-2 w-2 rounded-full bg-destructive" />{attention.fix} to fix</span> : null}
           {attention.done ? <span className="inline-flex items-center"><i className="mr-1.5 h-2 w-2 rounded-full bg-warning" />{attention.done} done</span> : null}
-          {attention.note ? <span className="inline-flex items-center"><i className="mr-1.5 h-2 w-2 rounded-full bg-muted-foreground/60" />{attention.note} note</span> : null}
+          {attention.note ? <span className="inline-flex items-center"><i className="mr-1.5 h-2 w-2 rounded-full bg-muted-foreground/60" />{attention.note} note{attention.note === 1 ? "" : "s"}</span> : null}
         </button>
       ) : null}
       {searching ? (

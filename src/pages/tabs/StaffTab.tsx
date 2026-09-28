@@ -240,6 +240,7 @@ export function useStaffScreen({ staff, setStaff, therapies, isMobile, requestDe
   const [newStaff, setNewStaff] = useState({
     name: "",
     gender: "Female",
+    role: "therapist" as "therapist" | "doctor",
     specializationsText: "",
     phone: "",
     schedule: "",
@@ -281,11 +282,19 @@ export function useStaffScreen({ staff, setStaff, therapies, isMobile, requestDe
       <Dialog open={showAddStaff} onOpenChange={setShowAddStaff}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-2xl">Add Staff</DialogTitle>
+            <DialogTitle className="text-2xl">Add a therapist or doctor</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 gap-3">
             <Label>Name</Label>
             <Input value={newStaff.name} onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })} />
+            <Label>Role</Label>
+            <Select value={newStaff.role} onValueChange={(v) => setNewStaff({ ...newStaff, role: v as 'therapist' | 'doctor' })}>
+              <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="therapist">Therapist</SelectItem>
+                <SelectItem value="doctor">Doctor: gives consultations</SelectItem>
+              </SelectContent>
+            </Select>
             <Label>Gender</Label>
             <Select value={newStaff.gender} onValueChange={(v) => setNewStaff({ ...newStaff, gender: v })}>
               <SelectTrigger className="h-12">
@@ -317,7 +326,7 @@ export function useStaffScreen({ staff, setStaff, therapies, isMobile, requestDe
               <Button onClick={async () => {
                 const specsInput = newStaff.specializationsText.split(',').map((s) => s.trim()).filter(Boolean);
                 const specIds = specsInput.map((name) => therapies.find((t) => t.name === name)?.id || name);
-                const payload: { name: string; gender: 'male'|'female'|'other'; specializations: (string | number)[]; phone: string; weekly_schedule: Record<string, unknown>; is_active: boolean } = { name: newStaff.name, gender: newStaff.gender.toLowerCase() as 'male'|'female'|'other', specializations: specIds, phone: newStaff.phone || '', weekly_schedule: {}, is_active: newStaff.status === 'Active' };
+                const payload: { name: string; gender: 'male'|'female'|'other'; specializations: (string | number)[]; phone: string; weekly_schedule: Record<string, unknown>; is_active: boolean; role: 'therapist' | 'doctor' } = { role: newStaff.role, name: newStaff.name, gender: newStaff.gender.toLowerCase() as 'male'|'female'|'other', specializations: specIds, phone: newStaff.phone || '', weekly_schedule: {}, is_active: newStaff.status === 'Active' };
                 try {
                   const res = await fetch(`${API_BASE}/staff`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
                   const created = await res.json();
@@ -334,7 +343,7 @@ export function useStaffScreen({ staff, setStaff, therapies, isMobile, requestDe
                     },
                   ]);
                   setShowAddStaff(false);
-                  setNewStaff({ name: '', gender: 'Female', specializationsText: '', phone: '', schedule: '', status: 'Active' });
+                  setNewStaff({ name: '', gender: 'Female', specializationsText: '', phone: '', schedule: '', status: 'Active', role: 'therapist' });
                 } catch {
                   toast.error('Failed to save staff');
                 }
