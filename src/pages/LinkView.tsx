@@ -91,7 +91,7 @@ export default function LinkView() {
                 <div className="mt-3 grid gap-2">
                   {it.checklist?.map((c) => (
                     <label key={c.text} className="flex min-h-11 items-center gap-3">
-                      <input type="checkbox" className="h-5 w-5" checked={c.done}
+                      <input type="checkbox" className="h-5 w-5 min-h-0 min-w-0 flex-none" checked={c.done}
                         onChange={(e) => save(it, { checklist: { [c.text]: e.target.checked } }, { checklist: it.checklist!.map((x) => (x.text === c.text ? { ...x, done: e.target.checked } : x)) })} />
                       <span className="flex-1">{c.text}</span>
                       {c.required ? <span className="text-[12px] text-muted-foreground">required</span> : null}

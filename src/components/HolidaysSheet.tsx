@@ -59,7 +59,7 @@ export function HolidaysSheet({ open, onOpenChange, closed, today, onAdded }: {
             <div className="max-h-[50vh] overflow-y-auto rounded-2xl border border-border">
               {list.map((h) => (
                 <label key={key(h)} className="flex min-h-[54px] items-center gap-3 border-b border-border px-3 last:border-b-0">
-                  <input type="checkbox" className="h-5 w-5" checked={!off[key(h)]} onChange={(e) => setOff((o) => ({ ...o, [key(h)]: !e.target.checked }))} />
+                  <input type="checkbox" className="h-5 w-5 min-h-0 min-w-0 flex-none" checked={!off[key(h)]} onChange={(e) => setOff((o) => ({ ...o, [key(h)]: !e.target.checked }))} />
                   <span className="grid">
                     <span className="text-[16px] font-semibold">{h.name}</span>
                     <span className="text-[13px] text-muted-foreground">{fmt(h.date)}</span>

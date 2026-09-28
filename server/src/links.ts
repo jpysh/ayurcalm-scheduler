@@ -64,7 +64,7 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
         ...base,
         patient: a.Patient.name,
         with: teamOf(a).filter((id) => id !== who.id).map((id) => names.get(id) || ''),
-        products: a.Therapy.products, amenities: a.Therapy.required_amenities,
+        products: a.Therapy.products, amenities: a.Therapy.required_amenities.map((x) => x.replace(/_/g, " ")),
         checklist: ((a.Therapy.checklist || []) as ChecklistItem[]).map((c) => ({ ...c, done: !!record.checklist?.[c.text] })),
         vitals: a.Therapy.vitals.map((f) => ({ field: f, value: record.vitals?.[f] ?? '' })),
         room_ready: !!record.room_ready,
