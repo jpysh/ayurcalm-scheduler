@@ -114,6 +114,20 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
     const url = URL.createObjectURL(await res.blob());
     if (tab) tab.location.href = url; else window.location.href = url;
   };
+  // Backups (#236): when the last one ran, and a copy to keep off the machine.
+  const [backups, setBackups] = useState<{ count: number; latest: { name: string; size: number; at: string } | null } | null>(null);
+  useEffect(() => {
+    if (isAdmin) fetch(`${API_BASE}/settings/backups`).then((r) => (r.ok ? r.json() : null)).then(setBackups).catch(() => setBackups(null));
+  }, [isAdmin]);
+  const downloadBackup = async () => {
+    const res = await fetch(`${API_BASE}/settings/backups/latest`);
+    if (!res.ok) { toast.error("No backup to download yet"); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(await res.blob());
+    a.download = backups?.latest?.name || "ayurcalm-backup.sql.gz";
+    a.click();
+  };
+  const since = (iso: string) => new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: settings?.timezone || "Asia/Kolkata" });
   const lh = (settings?.letterhead || {}) as Partial<Letterhead>;
   const setLh = (k: keyof Letterhead, v: string) => update("letterhead", { ...lh, [k]: v } as Letterhead);
   const onSealPicked = (file: File | undefined) => {
@@ -238,6 +252,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
       {row("letterhead", "Discharge letterhead", lh.discharge_format ? `Numbers like ${lh.discharge_format}` : "Seal, phones, registration, footer")}
       {row("hours", "Opening hours", `${settings.opening_time}–${settings.closing_time}`)}
       {row("support", "Support contacts", settings.support_whatsapp ? "WhatsApp button shown" : "No WhatsApp button")}
+      {isAdmin ? row("backups", "Backups", backups?.latest ? `Last ${since(backups.latest.at)}` : "No backup yet") : null}
       {row("printed", "Printed sheets", "Each day's sheets as last printed, 90 days")}
       {row("password", "Your password", "Change it")}
       {isAdmin ? row("assistant", "Your AI assistant", "Optional: connect Claude") : null}
@@ -303,6 +318,13 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
           </Button>
         </div>
       )}
+      </>)}
+      {sheet("backups", "Backups", <>
+      <p className="text-sm text-muted-foreground">Everything in the app is backed up when it starts and every night at 02:30, and the newest 14 are kept on the computer that runs it. Keep a copy somewhere else too: download the newest now and then, and save it to your phone or email it to yourself.</p>
+      <div className="rounded-xl border p-3 text-[15px]">
+        {backups?.latest ? <>Newest: <b>{since(backups.latest.at)}</b> · {(backups.latest.size / 1024 / 1024).toFixed(1)} MB · {backups.count} kept</> : "No backup yet. Ask whoever set up the app to check the backup service is running."}
+      </div>
+      {backups?.latest ? <Button className="min-h-11 w-full rounded-full" onClick={downloadBackup}>Download the newest backup</Button> : null}
       </>)}
       {sheet("printed", "Printed sheets", <>
       <p className="text-xs text-muted-foreground">The last copy printed for each day. Printing a day again replaces its copy; copies older than 90 days are removed.</p>

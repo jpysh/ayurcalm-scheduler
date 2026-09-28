@@ -66,6 +66,28 @@ run dietOverride       "Editing a diet plan changes it for everyone except what 
 run onboarding         "After the setup wizard, the centre has its hours, timezone, therapies, rooms and therapists, and the day sheet prints"
 run mcp                "Claude reads the centre only with the current key: the day, residents, who is free and the day sheet, and reading changes nothing"
 
+# Backups (#236): write one with the service's own script, restore the newest
+# file into a scratch database, and compare every table's row count with the live one.
+counts='select string_agg(table_name || '"'"'='"'"' || (xpath('"'"'/row/c/text()'"'"', query_to_xml(format('"'"'select count(*) as c from %I'"'"', table_name), false, true, '"'"''"'"')))[1]::text, '"'"' '"'"' order by table_name) from information_schema.tables where table_schema = '"'"'public'"'"''
+if docker compose exec -T backup sh -c "
+    set -e
+    sh /backup-loop.sh once
+    f=\$(ls -1t /backups/ayurcalm-*.sql.gz | head -1)
+    psql -h db -q -d postgres -c 'drop database if exists restorecheck' -c 'create database restorecheck'
+    gunzip -c \"\$f\" | psql -h db -q -v ON_ERROR_STOP=1 -d restorecheck >/dev/null
+    live=\$(psql -h db -At -c \"$counts\")
+    back=\$(psql -h db -At -d restorecheck -c \"$counts\")
+    psql -h db -q -d postgres -c 'drop database restorecheck'
+    [ -n \"\$live\" ] && [ \"\$live\" = \"\$back\" ] || { echo \"live:     \$live\"; echo \"restored: \$back\"; exit 1; }
+  " >"$log" 2>&1; then
+  echo "  PASS  Last night's kind of backup restores into an empty database with every table's rows intact"
+  passed=$((passed + 1))
+else
+  echo "  FAIL  Last night's kind of backup restores into an empty database with every table's rows intact"
+  sed 's/^/        /' "$log" | tail -15
+  failed=$((failed + 1))
+fi
+
 # A browser walk, run from the checkout against the stack: it needs Chromium
 # (npx playwright install chromium) on the machine running this.
 if E2E_BASE_URL="http://localhost:$PORT" npx playwright test absenceReplan >"$log" 2>&1; then
