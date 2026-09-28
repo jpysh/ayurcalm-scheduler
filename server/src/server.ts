@@ -770,12 +770,17 @@ app.post('/day-check', async (req: Request, res: Response) => {
 });
 
 /** Who is on leave, and when each therapist is tied up, for the schedule's "who is free". */
-// Private links (#219): issuing a new one revokes the old.
+// Private links (#219): the person's link, made on first ask. ?renew=1 makes a
+// new one, which stops the old.
 app.post('/staff/:id/link', requireAdmin, async (req: Request, res: Response) => {
-  res.json({ token: (await prisma.staff.update({ where: { id: String(req.params.id) }, data: { link_token: newLinkToken() } })).link_token });
+  const s = await prisma.staff.findUniqueOrThrow({ where: { id: String(req.params.id) } });
+  const token = s.link_token && req.query.renew !== '1' ? s.link_token : (await prisma.staff.update({ where: { id: s.id }, data: { link_token: newLinkToken() } })).link_token;
+  res.json({ token });
 });
 app.post('/patients/:id/link', requireAdmin, async (req: Request, res: Response) => {
-  res.json({ token: (await prisma.patient.update({ where: { id: String(req.params.id) }, data: { link_token: newLinkToken() } })).link_token });
+  const p = await prisma.patient.findUniqueOrThrow({ where: { id: String(req.params.id) } });
+  const token = p.link_token && req.query.renew !== '1' ? p.link_token : (await prisma.patient.update({ where: { id: p.id }, data: { link_token: newLinkToken() } })).link_token;
+  res.json({ token });
 });
 
 // Team → This week (#219): a week from start, booked hours against hours in.

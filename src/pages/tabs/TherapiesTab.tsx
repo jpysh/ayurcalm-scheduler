@@ -16,6 +16,9 @@ import { API_BASE } from "@/lib/apiBase";
 import { API_TOKEN, type UiTherapy } from "./shared";
 import { TherapyLibrarySheet } from "@/components/TherapyLibrarySheet";
 
+/** Readings a therapist can be asked for at a treatment (#219). The same keys as the link page. */
+const VITALS: [string, string][] = [["bp", "BP"], ["pulse", "Pulse"], ["weight", "Weight"], ["temp", "Temperature"], ["spo2", "SpO₂"], ["sugar", "Blood sugar"]];
+
 const TherapiesTab = ({
   therapies,
   searchTherapies,
@@ -62,6 +65,7 @@ const TherapiesTab = ({
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Duration (min)</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Required Amenities</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Gender Match</TableHead>
+              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">At the treatment</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -186,6 +190,35 @@ const TherapiesTab = ({
                       </div>
                     )}
                   </TableCell>
+                  {/* What the therapist's link asks for (#219): checks to tick, readings to take. */}
+                  <TableCell className="text-xs md:text-sm leading-tight py-0 pl-1.5 pr-1 md:py-0 md:px-3">
+                    {editingTherapyId === therapy.id ? (() => {
+                      const set = (patch: Partial<UiTherapy>) => setTherapies((prev: any[]) => prev.map((t: any) => t.id === therapy.id ? { ...t, ...patch } : t));
+                      const list = therapy.checklist || [];
+                      const vitals = therapy.vitals ?? ['bp'];
+                      return (
+                        <div className="grid gap-2">
+                          {list.map((c: { text: string; required: boolean }, i: number) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <Input className="h-10 flex-1" aria-label="Checklist item" value={c.text} onChange={(e: any) => set({ checklist: list.map((x: any, j: number) => j === i ? { ...x, text: e.target.value } : x) })} />
+                              <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={c.required} onChange={(e) => set({ checklist: list.map((x: any, j: number) => j === i ? { ...x, required: e.target.checked } : x) })} />Required</label>
+                              <Button type="button" variant="ghost" size="sm" aria-label="Remove item" onClick={() => set({ checklist: list.filter((_: any, j: number) => j !== i) })}>✕</Button>
+                            </div>
+                          ))}
+                          <Button type="button" variant="outline" size="sm" className="h-10" onClick={() => set({ checklist: [...list, { text: '', required: false }] })}>Add a checklist item</Button>
+                          <div className="flex flex-wrap gap-1">
+                            {VITALS.map(([k, label]) => (
+                              <Button key={k} type="button" size="sm" variant={vitals.includes(k) ? 'default' : 'outline'} className="h-9" aria-pressed={vitals.includes(k)}
+                                onClick={() => set({ vitals: vitals.includes(k) ? vitals.filter((v: string) => v !== k) : [...vitals, k] })}>{label}</Button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })() : [
+                      (therapy.checklist || []).length ? `${therapy.checklist!.length} checks` : '',
+                      (therapy.vitals ?? ['bp']).map((v: string) => VITALS.find(([k]) => k === v)?.[1] || v).join(', '),
+                    ].filter(Boolean).join(' · ') || '—'}
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-2 justify-end">
                       {editingTherapyId === therapy.id ? (
@@ -193,10 +226,10 @@ const TherapiesTab = ({
                           <Button variant="outline" size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={() => { if (originalTherapyEntry) setTherapies((prev: any[]) => prev.map((t: any) => t.id === therapy.id ? originalTherapyEntry : t)); setEditingTherapyId(null); setOriginalTherapyEntry(null); }}>Cancel</Button>
                           <Button size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={async () => {
                             try {
-                              const payload = { name: therapy.name, required_amenities: therapy.amenities, duration_minutes: therapy.duration, requires_gender_match: therapy.genderMatch, staff_required: therapy.staffRequired ?? 1 };
+                              const payload = { name: therapy.name, required_amenities: therapy.amenities, duration_minutes: therapy.duration, requires_gender_match: therapy.genderMatch, staff_required: therapy.staffRequired ?? 1, checklist: (therapy.checklist || []).filter((c: any) => c.text.trim()), vitals: therapy.vitals ?? ["bp"] };
                               const res = await fetch(`${API_BASE}/therapies/${therapy.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
                               const updated = await res.json();
-                              setTherapies((prev: any[]) => prev.map((t: any) => t.id === therapy.id ? { ...t, name: updated.name, amenities: (updated.required_amenities || t.amenities), duration: (updated.duration_minutes ?? t.duration), genderMatch: !!updated.requires_gender_match, staffRequired: updated.staff_required ?? 1 } : t));
+                              setTherapies((prev: any[]) => prev.map((t: any) => t.id === therapy.id ? { ...t, name: updated.name, amenities: (updated.required_amenities || t.amenities), duration: (updated.duration_minutes ?? t.duration), genderMatch: !!updated.requires_gender_match, staffRequired: updated.staff_required ?? 1, checklist: updated.checklist || [], vitals: updated.vitals || [] } : t));
                               setEditingTherapyId(null);
                               setOriginalTherapyEntry(null);
                             } catch {

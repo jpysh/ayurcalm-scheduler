@@ -494,3 +494,30 @@ test('Team shows this week: booked hours against hours in, and each person\'s da
   await expect(sheet.getByText(/^Week of /)).toBeVisible();
   await expect(sheet.getByText(/^\d+h\/\d+h$/).first()).toBeVisible();
 });
+
+test('a therapist\'s private link opens their own day with no sign-in, and a tick is kept (#219)', async ({ browser, request }) => {
+  const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
+  const headers = { Authorization: `Bearer ${token}` };
+  const staff = await (await request.get('/api/staff', { headers })).json();
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  // Someone with a treatment today, so the page has a checklist to tick.
+  let link = '';
+  for (const s of staff.filter((x: { role: string }) => x.role !== 'doctor')) {
+    const t = (await (await request.post(`/api/staff/${s.id}/link`, { headers })).json()).token;
+    if ((await (await request.get(`/api/public/link/${t}?date=${today}`)).json()).items.length) { link = t; break; }
+  }
+  test.skip(!link, 'nobody has a treatment today');
+  // A fresh context: no admin session, as on the therapist's phone.
+  const page = await (await browser.newContext({ viewport: { width: 375, height: 812 } })).newPage();
+  await page.goto(`/l/${link}`);
+  await expect(page.getByText('Today', { exact: true })).toBeVisible({ timeout: 15000 });
+  const box = page.getByRole('checkbox', { name: /^Room and table prepared/ }).first();
+  const was = await box.isChecked();
+  await box.setChecked(!was);
+  await page.reload();
+  await expect(page.getByRole('checkbox', { name: /^Room and table prepared/ }).first()).toBeChecked({ checked: !was, timeout: 15000 });
+  await page.getByRole('checkbox', { name: /^Room and table prepared/ }).first().setChecked(was);
+  await expect(page.getByText('Feedback', { exact: true })).toHaveCount(0);
+  await page.goto('/l/not-a-real-link-token-000000');
+  await expect(page.getByText('This link is no longer valid.', { exact: false })).toBeVisible({ timeout: 15000 });
+});

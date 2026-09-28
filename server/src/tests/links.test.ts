@@ -16,7 +16,8 @@ const login = await (await fetch(`${API}/auth/login`, { method: 'POST', headers:
 const admin = { Authorization: `Bearer ${login.token}` };
 const call = (path: string, body?: unknown, headers: Record<string, string> = {}) =>
   fetch(`${API}${path}`, body === undefined ? { headers } : { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
-const issue = async (kind: 'staff' | 'patients', id: string) => (await (await call(`/${kind}/${id}/link`, {}, admin)).json()).token as string;
+const issue = async (kind: 'staff' | 'patients', id: string) => (await (await call(`/${kind}/${id}/link?renew=1`, {}, admin)).json()).token as string;
+const shared = async (kind: 'staff' | 'patients', id: string) => (await (await call(`/${kind}/${id}/link`, {}, admin)).json()).token as string;
 
 const therapy = await prisma.therapy.create({ data: { name: `Abhyanga ${tag}`, required_amenities: [], duration_minutes: 60, checklist: [{ text: 'Oil warmed', required: true }], vitals: ['bp', 'pulse'] } });
 const consult = await prisma.therapy.create({ data: { name: `Consultation ${tag}`, required_amenities: [], duration_minutes: 20, is_consultation: true } });
@@ -63,6 +64,7 @@ try {
   assert.ok((await call(`/public/link/${p}/appointments/${mineA.id}`, { room_ready: true })).status >= 400, 'a resident cannot record for staff');
   assert.equal((await call(`/public/link/${p}/issues`, { kind: 'sos' })).status, 403);
 
+  assert.equal(await shared('staff', therapist.id), t, 'sharing again sends the same link');
   const t2 = await issue('staff', therapist.id);
   assert.equal((await call(`/public/link/${t}?date=${DAY}`)).status, 404, 'a reissued link stops the old one');
   assert.equal((await call(`/public/link/${t2}?date=${DAY}`)).status, 200);
