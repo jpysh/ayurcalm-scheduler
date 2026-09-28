@@ -101,6 +101,18 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
     reader.onload = () => saveDoctor(d, { signature: String(reader.result) });
     reader.readAsDataURL(file);
   };
+  // Printed sheets (#145): what was on the notice board, day by day.
+  const [printed, setPrinted] = useState<{ date: string; kind: string; printed_at: string }[] | null>(null);
+  useEffect(() => {
+    if (openSheet === "printed") fetch(`${API_BASE}/printed-sheets`).then((r) => r.json()).then(setPrinted).catch(() => setPrinted([]));
+  }, [openSheet]);
+  const openPrinted = async (date: string, kind: string) => {
+    const tab = window.open("", "_blank");
+    const res = await fetch(`${API_BASE}/printed-sheets/${date}/${kind}`);
+    if (!res.ok) { tab?.close(); toast.error("That copy could not be opened"); return; }
+    const url = URL.createObjectURL(await res.blob());
+    if (tab) tab.location.href = url; else window.location.href = url;
+  };
   const lh = (settings?.letterhead || {}) as Partial<Letterhead>;
   const setLh = (k: keyof Letterhead, v: string) => update("letterhead", { ...lh, [k]: v } as Letterhead);
   const onSealPicked = (file: File | undefined) => {
@@ -222,6 +234,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
       {row("letterhead", "Discharge letterhead", lh.discharge_format ? `Numbers like ${lh.discharge_format}` : "Seal, phones, registration, footer")}
       {row("hours", "Opening hours", `${settings.opening_time}–${settings.closing_time}`)}
       {row("support", "Support contacts", settings.support_whatsapp ? "WhatsApp button shown" : "No WhatsApp button")}
+      {row("printed", "Printed sheets", "Each day's sheets as last printed, 90 days")}
       {row("password", "Your password", "Change it")}
       {isAdmin ? row("assistant", "Your AI assistant", "Optional: connect Claude") : null}
       {isAdmin ? row("people", "People with access", "Who can sign in") : null}
@@ -284,6 +297,21 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
           <Button onClick={save} disabled={saving}>
             {saving ? "Saving…" : "Save settings"}
           </Button>
+        </div>
+      )}
+      </>)}
+      {sheet("printed", "Printed sheets", <>
+      <p className="text-xs text-muted-foreground">The last copy printed for each day. Printing a day again replaces its copy; copies older than 90 days are removed.</p>
+      {printed === null ? <div className="py-4 text-center text-muted-foreground">…</div> : printed.length === 0 ? <div className="py-4 text-center text-muted-foreground">Nothing printed yet.</div> : (
+        <div className="overflow-hidden rounded-xl border">
+          {[...new Set(printed.map((p) => p.date))].map((date) => (
+            <div key={date} className="flex min-h-12 flex-wrap items-center gap-2 border-b border-border px-3 py-2 last:border-b-0">
+              <span className="flex-1 font-semibold">{new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}</span>
+              {printed.filter((p) => p.date === date).map((p) => (
+                <Button key={p.kind} variant="outline" className="min-h-11 rounded-full" onClick={() => openPrinted(date, p.kind)}>{{ residents: "Residents", therapist: "Therapists", doctor: "Doctors" }[p.kind] ?? p.kind}</Button>
+              ))}
+            </div>
+          ))}
         </div>
       )}
       </>)}

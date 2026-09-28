@@ -12,6 +12,7 @@ export async function wipeDemo(tx: Prisma.TransactionClient, keepTemplates = fal
   const appointments = await tx.appointment.deleteMany({});
   await tx.dietPlanSegment.deleteMany({});
   await tx.dietPlan.deleteMany({});
+  await tx.printedSheet.deleteMany({});
   await tx.programEvent.deleteMany({});
   await tx.timeOff.deleteMany({});
   await tx.patientStay.deleteMany({});

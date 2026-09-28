@@ -1215,6 +1215,14 @@ app.get('/daily-schedule-pdf', async (req: Request, res: Response) => {
     const pdf = rota
       ? await generateTherapistRotaPdf(date, prisma, staffId, doctors ? 'doctor' : 'therapist')
       : await generateDailySchedulePdf(date, prisma);
+    // The centre's own sheets are kept as printed, replacing that day's earlier copy.
+    if (!staffId && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const kind = doctors ? 'doctor' : rota ? 'therapist' : 'residents';
+      const data = { pdf: Buffer.from(pdf), printed_at: new Date() };
+      await prisma.printedSheet.upsert({ where: { date_kind: { date, kind } }, update: data, create: { date, kind, ...data } });
+      const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+      await prisma.printedSheet.deleteMany({ where: { date: { lt: cutoff } } });
+    }
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="ayurcalm-${doctors ? 'doctor-rota' : rota ? 'therapist-rota' : 'daily-schedule'}-${date}.pdf"`);
     res.send(pdf);
@@ -1222,6 +1230,18 @@ app.get('/daily-schedule-pdf', async (req: Request, res: Response) => {
     const message = e instanceof Error ? e.message : 'Failed to generate PDF';
     res.status(500).json({ error: message });
   }
+});
+
+// Printed sheets (#145): the copies kept above, newest day first.
+app.get('/printed-sheets', async (_req: Request, res: Response) => {
+  res.json(await prisma.printedSheet.findMany({ select: { date: true, kind: true, printed_at: true }, orderBy: [{ date: 'desc' }, { kind: 'asc' }] }));
+});
+app.get('/printed-sheets/:date/:kind', async (req: Request, res: Response) => {
+  const row = await prisma.printedSheet.findUnique({ where: { date_kind: { date: String(req.params.date), kind: String(req.params.kind) } } });
+  if (!row) { res.status(404).json({ error: 'No printed copy for that day' }); return; }
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="printed-${row.kind}-${row.date}.pdf"`);
+  res.send(Buffer.from(row.pdf));
 });
 
 // Appointments

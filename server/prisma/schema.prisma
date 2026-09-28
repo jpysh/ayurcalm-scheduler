@@ -386,3 +386,15 @@ model LinkIssue {
   created_at     DateTime @default(now())
   seen           Boolean  @default(false)
 }
+
+/// The last printed copy of each day's sheets (#145): what was on the notice
+/// board, kept 90 days. In the database, so a backup keeps it with the rest.
+model PrintedSheet {
+  date       String
+  /// residents, therapist or doctor
+  kind       String
+  pdf        Bytes
+  printed_at DateTime @default(now())
+
+  @@id([date, kind])
+}
