@@ -569,6 +569,54 @@ async function main() {
     await prisma.timeOff.create({ data: { entity_type: 'room', entity_id: idleRoom.id, date: today, start_time: '14:00', end_time: '20:00', description: 'Plumbing repair' } });
   }
 
+  // Doctors (#219): three, sharing two consultation rooms that no treatment
+  // needs. Each stay opens with a consultation and has one a week after it, so
+  // the card shows a last and a next, and the doctor rota has a morning on it.
+  const consultation = await prisma.therapy.create({ data: {
+    name: 'Consultation', required_amenities: ['bp_monitor', 'examination_bed'], duration_minutes: 20,
+    is_consultation: true, description: 'Pulse, BP and a talk with the doctor; the plan is reviewed.',
+  } });
+  const consultRooms = await Promise.all(['Charaka', 'Sushruta'].map((name) => prisma.therapyRoom.create({
+    data: { name, amenities: ['bp_monitor', 'examination_bed'], weekly_schedule: scheduleStd, is_active: true },
+  })));
+  const doctors = await Promise.all([['Dr Lakshmi Menon', 'female'], ['Dr Vikram Rao', 'male'], ['Dr Farah Siddiqui', 'female']].map(([name, gender]) =>
+    prisma.staff.create({ data: { name, gender: gender as 'male' | 'female', role: 'doctor', specializations: [consultation.id], weekly_schedule: scheduleStd, is_active: true, phone: `+91-7${Math.floor(100000000 + random() * 899999999)}` } })));
+  const holidayKeys = new Set(centerHolidays.map((h) => h.date && h.date.toISOString().slice(0, 10)));
+  const consultSlots = Array.from({ length: 12 }, (_, i) => { const m = 9 * 60 + i * 20; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; });
+  const takenBy = new Map<string, Set<string>>(); // "date|time" -> doctor and room ids already booked
+  const plans = [
+    'Continue Abhyanga daily. Light diet, no curd at night. Review BP next week.',
+    'Pain easing. Add Kati Vasti for 5 days; reduce oil in lunch.',
+    'Good progress. Start Virechana preparation; ghee in the morning for 3 days.',
+    'Sleep improved. Keep Shirodhara every second day; walk after dinner.',
+  ];
+  for (const stay of await prisma.patientStay.findMany({ where: { end_date: { gte: start } } })) {
+    let consulted = false;
+    for (let d = new Date(stay.start_date); d <= stay.end_date && d <= end; d = new Date(d.getTime() + 7 * DAY_MS)) {
+      const dateKey = d.toISOString().slice(0, 10);
+      if (holidayKeys.has(dateKey)) continue;
+      const theirs = await prisma.appointment.findMany({ where: { patient_id: stay.patient_id, scheduled_date: d } });
+      for (const time of consultSlots) {
+        const s = mins(time);
+        if (theirs.some((a) => overlaps(mins(a.start_time), mins(a.start_time) + a.duration_minutes, s, s + 20))) continue;
+        const taken = takenBy.get(`${dateKey}|${time}`) ?? new Set<string>();
+        const doctor = doctors.find((x) => !taken.has(x.id));
+        const room = consultRooms.find((x) => !taken.has(x.id));
+        if (!doctor || !room) continue;
+        const past = dateKey < todayKey;
+        await prisma.appointment.create({ data: {
+          patient_id: stay.patient_id, therapy_id: consultation.id, staff_id: doctor.id, room_id: room.id,
+          scheduled_date: new Date(dateKey), start_time: time, duration_minutes: 20, session_number: 1, total_sessions: 1,
+          status: past ? 'completed' : 'pending', assignment_type: 'auto', notes: past ? randomOf(plans) : null,
+        } });
+        takenBy.set(`${dateKey}|${time}`, new Set([...taken, doctor.id, room.id]));
+        consulted ||= past;
+        break;
+      }
+    }
+    if (consulted) await prisma.patient.update({ where: { id: stay.patient_id }, data: { doctor_plan: randomOf(plans) } });
+  }
+
   // One patient given something different for one meal today, so the override
   // that a template edit must not overwrite is visible in the demo.
   const overridden = residents[0];
