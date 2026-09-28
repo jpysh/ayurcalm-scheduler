@@ -425,3 +425,33 @@ test('Therapies offers the standard library, and a seeded centre already has all
   await activePanel(page).getByRole('button', { name: 'From library' }).click();
   await expect(page.getByRole('dialog').getByText('You already have every therapy in the library.')).toBeVisible({ timeout: 15000 });
 });
+
+test('leave for a day ahead is marked from Team, and a whole day carries no hours (#219)', async ({ page, request }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  await openTab(page, 'Team and rooms');
+  await activePanel(page).getByRole('button', { name: /Working today|Not in today/ }).first().click();
+  const sheet = page.getByRole('dialog');
+  await sheet.getByRole('button', { name: 'Away another day' }).click();
+  // A fixed day far ahead, so the demo's own days are never touched.
+  await sheet.getByLabel('From').fill('2030-03-04');
+  await sheet.getByLabel('To').fill('2030-03-05');
+  const [req] = await Promise.all([
+    page.waitForRequest((r) => r.url().endsWith('/timeoff') && r.method() === 'POST'),
+    sheet.getByRole('button', { name: /Mark leave/ }).click(),
+  ]);
+  const body = req.postDataJSON();
+  // Whole-day leave used to be saved as 09:00–18:00, leaving 07:00 yoga and 18:30 treatments on.
+  expect(body).toMatchObject({ start_date: '2030-03-04', end_date: '2030-03-05', start_time: null, end_time: null });
+  const created = await (await req.response())!.json();
+  const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
+  expect((await request.delete(`/api/timeoff/${created.id}`, { headers: { Authorization: `Bearer ${token}` } })).ok()).toBe(true);
+});
+
+test('Leave offers India\'s public holidays, and a seeded centre is already closed on them (#219)', async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  await openTab(page, 'Leave');
+  await activePanel(page).getByRole('button', { name: 'Public holidays' }).click();
+  await expect(page.getByRole('dialog').getByText('Every public holiday ahead is already a closed day.')).toBeVisible({ timeout: 15000 });
+});

@@ -13,7 +13,7 @@ import PageHead from "@/components/PageHead";
 
 type Named = { id: string | number; name: string; is_active?: boolean; status?: string };
 type Pick = { kind: "staff" | "room"; id: string; name: string } | null;
-type Late = "late" | "early" | null;
+type Late = "late" | "early" | "away" | null;
 
 export function TeamRooms({ staff, rooms, today, nowHM, opening, closing, refresh, edit }: {
   staff: Named[];
@@ -31,6 +31,7 @@ export function TeamRooms({ staff, rooms, today, nowHM, opening, closing, refres
   const [pick, setPick] = useState<Pick>(null);
   const [late, setLate] = useState<Late>(null);
   const [at, setAt] = useState("");
+  const [until, setUntil] = useState("");
 
   const load = useCallback(() => {
     fetch(`${API_BASE}/staff-day?date=${today}`).then((r) => (r.ok ? r.json() : []))
@@ -43,13 +44,13 @@ export function TeamRooms({ staff, rooms, today, nowHM, opening, closing, refres
   const team = staff.filter(active).sort((a, b) => a.name.localeCompare(b.name));
   const notIn = team.filter((s) => offToday[String(s.id)]);
 
-  /** Time off today between from and until; null means the edge of the day. */
-  async function takeOut(kind: "staff" | "room", id: string, name: string, from: string | null, until: string | null, what: string) {
+  /** Time off between from and until; null means the edge of the day. Days default to today. */
+  async function takeOut(kind: "staff" | "room", id: string, name: string, from: string | null, until: string | null, what: string, days = { start: today, end: today }) {
     setPick(null);
     setLate(null);
     const res = await fetch(`${API_BASE}/timeoff`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entity_type: kind, entity_id: id, date: today, start_time: from, end_time: from || until ? until || closing : null, description: what }),
+      body: JSON.stringify({ entity_type: kind, entity_id: id, date: days.start, start_date: days.start, end_date: days.end, start_time: from, end_time: from || until ? until || closing : null, description: what }),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) { toast.error(body.error || "That could not be saved."); return; }
@@ -102,6 +103,22 @@ export function TeamRooms({ staff, rooms, today, nowHM, opening, closing, refres
               <button type="button" className={`${btn} border-[1.5px] border-border bg-card`} onClick={() => { setLate("late"); setAt(nowHM > opening ? nowHM : opening); }}>In late</button>
               <button type="button" className={`${btn} border-[1.5px] border-border bg-card`} onClick={() => { setLate("early"); setAt(closing); }}>Leaving early</button>
             </div>
+            <button type="button" className={`${btn} border-[1.5px] border-border bg-card`} onClick={() => { const t = nextDay(today); setLate("away"); setAt(t); setUntil(t); }}>Away another day</button>
+          </div>
+        ) : pick && late === "away" ? (
+          <div className="grid gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              <label className="grid gap-1 text-[13px] text-muted-foreground">From
+                <input type="date" className="min-h-11 rounded-xl border-[1.5px] border-border bg-card px-3 text-base text-foreground" min={today} value={at} onChange={(e) => { setAt(e.target.value); if (until < e.target.value) setUntil(e.target.value); }} />
+              </label>
+              <label className="grid gap-1 text-[13px] text-muted-foreground">To
+                <input type="date" className="min-h-11 rounded-xl border-[1.5px] border-border bg-card px-3 text-base text-foreground" min={at} value={until} onChange={(e) => setUntil(e.target.value)} />
+              </label>
+            </div>
+            <button type="button" className={`${btn} bg-primary text-primary-foreground`} disabled={!at || !until || until < at}
+              onClick={() => takeOut("staff", pick.id, pick.name, null, null, "Leave", { start: at, end: until })}>
+              Mark leave, move what they miss
+            </button>
           </div>
         ) : pick ? (
           <div className="grid gap-2">
@@ -120,3 +137,6 @@ export function TeamRooms({ staff, rooms, today, nowHM, opening, closing, refres
     </div>
   );
 }
+
+/** The day after a YYYY-MM-DD, as one. */
+const nextDay = (ymd: string) => new Date(Date.parse(ymd) + 86400000).toISOString().slice(0, 10);

@@ -6,13 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Plus, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { API_TOKEN, leaveWhen, toHHMM, toLocalInput, type UiTimeOff, type UiStaff, type UiRoom, type UiTherapy, type Patient } from "./shared";
 import PageHead from "@/components/PageHead";
+import { HolidaysSheet } from "@/components/HolidaysSheet";
 
 const TimeOffTab = ({
   timeOffs,
@@ -48,6 +49,7 @@ const TimeOffTab = ({
   toLocalInput,
   requestDelete,
   setShowAddTimeOff,
+  setShowHolidays,
 }: any) => {
   return (
     <>
@@ -58,6 +60,7 @@ const TimeOffTab = ({
           <Button size="sm" className="min-h-11 rounded-full px-4" onClick={() => setShowAddTimeOff(true)}>
             <Plus className="mr-1 h-4 w-4" />Add leave
           </Button>
+          <Button size="sm" variant="outline" className="min-h-11 rounded-full px-4" onClick={() => setShowHolidays(true)}>Public holidays</Button>
         </div>
         <div className="mt-0.5 flex justify-center">
           <Popover>
@@ -235,9 +238,9 @@ const TimeOffTab = ({
                           const sIso = sBase ? new Date(sBase) : undefined;
                           const eIso = eBase ? new Date(eBase) : undefined;
                           const setHM = (d: Date, hh: number, mm: number) => { const nd = new Date(d); nd.setHours(hh, mm, 0, 0); return nd.toISOString(); };
-                          return { ...h, startDate: sIso ? setHM(sIso, 9, 0) : h.startDate, endDate: eIso ? setHM(eIso, 18, 0) : h.endDate, startTime: '09:00', endTime: '18:00' };
+                          return { ...h, startDate: sIso ? setHM(sIso, 9, 0) : h.startDate, endDate: eIso ? setHM(eIso, 18, 0) : h.endDate, startTime: undefined, endTime: undefined };
                         }
-                        return { ...h };
+                        return { ...h, startTime: h.startTime || '09:00', endTime: h.endTime || '18:00' };
                       }))}>
                         <SelectTrigger className="h-7"><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -371,6 +374,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
   const [holidayFullDayFilter, setHolidayFullDayFilter] = useState<'all'|'full'|'partial'>('all');
   const [searchHolidays, setSearchHolidays] = useState("");
   const [showAddTimeOff, setShowAddTimeOff] = useState(false);
+  const [showHolidays, setShowHolidays] = useState(false);
+  const closedDays = useMemo(() => new Set(timeOffs.filter((h) => h.type === "Center").map((h) => (h.date || h.startDate || "").slice(0, 10))), [timeOffs]);
   const [visibleTimeOffRows, setVisibleTimeOffRows] = useState(isMobile ? 20 : 40);
   const timeoffTotalRef = useRef(0);
   useEffect(() => { setVisibleTimeOffRows(isMobile ? 20 : 40); }, [searchHolidays, timeOffs, holidayTypeFilter, holidayViewMode, holidayRecurringFilter, holidayFullDayFilter, holidaySelectedDate, isMobile]);
@@ -393,11 +398,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     return d.toISOString();
   };
   const isFullDay = (h: UiTimeOff) => {
-    // A single date with no times is the whole day.
-    if (h.date && !h.startDate && !h.startTime) return true;
-    const sT = h.startTime || toHHMM(h.startDate || h.date);
-    const eT = h.endTime || toHHMM(h.endDate || h.date);
-    return sT === '09:00' && eT === '18:00';
+    // No hours is the whole day, wherever the centre's day starts or ends.
+    return !h.startTime || !h.endTime;
   };
   const weeklyLabel = (weekdays?: UiTimeOff['weekdays']) => {
     if (!weekdays || weekdays.length === 0) return 'none';
@@ -420,8 +422,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
       date: h.date,
       start_date: h.startDate,
       end_date: h.endDate,
-      start_time: h.startTime ?? toHHMM(h.startDate || h.date),
-      end_time: h.endTime ?? toHHMM(h.endDate || h.date),
+      start_time: isFullDay(h) ? null : h.startTime,
+      end_time: isFullDay(h) ? null : h.endTime,
       recurrence: h.recurrence,
       weekdays: h.weekdays,
       description: h.description,
@@ -480,10 +482,14 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
               toLocalInput={toLocalInput}
               requestDelete={requestDelete}
               setShowAddTimeOff={setShowAddTimeOff}
+              setShowHolidays={setShowHolidays}
             />
   );
 
   const dialogs = (
+    <>
+      <HolidaysSheet open={showHolidays} onOpenChange={setShowHolidays} closed={closedDays} today={todayKey}
+        onAdded={(rows) => setTimeOffs((prev) => [...prev, ...rows.map((x) => ({ id: x.id, date: new Date(x.date).toISOString(), type: "Center" as const, entity: "All", description: x.description }))])} />
       <Dialog open={showAddTimeOff} onOpenChange={setShowAddTimeOff}>
         <DialogContent className="max-w-sm p-3">
           <DialogHeader>
@@ -614,8 +620,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
                       entity_id: optimistic.entity === 'All' ? null : (optimistic.entity || null),
                       start_date: optimistic.startDate,
                       end_date: optimistic.endDate,
-                      start_time: newTimeOff.fullDay ? '09:00' : toHHMM(optimistic.startDate),
-                      end_time: newTimeOff.fullDay ? '18:00' : toHHMM(optimistic.endDate),
+                      start_time: newTimeOff.fullDay ? null : toHHMM(optimistic.startDate),
+                      end_time: newTimeOff.fullDay ? null : toHHMM(optimistic.endDate),
                       recurrence: optimistic.recurrence,
                       weekdays: optimistic.weekdays,
                       description: optimistic.description,
@@ -639,6 +645,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
           </div>
         </DialogContent>
       </Dialog>
+    </>
   );
 
   return { tab, dialogs, setVisibleRows: setVisibleTimeOffRows, totalRef: timeoffTotalRef };

@@ -76,7 +76,9 @@ const EventsTab = ({
           <TableBody>
             {(() => {
               // By time of day, as the day is read (#137).
-              const rows = [...events].sort((a: any, b: any) => (a.start_time || '').localeCompare(b.start_time || '') || (a.activity_name || '').localeCompare(b.activity_name || ''));
+              const once = (x: any) => (x.recurrence === 'weekly' && (x.weekdays || []).length ? '' : String(x.date || x.start_date || ''));
+              // The daily round first, then one-off events by their day.
+              const rows = [...events].sort((a: any, b: any) => once(a).localeCompare(once(b)) || (a.start_time || '').localeCompare(b.start_time || '') || (a.activity_name || '').localeCompare(b.activity_name || ''));
               eventsTotalRef.current = rows.length;
               const shown = rows.slice(0, visibleEventsRows);
               return shown.map((ev: any) => (
@@ -173,7 +175,7 @@ const EventsTab = ({
                         </PopoverContent>
                       </Popover>
                     ) : (
-                      (() => { const scope = (ev as any).staff_scope || 'none'; const ids = Array.isArray((ev as any).staff_ids) ? (ev as any).staff_ids : []; if (scope === 'all') return 'All'; if (scope === 'none') return ids.length ? ids.map((id: string) => staffNameById[id] || id).join(', ') : 'None'; return ids.length ? ids.map((id: string) => staffNameById[id] || id).join(', ') : 'Custom'; })()
+                      (() => { const scope = (ev as any).staff_scope || 'none'; const ids = Array.isArray((ev as any).staff_ids) ? (ev as any).staff_ids : []; if (scope === 'all') return 'All'; if (scope === 'none') return ids.length ? ids.map((id: string) => staffNameById[id] || id).join(', ') : '—'; return ids.length ? ids.map((id: string) => staffNameById[id] || id).join(', ') : 'Custom'; })()
                     )}
                   </TableCell>
                   <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
@@ -212,7 +214,7 @@ const EventsTab = ({
                         </Popover>
                       </div>
                     ) : (
-                      (() => { const list = (ev.required_amenities || []) as string[]; return isMobile ? `${list.length}` : list.join(', '); })()
+                      (() => { const list = (ev.required_amenities || []) as string[]; return isMobile ? (list.length ? `${list.length}` : "—") : list.join(', '); })()
                     )}
                   </TableCell>
                   <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
@@ -314,7 +316,7 @@ const EventsTab = ({
                         </PopoverContent>
                       </Popover>
                     ) : (
-                      (() => { const d = (ev.weekdays || []); if ((ev.recurrence !== 'weekly') || d.length === 0) return 'Once'; if (d.length === 7) return 'Daily'; return d.map((w: string) => w.slice(0,3)).join(','); })()
+                      (() => { const d = (ev.weekdays || []); if ((ev.recurrence !== 'weekly') || d.length === 0) return 'Once'; if (d.length === 7) return 'Daily'; return d.map((w: string) => w[0].toUpperCase() + w.slice(1, 3)).join(', '); })()
                     )}
                   </TableCell>
                   <TableCell className="text-right text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:px-2">
