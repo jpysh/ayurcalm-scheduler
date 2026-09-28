@@ -417,3 +417,11 @@ test('after a consultation, the note on the day opens the resident\'s meals in o
   // The meals sheet lived inside the Residents screen, so from the day it never showed.
   await expect(page.getByRole('dialog').getByText(/^Diet for one day/)).toBeVisible();
 });
+
+test('Therapies offers the standard library, and a seeded centre already has all of it (#219)', async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  await openTab(page, 'Therapies');
+  await activePanel(page).getByRole('button', { name: 'From library' }).click();
+  await expect(page.getByRole('dialog').getByText('You already have every therapy in the library.')).toBeVisible({ timeout: 15000 });
+});

@@ -84,6 +84,9 @@ model Therapy {
   /// A doctor's consultation rather than a treatment: given by a doctor, printed
   /// on the doctor rota, and followed by a prompt to review diet and therapies.
   is_consultation       Boolean  @default(false)
+  /// What the therapist brings: oils, powders, leaves. Printed on the therapist
+  /// rota beside the treatment. A list, not stock: nothing is counted.
+  products              String[] @default([])
   // Rest for the patient and cleanup for the room after an oil or steam
   // therapy. One number because no centre has asked to tell the two apart.
   description           String?

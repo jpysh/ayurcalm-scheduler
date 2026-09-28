@@ -70,6 +70,8 @@ export const buildRota = (input: {
   patientById: Record<string, string>;
   therapyById: Record<string, string>;
   roomById: Record<string, string>;
+  /** What the therapist brings to each therapy (#219): its products, then what the room must have. */
+  bringById?: Record<string, string>;
   openingTime: string;
   closingTime: string;
   onlyStaffId?: string;
@@ -171,6 +173,7 @@ export const buildRota = (input: {
             },
             // Who they are working with, under the treatment it belongs to.
             ...(partners.length ? [{ t: a.start_time, bold: false, noTime: true, text: `with ${partners.join(' & ')}` }] : []),
+            ...(input.bringById?.[a.therapy_id] ? [{ t: a.start_time, bold: false, grey: true, noTime: true, text: input.bringById[a.therapy_id] }] : []),
           ];
         }),
         // An event the therapist is running is time they are not free, so it
@@ -267,6 +270,7 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
     timeOff,
     patientById: Object.fromEntries(patients.map((p) => [p.id, p.name])),
     therapyById: Object.fromEntries(therapies.map((t) => [t.id, t.name])),
+    bringById: Object.fromEntries(therapies.map((t) => [t.id, [...t.products, ...t.required_amenities.map((x) => x.replace(/_/g, ' '))].join(', ')])),
     roomById: Object.fromEntries(rooms.map((r) => [r.id, r.name])),
     openingTime: settings?.opening_time || '09:00',
     closingTime: settings?.closing_time || '18:00',

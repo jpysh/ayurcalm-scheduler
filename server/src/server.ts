@@ -13,6 +13,8 @@ import { historyOf } from './history.js';
 import { searchTreatments } from './search.js';
 import { residentDay } from './residentDay.js';
 import { changeLog } from './changeLog.js';
+import { therapyLibrary } from './therapyLibrary.js';
+import { requireAdmin } from './settings.js';
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:5433/ayurcalm_dev?schema=public';
@@ -327,10 +329,37 @@ app.post('/therapies', async (req: Request, res: Response) => {
     staff_required: z.number().int().min(1).max(6).default(1),
     description: z.string().optional(),
     is_consultation: z.boolean().default(false),
+    products: z.array(z.string().max(100)).max(20).default([]),
   });
   const body = schema.parse(req.body);
   const t = await prisma.therapy.create({ data: body });
   res.status(201).json(t);
+});
+
+// The standard library (#219), each marked if the centre already has one of
+// that name, so Therapies → Add from library offers only what is missing.
+app.get('/therapy-library', async (_req: Request, res: Response) => {
+  const have = new Set((await prisma.therapy.findMany({ select: { name: true } })).map((t) => t.name.toLowerCase()));
+  res.json(therapyLibrary.map((t) => ({ ...t, added: have.has(t.name.toLowerCase()) })));
+});
+
+// Imports the ticked library therapies as the admin edited them. A name the
+// centre already has is skipped rather than duplicated.
+app.post('/therapies/import', requireAdmin, async (req: Request, res: Response) => {
+  const { items } = z.object({ items: z.array(z.object({
+    name: z.string().trim().min(1).max(100),
+    description: z.string().max(500).optional(),
+    duration_minutes: z.number().int().min(5).max(480),
+    staff_required: z.number().int().min(1).max(6).default(1),
+    required_amenities: z.array(z.string()).default([]),
+    products: z.array(z.string().max(100)).max(20).default([]),
+    requires_gender_match: z.boolean().default(false),
+    is_consultation: z.boolean().default(false),
+  })).min(1).max(100) }).parse(req.body);
+  const have = new Set((await prisma.therapy.findMany({ select: { name: true } })).map((t) => t.name.toLowerCase()));
+  const fresh = items.filter((t) => !have.has(t.name.toLowerCase()));
+  const created = await prisma.$transaction(fresh.map((data) => prisma.therapy.create({ data })));
+  res.status(201).json({ created: created.length, skipped: items.length - fresh.length });
 });
 
 app.put('/therapies/:id', async (req: Request, res: Response) => {
@@ -343,6 +372,7 @@ app.put('/therapies/:id', async (req: Request, res: Response) => {
     staff_required: z.number().int().min(1).max(6).optional(),
     description: z.string().optional(),
     is_consultation: z.boolean().optional(),
+    products: z.array(z.string().max(100)).max(20).optional(),
   });
   const body = schema.parse(req.body);
   const t = await prisma.therapy.update({ where: { id }, data: body });
