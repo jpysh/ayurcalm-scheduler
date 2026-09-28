@@ -12,6 +12,7 @@ import { AlertCircle } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import LinkView from "./pages/LinkView";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -104,6 +105,9 @@ const App = () => {
     return () => { cancel = true; };
   }, [feedbackOpen]);
 
+  // A private link (#219) is its own small page: none of the admin's chrome.
+  const isLink = window.location.pathname.startsWith("/l/");
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -129,6 +133,7 @@ const App = () => {
               <Route path="/" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/index" element={<Index />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/l/:token" element={<LinkView />} />
               <Route path="/setup" element={<ProtectedRoute><SetupWizard /></ProtectedRoute>} />
               <Route path="/:username/schedule" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/:username/staff" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
@@ -145,8 +150,9 @@ const App = () => {
               <Route path="/admin/dashboard/*" element={<Navigate to="/admin/schedule" replace />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
-            <SupportButton />
+            {!isLink && <SupportButton />}
           </BrowserRouter>
+          {!isLink && (
           <footer className="border-t border-border bg-muted/20">
             <div className="container mx-auto px-3 py-2 text-xs text-muted-foreground flex items-center justify-between">
               <Dialog open={feedbackOpen} onOpenChange={setFeedbackOpen}>
@@ -270,6 +276,7 @@ const App = () => {
               <div className="text-center flex-1">Designed by GGP</div>
             </div>
           </footer>
+          )}
         </div>
       </TooltipProvider>
     </QueryClientProvider>

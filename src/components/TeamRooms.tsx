@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { BottomSheet } from "@/components/BottomBar";
 import { API_BASE } from "@/lib/apiBase";
 import PageHead from "@/components/PageHead";
+import { shareLink } from "@/lib/shareLink";
 
 type Named = { id: string | number; name: string; is_active?: boolean; status?: string };
 type Pick = { kind: "staff" | "room"; id: string; name: string } | null;
@@ -119,6 +120,10 @@ export function TeamRooms({ staff, rooms, today, nowHM, opening, closing, refres
               <button type="button" className={`${btn} border-[1.5px] border-border bg-card`} onClick={() => { setLate("early"); setAt(closing); }}>Leaving early</button>
             </div>
             <button type="button" className={`${btn} border-[1.5px] border-border bg-card`} onClick={() => { const t = nextDay(today); setLate("away"); setAt(t); setUntil(t); }}>Away another day</button>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" className={`${btn} border-[1.5px] border-border bg-card`} onClick={() => shareLink("staff", pick.id, pick.name)}>Share their link</button>
+              <button type="button" className={`${btn} text-muted-foreground`} onClick={() => shareLink("staff", pick.id, pick.name, true)}>New link</button>
+            </div>
           </div>
         ) : pick && late === "away" ? (
           <div className="grid gap-2">

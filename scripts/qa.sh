@@ -45,6 +45,7 @@ run therapistRota      "The therapist rota shows who works when, and why someone
 run scheduleInvariants "The demo schedule has no double bookings, today is properly full, and today has a therapist off to fix"
 run validation         "A half-filled form is refused politely, not crashed on, and nobody signed out can save, and staff cannot change a diet plan"
 run autoAssign         "Auto-booking a course respects gender, holidays, and times already past"
+run links              "A private link shows a person their own day only, records on their own treatments, and stops working when reissued"
 run replanSimulation   "When a therapist is absent, their day moves to others without clashes, and Undo restores it"
 run dayCheckParity     "Verify flags exactly the treatments the app would refuse to save, co-therapists included"
 run coTherapist        "A treatment worked by two books both therapists: neither can be booked elsewhere in that hour, and it is never booked short-handed"

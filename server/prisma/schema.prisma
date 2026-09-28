@@ -30,6 +30,8 @@ model Patient {
   /// and read on the resident's card. One note, not a history: each
   /// consultation's own note stays on that appointment.
   doctor_plan String?
+  /// The private link to their own schedule (#219): no sign-in, reissued to revoke.
+  link_token String? @unique
 
   DietPlans        DietPlan[]
   DietPlanSegments DietPlanSegment[]
@@ -64,6 +66,8 @@ model Staff {
   /// "therapist" or "doctor". A doctor is booked for consultations, which are
   /// therapies with is_consultation set, through the same scheduler and guard.
   role            String   @default("therapist")
+  /// The private link to their own day (#219): no sign-in, reissued to revoke.
+  link_token      String?  @unique
 
   Appointments Appointment[]
 }
@@ -90,6 +94,10 @@ model Therapy {
   /// A doctor's consultation rather than a treatment: given by a doctor, printed
   /// on the doctor rota, and followed by a prompt to review diet and therapies.
   is_consultation       Boolean  @default(false)
+  /// What the therapist ticks before or during it (#219): [{ text, required }].
+  checklist             Json     @default("[]")
+  /// The readings taken at it; blood pressure unless the centre chose otherwise.
+  vitals                String[] @default(["bp"])
   /// What the therapist brings: oils, powders, leaves. Printed on the therapist
   /// rota beside the treatment. A list, not stock: nothing is counted.
   products              String[] @default([])
@@ -119,6 +127,9 @@ model Appointment {
   status           AppointmentStatus
   assignment_type  AssignmentType
   notes            String?
+  /// What the link views record on it (#219): checklist ticks, vitals, room
+  /// ready, the resident's thumbs and note. Records only: never flagged, never printed.
+  record           Json?
   created_at       DateTime          @default(now())
   updated_at       DateTime          @updatedAt
 
@@ -349,4 +360,16 @@ model DietTemplate {
   updated_at DateTime @updatedAt
 
   Segments DietPlanSegment[]
+}
+
+/// Raised from a therapist's or doctor's link (#219): room unusable, co-therapist
+/// or resident absent, SOS, a permission, a note. The admin sees it on the day.
+model LinkIssue {
+  id             String   @id @default(uuid())
+  staff_id       String
+  appointment_id String?
+  kind           String
+  note           String?
+  created_at     DateTime @default(now())
+  seen           Boolean  @default(false)
 }

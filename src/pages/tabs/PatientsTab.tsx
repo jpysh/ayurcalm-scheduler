@@ -11,6 +11,7 @@ import { Edit, Trash2, Info, Plus, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { shareLink } from "@/lib/shareLink";
 import { BottomSheet } from "@/components/BottomBar";
 import { API_BASE } from "@/lib/apiBase";
 import type { CardAppt } from "@/components/TreatmentCard";
@@ -230,7 +231,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
             )) : <div className={fact}>No diet plan yet</div>}
           </div>
           <div className="mt-3 overflow-hidden rounded-xl border">
-            {([["Change today's meals", () => changeMeals(d)], ['Change stay dates', () => changeStay(d)], ['Book a treatment', book], ['Details', () => details(d.id)]] as const).map(([t, go]) => (
+            {([["Change today's meals", () => changeMeals(d)], ['Change stay dates', () => changeStay(d)], ['Book a treatment', book], ['Share their link', () => shareLink('patients', d.id, d.name)], ['Details', () => details(d.id)]] as const).map(([t, go]) => (
               <button key={t} type="button" className={fact} onClick={go}><span className="flex-1">{t}</span><span className="text-muted-foreground">›</span></button>
             ))}
           </div>
