@@ -148,8 +148,9 @@ linkRouter.get('/:token/discharges/:stayId', async (req: Request, res: Response)
   res.json(v);
 });
 linkRouter.put('/:token/discharges/:stayId', async (req: Request, res: Response) => {
-  if (!(await doctorOf(req, res))) return;
-  const out = await saveDischarge(String(req.params.stayId), req.body, 'doctor', prisma);
+  const who = await doctorOf(req, res);
+  if (!who) return;
+  const out = await saveDischarge(String(req.params.stayId), req.body, 'doctor', prisma, who.id);
   if ('error' in out) { res.status(out.error ?? 404).json({ error: out.error === 409 ? 'The centre has made this summary final. Ask them to change it.' : 'Stay not found' }); return; }
   res.json(await dischargeOf(String(req.params.stayId), prisma));
 });

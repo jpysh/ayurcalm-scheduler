@@ -64,7 +64,13 @@ export function useEventsScreen({ events, setEvents, roomsList, staff, staffName
     const payload = {
       activity_name: form.activity_name.trim(), start_time: form.start_time, end_time: form.end_time,
       recurrence: weekdays.length ? "weekly" : null, weekdays,
-      date: form.days === "once" ? form.date : null, start_date: null, end_date: null,
+      // A period the sheet does not show (weekly between two dates, or a run of days) is kept.
+      ...(() => {
+        const r = form.raw, day = (d?: string | Date | null) => (d ? String(d).slice(0, 10) : null);
+        if (weekdays.length) return { date: null, start_date: day(r?.start_date), end_date: day(r?.end_date) };
+        if (r?.end_date && !r.date && day(r.start_date) === form.date) return { date: null, start_date: form.date, end_date: day(r.end_date) };
+        return { date: form.date, start_date: null, end_date: null };
+      })(),
       room_id: form.room_id || null,
       staff_scope: form.staff_ids.length ? "custom" : "none", staff_ids: form.staff_ids, staff_id: form.staff_ids[0] || null,
       patients_scope: form.raw?.patients_scope || "all", patient_ids: form.raw?.patient_ids || [], is_optional: form.is_optional,
