@@ -200,12 +200,12 @@ async function main() {
 
   await event({ start_time: '07:00', end_time: '08:00', activity_name: 'Morning Yoga', is_optional: true, staff_scope: 'custom', staff_ids: [yogaStaff.id], staff_id: yogaStaff.id });
   await event({ start_time: '08:30', end_time: '09:00', activity_name: 'Morning Prayer Meditation', is_optional: true, staff_scope: 'custom', staff_ids: [prayerStaff.id], staff_id: prayerStaff.id });
-  await event({ start_time: '08:00', end_time: '12:00', activity_name: 'Breakfast', notes: 'Diet per plan' });
-  await event({ start_time: '12:00', end_time: '16:00', activity_name: 'Lunch' });
-  await event({ start_time: '17:00', end_time: '18:30', activity_name: 'Snacks', is_optional: true });
+  await event({ start_time: '08:00', end_time: '08:45', activity_name: 'Breakfast', notes: 'Diet per plan' });
+  await event({ start_time: '12:30', end_time: '13:30', activity_name: 'Lunch' });
+  await event({ start_time: '16:30', end_time: '17:00', activity_name: 'Snacks', is_optional: true });
   await event({ start_time: '17:00', end_time: '18:00', activity_name: 'Evening Yoga', is_optional: true, staff_scope: 'custom', staff_ids: [yogaStaff.id], staff_id: yogaStaff.id });
   await event({ start_time: '18:00', end_time: '19:00', activity_name: 'Evening Prayer Meditation', is_optional: true, staff_scope: 'custom', staff_ids: [prayerStaff.id], staff_id: prayerStaff.id });
-  await event({ start_time: '18:30', end_time: '20:30', activity_name: 'Dinner' });
+  await event({ start_time: '19:30', end_time: '20:15', activity_name: 'Dinner' });
   // Mondays the havan runs over the morning prayer, and replaces it: where two
   // events overlap, the more specific one is the one that happens.
   await event({ weekdays: ['monday'], start_time: '08:30', end_time: '09:30', activity_name: 'Temple Havan Ritual', staff_scope: 'custom', staff_ids: [prayerStaff.id], staff_id: prayerStaff.id });
@@ -227,14 +227,34 @@ async function main() {
   // nothing in it let the rota's evening column go untested for a release.
   // A couple of half-hour starts because a real day has them and the sheets
   // have to place them correctly.
-  const dayTimes = ['09:00','10:00','11:00','12:00','14:00','15:00','16:30','17:30','18:30','19:00'];
+  const dayTimes = ['09:00','10:00','11:00','14:00','15:00','16:00','17:00','18:00'];
   // One knob, not a second dataset: a stress fixture kept beside the demo one
   // drifts from it, and then a test passes on data no install has.
-  const treatmentsPerRoom = Math.max(1, Math.min(dayTimes.length, Number(process.env.SEED_TREATMENTS_PER_ROOM) || 2));
+  const treatmentsPerRoom = Math.max(1, Math.min(dayTimes.length, Number(process.env.SEED_TREATMENTS_PER_ROOM) || 3));
   // Patients are taken in rotation rather than at random so a day's bookings
   // land on ~40 different people. A real centre of this size treats most of its
   // residents each day, and picking at random gave the same dozen names twice
   // over and a day sheet that looked half empty.
+  // Stays first, then treatments inside them (#220 F8): a residential centre
+  // has people on 7 to 21 day courses, a few arriving and leaving each day.
+  // Deriving stays from scattered bookings made 38 one-day arrivals today.
+  const DAY = 86400000;
+  const staysOf = new Map<string, { s: Date; e: Date }[]>();
+  createdPatients.forEach((p, i) => {
+    // First arrival anywhere in one course-plus-gap cycle before the window, so the
+    // centre is as full on day one as on any other day.
+    let cursor = new Date(start.getTime() - Math.floor(random() * 34) * DAY);
+    const list: { s: Date; e: Date }[] = [];
+    while (cursor <= end) {
+      const days = randomOf([7, 10, 14, 14, 21]);
+      list.push({ s: new Date(cursor), e: new Date(cursor.getTime() + (days - 1) * DAY) });
+      cursor = new Date(cursor.getTime() + (days + 5 + Math.floor(random() * 30)) * DAY);
+    }
+    staysOf.set(p.id, list);
+  });
+  const inStay = (patientId: string, dateKey: string) => (staysOf.get(patientId) || []).some((x) => x.s.toISOString().slice(0, 10) <= dateKey && dateKey <= x.e.toISOString().slice(0, 10));
+  // Required meals are the resident's own time: no treatment runs through one.
+  const meals = seededEvents.filter((e) => !e.is_optional && e.activity_name !== 'Temple Havan Ritual').map((e) => ({ s: toMinutes(e.start_time), e: toMinutes(e.end_time) }));
   let patientCursor = 0;
   const busy: Record<string, { staff: Record<string, { s: number; e: number }[]>; room: Record<string, { s: number; e: number }[]>; patient: Record<string, { s: number; e: number }[]> }> = {};
   const centerHolidays = await prisma.timeOff.findMany({ where: { entity_type: 'center', date: { gte: start, lte: end } } });
@@ -261,8 +281,8 @@ async function main() {
     for (const r of rooms) {
       const rDay = (scheduleStd as any)[['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][weekday]];
       if (!rDay) continue;
-      // Two treatments per room per day: a centre of twenty rooms then treats
-      // about forty of its residents, which is what the day sheet has to hold.
+      // Three treatments per room per day: a resident on a course has two or
+      // three a day, and about forty are in house, which the day sheet must hold.
       // SEED_TREATMENTS_PER_ROOM raises that for checking how the sheet and the
       // screens behave at a size no demo install has.
       let slotsCreatedForRoom = 0;
@@ -284,7 +304,7 @@ async function main() {
         if (slotS < toMinutes(rDay.start) || slotS + th.duration_minutes > toMinutes(rDay.end)) continue;
         const p = createdPatients
           .map((_, k) => createdPatients[(patientCursor + k) % createdPatients.length])
-          .find((c) => !(busy[dateKey].patient[c.id] || []).some(b => overlaps(b.s, b.e, slotS, slotE)));
+          .find((c) => inStay(c.id, dateKey) && ![...meals, ...(busy[dateKey].patient[c.id] || [])].some(b => overlaps(b.s, b.e, slotS, slotE)));
         if (!p) continue;
         patientCursor++;
         const sCandidates = staff.filter(s => s.specializations.includes(th.id) && (!th.requires_gender_match || s.gender === p.gender));
@@ -424,16 +444,7 @@ async function main() {
   // that would look missing rather than unseeded.
   const today = centreToday();
   const templates = await prisma.dietTemplate.findMany({ orderBy: { name: 'asc' } });
-  // A resident's stay spans their own course, so every booking sits inside one:
-  // the app books a resident only while they are here (#142). Bookings more
-  // than three days apart are separate visits.
   const DAY_MS = 86400000;
-  const booked = await prisma.appointment.findMany({ select: { patient_id: true, scheduled_date: true }, orderBy: { scheduled_date: 'asc' } });
-  const datesOf = new Map<string, Date[]>();
-  for (const a of booked) {
-    if (!datesOf.has(a.patient_id)) datesOf.set(a.patient_id, []);
-    datesOf.get(a.patient_id)!.push(a.scheduled_date);
-  }
   const residents: { id: string }[] = [];
   let stayCount = 0;
   const addStay = async (patient_id: string, start_date: Date, end_date: Date) => {
@@ -450,30 +461,9 @@ async function main() {
     }
     if (planned && start_date <= today && today <= end_date) residents.push({ id: patient_id });
   };
-  for (const [patientId, dates] of datesOf) {
-    let start = dates[0];
-    let last = dates[0];
-    for (const d of dates.slice(1)) {
-      if (d.getTime() - last.getTime() > 3 * DAY_MS) {
-        await addStay(patientId, start, last);
-        start = d;
-      }
-      last = d;
-    }
-    await addStay(patientId, start, last);
+  for (const [patientId, list] of staysOf) {
+    for (const x of list) await addStay(patientId, x.s, x.e);
   }
-  // A couple in house today with nothing booked, so the sheet shows what a rest
-  // day looks like: no therapy, meals still theirs.
-  const nearToday = new Set(booked.filter((a) => Math.abs(a.scheduled_date.getTime() - today.getTime()) <= 3 * DAY_MS).map((a) => a.patient_id));
-  for (const p of createdPatients.filter((x) => !nearToday.has(x.id)).slice(0, 2)) {
-    await addStay(p.id, new Date(today.getTime() - 2 * DAY_MS), new Date(today.getTime() + 3 * DAY_MS));
-  }
-
-  // Someone arriving today and someone leaving, so the day list and the sheet
-  // show both without waiting for the calendar to line one up.
-  const unbooked = createdPatients.filter((x) => !nearToday.has(x.id)).slice(2, 4);
-  if (unbooked[0]) await addStay(unbooked[0].id, today, new Date(today.getTime() + 6 * DAY_MS));
-  if (unbooked[1]) await addStay(unbooked[1].id, new Date(today.getTime() - 5 * DAY_MS), today);
 
   // The rest of an ordinary day's changes, each once, so every row flag and
   // History line in the design has real data behind it (#159). Taken from
