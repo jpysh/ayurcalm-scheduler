@@ -455,3 +455,42 @@ test('Leave offers India\'s public holidays, and a seeded centre is already clos
   await activePanel(page).getByRole('button', { name: 'Public holidays' }).click();
   await expect(page.getByRole('dialog').getByText('Every public holiday ahead is already a closed day.')).toBeVisible({ timeout: 15000 });
 });
+
+test('a resident leaving today has a departure section and a summary to take home (#219)', async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  await openTab(page, 'Residents');
+  const leaving = activePanel(page).locator('section').filter({ hasText: 'Leaving today' }).getByRole('button');
+  await expect(activePanel(page).getByText(/treatments ·|Staying/).first()).toBeVisible({ timeout: 15000 });
+  test.skip(!(await leaving.count()), 'nobody leaves today');
+  await leaving.first().click();
+  const card = page.getByRole('dialog').last();
+  await expect(card.getByText('Departure', { exact: true })).toBeVisible({ timeout: 15000 });
+  const [download] = await Promise.all([page.waitForEvent('download'), card.getByRole('button', { name: /^↓ ?Summary for/ }).click()]);
+  expect(download.suggestedFilename()).toMatch(/stay summary\.pdf$/);
+});
+
+test('a resident arriving today has the arrival steps still to do (#219)', async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  await openTab(page, 'Residents');
+  const arriving = activePanel(page).locator('section').filter({ hasText: 'Arriving today' }).getByRole('button');
+  await expect(activePanel(page).getByText(/Staying/).first()).toBeVisible({ timeout: 15000 });
+  test.skip(!(await arriving.count()), 'nobody arrives today');
+  await arriving.first().click();
+  const card = page.getByRole('dialog').last();
+  await expect(card.getByText('Arrival', { exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(card.getByRole('button', { name: /Vitals and concerns/ })).toBeVisible();
+});
+
+test('Team shows this week: booked hours against hours in, and each person\'s days (#219)', async ({ page }) => {
+  await signIn(page);
+  await passSetupIfShown(page);
+  await openTab(page, 'Team and rooms');
+  const line = activePanel(page).getByRole('button', { name: /^This week/ });
+  await expect(line).toContainText(/\d+h booked of \d+h/, { timeout: 15000 });
+  await line.click();
+  const sheet = page.getByRole('dialog');
+  await expect(sheet.getByText(/^Week of /)).toBeVisible();
+  await expect(sheet.getByText(/^\d+h\/\d+h$/).first()).toBeVisible();
+});

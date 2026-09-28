@@ -20,7 +20,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
     prisma.appointment.findMany({
       where: { patient_id: patientId, scheduled_date: day, status: { not: 'cancelled' } },
       orderBy: { start_time: 'asc' },
-      include: { Therapy: { select: { name: true } }, Room: { select: { name: true } } },
+      include: { Therapy: { select: { name: true, is_consultation: true } }, Room: { select: { name: true } } },
     }),
     loadDietsForDay(day, prisma),
   ]);
@@ -52,10 +52,12 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
       end_date: stay.end_date.toISOString().slice(0, 10),
       day: Math.round((day.getTime() - stay.start_date.getTime()) / DAY_MS) + 1,
       days: Math.round((stay.end_date.getTime() - stay.start_date.getTime()) / DAY_MS) + 1,
+      vitals: stay.vitals, concerns: stay.concerns, tests: stay.tests,
     },
     treatments: appts.map(({ Therapy, Room, ...a }) => ({
       ...a,
       therapy_name: Therapy.name,
+      consultation: Therapy.is_consultation,
       room_name: Room?.name ?? null,
       staff_names: [a.staff_id, ...a.co_staff_ids].filter((x): x is string => Boolean(x)).map((id) => names.get(id) || ''),
     })),

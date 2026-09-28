@@ -28,6 +28,8 @@ export function TeamRooms({ staff, rooms, today, nowHM, opening, closing, refres
   edit: (screen: "staff" | "rooms" | "therapies" | "events") => void;
 }) {
   const [offToday, setOffToday] = useState<Record<string, string | null>>({});
+  const [week, setWeek] = useState<Week | null>(null);
+  const [showWeek, setShowWeek] = useState(false);
   const [pick, setPick] = useState<Pick>(null);
   const [late, setLate] = useState<Late>(null);
   const [at, setAt] = useState("");
@@ -39,6 +41,11 @@ export function TeamRooms({ staff, rooms, today, nowHM, opening, closing, refres
       .catch(() => setOffToday({}));
   }, [today]);
   useEffect(() => { load(); }, [load]);
+  // The week this day is in, from Monday: how full the team is, not what they do.
+  useEffect(() => {
+    const monday = new Date(Date.parse(`${today}T00:00:00Z`) - ((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10);
+    fetch(`${API_BASE}/staff-week?start=${monday}`).then((r) => (r.ok ? r.json() : null)).then(setWeek).catch(() => setWeek(null));
+  }, [today]);
 
   const active = (x: Named) => x.is_active !== false && x.status !== "Inactive";
   const team = staff.filter(active).sort((a, b) => a.name.localeCompare(b.name));
@@ -75,6 +82,10 @@ export function TeamRooms({ staff, rooms, today, nowHM, opening, closing, refres
   return (
     <div>
       <PageHead title="Team and rooms" note={`${team.length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}`} />
+      {/* Always there, so the list does not move under a tap when the week arrives. */}
+      <div className="mb-3 overflow-hidden rounded-2xl bg-card">
+        {row("week", "This week", week ? weekLine(week) : "…", () => week && setShowWeek(true))}
+      </div>
       <div className="overflow-hidden rounded-2xl bg-card">
         {team.map((s) => row(String(s.id), s.name,
           offToday[String(s.id)] ? <span className="text-destructive">Not in today</span> : "Working today",
@@ -90,6 +101,10 @@ export function TeamRooms({ staff, rooms, today, nowHM, opening, closing, refres
         {([["staff", "Therapists"], ["rooms", "Rooms"], ["therapies", "Therapies"], ["events", "Classes and events"]] as const)
           .map(([k, t]) => row(k, t, null, () => edit(k)))}
       </div>
+
+      <BottomSheet open={showWeek} onOpenChange={setShowWeek} title="This week">
+        {week ? <WeekList week={week} /> : null}
+      </BottomSheet>
 
       <BottomSheet open={!!pick} onOpenChange={(o) => { if (!o) { setPick(null); setLate(null); } }} title={pick?.name || ""}>
         {pick?.kind === "room" ? (
@@ -140,3 +155,33 @@ export function TeamRooms({ staff, rooms, today, nowHM, opening, closing, refres
 
 /** The day after a YYYY-MM-DD, as one. */
 const nextDay = (ymd: string) => new Date(Date.parse(ymd) + 86400000).toISOString().slice(0, 10);
+
+type Week = { start: string; days: string[]; rows: { id: string; name: string; role: string; week: ("in" | "part" | "away" | "off")[]; booked: number; capacity: number }[] };
+const hrs = (m: number) => `${Math.round(m / 60)}h`;
+const weekLine = (w: Week) => {
+  const booked = w.rows.reduce((n, r) => n + r.booked, 0), cap = w.rows.reduce((n, r) => n + r.capacity, 0);
+  const away = w.rows.filter((r) => r.week.includes("away")).length;
+  return `${hrs(booked)} booked of ${hrs(cap)}${cap ? ` (${Math.round((100 * booked) / cap)}%)` : ""}${away ? ` · ${away} away some days` : ""}`;
+};
+
+/** One line a person: their seven days and how full their week is. */
+function WeekList({ week }: { week: Week }) {
+  const letter = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "narrow", timeZone: "UTC" });
+  const look = { in: "bg-primary/15 text-foreground", part: "bg-amber-200 text-amber-900", away: "bg-destructive/15 text-destructive line-through", off: "text-muted-foreground/60" };
+  return (
+    <div className="-mt-1 max-h-[70dvh] overflow-y-auto">
+      <p className="mb-2 text-[13px] text-muted-foreground">Week of {new Date(`${week.start}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}. Shaded: in. Amber: part of the day. Red: away.</p>
+      <div className="overflow-hidden rounded-xl border">
+        {week.rows.map((r) => (
+          <div key={r.id} className="flex min-h-[54px] items-center gap-2 border-b border-border px-3 py-2 last:border-b-0">
+            <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{r.name}</span>
+            <span className="flex gap-0.5" aria-label={r.week.map((s, i) => `${letter(week.days[i])} ${s}`).join(", ")}>
+              {r.week.map((s, i) => <span key={i} className={`grid h-6 w-5 place-items-center rounded text-[11px] font-semibold ${look[s]}`}>{letter(week.days[i])}</span>)}
+            </span>
+            <span className="w-16 text-right text-[13px] tabular-nums text-muted-foreground">{hrs(r.booked)}/{hrs(r.capacity)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
