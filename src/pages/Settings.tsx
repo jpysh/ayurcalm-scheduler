@@ -254,6 +254,12 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
       {row("support", "Support contacts", settings.support_whatsapp ? "WhatsApp button shown" : "No WhatsApp button")}
       {isAdmin ? row("backups", "Backups", backups?.latest ? `Last ${since(backups.latest.at)}` : "No backup yet") : null}
       {row("printed", "Printed sheets", "Each day's sheets as last printed, 90 days")}
+      {settings.support_whatsapp ? (
+        <a className={rowClass} href={`https://wa.me/${settings.support_whatsapp}?text=${encodeURIComponent("AyurCalm: a problem or an idea from " + settings.centre_name + ": ")}`} target="_blank" rel="noopener noreferrer">
+          <span className="flex-1"><b className="block text-[16px]">Report a problem or an idea</b><span className="block text-[13px] text-muted-foreground">On WhatsApp, straight to whoever looks after this app</span></span>
+          <span className="text-muted-foreground">›</span>
+        </a>
+      ) : null}
       {row("password", "Your password", "Change it")}
       {isAdmin ? row("assistant", "Your AI assistant", "Optional: connect Claude") : null}
       {isAdmin ? row("people", "People with access", "Who can sign in") : null}

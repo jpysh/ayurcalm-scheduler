@@ -240,7 +240,13 @@ const App = () => {
                           viewport: typeof window !== "undefined" ? { w: window.innerWidth, h: window.innerHeight } : null,
                           timestamp: new Date().toISOString(),
                         };
+                        // Saved in the centre's own database, which the maintainer cannot see:
+                        // it also goes to the support WhatsApp, written out, for the admin to send.
+                        const tab = window.open("", "_blank");
                         try {
+                          const support = await fetch(`${API_BASE}/settings`).then((r) => r.json()).then((s) => s?.support_whatsapp as string | null).catch(() => null);
+                          if (tab && support) tab.location.href = `https://wa.me/${support}?text=${encodeURIComponent(`AyurCalm feedback (${payload.page}): ${feedbackText}`)}`;
+                          else tab?.close();
                           const res = await fetch(`${API_BASE}/feedback`, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
