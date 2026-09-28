@@ -194,7 +194,7 @@ compose stack it has already started.
 ## Backups and restoring
 
 `docker compose up -d` also starts a backup service. It saves the whole
-database, logos and signatures included, when it starts and every night at
+database, logos and signatures included, ten minutes after it starts and every night at
 02:30 India time, into the `backups` folder beside `docker-compose.yml`, and
 keeps the newest 14. Settings → Backups shows when the last one ran and
 downloads it, so you can keep a copy off the machine.

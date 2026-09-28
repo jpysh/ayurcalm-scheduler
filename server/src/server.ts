@@ -720,7 +720,8 @@ const deleteTimeOffHandler = async (req: Request, res: Response) => {
     for (const b of batches) {
       if ((b.old_value as { time_off_id?: string } | null)?.time_off_id === id) await undoReplan(b.id, prisma);
     }
-    await prisma.timeOff.delete({ where: { id } });
+    // Already gone (undoing its fix can remove it first): the caller's wish is met.
+    await prisma.timeOff.deleteMany({ where: { id } });
     res.status(204).end();
   } catch (e) {
     console.error('timeoff delete failed', id, e);
