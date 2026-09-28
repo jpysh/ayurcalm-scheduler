@@ -528,7 +528,8 @@ async function main() {
   };
   // Before the summaries, so their numbers follow the centre's format.
   // The demo is one made-up centre whatever CENTRE_NAME says; the setup wizard renames a real one.
-  const centre = { centre_name: 'Himalaya Ayurveda Retreat', address: 'Near the golf course, Ranikhet, Uttarakhand', logo: png('demo-logo.png') };
+  const support = process.env.DEFAULT_SUPPORT_WHATSAPP ?? '420777558262';
+  const centre = { support_whatsapp: support || null, patient_support_whatsapp: support || null, centre_name: 'Himalaya Ayurveda Retreat', address: 'Near the golf course, Ranikhet, Uttarakhand', logo: png('demo-logo.png') };
   await prisma.settings.upsert({ where: { id: 'singleton' }, update: { letterhead, ...centre }, create: { id: 'singleton', letterhead, ...centre, opening_time: '09:00', closing_time: '20:00' } });
   await Promise.all(doctors.map((d, i) => prisma.staff.update({ where: { id: d.id }, data: {
     qualification: ['BAMS, MD (Panchakarma)', 'BAMS, MD (Kayachikitsa)', 'BAMS'][i], reg_no: `UK-AY-${2100 + i * 37}`, signature: png(`sig-${i + 1}.png`),

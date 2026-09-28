@@ -56,6 +56,7 @@ To stop, `docker compose down`. To start over from scratch,
 
 On first sign-in as an administrator, a short setup wizard asks for your centre's
 name, opening hours and working days, and whether to keep the example data.
+The daily jobs on a phone are on one page: [docs/admin-guide.md](docs/admin-guide.md).
 
 Everything else is configured in the app, not in files — open **Settings**:
 
