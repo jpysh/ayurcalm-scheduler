@@ -466,8 +466,8 @@ test('a resident leaving today has a departure section and a summary to take hom
   await leaving.first().click();
   const card = page.getByRole('dialog').last();
   await expect(card.getByText('Departure', { exact: true })).toBeVisible({ timeout: 15000 });
-  const [download] = await Promise.all([page.waitForEvent('download'), card.getByRole('button', { name: /^↓ ?Summary for/ }).click()]);
-  expect(download.suggestedFilename()).toMatch(/stay summary\.pdf$/);
+  const [download] = await Promise.all([page.waitForEvent('download'), card.getByRole('button', { name: /^↓ ?Discharge summary for/ }).click()]);
+  expect(download.suggestedFilename()).toMatch(/discharge summary\.pdf$/);
 });
 
 test('a resident arriving today has the arrival steps still to do (#219)', async ({ page }) => {

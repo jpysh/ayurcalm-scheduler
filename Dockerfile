@@ -28,6 +28,7 @@ COPY --from=api /app/server/dist ./server/dist
 COPY --from=api /app/server/package.json ./server/package.json
 COPY --from=api /app/server/prisma ./server/prisma
 COPY --from=api /app/server/src ./server/src
+COPY --from=api /app/server/assets ./server/assets
 COPY --from=web /app/dist ./dist
 COPY docker-entrypoint.sh /usr/local/bin/
 

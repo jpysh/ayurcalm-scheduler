@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { autoSchedule } from './scheduler.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import { generateTherapistRotaPdf } from './pdf/therapistRotaPdf.js';
-import { staySummary, generateStaySummaryPdf } from './pdf/staySummaryPdf.js';
+import { renderDischarge } from './pdf/dischargePdf.js';
+import { dischargeOf, saveDischarge } from './discharge.js';
 import { staffWeek } from './staffWeek.js';
 import { newLinkToken } from './links.js';
 import { findConflict, HAPPENING, loadDay, nearestFreeTime, staffDay } from './appointmentGuard.js';
@@ -211,7 +212,12 @@ app.put('/feedback/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Staff
+// Staff. A doctor's qualification, registration and signature print on the discharge summary.
+const doctorFields = {
+  qualification: z.string().trim().max(120).nullish(),
+  reg_no: z.string().trim().max(60).nullish(),
+  signature: z.string().max(400_000).refine((v) => v.startsWith('data:image/'), 'Signature must be an image').nullish(),
+};
 app.get('/staff', async (_req: Request, res: Response) => {
   const data = await prisma.staff.findMany({ where: { is_active: true } });
   res.json(data);
@@ -225,6 +231,7 @@ app.post('/staff', async (req: Request, res: Response) => {
     phone: z.string().optional(),
     weekly_schedule: z.record(z.string(), z.any()).default({}),
     role: z.enum(['therapist', 'doctor']).default('therapist'),
+    ...doctorFields,
   });
   const body = schema.parse(req.body);
   // A doctor gives consultations and nothing else, whatever the form sent.
@@ -243,6 +250,7 @@ app.put('/staff/:id', async (req: Request, res: Response) => {
     weekly_schedule: z.record(z.string(), z.any()).optional(),
     is_active: z.boolean().optional(),
     role: z.enum(['therapist', 'doctor']).optional(),
+    ...doctorFields,
   });
   const body = schema.parse(req.body);
   const data = { ...body } as any;
@@ -534,14 +542,24 @@ app.patch('/patients/:id/stays/:stayId/arrival', async (req: Request, res: Respo
   res.json(await prisma.patientStay.update({ where: { id: stay.id }, data: body }));
 });
 
-// Departure (#219): the resident's own summary of the stay, to take home.
-app.get('/patients/:id/stays/:stayId/summary-pdf', async (req: Request, res: Response) => {
-  const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
-  const s = await staySummary(String(req.params.id), String(req.params.stayId), prisma, centreClock(settings?.timezone || 'Asia/Kolkata').date);
-  if (!s) { res.status(404).json({ error: 'Stay not found' }); return; }
+// Departure: the discharge summary (#194). The doctor writes it from their link
+// too; the admin's save may mark it final, which closes it to the link.
+const stayOf = (req: Request) => prisma.patientStay.findFirst({ where: { id: String(req.params.stayId), patient_id: String(req.params.id) } });
+app.get('/patients/:id/stays/:stayId/discharge', async (req: Request, res: Response) => {
+  if (!(await stayOf(req))) { res.status(404).json({ error: 'Stay not found' }); return; }
+  res.json(await dischargeOf(String(req.params.stayId), prisma));
+});
+app.put('/patients/:id/stays/:stayId/discharge', async (req: Request, res: Response) => {
+  if (!(await stayOf(req))) { res.status(404).json({ error: 'Stay not found' }); return; }
+  await saveDischarge(String(req.params.stayId), req.body, 'admin', prisma);
+  res.json(await dischargeOf(String(req.params.stayId), prisma));
+});
+app.get('/patients/:id/stays/:stayId/discharge-pdf', async (req: Request, res: Response) => {
+  const out = (await stayOf(req)) && (await renderDischarge(String(req.params.stayId), prisma));
+  if (!out) { res.status(404).json({ error: 'Stay not found' }); return; }
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="stay-summary-${s.from}.pdf"`);
-  res.send(await generateStaySummaryPdf(s, settings?.centre_name || 'Wellness Centre'));
+  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(out.filename)}"`);
+  res.send(out.pdf);
 });
 
 app.get('/patients/:id/stays', async (req: Request, res: Response) => {
