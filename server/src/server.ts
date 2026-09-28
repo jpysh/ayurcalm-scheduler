@@ -723,6 +723,7 @@ const deleteTimeOffHandler = async (req: Request, res: Response) => {
     await prisma.timeOff.delete({ where: { id } });
     res.status(204).end();
   } catch (e) {
+    console.error('timeoff delete failed', id, e);
     res.status(500).json({ error: 'Delete failed' });
   }
 };
