@@ -17,6 +17,7 @@ import PageHead from "@/components/PageHead";
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
 const SLOT_OPTIONS = [15, 20, 30, 60];
 const MAX_LOGO_BYTES = 500 * 1024;
+const KEEPS: [string, string][] = [["therapies", "Therapies"], ["rooms", "Rooms"], ["team", "Therapists, doctors and their leave"], ["events", "Classes, events and holidays"]];
 
 type Settings = {
   centre_name: string;
@@ -159,14 +160,17 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
     }
   };
 
+  // What to keep when the demo goes (#108): its therapies and rooms, by default, to edit rather than retype.
+  const [keep, setKeep] = useState<string[]>(["therapies", "rooms"]);
   const clearDemoData = async () => {
+    const going = KEEPS.filter(([k]) => !keep.includes(k)).map(([, t]) => t.toLowerCase());
     if (!(await confirmSheet(
-      "Delete all demo patients, staff, rooms, therapies and appointments?\n\n" +
+      `Delete the demo residents and bookings${going.length ? `, and ${going.join(", ")}` : ""}?\n\n` +
       "Your account and centre settings are kept. This cannot be undone.", "Delete"
     ))) return;
     setClearing(true);
     try {
-      const res = await fetch(`${API_BASE}/settings/clear-demo-data`, { method: "POST" });
+      const res = await fetch(`${API_BASE}/settings/clear-demo-data`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keep }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast.error(data?.error || "Could not clear demo data");
@@ -520,6 +524,16 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
               enter your centre's own details, or reset it to get four fresh months of bookings from today.
               Your account and the settings above are kept.
             </p>
+            <fieldset className="space-y-1">
+              <legend className="text-sm font-semibold">Keep when clearing</legend>
+              <p className="text-xs text-muted-foreground">Residents and bookings always go. Standard therapies can be brought back later from the therapy library.</p>
+              {KEEPS.map(([k, t]) => (
+                <label key={k} className="flex min-h-11 items-center gap-3">
+                  <input type="checkbox" className="h-5 w-5 min-h-0 min-w-0 flex-none" checked={keep.includes(k)} onChange={(e) => setKeep(e.target.checked ? [...keep, k] : keep.filter((x) => x !== k))} />
+                  <span>{t}</span>
+                </label>
+              ))}
+            </fieldset>
             <Button variant="destructive" onClick={clearDemoData} disabled={clearing}>
               {clearing ? "Working… (up to two minutes)" : "Clear demo data"}
             </Button>

@@ -77,12 +77,25 @@ async function main() {
     // Run inside a transaction that is rolled back: the other tests need the demo centre.
     const ROLLBACK = new Error('rollback');
     await prisma.$transaction(async (tx) => {
-      await wipeDemo(tx, true);
+      await wipeDemo(tx, ['therapies', 'rooms']);
       assert.equal(await tx.patient.count(), 0, 'Starting your own centre kept the example residents');
       assert.equal(await tx.staff.count(), 0, 'Starting your own centre kept the example therapists');
       assert.equal(await tx.appointment.count(), 0, 'Starting your own centre kept the example bookings');
       assert.ok(await tx.therapy.count() > 0, 'Starting your own centre lost the example therapies');
       assert.ok(await tx.therapyRoom.count() > 0, 'Starting your own centre lost the example rooms');
+      throw ROLLBACK;
+    }, { timeout: 120000 }).catch((e) => { if (e !== ROLLBACK) throw e; });
+    // Per module (#108): keeping the team keeps their leave; keeping events keeps them without the residents they named.
+    await prisma.$transaction(async (tx) => {
+      const leave = await tx.timeOff.count({ where: { entity_type: 'staff' } });
+      const events = await tx.programEvent.count();
+      await wipeDemo(tx, ['team', 'events']);
+      assert.equal(await tx.patient.count(), 0, 'Keeping the team kept the example residents');
+      assert.equal(await tx.therapy.count(), 0, 'Therapies not kept were not cleared');
+      assert.ok(await tx.staff.count() > 0, 'Keeping the team lost the therapists');
+      assert.equal(await tx.timeOff.count({ where: { entity_type: 'staff' } }), leave, "Keeping the team lost their leave");
+      assert.equal(await tx.programEvent.count(), events, 'Keeping events lost some');
+      assert.equal(await tx.programEvent.count({ where: { NOT: { patient_ids: { isEmpty: true } } } }), 0, 'A kept event still names a resident who is gone');
       throw ROLLBACK;
     }, { timeout: 120000 }).catch((e) => { if (e !== ROLLBACK) throw e; });
     assert.ok(await prisma.patient.count() > 0, 'The rollback did not put the demo centre back');

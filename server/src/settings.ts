@@ -1,7 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from './server.js';
-import { wipeDemo } from './demoData.js';
+import { wipeDemo, KEEPABLE, type Keep } from './demoData.js';
 import { letterheadSchema } from './discharge.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -119,11 +119,12 @@ settingsRouter.put('/', requireAdmin, async (req: Request, res: Response) => {
   res.json(saved);
 });
 
-const clearDemoData = (keepTemplates = false) => prisma.$transaction((tx) => wipeDemo(tx, keepTemplates), { timeout: 120000 });
+const clearDemoData = (keep: Keep[] = []) => prisma.$transaction((tx) => wipeDemo(tx, keep), { timeout: 120000 });
 
+// `keep` names what stays (#108); "templates" is the wizard's therapies and rooms.
 settingsRouter.post('/clear-demo-data', requireAdmin, async (req: Request, res: Response) => {
-  const { keep } = z.object({ keep: z.enum(['templates']).optional() }).parse(req.body ?? {});
-  res.json({ ok: true, deleted: await clearDemoData(keep === 'templates') });
+  const { keep } = z.object({ keep: z.union([z.literal('templates'), z.array(z.enum(KEEPABLE))]).optional() }).parse(req.body ?? {});
+  res.json({ ok: true, deleted: await clearDemoData(keep === 'templates' ? ['therapies', 'rooms'] : keep) });
 });
 
 /**
