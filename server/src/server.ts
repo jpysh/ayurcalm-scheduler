@@ -15,6 +15,7 @@ import { residentDay } from './residentDay.js';
 import { changeLog } from './changeLog.js';
 import { therapyLibrary } from './therapyLibrary.js';
 import { requireAdmin } from './settings.js';
+import { indiaHolidays } from './indiaHolidays.js';
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:5433/ayurcalm_dev?schema=public';
@@ -835,6 +836,8 @@ app.get('/replan/summary', async (req: Request, res: Response) => {
 });
 
 app.get('/timeoff', getTimeOffHandler);
+// India's public holidays, for the Leave screen to offer as centre-closed days.
+app.get('/holidays/india', (_req: Request, res: Response) => { res.json(indiaHolidays); });
 app.post('/timeoff', createTimeOffHandler);
 app.delete('/timeoff/:id', deleteTimeOffHandler);
 app.put('/timeoff/:id', updateTimeOffHandler);
@@ -1267,31 +1270,6 @@ app.post('/staff/cleanup-duplicates', async (_req: Request, res: Response) => {
     });
   }
   res.json({ groupsProcessed, staffDeactivated, apptsReassigned, timeoffsDeleted });
-});
-
-// Maintenance: normalize business hours for center/staff time off
-app.post('/timeoff/normalize-business-hours', async (_req: Request, res: Response) => {
-  const list = await prisma.timeOff.findMany({ where: { entity_type: { in: ['center','staff'] } } });
-  let updated = 0;
-  await prisma.$transaction(async (tx) => {
-    for (const h of list) {
-      const startDay = h.start_date ?? h.date ?? h.end_date ?? null;
-      const endDay = h.end_date ?? h.start_date ?? h.date ?? null;
-      const start = startDay ? new Date(startDay) : null;
-      const end = endDay ? new Date(endDay) : null;
-      if (start) start.setHours(9, 0, 0, 0);
-      if (end) end.setHours(18, 0, 0, 0);
-      const data: Prisma.TimeOffUpdateInput = {
-        start_date: start ?? undefined,
-        end_date: end ?? undefined,
-        start_time: '09:00',
-        end_time: '18:00',
-      };
-      await tx.timeOff.update({ where: { id: h.id }, data });
-      updated++;
-    }
-  });
-  res.json({ updated });
 });
 
 // Maintenance: rename active rooms to Rm1, Rm2, ... (stable order by id)

@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import { staffEventBusy } from './availability.js';
 import bcrypt from 'bcrypt';
 import { DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD } from './auth.js';
+import { indiaHolidays } from "./indiaHolidays.js";
 
 const prisma = new PrismaClient();
 
@@ -15,52 +16,6 @@ const ayurvedaRoomNames = [
 
 const amenitiesSet = ['massage_table','shower','steam','herbal_oil','shirodhara_stand','dhara_stand','rice_boluses','herbal_paste'];
 
-
-
-
-
-const indianHolidays2025 = [
-  { date: '2025-01-26', desc: 'Republic Day' },
-  { date: '2025-03-14', desc: 'Holi' },
-  { date: '2025-03-31', desc: 'Ram Navami' },
-  { date: '2025-04-06', desc: 'Mahavir Jayanti' },
-  { date: '2025-04-14', desc: 'Ambedkar Jayanti' },
-  { date: '2025-04-18', desc: 'Good Friday' },
-  { date: '2025-05-01', desc: 'Maharashtra Day' },
-  { date: '2025-06-08', desc: 'Eid al-Adha' },
-  { date: '2025-08-15', desc: 'Independence Day' },
-  { date: '2025-09-05', desc: 'Teacher’s Day' },
-  { date: '2025-10-02', desc: 'Gandhi Jayanti' },
-  { date: '2025-10-21', desc: 'Dussehra' },
-  { date: '2025-10-31', desc: 'Govardhan Puja' },
-  { date: '2025-11-01', desc: 'Bhai Dooj' },
-  { date: '2025-11-14', desc: 'Children’s Day' },
-  { date: '2025-11-15', desc: 'Diwali' },
-  { date: '2025-11-16', desc: 'Diwali Holiday' },
-  { date: '2025-12-25', desc: 'Christmas Day' },
-  { date: '2025-08-19', desc: 'Raksha Bandhan' },
-  { date: '2025-07-29', desc: 'Muharram' },
-];
-
-const indianHolidays2026 = [
-  { date: '2026-01-26', desc: 'Republic Day' },
-  { date: '2026-03-04', desc: 'Holi' },
-  { date: '2026-03-17', desc: 'Ram Navami' },
-  { date: '2026-04-09', desc: 'Mahavir Jayanti' },
-  { date: '2026-04-14', desc: 'Ambedkar Jayanti' },
-  { date: '2026-04-03', desc: 'Good Friday' },
-  { date: '2026-05-01', desc: 'Maharashtra Day' },
-  { date: '2026-06-27', desc: 'Eid al-Adha' },
-  { date: '2026-08-15', desc: 'Independence Day' },
-  { date: '2026-09-05', desc: 'Teacher’s Day' },
-  { date: '2026-10-02', desc: 'Gandhi Jayanti' },
-  { date: '2026-10-11', desc: 'Dussehra' },
-  { date: '2026-11-09', desc: 'Diwali' },
-  { date: '2026-11-10', desc: 'Diwali Holiday' },
-  { date: '2026-12-25', desc: 'Christmas Day' },
-  { date: '2026-08-28', desc: 'Raksha Bandhan' },
-  { date: '2026-07-19', desc: 'Muharram' },
-];
 
 // The demo data is a fixture, not a lottery: everyone who clones this repo gets
 // the same centre, and the scheduling invariant test can assert on it. Seeded
@@ -149,11 +104,8 @@ async function main() {
     },
   })));
 
-  for (const h of indianHolidays2025) {
-    await prisma.timeOff.create({ data: { entity_type: 'center', date: new Date(h.date), description: h.desc } });
-  }
-  for (const h of indianHolidays2026) {
-    await prisma.timeOff.create({ data: { entity_type: 'center', date: new Date(h.date), description: h.desc } });
+  for (const h of indiaHolidays) {
+    await prisma.timeOff.create({ data: { entity_type: "center", date: new Date(h.date), description: h.name } });
   }
   // staff holidays (5 random business days within next 3 months per staff)
   const startRange = centreToday();

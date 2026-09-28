@@ -314,7 +314,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
           const weeklyHit = isWeeklyMatch(h);
           if (!(dateHit || rangeHit || weeklyHit)) return false;
           // If weekly or date-only, treat as full-day block
-          if (weeklyHit || (h.start_time == null && h.end_time == null && !(h.start_date && h.end_date))) return true;
+          if (weeklyHit || !h.start_time || !h.end_time) return true;
           // If explicit time range provided, use that
           if (h.start_time && h.end_time) {
             const hs = toMinutes(h.start_time);
@@ -342,7 +342,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
             const rangeHit = h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd;
             const weeklyHit = isWeeklyMatch(h);
             if (!(dateHit || rangeHit || weeklyHit)) return false;
-            if (weeklyHit || (h.start_time == null && h.end_time == null && !(h.start_date && h.end_date))) return true;
+            if (weeklyHit || !h.start_time || !h.end_time) return true;
             if (h.start_time && h.end_time) {
               const hs = toMinutes(h.start_time);
               const he = toMinutes(h.end_time);

@@ -185,6 +185,7 @@
   /* A card is a plain row, as the design's lists: tapping it opens its edit
      sheet (table.tsx), where Save, Cancel and Delete are (#178). */
   .cards-sm tr:not(:has(input, textarea, [role=combobox])) td:last-child { display: none; }
+  .cards-sm tr:not(:has(input, textarea, [role=combobox])) td[data-empty] { display: none; }
 
   /* The row being edited is a bottom sheet over a dimmed page: each field under
      its column's name (table.tsx copies it), the buttons at the foot. */

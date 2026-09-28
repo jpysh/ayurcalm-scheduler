@@ -19,7 +19,11 @@ const tapCardToEdit = (e: React.MouseEvent<HTMLTableElement>) => {
 const labelCells = (table: HTMLTableElement | null) => {
   if (!table) return;
   const names = [...table.querySelectorAll("thead th")].map((th) => th.textContent?.trim() || "");
-  table.querySelectorAll("tbody tr").forEach((tr) => [...tr.children].forEach((td, i) => { if (names[i]) td.setAttribute("data-label", names[i]); }));
+  table.querySelectorAll("tbody tr").forEach((tr) => [...tr.children].forEach((td, i) => {
+    if (names[i]) td.setAttribute("data-label", names[i]);
+    // A card leaves out what is not set, rather than a row of dashes (index.css).
+    td.toggleAttribute("data-empty", ["", "—"].includes(td.textContent?.trim() || ""));
+  }));
 };
 
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
