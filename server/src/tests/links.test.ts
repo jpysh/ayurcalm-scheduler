@@ -64,6 +64,12 @@ try {
   assert.ok((await call(`/public/link/${p}/appointments/${mineA.id}`, { room_ready: true })).status >= 400, 'a resident cannot record for staff');
   assert.equal((await call(`/public/link/${p}/issues`, { kind: 'sos' })).status, 403);
 
+  // The admin reads both on the day, as notes: the room issue and the 👎.
+  const check = await (await call(`/day-check?date=${DAY}`, undefined, admin)).json();
+  const kinds = check.problems.filter((p: { problem_class: string }) => p.problem_class === 'worth_knowing').map((p: { id: string; what: string }) => `${p.id.split(':')[0]} ${p.what}`);
+  assert.ok(kinds.includes('ISSUE Room not usable: Steam not working'), `the issue is on the day: ${kinds}`);
+  assert.ok(kinds.includes('FEEDBACK 👎 Too hot'), 'and the 👎 with its note');
+
   assert.equal(await shared('staff', therapist.id), t, 'sharing again sends the same link');
   const t2 = await issue('staff', therapist.id);
   assert.equal((await call(`/public/link/${t}?date=${DAY}`)).status, 404, 'a reissued link stops the old one');

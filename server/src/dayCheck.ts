@@ -290,6 +290,38 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
     }
   }
 
+  // From the private links (#219): what the team raised today, and a resident's
+  // 👎. Notes to read, never a fix: the admin decides, and Dismiss clears them.
+  const key = day.toISOString().slice(0, 10);
+  // A day either side in UTC covers the centre's day in any time zone; the date check below picks it out.
+  const issues = await prisma.linkIssue.findMany({ where: { seen: false, created_at: { gte: new Date(day.getTime() - 86400000), lt: new Date(day.getTime() + 2 * 86400000) } }, orderBy: { created_at: 'asc' } });
+  const ISSUE: Record<string, string> = { room: 'Room not usable', co_therapist: 'Co-therapist not here', patient_absent: 'Resident not here', permission: 'Needs permission', note: 'A note', sos: 'SOS: needs help now' };
+  for (const i of issues) {
+    const a = i.appointment_id ? appointments.find((x) => x.id === i.appointment_id) : null;
+    // Raised on the centre's day, for that day's treatment, or with none: the one the admin is looking at.
+    if (i.appointment_id ? !a : centreClock(ctx.settings?.timezone || 'Asia/Kolkata', i.created_at).date !== key) continue;
+    raw.push({
+      id: `ISSUE:${i.id}`, kind: 'ISSUE', problem_class: 'worth_knowing',
+      who: a ? `${nameOfStaff(i.staff_id)} — ${nameOfPatient(a.patient_id)}` : nameOfStaff(i.staff_id), start_time: a?.start_time ?? null,
+      what: [ISSUE[i.kind] || i.kind, i.note].filter(Boolean).join(': '),
+      group_key: 'ISSUE', group_label: 'Raised by the team',
+      appointment_id: null, patient_id: a?.patient_id ?? null, patient_name: a ? nameOfPatient(a.patient_id) : '', staff_id: i.staff_id,
+      blocked_by_preferred_staff: false, fix: null, choices: [], no_fix_reason: null, cost: i.kind === 'sos' ? -1 : COST.IDLE_RESIDENT,
+    });
+  }
+  for (const a of appointments) {
+    const r = (a.record || {}) as { feedback?: string; feedback_note?: string };
+    if (r.feedback !== 'down') continue;
+    raw.push({
+      id: `FEEDBACK:${a.id}`, kind: 'FEEDBACK', problem_class: 'worth_knowing',
+      who: `${nameOfPatient(a.patient_id)} — ${nameOfTherapy(a.therapy_id)}`, start_time: a.start_time,
+      what: `👎 ${r.feedback_note || 'Did not like it'}`,
+      group_key: 'FEEDBACK', group_label: 'Residents not happy',
+      appointment_id: null, patient_id: a.patient_id, patient_name: nameOfPatient(a.patient_id), staff_id: a.staff_id,
+      blocked_by_preferred_staff: false, fix: null, choices: [], no_fix_reason: null, cost: COST.IDLE_RESIDENT,
+    });
+  }
+
   // A resident is paying to be treated. A day with nothing booked is the
   // failure the centre hears about from the resident.
   const booked = new Set(appointments.map((a) => a.patient_id));
