@@ -44,20 +44,21 @@ const TherapiesTab = ({
   setShowLibrary,
 }: any) => {
   return (
-    <Card>
-      <CardHeader className="px-2 md:px-4 pt-2 md:pt-4 pb-1 md:pb-2">
-        <div className="flex items-center justify-center gap-2">
-          <CardTitle className="text-base md:text-xl font-semibold">Therapies</CardTitle>
+    <Card className="border-0 bg-transparent shadow-none">
+      {/* The design's page header (#265 O1): name left, one action right, no card frame. */}
+      <CardHeader className="px-1 pb-2 pt-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="m-0 text-lg font-semibold">Therapies</h1>
           <Button size="sm" className="min-h-11 rounded-full px-4" onClick={() => setShowAddTherapy(true)}>
             <Plus className="mr-1 h-4 w-4" />Add therapy
           </Button>
           <Button size="sm" variant="outline" className="min-h-11 rounded-full px-4" onClick={() => setShowLibrary(true)}>From library</Button>
         </div>
         <div className="mt-0.5">
-          <Input placeholder="Search therapies" value={searchTherapies} onChange={(e: any) => setSearchTherapies(e.target.value)} className="h-8 md:h-10 text-center" />
+          <Input placeholder="Search therapies" value={searchTherapies} onChange={(e: any) => setSearchTherapies(e.target.value)} className="h-11 rounded-full text-base" />
         </div>
       </CardHeader>
-      <CardContent className="pt-0 p-1 md:p-2">
+      <CardContent className="p-0">
         <Table className="cards-sm" data-testid="therapies-table">
           <TableHeader>
             <TableRow>

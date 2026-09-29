@@ -39,6 +39,14 @@ type Settings = {
   plan: string | null;
   show_footer: boolean;
 };
+/** A photo picker as a button (#265 P4): the browser's own "Choose File · No file chosen" is cut off on a phone. */
+const PickImage = ({ id, has, disabled, onPick }: { id: string; has: boolean; disabled?: boolean; onPick: (f?: File) => void }) => (
+  <label className="flex min-h-11 cursor-pointer items-center rounded-full border px-4 font-semibold">
+    {has ? "Change photo" : "Choose a photo"}
+    <input id={id} type="file" accept="image/png,image/jpeg" className="sr-only" disabled={disabled} onChange={(e) => { onPick(e.target.files?.[0]); e.target.value = ""; }} />
+  </label>
+);
+
 const planHint = (t: { ends_at: string | null; read_only: boolean; plan: string | null; paid_until: string | null }) => {
   const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   if (t.plan) return `${PLANS.find((p) => p.id === t.plan)?.name ?? t.plan}${t.paid_until ? `, paid until ${day(t.paid_until)}` : ""}${t.read_only ? " (overdue)" : ""}`;
@@ -348,14 +356,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
               {settings.logo && (
                 <img src={settings.logo} alt="Centre logo" className="h-10 w-auto rounded border" />
               )}
-              <Input
-                id="logo"
-                type="file"
-                accept="image/png,image/jpeg"
-                className="max-w-xs"
-                onChange={(e) => onLogoPicked(e.target.files?.[0])}
-                disabled={!isAdmin}
-              />
+              <PickImage id="logo" has={!!settings.logo} disabled={!isAdmin} onPick={onLogoPicked} />
               {settings.logo && isAdmin && (
                 <Button variant="ghost" size="sm" onClick={() => update("logo", null)}>Remove</Button>
               )}
@@ -365,9 +366,9 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
         </CardContent>
       </Card>
       {isAdmin && (
-        <div className="flex justify-end">
-          <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save settings"}
+        <div>
+          <Button className="min-h-11 w-full rounded-full" onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
           </Button>
         </div>
       )}
@@ -425,7 +426,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
           <Label htmlFor="seal_logo">Right-hand logo or seal (optional)</Label>
           <div className="flex items-center gap-3">
             {lh.seal_logo ? <img src={lh.seal_logo} alt="Seal" className="h-10 w-auto rounded border" /> : null}
-            <Input id="seal_logo" type="file" accept="image/png,image/jpeg" className="max-w-xs" onChange={(e) => onSealPicked(e.target.files?.[0])} disabled={!isAdmin} />
+            <PickImage id="seal_logo" has={!!lh.seal_logo} disabled={!isAdmin} onPick={onSealPicked} />
             {lh.seal_logo && isAdmin ? <Button variant="ghost" size="sm" onClick={() => setLh("seal_logo", "")}>Remove</Button> : null}
           </div>
         </div>
@@ -435,7 +436,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
             <Input id={`lh_${k}`} placeholder={hint} value={lh[k] ?? ""} onChange={(e) => setLh(k, e.target.value)} disabled={!isAdmin} />
           </div>
         ))}
-        {isAdmin ? <div className="flex justify-end"><Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save letterhead"}</Button></div> : null}
+        {isAdmin ? <Button className="min-h-11 w-full rounded-full" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save letterhead"}</Button> : null}
         {doctors.map((d) => (
           <div key={d.id} className="space-y-2 rounded-xl border p-3" aria-label={`Doctor ${d.name}`}>
             <div className="font-semibold">{d.name}</div>
@@ -447,7 +448,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
             <div className="space-y-1"><Label htmlFor={`s_${d.id}`}>Signature (photo, optional)</Label>
               <div className="flex items-center gap-3">
                 {d.signature ? <img src={d.signature} alt={`${d.name}'s signature`} className="h-10 w-auto rounded border bg-white" /> : null}
-                <Input id={`s_${d.id}`} type="file" accept="image/png,image/jpeg" className="max-w-xs" disabled={!isAdmin} onChange={(e) => onSignaturePicked(d, e.target.files?.[0])} />
+                <PickImage id={`s_${d.id}`} has={!!d.signature} disabled={!isAdmin} onPick={(f) => onSignaturePicked(d, f)} />
                 {d.signature && isAdmin ? <Button variant="ghost" size="sm" onClick={() => saveDoctor(d, { signature: null })}>Remove</Button> : null}
               </div></div>
           </div>
@@ -546,9 +547,9 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
         </CardContent>
       </Card>
       {isAdmin && (
-        <div className="flex justify-end">
-          <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save settings"}
+        <div>
+          <Button className="min-h-11 w-full rounded-full" onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
           </Button>
         </div>
       )}
@@ -601,9 +602,9 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
         </CardContent>
       </Card>
       {isAdmin && (
-        <div className="flex justify-end">
-          <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save settings"}
+        <div>
+          <Button className="min-h-11 w-full rounded-full" onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
           </Button>
         </div>
       )}

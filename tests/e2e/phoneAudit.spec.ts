@@ -68,3 +68,30 @@ test('B4: people with access fit the phone', async ({ page }) => {
   await expect(page.getByRole('dialog')).toContainText('admin@example.com');
   expect(await fitsWidth(page)).toBe(true);
 });
+
+test('Help · WhatsApp sits after Settings in the menu, only with a number', async ({ page, request }) => {
+  const { token } = await (await request.post('/api/auth/login', { data: { email: 'admin@example.com', password: 'demo1234' } })).json();
+  const headers = { Authorization: `Bearer ${token}` };
+  const current = await (await request.get('/api/settings', { headers })).json();
+  const was = current.support_whatsapp ?? '';
+  // PUT takes the whole settings object.
+  const set = async (n: string) => expect((await request.put('/api/settings', { headers, data: { ...current, support_whatsapp: n } })).ok()).toBe(true);
+  try {
+    await set('420777558262');
+    await signIn(page);
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    const tiles = page.getByRole('dialog').locator('.grid-cols-2 > *');
+    await expect(page.getByRole('link', { name: /^Help · WhatsApp/ })).toBeVisible();
+    const names = await tiles.allInnerTexts();
+    const at = names.findIndex((t) => t.startsWith('Settings'));
+    expect(names[at + 1]).toMatch(/^Help · WhatsApp/);
+    await expect(tiles.nth(at + 1)).toHaveAttribute('href', 'https://wa.me/420777558262');
+    await set('');
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await expect(page.getByRole('dialog').getByText('Settings', { exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog').getByText('Help · WhatsApp')).toHaveCount(0);
+  } finally {
+    await set(was);
+  }
+});
