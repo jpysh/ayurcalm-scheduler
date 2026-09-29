@@ -51,6 +51,7 @@ services:
       # trust its cf-connecting-ip header.
       BEHIND_CLOUDFLARE: ${BEHIND_CLOUDFLARE:-}
       DEMO_MODE: ${DEMO_MODE:-}
+      DEMO_RESET_MINUTES: ${DEMO_RESET_MINUTES:-}
       # Writes per address in 5 minutes. Unset in a real install (40); qa raises it.
       RATE_LIMIT_WRITES: ${RATE_LIMIT_WRITES:-}
       RATE_LIMIT_CALLS: ${RATE_LIMIT_CALLS:-}
