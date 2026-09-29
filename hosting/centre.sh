@@ -3,6 +3,7 @@
 #   sh hosting/centre.sh up demo 8201     start or update ruta-demo on :8201
 #   sh hosting/centre.sh down demo        stop it, data kept
 #   stop|start <slug>: pause a trial and back; delete <slug>: its data is gone
+#   paid <slug> <cloud|onprem|founding> <YYYY-MM-DD>: record a payment (#250); paid <slug> none clears it
 # Data lives in Docker volume ruta-<slug>_db-data; backups in $DATA/<slug>/backups.
 # The slug "demo" runs DEMO_MODE with an hourly reset. Secrets are made once
 # per centre and kept in $DATA/<slug>/env.
@@ -23,5 +24,6 @@ case $cmd in
   stop)   docker compose -p "ruta-$slug" stop ;;
   start)  docker compose -p "ruta-$slug" start ;;
   delete) docker compose -p "ruta-$slug" down -v && rm -rf "$dir" ;;
-  *)    echo "up|down|stop|start|delete" >&2; exit 1 ;;
+  paid)   docker compose -p "ruta-$slug" exec -T app npx tsx server/src/scripts/markPaid.ts "$3" "${4:-}" ;;
+  *)    echo "up|down|stop|start|delete|paid" >&2; exit 1 ;;
 esac

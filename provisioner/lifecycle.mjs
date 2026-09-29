@@ -8,6 +8,7 @@ const H = 3_600_000, D = 24 * H;
  */
 export function next(c, now) {
   const w = (key) => !c.warned?.[key];
+  if (c.trial?.plan) return null; // a paying centre is never paused or deleted (#250)
   if (c.paused_at) {
     const del = c.paused_at + 14 * D;
     if (now >= del) return { do: 'delete', why: 'paused 14 days' };

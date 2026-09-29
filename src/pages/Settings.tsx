@@ -1,4 +1,5 @@
-import { PRODUCT } from "../../server/src/product";
+import { PRODUCT, PLANS, SALES_WHATSAPP } from "../../server/src/product";
+import { useTrial } from "@/lib/centreName";
 import { useEffect, useState, type ReactNode } from "react";
 import { confirmSheet } from "@/components/ConfirmSheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +36,16 @@ type Settings = {
   setup_complete: boolean;
   enforce_gender_match: boolean;
   letterhead: Letterhead | null;
+  plan: string | null;
+  show_footer: boolean;
+};
+const planHint = (t: { ends_at: string | null; read_only: boolean; plan: string | null; paid_until: string | null }) => {
+  const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  if (t.plan) return `${PLANS.find((p) => p.id === t.plan)?.name ?? t.plan}${t.paid_until ? `, paid until ${day(t.paid_until)}` : ""}${t.read_only ? " (overdue)" : ""}`;
+  if (!t.ends_at) return "Free trial: 30 days start with your first resident or printed sheet";
+  if (t.read_only) return "Free trial ended: read-only, nothing deleted";
+  const d = Math.ceil((Date.parse(t.ends_at) - Date.now()) / 86400000);
+  return `Free trial: ${d} ${d === 1 ? "day" : "days"} left`;
 };
 type Letterhead = { seal_logo: string; name_local: string; registration_line: string; accreditation_line: string; phones: string; email: string; website: string; footer_line: string; discharge_format: string };
 const LETTERHEAD: [keyof Letterhead, string, string][] = [
@@ -53,6 +64,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [openSheet, setOpenSheet] = useState<string | null>(null);
+  const trial = useTrial();
   const isAdmin = typeof window !== "undefined" && localStorage.getItem("authRole") === "Admin";
 
   useEffect(() => {
@@ -183,6 +195,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
           support_whatsapp: settings.support_whatsapp ?? "",
           patient_support_whatsapp: settings.patient_support_whatsapp ?? "",
           enforce_gender_match: settings.enforce_gender_match !== false,
+          show_footer: settings.show_footer !== false,
           ...(settings.letterhead ? { letterhead: settings.letterhead } : {}),
         }),
       });
@@ -286,6 +299,14 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
           <span className="text-muted-foreground">›</span>
         </a>
       ) : null}
+      {isAdmin && trial ? row("plan", "Plan", planHint(trial)) : null}
+      {isAdmin ? (
+        // Refer a centre (#249): both get 3 free months when it pays, recorded by hand for now.
+        <a className={rowClass} href={`https://wa.me/?text=${encodeURIComponent(`We run ${settings.centre_name} on ${PRODUCT}: residents, therapists and the day sheet on one phone. Free for 30 days: https://jains.es/ruta?ref=${encodeURIComponent(window.location.host.split(".")[0])}`)}`} target="_blank" rel="noopener noreferrer">
+          <span className="flex-1"><b className="block text-[16px]">Invite a centre</b><span className="block text-[13px] text-muted-foreground">On WhatsApp. When they pay, you both get 3 months free</span></span>
+          <span className="text-muted-foreground">›</span>
+        </a>
+      ) : null}
       {row("password", "Your password", "Change it")}
       {isAdmin ? row("assistant", "Your AI assistant", "Optional: connect Claude") : null}
       {isAdmin ? row("people", "People with access", "Who can sign in") : null}
@@ -367,6 +388,21 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
         <input type="file" accept=".gz,application/gzip" className="sr-only" disabled={moving} onChange={(e) => { importCentre(e.target.files?.[0]); e.target.value = ""; }} />
       </label>
       </>)}
+      {trial ? sheet("plan", "Plan", <div className="space-y-3 text-[15px]">
+        <p>{planHint(trial)}.</p>
+        {PLANS.map((p) => (
+          <a key={p.id} className="flex min-h-12 items-center rounded-xl border border-border px-4" target="_blank" rel="noopener noreferrer"
+            href={`https://wa.me/${SALES_WHATSAPP}?text=${encodeURIComponent(`${settings.centre_name} (${window.location.host}) would like ${p.name}, ${p.price}.`)}`}>
+            <span className="flex-1"><b className="block">Choose {p.name}</b><span className="block text-[13px] text-muted-foreground">{p.price}</span></span>›
+          </a>
+        ))}
+        <p className="text-[13px] text-muted-foreground">Opens WhatsApp. We reply the same working day with a UPI link. Or run it yourself for free: Download everything, then install it on your own computer.</p>
+        {trial.plan ? (
+          <label className="flex items-center gap-3"><Checkbox checked={settings.show_footer !== false} onCheckedChange={(v) => setSettings({ ...settings, show_footer: v === true })} />"Made with {PRODUCT}" at the foot of sheets and links</label>
+        ) : null}
+        {trial.plan ? <Button className="w-full" onClick={save} disabled={saving}>Save</Button> : null}
+      </div>) : null}
+
       {sheet("printed", "Printed sheets", <>
       <p className="text-xs text-muted-foreground">The last copy printed for each day. Printing a day again replaces its copy; copies older than 90 days are removed.</p>
       {printed === null ? <div className="py-4 text-center text-muted-foreground">…</div> : printed.length === 0 ? <div className="py-4 text-center text-muted-foreground">Nothing printed yet.</div> : (

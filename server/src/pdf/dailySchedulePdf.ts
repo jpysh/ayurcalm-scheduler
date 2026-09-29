@@ -1,6 +1,7 @@
 declare module 'pdfkit';
 import { teamOf, offOnDay, overlaps } from '../availability.js';
 import PDFDocument from 'pdfkit';
+import { madeWith } from '../product.js';
 import { loadDietsForDay, mealOrder, type MealKey } from '../dietResolution.js';
 import { PrismaClient } from '@prisma/client';
 
@@ -53,6 +54,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const day = new Date(dateISO);
 
   const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  const made = madeWith(settings);
   const centreName = settings?.centre_name || process.env.CENTRE_NAME || 'Wellness Centre';
 
   const [rooms, patients, therapies, staff, appts, eventsByDate, weeklyEvents, diets, staysToday, timeOff] = await Promise.all([
@@ -430,6 +432,8 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     // Seven loose sheets on a notice board need to say which one they are.
     doc.font('Helvetica').fontSize(8)
       .text(`Page ${pageNo} of ${totalPages}`, x, pageBottom + 4, { width: w, align: 'center', lineBreak: false });
+    // Same line as the page number, so it never costs a page (#249).
+    if (made) doc.fillColor('#666').text(made, x, pageBottom + 4, { width: w, align: 'right', lineBreak: false }).fillColor('black');
     drawHeaderRow();
   };
 
