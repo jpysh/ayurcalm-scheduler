@@ -109,6 +109,8 @@ to `.env` if you want to change any — the defaults work as-is for a local tria
 One container serves both the API and the built front end, so a self-hosted
 install is two containers total.
 
+Running it for a real centre on a Mac, with your own HTTPS address and backups: [docs/self-host.md](docs/self-host.md).
+
 ## Features
 
 - **Scheduling** — appointments across therapists, rooms and therapies, with
