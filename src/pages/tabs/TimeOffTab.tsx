@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { API_TOKEN, leaveWhen, toHHMM, toLocalInput, type UiTimeOff, type UiStaff, type UiRoom, type UiTherapy, type Patient } from "./shared";
 import PageHead from "@/components/PageHead";
+import { BottomSheet } from "@/components/BottomBar";
 import { HolidaysSheet } from "@/components/HolidaysSheet";
 
 const TimeOffTab = ({
@@ -130,7 +131,7 @@ const TimeOffTab = ({
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">For</TableHead>
               <TableHead className="h-7 py-0 text-xs md:text-sm font-normal">From</TableHead>
               <TableHead className="h-7 py-0 text-xs md:text-sm font-normal">To</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Why</TableHead>
+              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Reason</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">All day</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Repeats</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Who or what</TableHead>
@@ -181,7 +182,8 @@ const TimeOffTab = ({
               const shown = rows.slice(0, visibleTimeOffRows);
               return shown.map((holiday: any) => (
                 <TableRow key={holiday.id} className="h-7">
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
+                  {/* The name says who; "For Staff" on a phone card said it twice (#265 O3). */}
+                  <TableCell className={`text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2 ${editingTimeOffId === holiday.id ? '' : 'hidden md:table-cell'}`}>
                     {editingTimeOffId === holiday.id ? (
                       <Select value={holiday.type} onValueChange={(v: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, type: v as "Center" | "Staff" | "Room" | "Therapy" | "Patient", entity: v === 'Center' ? 'All' : '' } : h)))}>
                         <SelectTrigger className="h-10">
@@ -435,7 +437,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
       setEditingTimeOffId(null);
       setOriginalTimeOff(null);
     } catch {
-      toast.error('Failed to save time off');
+      toast.error('The leave was not saved. Try again.');
     }
   };
 
@@ -490,57 +492,21 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     <>
       <HolidaysSheet open={showHolidays} onOpenChange={setShowHolidays} closed={closedDays} today={todayKey}
         onAdded={(rows) => setTimeOffs((prev) => [...prev, ...rows.map((x) => ({ id: x.id, date: new Date(x.date).toISOString(), type: "Center" as const, entity: "All", description: x.description }))])} />
-      <Dialog open={showAddTimeOff} onOpenChange={setShowAddTimeOff}>
-        <DialogContent className="max-w-sm p-3">
-          <DialogHeader>
-            <DialogTitle className="text-lg">Add leave</DialogTitle>
-          </DialogHeader>
+      <BottomSheet open={showAddTimeOff} onOpenChange={setShowAddTimeOff} title="Add leave">
+        <div className="max-h-[75dvh] overflow-y-auto">
+          {/* Who first, as one list (#265 H1): the old form asked for a "type" before the person. */}
           <div className="grid grid-cols-1 gap-2">
-            <Label>Type</Label>
-            <Select value={newTimeOff.type} onValueChange={(v) => setNewTimeOff({ ...newTimeOff, type: v as "Center" | "Staff" | "Room" | "Therapy" | "Patient", entity: v === 'Center' ? 'All' : '' })}>
-              <SelectTrigger className="h-8">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Center">Centre</SelectItem>
-                <SelectItem value="Staff">Staff</SelectItem>
-                <SelectItem value="Room">Room</SelectItem>
-                <SelectItem value="Therapy">Therapy</SelectItem>
-                <SelectItem value="Patient">Patient</SelectItem>
-              </SelectContent>
-            </Select>
-            <Label>Who</Label>
-            {newTimeOff.type === 'Center' ? (
-              <Input className="h-8" value="All" readOnly />
-            ) : newTimeOff.type === 'Staff' ? (
-              <Select value={newTimeOff.entity} onValueChange={(v) => setNewTimeOff({ ...newTimeOff, entity: v })}>
-                <SelectTrigger className="h-8"><SelectValue placeholder="Select staff" /></SelectTrigger>
-                <SelectContent>
-                  {staff.map((s) => (<SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            ) : newTimeOff.type === 'Room' ? (
-              <Select value={newTimeOff.entity} onValueChange={(v) => setNewTimeOff({ ...newTimeOff, entity: v })}>
-                <SelectTrigger className="h-8"><SelectValue placeholder="Select room" /></SelectTrigger>
-                <SelectContent>
-                  {roomsList.map((r) => (<SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            ) : newTimeOff.type === 'Therapy' ? (
-              <Select value={newTimeOff.entity} onValueChange={(v) => setNewTimeOff({ ...newTimeOff, entity: v })}>
-                <SelectTrigger className="h-8"><SelectValue placeholder="Select therapy" /></SelectTrigger>
-                <SelectContent>
-                  {therapies.map((t) => (<SelectItem key={String(t.id ?? t.name)} value={String(t.id ?? t.name)}>{t.name}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Select value={newTimeOff.entity} onValueChange={(v) => setNewTimeOff({ ...newTimeOff, entity: v })}>
-                <SelectTrigger className="h-8"><SelectValue placeholder="Select patient" /></SelectTrigger>
-                <SelectContent>
-                  {patients.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            )}
+            <Label htmlFor="leaveWho">Who or what</Label>
+            <select id="leaveWho" className="h-11 rounded-md border bg-background px-3 text-[16px]"
+              value={newTimeOff.type === 'Center' ? 'Center:All' : newTimeOff.entity ? `${newTimeOff.type}:${newTimeOff.entity}` : ''}
+              onChange={(e) => { const [type, ...id] = e.target.value.split(':'); setNewTimeOff({ ...newTimeOff, type: type as UiTimeOff['type'], entity: id.join(':') }); }}>
+              <option value="" disabled>Choose…</option>
+              <optgroup label="Therapists and doctors">{staff.map((x) => <option key={x.id} value={`Staff:${x.id}`}>{x.name}</option>)}</optgroup>
+              <optgroup label="Rooms">{roomsList.map((r) => <option key={r.id} value={`Room:${r.id}`}>{r.name}</option>)}</optgroup>
+              <optgroup label="The whole centre"><option value="Center:All">The centre is closed</option></optgroup>
+              <optgroup label="Therapies">{therapies.map((t) => <option key={String(t.id ?? t.name)} value={`Therapy:${String(t.id ?? t.name)}`}>{t.name}</option>)}</optgroup>
+              <optgroup label="Residents">{patients.map((x) => <option key={x.id} value={`Patient:${x.id}`}>{x.name}</option>)}</optgroup>
+            </select>
             <Label>Full day</Label>
             <Select value={newTimeOff.fullDay ? 'yes' : 'no'} onValueChange={(v) => setNewTimeOff({ ...newTimeOff, fullDay: v === 'yes' })}>
               <SelectTrigger className="h-8">
@@ -591,13 +557,12 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
                 </div>
               )}
             </div>
-            <Label htmlFor="newTimeOffDescription">Description</Label>
+            <Label htmlFor="newTimeOffDescription">Reason (optional)</Label>
             <Input id="newTimeOffDescription" className="h-8" value={newTimeOff.description} onChange={(e) => setNewTimeOff({ ...newTimeOff, description: e.target.value })} />
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowAddTimeOff(false)}>Cancel</Button>
-              <Button onClick={async () => {
+            <div className="pt-2">
+              <Button className="min-h-11 w-full rounded-full" onClick={async () => {
                 if (newTimeOff.type !== 'Center' && !newTimeOff.entity) {
-                  toast.error('Select an entity for the chosen type');
+                  toast.error('Choose who is away first');
                   return;
                 }
                 const entity_type = newTimeOff.type.toLowerCase();
@@ -632,19 +597,19 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
                   // Show what it did where the admin is looking next.
                   if (Array.isArray(created.replan) && created.replan.length > 0) {
                     const total = created.replan.reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0);
-                    toast.success(`${total} treatment${total === 1 ? '' : 's'} rebooked — see the top of the dashboard`);
+                    toast.success(`${total} treatment${total === 1 ? '' : 's'} rebooked`);
                     loadReplans();
                     refreshAppointmentsForDate(todayKey, true);
                   }
                   setTimeOffs((prev) => prev.map((h) => h.id === tempId ? { id: created.id, startDate: created.start_date ? new Date(created.start_date).toISOString() : undefined, endDate: created.end_date ? new Date(created.end_date).toISOString() : undefined, recurrence: created.recurrence || undefined, weekdays: created.weekdays || undefined, type: optimistic.type, entity: created.entity_id ?? optimistic.entity, description: created.description ?? optimistic.description } : h));
                 } catch {
-                  toast.error('Failed to save time off');
+                  toast.error('The leave was not saved. Try again.');
                 }
               }}>Save</Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </BottomSheet>
     </>
   );
 

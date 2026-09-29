@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BottomSheet } from "@/components/BottomBar";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 
@@ -27,12 +27,18 @@ export default function DayDietDialog({ patient, onClose, onChangePlan }: { pati
   const [saved, setSaved] = useState<Texts>(empty);
   const [texts, setTexts] = useState<Texts>(empty);
   const [busy, setBusy] = useState(false);
+  // What the plan gives that day, shown in each empty box so the admin sees the meals, not "As plan" (#265 H2).
+  const [plan, setPlan] = useState<Partial<Record<string, string>>>({});
 
   useEffect(() => {
     if (!patient || !date) return;
     let stale = false;
     setSaved(empty);
     setTexts(empty);
+    setPlan({});
+    fetch(`${API_BASE}/patients/${patient.id}/day?date=${date}`).then((r) => (r.ok ? r.json() : null))
+      .then((d: { meals?: { meal: string; text: string }[] } | null) => { if (!stale && d?.meals) setPlan(Object.fromEntries(d.meals.map((m) => [m.meal, m.text]))); })
+      .catch(() => {});
     fetch(`${API_BASE}/dietplans?patient_id=${patient.id}&date=${date}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((rows: Row[]) => {
@@ -61,7 +67,7 @@ export default function DayDietDialog({ patient, onClose, onChangePlan }: { pati
         });
         if (!res.ok) throw new Error(String(res.status));
       }
-      toast.success(`Diet for ${date} saved`);
+      toast.success("Meals saved");
       onClose();
     } catch {
       toast.error("Could not save — nothing after the failed meal was saved");
@@ -71,40 +77,22 @@ export default function DayDietDialog({ patient, onClose, onChangePlan }: { pati
   };
 
   return (
-    <Dialog open={!!patient} onOpenChange={(v: boolean) => { if (!v) { setDate(localToday()); onClose(); } }}>
-      <DialogContent className="w-full max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto p-4">
-        <DialogHeader>
-          <DialogTitle className="text-sm pr-6">Diet for one day — {patient?.name}</DialogTitle>
-          <DialogDescription className="text-xs">
-            A filled meal replaces the plan on the day sheet for this date only. Leave a meal empty to follow the plan.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <Label htmlFor="day-diet-date" className="text-xs">Date</Label>
-            <Input id="day-diet-date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} className="h-8" />
+    <BottomSheet open={!!patient} onOpenChange={(v: boolean) => { if (!v) { setDate(localToday()); onClose(); } }} title={`${patient?.name ?? ''}'s meals`}>
+      <div className="max-h-[75dvh] space-y-3 overflow-y-auto">
+        <Input id="day-diet-date" aria-label="Day" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
+        {meals.map((meal) => (
+          <div key={meal} className="space-y-1">
+            <Label htmlFor={`day-diet-${meal}`} className="text-[13px]">{mealTitle[meal]}</Label>
+            <Input id={`day-diet-${meal}`} value={texts[meal]} maxLength={500}
+              placeholder={plan[mealTitle[meal]] || "Nothing on the plan"}
+              onChange={(e) => setTexts((t) => ({ ...t, [meal]: e.target.value }))} />
           </div>
-          {meals.map((meal) => (
-            <div key={meal} className="space-y-1">
-              <Label htmlFor={`day-diet-${meal}`} className="text-xs">{mealTitle[meal]}</Label>
-              <Input
-                id={`day-diet-${meal}`}
-                value={texts[meal]}
-                maxLength={500}
-                placeholder="As plan"
-                onChange={(e) => setTexts((t) => ({ ...t, [meal]: e.target.value }))}
-                className="h-8"
-              />
-            </div>
-          ))}
-        </div>
+        ))}
+        <p className="text-[13px] text-muted-foreground">Type in a meal to change it for this day only. Leave it empty to follow the plan.</p>
+        <Button className="min-h-11 w-full rounded-full" disabled={busy || !date} onClick={save}>{busy ? "Saving…" : "Save"}</Button>
         {/* The plan itself is one step further in (#178): the day is the daily job. */}
         {onChangePlan ? <Button variant="outline" className="min-h-11 w-full rounded-full" onClick={onChangePlan}>Change plan…</Button> : null}
-        <DialogFooter>
-          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-          <Button size="sm" disabled={busy || !date} onClick={save}>{busy ? "Saving…" : "Save"}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </BottomSheet>
   );
 }

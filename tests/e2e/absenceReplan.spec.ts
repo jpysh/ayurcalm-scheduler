@@ -107,13 +107,9 @@ test('a therapist off: the pill names it, its fix clears the day, and Undo puts 
   await openTab(page, 'Leave');
   await page.getByRole('button', { name: 'Add leave' }).click();
   const form = page.getByRole('dialog');
-  const pick = async (n: number, option: string) => {
-    await form.getByRole('combobox').nth(n).click();
-    await page.getByRole('option', { name: option, exact: true }).click();
-  };
-  await pick(0, 'Staff');
-  await pick(1, THERAPIST);
-  await pick(2, 'Yes');
+  // Who first, from one list (#265).
+  await form.getByLabel('Who or what').selectOption({ label: THERAPIST });
+  await expect(form.getByRole('combobox').nth(1)).toHaveText('Yes');
   await form.locator('input[type=date]').nth(0).fill(DAY);
   await form.locator('input[type=date]').nth(1).fill(DAY);
   await form.getByRole('button', { name: 'Save', exact: true }).click();

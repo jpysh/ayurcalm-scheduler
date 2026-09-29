@@ -7,8 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Edit, Trash2, Info, Plus, X } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Plus } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { shareLink } from "@/lib/shareLink";
@@ -451,18 +450,9 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           </div>
         ) : null}
       </BottomSheet>
-      <Dialog open={!!infoPatient} onOpenChange={(open) => { if (!open) { setInfoPatient(null); setInfoEditing(false); } }}>
-        <DialogContent hideClose className="max-w-[92vw] sm:max-w-md md:max-w-2xl p-3 sm:p-5 gap-2 sm:gap-4 max-h-[80vh] overflow-y-auto overflow-x-hidden">
-          <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">{infoPatient?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-3 gap-2 mb-2">
-            <Button variant="outline" size="icon" className="h-8 w-8 justify-self-start" aria-label="Close" onClick={() => { setInfoPatient(null); setInfoEditing(false); }}>
-              <X className="w-4 h-4" />
-            </Button>
-            <div />
-            <div className="justify-self-end"></div>
-          </div>
+      {/* A bottom sheet like every other (#265 O4), not a full-screen dialog with a boxed ✕. */}
+      <BottomSheet open={!!infoPatient} onOpenChange={(open) => { if (!open) { setInfoPatient(null); setInfoEditing(false); } }} title={infoPatient?.name ?? ''}>
+        <div className="max-h-[75dvh] overflow-y-auto overflow-x-hidden">
           {infoPatient && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
               <div className="space-y-2">
@@ -524,7 +514,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
               <div className="md:col-span-2 flex justify-end gap-2 pt-2">
                 {infoEditing ? (
                   <>
-                    <Button variant="outline" onClick={() => { setInfoEditing(false); setInfoDraft(infoPatient ? { ...infoPatient } : null); }}>Cancel</Button>
+                    <Button variant="outline" className="min-h-11 rounded-full" onClick={() => { setInfoEditing(false); setInfoDraft(infoPatient ? { ...infoPatient } : null); }}>Cancel</Button>
                     <Button onClick={async () => {
                       if (!infoDraft) return;
                       try {
@@ -533,21 +523,21 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
                         const updated = await res.json();
                         setPatients((prev) => prev.map((x) => x.id === infoDraft.id ? { ...x, phone: updated.phone || '', email: updated.email || '', emergencyContact: updated.emergency_contact || '', emergencyPhone: updated.emergency_phone || '', medicalNotes: updated.medical_notes || '', dob: updated.date_of_birth ? new Date(updated.date_of_birth).toISOString().slice(0,10) : '' } : x));
                         setInfoPatient((prev) => prev ? { ...prev, phone: updated.phone || '', email: updated.email || '', emergencyContact: updated.emergency_contact || '', emergencyPhone: updated.emergency_phone || '', medicalNotes: updated.medical_notes || '', dob: updated.date_of_birth ? new Date(updated.date_of_birth).toISOString().slice(0,10) : '' } : prev);
-                        toast.success('Patient updated');
+                        toast.success('Saved');
                         setInfoEditing(false);
                       } catch {
-                        toast.error('Failed to update patient');
+                        toast.error('That was not saved. Try again.');
                       }
                     }}>Save</Button>
                   </>
                 ) : (
-                  <Button onClick={() => setInfoEditing(true)}>Edit</Button>
+                  <Button className="min-h-11 w-full rounded-full" onClick={() => setInfoEditing(true)}>Edit</Button>
                 )}
               </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </div>
+      </BottomSheet>
     </>
   );
 

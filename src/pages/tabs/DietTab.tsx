@@ -268,19 +268,14 @@ const DietTab = ({
             </div>
           </div>
 
-          <Card>
-            <CardHeader className="px-2 md:px-4 pt-2 md:pt-4 pb-1 md:pb-2">
-              <div className="flex items-center justify-center gap-2">
-                <CardTitle className="text-base md:text-xl font-semibold">Active Assignments</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0 p-2">
+          <Card className="border-0 bg-transparent shadow-none">
+            <CardContent className="p-0">
               <Input placeholder="Search residents" aria-label="Search residents" value={q} onChange={(e) => setQ(e.target.value)} className="mb-2 h-11 rounded-full text-base" />
               <Table className="cards-sm">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-xs md:text-sm">Patient</TableHead>
-                    <TableHead className="text-xs md:text-sm">Diet Plan</TableHead>
+                    <TableHead className="text-xs md:text-sm">Plan</TableHead>
                     <TableHead className="hidden md:table-cell text-xs md:text-sm">Schedule</TableHead>
                     <TableHead className="hidden md:table-cell text-xs md:text-sm">Therapies</TableHead>
                     <TableHead className="text-xs md:text-sm text-right">Actions</TableHead>
@@ -292,13 +287,13 @@ const DietTab = ({
                       <TableCell className="text-xs md:text-sm">{p.name}</TableCell>
                       <TableCell className="text-xs md:text-sm">{(() => {
                         const segs = dietSchedules[p.id] || [];
-                        if (segs.length === 0) return '—';
+                        if (segs.length === 0) return 'None yet';
                         // Today's plan first: a resident on several over their stay is
                         // asked about for what they eat now (#137).
                         const today = new Date().toLocaleDateString('en-CA');
                         const now = segs.find((x) => x.start <= today && today <= x.end);
                         const uniqueTpls = new Set(segs.map((s) => s.templateId));
-                        if (!now && uniqueTpls.size > 1) return 'Multiple plans';
+                        if (!now && uniqueTpls.size > 1) return 'Several over the stay';
                         const seg = now || segs[0];
                         const tpl = dietTemplates.find((t) => t.id === seg.templateId);
                         // A retired plan is gone from the list but still assigned,
