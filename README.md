@@ -5,7 +5,7 @@
 
 **Your centre's day, printed and ready by 7 am.** Open-source scheduling for Ayurveda centres, therapy studios and wellness retreats.
 
-[Website](https://jains.es/ruta) · [Live demo](https://demo.jains.es) · [Free cloud trial](https://jains.es/ruta) *(website and demo go live with Launch A, early October)* · [Self-host guide](docs/self-host.md) · [Admin guide](docs/admin-guide.md)
+[Website](https://jains.es/ruta) · [Live demo](https://demo.jains.es) · [Free cloud trial](https://signup.jains.es) · [Self-host guide](docs/self-host.md) · [Admin guide](docs/admin-guide.md)
 
 Plan residents and their stays, therapists, rooms, therapies and daily programme in one place. Auto-assign fills the day around room amenities, therapist time off and opening hours, and the day sheet prints every resident's treatments and meals for the notice board. Built for residential Ayurveda centres; nothing in it is Ayurveda-specific.
 
