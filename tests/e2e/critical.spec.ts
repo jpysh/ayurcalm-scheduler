@@ -150,8 +150,9 @@ test('the booking dialog offers the slots the API found, and books one', async (
   await passSetupIfShown(page);
   await openTab(page, 'Back to the day');
   await page.getByRole('button', { name: 'Book a treatment' }).click();
-  // + suggests one booking (#136); the full form, for a course, is "Someone else…".
+  // + suggests one booking (#136); "Someone else…" books one other resident (#273), and the full form, for a course, is behind it.
   await page.getByRole('dialog').getByRole('button', { name: 'Someone else…' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'A course over several days…' }).click();
 
   // The centre's clock and the browser's clock are rarely the same one. The
   // dialog used to re-filter the server's slots against the browser's, so a

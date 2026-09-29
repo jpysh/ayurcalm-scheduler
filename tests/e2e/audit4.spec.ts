@@ -43,3 +43,45 @@ test('H1: rooms, therapists and therapies are plain rows with one sheet to add',
     await expect(page.getByRole('dialog').getByLabel('Name')).toBeVisible();
   }
 });
+
+test('H2: Someone else… books any resident in a sheet, not the old Auto-Assign dialog', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('button', { name: 'Book a treatment' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Someone else/ }).click();
+  const sheet = page.getByRole('dialog');
+  await expect(sheet).toContainText('Book someone else');
+  await expect(page.getByText('Auto-Assign')).toHaveCount(0);
+  await sheet.getByRole('button').nth(2).click();
+  await sheet.getByLabel('Therapy').selectOption({ label: 'Thalam' });
+  await expect(sheet.getByRole('button', { name: /^\d\d:\d\d/ }).first().or(sheet.getByText(/No free time/))).toBeVisible({ timeout: 15000 });
+});
+
+test('H3: a read-only trial says so on +, and hides Get started', async ({ page }) => {
+  await page.route('**/api/public/support', async (route) => {
+    const body = await (await route.fetch()).json();
+    await route.fulfill({ json: { ...body, trial: { started_at: '2026-01-01', ends_at: '2026-01-31', read_only: true, plan: null, paid_until: null } } });
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Book a treatment' }).click();
+  await expect(page.locator('[data-sonner-toast]')).toContainText('free trial has ended');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByLabel('Get started')).toHaveCount(0);
+});
+
+test('O1: Leave has Upcoming · Past · All, not a Filter popover', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Leave/ }).click();
+  const panel = page.locator('[role=tabpanel][data-state=active]');
+  await expect(panel.getByRole('button', { name: 'Upcoming' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel.getByRole('button', { name: 'Filter' })).toHaveCount(0);
+});
+
+test('O2: the print note keeps its words on one line, the other sheets under them', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('button', { name: "Print the day's sheets" }).click();
+  const words = page.locator('[data-sonner-toast]').getByText(/^Resident sheet printed/);
+  await expect(words).toBeVisible({ timeout: 20000 });
+  expect((await words.boundingBox())!.width).toBeGreaterThan(180);
+  await expect(page.locator('[data-sonner-toast]').getByRole('button', { name: 'Doctor sheet' })).toBeVisible();
+});
