@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useCentreName } from "@/lib/centreName";
+import { useCentreName, useDemo } from "@/lib/centreName";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const demo = useDemo();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +77,15 @@ const Login = () => {
       <div className="flex items-center justify-center p-1">
         <Card className="w-full max-w-xs shadow-sm mt-4">
           <CardContent className="pt-3">
+            {demo && (
+              <div className="mb-3 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950">
+                <p className="font-semibold">This is a demo. Sign in with:</p>
+                <p className="font-mono">{demo.email} / {demo.password}</p>
+                <Button type="button" size="sm" className="mt-2 w-full" onClick={() => { setUsername(demo.email); setPassword(demo.password); }}>
+                  Fill in the demo sign-in
+                </Button>
+              </div>
+            )}
             <form onSubmit={handleLogin} className="space-y-2">
               <div className="space-y-1">
                 <Label htmlFor="username" className="text-sm">Email</Label>

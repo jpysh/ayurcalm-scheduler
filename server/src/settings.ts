@@ -11,6 +11,8 @@ import { readdir, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'node:url';
+import { DEMO, nextReset } from './demo.js';
+import { DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD } from './auth.js';
 
 const SINGLETON_ID = 'singleton';
 
@@ -136,13 +138,17 @@ settingsRouter.post('/clear-demo-data', requireAdmin, async (req: Request, res: 
  * bookings gets a fresh four months. Refused once the demo has been cleared:
  * by then the data is the centre's own.
  */
-settingsRouter.post('/reset-demo-data', requireAdmin, async (_req: Request, res: Response) => {
+export async function resetDemo() {
   const settings = await prisma.settings.findUnique({ where: { id: SINGLETON_ID } });
-  if (!settings?.demo_data) return res.status(409).json({ error: 'This install holds the centre\'s own data, not demo data' });
+  if (!settings?.demo_data) return false;
   await clearDemoData();
   // The seed is the same script a new install runs; it only fills an empty database.
   const seed = fileURLToPath(new URL('../src/seed.ts', import.meta.url));
   await promisify(execFile)('npx', ['tsx', seed], { cwd: dirname(dirname(seed)), timeout: 10 * 60 * 1000 });
+  return true;
+}
+settingsRouter.post('/reset-demo-data', requireAdmin, async (_req: Request, res: Response) => {
+  if (!(await resetDemo())) return res.status(409).json({ error: 'This install holds the centre\'s own data, not demo data' });
   res.json({ ok: true });
 });
 
@@ -157,6 +163,7 @@ publicSettingsRouter.get('/support', async (_req: Request, res: Response) => {
   res.json({
     centre_name: settings.centre_name,
     patient_support_whatsapp: settings.patient_support_whatsapp,
+    ...(DEMO && { demo: { email: DEFAULT_ADMIN_EMAIL, password: DEFAULT_ADMIN_PASSWORD, next_reset: nextReset() } }),
   });
 });
 

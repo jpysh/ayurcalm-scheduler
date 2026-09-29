@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { DemoBanner } from "@/components/DemoBanner";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LinkView from "./pages/LinkView";
 import Index from "./pages/Index";
@@ -115,6 +116,7 @@ const App = () => {
         <Sonner />
         <ConfirmHost />
         <div className="min-h-screen flex flex-col">
+          <DemoBanner />
           {!serverOk && (
             <div className="border-b border-destructive/40 bg-destructive/10">
               <div className="container mx-auto px-3 py-2">

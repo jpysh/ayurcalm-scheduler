@@ -66,6 +66,7 @@ run changeLog        "The Log shows each change in words, newest first, and the 
 run dietOverride       "Editing a diet plan changes it for everyone except what one patient was told specifically"
 run onboarding         "After the setup wizard, the centre has its hours, timezone, therapies, rooms and therapists, and the day sheet prints"
 run mcp                "Claude reads the centre only with the current key: the day, residents, who is free and the day sheet, and reading changes nothing"
+run demo               "The public demo is put back to the seeded centre every six hours, on fixed hours a restart does not move"
 
 # Backups (#236): write one with the service's own script, restore the newest
 # file into a scratch database, and compare every table's row count with the live one.
