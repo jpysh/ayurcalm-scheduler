@@ -77,8 +77,12 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
     if (view !== "time" || q) return;
     // Opens on what is happening: the earliest treatment in progress, with the
     // line at now below it; with nothing in progress, the line itself.
-    const el = document.querySelector("[data-now]") || document.getElementById("nowline");
-    window.scrollTo({ top: el ? Math.max(0, el.getBoundingClientRect().top + window.scrollY - 130) : 0 });
+    // A long treatment that began well before now must not push the line off
+    // the screen: the line stays in the top 60% whatever is above it.
+    const y = (el: Element | null) => (el ? el.getBoundingClientRect().top + window.scrollY : null);
+    const first = y(document.querySelector("[data-now]")), line = y(document.getElementById("nowline"));
+    const top = first ?? line;
+    window.scrollTo({ top: top === null ? 0 : Math.max(0, top - 130, line === null ? 0 : line - window.innerHeight * 0.6) });
   }, [view, q, isToday, appointments.length]);
 
   const withText = (r: Row, except?: string) => {
