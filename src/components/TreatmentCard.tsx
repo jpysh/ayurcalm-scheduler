@@ -361,7 +361,7 @@ export function BookSheet({ open, onClose, day, isToday, nowMinutes, refresh, ot
       {!other_ ? (
       <div className="flex flex-col gap-3">
         <div className="-mt-2 text-[13px] text-muted-foreground">
-          {list === null ? "Finding the next free time…" : chosen ? `Next free: ${chosen.start_time} · ${chosen.staff_name} · ${chosen.room_name} · residents furthest behind on their stay` : "Nobody in house can be fitted in today."}
+          {list === null ? "Finding the next free time…" : chosen ? `Next free: ${chosen.start_time} · ${chosen.staff_name} · ${chosen.room_name} · residents furthest behind on their stay` : "No suggestion yet: suggestions follow each resident's past treatments. Tap Someone else… to choose."}
         </div>
         <div className="flex flex-col gap-1.5">
           {(list || []).map((s, i) => (

@@ -27,9 +27,12 @@ test('H1: rooms, therapists and therapies are plain rows with one sheet to add',
   await panel.getByRole('button', { name: /Add room/ }).click();
   const sheet = page.getByRole('dialog');
   await sheet.getByLabel('Name').fill('E2E Room');
+  // A new room starts with what the therapies need ticked (#273 U2); the admin unticks what it lacks.
+  await expect(sheet.getByRole('button', { name: 'steam', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await sheet.getByRole('button', { name: 'steam', exact: true }).click();
   await sheet.getByRole('button', { name: 'Save' }).click();
-  await expect(panel.getByRole('button', { name: /^E2E Room/ })).toContainText('Has steam');
+  await expect(panel.getByRole('button', { name: /^E2E Room/ })).toContainText('Has ');
+  await expect(panel.getByRole('button', { name: /^E2E Room/ })).not.toContainText('steam');
   const room = ((await (await request.get('/api/rooms', { headers })).json()) as { id: string; name: string }[]).find((r) => r.name === 'E2E Room');
   expect(room).toBeTruthy();
   await request.delete(`/api/rooms/${room!.id}`, { headers });
@@ -105,4 +108,25 @@ test("M1: a resident's link offers WhatsApp reception once the centre sets its o
   } finally {
     await request.put('/api/settings', { headers, data: current });
   }
+});
+
+test('U1: a centre with no therapies is asked for them first, and the library opens', async ({ page }) => {
+  await page.route('**/api/therapies', (route) => route.request().method() === 'GET' ? route.fulfill({ json: [] }) : route.continue());
+  await signIn(page);
+  const start = page.getByLabel('Get started');
+  await expect(start.getByRole('button').first()).toContainText('Add your therapies');
+  await start.getByRole('button', { name: /Add your therapies/ }).click();
+  await expect(page.getByRole('dialog')).toContainText('Add from library');
+});
+
+test('U3: a long sheet scrolls inside the phone, its top still reachable', async ({ page }) => {
+  await signIn(page);
+  await toList(page, 'Therapists');
+  await page.locator('[role=tabpanel][data-state=active]').getByRole('button', { name: /^\+ Add/ }).click();
+  const sheet = page.getByRole('dialog');
+  const box = (await sheet.boundingBox())!;
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  await expect(sheet.getByLabel('Name')).toBeInViewport();
+  await sheet.getByRole('button', { name: 'Save' }).scrollIntoViewIfNeeded();
+  await expect(sheet.getByRole('button', { name: 'Save' })).toBeInViewport();
 });
