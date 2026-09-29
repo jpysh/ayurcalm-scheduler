@@ -95,6 +95,7 @@ to `.env` if you want to change any — the defaults work as-is for a local tria
 | `JWT_SECRET` | *(random per restart)* | Session signing secret. Set it (`openssl rand -base64 32`) so sessions survive restarts |
 | `CENTRE_NAME` | `Wellness Centre` | Centre name used on first run only; after that it is edited in **Settings** |
 | `DEFAULT_SUPPORT_WHATSAPP` | maintainer's number | Support contact seeded on first run; changed in **Settings** afterwards |
+| `DEMO_MODE` | off | `true` runs the public demo: sign-in shown on screen, data put back every 6 hours (00, 06, 12, 18 UTC), hidden from search, and users, passwords, import and clearing the demo are turned off |
 
 ## What's inside
 

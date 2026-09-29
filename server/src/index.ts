@@ -8,7 +8,8 @@ import cors from 'cors';
 import { app } from './server.js';
 import { prisma } from './server.js';
 import { authRouter, requireAuth, warnIfDefaultAdminUnchanged, loadJwtSecret } from './auth.js';
-import { settingsRouter, publicSettingsRouter } from './settings.js';
+import { settingsRouter, publicSettingsRouter, resetDemo } from './settings.js';
+import { DEMO, demoGuard, scheduleDemoResets } from './demo.js';
 import { linkRouter } from './links.js';
 import { usersRouter, accountRouter } from './users.js';
 import { dietTemplatesRouter } from './dietTemplates.js';
@@ -30,6 +31,8 @@ expressApp.use((req: Request, res: Response, next: NextFunction) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Permissions-Policy', 'interest-cohort=()');
+  // The demo must never be mistaken for a centre's own install in search results (#84).
+  if (DEMO) res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   next();
 });
 expressApp.use(cors({
@@ -132,6 +135,7 @@ expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
   }
   next();
 });
+expressApp.use('/api', demoGuard);
 expressApp.post('/api/appointments', apptPostLimiter);
 expressApp.use('/api/settings', settingsRouter);
 expressApp.use('/api/users', usersRouter);
@@ -171,7 +175,8 @@ await loadJwtSecret();
 // Start server with timeouts
 const server = expressApp.listen(port, host, () => {
   console.log(`AyurCalm API listening on http://${host}:${port}`);
-  void warnIfDefaultAdminUnchanged();
+  if (!DEMO) void warnIfDefaultAdminUnchanged();
+  scheduleDemoResets(resetDemo);
 });
 
 server.keepAliveTimeout = KEEP_ALIVE_TIMEOUT;
