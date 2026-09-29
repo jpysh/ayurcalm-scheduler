@@ -70,7 +70,7 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
     ['Therapists', 'Add therapist'],
     ['Rooms', 'Add room'],
     ['Therapies', 'Add therapy'],
-    ['Diet plans', 'Active Assignments'],
+    ['Diet plans', 'Plans'],
     ['Leave', 'Add leave'],
     ['Events', 'Events'],
     ['Residents', 'in house'],
@@ -415,7 +415,7 @@ test('after a consultation, the note on the day opens the resident\'s meals in o
   test.skip(!(await diet.count()), 'no consultation note today');
   await diet.first().click();
   // The meals sheet lived inside the Residents screen, so from the day it never showed.
-  await expect(page.getByRole('dialog').getByText(/^Diet for one day/)).toBeVisible();
+  await expect(page.getByRole('dialog').getByText(/'s meals$/)).toBeVisible();
 });
 
 test('Therapies offers the standard library, and a seeded centre already has all of it (#219)', async ({ page }) => {

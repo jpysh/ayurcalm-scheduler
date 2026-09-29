@@ -205,7 +205,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       const name = (await residents.nth(Math.floor((await residents.count()) / 2)).locator('td').first().innerText()).trim();
       await activePanel(page).getByRole('textbox', { name: 'Search residents' }).fill(name);
       await tap(residents.first().locator('td').first());
-      await expect(page.getByRole('dialog')).toContainText(/Diet for one day/);
+      await expect(page.getByRole('dialog')).toContainText(/'s meals/);
       return 'the name is typed, not tapped';
     });
 
