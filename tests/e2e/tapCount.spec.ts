@@ -13,7 +13,7 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '@
  * Everything a job changes is undone, and the two days it touches are
  * compared back through the API.
  */
-const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Resident didn't come", 'Resident late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day']);
+const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Resident didn't come", 'Resident late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day', "A resident's meals today"]);
 
 /** The design's order, which is the order the table prints in. */
 const JOBS: [string, number][] = [
@@ -195,18 +195,12 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       }
     });
 
+    // From the day: a treatment's row, then the resident's name opens their card with today's meals.
     await job(page, rows, "A resident's meals today", async (tap) => {
-      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
-      await tap(page.getByRole('dialog').getByRole('button', { name: /^Diet plans/ }));
-      // Someone from the middle of the list, found by typing their name (#137).
-      // By element, not role: on a phone the table's rows are cards (#137), and a tap on one opens the day (#178).
-      const residents = activePanel(page).locator('tbody tr');
-      await residents.first().waitFor();
-      const name = (await residents.nth(Math.floor((await residents.count()) / 2)).locator('td').first().innerText()).trim();
-      await activePanel(page).getByRole('textbox', { name: 'Search residents' }).fill(name);
-      await tap(residents.first().locator('td').first());
-      await expect(page.getByRole('dialog')).toContainText(/'s meals/);
-      return 'the name is typed, not tapped';
+      await showDay(page, today);
+      await tap(activePanel(page).getByRole('button', { name: /^\d\d:\d\d/ }).first());
+      await tap(page.getByRole('dialog').locator('button.text-\\[22px\\]'));
+      await expect(page.getByRole('dialog')).toContainText('Meals today');
     });
 
     await job(page, rows, "Print today's sheets", async (tap) => {

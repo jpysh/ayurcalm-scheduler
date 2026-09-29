@@ -72,13 +72,17 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
   const [sheet, setSheet] = useState<"menu" | "day" | null>(null);
   // Live subtitles, read when the menu opens (#67): who is in house, who is not in.
   const [hints, setHints] = useState<Record<string, string>>({});
+  // The maintainer's WhatsApp from Settings; the Help tile shows only with one.
+  const [helpWa, setHelpWa] = useState<string | null>(null);
   useEffect(() => {
     if (sheet !== "menu") return;
     Promise.all([
       fetch(`${API_BASE}/patients?resident_on=${today}`).then((r) => (r.ok ? r.json() : [])),
       fetch(`${API_BASE}/staff-day?date=${today}`).then((r) => (r.ok ? r.json() : [])),
       fetch(`${API_BASE}/staff`).then((r) => (r.ok ? r.json() : [])),
-    ]).then(([residents, days, staff]: [unknown[], { staff_id: string; off: string | null }[], { id: string; name: string }[]]) => {
+      fetch(`${API_BASE}/settings`).then((r) => (r.ok ? r.json() : {})),
+    ]).then(([residents, days, staff, settings]: [unknown[], { staff_id: string; off: string | null }[], { id: string; name: string }[], { support_whatsapp?: string | null }]) => {
+      setHelpWa(settings.support_whatsapp || null);
       const out = days.filter((d) => d.off).map((d) => staff.find((s) => s.id === d.staff_id)?.name.split(" ")[0]).filter(Boolean);
       setHints({
         patients: `${residents.length} in house`,
@@ -135,14 +139,21 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
           ))}
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {MENU.map(([key, name, hint]) => (
+          {MENU.flatMap(([key, name, hint]) => [
             <button key={key} type="button"
               className="min-h-[60px] rounded-xl border-2 px-3 py-2 text-left"
               onClick={() => { go(key); setSheet(null); }}>
               <b className="block text-base">{name}</b>
               <span className="block text-xs text-muted-foreground">{hints[key] || hint}</span>
-            </button>
-          ))}
+            </button>,
+            key === "settings" && helpWa ? (
+              <a key="help" href={`https://wa.me/${helpWa}`} target="_blank" rel="noopener noreferrer"
+                className="min-h-[60px] rounded-xl border-2 px-3 py-2 text-left" onClick={() => setSheet(null)}>
+                <b className="block text-base">Help · WhatsApp</b>
+                <span className="block text-xs text-muted-foreground">Ask us anything</span>
+              </a>
+            ) : null,
+          ])}
 
         </div>
       </BottomSheet>

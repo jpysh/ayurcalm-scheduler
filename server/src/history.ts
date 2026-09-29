@@ -59,7 +59,7 @@ export function describer(staff: Named, rooms: Named, therapies: Named) {
       else if (before.status === 'cancelled') out.push('Put back');
     }
     if (after.scheduled_date !== undefined && String(after.scheduled_date).slice(0, 10) !== String(before.scheduled_date).slice(0, 10)) {
-      out.push(`Moved to ${String(after.scheduled_date).slice(0, 10)}`);
+      out.push(`Moved to ${new Date(`${String(after.scheduled_date).slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}`);
     }
     if (after.start_time !== undefined && after.start_time !== before.start_time) out.push(`Start time changed from ${before.start_time} to ${after.start_time}`);
     if (after.staff_id !== undefined && after.staff_id !== before.staff_id) out.push(`Therapist changed from ${nameIn(staff, before.staff_id)} to ${nameIn(staff, after.staff_id)}`);

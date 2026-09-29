@@ -20,7 +20,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
           description: "group-[.toast]:text-muted-foreground",
           // The design's Undo: pale green text on the dark bar, not a filled button.
           actionButton: "group-[.toast]:!bg-transparent group-[.toast]:!text-[#B9E2C6] group-[.toast]:!font-bold group-[.toast]:!text-[15px]",
-          cancelButton: "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+          // A second action (the doctors' sheet) reads like the first, not dark on dark (#265 P3).
+          cancelButton: "group-[.toast]:!bg-transparent group-[.toast]:!text-[#B9E2C6] group-[.toast]:!font-bold group-[.toast]:!text-[15px]",
         },
       }}
       {...props}
