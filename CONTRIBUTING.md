@@ -77,3 +77,11 @@ an existing migration that has already been merged.
 ## Code of conduct
 
 This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
+
+## What the tests cover
+
+`npm test` runs only what is self-contained: diet resolution and day-sheet text fitting. `cd server && npm run test:all` adds three that need a running install: `test:invariants` (no therapist, room or patient double-booked; rooms have the amenities their therapies need; gender matching holds; nothing outside opening hours), `test:validation` (null fields in a request body are handled, not a 500) and `test:auto-assign` (the scheduler books a course of sessions).
+
+Those last two write to the database and tidy up afterwards, so they refuse to run unless it is marked as demo data. Point `DATABASE_URL` at a test install, or set `ALLOW_TEST_WRITES=1` if you are certain.
+
+The front end always calls `/api` on its own origin. In development Vite proxies that to `http://localhost:4000` (override with `VITE_API_PROXY_TARGET`); `VITE_API_BASE` points a built app at another host.

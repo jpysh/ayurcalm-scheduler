@@ -91,3 +91,24 @@ Your data stays; take a backup download first.
 | The address shows a Cloudflare error page | The Mac is off or asleep, or Docker is not running. Open Docker Desktop. |
 | 404 at your address | `cloudflared` started before the app; wait a minute. If it stays, check `hostname` in `config.yml`. |
 | Locked out | `docker compose exec app npx tsx server/src/scripts/resetPassword.ts you@example.com` |
+
+## Configuration
+
+Install-time settings in `.env` (copy `.env.example`). The defaults work for a local trial. Everything else (centre details, opening hours, timezone, support contacts, people with access) is set in the app under **Settings**; a setup wizard asks for the essentials on first sign-in.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `APP_PORT` | `8080` | Host port the app is served on |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `ayurcalm` | Database credentials |
+| `JWT_SECRET` | *(random per restart)* | Session signing secret. Set it (`openssl rand -base64 32`) so sessions survive restarts |
+| `CENTRE_NAME` | `Wellness Centre` | Centre name used on first run only; after that it is edited in **Settings** |
+| `DEFAULT_SUPPORT_WHATSAPP` | maintainer's number | Support contact seeded on first run; changed in **Settings** afterwards |
+| `DEMO_MODE` | off | `true` runs the public demo: sign-in shown on screen, data put back every 6 hours (00, 06, 12, 18 UTC), hidden from search, and users, passwords, import and clearing the demo are turned off |
+
+When you are ready to replace the example centre with your own, use **Settings → Clear demo data**.
+
+## Security
+
+Passwords are bcrypt hashes in Postgres, sessions are JWTs, and every API route except `/api/health`, `/api/auth/login` and `/api/public/support` needs a valid token. The public route returns only the centre's name and the patient contact number.
+
+This is a small project maintained by one person and has not had an external security audit. Put it behind HTTPS (the tunnel above does this) and keep backups off the machine. Report vulnerabilities as described in [SECURITY.md](../SECURITY.md).
