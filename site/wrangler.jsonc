@@ -1,0 +1,12 @@
+// The landing page (#245): its own Worker, only on jains.es/ruta* and /ayurcalm*.
+{
+  "name": "ruta-site",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-01",
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": true },
+  "routes": [
+    { "pattern": "jains.es/ruta*", "zone_name": "jains.es" },
+    { "pattern": "jains.es/ayurcalm*", "zone_name": "jains.es" }
+  ],
+  "workers_dev": false
+}
