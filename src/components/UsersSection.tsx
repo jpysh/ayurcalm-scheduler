@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 
@@ -106,44 +105,27 @@ export const UsersSection = () => {
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Email</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-mono text-xs">{u.email}</TableCell>
-                  <TableCell>{u.name || "—"}</TableCell>
-                  <TableCell>
-                    <Select value={u.role} onValueChange={(v) => patch(u, { role: v as User["role"] })}>
-                      <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="staff">Staff</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="sm" onClick={() => patch(u, { is_active: !u.is_active })}>
-                      {u.is_active ? "Active" : "Disabled"}
-                    </Button>
-                  </TableCell>
-                  <TableCell className="text-right whitespace-nowrap">
-                    <Button variant="ghost" size="sm" onClick={() => setPassword(u)}>Set password</Button>
-                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => remove(u)}>Delete</Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        {/* One card per person: a table was wider than the phone (#265 B4). */}
+        <div className="overflow-hidden rounded-xl border">
+          {users.map((u) => (
+            <div key={u.id} className="space-y-2 border-b px-3 py-3 last:border-b-0">
+              <div className="flex items-start gap-2">
+                <span className="min-w-0 flex-1"><b className="block text-[16px]">{u.name || u.email}</b><span className="block break-all text-[13px] text-muted-foreground">{u.email}</span></span>
+                <Select value={u.role} onValueChange={(v) => patch(u, { role: v as User["role"] })}>
+                  <SelectTrigger className="h-11 w-28" aria-label={`Role for ${u.email}`}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="staff">Staff</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" className="min-h-11 rounded-full" onClick={() => patch(u, { is_active: !u.is_active })}>{u.is_active ? "Can sign in · turn off" : "Turned off · turn on"}</Button>
+                <Button variant="outline" className="min-h-11 rounded-full" onClick={() => setPassword(u)}>Set password</Button>
+                <Button variant="outline" className="min-h-11 rounded-full text-destructive" onClick={() => remove(u)}>Delete</Button>
+              </div>
+            </div>
+          ))}
         </div>
 
         <div className="border-t pt-3 space-y-2">
