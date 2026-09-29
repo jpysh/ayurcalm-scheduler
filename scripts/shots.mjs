@@ -92,22 +92,43 @@ const settingsRow = (name) => async (p) => { await menu(p, /^Settings/); await t
 const toast = (p, text) => p.locator('[data-sonner-toast]').filter({ hasText: text }).first().waitFor({ timeout: 20000 });
 const sql = (stack, q) => import('node:child_process').then(({ execFileSync }) => execFileSync('docker', ['compose', '-p', stack, 'exec', '-T', 'db', 'psql', '-U', 'ayurcalm', '-d', 'ayurcalm', '-c', q]));
 
+let rota = null;
+// The app's own fetch attaches the admin's token.
+const api = (p, method, path, body) => p.evaluate(([m, u, b]) => fetch(`/api${u}`, { method: m, headers: { 'Content-Type': 'application/json' }, body: b && JSON.stringify(b) }).then((r) => r.json()).catch(() => null), [method, path, body]);
+const linkFor = async (p, who) => {
+  if (who === 'resident') { const today = new Date().toISOString().slice(0, 10); const r = await api(p, 'GET', `/patients?resident_on=${today}`); return (await api(p, 'POST', `/patients/${r[0].id}/link`)).token; }
+  const s = (await api(p, 'GET', '/staff')).find((x) => (who === 'doctor' ? x.role === 'doctor' : x.role !== 'doctor'));
+  return (await api(p, 'POST', `/staff/${s.id}/link`)).token;
+};
+// A PDF's first page, shown at phone width so it sits in the contact sheet beside the screens.
+const pdfShot = async (p, download, name) => {
+  const { execFileSync } = await import('node:child_process');
+  const pdf = `${OUT}/stories/${name}.pdf`; await download.saveAs(pdf);
+  execFileSync('pdftoppm', ['-png', '-r', '70', '-f', '1', '-l', '1', '-singlefile', pdf, `${OUT}/stories/${name}-page`]);
+  await p.setContent(`<body style="margin:0;background:#888"><img style="width:100%" src="data:image/png;base64,${readFileSync(`${OUT}/stories/${name}-page.png`).toString('base64')}">`);
+};
+// A page the sign-up service serves on a centre's own address (it goes by the Host header, which a browser cannot set).
+const hostPage = (base, slug) => new Promise((ok, no) => {
+  import('node:http').then(({ request }) => request(`${base}/login`, { headers: { host: `${slug}.jains.es` } }, (r) => { let b = ''; r.on('data', (d) => (b += d)); r.on('end', () => ok(b)); }).on('error', no).end());
+});
+
 // [story, stack, design target taps (null: no design for it), steps: [name, act]].
 const STORIES = [
   ['glance', 'main', 0, [['day', async () => {}]]],
   ['print', 'main', 1, [['day', async () => {}], ['print', (p) => tap(btn(p, /^Print/))]]],
   ['book', 'main', 2, [['tomorrow', tomorrow], ['sheet', (p) => tap(btn(p, /^Book a treatment/))], ['booked', async (p) => { await tap(dlg(p).getByRole('button', { name: /^Book / }).first()); await toast(p, /^Booked/); }]]],
-  ['warning-fix', 'main', 2, [['tomorrow', tomorrow], ['pill', (p) => tap(btn(p, /to fix|done|note/))], ['fixed', async (p) => { await tap(dlg(p).locator('[data-main]').first()); await p.waitForTimeout(2500); }]]],
+  ['warning-fix', 'main', 2, [['tomorrow', tomorrow], ['pill', async (p) => { if (!(await btn(p, /to fix|done|note/).count())) await tap(btn(p, /^Change day/)).then(() => tap(dlg(p).getByRole('button', { name: /^Today/ }))); await tap(btn(p, /to fix|done|note/)); }], ['fixed', async (p) => { await tap(dlg(p).locator('[data-main]').first()); await p.waitForTimeout(2500); }]]],
   ['noshow', 'main', 3, [['tomorrow', tomorrow], ['card', (p) => card(p, (r) => r.first())], ['wrong', (p) => tap(dlg(p).getByRole('button', { name: /^Something wrong/ }))], ['marked', async (p) => { await tap(dlg(p).getByRole('button', { name: /didn't come$/ })); await toast(p, "didn't come"); }]]],
   ['late-move', 'main', 3, [['tomorrow', tomorrow], ['card', (p) => card(p, (r) => r.first())], ['when', (p) => tap(dlg(p).getByRole('button', { name: /^When/ }))], ['moved', async (p) => { await tap(dlg(p).getByRole('button', { name: /Suggested/ }).first()); await toast(p, 'Moved to'); }]]],
   ['therapist-not-in', 'main', 3, [['tomorrow', tomorrow], ['menu', (p) => tap(btn(p, /^Menu$/))], ['by-therapist', (p) => tap(dlg(p).getByRole('button', { name: 'Therapist', exact: true }))], ['not-in', async (p) => { await tap(p.getByRole('button', { name: / not in$/ }).first()); await toast(p, 'not in'); }]]],
   ['room-out', 'main', 3, [['tomorrow', tomorrow], ['card', (p) => card(p, (r) => r.first())], ['wrong', (p) => tap(dlg(p).getByRole('button', { name: /^Something wrong/ }))], ['out', async (p) => { await tap(dlg(p).getByRole('button', { name: /can't be used/ })); await toast(p, 'out of use'); }]]],
   ['search', 'main', 2, [['search', (p) => tap(btn(p, /^Search/))], ['typed', async (p) => { await p.keyboard.type('Diya'); await p.waitForTimeout(700); }], ['result', (p) => tap(p.getByRole('button', { name: /Diya/ }).first())]]],
-  ['meals', 'main', 2, [['menu', (p) => tap(btn(p, /^Menu$/))], ['diet', (p) => tap(dlg(p).getByRole('button', { name: /^Diet/ }))], ['resident', (p) => tap(p.locator('[role=tabpanel][data-state=active] tbody tr td, main tbody tr td').first())]]],
+  // From the day: a treatment, then the resident's name opens their card with today's meals.
+  ['meals', 'main', 2, [['card', (p) => card(p, (r) => r.first())], ['resident', (p) => tap(dlg(p).locator('button.text-\\[22px\\]'))]]],
   ['resident-card', 'main', 3, [['menu', (p) => tap(btn(p, /^Menu$/))], ['residents', (p) => tap(dlg(p).getByRole('button', { name: /^Residents/ }))], ['card', (p) => tap(p.getByRole('button', { name: /day \d+ of \d+/ }).first())], ['details', (p) => tap(dlg(p).getByRole('button', { name: /details|History|stay/i }).first())]]],
   ['arrival', 'main', null, [['residents', (p) => menu(p, /^Residents/)], ['add', (p) => tap(btn(p, /^Add|New resident|\+/))], ['filled', async (p) => { await dlg(p).getByLabel(/name/i).first().fill('Audit Arrival'); }], ['saved', (p) => tap(dlg(p).getByRole('button', { name: /^(Save|Add|Register)/ }).last())]]],
   ['discharge', 'main', 5, [['card', async (p) => { await menu(p, /^Residents/); await tap(p.getByRole('button', { name: /day (\d+) of \1\b/ }).first()); }], ['write', (p) => tap(dlg(p).getByRole('button', { name: /discharge summary/i }).first())], ['form-end', async (p) => { await dlg(p).locator('div').filter({ has: p.locator('textarea') }).last().evaluate((e) => e.scrollIntoView()).catch(() => {}); }], ['saved', (p) => tap(dlg(p).getByRole('button', { name: /^Save|^Done|^Print/ }).first())]]],
-  ['leave', 'main', 5, [['menu', (p) => tap(btn(p, /^Menu$/))], ['leave', (p) => tap(dlg(p).getByRole('button', { name: /^Leave/ }))], ['add', (p) => tap(btn(p, /^Add leave/))], ['who', async (p) => { await tap(dlg(p).getByRole('combobox').first()); }], ['saved', async (p) => { await esc(p); await tap(dlg(p).getByRole('button', { name: /^(Save|Add)/ }).last()); }]]],
+  ['leave', 'main', 5, [['menu', (p) => tap(btn(p, /^Menu$/))], ['leave', (p) => tap(dlg(p).getByRole('button', { name: /^Leave/ }))], ['add', (p) => tap(btn(p, /^Add leave/))], ['who', async (p) => { await tap(dlg(p).getByRole('combobox').first()); }], ['picked', async (p) => { await tap(p.getByRole('option').first()); }], ['saved', async (p) => { await tap(dlg(p).getByRole('button', { name: /^(Save|Add)/ }).last()); }]]],
   ['holidays', 'main', 3, [['leave', (p) => menu(p, /^Leave/)], ['holidays', (p) => tap(btn(p, /^Public holidays/))]]],
   ['team', 'main', 3, [['team', (p) => menu(p, /^Team/)], ['person', (p) => tap(p.getByRole('button', { name: /Working today/ }).first())], ['room', async (p) => { await esc(p); await tap(p.getByRole('button', { name: /^(Agni|Brahma|Room)/ }).first()); }], ['week', async (p) => { await esc(p); await tap(btn(p, /^This week/)); }]]],
   ['therapies', 'main', null, [['team', (p) => menu(p, /^Team/)], ['therapies', async (p) => { await p.mouse.wheel(0, 20000); await p.waitForTimeout(400); await tap(p.getByRole('button', { name: /Therap(y|ies)|library/i }).last()); }]]],
@@ -121,8 +142,31 @@ const STORIES = [
   // Launch A (#245–#250).
   ['landing-demo', 'demo', null, [['landing', (p) => p.goto(`${SITE}/ruta/index.html`)], ['demo-login', (p) => p.goto(`${STACK.demo}/login`)], ['signed-in', async (p) => { await tap(p.getByRole('button', { name: /sign in|try|demo/i }).first()); await p.waitForTimeout(1500); }]]],
   ['trial-signup', 'trial', null, [['form', (p) => p.goto(SIGNUP)], ['login', (p) => p.goto(`${STACK.trial}/login`)], ['wizard', async (p) => { await p.getByLabel('Email').fill('owner@example.com'); await p.getByLabel('Password').fill('trial1234'); await p.getByLabel('Password').press('Enter'); await p.waitForTimeout(2000); }],
-    ['wizard-2', async (p) => { await p.getByLabel(/name/i).first().fill('Audit Centre'); await tap(btn(p, /^Continue/)); }], ['wizard-3', (p) => tap(btn(p, /^Continue|^Finish/))], ['first-day', async (p) => { if (await btn(p, /templates|starter|keep/i).count()) await tap(btn(p, /templates|starter|keep/i)); await p.waitForTimeout(2000); }], ['plan', settingsRow(/^Plan/)]]],
-  ['trial-ended', 'trial', null, [['day', async (p) => { await sql('ayurcalm-audit-trial', "update \"Settings\" set trial_started_at = now() - interval '31 days'"); await p.goto('/'); await p.waitForTimeout(1500); }], ['book', (p) => tap(btn(p, /^Book a treatment/))], ['plan', async (p) => { await esc(p); await settingsRow(/^Plan/)(p); }]]],
+    ['wizard-2', async (p) => { await p.getByLabel('Password').fill('trial1234'); await tap(btn(p, /^Continue/)); }],
+    ['wizard-3', async (p) => { await p.getByLabel(/name/i).first().fill('Audit Centre'); await tap(btn(p, /^Continue/)); }], ['wizard-4', (p) => tap(btn(p, /^Continue|^Finish/))], ['first-day', async (p) => { if (await btn(p, /templates|starter|keep/i).count()) await tap(btn(p, /templates|starter|keep/i)); await p.waitForTimeout(2000); }], ['plan', settingsRow(/^Plan/)]]],
+  ['trial-ended', 'trial', null, [['day', async (p) => { await p.goto('/login'); await p.getByLabel('Email').fill('owner@example.com'); await p.getByLabel('Password').fill('trial1234'); await p.getByLabel('Password').press('Enter'); await p.waitForTimeout(1500); await sql('ayurcalm-audit-trial', "update \"Settings\" set trial_started_at = now() - interval '31 days'"); await p.goto('/'); await p.waitForTimeout(1500); }], ['book', (p) => tap(btn(p, /^Book a treatment/))], ['plan', async (p) => { await esc(p); await settingsRow(/^Plan/)(p); }]]],
+  // Audit 4: every remaining screen and sheet belongs to a story.
+  ...[["Details", 'details'], ["Change today's meals", 'meals-change'], ['Change stay dates', 'stay'], ['Book a treatment', 'book']].map(([n, k]) =>
+    [`resident-${k}`, 'main', 4, [['card', residentCard], [k, (p) => tap(dlg(p).getByRole('button', { name: new RegExp(`^${n}`) }))]]]),
+  ['arrival-stay', 'main', null, [['residents', (p) => menu(p, /^Residents/)], ['add', (p) => tap(btn(p, /^Add|New resident|\+/))]]],
+  ['book-other', 'main', null, [['tomorrow', tomorrow], ['sheet', (p) => tap(btn(p, /^Book a treatment/))], ['full', (p) => tap(dlg(p).getByRole('button', { name: /^Someone else/ }))]]],
+  ['help', 'main', 1, [['menu', (p) => tap(btn(p, /^Menu$/))]]],
+  ['team-therapist-add', 'main', null, [['team', (p) => menu(p, /^Team/)], ['therapists', (p) => tap(btn(p, /^Therapists$/))], ['list', async () => {}], ['add', (p) => tap(btn(p, /Add therapist/))], ['edit', async (p) => { await esc(p); await tap(p.getByRole('button', { name: /Therapist ·|Doctor ·/ }).first()); }]]],
+  ['team-room-add', 'main', null, [['team', (p) => menu(p, /^Team/)], ['rooms', (p) => tap(btn(p, /^Rooms$/))], ['list-end', (p) => p.mouse.wheel(0, 20000)], ['add', (p) => tap(btn(p, /Add room/))], ['edit', async (p) => { await esc(p); await tap(p.getByRole('button', { name: /Has |Nothing special/ }).first()); }]]],
+  ['team-therapy-add', 'main', null, [['team', (p) => menu(p, /^Team/)], ['therapies', (p) => tap(btn(p, /^Therapies$/))], ['add', (p) => tap(btn(p, /Add therapy/))], ['edit', async (p) => { await esc(p); await tap(p.getByRole('button', { name: / min/ }).first()); }], ['library', async (p) => { await esc(p); await tap(btn(p, /^From library/)); }]]],
+  ['events', 'main', null, [['team', (p) => menu(p, /^Team/)], ['events', (p) => tap(btn(p, /^Classes and events/))], ['add', (p) => tap(btn(p, /^Add event/))]]],
+  ['day-sheet', 'main', 1, [['print', async (p) => { const d = p.waitForEvent('download', { timeout: 60000 }); await tap(btn(p, /^Print/)); const sheet = await d;
+      rota = p.waitForEvent('download', { timeout: 60000 }).catch(() => null); await p.locator('[data-sonner-toast] button').filter({ hasText: /Therapist/ }).first().click({ timeout: 8000 }).catch(() => {}); await pdfShot(p, sheet, 'day-sheet'); }],
+    ['rota', async (p) => { const r = await rota; if (!r) throw new Error('no therapist rota download'); await pdfShot(p, r, 'rota'); }]]],
+  ['staff-user', 'main', null, [['create', async (p) => { await api(p, 'POST', '/users', { email: 'staff@example.com', name: 'Asha Staff', role: 'staff', password: 'staff12345' }); await p.evaluate(() => localStorage.clear()); await p.goto('/login'); }],
+    ['day', async (p) => { await p.getByLabel('Email').fill('staff@example.com'); await p.getByLabel('Password').fill('staff12345'); await p.getByLabel('Password').press('Enter'); await p.waitForTimeout(2500); }],
+    ['menu', (p) => tap(btn(p, /^Menu$/))], ['settings', (p) => tap(dlg(p).getByRole('button', { name: /^Settings/ }))],
+    ['back', async (p) => { await p.evaluate(() => localStorage.clear()); await p.goto('/'); }]]],
+  ...['therapist', 'doctor', 'resident'].map((who) => [`link-${who}`, 'main', null, [['link', async (p) => { await p.goto(`/l/${await linkFor(p, who)}`); await p.waitForTimeout(1500); }],
+    ['tell', (p) => tap(btn(p, /Raise an issue/))]]]),
+  ['trial-forgot', 'trial', null, [['login', (p) => p.goto(`${STACK.trial}/login`)], ['open', (p) => tap(p.getByText('Forgotten your password?'))]]],
+  ['signup-error', 'trial', null, [['sent', async (p) => { await p.goto(SIGNUP); await p.getByLabel('Centre name').fill('Audit'); await p.getByLabel('Your email').fill('not-an-email@x'); await p.getByLabel('Your email').evaluate((e) => { e.type = 'text'; }); await tap(p.getByRole('button').last()); }]]],
+  ['paused', 'trial', null, [['page', async (p) => { await p.setContent(await hostPage(SIGNUP, 'paused-audit')); }]]],
 ];
 // Every route and every place that opens a dialog, opened directly: an old screen reached by nothing still counts.
 const ROUTES = ['/', '/index', '/setup', '/admin/schedule', '/admin/staff', '/admin/rooms', '/admin/therapies', '/admin/diet', '/admin/timeoff', '/admin/team', '/admin/log', '/admin/events', '/admin/patients', '/admin/settings', '/admin/ailments', '/admin/dashboard/x', '/nope', '/l/not-a-token'];

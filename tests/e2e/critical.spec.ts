@@ -121,27 +121,18 @@ test('an edit to a room is still there after a reload', async ({ page }) => {
   await openTab(page, 'Rooms');
   // A centre edits its own data on day one, and an edit that looks saved but is
   // not is the failure nobody notices until the schedule is already wrong.
-  //
-  // Rows are found by position, not by their text: editing puts the name into
-  // an input, so a locator matching on the name stops matching the moment the
-  // row is opened for editing.
-  const rowAt = (n: number) => activePanel(page).getByRole('row').nth(n);
-  const indexOfRow = async (text: string) => {
-    const rows = activePanel(page).getByRole('row');
-    for (let n = 0; n < await rows.count(); n++) {
-      if ((await rows.nth(n).innerText()).includes(text)) return n;
-    }
-    throw new Error(`no room row contains "${text}"`);
-  };
-  const rename = async (n: number, to: string) => {
-    await rowAt(n).getByRole('button', { name: 'Edit', exact: true }).click();
-    await rowAt(n).getByRole('textbox').first().fill(to);
-    await rowAt(n).getByRole('button', { name: 'Save', exact: true }).click();
+  // Each room is a row; a tap opens its sheet (#273).
+  const rows = activePanel(page).getByRole('button', { name: /Has |Nothing special/ });
+  const rename = async (from: string, to: string) => {
+    await activePanel(page).getByRole('button', { name: new RegExp(`^${from}`) }).first().click();
+    await page.getByRole('dialog').getByLabel('Name').fill(to);
+    await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
   };
 
-  const original = (await rowAt(1).innerText()).split('\n')[0].trim();
+  const original = (await rows.nth(1).innerText()).split('\n')[0].trim();
   const edited = `${original} Renamed`;
-  await rename(1, edited);
+  await rename(original, edited);
   await expect(activePanel(page)).toContainText(edited, { timeout: 15000 });
 
   await page.reload();
@@ -150,7 +141,7 @@ test('an edit to a room is still there after a reload', async ({ page }) => {
   await expect(activePanel(page)).toContainText(edited, { timeout: 15000 });
 
   // Put the name back, so the day sheet and the next run see the centre as it was.
-  await rename(await indexOfRow(edited), original);
+  await rename(edited, original);
   await expect(activePanel(page)).not.toContainText(edited, { timeout: 15000 });
 });
 

@@ -181,8 +181,8 @@ const AdminDashboard = () => {
       try {
         const t: ApiTherapy[] = await fetchJsonWithTimeout(`${API_BASE}/therapies`);
         setTherapies(t.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match, staffRequired: x.staff_required ?? 1, checklist: x.checklist || [], vitals: x.vitals || ["bp"] })));
-        const s: (ApiStaff & { is_active?: boolean; status?: string })[] = await fetchJsonWithTimeout(`${API_BASE}/staff`);
-        setStaff(s.map((x) => ({ id: x.id, name: x.name, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", specializations: x.specializations.map((id) => t.find((k) => k.id === id)?.name).filter((n): n is string => !!n), phone: x.phone ?? "", schedule: "", status: (typeof x.is_active === 'boolean' ? (x.is_active ? 'Active' : 'Inactive') : (x.status === 'Active' ? 'Active' : 'Inactive')) })));
+        const s: (ApiStaff & { is_active?: boolean; status?: string; role?: 'therapist' | 'doctor' })[] = await fetchJsonWithTimeout(`${API_BASE}/staff`);
+        setStaff(s.map((x) => ({ id: x.id, name: x.name, role: x.role, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", specializations: x.specializations.map((id) => t.find((k) => k.id === id)?.name).filter((n): n is string => !!n), phone: x.phone ?? "", schedule: "", status: (typeof x.is_active === 'boolean' ? (x.is_active ? 'Active' : 'Inactive') : (x.status === 'Active' ? 'Active' : 'Inactive')) })));
         const r: ApiRoom[] = await fetchJsonWithTimeout(`${API_BASE}/rooms`);
         setRoomsList(r.map((x) => ({ id: x.id, name: x.name, amenities: x.amenities, schedule: "", status: x.is_active ? "Active" : "Maintenance" })));
         const p: ApiPatient[] = await fetchJsonWithTimeout(`${API_BASE}/patients`);
