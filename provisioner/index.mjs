@@ -1,6 +1,7 @@
 // Trial sign-up (#247): signup.jains.es. A visitor gives a centre name and an
-// email; the emailed link creates the centre at <slug>.jains.es and signs them
-// into its setup wizard. Hourly, each centre moves through lifecycle.mjs.
+// email; the centre is created at <slug>.jains.es and an "Open your centre" link
+// on screen signs them into its setup wizard, where they choose a password. With
+// CF_EMAIL_TOKEN set, the link is emailed first instead, to prove the address. Hourly, each centre moves through lifecycle.mjs.
 // Runs on the trial host next to Docker (hosting/centre.sh). No dependencies.
 //   node provisioner/index.mjs          (PORT 8200; env below)
 import http from 'node:http';
@@ -146,8 +147,8 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 const form = (msg = '', ref = '') => page(`<h1>Start a free 30-day trial</h1><p>Your own centre at <b>yourname.${DOMAIN}</b>, ready in about two minutes. No card. Want to look first? <a href="https://demo.${DOMAIN}">See the demo</a>.</p>
 ${msg && `<p role="alert"><b>${esc(msg)}</b></p>`}<form method="post" action="/signup">${/^[a-z0-9-]{1,40}$/.test(ref || '') ? `<input type="hidden" name="ref" value="${ref}">` : ''}<label for="c">Centre name</label><input id="c" name="centre" required maxlength="80" autocomplete="organization">
 <label for="e">Your email</label><input id="e" name="email" type="email" required maxlength="120" autocomplete="email">
-${env.TURNSTILE_SITEKEY ? `<div class="cf-turnstile" data-sitekey="${env.TURNSTILE_SITEKEY}" style="margin-top:1rem"></div>` : ''}<button>Email me the link</button></form>
-<h2 style="font-size:1rem;margin-top:2rem">Already have a centre?</h2><form method="post" action="/again"><label for="a">Your email</label><input id="a" name="email" type="email" required autocomplete="email"><button>Email me a sign-in link</button></form>
+${env.TURNSTILE_SITEKEY ? `<div class="cf-turnstile" data-sitekey="${env.TURNSTILE_SITEKEY}" style="margin-top:1rem"></div>` : ''}<button>${env.CF_EMAIL_TOKEN ? 'Email me the link' : 'Create my centre'}</button></form>
+${env.CF_EMAIL_TOKEN ? `<h2 style="font-size:1rem;margin-top:2rem">Already have a centre?</h2><form method="post" action="/again"><label for="a">Your email</label><input id="a" name="email" type="email" required autocomplete="email"><button>Email me a sign-in link</button></form>` : ''}
 <p style="font-size:.85rem;margin-top:2rem">By starting a trial you accept the <a href="https://jains.es/ruta/pilot">pilot notice</a>. Questions: <a href="https://wa.me/420777558262">WhatsApp</a> · <a href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a></p>`);
 
 const body = (req) => new Promise((ok) => { let b = ''; req.on('data', (d) => { if ((b += d).length > 4096) req.destroy(); }); req.on('end', () => ok(new URLSearchParams(b))); });
@@ -179,10 +180,11 @@ export const server = http.createServer(async (req, res) => {
       const ref = /^[a-z0-9-]{1,40}$/.test(f.get('ref') || '') ? f.get('ref') : undefined;
       const s = { centre, email: to, ip, ref, at: Date.now(), key: randomBytes(18).toString('base64url') };
       db.signups.push(s); save();
+      if (!env.CF_EMAIL_TOKEN) return send(res, 303, '', { Location: `/go?k=${s.key}` });
       await email(to, `Your Ruta link for ${centre}`, `Open this link to create ${centre}. It signs you straight in.\n\n${SELF}/go?k=${s.key}\n\nIf you did not ask for this, ignore this email.`);
       return send(res, 200, page(`<h1>Check your email</h1><p>We sent a link to <b>${esc(to)}</b>. Open it on this phone or computer to create ${esc(centre)}.</p>`));
     }
-    if (req.method === 'POST' && url.pathname === '/again') {
+    if (req.method === 'POST' && url.pathname === '/again' && env.CF_EMAIL_TOKEN) {
       const to = ((await body(req)).get('email') || '').trim().toLowerCase();
       const c = db.centres.find((x) => x.email === to && !x.paused_at);
       if (c) await email(to, `Sign in to ${c.centre}`, `This link signs you in to ${c.slug}.${DOMAIN}. It works once, within 30 minutes.\n\n${signinLink(c.slug, to)}`);
@@ -192,7 +194,8 @@ export const server = http.createServer(async (req, res) => {
     if (url.pathname === '/go' && s) {
       if (!s.state) provision(s);
       return send(res, 200, page(`<h1>Creating ${esc(s.centre)}…</h1><p id="m">This takes about two minutes. Keep this page open.</p><progress style="width:100%"></progress>
-<script>(async function poll(){const r=await fetch('/status?k=${esc(s.key)}').then(r=>r.json()).catch(()=>({}));if(r.go)return location.replace(r.go);if(r.failed){document.getElementById('m').textContent='Something went wrong. We have been told and will email you.';return}setTimeout(poll,3000)})()</script>`));
+<p id="o" hidden><a id="go" style="display:block;text-align:center;padding:.8rem;border-radius:.6rem;background:#3d6b50;color:#fff;font-weight:600;text-decoration:none">Open your centre</a></p>
+<script>(async function poll(){const r=await fetch('/status?k=${esc(s.key)}').then(r=>r.json()).catch(()=>({}));if(r.go){const h=document.querySelector('h1');h.textContent=h.textContent.replace(/^Creating (.*)…$/,'$1 is ready');document.getElementById('m').textContent='Open it here. It works once: you choose your password first.';document.querySelector('progress').remove();document.getElementById('go').href=r.go;document.getElementById('o').hidden=false;return}if(r.failed){document.getElementById('m').textContent='Something went wrong. We have been told and will email you.';return}setTimeout(poll,3000)})()</script>`));
     }
     if (url.pathname === '/status' && s) {
       // The sign-in is handed over once; after that the admin asks for a fresh link by email.

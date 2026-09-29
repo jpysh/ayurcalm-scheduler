@@ -10,17 +10,34 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
+import { useTrial } from "@/lib/centreName";
 
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
 
 /**
  * Shown once, when an administrator signs in to an install whose settings have
- * never been completed. Three steps, then a choice about the demo data.
+ * never been completed. Three steps, then a choice about the demo data. A cloud
+ * trial's admin arrives by a one-time link with no password (#247), so they set one first.
  */
 const SetupWizard = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
+  const trial = useTrial();
+  const [pw, setPw] = useState("");
+  useEffect(() => { if (trial) setStep(0); }, [trial]);
+  const savePassword = async () => {
+    setBusy(true);
+    try {
+      const me = await fetch(`${API_BASE}/auth/me`).then((r) => r.json());
+      const res = await fetch(`${API_BASE}/users/${me.user.id}/set-password`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ new_password: pw }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(data?.error || "Could not save your password"); return; }
+      setStep(1);
+    } catch { toast.error("Could not save your password"); } finally { setBusy(false); }
+  };
   // A cloud trial (#247) starts with no example centre, so there is nothing to keep or clear.
   const [hasDemo, setHasDemo] = useState(true);
   useEffect(() => { fetch(`${API_BASE}/settings`).then((r) => r.json()).then((s) => setHasDemo(s?.demo_data !== false)).catch(() => {}); }, []);
@@ -78,8 +95,9 @@ const SetupWizard = () => {
     <div className="min-h-screen bg-muted/30 flex items-start justify-center p-4">
       <Card className="w-full max-w-lg mt-8">
         <CardHeader className="pb-2">
-          <p className="text-xs text-muted-foreground">Step {step} of {hasDemo ? 3 : 2}</p>
+          <p className="text-xs text-muted-foreground">Step {step + (trial ? 1 : 0)} of {(hasDemo ? 3 : 2) + (trial ? 1 : 0)}</p>
           <CardTitle className="text-lg">
+            {step === 0 && "Choose your password"}
             {step === 1 && "What is your centre called?"}
             {step === 2 && "When are you open?"}
             {step === 3 && "Start with example data?"}
@@ -87,6 +105,21 @@ const SetupWizard = () => {
         </CardHeader>
 
         <CardContent className="space-y-4">
+          {step === 0 && (
+            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); savePassword(); }}>
+              <input type="email" autoComplete="username" value={localStorage.getItem("authUser") ?? ""} readOnly hidden />
+              <div className="space-y-1">
+                <Label htmlFor="w_pw">Password</Label>
+                <Input id="w_pw" type="password" autoFocus autoComplete="new-password" minLength={8} required
+                  value={pw} onChange={(e) => setPw(e.target.value)} />
+                <p className="text-xs text-muted-foreground">At least 8 characters. You sign in with {localStorage.getItem("authUser")} and this password.</p>
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit" disabled={pw.length < 8 || busy}>Continue</Button>
+              </div>
+            </form>
+          )}
+
           {step === 1 && (
             <>
               <div className="space-y-1">
