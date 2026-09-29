@@ -321,9 +321,11 @@ export function BookSheet({ open, onClose, day, isToday, nowMinutes, refresh, ot
   const [list, setList] = useState<Suggestion[] | null>(null);
   const [pick, setPick] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [other_, setElse] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    setElse(false);
     setList(null);
     setPick(0);
     fetch(`${API_BASE}/appointments/suggest?date=${day}${isToday ? `&now=${hm(nowMinutes)}` : ""}`)
@@ -355,7 +357,8 @@ export function BookSheet({ open, onClose, day, isToday, nowMinutes, refresh, ot
 
   const opt = "flex w-full min-h-12 items-center justify-between gap-2 rounded-xl border-2 px-3 py-2.5 text-left text-[15px] aria-pressed:border-primary aria-pressed:bg-secondary";
   return (
-    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title="Book a treatment">
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={other_ ? "Book someone else" : "Book a treatment"}>
+      {!other_ ? (
       <div className="flex flex-col gap-3">
         <div className="-mt-2 text-[13px] text-muted-foreground">
           {list === null ? "Finding the next free time…" : chosen ? `Next free: ${chosen.start_time} · ${chosen.staff_name} · ${chosen.room_name} · residents furthest behind on their stay` : "Nobody in house can be fitted in today."}
@@ -367,10 +370,72 @@ export function BookSheet({ open, onClose, day, isToday, nowMinutes, refresh, ot
               {i === 0 ? <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">best</span> : null}
             </button>
           ))}
-          <button type="button" className={opt} onClick={() => { onClose(); other(); }}>Someone else…</button>
+          <button type="button" className={opt} onClick={() => setElse(true)}>Someone else…</button>
         </div>
         {chosen ? <button type="button" className="min-h-11 rounded-full bg-primary font-semibold text-primary-foreground" disabled={busy} onClick={book}>Book {chosen.patient_name}</button> : null}
       </div>
+      ) : (
+        <SomeoneElse day={day} isToday={isToday} nowMinutes={nowMinutes} opt={opt} back={() => setElse(false)} course={() => { onClose(); other(); }}
+          choose={(s) => { setList([s]); setPick(0); setElse(false); }} />
+      )}
     </BottomSheet>
+  );
+}
+
+/**
+ * "Someone else…" (#273 H2): any resident staying that day and any therapy,
+ * then the server's next three free times for them. A course over several
+ * days is still the full form, behind the last link.
+ */
+function SomeoneElse({ day, isToday, nowMinutes, opt, back, course, choose }: {
+  day: string; isToday: boolean; nowMinutes: number; opt: string; back: () => void; course: () => void; choose: (s: Suggestion) => void;
+}) {
+  const [residents, setResidents] = useState<{ id: string; name: string }[]>([]);
+  const [therapies, setTherapies] = useState<{ id: string; name: string; staff_required?: number }[]>([]);
+  const [q, setQ] = useState("");
+  const [who, setWho] = useState<{ id: string; name: string } | null>(null);
+  const [what, setWhat] = useState("");
+  const [times, setTimes] = useState<Suggestion[] | null>(null);
+  useEffect(() => {
+    fetch(`${API_BASE}/patients?resident_on=${day}`).then((r) => (r.ok ? r.json() : [])).then(setResidents).catch(() => setResidents([]));
+    fetch(`${API_BASE}/therapies`).then((r) => (r.ok ? r.json() : [])).then((t: { id: string; name: string; staff_required?: number }[]) => setTherapies([...t].sort((a, b) => a.name.localeCompare(b.name)))).catch(() => setTherapies([]));
+  }, [day]);
+  useEffect(() => {
+    if (!who || !what) { setTimes(null); return; }
+    setTimes(null);
+    fetch(`${API_BASE}/appointments/suggest?date=${day}&patient_id=${who.id}&therapy_id=${what}${isToday ? `&now=${hm(nowMinutes)}` : ""}`)
+      .then((r) => (r.ok ? r.json() : { suggestions: [] })).then((d) => setTimes(d.suggestions || []));
+  }, [who, what, day, isToday, nowMinutes]);
+  const shown = residents.filter((p) => !q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 6);
+  const input = "h-11 w-full rounded-xl border bg-background px-3 text-base";
+  return (
+    <div className="flex flex-col gap-3">
+      <button type="button" className="-mt-2 self-start text-sm font-semibold text-primary" onClick={back}>‹ Back</button>
+      {!who ? (<>
+        <input autoFocus className={input} placeholder="Resident's name" aria-label="Resident's name" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="flex flex-col gap-1.5">
+          {shown.map((p) => <button key={p.id} type="button" className={opt} onClick={() => setWho(p)}>{p.name}</button>)}
+          {!shown.length ? <p className="text-sm text-muted-foreground">Nobody staying on this day has that name.</p> : null}
+        </div>
+      </>) : (<>
+        <button type="button" className={opt} aria-pressed onClick={() => { setWho(null); setWhat(""); }}>{who.name}<span className="text-sm text-muted-foreground">Change</span></button>
+        <select className={input} aria-label="Therapy" value={what} onChange={(e) => setWhat(e.target.value)}>
+          <option value="">Choose a therapy…</option>
+          {therapies.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+        {what ? (
+          times === null ? <p className="text-sm text-muted-foreground">Finding free times…</p>
+            : times.length ? times.map((t) => (
+              <button key={t.start_time} type="button" className={opt} onClick={() => choose(t)}>
+                <span>{t.start_time}<small className="block text-[13px] text-muted-foreground">with {t.staff_name} · {t.room_name}</small></span><span>›</span>
+              </button>
+            )) : (therapies.find((t) => t.id === what)?.staff_required ?? 1) > 1
+              // ponytail: the quick times pair one therapist; a two-therapist therapy goes to the full form.
+              ? <p className="text-sm text-muted-foreground">This therapy needs {therapies.find((t) => t.id === what)?.staff_required} therapists together: book it with the full form below.</p>
+              : <p className="text-sm text-muted-foreground">No free time for {who.name.split(" ")[0]} on this day. Try another day or therapy.</p>
+        ) : null}
+      </>)}
+      <button type="button" className="text-sm text-muted-foreground underline" onClick={course}>A course over several days…</button>
+    </div>
   );
 }

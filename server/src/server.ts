@@ -1454,7 +1454,8 @@ app.get('/appointments/suggest', async (req: Request, res: Response) => {
   const date = String(req.query.date || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { res.status(400).json({ error: 'date required' }); return; }
   const now = typeof req.query.now === 'string' && /^\d\d:\d\d$/.test(req.query.now) ? Number(req.query.now.slice(0, 2)) * 60 + Number(req.query.now.slice(3)) : null;
-  res.json({ suggestions: await bookingSuggestions(date, now, prisma) });
+  const pick = z.object({ patient_id: z.string().uuid(), therapy_id: z.string().uuid() }).safeParse(req.query);
+  res.json({ suggestions: await bookingSuggestions(date, now, prisma, 3, pick.success ? pick.data : undefined) });
 });
 
 // Book one treatment at an exact time, therapist and room: what the + sheet

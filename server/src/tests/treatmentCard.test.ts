@@ -103,7 +103,14 @@ async function main() {
     const again = await fetch(`${API_BASE}/appointments/one`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(one) });
     assert.equal(again.status, 409, 'the same slot booked twice was not refused');
 
-    console.log("Treatment card: every time and room offered saves, a busy therapist isn't offered, a no-show frees theirs, and History says what changed; a suggested booking saves once and not twice.");
+    // "Someone else…" (#273 H2): one chosen resident and therapy gets three different free times, each of which books.
+    const times = (await call('GET', `/appointments/suggest?date=${DAY}&patient_id=${sita.id}&therapy_id=${therapy.id}`)).suggestions as typeof suggested[];
+    assert.equal(times.length, 3, `expected three times for the chosen resident, got ${times.length}`);
+    assert.ok(times.every((x) => x.patient_id === sita.id && x.therapy_id === therapy.id), 'a time for someone else was offered');
+    assert.equal(new Set(times.map((x) => x.start_time)).size, 3, 'the three times are not different');
+    await call('POST', '/appointments/one', { patient_id: sita.id, therapy_id: therapy.id, date: DAY, start_time: times[2].start_time, staff_id: times[2].staff_id, room_id: times[2].room_id });
+
+    console.log("Treatment card: every time and room offered saves, a busy therapist isn't offered, a no-show frees theirs, and History says what changed; a suggested booking saves once and not twice; a chosen resident gets three free times.");
   } finally {
     await tidy(prisma).catch(() => {});
     await prisma.$disconnect();

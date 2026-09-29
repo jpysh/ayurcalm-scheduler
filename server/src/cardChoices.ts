@@ -149,17 +149,18 @@ export type Suggestion = {
  * fewest treatments so far in their stay, each with their own therapy (the one
  * they had last) at its first time from now that the guard accepts.
  */
-export async function bookingSuggestions(dayISO: string, nowMinutes: number | null, prisma: PrismaClient, limit = 3): Promise<Suggestion[]> {
+/** With `pick`, one resident and therapy chosen by the admin ("Someone else…", #273 H2): their next free times instead. */
+export async function bookingSuggestions(dayISO: string, nowMinutes: number | null, prisma: PrismaClient, limit = 3, pick?: { patient_id: string; therapy_id: string }): Promise<Suggestion[]> {
   const day = new Date(`${dayISO}T00:00:00.000Z`);
   const ctx = await loadDay(day, prisma);
-  const stays = await prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } } });
+  const stays = await prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day }, ...(pick && { patient_id: pick.patient_id }) } });
   const ids = stays.map((s) => s.patient_id);
   const history = await prisma.appointment.findMany({
     where: { patient_id: { in: ids }, status: { notIn: ['cancelled', 'no_show'] } },
     orderBy: { scheduled_date: 'desc' },
     select: { patient_id: true, therapy_id: true, scheduled_date: true },
   });
-  const ranked = stays
+  const ranked = pick ? stays.slice(0, 1).map((stay) => ({ stay, done: 0, therapy_id: pick.therapy_id })) : stays
     .map((s) => {
       const theirs = history.filter((h) => h.patient_id === s.patient_id);
       const done = theirs.filter((h) => h.scheduled_date >= s.start_date && h.scheduled_date <= day).length;
@@ -185,7 +186,8 @@ export async function bookingSuggestions(dayISO: string, nowMinutes: number | nu
         if (findConflict(c, ctx)) continue;
         const p = ctx.patients.find((x) => x.id === r.stay.patient_id);
         out.push({ patient_id: c.patient_id, patient_name: p?.name || '', therapy_id: therapy.id, therapy_name: therapy.name, start_time: c.start_time, duration_minutes: c.duration_minutes, staff_id: s.id, staff_name: s.name, room_id: room.id, room_name: room.name });
-        break search;
+        if (!pick || out.length >= limit) break search;
+        continue search;
       }
     }
     if (out.length >= limit) break;

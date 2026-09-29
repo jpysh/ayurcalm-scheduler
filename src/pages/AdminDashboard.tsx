@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useTrial } from "@/lib/centreName";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -143,6 +144,8 @@ const AdminDashboard = () => {
   const [therapies, setTherapies] = useState<UiTherapy[]>([]);
   const [timeOffs, setTimeOffs] = useState<UiTimeOff[]>([]);
   const [events, setEvents] = useState<ApiProgramEvent[]>([]);
+  // An ended trial is read-only (#273 H3): + and Get started say so instead of offering what the server refuses.
+  const readOnly = !!useTrial()?.read_only;
   const [appointmentsByDate, setAppointmentsByDate] = useState<Record<string, ApiAppointment[]>>({});
   const therapyNameById = useMemo(() => Object.fromEntries(therapies.map((t: UiTherapy) => [String(t.id), t.name])), [therapies]);
   const staffNameById = useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
@@ -545,7 +548,7 @@ const AdminDashboard = () => {
               }
             }}>
             {/* A new centre's first steps, until it can book (#60): each row opens the screen that adds it. */}
-            {!loaded ? null : staff.length === 0 || roomsList.length === 0 || patients.length === 0 ? (
+            {!loaded || readOnly ? null : staff.length === 0 || roomsList.length === 0 || patients.length === 0 ? (
               <div className="mt-3 overflow-hidden rounded-2xl bg-card" aria-label="Get started">
                 <div className="px-4 pt-3 text-[13px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Get started</div>
                 {([["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first resident", patients.length]] as const).map(([tab, label, n]) => (
@@ -627,13 +630,17 @@ const AdminDashboard = () => {
           // It just says so (#134). The rota is a second tap, a fresh gesture, so
           // the phone does not block its tab as a popup.
           const open = dayCheck.problems.filter((p) => p.problem_class === 'blocking').length;
-          toast(`Resident sheet printed${open ? ` · ${open} still to fix` : ''}`, {
-            action: { label: 'Therapist sheet', onClick: () => scheduleScreen.printSheet('therapist') },
-            // The doctors' sheet (#219) sits beside it: sonner's second button.
-            cancel: { label: 'Doctor sheet', onClick: () => scheduleScreen.printSheet('doctor') },
-          });
+          // The two other sheets under the words, not beside them: two buttons in a row squeezed the text to a word a line (#273 O2).
+          const more = "min-h-10 rounded-full px-1 text-[15px] font-bold text-[#B9E2C6]";
+          toast(<div className="w-full">
+            <div>Resident sheet printed{open ? ` · ${open} still to fix` : ''}</div>
+            <div className="mt-1 flex gap-4">
+              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('therapist')}>Therapist sheet</button>
+              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('doctor')}>Doctor sheet</button>
+            </div>
+          </div>, { duration: 10000 });
         }}
-        book={() => { go('schedule'); scheduleScreen.openBook(); }}
+        book={() => { if (readOnly) { toast("The free trial has ended, so nothing new can be booked. Nothing is deleted.", { duration: 10000, action: { label: "Choose a plan", onClick: () => go('settings') } }); return; } go('schedule'); scheduleScreen.openBook(); }}
         view={scheduleScreen.view}
         setView={scheduleScreen.setView}
         query={scheduleScreen.query}

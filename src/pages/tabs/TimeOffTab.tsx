@@ -63,65 +63,12 @@ const TimeOffTab = ({
           </Button>
           <Button size="sm" variant="outline" className="min-h-11 rounded-full px-4" onClick={() => setShowHolidays(true)}>Public holidays</Button>
         </div>
-        <div className="mt-0.5 flex justify-center">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="h-8 md:h-10 px-3">Filter</Button>
-            </PopoverTrigger>
-            <PopoverContent className="p-2 w-[320px] md:w-[520px]">
-              <div className="grid grid-cols-2 gap-1">
-                <div className="col-span-2">
-                  <Input placeholder="Search" value={searchHolidays} onChange={(e: any) => setSearchHolidays(e.target.value)} className="h-7 text-center" />
-                </div>
-                <div>
-                  <Select value={holidayTypeFilter} onValueChange={(v: any) => setHolidayTypeFilter(v)}>
-                    <SelectTrigger className="h-7"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Types</SelectItem>
-                      <SelectItem value="Center">Centre</SelectItem>
-                      <SelectItem value="Staff">Staff</SelectItem>
-                      <SelectItem value="Room">Room</SelectItem>
-                      <SelectItem value="Therapy">Therapy</SelectItem>
-                      <SelectItem value="Patient">Patient</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Select value={holidayViewMode} onValueChange={(v: any) => setHolidayViewMode(v)}>
-                    <SelectTrigger className="h-7"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="upcoming">Upcoming</SelectItem>
-                      <SelectItem value="past">Past</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Select value={holidayRecurringFilter} onValueChange={(v: any) => setHolidayRecurringFilter(v)}>
-                    <SelectTrigger className="h-7"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Recurrence</SelectItem>
-                      <SelectItem value="weekly">Weekly</SelectItem>
-                      <SelectItem value="none">Non-recurring</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Select value={holidayFullDayFilter} onValueChange={(v: any) => setHolidayFullDayFilter(v)}>
-                    <SelectTrigger className="h-7"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Day Length</SelectItem>
-                      <SelectItem value="full">Full Day</SelectItem>
-                      <SelectItem value="partial">Partial Day</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Input type="date" lang="en-IN" value={holidaySelectedDate} onChange={(e: any) => setHolidaySelectedDate(e.target.value)} className="h-7" />
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
+        {/* Upcoming, past or all (#273 O1): the one filter a centre uses, in place of a Filter popover. */}
+        <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-background p-1">
+          {([["upcoming", "Upcoming"], ["past", "Past"], ["all", "All"]] as const).map(([v, l]) => (
+            <button key={v} type="button" aria-pressed={holidayViewMode === v} onClick={() => setHolidayViewMode(v)}
+              className="min-h-10 rounded-lg text-sm font-semibold text-muted-foreground aria-pressed:bg-card aria-pressed:text-foreground aria-pressed:shadow">{l}</button>
+          ))}
         </div>
       </CardHeader>
       <CardContent className="pt-0 p-1 md:p-2">
@@ -131,7 +78,8 @@ const TimeOffTab = ({
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">For</TableHead>
               <TableHead className="h-7 py-0 text-xs md:text-sm font-normal">From</TableHead>
               <TableHead className="h-7 py-0 text-xs md:text-sm font-normal">To</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Reason</TableHead>
+              {/* No header: on a phone the reason simply follows the dates, not "Reason Personal Leave" (#273 O1). */}
+              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal"></TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">All day</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Repeats</TableHead>
               <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Who or what</TableHead>
@@ -320,7 +268,7 @@ const TimeOffTab = ({
                         </Select>
                       )
                     ) : (
-                      holiday.type === 'Center' ? 'All' : (
+                      holiday.type === 'Center' ? 'Whole centre' : (
                         holiday.type === 'Staff' ? (staffNameById[holiday.entity] ?? holiday.entity) :
                         holiday.type === 'Room' ? (roomNameById[holiday.entity] ?? holiday.entity) :
                         holiday.type === 'Therapy' ? (therapyNameById[holiday.entity] ?? holiday.entity) :
