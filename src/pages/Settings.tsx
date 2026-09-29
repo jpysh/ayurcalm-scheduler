@@ -592,11 +592,8 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
               disabled={!isAdmin}
             />
             <p className="text-xs text-muted-foreground">
-              Kept for the patient schedule link, which is not built yet, so this number
-              is not shown anywhere today.
-              <strong className="font-medium"> Set it to your own centre's number</strong> —
-              patients asking about their appointment should reach you, not the software
-              maintainer.
+              Shown on each resident's own link as <strong className="font-medium">WhatsApp reception</strong>.
+              Hidden while it is the same as the number above, so residents never reach the software maintainer.
             </p>
           </div>
         </CardContent>

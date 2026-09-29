@@ -165,7 +165,8 @@ publicSettingsRouter.get('/support', async (_req: Request, res: Response) => {
   const settings = await getSettings();
   res.json({
     centre_name: settings.centre_name,
-    patient_support_whatsapp: settings.patient_support_whatsapp,
+    // Only the centre's own number: while it is still the maintainer's (the default), residents are not sent there (#273 M1).
+    patient_support_whatsapp: settings.patient_support_whatsapp && settings.patient_support_whatsapp !== settings.support_whatsapp ? settings.patient_support_whatsapp : null,
     trial: await trialInfo(),
     made_with: madeWith(settings),
     ...(DEMO && { demo: { email: DEFAULT_ADMIN_EMAIL, password: DEFAULT_ADMIN_PASSWORD, next_reset: nextReset() } }),

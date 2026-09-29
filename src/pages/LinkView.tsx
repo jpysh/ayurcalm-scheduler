@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
-import { useMadeWith } from "@/lib/centreName";
+import { useMadeWith, useReception } from "@/lib/centreName";
 import { BottomSheet } from "@/components/BottomBar";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 
@@ -29,6 +29,7 @@ const nowHM = () => new Date().toTimeString().slice(0, 5);
 
 export default function LinkView() {
   const made = useMadeWith();
+  const reception = useReception();
   const { token = "" } = useParams();
   const [date, setDate] = useState<string | null>(null);
   const [day, setDay] = useState<Day | null>(null);
@@ -179,6 +180,8 @@ export default function LinkView() {
       </BottomSheet>
 
       {staff ? <button type="button" className={`${chip} mt-4 w-full border-destructive text-destructive`} onClick={() => setRaise({})}>Raise an issue or SOS</button> : null}
+      {/* A resident's way to the centre (#273 M1): reception on WhatsApp, once the centre has set its own number. */}
+      {!staff && reception ? <a className={`${chip} mt-4 flex w-full items-center justify-center border-border`} href={`https://wa.me/${reception}?text=${encodeURIComponent(`${day.who.name}: `)}`} target="_blank" rel="noopener noreferrer">WhatsApp reception</a> : null}
 
       <BottomSheet open={!!raise} onOpenChange={(o) => { if (!o) setRaise(null); }} title="Tell the centre">
         <div className="grid gap-2">
