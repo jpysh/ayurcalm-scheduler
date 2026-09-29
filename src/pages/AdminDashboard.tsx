@@ -548,11 +548,12 @@ const AdminDashboard = () => {
               }
             }}>
             {/* A new centre's first steps, until it can book (#60): each row opens the screen that adds it. */}
-            {!loaded || readOnly ? null : staff.length === 0 || roomsList.length === 0 || patients.length === 0 ? (
+            {!loaded || readOnly ? null : therapies.length === 0 || staff.length === 0 || roomsList.length === 0 || patients.length === 0 ? (
               <div className="mt-3 overflow-hidden rounded-2xl bg-card" aria-label="Get started">
                 <div className="px-4 pt-3 text-[13px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Get started</div>
-                {([["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first resident", patients.length]] as const).map(([tab, label, n]) => (
-                  <button key={tab} type="button" className="flex min-h-14 w-full items-center gap-3 border-b border-border px-4 text-left last:border-b-0" onClick={() => go(tab)}>
+                {/* Therapies first (#273 U1): a new trial has none, and nothing can be booked or given without them. */}
+                {([["therapies", "Add your therapies", therapies.length], ["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first resident", patients.length]] as const).map(([tab, label, n]) => (
+                  <button key={tab} type="button" className="flex min-h-14 w-full items-center gap-3 border-b border-border px-4 text-left last:border-b-0" onClick={() => { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); }}>
                     <span className={n ? "text-primary" : "text-muted-foreground"}>{n ? "✓" : "○"}</span>
                     <span className="flex-1 text-[16px]">{label}</span><span className="text-muted-foreground">›</span>
                   </button>

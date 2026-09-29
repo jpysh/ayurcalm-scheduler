@@ -36,5 +36,5 @@ export function useTherapiesScreen({ therapies, setTherapies, amenityOptions, re
       onSaved={(x) => setTherapies((prev) => prev.some((t) => t.id === x.id) ? prev.map((t) => t.id === x.id ? x : t) : [...prev, x])}
       remove={(t) => requestDelete("therapy", String(t.id), t.name)} />
   </>);
-  return { tab, dialogs, setVisibleRows: (_: number) => {}, totalRef };
+  return { tab, dialogs, setVisibleRows: (_: number) => {}, totalRef, openLibrary: () => setShowLibrary(true) };
 }

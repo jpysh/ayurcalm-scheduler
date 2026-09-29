@@ -103,7 +103,8 @@ export function RoomSheet({ room, open, onClose, amenityOptions, onSaved, remove
   room: UiRoom | null; open: boolean; onClose: () => void; amenityOptions: string[]; onSaved: (r: UiRoom) => void; remove: (r: UiRoom) => void;
 }) {
   const [name, setName] = useState(""); const [has, setHas] = useState<string[]>([]); const [busy, setBusy] = useState(false);
-  useEffect(() => { if (open) { setName(room?.name ?? ""); setHas(room?.amenities ?? []); } }, [open, room]);
+  // A new room starts with everything the therapies need (#273 U2): with nothing ticked, no therapy fits any room and nothing books.
+  useEffect(() => { if (open) { setName(room?.name ?? ""); setHas(room?.amenities ?? amenityOptions); } }, [open, room]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = async () => {
     setBusy(true);
     try {
@@ -118,7 +119,7 @@ export function RoomSheet({ room, open, onClose, amenityOptions, onSaved, remove
       <label className={lbl} htmlFor="room-name">Name</label>
       <input id="room-name" className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Room 4 or Dhanvantari" />
       <span className={lbl}>What it has</span>
-      <p className="-mt-1 mb-2 text-[13px] text-muted-foreground">A therapy that needs something is only booked into a room that has it.</p>
+      <p className="-mt-1 mb-2 text-[13px] text-muted-foreground">A therapy that needs something is only booked into a room that has it. Untick what this room does not have.</p>
       <Chips options={amenityOptions} value={has} onChange={setHas} addLabel="Something else…" />
       <Foot busy={busy} ok={!!name.trim()} save={save} remove={room ? () => { onClose(); remove(room); } : undefined} />
     </BottomSheet>
