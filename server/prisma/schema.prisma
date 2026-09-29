@@ -324,6 +324,9 @@ model Settings {
   /// registration and accreditation lines, phones, email, website, footer and
   /// the discharge number format. Shape is `Letterhead` in src/discharge.ts.
   letterhead               Json?
+  /// Cloud trials only (TRIAL=true, #247): when the 30 days began, which is
+  /// the first resident added or day sheet printed after setup. Null before.
+  trial_started_at         DateTime?
   updated_at               DateTime @updatedAt
 }
 

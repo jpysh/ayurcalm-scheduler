@@ -5,4 +5,6 @@ credentials-file: /etc/cloudflared/ruta.json
 ingress:
   - hostname: demo.jains.es
     service: http://host.docker.internal:8201
+  - hostname: signup.jains.es
+    service: http://host.docker.internal:8200
   - service: http_status:404

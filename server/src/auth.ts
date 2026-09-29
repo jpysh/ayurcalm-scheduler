@@ -80,6 +80,33 @@ authRouter.post('/login', async (req: Request, res: Response) => {
   res.json({ token, user: payload });
 });
 
+/**
+ * One-time sign-in link (#247). The provisioner, which knows this centre's
+ * JWT_SECRET, signs { purpose: 'signin', email } for 30 minutes and emails it
+ * as https://<centre>/login#link=<token>. It works once for an active admin.
+ */
+// ponytail: used links are remembered in memory, so a restart inside the 30 minutes forgets them; a table if that matters.
+const usedLinks = new Set<string>();
+export function readSigninLink(token: string, secret = jwtSecret()): { email: string; jti: string } | null {
+  try {
+    const p = jwt.verify(token, secret) as { purpose?: string; email?: string; jti?: string };
+    return p.purpose === 'signin' && p.email && p.jti ? { email: p.email.toLowerCase(), jti: p.jti } : null;
+  } catch { return null; }
+}
+
+authRouter.post('/link', async (req: Request, res: Response) => {
+  const link = typeof req.body?.token === 'string' ? readSigninLink(req.body.token) : null;
+  const user = link && !usedLinks.has(link.jti) ? await prisma.user.findUnique({ where: { email: link.email } }) : null;
+  if (!link || !user || !user.is_active || user.role !== 'admin') {
+    res.status(401).json({ error: 'This sign-in link has expired or was already used. Ask for a new one.' });
+    return;
+  }
+  usedLinks.add(link.jti);
+  await prisma.user.update({ where: { id: user.id }, data: { last_login: new Date() } });
+  const payload: AuthUser = { id: user.id, email: user.email, role: user.role, name: user.name };
+  res.json({ token: jwt.sign(payload, jwtSecret(), { expiresIn: TOKEN_TTL }), user: payload });
+});
+
 authRouter.get('/me', requireAuth, (req: Request, res: Response) => {
   res.json({ user: req.user });
 });

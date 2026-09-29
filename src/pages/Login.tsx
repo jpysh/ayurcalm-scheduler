@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useCentreName, useDemo } from "@/lib/centreName";
+import { useEffect, useState } from "react";
+import { useCentreName, useDemo, useTrial } from "@/lib/centreName";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,15 +16,29 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const demo = useDemo();
+  const trial = useTrial();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    signIn("login", { email: username.trim(), password });
+  };
+
+  // The emailed sign-in link of a new cloud trial (#247): /login#link=<token>.
+  useEffect(() => {
+    const link = new URLSearchParams(window.location.hash.slice(1)).get("link");
+    if (!link) return;
+    history.replaceState(null, "", "/login");
+    signIn("link", { token: link });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const signIn = async (path: "login" | "link", body: object) => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/auth/login`, {
+      const res = await fetch(`${API_BASE}/auth/${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: username.trim(), password }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -118,6 +132,12 @@ const Login = () => {
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
             </form>
+            {trial ? (
+              // A cloud trial's admin has no password (#247): the sign-up service emails a link.
+              <p className="mt-3 text-center text-sm">
+                <a className="underline" href={`https://signup.${window.location.host.split(".").slice(1).join(".")}/`}>Email me a sign-in link</a>
+              </p>
+            ) : (
             <details className="mt-2 text-center">
               <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
                 Forgotten your password?
@@ -133,6 +153,7 @@ const Login = () => {
                 <p>It prints a new password for you.</p>
               </div>
             </details>
+            )}
           </CardContent>
         </Card>
       </div>

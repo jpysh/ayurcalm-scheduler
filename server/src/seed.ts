@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { therapyLibrary } from './therapyLibrary.js';
 import 'dotenv/config';
 import { ensureStarterDietTemplates } from './dietTemplateSeed.js';
@@ -44,7 +45,39 @@ const CENTRE_TZ = process.env.ADMIN_TZ || 'Asia/Kolkata';
 const centreYmd = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: CENTRE_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 const centreToday = () => new Date(`${centreYmd(new Date())}T00:00:00.000Z`);
 
+async function ensureAdmin() {
+  // Demo login. Idempotent so re-seeding never locks you out, and never
+  // overwrites the password if you have already changed it.
+  // A cloud trial (#247) passes ADMIN_EMAIL: that person is the admin, with a
+  // random password they never see; they sign in from the emailed link.
+  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() || DEFAULT_ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_EMAIL ? randomBytes(24).toString('hex') : DEFAULT_ADMIN_PASSWORD;
+  const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
+  if (!existingAdmin) {
+    await prisma.user.create({
+      data: {
+        email: adminEmail,
+        password_hash: await bcrypt.hash(adminPassword, 10),
+        name: process.env.ADMIN_EMAIL ? 'Admin' : 'Demo Admin',
+        role: 'admin',
+      },
+    });
+    console.log(`Created admin: ${adminEmail}`);
+  }
+}
+
 async function main() {
+  // A new cloud trial (#247) starts empty: its admin, the starter diet plans,
+  // and the setup wizard. Seeding the demo only for the wizard to clear it
+  // took over two minutes of the sign-up. Safe to repeat on every boot.
+  if (process.env.ADMIN_EMAIL) {
+    await ensureAdmin();
+    await ensureStarterDietTemplates(prisma);
+    const support = process.env.DEFAULT_SUPPORT_WHATSAPP ?? '420777558262';
+    await prisma.settings.upsert({ where: { id: 'singleton' }, update: {}, create: { id: 'singleton', setup_complete: false, demo_data: false, support_whatsapp: support || null, patient_support_whatsapp: support || null } });
+    console.log('Trial centre ready for its setup wizard');
+    return;
+  }
   const existingCounts = await Promise.all([
     prisma.patient.count(),
     prisma.staff.count(),
@@ -393,20 +426,7 @@ async function main() {
     });
   }
 
-  // Demo login. Idempotent so re-seeding never locks you out, and never
-  // overwrites the password if you have already changed it.
-  const existingAdmin = await prisma.user.findUnique({ where: { email: DEFAULT_ADMIN_EMAIL } });
-  if (!existingAdmin) {
-    await prisma.user.create({
-      data: {
-        email: DEFAULT_ADMIN_EMAIL,
-        password_hash: await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10),
-        name: 'Demo Admin',
-        role: 'admin',
-      },
-    });
-    console.log(`Created demo admin: ${DEFAULT_ADMIN_EMAIL} / ${DEFAULT_ADMIN_PASSWORD}`);
-  }
+  await ensureAdmin();
 
   // Diet plans are the centre's own content, so these are a starting set rather
   // than demo data: a fresh install has something to assign on day one, and the

@@ -12,6 +12,7 @@ import { createReadStream } from 'node:fs';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'node:url';
 import { DEMO, nextReset } from './demo.js';
+import { trialInfo } from './trial.js';
 import { DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD } from './auth.js';
 
 const SINGLETON_ID = 'singleton';
@@ -163,6 +164,7 @@ publicSettingsRouter.get('/support', async (_req: Request, res: Response) => {
   res.json({
     centre_name: settings.centre_name,
     patient_support_whatsapp: settings.patient_support_whatsapp,
+    trial: await trialInfo(),
     ...(DEMO && { demo: { email: DEFAULT_ADMIN_EMAIL, password: DEFAULT_ADMIN_PASSWORD, next_reset: nextReset() } }),
   });
 });

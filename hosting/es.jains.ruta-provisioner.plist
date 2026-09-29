@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Keeps the sign-up service (#247) running on a Mac host, across restarts.
+     It runs from its own clone of main, ~/ruta-host, so centres are never built from a branch.
+     cp hosting/es.jains.ruta-provisioner.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/es.jains.ruta-provisioner.plist
+     Secrets (TURNSTILE_*, CF_EMAIL_TOKEN, TELEGRAM_*) go in ~/ruta-data/provisioner.env. -->
+<plist version="1.0"><dict>
+  <key>Label</key><string>es.jains.ruta-provisioner</string>
+  <key>ProgramArguments</key><array><string>/bin/sh</string><string>-c</string>
+    <string>cd "$HOME/ruta-host" &amp;&amp; set -a &amp;&amp; { [ -f "$HOME/ruta-data/provisioner.env" ] &amp;&amp; . "$HOME/ruta-data/provisioner.env"; true; } &amp;&amp; exec node provisioner/index.mjs</string></array>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string><key>BEHIND_CLOUDFLARE</key><string>true</string></dict>
+  <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/tmp/ruta-provisioner.log</string><key>StandardErrorPath</key><string>/tmp/ruta-provisioner.log</string>
+</dict></plist>

@@ -36,6 +36,8 @@ jobs:
       # functions, no database.
       - run: npm test
         working-directory: server
+      # Trial sign-up limits and lifecycle on a fake clock (#247).
+      - run: node provisioner/test.mjs
 
   # Does this change reach the server? Merges to main always count.
   scope:
