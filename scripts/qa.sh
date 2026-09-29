@@ -105,9 +105,10 @@ fi
 # The wizard is read from the checkout, not the container: the app image carries
 # only the built front end. Onboarding speed is the point of the wizard, so it
 # may not grow a screen or a field without someone lowering these on purpose.
+# 4 and 8 since a cloud trial's admin chooses a password first (#247); others still see 3.
 WIZARD=src/pages/SetupWizard.tsx
-MAX_SCREENS=3
-MAX_FIELDS=7
+MAX_SCREENS=4
+MAX_FIELDS=8
 screens=$(grep -o 'step === [0-9]* && (' "$WIZARD" | sort -u | wc -l | tr -d ' ')
 fields=$(grep -c '<Label' "$WIZARD")
 if [ "$screens" -le "$MAX_SCREENS" ] && [ "$fields" -le "$MAX_FIELDS" ]; then

@@ -23,7 +23,7 @@ const Login = () => {
     signIn("login", { email: username.trim(), password });
   };
 
-  // The emailed sign-in link of a new cloud trial (#247): /login#link=<token>.
+  // The one-time sign-in link of a new cloud trial (#247): /login#link=<token>.
   useEffect(() => {
     const link = new URLSearchParams(window.location.hash.slice(1)).get("link");
     if (!link) return;
@@ -132,12 +132,6 @@ const Login = () => {
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
             </form>
-            {trial ? (
-              // A cloud trial's admin has no password (#247): the sign-up service emails a link.
-              <p className="mt-3 text-center text-sm">
-                <a className="underline" href={`https://signup.${window.location.host.split(".").slice(1).join(".")}/`}>Email me a sign-in link</a>
-              </p>
-            ) : null}
             {trial ? (
               // Pilot notice and contacts (#251): who runs a cloud centre and how to reach them.
               <p className="mt-4 text-center text-xs text-muted-foreground">
