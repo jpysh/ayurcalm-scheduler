@@ -356,12 +356,15 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const [searchPatients, setSearchPatients] = useState("");
   const [infoPatient, setInfoPatient] = useState<PatientRow | null>(null);
   const [infoDraft, setInfoDraft] = useState<PatientRow | null>(null);
-  const [infoAppointments, setInfoAppointments] = useState<ApiAppointment[]>([]);
-  const [infoStays, setInfoStays] = useState<ApiStay[]>([]);
+  // null while loading: an empty list would say "Not staying" and "No treatments" for a moment (#265 B2).
+  const [infoAppointments, setInfoAppointments] = useState<ApiAppointment[] | null>(null);
+  const [infoStays, setInfoStays] = useState<ApiStay[] | null>(null);
   const [infoEditing, setInfoEditing] = useState(false);
   const showPatientInfo = async (p: PatientRow) => {
     setInfoPatient(p);
     setInfoDraft({ ...p });
+    setInfoAppointments(null);
+    setInfoStays(null);
     try {
       const [appts, stays] = await Promise.all([
         fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?patient_id=${p.id}`),
@@ -480,7 +483,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
                 <Label>Medical Notes</Label>
                 <Input value={infoEditing ? (infoDraft?.medicalNotes || '') : (infoPatient.medicalNotes || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, medicalNotes: e.target.value } : prev)} />
                 <Label>Stay</Label>
-                {(() => {
+                {infoStays === null ? <div className="h-12" /> : (() => {
                   // The API does not order stays: the one under way or next is the earliest that has not ended.
                   const current = [...infoStays].sort((a, b) => a.start_date.localeCompare(b.start_date)).find((st) => st.end_date.slice(0, 10) >= today);
                   return (
@@ -497,24 +500,24 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
                 <div>
                   <p className="text-sm font-medium">Treatments</p>
                   <div className="mt-1 space-y-1">
-                    {infoAppointments.map((a) => (
+                    {(infoAppointments ?? []).map((a) => (
                       <div key={a.id} className="text-xs">
                         {longDay(a.scheduled_date)} · {a.start_time} · {therapyNameById[String(a.therapy_id)] || a.therapy_id}
                         {recordLine(a) ? <div className="text-muted-foreground">{recordLine(a)}</div> : null}
                       </div>
                     ))}
-                    {infoAppointments.length === 0 && <p className="text-xs text-muted-foreground">No treatments</p>}
+                    {infoAppointments?.length === 0 && <p className="text-xs text-muted-foreground">No treatments</p>}
                   </div>
                 </div>
                 <div>
                   <p className="text-sm font-medium">Stays</p>
                   <div className="mt-1 space-y-1">
-                    {infoStays.map((s) => (
+                    {(infoStays ?? []).map((s) => (
                       <div key={s.id} className="text-xs">
                         {stayDay(s.start_date)} → {stayDay(s.end_date)} · {String(s.duration_days)} days
                       </div>
                     ))}
-                    {infoStays.length === 0 && <p className="text-xs text-muted-foreground">No stays</p>}
+                    {infoStays?.length === 0 && <p className="text-xs text-muted-foreground">No stays</p>}
                   </div>
                 </div>
               </div>

@@ -18,6 +18,7 @@ import { toOverrides, saveTemplate, loadTemplates } from "@/lib/dietPlan";
 import { API_BASE } from "@/lib/apiBase";
 import { API_TOKEN, fetchJsonWithTimeout, type Patient as ResidentRow } from "./shared";
 import PageHead from "@/components/PageHead";
+import { BottomSheet } from "@/components/BottomBar";
 
 type Patient = { id: string; name: string; phone?: string; gender?: string; actualStart?: string; actualEnd?: string };
 type DietPlanTemplate = {
@@ -1053,6 +1054,7 @@ export function useDietScreen({ patients, setPatients, therapies, therapyNameByI
   const [showAddDietDialog, setShowAddDietDialog] = useState(false);
   const [editAssignmentPatientId, setEditAssignmentPatientId] = useState<string | null>(null);
   const [assignmentTemplateId, setAssignmentTemplateId] = useState<string>('tpl-std');
+  const [planOpen, setPlanOpen] = useState(false);
   const [assignmentTherapyIds, setAssignmentTherapyIds] = useState<string[]>([]);
   const [showTemplatesDialog, setShowTemplatesDialog] = useState(false);
   const [dietSchedules, setDietSchedules] = useState<Record<string, { start: string; end: string; templateId: string; therapyIds: string[]; label?: string }[]>>({});
@@ -1217,119 +1219,54 @@ export function useDietScreen({ patients, setPatients, therapies, therapyNameByI
             />
   );
 
+  // The design's pattern (#178, #265 B3): a list of plans; a plan opens its form in the same sheet.
+  const field = (name: keyof DietPlanTemplate, label: string, placeholder?: string) => (
+    <div>
+      <Label className="text-[13px]" htmlFor={`tpl-${String(name)}`}>{label}</Label>
+      <Input id={`tpl-${String(name)}`} placeholder={placeholder} value={(dietDraft[name] as string) || ''}
+        onChange={(e) => setDietDraft((prev) => ({ ...prev, [name]: e.target.value }))} />
+    </div>
+  );
+  const meals: [keyof DietPlanTemplate, keyof DietPlanTemplate, string][] = [
+    ['breakfast', 'restBreakfast', 'Breakfast'], ['lunch', 'restLunch', 'Lunch'], ['dinner', 'restDinner', 'Dinner'], ['snacks', 'restSnacks', 'Snacks'],
+  ];
+  const closePlans = (o: boolean) => { setShowTemplatesDialog(o); if (!o) setPlanOpen(false); };
   const dialogs = (
-    <Dialog open={showTemplatesDialog} onOpenChange={setShowTemplatesDialog}>
-      <DialogContent className="max-w-3xl max-h-[85vh] sm:max-h-[90vh] overflow-auto p-4">
-        <DialogHeader>
-          <DialogTitle className="text-base">Diet plans</DialogTitle>
-        </DialogHeader>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <div className="space-y-2">
-            <Button size="sm" variant="outline" className="h-8 w-full" onClick={() => { setSelectedDietTemplateId(''); resetDietDraft(); }}>
-              New plan
-            </Button>
-            <Input placeholder="Search plans" className="h-8" onChange={(e) => {
-              const q = e.target.value.toLowerCase();
-              const first = dietTemplates.find(t => t.name.toLowerCase().includes(q));
-              if (first) applyTemplateToDraft(first.id);
-            }} />
-            <div className="space-y-1 max-h-[320px] overflow-auto">
-              {dietTemplates.map((tpl) => (
-                <Card key={tpl.id} className={`cursor-pointer ${selectedDietTemplateId === tpl.id ? 'border-primary' : ''}`} onClick={() => applyTemplateToDraft(tpl.id)}>
-                  <CardContent className="p-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-semibold text-sm">{tpl.name}</div>
-                        <div className="text-xs text-muted-foreground truncate">{tpl.description || '—'}</div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={(e) => { e.stopPropagation(); applyTemplateToDraft(tpl.id); }}>Edit</Button>
-                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={(e) => { e.stopPropagation(); setAssignmentTemplateId(tpl.id); setAssignmentTherapyIds(tpl.therapyIds || []); }}>Select</Button>
-                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={(e) => { e.stopPropagation(); void retireDietTemplate(tpl.id); }}>Retire</Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+    <BottomSheet open={showTemplatesDialog} onOpenChange={closePlans} title={planOpen ? '' : 'Diet plans'}>
+      <div className="max-h-[75dvh] space-y-3 overflow-y-auto">
+        {!planOpen ? (<>
+          <Button className="min-h-11 w-full rounded-full" onClick={() => { setSelectedDietTemplateId(''); resetDietDraft(); setPlanOpen(true); }}>New plan</Button>
+          <div className="overflow-hidden rounded-2xl border">
+            {dietTemplates.map((tpl) => (
+              <button key={tpl.id} type="button" className="flex min-h-14 w-full items-center border-b px-4 py-2 text-left last:border-b-0" onClick={() => { applyTemplateToDraft(tpl.id); setPlanOpen(true); }}>
+                <span className="min-w-0 flex-1"><b className="block text-[16px]">{tpl.name}</b><span className="line-clamp-2 block text-[13px] text-muted-foreground">{tpl.description || ''}</span></span>
+                <span className="text-muted-foreground">›</span>
+              </button>
+            ))}
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium">{selectedDietTemplateId ? 'Edit plan' : 'New plan'}</div>
-              {dietDraft.patients ? (
-                <div className="text-xs text-muted-foreground">
-                  {dietDraft.patients} patient{dietDraft.patients === 1 ? '' : 's'} on this plan
-                </div>
-              ) : null}
-            </div>
-            {(() => {
-              const field = (name: keyof DietPlanTemplate, label: string, placeholder?: string) => (
-                <div>
-                  <Label className="text-xs" htmlFor={`tpl-${String(name)}`}>{label}</Label>
-                  <Input
-                    id={`tpl-${String(name)}`}
-                    className="h-8"
-                    placeholder={placeholder}
-                    value={(dietDraft[name] as string) || ''}
-                    onChange={(e) => setDietDraft((prev) => ({ ...prev, [name]: e.target.value }))}
-                  />
-                </div>
-              );
-              const meals: [keyof DietPlanTemplate, keyof DietPlanTemplate, string][] = [
-                ['breakfast', 'restBreakfast', 'Breakfast'],
-                ['lunch', 'restLunch', 'Lunch'],
-                ['dinner', 'restDinner', 'Dinner'],
-                ['snacks', 'restSnacks', 'Snacks'],
-              ];
-              return (
-                <div className="space-y-2">
-                  {field('name', 'Plan name')}
-                  {field('description', 'Description')}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="text-xs font-semibold">On a day with treatment</div>
-                    <div className="text-xs font-semibold">On a rest day</div>
-                    {meals.map(([therapyName, restName, label]) => (
-                      <Fragment key={label}>
-                        {field(therapyName, label)}
-                        {field(restName, label, (dietDraft[therapyName] as string) || 'Same as the treatment day')}
-                      </Fragment>
-                    ))}
-                  </div>
-                  {field('medication', 'Medication')}
-                  <div className="grid grid-cols-2 gap-2">
-                    {field('preTherapyNotes', 'Before treatment')}
-                    {field('postTherapyNotes', 'After treatment')}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    Medication prints in the patient's own row. The two treatment notes print once
-                    under the day sheet, under "Around treatment".
-                  </div>
-                  <div className="flex items-center gap-2 pt-1">
-                    <Button size="sm" className="h-8" onClick={() => void saveDietTemplate()}>
-                      {selectedDietTemplateId ? 'Save changes' : 'Create plan'}
-                    </Button>
-                    {selectedDietTemplateId ? (
-                      <Button size="sm" variant="outline" className="h-8" onClick={() => { setSelectedDietTemplateId(''); resetDietDraft(); }}>
-                        New plan
-                      </Button>
-                    ) : null}
-                  </div>
-                  {selectedDietTemplateId && dietDraft.patients ? (
-                    <div className="text-[11px] text-muted-foreground">
-                      Saving changes what {dietDraft.patients === 1 ? 'this patient eats' : `these ${dietDraft.patients} patients eat`} from
-                      their next sheet, except where something was written for one of them specifically.
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })()}
+        </>) : (<>
+          <div className="flex items-center gap-2">
+            <button type="button" className="min-h-11 pr-2 text-primary" onClick={() => setPlanOpen(false)}>‹ Back</button>
+            <b className="flex-1 text-lg">{selectedDietTemplateId ? dietDraft.name || 'Plan' : 'New plan'}</b>
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" size="sm" className="h-8" onClick={() => setShowTemplatesDialog(false)}>Close</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          {dietDraft.patients ? <p className="text-[13px] text-muted-foreground">{dietDraft.patients} resident{dietDraft.patients === 1 ? '' : 's'} on this plan. Saving changes what they eat from their next sheet, except where something was written for one of them.</p> : null}
+          {field('name', 'Plan name')}
+          {field('description', 'Description')}
+          {meals.map(([day, rest, label]) => (
+            <div key={label} className="grid grid-cols-2 gap-2">
+              {field(day, `${label}, treatment day`)}
+              {field(rest, `${label}, rest day`, (dietDraft[day] as string) || 'Same')}
+            </div>
+          ))}
+          {field('medication', 'Medication')}
+          {field('preTherapyNotes', 'Before treatment')}
+          {field('postTherapyNotes', 'After treatment')}
+          <p className="text-[13px] text-muted-foreground">Medication prints in the resident's own row. The two treatment notes print once, under "Around treatment".</p>
+          <Button className="min-h-11 w-full rounded-full" onClick={async () => { await saveDietTemplate(); setPlanOpen(false); }}>{selectedDietTemplateId ? 'Save changes' : 'Create plan'}</Button>
+          {selectedDietTemplateId ? <Button variant="outline" className="min-h-11 w-full rounded-full" onClick={async () => { await retireDietTemplate(selectedDietTemplateId); setPlanOpen(false); }}>Retire this plan</Button> : null}
+        </>)}
+      </div>
+    </BottomSheet>
   );
 
   return { tab, dialogs };
