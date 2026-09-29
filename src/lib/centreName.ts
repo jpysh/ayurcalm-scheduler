@@ -4,7 +4,8 @@ import { PRODUCT } from "../../server/src/product";
 
 
 export type DemoInfo = { email: string; password: string; next_reset: string };
-type Support = { centre_name?: string; demo?: DemoInfo };
+export type TrialInfo = { started_at: string | null; ends_at: string | null; read_only: boolean };
+type Support = { centre_name?: string; demo?: DemoInfo; trial?: TrialInfo };
 
 // One request for the whole page: the login screen and the demo banner both read it.
 let support: Promise<Support | null> | null = null;
@@ -22,4 +23,11 @@ export function useDemo() {
   const [demo, setDemo] = useState<DemoInfo | null>(null);
   useEffect(() => { loadSupport().then((d) => setDemo(d?.demo ?? null)); }, []);
   return demo;
+}
+
+/** Set only on a cloud trial (#247): when its 30 days end, and whether they have. */
+export function useTrial() {
+  const [trial, setTrial] = useState<TrialInfo | null>(null);
+  useEffect(() => { loadSupport().then((d) => setTrial(d?.trial ?? null)); }, []);
+  return trial;
 }

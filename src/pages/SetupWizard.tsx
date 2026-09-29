@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { confirmSheet } from "@/components/ConfirmSheet";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +21,9 @@ const SetupWizard = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
+  // A cloud trial (#247) starts with no example centre, so there is nothing to keep or clear.
+  const [hasDemo, setHasDemo] = useState(true);
+  useEffect(() => { fetch(`${API_BASE}/settings`).then((r) => r.json()).then((s) => setHasDemo(s?.demo_data !== false)).catch(() => {}); }, []);
   const [form, setForm] = useState({
     centre_name: "",
     address: "",
@@ -75,7 +78,7 @@ const SetupWizard = () => {
     <div className="min-h-screen bg-muted/30 flex items-start justify-center p-4">
       <Card className="w-full max-w-lg mt-8">
         <CardHeader className="pb-2">
-          <p className="text-xs text-muted-foreground">Step {step} of 3</p>
+          <p className="text-xs text-muted-foreground">Step {step} of {hasDemo ? 3 : 2}</p>
           <CardTitle className="text-lg">
             {step === 1 && "What is your centre called?"}
             {step === 2 && "When are you open?"}
@@ -147,7 +150,7 @@ const SetupWizard = () => {
               </p>
               <div className="flex justify-between">
                 <Button variant="ghost" onClick={() => setStep(1)}>Back</Button>
-                <Button onClick={() => setStep(3)} disabled={form.working_days.length === 0}>Continue</Button>
+                <Button onClick={() => (hasDemo ? setStep(3) : finish("all"))} disabled={form.working_days.length === 0 || busy}>{hasDemo ? "Continue" : "Finish"}</Button>
               </div>
             </>
           )}

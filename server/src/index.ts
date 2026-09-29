@@ -12,6 +12,7 @@ import { authRouter, requireAuth, warnIfDefaultAdminUnchanged, loadJwtSecret } f
 import { settingsRouter, publicSettingsRouter, resetDemo } from './settings.js';
 import { DEMO, demoGuard, scheduleDemoResets } from './demo.js';
 import { linkRouter } from './links.js';
+import { trialGuard } from './trial.js';
 import { usersRouter, accountRouter } from './users.js';
 import { dietTemplatesRouter } from './dietTemplates.js';
 import { mcpRouter, mcpKeyRouter } from './mcp.js';
@@ -137,6 +138,7 @@ expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
   next();
 });
 expressApp.use('/api', demoGuard);
+expressApp.use('/api', trialGuard);
 expressApp.post('/api/appointments', apptPostLimiter);
 expressApp.use('/api/settings', settingsRouter);
 expressApp.use('/api/users', usersRouter);

@@ -52,6 +52,9 @@ services:
       BEHIND_CLOUDFLARE: ${BEHIND_CLOUDFLARE:-}
       DEMO_MODE: ${DEMO_MODE:-}
       DEMO_RESET_MINUTES: ${DEMO_RESET_MINUTES:-}
+      # Cloud trials only (#247): the 30-day clock, and the admin who signed up.
+      TRIAL: ${TRIAL:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       # Writes per address in 5 minutes. Unset in a real install (40); qa raises it.
       RATE_LIMIT_WRITES: ${RATE_LIMIT_WRITES:-}
       RATE_LIMIT_CALLS: ${RATE_LIMIT_CALLS:-}
