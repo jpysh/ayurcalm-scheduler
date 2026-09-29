@@ -8,6 +8,7 @@
 import { chromium } from '@playwright/test';
 import { createServer } from 'node:http';
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';
 const OUT = 'docs/design/shots';
@@ -130,7 +131,12 @@ const SIGNUP = process.env.SIGNUP_URL || 'http://localhost:8200';
 
 async function runStories(names) {
   const SOUT = `${OUT}/stories`; mkdirSync(SOUT, { recursive: true });
-  const site = createServer((req, res) => { try { res.writeHead(200, { 'content-type': req.url.endsWith('.html') ? 'text/html; charset=utf-8' : 'application/octet-stream' }).end(readFileSync(`site/public${decodeURIComponent(req.url.split('?')[0])}`)); } catch { res.writeHead(404).end(); } }).listen(8766);
+  const root = resolve('site/public');
+  const site = createServer((req, res) => {
+    const file = resolve(root, `.${decodeURIComponent(req.url.split('?')[0])}`);
+    if (!file.startsWith(`${root}/`) || !existsSync(file)) { res.writeHead(404).end(); return; }
+    res.writeHead(200, { 'content-type': file.endsWith('.html') ? 'text/html; charset=utf-8' : 'application/octet-stream' }).end(readFileSync(file));
+  }).listen(8766);
   const report = [];
   for (const [story, stack, target, steps] of STORIES) {
     if (names.length && !names.some((w) => story.includes(w))) continue;
