@@ -1,31 +1,32 @@
-# Ruta (ayurcalm-scheduler)
+# Ruta
 
 [![CI](https://github.com/jpysh/ayurcalm-scheduler/actions/workflows/ci.yml/badge.svg)](https://github.com/jpysh/ayurcalm-scheduler/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Self-hosted appointment and therapy scheduler for Ayurveda centres, therapy and
-massage studios, and wellness retreats.
+**Your centre's day, printed and ready by 7 am.** Open-source scheduling for Ayurveda centres, therapy studios and wellness retreats.
 
-Plan a centre's day in one place: clients and their stays, therapists, treatment
-rooms, therapy definitions, recurring programme events, and the appointments that
-tie them together. An auto-assign pass fills the schedule while respecting room
-amenities, therapist availability, and time off.
+[Website](https://jains.es/ruta) · [Live demo](https://demo.jains.es) · [Free cloud trial](https://jains.es/ruta) *(website and demo go live with Launch A, early October)* · [Self-host guide](docs/self-host.md) · [Admin guide](docs/admin-guide.md)
 
-**Who it's for.** Built first for residential Ayurveda centres, where a guest
-stays for days and needs a coherent daily programme rather than isolated bookings.
-That shape fits any practice juggling several therapists, several treatment rooms
-and treatments of differing length — massage and therapy studios, physiotherapy
-practices, spas and wellness retreats. Nothing in the data model is specific to
-Ayurveda: therapies, rooms and their amenities are all defined by you.
+Plan residents and their stays, therapists, rooms, therapies and daily programme in one place. Auto-assign fills the day around room amenities, therapist time off and opening hours, and the day sheet prints every resident's treatments and meals for the notice board. Built for residential Ayurveda centres; nothing in it is Ayurveda-specific.
 
 ![The daily schedule: therapy rooms across the top, appointments with therapy, duration and assigned therapist](docs/screenshot-dashboard.png)
 
-*Running on seeded demo data — one `docker compose up` away.*
+## Cloud or self-host?
+
+Same app, same features. The difference is who runs it.
+
+| | Self-host | Ruta Cloud |
+|---|---|---|
+| Price | Free | Monthly per centre, [see pricing](https://jains.es/ruta) |
+| Hosting, HTTPS, backups, updates | You | Us |
+| Support by WhatsApp, email or phone | Community | Included |
+| Setup help with your therapies, rooms and rota | No | Included |
+
+You can move between them at any time and always leave with your data.
 
 ## Quick start
 
-You need [Docker](https://docs.docker.com/get-docker/). Nothing else.
+You need [Docker](https://docs.docker.com/get-docker/).
 
 ```bash
 git clone https://github.com/jpysh/ayurcalm-scheduler.git
@@ -33,217 +34,17 @@ cd ayurcalm-scheduler
 docker compose up -d
 ```
 
-Open **http://localhost:8080** and sign in:
+Open **http://localhost:8080** and sign in as `admin@example.com` / `demo1234`. The first boot seeds an example centre (about 40 residents a day), and a setup wizard asks for your centre's name and hours. Change the password before putting it on a network.
 
-| Email | Password |
-|---|---|
-| `admin@example.com` | `demo1234` |
+Running it for a real centre, with HTTPS and backups: [docs/self-host.md](docs/self-host.md).
 
-The first boot creates the database, applies migrations, and seeds a demo centre —
-120 patients, 20 therapists, 20 rooms, 50 therapies, four months of appointments,
-and a daily programme. About 40 residents are treated each day, which is what a
-centre of this size looks like on paper. The seed is deterministic, so everyone
-who clones this repo gets the same centre and the same day sheet. Restarts keep
-your data; the seed only runs against an empty database.
+## Stack
 
-> **Change the demo password before putting this on a network.** The server prints
-> a warning on every startup while the default is still in place.
-
-To stop, `docker compose down`. To start over from scratch,
-`docker compose down -v` (this deletes the database volume).
-
-## Setting up your centre
-
-On first sign-in as an administrator, a short setup wizard asks for your centre's
-name, opening hours and working days, and whether to keep the example data.
-The daily jobs on a phone are on one page: [docs/admin-guide.md](docs/admin-guide.md).
-
-Everything else is configured in the app, not in files — open **Settings**:
-
-- **Centre details** — name, address and logo, shown in the app and on the printed
-  daily schedule
-- **Opening hours** — opening and closing time, slot length and working days.
-  These decide which time rows the schedule shows, so set them before entering
-  appointments
-- **Timezone**
-- **Support contacts** — two WhatsApp numbers, each shown as a button in the
-  corner to a different audience. *Help with this app* goes to whoever supports
-  the software and is shown to signed-in staff; *Contact for patients* is your
-  own reception and is shown on the schedule links you share. Both default to
-  the project maintainer — **change the patient one to your own number**
-- **People with access** — add logins for your staff, set roles, and reset a
-  forgotten password. Administrators manage settings and users; staff run the
-  schedule. Everyone can change their own password
-
-Staff, therapists, treatment rooms and therapies are managed in their own tabs.
-
-When you are ready to replace the seeded example centre with your own, use
-**Settings → Clear demo data**. It removes the demo patients, staff, rooms,
-therapies and appointments, and keeps your account and centre settings.
-**Reset demo data from today** instead rebuilds a fresh four months, for trying
-things out.
-
-## Configuration
-
-These are install-time settings for whoever deploys the app. Copy `.env.example`
-to `.env` if you want to change any — the defaults work as-is for a local trial.
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `APP_PORT` | `8080` | Host port the app is served on |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `ayurcalm` | Database credentials |
-| `JWT_SECRET` | *(random per restart)* | Session signing secret. Set it (`openssl rand -base64 32`) so sessions survive restarts |
-| `CENTRE_NAME` | `Wellness Centre` | Centre name used on first run only; after that it is edited in **Settings** |
-| `DEFAULT_SUPPORT_WHATSAPP` | maintainer's number | Support contact seeded on first run; changed in **Settings** afterwards |
-| `DEMO_MODE` | off | `true` runs the public demo: sign-in shown on screen, data put back every 6 hours (00, 06, 12, 18 UTC), hidden from search, and users, passwords, import and clearing the demo are turned off |
-
-## What's inside
-
-| Layer | Stack |
-|---|---|
-| Front end | React 18, Vite 8, TypeScript, Tailwind, shadcn/ui |
-| API | Express 5, Prisma, Zod, JWT auth |
-| Database | PostgreSQL 16 |
-| Tests | Playwright end-to-end on a real install; plain Node tests for diet and PDF logic |
-
-One container serves both the API and the built front end, so a self-hosted
-install is two containers total.
-
-Running it for a real centre on a Mac, with your own HTTPS address and backups: [docs/self-host.md](docs/self-host.md).
-
-## Features
-
-- **Scheduling** — appointments across therapists, rooms and therapies, with
-  conflict detection
-- **Auto-assign** — fills open slots against amenity requirements and availability
-- **Patients and stays** — patient records, arrival and departure windows
-- **Diet plans** — reusable plans with separate meals for a day with treatment
-  and a rest day. Assigning one points at the plan, so correcting it reaches
-  everyone on it while anything written for one patient stays theirs
-- **Time off** — centre holidays, per-therapist leave, room and therapy blocks
-- **Programme events** — recurring daily activities (yoga, meals, meditation) and
-  one-off sessions
-- **Daily schedule PDF** — the day sheet a centre prints and pins up: every
-  resident as a row, their therapies by start time, and their own meals in the
-  breakfast, lunch and dinner columns, and their plan and treatment notes in the
-  same row
-- **Audit log** — records changes to scheduling data
-
-## Status and roadmap
-
-Version 0.4.0 — usable, and in active development by a single maintainer. Known
-to be unfinished:
-
-- **Ailments** — the tab is a placeholder
-  ([#34](https://github.com/jpysh/ayurcalm-scheduler/issues/34))
-- **Diet tab polish** — the plans and the sheet are done; the tab around them
-  still has rough edges
-  ([#6](https://github.com/jpysh/ayurcalm-scheduler/issues/6))
-- **Patient schedule links** are not built. There is no way for a patient to see
-  their own day without the printed sheet
-  ([#19](https://github.com/jpysh/ayurcalm-scheduler/issues/19))
-
-Everything else in the feature list above works. Issues and feature requests are
-welcome — see [open issues](https://github.com/jpysh/ayurcalm-scheduler/issues),
-or start a thread in
-[Discussions](https://github.com/jpysh/ayurcalm-scheduler/discussions) if you are
-not sure whether something is a bug.
-
-## Development
-
-Runs the front end and API separately with hot reload.
-
-```bash
-# Database only
-docker compose up -d db
-
-# API — http://127.0.0.1:4000
-cd server
-npm install
-cp .env.example .env      # if present; otherwise set DATABASE_URL
-npx prisma migrate deploy
-npx tsx src/seed.ts
-npm run dev
-
-# Front end — http://localhost:5173
-cd ..
-npm install
-npm run dev
-```
-
-The front end always calls `/api` on its own origin. In development the Vite dev
-server proxies that to `http://localhost:4000` (override with
-`VITE_API_PROXY_TARGET`); to point the built app at a different host entirely,
-set `VITE_API_BASE`.
-
-```bash
-npm test                  # the tests that need nothing running
-npm run test:e2e          # Playwright, against docker compose on :8080 (E2E_BASE_URL to change)
-cd server && npm run test:all   # the above plus the tests that need a database and a server
-```
-
-`npm test` runs only what is self-contained: diet resolution and day-sheet text
-fitting. `test:all` adds three that need a running install — `test:invariants`
-(no therapist, room or patient double-booked; rooms have the amenities their
-therapies need; gender matching holds; nothing outside opening hours, over every
-booked day), `test:validation` (null fields in a request body are handled, not a
-500) and `test:auto-assign` (the scheduler books a course of sessions).
-
-Those last two **write to the database and tidy up afterwards**, so they refuse
-to run unless it is marked as demo data. Point `DATABASE_URL` at a test install,
-or set `ALLOW_TEST_WRITES=1` if you are certain. CI runs all of them inside the
-compose stack it has already started.
-
-## Backups and restoring
-
-`docker compose up -d` also starts a backup service. It saves the whole
-database, logos and signatures included, ten minutes after it starts and every night at
-02:30 India time, into the `backups` folder beside `docker-compose.yml`, and
-keeps the newest 14. Settings → Backups shows when the last one ran and
-downloads it, so you can keep a copy off the machine.
-
-To restore, pick a file from `backups/` and run these two commands in the
-folder with `docker-compose.yml`:
-
-```bash
-docker compose stop app
-gunzip -c backups/ayurcalm-YYYYMMDD-HHMM.sql.gz | docker compose exec -T db psql -q -U ayurcalm ayurcalm && docker compose start app
-```
-
-`npm run qa` restores the newest backup into a scratch database and checks
-every table comes back with the same number of rows, so the restore is tested
-on every change.
-
-## If you are locked out
-
-An administrator can set a new password for anyone from **Settings → People with
-access**. If nobody can sign in, run this on the machine hosting the app:
-
-```bash
-docker compose exec app npx tsx server/src/scripts/resetPassword.ts you@example.com
-```
-
-It prints a new password. Run it with no email to list the accounts on the
-install. Shell access to the server is the proof of ownership here, which is why
-a self-hosted install needs no password-reset email to be configured.
-
-## Security
-
-Login is server-side: bcrypt password hashes in Postgres, JWT sessions, and every
-API route except `/api/health`, `/api/auth/login` and `/api/public/support`
-requires a valid token. The public route returns only the centre's name and the
-patient contact number — nothing about patients, staff or appointments.
-
-This is a small project maintained by one person. It has not had an external
-security audit. Do not put it on the public internet without putting your own
-authentication layer, TLS and backups in front of it. See
-[SECURITY.md](SECURITY.md) to report a vulnerability.
+React, Vite and TypeScript front end; Express, Prisma and PostgreSQL 16 API; Playwright end-to-end tests. Two containers in total.
 
 ## Contributing
 
-Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
-Bug reports and feature requests both have templates that will prompt you for
-what's needed.
+Issues, ideas and pull requests welcome: [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md). Not sure if it's a bug? Ask in [Discussions](https://github.com/jpysh/ayurcalm-scheduler/discussions).
 
 ## License
 
