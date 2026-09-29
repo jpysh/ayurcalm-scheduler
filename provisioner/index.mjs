@@ -1,7 +1,8 @@
 // Trial sign-up (#247): signup.jains.es. A visitor gives a centre name and an
 // email; the centre is created at <slug>.jains.es and an "Open your centre" link
 // on screen signs them into its setup wizard, where they choose a password. With
-// CF_EMAIL_TOKEN set, the link is emailed first instead, to prove the address. Hourly, each centre moves through lifecycle.mjs.
+// CF_EMAIL_TOKEN set, the link is emailed first instead, to prove the address.
+// Hourly, each centre moves through lifecycle.mjs; nothing about that is emailed.
 // Runs on the trial host next to Docker (hosting/centre.sh). No dependencies.
 //   node provisioner/index.mjs          (PORT 8200; env below)
 import http from 'node:http';
@@ -9,7 +10,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHmac, randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync, renameSync, appendFileSync, existsSync } from 'node:fs';
-import { next, refuse, slugFor } from './lifecycle.mjs';
+import { next, deletesAt, refuse, slugFor } from './lifecycle.mjs';
 
 const run = promisify(execFile);
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -54,18 +55,22 @@ function signinLink(slug, to) {
   return `https://${slug}.${DOMAIN}/login#link=${body}.${createHmac('sha256', secret).update(body).digest('base64url')}`;
 }
 
-// The tunnel's config lists one address per centre; the tunnel restarts to read it.
+// The tunnel's config lists one address per centre: its own port, or this
+// service while it is paused, so its address can switch it back on (#247).
 // ponytail: a restart drops every centre's connections for ~2 s; remotely-managed tunnel config if that bites.
 const TUNNEL = `${DATA}/tunnel.yml`;
-async function route(slug, port) {
-  const y = readFileSync(TUNNEL, 'utf8');
-  const line = `  - hostname: ${slug}.${DOMAIN}\n    service: http://host.docker.internal:${port}\n`;
-  if (port && !y.includes(`${slug}.${DOMAIN}`)) writeFileSync(TUNNEL, y.replace('  - service: http_status:404', `${line}  - service: http_status:404`));
-  if (!port) writeFileSync(TUNNEL, y.replace(new RegExp(`  - hostname: ${slug}\\.${DOMAIN.replace('.', '\\.')}\\n.*\\n`), ''));
+const svc = (port) => `http://host.docker.internal:${port}`;
+const PAUSED = svc(env.PORT || 8200);
+async function route(slug, service) {
+  if (!existsSync(TUNNEL)) return; // a local run has no tunnel
+  const host = `${slug}.${DOMAIN}`;
+  const y = readFileSync(TUNNEL, 'utf8').replace(new RegExp(`  - hostname: ${host.replaceAll('.', '\\.')}\\n.*\\n`), '');
+  writeFileSync(TUNNEL, service ? y.replace('  - service: http_status:404', `  - hostname: ${host}\n    service: ${service}\n  - service: http_status:404`) : y);
   // ponytail: a deleted centre's DNS record stays, pointing at the tunnel's 404; the scoped API token (#247) can remove it.
-  if (port) await run('cloudflared', ['--config', TUNNEL, 'tunnel', 'route', 'dns', '--overwrite-dns', 'ruta', `${slug}.${DOMAIN}`]);
+  if (service) await run('cloudflared', ['--config', TUNNEL, 'tunnel', 'route', 'dns', '--overwrite-dns', 'ruta', host]);
   await run('docker', ['compose', '-f', `${ROOT}hosting/compose.yml`, '-p', 'ruta-host', 'restart', 'tunnel']);
 }
+const up = async (port) => { for (let i = 0; i < 100 && !(await fetch(`http://localhost:${port}/api/health`).then((r) => r.ok, () => false)); i++) await new Promise((r) => setTimeout(r, 3000)); };
 const centreSh = (extra, ...a) => run('sh', [`${ROOT}hosting/centre.sh`, ...a], { env: { ...env, RUTA_DATA: DATA, TRIAL: 'true', ...extra }, maxBuffer: 1 << 26 });
 
 // ---- provisioning, one at a time ----
@@ -76,11 +81,11 @@ function provision(s) {
     try {
       s.state = 'building'; save();
       const slug = slugFor(s.centre, [...db.centres.map((c) => c.slug), 'shots', 'host']);
-      const port = Math.max(8299, ...db.centres.map((c) => c.port)) + 1;
+      const port = Math.max(Number(env.CENTRE_PORT_FROM || 8300) - 1, ...db.centres.map((c) => c.port)) + 1;
       await centreSh({ ADMIN_EMAIL: s.email }, 'up', slug, String(port));
-      for (let i = 0; i < 100 && !(await fetch(`http://localhost:${port}/api/health`).then((r) => r.ok, () => false)); i++) await new Promise((r) => setTimeout(r, 3000));
-      await route(slug, port);
-      db.centres.push({ slug, port, email: s.email, centre: s.centre, ref: s.ref, created: Date.now(), warned: {}, key: randomBytes(18).toString('base64url') });
+      await up(port);
+      await route(slug, svc(port));
+      db.centres.push({ slug, port, email: s.email, centre: s.centre, ref: s.ref, created: Date.now() });
       s.state = 'ready'; s.slug = slug; s.used = true; save();
       await telegram(`New trial centre: ${s.centre} (${slug}.${DOMAIN}) by ${s.email}${s.ref ? `, invited by ${s.ref}` : ''}`);
     } catch (e) {
@@ -91,25 +96,15 @@ function provision(s) {
 }
 
 // ---- lifecycle, hourly ----
-const say = {
-  pause: (c) => [`${c.centre} is paused`, `Nobody has used ${c.slug}.${DOMAIN} for three days, so we paused it. Open this link within 14 days to switch it back on:\n${SELF}/restore?c=${c.slug}&k=${c.key}`],
-  p7: (c) => [`${c.centre} will be deleted in 7 days`, `Your paused trial centre is deleted in 7 days. Switch it back on:\n${SELF}/restore?c=${c.slug}&k=${c.key}`],
-  p1: (c) => [`${c.centre} will be deleted tomorrow`, `Your paused trial centre is deleted tomorrow. Switch it back on:\n${SELF}/restore?c=${c.slug}&k=${c.key}`],
-  t7: (c) => [`7 days left on your ${c.centre} trial`, `Your free trial ends in 7 days. Nothing is deleted then: the centre becomes read-only and "Download everything" in Settings keeps working. Reply to choose Cloud + support or On-premise + support.`],
-  ended: (c) => [`Your ${c.centre} trial has ended`, `Your data is safe and read-only for 60 days. Download everything from Settings to run it yourself for free, or reply to choose Cloud + support (₹1,499/month) or On-premise + support (₹999/month).`],
-  e7: (c) => [`${c.centre} will be deleted in 7 days`, `Your ended trial is deleted in 7 days. Download everything from Settings first if you want to keep it.`],
-  e1: (c) => [`${c.centre} will be deleted tomorrow`, `Your ended trial is deleted tomorrow. Download everything from Settings first if you want to keep it.`],
-};
 export async function tick(now = Date.now()) {
   for (const c of [...db.centres]) {
     if (!c.paused_at) c.trial = await fetch(`http://localhost:${c.port}/api/public/support`).then((r) => r.json()).then((d) => d.trial, () => c.trial);
     const a = next(c, now);
     if (!a) continue;
     try {
-      if (a.do === 'pause') { await centreSh({}, 'stop', c.slug); c.paused_at = now; await email(c.email, ...say.pause(c)); }
-      if (a.do === 'warn') { await email(c.email, ...say[a.key](c)); c.warned[a.key] = true; }
+      if (a.do === 'pause') { await centreSh({}, 'stop', c.slug); c.paused_at = now; await route(c.slug, PAUSED); }
       if (a.do === 'delete') {
-        await centreSh({}, 'delete', c.slug); await route(c.slug, 0);
+        await centreSh({}, 'delete', c.slug); await route(c.slug, null);
         db.centres = db.centres.filter((x) => x !== c);
         await telegram(`Deleted ${c.slug} (${a.why})`);
       }
@@ -151,6 +146,24 @@ ${env.TURNSTILE_SITEKEY ? `<div class="cf-turnstile" data-sitekey="${env.TURNSTI
 ${env.CF_EMAIL_TOKEN ? `<h2 style="font-size:1rem;margin-top:2rem">Already have a centre?</h2><form method="post" action="/again"><label for="a">Your email</label><input id="a" name="email" type="email" required autocomplete="email"><button>Email me a sign-in link</button></form>` : ''}
 <p style="font-size:.85rem;margin-top:2rem">By starting a trial you accept the <a href="https://jains.es/ruta/pilot">pilot notice</a>. Questions: <a href="https://wa.me/420777558262">WhatsApp</a> · <a href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a></p>`);
 
+const day = (ms) => new Date(ms).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+async function wake(req, res, c) {
+  const login = `https://${c.slug}.${DOMAIN}/login`;
+  const opening = page(`<meta http-equiv="refresh" content="8;url=${login}"><h1>${esc(c.centre)} is back on</h1><p>Opening it in a few seconds. <a href="${login}">Open it now</a></p>`);
+  if (!c.paused_at) return send(res, 200, opening); // switched on a moment ago; the tunnel is catching up
+  if (req.method !== 'POST') return send(res, 200, page(`<h1>${esc(c.centre)} is switched off</h1><p>Nobody used it for three days, so we switched it off to save space. Everything in it is kept until <b>${day(deletesAt(c))}</b>.</p>
+<form method="post"><button>Switch it back on</button></form><p style="font-size:.85rem;margin-top:2rem">Questions: <a href="https://wa.me/420777558262">WhatsApp</a></p>`));
+  if (!c.waking) {
+    c.waking = (async () => {
+      await centreSh({}, 'start', c.slug); await up(c.port); await route(c.slug, svc(c.port));
+      c.paused_at = null; c.created = Date.now(); save();
+      await telegram(`Switched back on: ${c.slug}`);
+    })().finally(() => { delete c.waking; });
+  }
+  await c.waking;
+  send(res, 200, opening);
+}
+
 const body = (req) => new Promise((ok) => { let b = ''; req.on('data', (d) => { if ((b += d).length > 4096) req.destroy(); }); req.on('end', () => ok(new URLSearchParams(b))); });
 const send = (res, code, html, headers = {}) => { res.writeHead(code, { 'Content-Type': 'text/html; charset=utf-8', ...headers }); res.end(html); };
 
@@ -158,6 +171,10 @@ export const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, SELF);
   const ip = (env.BEHIND_CLOUDFLARE === 'true' && req.headers['cf-connecting-ip']) || req.socket.remoteAddress;
   try {
+    // A paused centre's own address lands here (#247): switch it back on, no key, no email.
+    const own = (req.headers.host || '').match(new RegExp(`^([a-z0-9-]+)\\.${DOMAIN.replaceAll('.', '\\.')}$`));
+    const c = own && db.centres.find((x) => x.slug === own[1]);
+    if (c) return wake(req, res, c);
     if (req.method === 'GET' && url.pathname === '/') return send(res, 200, form('', url.searchParams.get('ref')));
     // The landing page's "N of 10 founding places left" (#245). Founding centres not hosted here: FOUNDING_ELSEWHERE.
     if (url.pathname === '/founding') {
@@ -195,18 +212,13 @@ export const server = http.createServer(async (req, res) => {
       if (!s.state) provision(s);
       return send(res, 200, page(`<h1>Creating ${esc(s.centre)}…</h1><p id="m">This takes about two minutes. Keep this page open.</p><progress style="width:100%"></progress>
 <p id="o" hidden><a id="go" style="display:block;text-align:center;padding:.8rem;border-radius:.6rem;background:#3d6b50;color:#fff;font-weight:600;text-decoration:none">Open your centre</a></p>
-<script>(async function poll(){const r=await fetch('/status?k=${esc(s.key)}').then(r=>r.json()).catch(()=>({}));if(r.go){const h=document.querySelector('h1');h.textContent=h.textContent.replace(/^Creating (.*)…$/,'$1 is ready');document.getElementById('m').textContent='Open it here. It works once: you choose your password first.';document.querySelector('progress').remove();document.getElementById('go').href=r.go;document.getElementById('o').hidden=false;return}if(r.failed){document.getElementById('m').textContent='Something went wrong. We have been told and will email you.';return}setTimeout(poll,3000)})()</script>`));
+<script>(async function poll(){const r=await fetch('/status?k=${esc(s.key)}').then(r=>r.json()).catch(()=>({}));if(r.go){const h=document.querySelector('h1');h.textContent=h.textContent.replace(/^Creating (.*)…$/,'$1 is ready');document.getElementById('m').textContent='Open it here. It works once: you choose your password first.';document.querySelector('progress').remove();document.getElementById('go').href=r.go;document.getElementById('o').hidden=false;return}if(r.failed){document.getElementById('m').textContent='Something went wrong. We have been told; WhatsApp +420 777 558 262 if you want to hear back sooner.';return}setTimeout(poll,3000)})()</script>`));
     }
     if (url.pathname === '/status' && s) {
       // The sign-in is handed over once; after that the admin asks for a fresh link by email.
       const go = s.state === 'ready' && !s.handed ? signinLink(s.slug, s.email) : null;
       if (go) { s.handed = true; save(); }
       res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ state: s.state, go, failed: s.state === 'failed' }));
-    }
-    const c = db.centres.find((x) => x.slug === url.searchParams.get('c'));
-    if (url.pathname === '/restore' && c && c.key && url.searchParams.get('k') === c.key) {
-      if (c.paused_at) { await centreSh({}, 'start', c.slug); c.paused_at = null; c.created = Date.now(); c.warned = {}; save(); }
-      return send(res, 302, '', { Location: `https://${c.slug}.${DOMAIN}/login` });
     }
     send(res, 404, page('<h1>This link is not valid</h1><p><a href="/">Start again</a></p>'));
   } catch (e) { console.error(e); send(res, 500, page('<h1>Something went wrong</h1><p>Please try again in a minute.</p>')); }

@@ -3,28 +3,20 @@
 const H = 3_600_000, D = 24 * H;
 
 /**
- * c: { created, paused_at?, trial?: { started_at, ends_at }, warned?: {[key]: true} }
- * Returns the one thing to do now, or null. `warn` keys are sent once each.
+ * c: { created, paused_at?, trial?: { started_at, ends_at, plan? } }
+ * Returns the one thing to do now, or null. No emails (#247): a paused centre's
+ * own address says when it goes and switches it back on; an ended trial is
+ * read-only in the app itself.
  */
 export function next(c, now) {
-  const w = (key) => !c.warned?.[key];
   if (c.trial?.plan) return null; // a paying centre is never paused or deleted (#250)
-  if (c.paused_at) {
-    const del = c.paused_at + 14 * D;
-    if (now >= del) return { do: 'delete', why: 'paused 14 days' };
-    if (now >= del - D && w('p1')) return { do: 'warn', key: 'p1', days: 1 };
-    if (now >= del - 7 * D && w('p7')) return { do: 'warn', key: 'p7', days: 7 };
-    return null;
-  }
+  if (c.paused_at) return now >= deletesAt(c) ? { do: 'delete', why: 'paused 14 days' } : null;
   if (!c.trial?.started_at) return now >= c.created + 72 * H ? { do: 'pause' } : null;
-  const del = Date.parse(c.trial.ends_at) + 60 * D;
-  if (now >= del) return { do: 'delete', why: 'trial ended 60 days ago' };
-  if (now >= del - D && w('e1')) return { do: 'warn', key: 'e1', days: 1 };
-  if (now >= del - 7 * D && w('e7')) return { do: 'warn', key: 'e7', days: 7 };
-  if (now >= Date.parse(c.trial.ends_at) && w('ended')) return { do: 'warn', key: 'ended', days: 60 };
-  if (now >= Date.parse(c.trial.ends_at) - 7 * D && w('t7')) return { do: 'warn', key: 't7', days: 7 };
-  return null;
+  return now >= deletesAt(c) ? { do: 'delete', why: 'trial ended 60 days ago' } : null;
 }
+
+/** When a paused centre, or an ended trial, is deleted. */
+export const deletesAt = (c) => (c.paused_at ? c.paused_at + 14 * D : Date.parse(c.trial.ends_at) + 60 * D);
 
 /** Sign-up limits: 3 per address a day, one live centre per email, 20 a day, 25 live. */
 export function refuse(signups, centres, { ip, email }, now) {
