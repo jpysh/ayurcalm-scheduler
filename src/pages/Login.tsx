@@ -133,10 +133,13 @@ const Login = () => {
               </Button>
             </form>
             {trial ? (
-              // A cloud trial's admin has no password (#247): the sign-up service emails a link.
-              <p className="mt-3 text-center text-sm">
-                <a className="underline" href={`https://signup.${window.location.host.split(".").slice(1).join(".")}/`}>Email me a sign-in link</a>
-              </p>
+              // No email at launch (#247): the maintainer sets a new password and sends it back.
+              <details className="mt-2 text-center">
+                <summary className="cursor-pointer text-sm text-muted-foreground">Forgotten your password?</summary>
+                <p className="mt-2 text-sm">
+                  <a className="underline" href={`https://wa.me/420777558262?text=${encodeURIComponent(`Please reset the password for ${window.location.host}`)}`}>WhatsApp us</a> from your phone and we will send you a new one, usually within a few hours.
+                </p>
+              </details>
             ) : null}
             {trial ? (
               // Pilot notice and contacts (#251): who runs a cloud centre and how to reach them.

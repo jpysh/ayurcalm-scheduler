@@ -1,31 +1,26 @@
 // Fake-clock checks for the trial lifecycle and sign-up limits (#247).
 import assert from 'node:assert/strict';
-import { next, refuse, slugFor } from './lifecycle.mjs';
+import { next, deletesAt, refuse, slugFor } from './lifecycle.mjs';
 const H = 3_600_000, D = 24 * H, t0 = Date.parse('2026-10-01T00:00:00Z');
 
-// Level 1 idle 72 h -> paused; paused 14 days -> deleted, warned 7 and 1 days before.
+// Level 1 idle 72 h -> paused; paused 14 days -> deleted. No warnings: nothing is emailed.
 const idle = { created: t0 };
 assert.equal(next(idle, t0 + 71 * H), null);
 assert.equal(next(idle, t0 + 72 * H).do, 'pause');
-const paused = { created: t0, paused_at: t0 + 72 * H, warned: {} };
-assert.equal(next(paused, paused.paused_at + 7 * D).key, 'p7');
-paused.warned.p7 = true;
-assert.equal(next(paused, paused.paused_at + 8 * D), null);
-assert.equal(next(paused, paused.paused_at + 13 * D).key, 'p1');
-paused.warned.p1 = true;
+const paused = { created: t0, paused_at: t0 + 72 * H };
+assert.equal(next(paused, paused.paused_at + 14 * D - 1), null);
+assert.equal(deletesAt(paused), paused.paused_at + 14 * D);
 assert.equal(next(paused, paused.paused_at + 14 * D).do, 'delete');
-// Restored (paused_at cleared) -> nothing to do until the trial starts... then 72 h again from created.
-// Real trial: warned 7 days before the end, at the end, then 7 and 1 days before deletion 60 days later.
-const ends = t0 + 30 * D, real = { created: t0, trial: { started_at: new Date(t0).toISOString(), ends_at: new Date(ends).toISOString() }, warned: {} };
+// Switched back on: the 72 h start again from the restore.
+assert.equal(next({ created: t0 + 20 * D }, t0 + 20 * D + 71 * H), null);
+// Real trial: never paused; read-only at the end is the app's; deleted 60 days after.
+const ends = t0 + 30 * D, real = { created: t0, trial: { started_at: new Date(t0).toISOString(), ends_at: new Date(ends).toISOString() } };
 assert.equal(next(real, t0 + 5 * D), null);
-assert.equal(next(real, ends - 7 * D).key, 't7'); real.warned.t7 = true;
-assert.equal(next(real, ends).key, 'ended'); real.warned.ended = true;
-assert.equal(next(real, ends + 53 * D).key, 'e7'); real.warned.e7 = true;
-assert.equal(next(real, ends + 59 * D).key, 'e1'); real.warned.e1 = true;
+assert.equal(next(real, ends + 59 * D), null);
 assert.equal(next(real, ends + 60 * D).do, 'delete');
 
 // Paid: never touched, however long ago the trial ended (#250).
-assert.equal(next({ ...real, warned: {}, trial: { ...real.trial, plan: 'founding' } }, ends + 400 * D), null);
+assert.equal(next({ ...real, trial: { ...real.trial, plan: 'founding' } }, ends + 400 * D), null);
 
 // Limits.
 const s = (ip, email, at = t0) => ({ ip, email, at });
