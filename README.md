@@ -1,4 +1,4 @@
-# AyurCalm Scheduler
+# Ruta (ayurcalm-scheduler)
 
 [![CI](https://github.com/jpysh/ayurcalm-scheduler/actions/workflows/ci.yml/badge.svg)](https://github.com/jpysh/ayurcalm-scheduler/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)

@@ -1,3 +1,4 @@
+import { PRODUCT } from "../../server/src/product";
 import { useEffect, useState } from "react";
 import { confirmSheet } from "@/components/ConfirmSheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,10 +34,10 @@ export const AssistantSection = () => {
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement("a");
       a.href = url;
-      a.download = "AyurCalm.mcpb";
+      a.download = `${PRODUCT}.mcpb`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success("Downloaded. Double-click AyurCalm.mcpb to add it to Claude Desktop.");
+      toast.success(`Downloaded. Double-click ${PRODUCT}.mcpb to add it to Claude Desktop.`);
       load();
     } catch {
       toast.error("Could not create the download");
@@ -62,7 +63,7 @@ export const AssistantSection = () => {
       <CardContent className="space-y-3">
         <ol className="list-decimal pl-5 text-sm space-y-1">
           <li>Install Claude Desktop on this computer, if you have not.</li>
-          <li>Download the AyurCalm extension below and double-click it. Claude asks to install it: click Install.</li>
+          <li>Download the {PRODUCT} extension below and double-click it. Claude asks to install it: click Install.</li>
           <li>In Claude, ask: "What's on tomorrow at the centre?"</li>
         </ol>
         {status?.connected && (

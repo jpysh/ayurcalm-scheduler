@@ -1,3 +1,4 @@
+import { PRODUCT } from './product.js';
 import 'dotenv/config';
 // Routes are async and validate with Zod. Without this, a rejected handler —
 // which a malformed request body is enough to cause — never reaches the error
@@ -161,7 +162,7 @@ if (fs.existsSync(staticDir)) {
 }
 if (!fs.existsSync(staticDir)) {
   expressApp.get('/', (_req: Request, res: Response) => {
-    res.status(200).send('AyurCalm API');
+    res.status(200).send(`${PRODUCT} API`);
   });
   expressApp.get('/{*path}', (_req: Request, res: Response) => {
     res.status(404).json({ error: 'Not Found' });
@@ -174,7 +175,7 @@ await loadJwtSecret();
 
 // Start server with timeouts
 const server = expressApp.listen(port, host, () => {
-  console.log(`AyurCalm API listening on http://${host}:${port}`);
+  console.log(`${PRODUCT} API listening on http://${host}:${port}`);
   if (!DEMO) void warnIfDefaultAdminUnchanged();
   scheduleDemoResets(resetDemo);
 });

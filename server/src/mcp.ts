@@ -6,6 +6,7 @@
  * Tools are grouped by what they act on, each with an `action`, so the list
  * stays short as later issues add writes (#120, #121, #124, #125).
  */
+import { PRODUCT } from './product.js';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import zlib from 'node:zlib';
@@ -45,7 +46,7 @@ async function requireMcpKey(req: Request, res: Response, next: NextFunction) {
   const row = key ? await prisma.serverSecret.findUnique({ where: { id: 'singleton' } }) : null;
   const stored = row?.mcp_key_hash ? Buffer.from(row.mcp_key_hash, 'hex') : null;
   if (!stored || !timingSafeEqual(stored, hash(key))) {
-    res.status(401).json({ error: 'AyurCalm key missing or revoked. Download the extension again from Settings.' });
+    res.status(401).json({ error: `${PRODUCT} key missing or revoked. Download the extension again from Settings.` });
     return;
   }
   const user = row!.mcp_key_user_id ? await prisma.user.findUnique({ where: { id: row!.mcp_key_user_id } }) : null;
@@ -96,10 +97,10 @@ function buildExtension(url: string, key: string, centreName: string): Buffer {
   const manifest = {
     manifest_version: '0.3',
     name: 'ayurcalm',
-    display_name: `AyurCalm — ${centreName}`,
+    display_name: `${PRODUCT} — ${centreName}`,
     version: '1.0.0',
     description: "Your centre's day, residents, therapists and day sheet, from Claude.",
-    author: { name: 'AyurCalm' },
+    author: { name: PRODUCT },
     server: {
       type: 'node',
       entry_point: 'server/index.cjs',
@@ -127,7 +128,7 @@ mcpKeyRouter.post('/extension', requireAdmin, async (req: Request, res: Response
   // machine, can reach.
   const url = `${req.protocol}://${req.get('host')}/mcp`;
   res.setHeader('Content-Type', 'application/zip');
-  res.setHeader('Content-Disposition', 'attachment; filename="AyurCalm.mcpb"');
+  res.setHeader('Content-Disposition', `attachment; filename="${PRODUCT}.mcpb"`);
   res.send(buildExtension(url, key, settings?.centre_name || 'Wellness Centre'));
 });
 
@@ -299,7 +300,7 @@ export function buildServer() {
     { name: 'ayurcalm', version: '1.0.0' },
     {
       instructions:
-        "AyurCalm runs one residential Ayurveda centre. Dates are the centre's, never yours: ask centre/today first. " +
+        `${PRODUCT} runs one residential Ayurveda centre. Dates are the centre's, never yours: ask centre/today first. ` +
         'Repeat refusals and reasons to the admin as they are written. Names and ids always come back together; never invent an id.',
     },
   );

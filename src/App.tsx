@@ -1,3 +1,4 @@
+import { PRODUCT } from "../server/src/product";
 import { Toaster } from "@/components/ui/toaster";
 import { ConfirmHost } from "@/components/ConfirmSheet";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -247,7 +248,7 @@ const App = () => {
                         const tab = window.open("", "_blank");
                         try {
                           const support = await fetch(`${API_BASE}/settings`).then((r) => r.json()).then((s) => s?.support_whatsapp as string | null).catch(() => null);
-                          if (tab && support) tab.location.href = `https://wa.me/${support}?text=${encodeURIComponent(`AyurCalm feedback (${payload.page}): ${feedbackText}`)}`;
+                          if (tab && support) tab.location.href = `https://wa.me/${support}?text=${encodeURIComponent(`${PRODUCT} feedback (${payload.page}): ${feedbackText}`)}`;
                           else tab?.close();
                           const res = await fetch(`${API_BASE}/feedback`, {
                             method: "POST",

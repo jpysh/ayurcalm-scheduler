@@ -1,3 +1,4 @@
+import { PRODUCT } from "../../server/src/product";
 import { useEffect, useState, type ReactNode } from "react";
 import { confirmSheet } from "@/components/ConfirmSheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -127,7 +128,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
     a.download = backups?.latest?.name || "ayurcalm-backup.sql.gz";
     a.click();
   };
-  // Moving to or from another AyurCalm (#231): one file with the whole centre.
+  // Moving to or from another install (#231): one file with the whole centre.
   const [moving, setMoving] = useState(false);
   const exportCentre = async () => {
     setMoving(true);
@@ -280,7 +281,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
       {isAdmin ? row("backups", "Backups", backups?.latest ? `Last ${since(backups.latest.at)}` : "No backup yet") : null}
       {row("printed", "Printed sheets", "Each day's sheets as last printed, 90 days")}
       {settings.support_whatsapp ? (
-        <a className={rowClass} href={`https://wa.me/${settings.support_whatsapp}?text=${encodeURIComponent("AyurCalm: a problem or an idea from " + settings.centre_name + ": ")}`} target="_blank" rel="noopener noreferrer">
+        <a className={rowClass} href={`https://wa.me/${settings.support_whatsapp}?text=${encodeURIComponent(PRODUCT + ": a problem or an idea from " + settings.centre_name + ": ")}`} target="_blank" rel="noopener noreferrer">
           <span className="flex-1"><b className="block text-[16px]">Report a problem or an idea</b><span className="block text-[13px] text-muted-foreground">On WhatsApp, straight to whoever looks after this app</span></span>
           <span className="text-muted-foreground">›</span>
         </a>
@@ -357,7 +358,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
       </div>
       {backups?.latest ? <Button className="min-h-11 w-full rounded-full" onClick={downloadBackup}>Download the newest backup</Button> : null}
       <div className="mt-2 border-t pt-3">
-        <b className="block text-[15px]">Move to another AyurCalm</b>
+        <b className="block text-[15px]">Move to another {PRODUCT}</b>
         <p className="text-sm text-muted-foreground">From the cloud to your own computer, or back: download everything here as one file, then load it into the other one. Loading replaces whatever that install holds, so do it on a new one.</p>
       </div>
       <Button variant="outline" className="min-h-11 w-full rounded-full" disabled={moving} onClick={exportCentre}>{moving ? "Working…" : "Download everything"}</Button>
