@@ -1,6 +1,7 @@
 declare module 'pdfkit';
 import { teamOf } from '../availability.js';
 import PDFDocument from 'pdfkit';
+import { madeWith } from '../product.js';
 import { PrismaClient } from '@prisma/client';
 import { addHeader, shortenWords, toMinutes, eventWindow } from './dailySchedulePdf.js';
 
@@ -241,6 +242,7 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
   const weekday = weekdayNames[day.getDay()];
 
   const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  const made = madeWith(settings);
   const centreName = settings?.centre_name || process.env.CENTRE_NAME || 'Wellness Centre';
 
   const [rooms, patients, therapies, staff, appts, eventsByDate, weeklyEvents, timeOff] = await Promise.all([
@@ -450,6 +452,8 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
     pageNo++;
     doc.font('Helvetica').fontSize(8)
       .text(`Page ${pageNo} of ${totalPages}`, x, pageBottom + 4, { width: w, align: 'center', lineBreak: false });
+    // Same line as the page number, so it never costs a page (#249).
+    if (made) doc.fillColor('#666').text(made, x, pageBottom + 4, { width: w, align: 'right', lineBreak: false }).fillColor('black');
     drawHeaderRow();
   };
 

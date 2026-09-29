@@ -1,0 +1,1 @@
+ALTER TABLE "Settings" ADD COLUMN "plan" TEXT, ADD COLUMN "paid_until" TIMESTAMP(3), ADD COLUMN "show_footer" BOOLEAN NOT NULL DEFAULT true;

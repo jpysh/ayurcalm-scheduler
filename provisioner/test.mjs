@@ -24,6 +24,9 @@ assert.equal(next(real, ends + 53 * D).key, 'e7'); real.warned.e7 = true;
 assert.equal(next(real, ends + 59 * D).key, 'e1'); real.warned.e1 = true;
 assert.equal(next(real, ends + 60 * D).do, 'delete');
 
+// Paid: never touched, however long ago the trial ended (#250).
+assert.equal(next({ ...real, warned: {}, trial: { ...real.trial, plan: 'founding' } }, ends + 400 * D), null);
+
 // Limits.
 const s = (ip, email, at = t0) => ({ ip, email, at });
 assert.match(refuse([s('1', 'a'), s('1', 'b'), s('1', 'c')], [], { ip: '1', email: 'd' }, t0), /connection/);

@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { madeWith } from '../product.js';
 import { fileURLToPath } from 'node:url';
 import type { PrismaClient } from '@prisma/client';
 import { dischargeOf, letterheadOf, type DischargeView, type Letterhead, type Med } from '../discharge.js';
@@ -20,7 +21,7 @@ const image = (doc: any, uri: string | null | undefined, x: number, y: number, o
   try { doc.image(Buffer.from(uri.split(',')[1], 'base64'), x, y, opts); return true; } catch { return false; }
 };
 
-export async function generateDischargePdf(v: DischargeView, centre: { name: string; address: string | null; logo: string | null }, lh: Letterhead): Promise<Buffer> {
+export async function generateDischargePdf(v: DischargeView, centre: { name: string; address: string | null; logo: string | null; made?: string }, lh: Letterhead): Promise<Buffer> {
   const doc = new PDFDocument({ size: 'A4', margin: M, bufferPages: true });
   doc.registerFont('Local', DEVANAGARI);
   const chunks: Buffer[] = [];
@@ -153,7 +154,7 @@ export async function generateDischargePdf(v: DischargeView, centre: { name: str
     doc.switchToPage(i);
     doc.page.margins.bottom = 0; // or writing in the margin starts a new page
     doc.font('Helvetica').fontSize(7).fillColor('#666');
-    const foot = [lh.footer_line, `${v.name} · ${d.no} · page ${i + 1} of ${range.count}`].filter(Boolean).join('    ');
+    const foot = [lh.footer_line, `${v.name} · ${d.no} · page ${i + 1} of ${range.count}`, centre.made].filter(Boolean).join('    ');
     doc.text(foot, M, 841.89 - M - 8, { width: W, align: 'center', lineBreak: false });
   }
   doc.end();
@@ -165,6 +166,6 @@ export async function renderDischarge(stayId: string, prisma: PrismaClient) {
   const v = await dischargeOf(stayId, prisma);
   if (!v) return null;
   const s = await prisma.settings.findUnique({ where: { id: 'singleton' } });
-  const pdf = await generateDischargePdf(v, { name: s?.centre_name || 'Wellness Centre', address: s?.address ?? null, logo: s?.logo ?? null }, letterheadOf(s?.letterhead));
+  const pdf = await generateDischargePdf(v, { name: s?.centre_name || 'Wellness Centre', address: s?.address ?? null, logo: s?.logo ?? null, made: madeWith(s) }, letterheadOf(s?.letterhead));
   return { pdf, filename: `${v.name} - discharge summary.pdf` };
 }

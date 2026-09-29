@@ -4,8 +4,8 @@ import { PRODUCT } from "../../server/src/product";
 
 
 export type DemoInfo = { email: string; password: string; next_reset: string };
-export type TrialInfo = { started_at: string | null; ends_at: string | null; read_only: boolean };
-type Support = { centre_name?: string; demo?: DemoInfo; trial?: TrialInfo };
+export type TrialInfo = { started_at: string | null; ends_at: string | null; read_only: boolean; plan: string | null; paid_until: string | null };
+type Support = { centre_name?: string; demo?: DemoInfo; trial?: TrialInfo; made_with?: string };
 
 // One request for the whole page: the login screen and the demo banner both read it.
 let support: Promise<Support | null> | null = null;
@@ -30,4 +30,11 @@ export function useTrial() {
   const [trial, setTrial] = useState<TrialInfo | null>(null);
   useEffect(() => { loadSupport().then((d) => setTrial(d?.trial ?? null)); }, []);
   return trial;
+}
+
+/** "Made with Ruta ..." for the foot of link pages (#249); empty when a paying centre turned it off. */
+export function useMadeWith() {
+  const [made, setMade] = useState("");
+  useEffect(() => { loadSupport().then((d) => setMade(d?.made_with ?? "")); }, []);
+  return made;
 }

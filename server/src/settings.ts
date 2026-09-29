@@ -13,6 +13,7 @@ import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'node:url';
 import { DEMO, nextReset } from './demo.js';
 import { trialInfo } from './trial.js';
+import { madeWith } from './product.js';
 import { DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD } from './auth.js';
 
 const SINGLETON_ID = 'singleton';
@@ -61,6 +62,7 @@ const settingsSchema = z.object({
   patient_support_whatsapp: z.string().trim().regex(/^\d{8,15}$/, 'Use international format with no + or leading zero, e.g. 420777558262').or(z.literal('')).nullish(),
   setup_complete: z.boolean().optional(),
   enforce_gender_match: z.boolean().optional(),
+  show_footer: z.boolean().optional(),
   letterhead: letterheadSchema.optional(),
 }).refine(
   v => toMinutes(v.closing_time) > toMinutes(v.opening_time),
@@ -165,6 +167,7 @@ publicSettingsRouter.get('/support', async (_req: Request, res: Response) => {
     centre_name: settings.centre_name,
     patient_support_whatsapp: settings.patient_support_whatsapp,
     trial: await trialInfo(),
+    made_with: madeWith(settings),
     ...(DEMO && { demo: { email: DEFAULT_ADMIN_EMAIL, password: DEFAULT_ADMIN_PASSWORD, next_reset: nextReset() } }),
   });
 });

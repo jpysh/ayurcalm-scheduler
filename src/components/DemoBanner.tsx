@@ -4,11 +4,13 @@ import { useDemo, useTrial } from "@/lib/centreName";
 export function DemoBanner() {
   const demo = useDemo();
   const trial = useTrial();
-  if (trial?.ends_at) {
+  if (trial?.ends_at || trial?.read_only) {
     const days = Math.ceil((Date.parse(trial.ends_at) - Date.now()) / 86400000);
     return (
       <div role="status" className="bg-amber-100 text-amber-950 text-xs text-center px-4 py-1.5">
-        {trial.read_only
+        {trial.plan
+          ? "Payment is overdue, so the centre is read-only. Nothing is deleted: Settings → Plan to carry on."
+          : trial.read_only
           ? "Your free trial has ended. Nothing is deleted: download everything from Settings, or choose a plan to keep going."
           : `Free trial: ${days} ${days === 1 ? "day" : "days"} left.`}
       </div>

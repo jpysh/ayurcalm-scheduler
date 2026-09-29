@@ -327,6 +327,13 @@ model Settings {
   /// Cloud trials only (TRIAL=true, #247): when the 30 days began, which is
   /// the first resident added or day sheet printed after setup. Null before.
   trial_started_at         DateTime?
+  /// Billing (#250), set by hand with `centre.sh paid` until Razorpay:
+  /// "cloud", "onprem" or "founding", and the day paid until. A plan lifts a
+  /// trial's read-only; 14 days past paid_until it is read-only again.
+  plan                     String?
+  paid_until               DateTime?
+  /// "Made with Ruta" on sheets and links (#249). Only a paying centre may turn it off.
+  show_footer              Boolean  @default(true)
   updated_at               DateTime @updatedAt
 }
 

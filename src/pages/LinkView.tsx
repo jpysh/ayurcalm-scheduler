@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
+import { useMadeWith } from "@/lib/centreName";
 import { BottomSheet } from "@/components/BottomBar";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 
@@ -27,6 +28,7 @@ const shift = (ymd: string, n: number) => new Date(Date.parse(`${ymd}T00:00:00Z`
 const nowHM = () => new Date().toTimeString().slice(0, 5);
 
 export default function LinkView() {
+  const made = useMadeWith();
   const { token = "" } = useParams();
   const [date, setDate] = useState<string | null>(null);
   const [day, setDay] = useState<Day | null>(null);
@@ -186,6 +188,7 @@ export default function LinkView() {
           ))}
         </div>
       </BottomSheet>
+      {made && <p className="mt-8 text-center text-xs text-muted-foreground"><a href="https://jains.es/ruta" className="underline-offset-2 hover:underline">{made}</a></p>}
     </main>
   );
 }
