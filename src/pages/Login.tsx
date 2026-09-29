@@ -137,7 +137,14 @@ const Login = () => {
               <p className="mt-3 text-center text-sm">
                 <a className="underline" href={`https://signup.${window.location.host.split(".").slice(1).join(".")}/`}>Email me a sign-in link</a>
               </p>
-            ) : (
+            ) : null}
+            {trial ? (
+              // Pilot notice and contacts (#251): who runs a cloud centre and how to reach them.
+              <p className="mt-4 text-center text-xs text-muted-foreground">
+                <a className="underline" href="https://jains.es/ruta/pilot">Pilot notice: your data</a> · <a className="underline" href="https://wa.me/420777558262">WhatsApp</a> · <a className="underline" href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a>
+              </p>
+            ) : null}
+            {trial ? null : (
             <details className="mt-2 text-center">
               <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
                 Forgotten your password?

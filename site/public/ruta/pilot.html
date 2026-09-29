@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ruta pilot notice</title>
+<meta name="description" content="Who runs Ruta, what it stores and why, and how to get your data out or deleted, while Ruta is in its pilot.">
+<link rel="icon" href="data:,">
+<style>
+:root{--bg:#f3f6f3;--card:#fff;--ink:#1c2b22;--muted:#56645b;--line:#dfe6e0;--brand:#3d6b50;--brand-ink:#fff;--soft:#e6efe8;--warn:#9a4a1a}
+@media (prefers-color-scheme:dark){:root{--bg:#131a16;--card:#1b241f;--ink:#e6ede8;--muted:#a3b1a8;--line:#2c3831;--brand:#6fae88;--brand-ink:#0f1612;--soft:#223029;--warn:#f0a36b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--brand)}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+header.top{display:flex;align-items:center;justify-content:space-between;padding:14px 0}
+.logo{font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--ink);text-decoration:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 22px;border-radius:999px;font-weight:650;text-decoration:none;border:1.5px solid var(--brand)}
+.btn.primary{background:var(--brand);color:var(--brand-ink)}
+.btn.ghost{color:var(--brand);background:transparent}
+.hero{padding:28px 0 8px}
+h1{font-size:clamp(32px,6vw,52px);line-height:1.08;letter-spacing:-.025em;margin:0 0 14px}
+h2{font-size:clamp(24px,4vw,32px);letter-spacing:-.02em;margin:56px 0 16px}
+.lead{font-size:19px;color:var(--muted);max-width:40rem;margin:0 0 22px}
+.ctas{display:flex;gap:10px;flex-wrap:wrap}
+.note{font-size:14px;color:var(--muted);margin-top:10px}
+.shots{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:36px;align-items:start}
+.shots figure{margin:0}
+.shots img{width:100%;height:auto;border-radius:18px;border:1px solid var(--line);display:block;background:var(--card)}
+.shots figcaption{font-size:14px;color:var(--muted);margin-top:8px}
+.feat{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.feat div{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+.feat b{display:block;margin-bottom:4px}
+.feat p{margin:0;color:var(--muted);font-size:15px}
+.toggle{display:inline-flex;background:var(--soft);border-radius:999px;padding:4px;margin-bottom:16px}
+input[name=billing]{position:absolute;opacity:0;pointer-events:none}
+.toggle label{padding:8px 16px;border-radius:999px;cursor:pointer;font-size:15px;font-weight:600}
+#m:checked~.toggle label[for=m],#y:checked~.toggle label[for=y]{background:var(--card)}
+#m:focus-visible~.toggle label[for=m],#y:focus-visible~.toggle label[for=y]{outline:2px solid var(--brand)}
+.yr{display:none}#y:checked~.plans .yr{display:inline}#y:checked~.plans .mo{display:none}
+.usd{display:none}html[data-cc=XX] .usd{display:inline}html[data-cc=XX] .inr{display:none}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.plan{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;display:flex;flex-direction:column}
+.plan.best{border:2px solid var(--brand)}
+.plan h3{margin:0 0 4px;font-size:19px}
+.price{font-size:30px;font-weight:800;letter-spacing:-.02em;margin:8px 0 2px}
+.price s{font-size:17px;font-weight:500;color:var(--muted);margin-left:6px}
+.per{font-size:14px;color:var(--muted)}
+.plan ul{padding-left:18px;margin:14px 0;color:var(--muted);font-size:15px;flex:1}
+.tag{display:inline-block;background:var(--soft);color:var(--brand);font-weight:700;font-size:13px;border-radius:999px;padding:3px 10px}
+.left{color:var(--warn);font-weight:650;font-size:14px;margin-top:6px}
+details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;margin-bottom:8px}
+summary{cursor:pointer;font-weight:650;min-height:48px;display:flex;align-items:center}
+details p{color:var(--muted);margin:0 0 14px}
+footer{margin:64px 0 40px;color:var(--muted);font-size:15px}
+@media (max-width:720px){.shots{grid-template-columns:1fr 1fr}.shots figure:last-child{grid-column:1/-1}.ctas .btn{flex:1}}
+</style>
+</head>
+<body>
+<div class="wrap" style="max-width:44rem">
+<header class="top"><a class="logo" href="/ruta">Ruta</a></header>
+<h1 style="font-size:32px">Pilot notice</h1>
+<p class="lead">Ruta is in a pilot. This is how we handle your centre's data until a lawyer has reviewed a full privacy policy. Last changed 29 September 2026.</p>
+<h2>Who runs it</h2>
+<p>Ruta is run by its maintainer, who also answers questions and complaints: <a href="https://wa.me/420777558262">WhatsApp +420 777 558 262</a>, <a href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a>. We reply within one working day, and act on any request within 30 days.</p>
+<h2>Whose data it is</h2>
+<p>Your centre decides what goes into Ruta and is responsible for its residents' data. Ruta keeps and processes it only to run your centre's schedule for you.</p>
+<h2>What we store and why</h2>
+<p>Names and phone numbers of staff and residents; stay dates; therapies, schedules, diets, vitals and notes you enter; your letterhead, logo and signatures; the admin's email for sign-in. It is used only to run the schedule, print your sheets and send you sign-in and trial emails. No card details. No ads, never sold or shared, never used to train AI.</p>
+<h2>Where it is kept</h2>
+<p>On servers we run for the pilot, behind Cloudflare for HTTPS, with an encrypted nightly copy kept in a second place (Cloudflare R2). Only the maintainer can reach them. A centre on On-premise keeps everything on its own computer.</p>
+<h2>Getting it out, or deleted</h2>
+<p>Settings → Download everything gives you all your data in one file at any time, also after a trial ends. Ask us and we delete your centre; trial centres are deleted automatically as the trial emails say. Backup copies roll off within 30 days.</p>
+<h2>Changes</h2>
+<p>We announce changes to this notice in the app before they apply.</p>
+<footer><a href="/ruta">Back to Ruta</a></footer>
+</div>
+</body>
+</html>
