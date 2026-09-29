@@ -127,6 +127,31 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
     a.download = backups?.latest?.name || "ayurcalm-backup.sql.gz";
     a.click();
   };
+  // Moving to or from another AyurCalm (#231): one file with the whole centre.
+  const [moving, setMoving] = useState(false);
+  const exportCentre = async () => {
+    setMoving(true);
+    try {
+      const res = await fetch(`${API_BASE}/settings/export`);
+      if (!res.ok) { toast.error("The export could not be made"); return; }
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await res.blob());
+      a.download = `ayurcalm-export-${new Date().toISOString().slice(0, 10)}.json.gz`;
+      a.click();
+    } finally { setMoving(false); }
+  };
+  const importCentre = async (file: File | undefined) => {
+    if (!file) return;
+    if (!(await confirmSheet("Replace everything in this app with the centre in this file?\n\nEveryone signs in again afterwards, with the passwords from the other install.", "Replace"))) return;
+    setMoving(true);
+    try {
+      const res = await fetch(`${API_BASE}/settings/import`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: file });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(data?.error || "That file could not be loaded", { duration: 10000 }); return; }
+      toast.success("Loaded. Sign in again.");
+      setTimeout(() => signOut ? signOut() : window.location.reload(), 1200);
+    } finally { setMoving(false); }
+  };
   const since = (iso: string) => new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: settings?.timezone || "Asia/Kolkata" });
   const lh = (settings?.letterhead || {}) as Partial<Letterhead>;
   const setLh = (k: keyof Letterhead, v: string) => update("letterhead", { ...lh, [k]: v } as Letterhead);
@@ -326,11 +351,20 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
       )}
       </>)}
       {sheet("backups", "Backups", <>
-      <p className="text-sm text-muted-foreground">Everything in the app is backed up when it starts and every night at 02:30, and the newest 14 are kept on the computer that runs it. Keep a copy somewhere else too: download the newest now and then, and save it to your phone or email it to yourself.</p>
+      <p className="text-sm text-muted-foreground">Everything in the app is backed up ten minutes after it starts and every night at 02:30, and the newest 14 are kept on the computer that runs it. Keep a copy somewhere else too: download the newest now and then, and save it to your phone or email it to yourself.</p>
       <div className="rounded-xl border p-3 text-[15px]">
         {backups?.latest ? <>Newest: <b>{since(backups.latest.at)}</b> · {(backups.latest.size / 1024 / 1024).toFixed(1)} MB · {backups.count} kept</> : "No backup yet. Ask whoever set up the app to check the backup service is running."}
       </div>
       {backups?.latest ? <Button className="min-h-11 w-full rounded-full" onClick={downloadBackup}>Download the newest backup</Button> : null}
+      <div className="mt-2 border-t pt-3">
+        <b className="block text-[15px]">Move to another AyurCalm</b>
+        <p className="text-sm text-muted-foreground">From the cloud to your own computer, or back: download everything here as one file, then load it into the other one. Loading replaces whatever that install holds, so do it on a new one.</p>
+      </div>
+      <Button variant="outline" className="min-h-11 w-full rounded-full" disabled={moving} onClick={exportCentre}>{moving ? "Working…" : "Download everything"}</Button>
+      <label className="flex min-h-11 w-full cursor-pointer items-center justify-center rounded-full border font-semibold">
+        Load a centre from a file
+        <input type="file" accept=".gz,application/gzip" className="sr-only" disabled={moving} onChange={(e) => { importCentre(e.target.files?.[0]); e.target.value = ""; }} />
+      </label>
       </>)}
       {sheet("printed", "Printed sheets", <>
       <p className="text-xs text-muted-foreground">The last copy printed for each day. Printing a day again replaces its copy; copies older than 90 days are removed.</p>

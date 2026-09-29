@@ -43,6 +43,10 @@ async function main() {
   });
 
   const cases: [string, () => Promise<void>][] = [
+    ['deleting a leave that is already gone answers done, not a 500', async () => {
+      const res = await fetch(`${API_BASE}/timeoff/00000000-0000-4000-8000-000000000000`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      if (res.status !== 204) throw new Error(`answered ${res.status}`);
+    }],
     ['a programme event with no recurrence is created, not a 500', async () => {
       const res = await post('/program-events', {
         start_time: '10:00', end_time: '11:00', activity_name: 'Validation Test Event',

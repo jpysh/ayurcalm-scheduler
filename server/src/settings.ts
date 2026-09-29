@@ -1,4 +1,5 @@
-import { Router, type Request, type Response, type NextFunction } from 'express';
+import express, { Router, type Request, type Response, type NextFunction } from 'express';
+import { exportCentre, importCentre, ImportRefused } from './transfer.js';
 import { z } from 'zod';
 import { prisma } from './server.js';
 import { wipeDemo, KEEPABLE, type Keep } from './demoData.js';
@@ -178,4 +179,21 @@ settingsRouter.get('/backups/latest', backupLimiter, requireAdmin, async (_req: 
   res.setHeader('Content-Type', 'application/gzip');
   res.setHeader('Content-Disposition', `attachment; filename="${latest.name}"`);
   createReadStream(join(BACKUPS, latest.name)).pipe(res);
+});
+
+// Moving a centre between installs (#231): one file out, one file in.
+settingsRouter.get('/export', backupLimiter, requireAdmin, async (_req: Request, res: Response) => {
+  const day = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'application/gzip');
+  res.setHeader('Content-Disposition', `attachment; filename="ayurcalm-export-${day}.json.gz"`);
+  res.send(await exportCentre(prisma));
+});
+settingsRouter.post('/import', backupLimiter, requireAdmin, express.raw({ type: () => true, limit: '200mb' }), async (req: Request, res: Response) => {
+  if (!Buffer.isBuffer(req.body) || !req.body.length) { res.status(400).json({ error: 'Choose an export file.' }); return; }
+  try {
+    res.json({ ok: true, imported: await importCentre(req.body, prisma) });
+  } catch (e) {
+    if (e instanceof ImportRefused) { res.status(409).json({ error: e.message }); return; }
+    throw e;
+  }
 });
