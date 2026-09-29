@@ -1,0 +1,8 @@
+# One Cloudflare Tunnel for every Ruta address on jains.es (#246).
+# The provisioner (#247) adds a line per centre above the 404.
+tunnel: ruta
+credentials-file: /etc/cloudflared/ruta.json
+ingress:
+  - hostname: demo.jains.es
+    service: http://host.docker.internal:8201
+  - service: http_status:404

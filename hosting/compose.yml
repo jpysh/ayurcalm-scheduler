@@ -1,0 +1,25 @@
+# The host's shared services (#246): the Cloudflare Tunnel for *.jains.es.
+#   docker compose -f hosting/compose.yml -p ruta-host up -d
+# Needs $RUTA_DATA/tunnel.json (from `cloudflared tunnel create ruta`) and
+# $RUTA_DATA/tunnel.yml (starts as a copy of hosting/tunnel.yml; one line per centre).
+services:
+  tunnel:
+    image: cloudflare/cloudflared:2026.9.3
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    volumes:
+      - ${RUTA_DATA:-~/ruta-data}/tunnel.yml:/etc/cloudflared/config.yml:ro
+      - ${RUTA_DATA:-~/ruta-data}/tunnel.json:/etc/cloudflared/ruta.json:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Off by default until R2 is set up: docker compose ... --profile offsite up -d
+  offsite:
+    image: rclone/rclone:1.71
+    profiles: [offsite]
+    restart: unless-stopped
+    entrypoint: ["sh", "/offsite.sh"]
+    env_file: ${RUTA_DATA:-~/ruta-data}/r2.env
+    volumes:
+      - ./offsite.sh:/offsite.sh:ro
+      - ${RUTA_DATA:-~/ruta-data}:/data:ro
