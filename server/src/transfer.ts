@@ -6,6 +6,7 @@
  * the database's shape at that version. The server's signing secret is never
  * exported: a new install keeps its own, so everyone signs in again.
  */
+import { PRODUCT } from './product.js';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { Prisma, type PrismaClient } from '@prisma/client';
 
@@ -37,9 +38,9 @@ export class ImportRefused extends Error {}
 
 export async function importCentre(file: Buffer, prisma: PrismaClient) {
   let data: { app?: string; version?: string; tables?: Record<string, Record<string, unknown>[]> };
-  try { data = JSON.parse(gunzipSync(file).toString('utf8')); } catch { throw new ImportRefused('That is not an AyurCalm export file.'); }
-  if (data.app !== 'ayurcalm' || !data.tables) throw new ImportRefused('That is not an AyurCalm export file.');
-  if (data.version !== (await version(prisma))) throw new ImportRefused('That file comes from a different version of AyurCalm. Update both to the same version, then export again.');
+  try { data = JSON.parse(gunzipSync(file).toString('utf8')); } catch { throw new ImportRefused(`That is not a ${PRODUCT} export file.`); }
+  if (data.app !== 'ayurcalm' || !data.tables) throw new ImportRefused(`That is not a ${PRODUCT} export file.`);
+  if (data.version !== (await version(prisma))) throw new ImportRefused(`That file comes from a different version of ${PRODUCT}. Update both to the same version, then export again.`);
   const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
   if (settings && !settings.demo_data && (await prisma.patient.count()) > 0) {
     throw new ImportRefused("This install already holds a centre's own data. Load the file into a new install.");

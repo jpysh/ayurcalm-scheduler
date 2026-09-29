@@ -1,3 +1,4 @@
+import { PRODUCT } from "../../server/src/product";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Flower2, Calendar, Users, Sparkles } from "lucide-react";
@@ -14,7 +15,7 @@ const Index = () => {
           <div className="mx-auto bg-primary rounded-full p-6 w-24 h-24 flex items-center justify-center shadow-lg">
             <Flower2 className="w-12 h-12 text-primary-foreground" />
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold">AyurApp</h1>
+          <h1 className="text-4xl md:text-5xl font-bold">{PRODUCT}</h1>
           <p className="text-xl md:text-2xl text-muted-foreground">
             Ayurvedic Therapy Center Management System
           </p>

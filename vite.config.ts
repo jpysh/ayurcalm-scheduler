@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { PRODUCT } from "./server/src/product";
 
 // Dev server proxies /api to the local API, so the app uses the same
 // same-origin "/api" base in development and in production.
@@ -22,7 +23,7 @@ export default defineConfig(() => ({
   preview: {
     proxy: apiProxy,
   },
-  plugins: [react()],
+  plugins: [react(), { name: "product", transformIndexHtml: (html: string) => html.replaceAll("%PRODUCT%", PRODUCT) }],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),

@@ -1,4 +1,4 @@
-# AyurCalm on your phone: the daily jobs
+# Ruta on your phone: the daily jobs
 
 One page for the person running the centre. Sign in on your phone; everything below starts from the bar at the bottom: **☰ menu · 🔍 search · the day · 🖨 print · ＋ book**.
 

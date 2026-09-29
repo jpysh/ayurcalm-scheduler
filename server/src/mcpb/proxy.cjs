@@ -39,13 +39,13 @@ async function forward(msg) {
   try {
     res = await fetch(URL_, { method: 'POST', headers, body: JSON.stringify(msg) });
   } catch {
-    if (msg.id !== undefined) send({ jsonrpc: '2.0', id: msg.id, error: { code: -32000, message: `AyurCalm is not running at ${URL_}. Start it (docker compose up -d) and try again.` } });
+    if (msg.id !== undefined) send({ jsonrpc: '2.0', id: msg.id, error: { code: -32000, message: `Ruta is not running at ${URL_}. Start it (docker compose up -d) and try again.` } });
     return;
   }
   if (res.status === 202 || msg.id === undefined) return;
   const text = await res.text();
   if (res.status === 401) {
-    send({ jsonrpc: '2.0', id: msg.id, error: { code: -32001, message: 'AyurCalm refused this key. It was revoked or replaced: download the extension again from AyurCalm Settings.' } });
+    send({ jsonrpc: '2.0', id: msg.id, error: { code: -32001, message: 'Ruta refused this key. It was revoked or replaced: download the extension again from Ruta Settings.' } });
     return;
   }
   const replies = (res.headers.get('content-type') || '').includes('text/event-stream')

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { API_BASE } from "@/lib/apiBase";
+import { PRODUCT } from "../../server/src/product";
+
 
 export type DemoInfo = { email: string; password: string; next_reset: string };
 type Support = { centre_name?: string; demo?: DemoInfo };
@@ -9,7 +11,7 @@ let support: Promise<Support | null> | null = null;
 const loadSupport = () => (support ??= fetch(`${API_BASE}/public/support`).then((r) => (r.ok ? r.json() : null)).catch(() => null));
 
 /** The centre's own name from Settings; public, so the login page can show it too. */
-export function useCentreName(fallback = "AyurCalm") {
+export function useCentreName(fallback = PRODUCT) {
   const [name, setName] = useState(fallback);
   useEffect(() => { loadSupport().then((d) => { if (d?.centre_name) setName(d.centre_name); }); }, []);
   return name;
