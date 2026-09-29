@@ -79,5 +79,7 @@ jobs:
       # Sign in, every tab, the day sheet. The absence walk already ran in qa, and
       # a second run would press on the API's write limit.
       - run: npm run test:e2e -- --grep-invert "a therapist off"
+      # A centre moves self-host -> cloud -> self-host in one file (#231).
+      - run: sh scripts/move-test.sh
       - if: failure()
         run: docker compose logs app | tail -100
