@@ -5,7 +5,7 @@ import { PRODUCT } from "../../server/src/product";
 
 export type DemoInfo = { email: string; password: string; next_reset: string };
 export type TrialInfo = { started_at: string | null; ends_at: string | null; read_only: boolean; plan: string | null; paid_until: string | null };
-type Support = { centre_name?: string; demo?: DemoInfo; trial?: TrialInfo; made_with?: string };
+type Support = { centre_name?: string; patient_support_whatsapp?: string | null; demo?: DemoInfo; trial?: TrialInfo; made_with?: string };
 
 // One request for the whole page: the login screen and the demo banner both read it.
 let support: Promise<Support | null> | null = null;
@@ -37,4 +37,11 @@ export function useMadeWith() {
   const [made, setMade] = useState("");
   useEffect(() => { loadSupport().then((d) => setMade(d?.made_with ?? "")); }, []);
   return made;
+}
+
+/** The centre's reception WhatsApp for residents (#273 M1); null until the centre sets its own. */
+export function useReception() {
+  const [n, setN] = useState<string | null>(null);
+  useEffect(() => { loadSupport().then((d) => setN(d?.patient_support_whatsapp ?? null)); }, []);
+  return n;
 }

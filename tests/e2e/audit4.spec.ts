@@ -85,3 +85,24 @@ test('O2: the print note keeps its words on one line, the other sheets under the
   expect((await words.boundingBox())!.width).toBeGreaterThan(180);
   await expect(page.locator('[data-sonner-toast]').getByRole('button', { name: 'Doctor sheet' })).toBeVisible();
 });
+
+test("M1: a resident's link offers WhatsApp reception once the centre sets its own number", async ({ page, request }) => {
+  const { token } = await (await request.post('/api/auth/login', { data: { email: 'admin@example.com', password: 'demo1234' } })).json();
+  const headers = { Authorization: `Bearer ${token}` };
+  const current = await (await request.get('/api/settings', { headers })).json();
+  const set = async (n: string) => expect((await request.put('/api/settings', { headers, data: { ...current, support_whatsapp: '420777558262', patient_support_whatsapp: n } })).ok()).toBe(true);
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const resident = (await (await request.get(`/api/patients?resident_on=${today}`, { headers })).json())[0];
+  const { token: link } = await (await request.post(`/api/patients/${resident.id}/link`, { headers })).json();
+  try {
+    await set('420777558262');
+    await page.goto(`/l/${link}`);
+    await expect(page.getByText(resident.name).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: 'WhatsApp reception' })).toHaveCount(0);
+    await set('919876543210');
+    await page.goto(`/l/${link}`);
+    await expect(page.getByRole('link', { name: 'WhatsApp reception' })).toHaveAttribute('href', /wa\.me\/919876543210/);
+  } finally {
+    await request.put('/api/settings', { headers, data: current });
+  }
+});
