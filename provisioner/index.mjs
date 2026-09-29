@@ -117,6 +117,27 @@ export async function tick(now = Date.now()) {
   }
 }
 
+// ---- watch, hourly (#248): the demo and every centre up, a backup in the last 26 h, disk not full.
+// Each problem is told once on Telegram, and once more when it clears. All clear pings HEALTHCHECKS_URL,
+// so a silent host (provisioner or Mac down) raises Healthchecks.io's own alarm.
+const open = new Set();
+export async function watch(now = Date.now()) {
+  const problems = [];
+  const sites = [{ slug: 'demo', port: 8201 }, ...db.centres.filter((c) => !c.paused_at)];
+  for (const c of sites) {
+    if (!(await fetch(`http://localhost:${c.port}/api/health`).then((r) => r.ok, () => false))) problems.push(`${c.slug}.${DOMAIN} is down`);
+    const newest = await run('sh', ['-c', `ls -1t "${DATA}/${c.slug}/backups"/ayurcalm-*.sql.gz 2>/dev/null | head -1`]).then((r) => r.stdout.trim(), () => '');
+    const age = newest ? now - (await import('node:fs')).statSync(newest).mtimeMs : Infinity;
+    if (age > 26 * 3_600_000 && now - (c.created || 0) > 26 * 3_600_000) problems.push(`${c.slug}: no backup in 26 hours`);
+  }
+  const used = await run('df', ['-P', DATA]).then((r) => Number(r.stdout.trim().split('\n')[1].split(/\s+/)[4].replace('%', '')), () => 0);
+  if (used >= 85) problems.push(`disk ${used}% full`);
+  for (const p of problems) if (!open.has(p)) { open.add(p); await telegram(`ALERT: ${p}`); }
+  for (const p of [...open]) if (!problems.includes(p)) { open.delete(p); await telegram(`Cleared: ${p}`); }
+  if (!problems.length && env.HEALTHCHECKS_URL) await fetch(env.HEALTHCHECKS_URL).catch(() => {});
+  return problems;
+}
+
 // ---- HTTP ----
 const page = (body) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ruta: start a free trial</title>
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:26rem;margin:2rem auto;padding:0 1rem;color:#1c2b22;background:#f3f6f3}label{display:block;margin:.8rem 0 .2rem}input{width:100%;box-sizing:border-box;padding:.7rem;border:1px solid #8a9a8f;border-radius:.6rem;font:inherit}button{margin-top:1rem;width:100%;padding:.8rem;border:0;border-radius:.6rem;background:#3d6b50;color:#fff;font:inherit;font-weight:600}a{color:#3d6b50}</style>
@@ -126,7 +147,8 @@ const form = (msg = '', ref = '') => page(`<h1>Start a free 30-day trial</h1><p>
 ${msg && `<p role="alert"><b>${esc(msg)}</b></p>`}<form method="post" action="/signup">${/^[a-z0-9-]{1,40}$/.test(ref || '') ? `<input type="hidden" name="ref" value="${ref}">` : ''}<label for="c">Centre name</label><input id="c" name="centre" required maxlength="80" autocomplete="organization">
 <label for="e">Your email</label><input id="e" name="email" type="email" required maxlength="120" autocomplete="email">
 ${env.TURNSTILE_SITEKEY ? `<div class="cf-turnstile" data-sitekey="${env.TURNSTILE_SITEKEY}" style="margin-top:1rem"></div>` : ''}<button>Email me the link</button></form>
-<h2 style="font-size:1rem;margin-top:2rem">Already have a centre?</h2><form method="post" action="/again"><label for="a">Your email</label><input id="a" name="email" type="email" required autocomplete="email"><button>Email me a sign-in link</button></form>`);
+<h2 style="font-size:1rem;margin-top:2rem">Already have a centre?</h2><form method="post" action="/again"><label for="a">Your email</label><input id="a" name="email" type="email" required autocomplete="email"><button>Email me a sign-in link</button></form>
+<p style="font-size:.85rem;margin-top:2rem">By starting a trial you accept the <a href="https://jains.es/ruta/pilot">pilot notice</a>. Questions: <a href="https://wa.me/420777558262">WhatsApp</a> · <a href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a></p>`);
 
 const body = (req) => new Promise((ok) => { let b = ''; req.on('data', (d) => { if ((b += d).length > 4096) req.destroy(); }); req.on('end', () => ok(new URLSearchParams(b))); });
 const send = (res, code, html, headers = {}) => { res.writeHead(code, { 'Content-Type': 'text/html; charset=utf-8', ...headers }); res.end(html); };
@@ -189,5 +211,6 @@ export const server = http.createServer(async (req, res) => {
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {
   server.listen(Number(env.PORT || 8200), () => console.log(`provisioner on :${env.PORT || 8200}`));
-  setInterval(() => tick().catch(console.error), 3_600_000);
+  setInterval(() => { tick().catch(console.error); watch().catch(console.error); }, 3_600_000);
+  watch().catch(console.error);
 }
