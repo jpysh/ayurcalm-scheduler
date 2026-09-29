@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en" data-cc="IN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ruta: scheduling for Ayurveda centres</title>
+<meta name="description" content="Ruta runs a residential Ayurveda centre's day from the admin's phone: residents, therapists, rooms, and the day sheet printed for the notice board by 7 am. Free 30-day trial, no card.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%2216%22 fill=%22%233d6b50%22/%3E%3C/svg%3E">
+<link rel="canonical" href="https://jains.es/ruta">
+<meta property="og:title" content="Ruta: your centre's day, printed and ready by 7 am">
+<meta property="og:description" content="Residents, therapists, rooms and the printed day sheet, from one phone. Free for 30 days.">
+<meta property="og:image" content="https://jains.es/ruta/img/sheet.jpg">
+<style>
+:root{--bg:#f3f6f3;--card:#fff;--ink:#1c2b22;--muted:#56645b;--line:#dfe6e0;--brand:#3d6b50;--brand-ink:#fff;--soft:#e6efe8;--warn:#9a4a1a}
+@media (prefers-color-scheme:dark){:root{--bg:#131a16;--card:#1b241f;--ink:#e6ede8;--muted:#a3b1a8;--line:#2c3831;--brand:#6fae88;--brand-ink:#0f1612;--soft:#223029;--warn:#f0a36b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--brand)}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+header.top{display:flex;align-items:center;justify-content:space-between;padding:14px 0}
+.logo{font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--ink);text-decoration:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 22px;border-radius:999px;font-weight:650;text-decoration:none;border:1.5px solid var(--brand)}
+.btn.primary{background:var(--brand);color:var(--brand-ink)}
+.btn.ghost{color:var(--brand);background:transparent}
+.hero{padding:28px 0 8px}
+h1{font-size:clamp(32px,6vw,52px);line-height:1.08;letter-spacing:-.025em;margin:0 0 14px}
+h2{font-size:clamp(24px,4vw,32px);letter-spacing:-.02em;margin:56px 0 16px}
+.lead{font-size:19px;color:var(--muted);max-width:40rem;margin:0 0 22px}
+.ctas{display:flex;gap:10px;flex-wrap:wrap}
+.note{font-size:14px;color:var(--muted);margin-top:10px}
+.shots{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:36px;align-items:start}
+.shots figure{margin:0}
+.shots img{width:100%;height:auto;border-radius:18px;border:1px solid var(--line);display:block;background:var(--card)}
+.shots figcaption{font-size:14px;color:var(--muted);margin-top:8px}
+.feat{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.feat div{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+.feat b{display:block;margin-bottom:4px}
+.feat p{margin:0;color:var(--muted);font-size:15px}
+.toggle{display:inline-flex;background:var(--soft);border-radius:999px;padding:4px;margin-bottom:16px}
+input[name=billing]{position:absolute;opacity:0;pointer-events:none}
+.toggle label{padding:8px 16px;border-radius:999px;cursor:pointer;font-size:15px;font-weight:600}
+#m:checked~.toggle label[for=m],#y:checked~.toggle label[for=y]{background:var(--card)}
+#m:focus-visible~.toggle label[for=m],#y:focus-visible~.toggle label[for=y]{outline:2px solid var(--brand)}
+.yr{display:none}#y:checked~.plans .yr{display:inline}#y:checked~.plans .mo{display:none}
+.usd{display:none}html[data-cc=XX] .usd{display:inline}html[data-cc=XX] .inr{display:none}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.plan{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;display:flex;flex-direction:column}
+.plan.best{border:2px solid var(--brand)}
+.plan h3{margin:0 0 4px;font-size:19px}
+.price{font-size:30px;font-weight:800;letter-spacing:-.02em;margin:8px 0 2px}
+.price s{font-size:17px;font-weight:500;color:var(--muted);margin-left:6px}
+.per{font-size:14px;color:var(--muted)}
+.plan ul{padding-left:18px;margin:14px 0;color:var(--muted);font-size:15px;flex:1}
+.tag{display:inline-block;background:var(--soft);color:var(--brand);font-weight:700;font-size:13px;border-radius:999px;padding:3px 10px}
+.left{color:var(--warn);font-weight:650;font-size:14px;margin-top:6px}
+details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;margin-bottom:8px}
+summary{cursor:pointer;font-weight:650;min-height:48px;display:flex;align-items:center}
+details p{color:var(--muted);margin:0 0 14px}
+footer{margin:64px 0 40px;color:var(--muted);font-size:15px}
+@media (max-width:720px){.shots{grid-template-columns:1fr 1fr}.shots figure:last-child{grid-column:1/-1}.ctas .btn{flex:1}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top"><a class="logo" href="/ruta">Ruta</a><a class="btn ghost" href="https://demo.jains.es">See it live</a></header>
+
+<section class="hero">
+  <h1>Your centre's day, printed and ready by 7&nbsp;am</h1>
+  <p class="lead">Ruta runs a residential Ayurveda centre from the admin's phone: each resident's therapies, who treats them, in which room, and one day sheet for the notice board.</p>
+  <div class="ctas"><a class="btn primary" id="start" href="https://signup.jains.es/">Start free trial</a><a class="btn ghost" href="https://demo.jains.es">See it live</a></div>
+  <p class="note">30 days free, no card. Your own centre in about two minutes.</p>
+</section>
+
+<div class="shots">
+  <figure><img src="/ruta/img/day.jpg" width="444" height="900" alt="The day on a phone: each treatment with its time, resident, therapy, therapist and room"><figcaption>The whole day, one scroll.</figcaption></figure>
+  <figure><img src="/ruta/img/card.jpg" width="444" height="900" alt="One treatment opened: when, therapy, therapist, room, note and history" loading="lazy"><figcaption>Tap a treatment to move or change it.</figcaption></figure>
+  <figure><img src="/ruta/img/sheet.jpg" width="1287" height="910" alt="The printed day sheet: residents in rows, the day's therapies by time, meals for each group" loading="lazy"><figcaption>The sheet for the notice board, A4.</figcaption></figure>
+</div>
+
+<h2>What it does</h2>
+<div class="feat">
+  <div><b>The day sheet</b><p>Residents, therapies, therapists, rooms and meals on A4, from the phone. Therapist and doctor rotas too.</p></div>
+  <div><b>Therapist off? One tap</b><p>Ruta finds who is free and moves their treatments. Undo puts the day back.</p></div>
+  <div><b>Residents and stays</b><p>Arrival checklist, diet, treatment plan and every visit in one card.</p></div>
+  <div><b>Discharge summary</b><p>Your letterhead, day-by-day treatments, vitals and medicines, ready to sign.</p></div>
+  <div><b>Private links</b><p>Therapists, doctors and residents see their own day without signing in.</p></div>
+  <div><b>Leave with your data</b><p>One "Download everything" file, which loads into a free self-hosted copy.</p></div>
+</div>
+
+<h2 id="pricing">Pricing</h2>
+<input type="radio" name="billing" id="m" checked><input type="radio" name="billing" id="y">
+<div class="toggle" role="group" aria-label="Billing period"><label for="m">Monthly</label><label for="y">Yearly: 2 months free</label></div>
+<div class="plans">
+  <div class="plan">
+    <h3>Free trial</h3>
+    <div class="price"><span class="inr">₹0</span><span class="usd">$0</span></div><div class="per">30 days, no card</div>
+    <ul><li>The full app on your own address</li><li>The clock starts with your first resident or printed sheet</li><li>Upgrade any day; nothing is deleted at the end</li></ul>
+    <a class="btn primary" href="https://signup.jains.es/">Start free trial</a>
+  </div>
+  <div class="plan best">
+    <span class="tag">Founding price, locked for life</span>
+    <h3>Cloud + support</h3>
+    <div class="price"><span class="inr"><span class="mo">₹999</span><span class="yr">₹9,990</span><s class="mo">₹1,499</s><s class="yr">₹14,990</s></span><span class="usd"><span class="mo">$19</span><span class="yr">$190</span><s class="mo">$29</s><s class="yr">$290</s></span></div>
+    <div class="per"><span class="mo">per centre a month</span><span class="yr">per centre a year</span><span class="inr">, incl. GST</span></div>
+    <p class="left" id="left" hidden></p>
+    <ul><li>Hosting, HTTPS, nightly backups, updates</li><li>Support on WhatsApp, email and phone, working hours IST</li><li>Setup help: we enter your therapies, rooms, programmes and rota from your paper sheets</li><li>AI assistant connector, hosted</li></ul>
+    <a class="btn primary" href="https://wa.me/420777558262?text=I%27d%20like%20Ruta%20Cloud%20%2B%20support%20at%20the%20founding%20price.">Choose on WhatsApp</a>
+  </div>
+  <div class="plan">
+    <h3>On-premise + support</h3>
+    <div class="price"><span class="inr"><span class="mo">₹999</span><span class="yr">₹9,990</span></span><span class="usd"><span class="mo">$19</span><span class="yr">$190</span></span></div>
+    <div class="per"><span class="mo">per centre a month</span><span class="yr">per centre a year</span><span class="inr">, incl. GST</span></div>
+    <ul><li>Ruta on your own computer at the centre</li><li>The same support and setup help</li><li>Your data never leaves the building</li></ul>
+    <a class="btn ghost" href="https://wa.me/420777558262?text=I%27d%20like%20Ruta%20On-premise%20%2B%20support.">Choose on WhatsApp</a>
+  </div>
+</div>
+<p class="note">Or run it yourself for free: Ruta is open source. <a href="https://github.com/jpysh/ayurcalm-scheduler/blob/main/docs/self-host.md">Self-host guide</a> (community help only).</p>
+
+<h2>Questions</h2>
+<details><summary>Can I leave with my data?</summary><p>Always. Settings → Download everything gives one file with all your residents, bookings, letterhead and signatures. It loads into a free self-hosted Ruta, or back into the cloud.</p></details>
+<details><summary>What happens when the trial ends?</summary><p>Nothing is deleted. The centre becomes read-only for 60 days and Download everything keeps working. Choose a plan any day to carry on.</p></details>
+<details><summary>Where is our data kept?</summary><p>Cloud centres run on servers we look after, with an encrypted copy made every night and kept in a second place. On-premise keeps everything on your own computer.</p></details>
+<details><summary>Do we need the internet all day?</summary><p>Cloud needs a connection to change the day; the printed sheet works without one. On-premise works on the centre's own Wi-Fi.</p></details>
+<details><summary>Is support included in the trial?</summary><p>The trial is the full app without support. Upgrade on any day of the trial to get support and setup help straight away.</p></details>
+<details><summary>Can we cancel?</summary><p>Yes, any month. You keep your data: download it, or self-host for free.</p></details>
+
+<footer>
+  <p><b>Talk to us:</b> <a href="https://wa.me/420777558262">WhatsApp +420 777 558 262</a> · <a href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a>. Replies the same working day, IST.</p>
+  <p>Ruta is open source (MIT). Made for residential Ayurveda centres; it fits wellness retreats and spas too.</p>
+</footer>
+</div>
+<script>
+// A referral (?ref=) goes with the visitor to the sign-up form (#249).
+var r=new URLSearchParams(location.search).get("ref");if(r&&/^[a-z0-9-]{1,40}$/.test(r))document.querySelectorAll('a[href^="https://signup.jains.es"]').forEach(function(a){a.href+="?ref="+r});
+</script>
+</body>
+</html>

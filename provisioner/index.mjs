@@ -79,9 +79,9 @@ function provision(s) {
       await centreSh({ ADMIN_EMAIL: s.email }, 'up', slug, String(port));
       for (let i = 0; i < 100 && !(await fetch(`http://localhost:${port}/api/health`).then((r) => r.ok, () => false)); i++) await new Promise((r) => setTimeout(r, 3000));
       await route(slug, port);
-      db.centres.push({ slug, port, email: s.email, centre: s.centre, created: Date.now(), warned: {}, key: randomBytes(18).toString('base64url') });
+      db.centres.push({ slug, port, email: s.email, centre: s.centre, ref: s.ref, created: Date.now(), warned: {}, key: randomBytes(18).toString('base64url') });
       s.state = 'ready'; s.slug = slug; s.used = true; save();
-      await telegram(`New trial centre: ${s.centre} (${slug}.${DOMAIN}) by ${s.email}`);
+      await telegram(`New trial centre: ${s.centre} (${slug}.${DOMAIN}) by ${s.email}${s.ref ? `, invited by ${s.ref}` : ''}`);
     } catch (e) {
       console.error('provision failed', e); s.state = 'failed'; save();
       await telegram(`Provisioning FAILED for ${s.centre} (${s.email}): ${e.message}`);
@@ -122,8 +122,8 @@ const page = (body) => `<!doctype html><html lang="en"><meta charset="utf-8"><me
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:26rem;margin:2rem auto;padding:0 1rem;color:#1c2b22;background:#f3f6f3}label{display:block;margin:.8rem 0 .2rem}input{width:100%;box-sizing:border-box;padding:.7rem;border:1px solid #8a9a8f;border-radius:.6rem;font:inherit}button{margin-top:1rem;width:100%;padding:.8rem;border:0;border-radius:.6rem;background:#3d6b50;color:#fff;font:inherit;font-weight:600}a{color:#3d6b50}</style>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>${body}</html>`;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const form = (msg = '') => page(`<h1>Start a free 30-day trial</h1><p>Your own centre at <b>yourname.${DOMAIN}</b>, ready in about two minutes. No card. Want to look first? <a href="https://demo.${DOMAIN}">See the demo</a>.</p>
-${msg && `<p role="alert"><b>${esc(msg)}</b></p>`}<form method="post" action="/signup"><label for="c">Centre name</label><input id="c" name="centre" required maxlength="80" autocomplete="organization">
+const form = (msg = '', ref = '') => page(`<h1>Start a free 30-day trial</h1><p>Your own centre at <b>yourname.${DOMAIN}</b>, ready in about two minutes. No card. Want to look first? <a href="https://demo.${DOMAIN}">See the demo</a>.</p>
+${msg && `<p role="alert"><b>${esc(msg)}</b></p>`}<form method="post" action="/signup">${/^[a-z0-9-]{1,40}$/.test(ref || '') ? `<input type="hidden" name="ref" value="${ref}">` : ''}<label for="c">Centre name</label><input id="c" name="centre" required maxlength="80" autocomplete="organization">
 <label for="e">Your email</label><input id="e" name="email" type="email" required maxlength="120" autocomplete="email">
 ${env.TURNSTILE_SITEKEY ? `<div class="cf-turnstile" data-sitekey="${env.TURNSTILE_SITEKEY}" style="margin-top:1rem"></div>` : ''}<button>Email me the link</button></form>
 <h2 style="font-size:1rem;margin-top:2rem">Already have a centre?</h2><form method="post" action="/again"><label for="a">Your email</label><input id="a" name="email" type="email" required autocomplete="email"><button>Email me a sign-in link</button></form>`);
@@ -135,7 +135,13 @@ export const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, SELF);
   const ip = (env.BEHIND_CLOUDFLARE === 'true' && req.headers['cf-connecting-ip']) || req.socket.remoteAddress;
   try {
-    if (req.method === 'GET' && url.pathname === '/') return send(res, 200, form());
+    if (req.method === 'GET' && url.pathname === '/') return send(res, 200, form('', url.searchParams.get('ref')));
+    // The landing page's "N of 10 founding places left" (#245). Founding centres not hosted here: FOUNDING_ELSEWHERE.
+    if (url.pathname === '/founding') {
+      const taken = db.centres.filter((c) => c.trial?.plan === 'founding').length + Number(env.FOUNDING_ELSEWHERE || 0);
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=300' });
+      return res.end(JSON.stringify({ left: Math.max(0, 10 - taken) }));
+    }
     if (req.method === 'POST' && url.pathname === '/signup') {
       const f = await body(req);
       const centre = (f.get('centre') || '').trim().slice(0, 80), to = (f.get('email') || '').trim().toLowerCase();
@@ -148,7 +154,8 @@ export const server = http.createServer(async (req, res) => {
         return send(res, 200, page(`<h1>You're on the list</h1><p>All our trial places are full right now. We will email ${esc(to)} as soon as one opens.</p>`));
       }
       if (no) return send(res, 429, form(no));
-      const s = { centre, email: to, ip, at: Date.now(), key: randomBytes(18).toString('base64url') };
+      const ref = /^[a-z0-9-]{1,40}$/.test(f.get('ref') || '') ? f.get('ref') : undefined;
+      const s = { centre, email: to, ip, ref, at: Date.now(), key: randomBytes(18).toString('base64url') };
       db.signups.push(s); save();
       await email(to, `Your Ruta link for ${centre}`, `Open this link to create ${centre}. It signs you straight in.\n\n${SELF}/go?k=${s.key}\n\nIf you did not ask for this, ignore this email.`);
       return send(res, 200, page(`<h1>Check your email</h1><p>We sent a link to <b>${esc(to)}</b>. Open it on this phone or computer to create ${esc(centre)}.</p>`));
