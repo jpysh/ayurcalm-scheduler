@@ -18,6 +18,7 @@ import DayDietDialog from "./DayDietDialog";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
+import { DateRow, Dropdown, Foot, Group, Seg, Text } from "@/components/kit";
 // removed dialog import to avoid dev parse error
 
 type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; preferredStaffId?: string | null; requiresPreferredStaff?: boolean };
@@ -25,7 +26,7 @@ type Patient = { id: string | number; name: string; phone?: string; gender: stri
 /** "26 Sep": a stay is whole days, so no time. */
 const longDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const stayDay = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '');
-const blankNew = () => ({ name: '', phone: '', gender: 'Male', arriving: '', leaving: '', templateId: '' });
+const blankNew = () => ({ name: '', phone: '', gender: '' as '' | 'Female' | 'Male' | 'Other', arriving: '', leaving: '', templateId: '' });
 
 type InHouse = { id: string; name: string; Stays: { id: string; start_date: string; end_date: string }[] };
 type ResidentDay = {
@@ -295,6 +296,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   });
   const saveNewPatient = async () => {
     if (!newPatient.name.trim()) { toast.error('A name is needed'); return; }
+    if (!newPatient.gender) { toast.error('Choose a gender'); return; }
     if (newPatient.leaving < newPatient.arriving) { toast.error('Leaving must be on or after arriving'); return; }
     const res = await fetch(`${API_BASE}/patients`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -408,24 +410,21 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         details={(id) => { const row = patients.find((x) => String(x.id) === id); setCardId(null); if (row) showPatientInfo(row); }} />
 
       <BottomSheet open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) setNewPatient(blankNew()); }} title="New resident">
+        <Text label="Name" value={newPatient.name} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} />
+        <Text label="Phone (optional)" type="tel" value={newPatient.phone} onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })} />
+        {/* Nothing chosen to start with (#283): a list that opened on Male made every resident one until corrected. */}
+        <Group label="Gender">
+          <Seg options={[["Female", "Female"], ["Male", "Male"], ["Other", "Other"]]} value={newPatient.gender} onChange={(gender) => setNewPatient({ ...newPatient, gender })} />
+        </Group>
         <div className="grid grid-cols-2 gap-3">
-          <label className="col-span-2 grid gap-1">Name<Input value={newPatient.name} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} /></label>
-          <label className="grid gap-1">Phone<Input type="tel" value={newPatient.phone} onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })} /></label>
-          <label className="grid gap-1">Gender
-            <select className="h-10 rounded-md border border-input bg-background px-2" value={newPatient.gender} onChange={(e) => setNewPatient({ ...newPatient, gender: e.target.value })}>
-              <option>Male</option><option>Female</option><option>Other</option>
-            </select>
-          </label>
-          <label className="grid gap-1">Arriving<Input type="date" value={newPatient.arriving} onChange={(e) => setNewPatient({ ...newPatient, arriving: e.target.value })} /></label>
-          <label className="grid gap-1">Leaving<Input type="date" value={newPatient.leaving} min={newPatient.arriving} onChange={(e) => setNewPatient({ ...newPatient, leaving: e.target.value })} /></label>
-          <label className="col-span-2 grid gap-1">Diet plan
-            <select className="h-10 rounded-md border border-input bg-background px-2" value={newPatient.templateId} onChange={(e) => setNewPatient({ ...newPatient, templateId: e.target.value })}>
-              <option value="">Not decided yet</option>
-              {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </label>
-          <Button className="col-span-2 h-12 rounded-full" onClick={saveNewPatient}>Add resident</Button>
+          <DateRow label="Arriving" value={newPatient.arriving} onChange={(v) => setNewPatient({ ...newPatient, arriving: v, leaving: newPatient.leaving < v ? v : newPatient.leaving })} />
+          <DateRow label="Leaving" value={newPatient.leaving} min={newPatient.arriving} onChange={(v) => setNewPatient({ ...newPatient, leaving: v })} />
         </div>
+        <Dropdown label="Diet plan" value={newPatient.templateId} onChange={(e) => setNewPatient({ ...newPatient, templateId: e.target.value })}>
+          <option value="">Not decided yet</option>
+          {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </Dropdown>
+        <Foot label="Add resident" save={saveNewPatient} />
       </BottomSheet>
       <BottomSheet open={!!stayEdit} onOpenChange={(open) => { if (!open) { setStayEdit(null); setLeftOver([]); } }} title={stayEdit?.id ? 'Stay' : 'New stay'}>
         {stayEdit && leftOver.length === 0 ? (

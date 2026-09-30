@@ -140,7 +140,7 @@ test('P1: Add leave has Full day and Every week as switches, not Yes / None drop
   const form = page.getByRole('dialog');
   await expect(form.getByRole('switch', { name: 'Full day' })).toBeChecked();
   await form.getByRole('switch', { name: 'Every week' }).click();
-  await expect(form.getByRole('button', { name: 'SUN' })).toBeVisible();
+  await expect(form.getByRole('button', { name: 'Sun' })).toBeVisible();
   await expect(form.getByRole('combobox').filter({ hasText: /^(Yes|No|None|Weekly)$/ })).toHaveCount(0);
 });
 
@@ -162,4 +162,31 @@ test('P2: the wizard picks the timezone from a list', async ({ page }) => {
   await expect(tz).toHaveValue('Asia/Kolkata');
   await tz.selectOption('Europe/Prague');
   await expect(tz).toHaveValue('Europe/Prague');
+});
+
+test('#283: Add leave, New resident and Opening hours show no native date or time box and no AM/PM', async ({ page }) => {
+  await signIn(page);
+  const open = async (menu: RegExp, button: string | RegExp) => {
+    await page.goto('/admin/schedule');
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: menu }).click();
+    await page.getByRole('button', { name: button }).click();
+    return page.getByRole('dialog');
+  };
+  // The date box is still there for the phone's calendar, but unseen under the row that reads "Wed 30 Sept".
+  const clean = async (form: Awaited<ReturnType<typeof open>>) => {
+    expect(await form.locator('input[type=date], input[type=time], input[type=datetime-local]').evaluateAll((all) => all.filter((e) => getComputedStyle(e).opacity !== '0').length)).toBe(0);
+    expect(await form.innerText()).not.toMatch(/\b[AP]M\b/i);
+  };
+  const leave = await open(/^Leave/, 'Add leave');
+  await leave.getByRole('switch', { name: 'Full day' }).click();
+  await expect(leave.getByLabel('Starts')).toHaveValue(/^\d\d:\d\d$/);
+  await expect(leave.getByLabel('From')).toHaveAttribute('type', 'date');
+  await clean(leave);
+  const resident = await open(/^Residents/, 'New resident');
+  await expect(resident.getByText(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{1,2} \w+$/).first()).toBeVisible();
+  await clean(resident);
+  const hours = await open(/^Settings/, /^Opening hours/);
+  await expect(hours.getByLabel('Opens')).toHaveValue(/^\d\d:\d\d$/);
+  await clean(hours);
 });

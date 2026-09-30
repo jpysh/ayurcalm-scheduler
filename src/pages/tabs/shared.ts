@@ -58,14 +58,6 @@ export const fetchJsonWithTimeout = async <T = unknown>(url: string, ms = 6000):
   }
 };
 
-export const toHHMM = (iso?: string) => {
-  if (!iso) return undefined;
-  const d = new Date(iso);
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
-};
-
 export const toLocalInput = (iso?: string) => {
   if (!iso) return '';
   const d = new Date(iso);
