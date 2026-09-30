@@ -34,6 +34,7 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
   const [fromSearch, setFromSearch] = useState(false);
   const [card, setCard] = useState<CardAppt | null>(null);
   const [booking, setBooking] = useState(false);
+  const [bookFor, setBookFor] = useState<{ id: string; name: string } | null>(null);
   const [pdfLoading, setPdfLoading] = useState<'patient' | 'therapist' | 'doctor' | null>(null);
   // Two sheets off the same day: the patient one for the notice board, the
   // therapist rota for the treatment team.
@@ -167,9 +168,9 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
   );
 
   const bookSheet = (
-    <BookSheet open={booking} onClose={() => setBooking(false)} day={dayKeyMemo} isToday={isToday} nowMinutes={now}
+    <BookSheet open={booking} onClose={() => setBooking(false)} day={dayKeyMemo} today={ymdInTZ(new Date())} isToday={isToday} nowMinutes={now} patient={bookFor}
       refresh={() => refreshDay(dayKeyMemo)} other={openFullBooking} />
   );
 
-  return { tab: <>{tab}{cardSheet}{bookSheet}</>, openBook: () => setBooking(true), openCard: setCard, printSheet, pdfLoading, view, setView, query, setQuery, searching, setSearching };
+  return { tab: <>{tab}{cardSheet}{bookSheet}</>, openBook: (p?: { id: string; name: string }) => { setBookFor(p || null); setBooking(true); }, openCard: setCard, printSheet, pdfLoading, view, setView, query, setQuery, searching, setSearching };
 }

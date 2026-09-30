@@ -6,7 +6,7 @@ export type UiTherapy = { id: string | number; name: string; duration: number; a
 export type UiTimeOff = { id: string; date?: string; startDate?: string; endDate?: string; startTime?: string; endTime?: string; recurrence?: 'weekly'; weekdays?: ('sunday'|'monday'|'tuesday'|'wednesday'|'thursday'|'friday'|'saturday')[]; type: "Center" | "Staff" | "Room" | "Therapy" | "Patient"; entity: string; description: string };
 export type Patient = {
   id: string; name: string; phone: string; email: string; gender: string; dob: string;
-  emergencyContact: string; emergencyPhone: string; address: string; medicalNotes: string;
+  emergencyContact: string; emergencyPhone: string; address: string; country: string; idNumber: string; registrationNumber: string; medicalNotes: string;
   actualStart: string; actualEnd: string; preferredStaffId?: string | null;
   /** Every stay, newest first; actualStart/actualEnd are only the newest. */
   stays?: { start_date: string; end_date: string }[]; requiresPreferredStaff?: boolean;
@@ -30,7 +30,7 @@ export function leaveWhen(h: Pick<UiTimeOff, 'date' | 'startDate' | 'endDate' | 
   return hours ? `${from} ${h.startTime} to ${to} ${h.endTime}` : `${from} to ${to}`;
 }
 
-export const blankPatient = (): Patient => ({ id: '', name: '', phone: '', email: '', gender: 'Male', dob: '', emergencyContact: '', emergencyPhone: '', address: '', medicalNotes: '', actualStart: '', actualEnd: '' });
+export const blankPatient = (): Patient => ({ id: '', name: '', phone: '', email: '', gender: 'Male', dob: '', emergencyContact: '', emergencyPhone: '', address: '', country: '', idNumber: '', registrationNumber: '', medicalNotes: '', actualStart: '', actualEnd: '' });
 
 export const API_TOKEN = (import.meta as any).env?.VITE_API_TOKEN || '';
 

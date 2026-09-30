@@ -4,9 +4,10 @@
  * at once with Undo — no confirm button. Every problem on one treatment sits
  * behind one "Something wrong?" row. History shows the latest change.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { BottomSheet } from "@/components/BottomBar";
+import { ChangeLine, LineDate, LineSelect, dayText, Loading, SearchField, WhoPicker, wide } from "@/components/kit";
 import { API_BASE } from "@/lib/apiBase";
 
 export type CardAppt = {
@@ -304,50 +305,82 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
   );
 }
 
-type Suggestion = {
+type Slot = {
   patient_id: string; patient_name: string; therapy_id: string; therapy_name: string;
   start_time: string; duration_minutes: number; staff_id: string; staff_name: string; co_staff_ids: string[]; room_id: string; room_name: string;
 };
+type Option = { id: string; name: string; free: boolean; why?: string };
+type Options = { times: Slot[]; staff: Option[]; rooms: Option[]; why?: string };
+type Who = { id: string; name: string; note: string; therapy_id: string | null; last: { name: string; date: string } | null };
+
+const shortDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).replace(",", "");
 
 /**
- * Book one treatment from + (#136): the server's next free time for the
- * patients furthest behind on their stay, the best one chosen, one tap to book.
- * "Someone else…" is the full booking form.
+ * Book one treatment from + (#285 story 5), on one sheet. Who first (nobody
+ * booked today, then recent, a search at the bottom); choosing them fills in the
+ * rest in place, every line the admin's to change: their last therapy, the date,
+ * the best free time, a free therapist and a free room. The button names the outcome.
+ * `patient` skips the first step, for a booking started from their card.
  */
-export function BookSheet({ open, onClose, day, isToday, nowMinutes, refresh, other }: {
-  open: boolean; onClose: () => void; day: string; isToday: boolean; nowMinutes: number;
-  refresh: () => Promise<void>; other: () => void;
+export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refresh, other, patient }: {
+  open: boolean; onClose: () => void; day: string; today: string; isToday: boolean; nowMinutes: number;
+  refresh: () => Promise<void>; other: () => void; patient?: { id: string; name: string } | null;
 }) {
-  const [list, setList] = useState<Suggestion[] | null>(null);
-  const [pick, setPick] = useState(0);
+  const [who, setWho] = useState<{ none: Who[]; recent: Who[]; all: Who[] } | null>(null);
+  const [therapies, setTherapies] = useState<{ id: string; name: string }[]>([]);
+  const [q, setQ] = useState("");
+  const [chosen, setChosen] = useState<Who | null>(null);
+  const [therapyId, setTherapyId] = useState("");
+  const [date, setDate] = useState(day);
+  const [opts, setOpts] = useState<Options | null>(null);
+  const [time, setTime] = useState("");
+  const [staffId, setStaffId] = useState("");
+  const [roomId, setRoomId] = useState("");
   const [busy, setBusy] = useState(false);
-  const [other_, setElse] = useState(false);
+  const seq = useRef(0);
 
   useEffect(() => {
     if (!open) return;
-    setElse(false);
-    setList(null);
-    setPick(0);
-    fetch(`${API_BASE}/appointments/suggest?date=${day}${isToday ? `&now=${hm(nowMinutes)}` : ""}`)
-      .then((r) => (r.ok ? r.json() : { suggestions: [] })).then((d) => setList(d.suggestions || []));
-  }, [open, day, isToday, nowMinutes]);
+    setQ(""); setChosen(null); setOpts(null); setDate(day); setWho(null);
+    fetch(`${API_BASE}/appointments/who?date=${day}`).then((r) => (r.ok ? r.json() : { none: [], recent: [], all: [] })).then(setWho).catch(() => setWho({ none: [], recent: [], all: [] }));
+    fetch(`${API_BASE}/therapies`).then((r) => (r.ok ? r.json() : [])).then((t: { id: string; name: string; is_consultation?: boolean }[]) => setTherapies([...t].sort((a, b) => a.name.localeCompare(b.name)))).catch(() => setTherapies([]));
+  }, [open, day]);
 
-  const chosen = list?.[pick];
+  const choose = (p: Who) => { setChosen(p); setTherapyId(p.therapy_id || therapies[0]?.id || ""); setDate(day); };
+  // From their card: the patient is known, so the sheet opens on their lines.
+  useEffect(() => { if (open && patient && who && !chosen) { const p = who.all.find((x) => x.id === patient.id); if (p) choose(p); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [open, patient, who, therapies]);
+
+  /** The free times, and for the time chosen (or the best) who is free and which room. */
+  const load = (at?: string) => {
+    if (!chosen || !therapyId) return;
+    const n = ++seq.current;
+    const nowQ = date === today ? `&now=${hm(nowMinutes)}` : "";
+    fetch(`${API_BASE}/appointments/options?date=${date}&patient_id=${chosen.id}&therapy_id=${therapyId}${at ? `&at=${at}` : ""}${nowQ}`)
+      .then((r) => (r.ok ? r.json() : null)).then((o: Options | null) => {
+        if (n !== seq.current || !o) return;
+        const slot = o.times.find((t) => t.start_time === at) || o.times[0];
+        setOpts(o); setTime(slot?.start_time || ""); setStaffId(slot?.staff_id || ""); setRoomId(slot?.room_id || "");
+      });
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [chosen, therapyId, date]);
+
+  const slot = opts?.times.find((t) => t.start_time === time);
+  const coStaff = (slot?.co_staff_ids || []).filter((id) => id !== staffId);
   const book = async () => {
-    if (!chosen) return;
+    if (!chosen || !slot) return;
     setBusy(true);
     try {
       const res = await fetch(`${API_BASE}/appointments/one`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patient_id: chosen.patient_id, therapy_id: chosen.therapy_id, date: day, start_time: chosen.start_time, staff_id: chosen.staff_id, co_staff_ids: chosen.co_staff_ids, room_id: chosen.room_id }),
+        body: JSON.stringify({ patient_id: chosen.id, therapy_id: therapyId, date, start_time: time, staff_id: staffId, co_staff_ids: coStaff, room_id: roomId }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) { toast.error(body.message || "That time has just gone. Try again."); return; }
+      if (!res.ok) { toast.error(body.message || "That time has just gone. Choose another."); load(time); return; }
       onClose();
       await refresh();
-      const ids: string[] = [body.id];
-      toast(`Booked ${chosen.patient_name.split(" ")[0]}: ${chosen.therapy_name} at ${chosen.start_time}`, { duration: 8000, action: { label: "Undo", onClick: async () => {
-        await Promise.all(ids.map((id) => fetch(`${API_BASE}/appointments/${id}`, { method: "DELETE" })));
+      const first = chosen.name.split(" ")[0];
+      toast(`Booked ${first}: ${therapies.find((t) => t.id === therapyId)?.name.replace(/_/g, " ")} at ${time}`, { duration: 8000, action: { label: "Undo", onClick: async () => {
+        await fetch(`${API_BASE}/appointments/${body.id}`, { method: "DELETE" });
         await refresh();
       } } });
     } finally {
@@ -355,86 +388,43 @@ export function BookSheet({ open, onClose, day, isToday, nowMinutes, refresh, ot
     }
   };
 
-  const opt = "flex w-full min-h-12 items-center justify-between gap-2 rounded-xl border-2 px-3 py-2.5 text-left text-[15px] aria-pressed:border-primary aria-pressed:bg-secondary";
+  const free = (l: Option[]) => l.filter((o) => o.free);
+  const busyOnes = (l: Option[]) => l.filter((o) => !o.free);
+  const nameOf = (l: Option[] | undefined, id: string) => l?.find((o) => o.id === id)?.name || "";
+  const first = chosen?.name.split(" ")[0] || "";
+  const when = date === today ? "today" : new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).replace(",", "");
+
   return (
-    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={other_ ? "Book someone else" : "Book a treatment"}>
-      {!other_ ? (
-      <div className="flex flex-col gap-3">
-        <div className="-mt-2 text-[13px] text-muted-foreground">
-          {list === null ? "Finding the next free time…" : chosen ? `Next free: ${chosen.start_time} · ${chosen.staff_name} · ${chosen.room_name} · patients furthest behind on their stay` : "No suggestion yet: suggestions follow each resident's past treatments. Tap Someone else… to choose."}
-        </div>
-        <div className="flex flex-col gap-1.5">
-          {(list || []).map((s, i) => (
-            <button key={s.patient_id} type="button" aria-pressed={i === pick} className={opt} onClick={() => setPick(i)}>
-              <span>{s.patient_name} · {s.therapy_name}<small className="block text-[13px] text-muted-foreground">{s.start_time} with {s.staff_name} · {s.room_name}</small></span>
-              {i === 0 ? <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">best</span> : null}
-            </button>
-          ))}
-          <button type="button" className={opt} onClick={() => setElse(true)}>Someone else…</button>
-        </div>
-        {chosen ? <button type="button" className="min-h-11 rounded-full bg-primary font-semibold text-primary-foreground" disabled={busy} onClick={book}>Book {chosen.patient_name}</button> : null}
-      </div>
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={chosen ? chosen.name : "Book a treatment"}
+      note={chosen ? chosen.note : "Who is it for?"}
+      foot={chosen
+        ? <button type="button" className={`${wide} bg-primary text-primary-foreground disabled:opacity-50`} disabled={busy || !slot} onClick={book}>{busy ? "Saving…" : slot ? `Book ${first}, ${date === today ? "" : `${new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" })} `}${time}` : `Book ${first}`}</button>
+        : <SearchField value={q} onChange={setQ} placeholder="Search patients" />}>
+      {!chosen ? (
+        who === null ? <Loading rows={3} /> : (<>
+          <WhoPicker q={q} chosen={null} all={who.all} onChoose={choose}
+            groups={[{ title: `No treatment yet ${day === today ? "today" : "that day"}`, list: who.none }, { title: "Recently booked", list: who.recent }]} />
+          <button type="button" className="mt-3 min-h-11 text-sm font-semibold text-primary" onClick={() => { onClose(); other(); }}>A course over several days ›</button>
+        </>)
       ) : (
-        <SomeoneElse day={day} isToday={isToday} nowMinutes={nowMinutes} opt={opt} back={() => setElse(false)} course={() => { onClose(); other(); }}
-          choose={(s) => { setList([s]); setPick(0); setElse(false); }} />
+        <div>
+          {!patient ? <button type="button" className="-mt-1 mb-1 min-h-10 text-sm font-semibold text-primary" onClick={() => { setChosen(null); setOpts(null); }}>‹ Someone else</button> : null}
+          <ChangeLine label={chosen.last ? `Therapy · last: ${chosen.last.name.replace(/_/g, " ")}, ${shortDay(chosen.last.date)}` : "Therapy"} value={therapies.find((t) => t.id === therapyId)?.name.replace(/_/g, " ") || "Choose"}
+            select={<LineSelect label="Therapy" value={therapyId} onChange={setTherapyId} free={therapies.map((t) => ({ id: t.id, name: t.name.replace(/_/g, " ") }))} />} />
+          <ChangeLine label="Date" value={dayText(date)} select={<LineDate label="Date" value={date} min={today} onChange={setDate} />} />
+          {opts === null ? <Loading rows={3} /> : opts.times.length === 0 ? (
+            <p className="py-3 text-sm text-muted-foreground">{opts.why || `No free time for ${first} ${when}. Try another day or therapy.`}</p>
+          ) : (<>
+            <ChangeLine label="Time" value={<>{time}{time === opts.times[0].start_time ? <span className="ml-2 rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-primary">best</span> : null}</>}
+              select={<LineSelect label="Time" value={time} onChange={(t) => load(t)} free={opts.times.map((t, i) => ({ id: t.start_time, name: t.start_time, tag: i === 0 ? "best" : undefined }))} />} />
+            <ChangeLine label="Therapist" value={nameOf(opts.staff, staffId) || slot?.staff_name || "None free"}
+              select={<LineSelect label="Therapist" value={staffId} onChange={setStaffId} free={free(opts.staff)} busy={busyOnes(opts.staff)} />} />
+            <ChangeLine label="Room" value={nameOf(opts.rooms, roomId) || slot?.room_name || "None free"}
+              select={<LineSelect label="Room" value={roomId} onChange={setRoomId} free={free(opts.rooms)} busy={busyOnes(opts.rooms)} />} />
+            <p className="mt-2 text-[13px] text-muted-foreground">Chosen for you: free at {time}. Change any line.</p>
+          </>)}
+        </div>
       )}
     </BottomSheet>
-  );
-}
-
-/**
- * "Someone else…" (#273 H2): any resident staying that day and any therapy,
- * then the server's next three free times for them. A course over several
- * days is still the full form, behind the last link.
- */
-function SomeoneElse({ day, isToday, nowMinutes, opt, back, course, choose }: {
-  day: string; isToday: boolean; nowMinutes: number; opt: string; back: () => void; course: () => void; choose: (s: Suggestion) => void;
-}) {
-  const [residents, setResidents] = useState<{ id: string; name: string }[]>([]);
-  const [therapies, setTherapies] = useState<{ id: string; name: string }[]>([]);
-  const [q, setQ] = useState("");
-  const [who, setWho] = useState<{ id: string; name: string } | null>(null);
-  const [what, setWhat] = useState("");
-  const [times, setTimes] = useState<Suggestion[] | null>(null);
-  const [why, setWhy] = useState("");
-  useEffect(() => {
-    fetch(`${API_BASE}/patients?resident_on=${day}`).then((r) => (r.ok ? r.json() : [])).then(setResidents).catch(() => setResidents([]));
-    fetch(`${API_BASE}/therapies`).then((r) => (r.ok ? r.json() : [])).then((t: { id: string; name: string }[]) => setTherapies([...t].sort((a, b) => a.name.localeCompare(b.name)))).catch(() => setTherapies([]));
-  }, [day]);
-  useEffect(() => {
-    if (!who || !what) { setTimes(null); return; }
-    setTimes(null);
-    fetch(`${API_BASE}/appointments/suggest?date=${day}&patient_id=${who.id}&therapy_id=${what}${isToday ? `&now=${hm(nowMinutes)}` : ""}`)
-      .then((r) => (r.ok ? r.json() : { suggestions: [] })).then((d) => { setTimes(d.suggestions || []); setWhy(d.why || ""); });
-  }, [who, what, day, isToday, nowMinutes]);
-  const shown = residents.filter((p) => !q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 6);
-  const input = "h-11 w-full rounded-xl border bg-background px-3 text-base";
-  return (
-    <div className="flex flex-col gap-3">
-      <button type="button" className="-mt-2 self-start text-sm font-semibold text-primary" onClick={back}>‹ Back</button>
-      {!who ? (<>
-        <input autoFocus className={input} placeholder="Patient's name" aria-label="Patient's name" value={q} onChange={(e) => setQ(e.target.value)} />
-        <div className="flex flex-col gap-1.5">
-          {shown.map((p) => <button key={p.id} type="button" className={opt} onClick={() => setWho(p)}>{p.name}</button>)}
-          {!shown.length ? <p className="text-sm text-muted-foreground">Nobody staying on this day has that name.</p> : null}
-        </div>
-      </>) : (<>
-        <button type="button" className={opt} aria-pressed onClick={() => { setWho(null); setWhat(""); }}>{who.name}<span className="text-sm text-muted-foreground">Change</span></button>
-        <select className={input} aria-label="Therapy" value={what} onChange={(e) => setWhat(e.target.value)}>
-          <option value="">Choose a therapy…</option>
-          {therapies.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
-        {what ? (
-          times === null ? <p className="text-sm text-muted-foreground">Finding free times…</p>
-            : times.length ? times.map((t) => (
-              <button key={t.start_time} type="button" className={opt} onClick={() => choose(t)}>
-                <span>{t.start_time}<small className="block text-[13px] text-muted-foreground">with {t.staff_name} · {t.room_name}</small></span><span>›</span>
-              </button>
-            ))
-              : <p className="text-sm text-muted-foreground">{why || `No free time for ${who.name.split(" ")[0]} on this day. Try another day or therapy.`}</p>
-        ) : null}
-      </>)}
-      <button type="button" className="text-sm text-muted-foreground underline" onClick={course}>A course over several days…</button>
-    </div>
   );
 }

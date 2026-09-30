@@ -13,6 +13,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
       // Just above the bottom bar, full width on a phone, as the design puts it.
       position="bottom-center"
       offset="84px"
+      // Sonner ignores offset at phone width and sits 16px from the edge, over the bar.
+      mobileOffset={{ bottom: "84px", left: "16px", right: "16px" }}
       toastOptions={{
         classNames: {
           toast:

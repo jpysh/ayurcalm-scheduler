@@ -12,16 +12,13 @@ import type { UiRoom, UiStaff, UiTherapy } from "@/pages/tabs/shared";
  * the fields a centre fills. Replaces the old desktop tables and dialogs.
  */
 
-export function SetupPage({ title, note, add, extra, search, setSearch, placeholder, children }: {
-  title: string; note?: ReactNode; add: [string, () => void]; extra?: ReactNode; search: string; setSearch: (s: string) => void; placeholder: string; children: ReactNode;
+export function SetupPage({ title, note, extra, search, setSearch, placeholder, children }: {
+  title: string; note?: ReactNode; extra?: ReactNode; search: string; setSearch: (s: string) => void; placeholder: string; children: ReactNode;
 }) {
   return (
     <div className="pb-28">
       <PageHead title={title} note={note} />
-      <div className="mb-2 flex gap-2">
-        <button type="button" className={`${wide} flex-1 bg-primary text-primary-foreground`} onClick={add[1]}>+ {add[0]}</button>
-        {extra}
-      </div>
+      {extra ? <div className="mb-2 flex gap-2">{extra}</div> : null}
       <input className={`${field} mb-2 rounded-full`} placeholder={placeholder} aria-label={placeholder} value={search} onChange={(e) => setSearch(e.target.value)} />
       <div className="overflow-hidden rounded-2xl bg-card">{children}</div>
     </div>

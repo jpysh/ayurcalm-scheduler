@@ -18,7 +18,8 @@ import DayDietDialog from "./DayDietDialog";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
-import { DateRow, Dropdown, Empty, Foot, Group, ListGroup, Loading, Row, Seg, Text } from "@/components/kit";
+import { wide, ChangeLine, DateRow, Empty, Foot, Group, ListGroup, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText } from "@/components/kit";
+import { marked } from "@/components/SearchScreen";
 // removed dialog import to avoid dev parse error
 
 type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; preferredStaffId?: string | null; requiresPreferredStaff?: boolean };
@@ -26,7 +27,9 @@ type Patient = { id: string | number; name: string; phone?: string; gender: stri
 /** "26 Sep": a stay is whole days, so no time. */
 const longDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const stayDay = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '');
-const blankNew = () => ({ name: '', phone: '', gender: '' as '' | 'Female' | 'Male' | 'Other', arriving: '', leaving: '', templateId: '' });
+const blankNew = () => ({ name: '', gender: '' as '' | 'Female' | 'Male' | 'Other', arriving: '', leaving: '', onSite: true, phone: '', emergencyContact: '', emergencyPhone: '', address: '', country: '', idNumber: '', registrationNumber: '' });
+type Slot = { date: string; start_time: string; staff_id: string; staff_name: string; room_id: string; room_name: string };
+const clock = (timeZone: string) => new Date().toLocaleTimeString('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
 
 type InHouse = { id: string; name: string; Stays: { id: string; start_date: string; end_date: string }[] };
 type ResidentDay = {
@@ -37,6 +40,7 @@ type ResidentDay = {
   doctor_plan: string | null;
   last_consultation: Visit | null; next_consultation: Visit | null;
 };
+type Found = { id: string; name: string; plan: string; stay: { start: string; end: string } | null; last_end: string | null };
 type Visit = { id: string; date: string; start_time: string; doctor: string | null; note: string | null };
 const visitDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 const DAY_MS = 86400000;
@@ -45,7 +49,7 @@ const DAY_MS = 86400000;
  * Residents (#63, docs/design/phone.html): who is in house today, arriving,
  * staying and leaving, from their stays. Search finds anyone, in house or not.
  */
-function ResidentsList({ patients, today, onOpen, q }: { patients: Patient[]; today: string; onOpen: (id: string) => void; q: string }) {
+function ResidentsList({ patients, today, onOpen, q, everything }: { patients: Patient[]; today: string; onOpen: (id: string) => void; q: string; everything: (q: string) => void }) {
   const [inHouse, setInHouse] = useState<InHouse[] | null>(null);
   useEffect(() => {
     fetchJsonWithTimeout<InHouse[]>(`${API_BASE}/patients?resident_on=${today}`).then((r) => setInHouse(Array.isArray(r) ? r : [])).catch(() => setInHouse([]));
@@ -64,16 +68,34 @@ function ResidentsList({ patients, today, onOpen, q }: { patients: Patient[]; to
     ['Staying', people.filter((x) => x.s!.start_date.slice(0, 10) !== today && x.s!.end_date.slice(0, 10) !== today)],
   ];
   const row = (id: string | number, name: string, sub: string) => <Row key={id} title={name} facts={sub} onClick={() => onOpen(String(id))} />;
-  const ql = q.trim().toLowerCase();
-  const inHouseIds = new Set(people.map((x) => x.p.id));
+  const ql = q.trim();
+  // Search (#285 story 6): by name or diet plan, each result with the facts a decision needs and a flag only when it needs doing.
+  const [found, setFound] = useState<{ q: string; list: Found[] } | null>(null);
+  useEffect(() => {
+    if (!ql) { setFound(null); return; }
+    const t = setTimeout(() => {
+      fetchJsonWithTimeout<{ patients: Found[] }>(`${API_BASE}/patients/find?q=${encodeURIComponent(ql)}&date=${today}`).then((r) => setFound({ q: ql, list: r.patients || [] })).catch(() => setFound({ q: ql, list: [] }));
+    }, 200);
+    return () => clearTimeout(t);
+  }, [ql, today]);
+  const leavesIn = (end: string) => Math.round((Date.parse(end) - Date.parse(`${today}T00:00:00Z`)) / DAY_MS);
   return (
     <div>
       <PageHead title="Patients" note={inHouse === null ? '' : `${people.length} in house`} />
       {ql ? (
-        <ListGroup>
-          {patients.filter((p) => p.name.toLowerCase().includes(ql)).sort(byName).slice(0, 40)
-            .map((p) => row(p.id, p.name, inHouseIds.has(String(p.id)) ? 'In house' : p.actualEnd ? `Last stay to ${stayDay(p.actualEnd)}` : ''))}
-        </ListGroup>
+        found === null ? <Loading rows={3} /> : (<>
+          <ListGroup title={`Patients matching “${found.q}”`} count={found.list.length}>
+            {found.list.length ? found.list.map((f) => {
+              const n = f.stay ? leavesIn(f.stay.end) : 0;
+              const day = f.stay ? Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(f.stay.start)) / DAY_MS) + 1 : 0;
+              const of = f.stay ? Math.round((Date.parse(f.stay.end) - Date.parse(f.stay.start)) / DAY_MS) + 1 : 0;
+              return <Row key={f.id} onClick={() => onOpen(f.id)} title={marked(f.name, found.q)}
+                facts={f.stay ? <>Day {day} of {of} · Diet: {f.plan ? marked(f.plan, found.q) : 'not chosen'}</> : f.last_end ? `Not in house · last stay to ${stayDay(f.last_end)}` : 'Not in house'}
+                flag={f.stay && n <= 3 ? (n <= 0 ? 'Leaves today' : n === 1 ? 'Leaves tomorrow' : `Leaves in ${n} days`) : undefined} />;
+            }) : <Empty text={`No patient or diet plan matches “${found.q}”.`} />}
+          </ListGroup>
+          <button type="button" className="mx-1 mt-3 min-h-11 text-base font-semibold text-primary" onClick={() => everything(found.q)}>Search everything for “{found.q}” ›</button>
+        </>)
       ) : inHouse === null ? <Loading /> : people.length === 0 ? <Empty text="No one is staying today." /> : groups.filter(([, list]) => list.length).map(([title, list]) => (
         <ListGroup key={title} title={title} count={list.length}>{list.map(({ p, s }) => row(p.id, p.name, dayOf(s!)))}</ListGroup>
       ))}
@@ -82,10 +104,12 @@ function ResidentsList({ patients, today, onOpen, q }: { patients: Patient[]; to
 }
 
 /** One resident: the stay, today's treatments, today's meals, and what to change. */
-function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeStay, book, details }: {
+function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeStay, book, details, detailsHint }: {
   id: string | null; today: string; onClose: () => void;
   openTreatment: (a: CardAppt) => void; changeMeals: (p: { id: string; name: string }) => void;
-  changeStay: (p: ResidentDay) => void; book: () => void; details: (id: string) => void;
+  changeStay: (p: ResidentDay) => void; book: (p: { id: string; name: string }) => void; details: (id: string) => void;
+  /** What the Details row says: what is filled, or what to add. */
+  detailsHint: (id: string) => string;
 }) {
   const [d, setD] = useState<ResidentDay | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
@@ -131,6 +155,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
     setD(null); setPlan(null); setIntake(null);
     if (id) fetchJsonWithTimeout<ResidentDay>(`${API_BASE}/patients/${id}/day?date=${today}`).then(setD).catch(() => setD(null));
   }, [id, today]);
+  const booked = d ? d.treatments.filter((t) => !t.consultation && t.status !== 'no_show').length : 0;
   const fact = "flex w-full min-h-11 items-center gap-3 border-b border-border px-3 py-2.5 text-left last:border-b-0";
   const label = "mx-1 mb-1.5 mt-3.5 text-xs font-semibold uppercase tracking-[.05em] text-muted-foreground";
   return (
@@ -139,6 +164,13 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
         <div className="-mt-2 max-h-[70dvh] overflow-y-auto">
           <div className="text-[13px] text-muted-foreground">
             {d.stay ? `Staying ${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)} · day ${d.stay.day} of ${d.stay.days}` : 'Not staying today'}
+          </div>
+          {/* Story 4: everything a patient may have is a row with an arrow, filled when it is decided; nothing is forced. */}
+          <div className="mt-2 border-t border-border">
+            <ChangeLine label="Diet" value={d.plan_name || "Not chosen yet"} faint={!d.plan_name} onClick={() => changeMeals(d)} />
+            <ChangeLine label="Therapies" value={booked ? `${booked} today` : "None booked today"} faint={!booked} onClick={() => book(d)} />
+            {d.stay ? <ChangeLine label="Stay" value={`${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)}`} onClick={() => changeStay(d)} /> : <ChangeLine label="Stay" value="Not staying · add a stay" faint onClick={() => changeStay(d)} />}
+            <ChangeLine label="Details" value={detailsHint(d.id)} faint onClick={() => details(d.id)} />
           </div>
           <div className={label}>Treatments today</div>
           <div className="overflow-hidden rounded-xl border">
@@ -158,20 +190,6 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
                 <button type="button" className={fact} onClick={() => setIntake({ vitals: d.stay!.vitals || '', concerns: d.stay!.concerns || '', tests: d.stay!.tests || '' })}>
                   <span className="w-5 flex-none">{d.stay.vitals && d.stay.concerns ? '✓' : '○'}</span>
                   <span className="flex-1">{d.stay.vitals || d.stay.concerns ? [d.stay.vitals, d.stay.concerns].filter(Boolean).join(' · ') : 'Vitals and concerns'}</span>
-                  <span className="text-muted-foreground">›</span>
-                </button>
-                <button type="button" className={fact} onClick={d.last_consultation || d.next_consultation ? undefined : book}>
-                  <span className="w-5 flex-none">{d.last_consultation ? '✓' : '○'}</span>
-                  <span className="flex-1">{d.last_consultation || d.next_consultation ? `First consultation ${visitDay((d.last_consultation || d.next_consultation)!.date)}` : 'Book the first consultation'}</span>
-                </button>
-                <button type="button" className={fact} onClick={() => changeMeals(d)}>
-                  <span className="w-5 flex-none">{d.plan_name ? '✓' : '○'}</span>
-                  <span className="flex-1">{d.plan_name ? `Diet: ${d.plan_name}` : 'Choose a diet'}</span>
-                  <span className="text-muted-foreground">›</span>
-                </button>
-                <button type="button" className={fact} onClick={book}>
-                  <span className="w-5 flex-none">{d.treatments.some((t) => !t.consultation && t.status !== 'no_show') ? '✓' : '○'}</span>
-                  <span className="flex-1">Book their therapies</span>
                   <span className="text-muted-foreground">›</span>
                 </button>
                 <button type="button" className={fact} onClick={() => setIntake({ vitals: d.stay!.vitals || '', concerns: d.stay!.concerns || '', tests: d.stay!.tests || '' })}>
@@ -196,7 +214,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
           {d.stay && d.stay.day >= d.stay.days - 1 ? (<>
             <div className={label}>Departure</div>
             <div className="overflow-hidden rounded-xl border">
-              <button type="button" className={fact} onClick={d.next_consultation ? undefined : book}>
+              <button type="button" className={fact} onClick={d.next_consultation ? undefined : () => book(d)}>
                 <span className="w-5 flex-none">{d.next_consultation ? '✓' : '○'}</span>
                 <span className="flex-1">{d.next_consultation ? `Closing consultation ${visitDay(d.next_consultation.date)} ${d.next_consultation.start_time}` : 'Book the closing consultation'}</span>
               </button>
@@ -213,12 +231,14 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
           </>) : null}
           <div className={label}>Doctor</div>
           <div className="overflow-hidden rounded-xl border">
-            {([['Last', d.last_consultation], ['Next', d.next_consultation]] as const).map(([k, v]) => (
-              <div key={k} className={fact}>
+            {([['Last', d.last_consultation], ['Next', d.next_consultation]] as const).map(([k, v]) => {
+              const inner = (<>
                 <span className="w-12 flex-none text-muted-foreground">{k}</span>
-                <span className="flex-1">{v ? `${visitDay(v.date)}${k === 'Next' ? ` ${v.start_time}` : ''}${v.doctor ? ` · ${v.doctor}` : ''}` : k === 'Last' ? 'Not seen yet' : 'None booked'}</span>
-              </div>
-            ))}
+                <span className="flex-1">{v ? `${visitDay(v.date)}${k === 'Next' ? ` ${v.start_time}` : ''}${v.doctor ? ` · ${v.doctor}` : ''}` : k === 'Last' ? 'Not seen yet' : 'None booked · book one'}</span>
+                {!v && k === 'Next' ? <span className="text-muted-foreground">›</span> : null}
+              </>);
+              return !v && k === 'Next' ? <button key={k} type="button" className={fact} onClick={() => book(d)}>{inner}</button> : <div key={k} className={fact}>{inner}</div>;
+            })}
             {plan === null ? (
               <button type="button" className={fact} onClick={() => setPlan(d.doctor_plan || '')}>
                 <span className="w-12 flex-none text-muted-foreground">Plan</span>
@@ -241,10 +261,8 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
               <div key={m.meal} className={fact}><span className="w-20 flex-none text-muted-foreground">{m.meal}</span><span className="flex-1">{m.text}</span></div>
             )) : <div className={fact}>No diet plan yet</div>}
           </div>
-          <div className="mt-3 overflow-hidden rounded-xl border">
-            {([["Change today's meals", () => changeMeals(d)], ['Change stay dates', () => changeStay(d)], ['Book a treatment', book], ['Share their link', () => shareLink('patients', d.id, d.name)], ['Details', () => details(d.id)]] as const).map(([t, go]) => (
-              <button key={t} type="button" className={fact} onClick={go}><span className="flex-1">{t}</span><span className="text-muted-foreground">›</span></button>
-            ))}
+          <div className="mt-3 border-t border-border">
+            <ChangeLine label="Private link" value="Share their day" onClick={() => shareLink('patients', d.id, d.name)} />
           </div>
         </div>
       ) : <div className="py-6 text-center text-muted-foreground">…</div>}
@@ -256,50 +274,70 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
 }
 
 /** The Patients screen: the Add and Details dialogs and the tab, held by the dashboard so they last as long as it does. */
-export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, openTreatment, book }: {
+export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, openTreatment, book, searchEverything }: {
   patients: PatientRow[]; setPatients: React.Dispatch<React.SetStateAction<PatientRow[]>>; staff: UiStaff[];
   therapyNameById: Record<string, string>; timezone: string;
   /** A treatment on the resident card opens the treatment card, on its day. */
   openTreatment: (a: CardAppt) => void;
-  book: () => void;
+  /** A booking, for the patient on a card when there is one. */
+  book: (p?: { id: string; name: string }) => void;
+  /** "Search everything": the same words, over treatments. */
+  searchEverything: (q: string) => void;
 }) {
   const ADMIN_TZ = timezone;
   const [showAddPatient, setShowAddPatient] = useState(false);
   const [newPatient, setNewPatient] = useState(blankNew);
-  const [templates, setTemplates] = useState<{ id: string; name: string }[]>([]);
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
   // Opening Add fills in the likely stay: arriving today, a fortnight.
   useEffect(() => {
     if (!showAddPatient) return;
     setNewPatient((p) => ({ ...p, arriving: p.arriving || today, leaving: p.leaving || addDays(today, 13) }));
-    fetchJsonWithTimeout<{ id: string; name: string }[]>(`${API_BASE}/diet-templates`).then((t) => setTemplates(Array.isArray(t) ? t : [])).catch(() => setTemplates([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAddPatient]);
+  // The consultation they are pre-booked into: the next free doctor time from the day they arrive (story 4).
+  const [slots, setSlots] = useState<Slot[] | null>(null);
+  const [consult, setConsult] = useState<number | 'later'>(0);
+  const [changing, setChanging] = useState(false);
+  useEffect(() => {
+    if (!showAddPatient || !newPatient.arriving) return;
+    setConsult(0); setChanging(false);
+    fetchJsonWithTimeout<{ slots: Slot[] }>(`${API_BASE}/consultations/next?date=${newPatient.arriving}${newPatient.arriving === today ? `&now=${clock(timezone)}` : ''}`)
+      .then((r) => setSlots((r.slots || []).filter((x) => x.date <= newPatient.leaving))).catch(() => setSlots([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAddPatient, newPatient.arriving]);
   const toRow = (c: any): PatientRow => ({
     id: c.id, name: c.name, phone: c.phone || '', email: c.email || '',
     gender: c.gender === 'male' ? 'Male' : c.gender === 'female' ? 'Female' : 'Other',
-    dob: '', emergencyContact: '', emergencyPhone: '', address: '', medicalNotes: c.medical_notes || '',
+    dob: '', emergencyContact: c.emergency_contact || '', emergencyPhone: c.emergency_phone || '', address: c.address || '', country: c.country || '', idNumber: c.id_number || '', registrationNumber: c.registration_number || '', medicalNotes: c.medical_notes || '',
     actualStart: c.Stays?.[0]?.start_date || '', actualEnd: c.Stays?.[0]?.end_date || '',
   });
   const saveNewPatient = async () => {
-    if (!newPatient.name.trim()) { toast.error('A name is needed'); return; }
-    if (!newPatient.gender) { toast.error('Choose a gender'); return; }
-    if (newPatient.leaving < newPatient.arriving) { toast.error('Leaving must be on or after arriving'); return; }
+    const n = newPatient;
+    const visit = consult === 'later' ? null : slots?.[consult];
+    const blank = (v: string) => v.trim() || undefined;
     const res = await fetch(`${API_BASE}/patients`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: newPatient.name.trim(), phone: newPatient.phone, gender: newPatient.gender.toLowerCase(),
-        stay: { start_date: newPatient.arriving, end_date: newPatient.leaving },
-        template_id: newPatient.templateId || undefined,
+        name: n.name.trim(), gender: n.gender.toLowerCase(), on_site: n.onSite,
+        phone: blank(n.phone), emergency_contact: blank(n.emergencyContact), emergency_phone: blank(n.emergencyPhone),
+        address: blank(n.address), country: blank(n.country), id_number: blank(n.idNumber), registration_number: blank(n.registrationNumber),
+        stay: { start_date: n.arriving, end_date: n.leaving },
+        consultation: visit ? { date: visit.date, start_time: visit.start_time, staff_id: visit.staff_id, room_id: visit.room_id } : undefined,
       }),
     });
-    if (!res.ok) { toast.error('Could not save the patient'); return; }
+    if (!res.ok) {
+      const why = await res.json().catch(() => ({}));
+      toast.error(why.message ? `${why.message} Choose another consultation time.` : 'Could not save the patient');
+      return;
+    }
     const created = await res.json();
     setPatients((prev) => [...prev, toRow(created)]);
-    toast.success(`${created.name} added, ${stayDay(newPatient.arriving)} to ${stayDay(newPatient.leaving)}`);
+    toast.success(`${created.name} added${visit ? `, consultation ${dayText(visit.date)} ${visit.start_time}` : ''}`);
     setShowAddPatient(false);
     setNewPatient(blankNew());
+    // They land on their card, with everything else a row to fill in when it is decided.
+    setCardId(created.id);
   };
 
   // The resident card's stay: one sheet to extend, shorten or end it today.
@@ -348,7 +386,6 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   // null while loading: an empty list would say "Not staying" and "No treatments" for a moment (#265 B2).
   const [infoAppointments, setInfoAppointments] = useState<ApiAppointment[] | null>(null);
   const [infoStays, setInfoStays] = useState<ApiStay[] | null>(null);
-  const [infoEditing, setInfoEditing] = useState(false);
   const showPatientInfo = async (p: PatientRow) => {
     setInfoPatient(p);
     setInfoDraft({ ...p });
@@ -367,6 +404,18 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     }
   };
 
+  const saveDetails = async () => {
+    if (!infoDraft) return;
+    const d = infoDraft;
+    const res = await fetch(`${API_BASE}/patients/${d.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify({
+      name: d.name.trim() || undefined, phone: d.phone, email: d.email, emergency_contact: d.emergencyContact, emergency_phone: d.emergencyPhone,
+      address: d.address, country: d.country, id_number: d.idNumber, registration_number: d.registrationNumber, medical_notes: d.medicalNotes, date_of_birth: d.dob || undefined,
+    }) });
+    if (!res.ok) { toast.error('That was not saved. Try again.'); return; }
+    setPatients((prev) => prev.map((x) => (x.id === d.id ? { ...x, ...d, name: d.name.trim() || x.name } : x)));
+    toast.success('Saved');
+    setInfoPatient(null);
+  };
   const toLocalDisplayNoSeconds = (iso?: string) => {
     if (!iso) return '';
     const d = new Date(iso);
@@ -379,7 +428,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const [mealsFor, setMealsFor] = useState<{ id: string; name: string } | null>(null);
   const tab = (
     <>
-      <ResidentsList patients={patients} today={today} onOpen={setCardId} q={query} />
+      <ResidentsList patients={patients} today={today} onOpen={setCardId} q={query} everything={searchEverything} />
     </>
   );
 
@@ -396,12 +445,13 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           setCardId(null);
           setStayEdit(d.stay ? { id: d.stay.id, start: d.stay.start_date, end: d.stay.end_date } : { id: null, start: today, end: addDays(today, 13) });
         }}
-        book={() => { setCardId(null); book(); }}
+        book={(p) => { setCardId(null); book(p); }}
+        detailsHint={(id) => { const r = patients.find((x) => String(x.id) === id); return r?.phone || r?.emergencyContact ? [r.phone, r.emergencyContact].filter(Boolean).join(' · ') : 'Add phone, emergency contact…'; }}
         details={(id) => { const row = patients.find((x) => String(x.id) === id); setCardId(null); if (row) showPatientInfo(row); }} />
 
-      <BottomSheet open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) setNewPatient(blankNew()); }} title="New patient">
-        <Text label="Name" value={newPatient.name} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} />
-        <Text label="Phone (optional)" type="tel" value={newPatient.phone} onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })} />
+      <BottomSheet open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) setNewPatient(blankNew()); }} title="New patient" note="Only name and gender are needed. Everything else can wait."
+        foot={<button type="button" className={`${wide} bg-primary text-primary-foreground disabled:opacity-50`} disabled={!newPatient.name.trim() || !newPatient.gender || newPatient.leaving < newPatient.arriving} onClick={saveNewPatient}>{newPatient.name.trim() ? `Add ${newPatient.name.trim()}` : 'Add patient'}</button>}>
+        <Text label="Name" autoComplete="off" value={newPatient.name} valid={newPatient.name.trim().length > 1} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} />
         {/* Nothing chosen to start with (#283): a list that opened on Male made every resident one until corrected. */}
         <Group label="Gender">
           <Seg options={[["Female", "Female"], ["Male", "Male"], ["Other", "Other"]]} value={newPatient.gender} onChange={(gender) => setNewPatient({ ...newPatient, gender })} />
@@ -410,11 +460,34 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           <DateRow label="Arriving" value={newPatient.arriving} onChange={(v) => setNewPatient({ ...newPatient, arriving: v, leaving: newPatient.leaving < v ? v : newPatient.leaving })} />
           <DateRow label="Leaving" value={newPatient.leaving} min={newPatient.arriving} onChange={(v) => setNewPatient({ ...newPatient, leaving: v })} />
         </div>
-        <Dropdown label="Diet plan" value={newPatient.templateId} onChange={(e) => setNewPatient({ ...newPatient, templateId: e.target.value })}>
-          <option value="">Not decided yet</option>
-          {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </Dropdown>
-        <Foot label="Add patient" save={saveNewPatient} />
+        <Switch label="Stays on site" note="Off for a day patient" on={newPatient.onSite} set={(onSite) => setNewPatient({ ...newPatient, onSite })} />
+        {slots === null || slots.length === 0 ? (
+          slots?.length === 0 ? <p className={`mt-3 ${noteText}`}>No doctor is free before they leave, so no consultation is booked. Book one from their card.</p> : null
+        ) : (
+          <div className="mt-3 rounded-xl border p-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="min-w-0"><b className="block">First consultation</b>
+                <span className={`block ${noteText}`}>{consult === 'later' ? 'Later, from their card' : `${dayText(slots[consult].date)} · ${slots[consult].start_time} · ${slots[consult].staff_name}`}</span></span>
+              <span className="flex flex-none text-sm font-semibold text-primary">
+                {consult === 'later' ? <button type="button" className="min-h-11 px-2" onClick={() => setConsult(0)}>Book</button> : (<>
+                  <button type="button" className="min-h-11 px-2" aria-expanded={changing} onClick={() => setChanging(!changing)}>Change</button>
+                  <button type="button" className="min-h-11 px-2" onClick={() => { setConsult('later'); setChanging(false); }}>Later</button>
+                </>)}
+              </span>
+            </div>
+            {changing ? <div className="mt-2"><Picker value={String(consult)} onChange={(id) => { setConsult(Number(id)); setChanging(false); }}
+              options={slots.map((x, i) => ({ id: String(i), name: `${dayText(x.date)} · ${x.start_time}`, note: `${x.staff_name} · ${x.room_name}`, fact: i === 0 ? 'soonest' : undefined }))} /></div> : null}
+          </div>
+        )}
+        <More hint="phone, passport… (optional)">
+          <Text label="Phone (optional)" type="tel" inputMode="tel" autoComplete="off" value={newPatient.phone} onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })} />
+          <Text label="Emergency contact (optional)" autoComplete="off" value={newPatient.emergencyContact} onChange={(e) => setNewPatient({ ...newPatient, emergencyContact: e.target.value })} />
+          <Text label="Emergency phone (optional)" type="tel" inputMode="tel" autoComplete="off" value={newPatient.emergencyPhone} onChange={(e) => setNewPatient({ ...newPatient, emergencyPhone: e.target.value })} />
+          <Text label="Address (optional)" autoComplete="off" value={newPatient.address} onChange={(e) => setNewPatient({ ...newPatient, address: e.target.value })} />
+          <Text label="Country (optional)" autoComplete="off" value={newPatient.country} onChange={(e) => setNewPatient({ ...newPatient, country: e.target.value })} />
+          <Text label="Passport or ID (optional)" autoComplete="off" value={newPatient.idNumber} onChange={(e) => setNewPatient({ ...newPatient, idNumber: e.target.value })} />
+          <Text label="Registration number (optional)" autoComplete="off" value={newPatient.registrationNumber} onChange={(e) => setNewPatient({ ...newPatient, registrationNumber: e.target.value })} />
+        </More>
       </BottomSheet>
       <BottomSheet open={!!stayEdit} onOpenChange={(open) => { if (!open) { setStayEdit(null); setLeftOver([]); } }} title={stayEdit?.id ? 'Stay' : 'New stay'}>
         {stayEdit && leftOver.length === 0 ? (
@@ -439,93 +512,28 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           </div>
         ) : null}
       </BottomSheet>
-      {/* A bottom sheet like every other (#265 O4), not a full-screen dialog with a boxed ✕. */}
-      <BottomSheet open={!!infoPatient} onOpenChange={(open) => { if (!open) { setInfoPatient(null); setInfoEditing(false); } }} title={infoPatient?.name ?? ''}>
-        <div className="max-h-[75dvh] overflow-y-auto overflow-x-hidden">
-          {infoPatient && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
-              <div className="space-y-2">
-                <Label>Name</Label>
-                <Input value={infoEditing ? (infoDraft?.name || '') : infoPatient.name} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, name: e.target.value } : prev)} />
-                <Label>Phone</Label>
-                <Input value={infoEditing ? (infoDraft?.phone || '') : (infoPatient.phone || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, phone: e.target.value } : prev)} />
-                <Label>Date of Birth</Label>
-                <Input type="date" value={infoEditing ? (infoDraft?.dob || '') : (infoPatient.dob || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, dob: e.target.value } : prev)} />
-                <Label>Email</Label>
-                <Input value={infoEditing ? (infoDraft?.email || '') : (infoPatient.email || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, email: e.target.value } : prev)} />
-                <Label>Emergency Contact</Label>
-                <Input value={infoEditing ? (infoDraft?.emergencyContact || '') : (infoPatient.emergencyContact || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, emergencyContact: e.target.value } : prev)} />
-                <Label>Emergency Phone</Label>
-                <Input value={infoEditing ? (infoDraft?.emergencyPhone || '') : (infoPatient.emergencyPhone || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, emergencyPhone: e.target.value } : prev)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Medical Notes</Label>
-                <Input value={infoEditing ? (infoDraft?.medicalNotes || '') : (infoPatient.medicalNotes || '')} onChange={(e) => infoEditing && setInfoDraft((prev) => prev ? { ...prev, medicalNotes: e.target.value } : prev)} />
-                <Label>Stay</Label>
-                {infoStays === null ? <div className="h-12" /> : (() => {
-                  // The API does not order stays: the one under way or next is the earliest that has not ended.
-                  const current = [...infoStays].sort((a, b) => a.start_date.localeCompare(b.start_date)).find((st) => st.end_date.slice(0, 10) >= today);
-                  return (
-                    <Button variant="outline" className="w-full justify-between h-12" onClick={() => setStayEdit(current
-                      ? { id: current.id, start: current.start_date.slice(0, 10), end: current.end_date.slice(0, 10) }
-                      : { id: null, start: today, end: addDays(today, 13) })}>
-                      {current ? `${stayDay(current.start_date)} → ${stayDay(current.end_date)}` : 'Not staying · add a stay'}
-                      <span aria-hidden>›</span>
-                    </Button>
-                  );
-                })()}
-              </div>
-              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 pt-2">
-                <div>
-                  <p className="text-sm font-medium">Treatments</p>
-                  <div className="mt-1 space-y-1">
-                    {(infoAppointments ?? []).map((a) => (
-                      <div key={a.id} className="text-xs">
-                        {longDay(a.scheduled_date)} · {a.start_time} · {therapyNameById[String(a.therapy_id)] || a.therapy_id}
-                        {recordLine(a) ? <div className="text-muted-foreground">{recordLine(a)}</div> : null}
-                      </div>
-                    ))}
-                    {infoAppointments?.length === 0 && <p className="text-xs text-muted-foreground">No treatments</p>}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Stays</p>
-                  <div className="mt-1 space-y-1">
-                    {(infoStays ?? []).map((s) => (
-                      <div key={s.id} className="text-xs">
-                        {stayDay(s.start_date)} → {stayDay(s.end_date)} · {String(s.duration_days)} days
-                      </div>
-                    ))}
-                    {infoStays?.length === 0 && <p className="text-xs text-muted-foreground">No stays</p>}
-                  </div>
-                </div>
-              </div>
-              <div className="md:col-span-2 flex justify-end gap-2 pt-2">
-                {infoEditing ? (
-                  <>
-                    <Button variant="outline" className="min-h-11 rounded-full" onClick={() => { setInfoEditing(false); setInfoDraft(infoPatient ? { ...infoPatient } : null); }}>Cancel</Button>
-                    <Button onClick={async () => {
-                      if (!infoDraft) return;
-                      try {
-                        const payload = { phone: infoDraft.phone || undefined, email: infoDraft.email || undefined, emergency_contact: infoDraft.emergencyContact || undefined, emergency_phone: infoDraft.emergencyPhone || undefined, medical_notes: infoDraft.medicalNotes || undefined, date_of_birth: infoDraft.dob || undefined };
-                        const res = await fetch(`${API_BASE}/patients/${infoDraft.id}` , { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
-                        const updated = await res.json();
-                        setPatients((prev) => prev.map((x) => x.id === infoDraft.id ? { ...x, phone: updated.phone || '', email: updated.email || '', emergencyContact: updated.emergency_contact || '', emergencyPhone: updated.emergency_phone || '', medicalNotes: updated.medical_notes || '', dob: updated.date_of_birth ? new Date(updated.date_of_birth).toISOString().slice(0,10) : '' } : x));
-                        setInfoPatient((prev) => prev ? { ...prev, phone: updated.phone || '', email: updated.email || '', emergencyContact: updated.emergency_contact || '', emergencyPhone: updated.emergency_phone || '', medicalNotes: updated.medical_notes || '', dob: updated.date_of_birth ? new Date(updated.date_of_birth).toISOString().slice(0,10) : '' } : prev);
-                        toast.success('Saved');
-                        setInfoEditing(false);
-                      } catch {
-                        toast.error('That was not saved. Try again.');
-                      }
-                    }}>Save</Button>
-                  </>
-                ) : (
-                  <Button className="min-h-11 w-full rounded-full" onClick={() => setInfoEditing(true)}>Edit</Button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+      {/* Filled over time (story 4): every field is editable at once, one Save, and the history of treatments and stays under it. */}
+      <BottomSheet open={!!infoPatient} onOpenChange={(open) => { if (!open) setInfoPatient(null); }} title={infoPatient?.name ?? ''} note="Nothing here is required. Fill in what you have."
+        foot={<Foot label={infoPatient ? `Save ${infoPatient.name.split(' ')[0]}'s details` : 'Save'} save={saveDetails} />}>
+        {infoPatient && infoDraft ? (<>
+          <Text label="Name" value={infoDraft.name} onChange={(e) => setInfoDraft({ ...infoDraft, name: e.target.value })} />
+          <Text label="Phone (optional)" type="tel" inputMode="tel" value={infoDraft.phone || ''} onChange={(e) => setInfoDraft({ ...infoDraft, phone: e.target.value })} />
+          <Text label="Emergency contact (optional)" value={infoDraft.emergencyContact || ''} onChange={(e) => setInfoDraft({ ...infoDraft, emergencyContact: e.target.value })} />
+          <Text label="Emergency phone (optional)" type="tel" inputMode="tel" value={infoDraft.emergencyPhone || ''} onChange={(e) => setInfoDraft({ ...infoDraft, emergencyPhone: e.target.value })} />
+          <Text label="Address (optional)" value={infoDraft.address || ''} onChange={(e) => setInfoDraft({ ...infoDraft, address: e.target.value })} />
+          <Text label="Country (optional)" value={infoDraft.country || ''} onChange={(e) => setInfoDraft({ ...infoDraft, country: e.target.value })} />
+          <Text label="Passport or ID (optional)" value={infoDraft.idNumber || ''} onChange={(e) => setInfoDraft({ ...infoDraft, idNumber: e.target.value })} />
+          <Text label="Registration number (optional)" value={infoDraft.registrationNumber || ''} onChange={(e) => setInfoDraft({ ...infoDraft, registrationNumber: e.target.value })} />
+          <DateRow label="Date of birth (optional)" value={infoDraft.dob || ''} onChange={(v) => setInfoDraft({ ...infoDraft, dob: v })} />
+          <Text label="Email (optional)" type="email" inputMode="email" value={infoDraft.email || ''} onChange={(e) => setInfoDraft({ ...infoDraft, email: e.target.value })} />
+          <Text label="Medical notes (optional)" value={infoDraft.medicalNotes || ''} onChange={(e) => setInfoDraft({ ...infoDraft, medicalNotes: e.target.value })} />
+          <ListGroup title="Stays" count={infoStays?.length}>
+            {infoStays === null ? <Loading rows={1} /> : infoStays.length ? infoStays.map((st) => <Row key={st.id} title={`${stayDay(st.start_date)} to ${stayDay(st.end_date)}`} facts={`${st.duration_days} days`} onClick={() => setStayEdit({ id: st.id, start: st.start_date.slice(0, 10), end: st.end_date.slice(0, 10) })} />) : <Empty text="No stays yet." />}
+          </ListGroup>
+          <ListGroup title="Treatments" count={infoAppointments?.length}>
+            {infoAppointments === null ? <Loading rows={2} /> : infoAppointments.length ? infoAppointments.map((a) => <Row key={a.id} title={`${longDay(a.scheduled_date)} · ${a.start_time}`} facts={[therapyNameById[String(a.therapy_id)] || 'Treatment', recordLine(a)].filter(Boolean).join(' · ')} />) : <Empty text="No treatments yet." />}
+          </ListGroup>
+        </>) : null}
       </BottomSheet>
     </>
   );

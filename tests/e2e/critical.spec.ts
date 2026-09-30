@@ -67,11 +67,11 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
   await passSetupIfShown(page);
   for (const [tab, text] of [
     ['Team and rooms', 'Working today'],
-    ['Therapists', 'Add therapist'],
-    ['Rooms', 'Add room'],
-    ['Therapies', 'Add therapy'],
+    ['Therapists', 'Therapists and doctors'],
+    ['Rooms', 'Rooms'],
+    ['Therapies', 'Therapies'],
     ['Diet plans', 'Plans'],
-    ['Leave', 'Add leave'],
+    ['Leave', 'Upcoming'],
     ['Events', 'Events'],
     ['Patients', 'in house'],
     ['Settings', 'Centre details'],
@@ -150,9 +150,8 @@ test('the booking dialog offers the slots the API found, and books one', async (
   await passSetupIfShown(page);
   await openTab(page, 'Back to the day');
   await page.getByRole('button', { name: 'Book a treatment' }).click();
-  // + suggests one booking (#136); "Someone else…" books one other resident (#273), and the full form, for a course, is behind it.
-  await page.getByRole('dialog').getByRole('button', { name: 'Someone else…' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'A course over several days…' }).click();
+  // + opens one sheet to book one treatment (#285); the full form, for a course, is behind its last link.
+  await page.getByRole('dialog').getByRole('button', { name: /^A course over several days/ }).click();
 
   // The centre's clock and the browser's clock are rarely the same one. The
   // dialog used to re-filter the server's slots against the browser's, so a
@@ -376,7 +375,7 @@ test("a resident's details show the stay under way, not the first one on file (#
   await page.getByRole('dialog').getByRole('button', { name: 'Details' }).click();
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
   const details = page.getByRole('dialog').last();
-  await expect(details.getByRole('button', { name: new RegExp(`^${today} →`) })).toBeVisible();
+  await expect(details.getByRole('button', { name: new RegExp(`^${today} to`) })).toBeVisible();
   // The old per-resident meal list is gone; the card's plan is the one place meals are read.
   await expect(details.getByText('Diet Plans')).toHaveCount(0);
 });

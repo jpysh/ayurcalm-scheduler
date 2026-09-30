@@ -16,7 +16,7 @@ export function useStaffScreen({ staff, setStaff, therapies, requestDelete }: {
   totalRef.current = rows.length;
 
   const tab = (
-    <SetupPage title="Therapists and doctors" note={`${staff.filter((s) => s.status === "Active").length} working`} add={["Add therapist or doctor", () => setOpen("new")]}
+    <SetupPage title="Therapists and doctors" note={`${staff.filter((s) => s.status === "Active").length} working`}
       search={search} setSearch={setSearch} placeholder="Search by name or therapy">
       {rows.map((s) => <Row key={s.id} name={s.name} sub={personSub(s)} dim={s.status !== "Active"} onClick={() => setOpen(s)} />)}
     </SetupPage>
@@ -26,5 +26,5 @@ export function useStaffScreen({ staff, setStaff, therapies, requestDelete }: {
       onSaved={(x) => setStaff((prev) => prev.some((s) => s.id === x.id) ? prev.map((s) => s.id === x.id ? x : s) : [...prev, x])}
       remove={(s) => requestDelete("staff", String(s.id), s.name)} />
   );
-  return { tab, dialogs, setVisibleRows: (_: number) => {}, totalRef };
+  return { tab, dialogs, setVisibleRows: (_: number) => {}, totalRef, openAdd: () => setOpen("new") };
 }

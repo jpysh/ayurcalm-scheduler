@@ -58,9 +58,6 @@ const TimeOffTab = ({
     <Card>
       <CardHeader className="px-2 md:px-4 pt-2 md:pt-4 pb-1 md:pb-2">
         <div className="flex items-center justify-center gap-2">
-          <Button size="sm" className="min-h-11 rounded-full px-4" onClick={() => setShowAddTimeOff(true)}>
-            <Plus className="mr-1 h-4 w-4" />Add leave
-          </Button>
           <Button size="sm" variant="outline" className="min-h-11 rounded-full px-4" onClick={() => setShowHolidays(true)}>Public holidays</Button>
         </div>
         {/* Upcoming, past or all (#273 O1): the one filter a centre uses, in place of a Filter popover. */}
@@ -508,5 +505,5 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     </>
   );
 
-  return { tab, dialogs, setVisibleRows: setVisibleTimeOffRows, totalRef: timeoffTotalRef };
+  return { tab, dialogs, setVisibleRows: setVisibleTimeOffRows, totalRef: timeoffTotalRef, openAdd: () => setShowAddTimeOff(true) };
 }

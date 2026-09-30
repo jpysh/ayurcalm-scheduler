@@ -23,6 +23,8 @@ import Settings from "./Settings";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout, API_TOKEN, type ApiAppointment, type ApiProgramEvent, type Patient, type UiRoom, type UiStaff, type UiTherapy, type UiTimeOff } from "./tabs/shared";
 import PageHead from "@/components/PageHead";
+import { BottomSheet } from "@/components/BottomBar";
+import { ListGroup, Row } from "@/components/kit";
 
 /** Builds the schedule's time rows from the centre's opening hours. */
 const buildTimeSlots = (openingTime: string, closingTime: string, slotMinutes: number) => {
@@ -189,7 +191,7 @@ const AdminDashboard = () => {
         const r: ApiRoom[] = await fetchJsonWithTimeout(`${API_BASE}/rooms`);
         setRoomsList(r.map((x) => ({ id: x.id, name: x.name, amenities: x.amenities, schedule: "", status: x.is_active ? "Active" : "Maintenance" })));
         const p: ApiPatient[] = await fetchJsonWithTimeout(`${API_BASE}/patients`);
-        setPatients(p.map((x) => ({ id: x.id, name: x.name, phone: x.phone ?? "", email: x.email ?? "", gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", dob: x.date_of_birth ? new Date(x.date_of_birth as unknown as string).toISOString().slice(0,10) : "", emergencyContact: x.emergency_contact ?? "", emergencyPhone: x.emergency_phone ?? "", address: "", medicalNotes: x.medical_notes ?? "", actualStart: x.Stays?.[0]?.start_date || "", actualEnd: x.Stays?.[0]?.end_date || "", stays: x.Stays || [], preferredStaffId: (x as { preferred_staff_id?: string | null }).preferred_staff_id ?? null, requiresPreferredStaff: !!(x as { requires_preferred_staff?: boolean }).requires_preferred_staff })));
+        setPatients(p.map((x) => ({ id: x.id, name: x.name, phone: x.phone ?? "", email: x.email ?? "", gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", dob: x.date_of_birth ? new Date(x.date_of_birth as unknown as string).toISOString().slice(0,10) : "", emergencyContact: x.emergency_contact ?? "", emergencyPhone: x.emergency_phone ?? "", address: (x as { address?: string | null }).address ?? "", country: (x as { country?: string | null }).country ?? "", idNumber: (x as { id_number?: string | null }).id_number ?? "", registrationNumber: (x as { registration_number?: string | null }).registration_number ?? "", medicalNotes: x.medical_notes ?? "", actualStart: x.Stays?.[0]?.start_date || "", actualEnd: x.Stays?.[0]?.end_date || "", stays: x.Stays || [], preferredStaffId: (x as { preferred_staff_id?: string | null }).preferred_staff_id ?? null, requiresPreferredStaff: !!(x as { requires_preferred_staff?: boolean }).requires_preferred_staff })));
       } catch {
         setTherapies([]);
         setStaff([]);
@@ -502,8 +504,21 @@ const AdminDashboard = () => {
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const patientsScreen = usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ,
     openTreatment: (a) => { go('schedule'); scheduleScreen.openCard(a); },
-    book: () => { go('schedule'); scheduleScreen.openBook(); } });
+    book: (p) => { go('schedule'); scheduleScreen.openBook(p); },
+    // The same words, over every treatment: the day's own search.
+    searchEverything: (q) => { patientsScreen.setSearching(false); patientsScreen.setQuery(''); go('schedule'); scheduleScreen.setQuery(q); scheduleScreen.setSearching(true); } });
   residentOpener.current = patientsScreen.openResident;
+  // The adaptive + (#285): it adds what the screen is about. A trial that has ended adds nothing and says so.
+  const [showTeamChoice, setShowTeamChoice] = useState(false);
+  const guard = (adds: string, what: string, run: () => void) => ({ adds, run: () => { if (readOnly) { toast(`The free trial has ended, so nothing new can be ${what}. Nothing is deleted.`, { duration: 10000, action: { label: "Choose a plan", onClick: () => go('settings') } }); return; } run(); } });
+  const plusFor = activeTab === 'schedule' ? guard('Book a treatment', 'booked', scheduleScreen.openBook)
+    : activeTab === 'patients' ? guard('New patient', 'added', patientsScreen.openAdd)
+    : activeTab === 'timeoff' ? guard('Add leave', 'added', timeOffScreen.openAdd)
+    : activeTab === 'team' ? guard('Add to the team', 'added', () => setShowTeamChoice(true))
+    : activeTab === 'staff' ? guard('Add therapist or doctor', 'added', staffScreen.openAdd)
+    : activeTab === 'rooms' ? guard('Add room', 'added', roomsScreen.openAdd)
+    : activeTab === 'therapies' ? guard('Add therapy', 'added', therapiesScreen.openAdd)
+    : null;
   const dietScreen = useDietScreen({ patients, setPatients, therapies, therapyNameById, ymdInTZ, active: activeTab === 'diet' });
 
   // The list screens grow as the admin scrolls to the bottom.
@@ -642,9 +657,7 @@ const AdminDashboard = () => {
             </div>
           </div>, { duration: 10000 });
         }}
-        plus={activeTab === 'schedule' ? { adds: 'Book a treatment', run: () => { if (readOnly) { toast("The free trial has ended, so nothing new can be booked. Nothing is deleted.", { duration: 10000, action: { label: "Choose a plan", onClick: () => go('settings') } }); return; } scheduleScreen.openBook(); } }
-          : activeTab === 'patients' ? { adds: 'New patient', run: () => { if (readOnly) { toast("The free trial has ended, so nothing new can be added. Nothing is deleted.", { duration: 10000, action: { label: "Choose a plan", onClick: () => go('settings') } }); return; } patientsScreen.openAdd(); } }
-          : null}
+        plus={plusFor}
         view={scheduleScreen.view}
         setView={scheduleScreen.setView}
         // One search: on Patients it filters that list, anywhere else it searches the day.
@@ -713,6 +726,14 @@ const AdminDashboard = () => {
         }}
       />
       {patientsScreen.dialogs}
+      {/* Choice +: Team can add several kinds of thing, so + asks which (#285). */}
+      <BottomSheet open={showTeamChoice} onOpenChange={setShowTeamChoice} title="Add to the team" note="What are you adding?">
+        <ListGroup>
+          {([['Therapist or doctor', 'Someone who gives treatments or consultations', 'staff', staffScreen.openAdd], ['Room', 'Where treatments happen', 'rooms', roomsScreen.openAdd], ['Therapy', 'A treatment the centre offers', 'therapies', therapiesScreen.openAdd]] as const).map(([name, note, to, add]) => (
+            <Row key={name} title={name} facts={note} trailing="›" onClick={() => { setShowTeamChoice(false); go(to); add(); }} />
+          ))}
+        </ListGroup>
+      </BottomSheet>
       {staffScreen.dialogs}
 
       {roomsScreen.dialogs}

@@ -19,6 +19,12 @@ model Patient {
   date_of_birth     DateTime?
   emergency_contact String?
   emergency_phone   String?
+  /// Filled over time from the card ("More details"); the discharge summary asks for some of them.
+  address           String?
+  country           String?
+  /// Passport or other ID.
+  id_number         String?
+  registration_number String?
   medical_notes     String?
   created_at        DateTime  @default(now())
   /// The therapist this resident is booked with when there is a choice.
@@ -45,6 +51,8 @@ model PatientStay {
   start_date    DateTime
   end_date      DateTime
   duration_days Int
+  /// False for a day patient, who does not sleep at the centre.
+  on_site       Boolean  @default(true)
   /// Taken on arrival (#219): the first reading, free text ("BP 130/85, pulse 72").
   vitals        String?
   /// What the resident came about, in their words.

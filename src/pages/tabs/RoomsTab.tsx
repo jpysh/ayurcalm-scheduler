@@ -16,7 +16,7 @@ export function useRoomsScreen({ roomsList, setRoomsList, amenityOptions, reques
   totalRef.current = rows.length;
 
   const tab = (
-    <SetupPage title="Rooms" note={`${roomsList.filter((r) => r.status === "Active").length} in use`} add={["Add room", () => setOpen("new")]}
+    <SetupPage title="Rooms" note={`${roomsList.filter((r) => r.status === "Active").length} in use`}
       search={search} setSearch={setSearch} placeholder="Search rooms">
       {rows.map((r) => <Row key={r.id} name={r.name} sub={roomSub(r)} dim={r.status !== "Active"} onClick={() => setOpen(r)} />)}
     </SetupPage>
@@ -26,5 +26,5 @@ export function useRoomsScreen({ roomsList, setRoomsList, amenityOptions, reques
       onSaved={(x) => setRoomsList((prev) => prev.some((r) => r.id === x.id) ? prev.map((r) => r.id === x.id ? x : r) : [...prev, x])}
       remove={(r) => requestDelete("room", String(r.id), r.name)} />
   );
-  return { tab, dialogs, setVisibleRows: (_: number) => {}, totalRef };
+  return { tab, dialogs, setVisibleRows: (_: number) => {}, totalRef, openAdd: () => setOpen("new") };
 }
