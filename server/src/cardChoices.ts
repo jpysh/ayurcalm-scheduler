@@ -141,7 +141,7 @@ export async function cardChoices(appointmentId: string, kind: Kind, nowMinutes:
 
 export type Suggestion = {
   patient_id: string; patient_name: string; therapy_id: string; therapy_name: string;
-  start_time: string; duration_minutes: number; staff_id: string; staff_name: string; room_id: string; room_name: string;
+  start_time: string; duration_minutes: number; staff_id: string; staff_name: string; co_staff_ids: string[]; room_id: string; room_name: string;
 };
 
 /**
@@ -183,9 +183,18 @@ export async function bookingSuggestions(dayISO: string, nowMinutes: number | nu
       for (const s of staff) for (const room of rooms) {
         if (!works(s.weekly_schedule, day, t, therapy.duration_minutes) || !works(room.weekly_schedule, day, t, therapy.duration_minutes)) continue;
         const c: Candidate = { scheduled_date: day, start_time: hm(t), duration_minutes: therapy.duration_minutes, staff_id: s.id, co_staff_ids: [], room_id: room.id, patient_id: r.stay.patient_id, therapy_id: therapy.id };
+        // A therapy given by two or more: add each further therapist the guard has nothing against but the head count.
+        const co: string[] = [];
+        for (const o of staff) {
+          if (co.length >= (therapy.staff_required ?? 1) - 1) break;
+          if (o.id === s.id || !works(o.weekly_schedule, day, t, therapy.duration_minutes)) continue;
+          const short = findConflict({ ...c, co_staff_ids: [...co, o.id] }, ctx);
+          if (!short || short.reason === 'STAFF_SHORT') co.push(o.id);
+        }
+        c.co_staff_ids = co;
         if (findConflict(c, ctx)) continue;
         const p = ctx.patients.find((x) => x.id === r.stay.patient_id);
-        out.push({ patient_id: c.patient_id, patient_name: p?.name || '', therapy_id: therapy.id, therapy_name: therapy.name, start_time: c.start_time, duration_minutes: c.duration_minutes, staff_id: s.id, staff_name: s.name, room_id: room.id, room_name: room.name });
+        out.push({ patient_id: c.patient_id, patient_name: p?.name || '', therapy_id: therapy.id, therapy_name: therapy.name, start_time: c.start_time, duration_minutes: c.duration_minutes, staff_id: s.id, staff_name: [s, ...co.map((id) => staff.find((x) => x.id === id)!)].map((x) => x.name).join(' and '), co_staff_ids: co, room_id: room.id, room_name: room.name });
         if (!pick || out.length >= limit) break search;
         continue search;
       }
@@ -193,4 +202,21 @@ export async function bookingSuggestions(dayISO: string, nowMinutes: number | nu
     if (out.length >= limit) break;
   }
   return out;
+}
+
+/**
+ * Why a chosen resident and therapy got no time at all, when the reason is the
+ * team and not the day: "no free time" would send the admin hunting for another day.
+ */
+export async function whyNoTime(dayISO: string, pick: { patient_id: string; therapy_id: string }, prisma: PrismaClient): Promise<string | undefined> {
+  const ctx = await loadDay(new Date(`${dayISO}T00:00:00.000Z`), prisma);
+  const therapy = ctx.therapies.find((t) => t.id === pick.therapy_id);
+  const patient = ctx.patients.find((x) => x.id === pick.patient_id);
+  if (!therapy || !patient) return undefined;
+  const sameGender = therapy.requires_gender_match && ctx.settings?.enforce_gender_match !== false;
+  const able = ctx.staff.filter((s) => s.is_active && (!s.specializations.length || s.specializations.includes(therapy.id)) && (!sameGender || s.gender === patient.gender)).length;
+  const needed = therapy.staff_required ?? 1;
+  if (able >= needed) return undefined;
+  const who = `${needed === 1 ? 'a therapist' : `${needed} therapists together`}${sameGender ? ` of ${patient.name.split(' ')[0]}'s gender` : ''}`;
+  return `${therapy.name} needs ${who}, and ${able === 0 ? 'nobody here gives it yet' : `only ${able} here ${able === 1 ? 'gives' : 'give'} it`}. Add one in Team and rooms.`;
 }

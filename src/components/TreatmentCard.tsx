@@ -306,7 +306,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
 
 type Suggestion = {
   patient_id: string; patient_name: string; therapy_id: string; therapy_name: string;
-  start_time: string; duration_minutes: number; staff_id: string; staff_name: string; room_id: string; room_name: string;
+  start_time: string; duration_minutes: number; staff_id: string; staff_name: string; co_staff_ids: string[]; room_id: string; room_name: string;
 };
 
 /**
@@ -339,7 +339,7 @@ export function BookSheet({ open, onClose, day, isToday, nowMinutes, refresh, ot
     try {
       const res = await fetch(`${API_BASE}/appointments/one`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patient_id: chosen.patient_id, therapy_id: chosen.therapy_id, date: day, start_time: chosen.start_time, staff_id: chosen.staff_id, room_id: chosen.room_id }),
+        body: JSON.stringify({ patient_id: chosen.patient_id, therapy_id: chosen.therapy_id, date: day, start_time: chosen.start_time, staff_id: chosen.staff_id, co_staff_ids: chosen.co_staff_ids, room_id: chosen.room_id }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { toast.error(body.message || "That time has just gone. Try again."); return; }
@@ -391,20 +391,21 @@ function SomeoneElse({ day, isToday, nowMinutes, opt, back, course, choose }: {
   day: string; isToday: boolean; nowMinutes: number; opt: string; back: () => void; course: () => void; choose: (s: Suggestion) => void;
 }) {
   const [residents, setResidents] = useState<{ id: string; name: string }[]>([]);
-  const [therapies, setTherapies] = useState<{ id: string; name: string; staff_required?: number }[]>([]);
+  const [therapies, setTherapies] = useState<{ id: string; name: string }[]>([]);
   const [q, setQ] = useState("");
   const [who, setWho] = useState<{ id: string; name: string } | null>(null);
   const [what, setWhat] = useState("");
   const [times, setTimes] = useState<Suggestion[] | null>(null);
+  const [why, setWhy] = useState("");
   useEffect(() => {
     fetch(`${API_BASE}/patients?resident_on=${day}`).then((r) => (r.ok ? r.json() : [])).then(setResidents).catch(() => setResidents([]));
-    fetch(`${API_BASE}/therapies`).then((r) => (r.ok ? r.json() : [])).then((t: { id: string; name: string; staff_required?: number }[]) => setTherapies([...t].sort((a, b) => a.name.localeCompare(b.name)))).catch(() => setTherapies([]));
+    fetch(`${API_BASE}/therapies`).then((r) => (r.ok ? r.json() : [])).then((t: { id: string; name: string }[]) => setTherapies([...t].sort((a, b) => a.name.localeCompare(b.name)))).catch(() => setTherapies([]));
   }, [day]);
   useEffect(() => {
     if (!who || !what) { setTimes(null); return; }
     setTimes(null);
     fetch(`${API_BASE}/appointments/suggest?date=${day}&patient_id=${who.id}&therapy_id=${what}${isToday ? `&now=${hm(nowMinutes)}` : ""}`)
-      .then((r) => (r.ok ? r.json() : { suggestions: [] })).then((d) => setTimes(d.suggestions || []));
+      .then((r) => (r.ok ? r.json() : { suggestions: [] })).then((d) => { setTimes(d.suggestions || []); setWhy(d.why || ""); });
   }, [who, what, day, isToday, nowMinutes]);
   const shown = residents.filter((p) => !q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 6);
   const input = "h-11 w-full rounded-xl border bg-background px-3 text-base";
@@ -429,10 +430,8 @@ function SomeoneElse({ day, isToday, nowMinutes, opt, back, course, choose }: {
               <button key={t.start_time} type="button" className={opt} onClick={() => choose(t)}>
                 <span>{t.start_time}<small className="block text-[13px] text-muted-foreground">with {t.staff_name} · {t.room_name}</small></span><span>›</span>
               </button>
-            )) : (therapies.find((t) => t.id === what)?.staff_required ?? 1) > 1
-              // ponytail: the quick times pair one therapist; a two-therapist therapy goes to the full form.
-              ? <p className="text-sm text-muted-foreground">This therapy needs {therapies.find((t) => t.id === what)?.staff_required} therapists together: book it with the full form below.</p>
-              : <p className="text-sm text-muted-foreground">No free time for {who.name.split(" ")[0]} on this day. Try another day or therapy.</p>
+            ))
+              : <p className="text-sm text-muted-foreground">{why || `No free time for ${who.name.split(" ")[0]} on this day. Try another day or therapy.`}</p>
         ) : null}
       </>)}
       <button type="button" className="text-sm text-muted-foreground underline" onClick={course}>A course over several days…</button>
