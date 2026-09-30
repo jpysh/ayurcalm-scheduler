@@ -442,7 +442,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
           <optgroup label="Rooms">{roomsList.map((r) => <option key={r.id} value={`Room:${r.id}`}>{r.name}</option>)}</optgroup>
           <optgroup label="The whole centre"><option value="Center:All">The centre is closed</option></optgroup>
           <optgroup label="Therapies">{therapies.map((t) => <option key={String(t.id ?? t.name)} value={`Therapy:${String(t.id ?? t.name)}`}>{t.name}</option>)}</optgroup>
-          <optgroup label="Residents">{patients.map((x) => <option key={x.id} value={`Patient:${x.id}`}>{x.name}</option>)}</optgroup>
+          <optgroup label="Patients">{patients.map((x) => <option key={x.id} value={`Patient:${x.id}`}>{x.name}</option>)}</optgroup>
         </Dropdown>
         <div className="grid grid-cols-2 gap-3">
           <DateRow label="From" value={newTimeOff.date} onChange={(v) => setNewTimeOff({ ...newTimeOff, date: v, endDate: newTimeOff.endDate < v ? v : newTimeOff.endDate })} />

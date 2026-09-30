@@ -84,7 +84,7 @@ test('O1: Leave has Upcoming · Past · All, not a Filter popover', async ({ pag
 test('O2: the print note keeps its words on one line, the other sheets under them', async ({ page }) => {
   await signIn(page);
   await page.getByRole('button', { name: "Print the day's sheets" }).click();
-  const words = page.locator('[data-sonner-toast]').getByText(/^Resident sheet printed/);
+  const words = page.locator('[data-sonner-toast]').getByText(/^Patient sheet printed/);
   await expect(words).toBeVisible({ timeout: 20000 });
   expect((await words.boundingBox())!.width).toBeGreaterThan(180);
   await expect(page.locator('[data-sonner-toast]').getByRole('button', { name: 'Doctor sheet' })).toBeVisible();
@@ -183,7 +183,7 @@ test('#283: Add leave, New resident and Opening hours show no native date or tim
   await expect(leave.getByLabel('Starts')).toHaveValue(/^\d\d:\d\d$/);
   await expect(leave.getByLabel('From')).toHaveAttribute('type', 'date');
   await clean(leave);
-  const resident = await open(/^Residents/, 'New resident');
+  const resident = await open(/^Patients/, 'New patient');
   await expect(resident.getByText(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{1,2} \w+$/).first()).toBeVisible();
   await clean(resident);
   const hours = await open(/^Settings/, /^Opening hours/);

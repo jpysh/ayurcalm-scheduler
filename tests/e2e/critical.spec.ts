@@ -73,7 +73,7 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
     ['Diet plans', 'Plans'],
     ['Leave', 'Add leave'],
     ['Events', 'Events'],
-    ['Residents', 'in house'],
+    ['Patients', 'in house'],
     ['Settings', 'Centre details'],
     ['Back to the day', 'treatments'],
   ]) {
@@ -81,7 +81,7 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
     await expect(activePanel(page)).toContainText(text, { timeout: 15000 });
   }
   // A page has one header line, as the design's (#193): its name, and no "‹ The day" line above it.
-  for (const [tab, title] of [['Residents', 'Residents'], ['Team and rooms', 'Team and rooms'], ['Leave', 'Leave'], ['Diet plans', 'Diet'], ['Settings', 'Settings']]) {
+  for (const [tab, title] of [['Patients', 'Patients'], ['Team and rooms', 'Team and rooms'], ['Leave', 'Leave'], ['Diet plans', 'Diet'], ['Settings', 'Settings']]) {
     await openTab(page, tab);
     await expect(activePanel(page).getByRole('heading', { level: 1 })).toHaveText(title);
     await expect(page.getByRole('button', { name: '‹ The day' })).toHaveCount(0);
@@ -92,8 +92,8 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
   await expect(activePanel(page)).toContainText(/Today|Yesterday/, { timeout: 15000 });
     // A seeded install has residents in house, and one opens on a card with
   // today's meals (#63); an empty list means the API is not answering.
-  await openTab(page, 'Residents');
-  const resident = activePanel(page).getByRole('button', { name: / · day \d+ of \d+$/ });
+  await openTab(page, 'Patients');
+  const resident = activePanel(page).getByRole('button', { name: /Day \d+ of \d+ · leaves/ });
   await expect(resident.nth(5)).toBeVisible();
   await resident.first().click();
   await expect(page.getByRole('dialog')).toContainText('Meals today', { timeout: 15000 });
@@ -239,7 +239,7 @@ test("the day's problems are named on the first screen", async ({ page, request 
     // one tap names it with the resident in it. The count comes from the same
     // server check that refuses a booking — the pill has no rules of its own.
     // A resident with nothing booked is a rest day, not a note.
-    const pill = page.getByRole('button', { name: /1 to fix/ });
+    const pill = page.getByRole('button', { name: /1 need you/ });
     await expect(pill).toBeVisible({ timeout: 20000 });
     await expect(pill).not.toContainText('note');
     await pill.click();
@@ -255,7 +255,7 @@ test('search finds a resident on other days and opens the card with Show this da
   // Search covers every day, not the one on screen (#165): a resident from the
   // chips has treatments listed under day headings, and a result opens its card.
   await page.getByRole('button', { name: 'Search treatments' }).click();
-  await expect(page.getByText('Residents', { exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText('Patients', { exact: true })).toBeVisible({ timeout: 15000 });
   // A resident chip is a full name; therapist chips are first names.
   await page.getByRole('button', { name: /^\S+ \S+/ }).first().click();
   await page.getByRole('button', { name: 'All', exact: true }).click();
@@ -370,9 +370,9 @@ test('an admin who never finished setup is sent back to it (#60)', async ({ page
 test("a resident's details show the stay under way, not the first one on file (#220)", async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  await openTab(page, 'Residents');
+  await openTab(page, 'Patients');
   // Someone arriving today: their stay starts today, and they have older and later stays in the seed.
-  await activePanel(page).getByRole('button', { name: /day 1 of/ }).first().click();
+  await activePanel(page).getByRole('button', { name: /day 1 of/i }).first().click();
   await page.getByRole('dialog').getByRole('button', { name: 'Details' }).click();
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
   const details = page.getByRole('dialog').last();
@@ -384,8 +384,8 @@ test("a resident's details show the stay under way, not the first one on file (#
 test("a resident's card shows the doctor's last and next consultation and a plan that can be edited (#219)", async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  await openTab(page, 'Residents');
-  await activePanel(page).getByRole('button', { name: /day \d+ of/ }).first().click();
+  await openTab(page, 'Patients');
+  await activePanel(page).getByRole('button', { name: /day \d+ of/i }).first().click();
   const card = page.getByRole('dialog').last();
   await expect(card.getByText('Doctor', { exact: true })).toBeVisible({ timeout: 15000 });
   await expect(card.getByText('Next', { exact: true })).toBeVisible();
@@ -451,7 +451,7 @@ test('Leave offers India\'s public holidays, and a seeded centre is already clos
 test('a resident leaving today has a departure section and a summary to take home (#219)', async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  await openTab(page, 'Residents');
+  await openTab(page, 'Patients');
   const leaving = activePanel(page).locator('section').filter({ hasText: 'Leaving today' }).getByRole('button');
   await expect(activePanel(page).getByText(/treatments ·|Staying/).first()).toBeVisible({ timeout: 15000 });
   test.skip(!(await leaving.count()), 'nobody leaves today');
@@ -471,7 +471,7 @@ test('a resident leaving today has a departure section and a summary to take hom
 test('a resident arriving today has the arrival steps still to do (#219)', async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  await openTab(page, 'Residents');
+  await openTab(page, 'Patients');
   const arriving = activePanel(page).locator('section').filter({ hasText: 'Arriving today' }).getByRole('button');
   await expect(activePanel(page).getByText(/Staying/).first()).toBeVisible({ timeout: 15000 });
   test.skip(!(await arriving.count()), 'nobody arrives today');

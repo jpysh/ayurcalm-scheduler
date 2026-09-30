@@ -18,7 +18,7 @@ import DayDietDialog from "./DayDietDialog";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
-import { DateRow, Dropdown, Foot, Group, Seg, Text } from "@/components/kit";
+import { DateRow, Dropdown, Empty, Foot, Group, ListGroup, Loading, Row, Seg, Text } from "@/components/kit";
 // removed dialog import to avoid dev parse error
 
 type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; preferredStaffId?: string | null; requiresPreferredStaff?: boolean };
@@ -45,9 +45,8 @@ const DAY_MS = 86400000;
  * Residents (#63, docs/design/phone.html): who is in house today, arriving,
  * staying and leaving, from their stays. Search finds anyone, in house or not.
  */
-function ResidentsList({ patients, today, onOpen, onAdd }: { patients: Patient[]; today: string; onOpen: (id: string) => void; onAdd: () => void }) {
+function ResidentsList({ patients, today, onOpen, q }: { patients: Patient[]; today: string; onOpen: (id: string) => void; q: string }) {
   const [inHouse, setInHouse] = useState<InHouse[] | null>(null);
-  const [q, setQ] = useState('');
   useEffect(() => {
     fetchJsonWithTimeout<InHouse[]>(`${API_BASE}/patients?resident_on=${today}`).then((r) => setInHouse(Array.isArray(r) ? r : [])).catch(() => setInHouse([]));
   }, [today, patients.length]);
@@ -55,7 +54,7 @@ function ResidentsList({ patients, today, onOpen, onAdd }: { patients: Patient[]
   const dayOf = (s: { start_date: string; end_date: string }) => {
     const n = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(s.start_date)) / DAY_MS) + 1;
     const of = Math.round((Date.parse(s.end_date) - Date.parse(s.start_date)) / DAY_MS) + 1;
-    return `${stayDay(s.start_date)} to ${stayDay(s.end_date)} · day ${n} of ${of}`;
+    return `Day ${n} of ${of} · leaves ${stayDay(s.end_date)}`;
   };
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
   const people = (inHouse || []).map((p) => ({ p, s: stayOf(p) })).filter((x) => x.s).sort((a, b) => byName(a.p, b.p));
@@ -64,31 +63,20 @@ function ResidentsList({ patients, today, onOpen, onAdd }: { patients: Patient[]
     ['Leaving today', people.filter((x) => x.s!.end_date.slice(0, 10) === today && x.s!.start_date.slice(0, 10) !== today)],
     ['Staying', people.filter((x) => x.s!.start_date.slice(0, 10) !== today && x.s!.end_date.slice(0, 10) !== today)],
   ];
-  const row = (id: string | number, name: string, sub: string) => (
-    <button key={id} type="button" onClick={() => onOpen(String(id))} className="flex w-full min-h-[54px] flex-col justify-center border-b border-border px-3 py-2 text-left last:border-b-0">
-      <span className="text-[16px] font-semibold">{name}</span>
-      {sub ? <span className="text-[13px] text-muted-foreground">{sub}</span> : null}
-    </button>
-  );
+  const row = (id: string | number, name: string, sub: string) => <Row key={id} title={name} facts={sub} onClick={() => onOpen(String(id))} />;
   const ql = q.trim().toLowerCase();
   const inHouseIds = new Set(people.map((x) => x.p.id));
   return (
     <div>
-      <PageHead title="Residents" note={inHouse === null ? '' : `${people.length} in house`} />
-      <input className="mb-2 min-h-11 w-full rounded-full border-[1.5px] border-border bg-card px-4 text-base outline-none" placeholder="Search all residents" aria-label="Search residents"
-        value={q} onChange={(e) => setQ(e.target.value)} />
+      <PageHead title="Patients" note={inHouse === null ? '' : `${people.length} in house`} />
       {ql ? (
-        <div className="overflow-hidden rounded-2xl bg-card">
+        <ListGroup>
           {patients.filter((p) => p.name.toLowerCase().includes(ql)).sort(byName).slice(0, 40)
             .map((p) => row(p.id, p.name, inHouseIds.has(String(p.id)) ? 'In house' : p.actualEnd ? `Last stay to ${stayDay(p.actualEnd)}` : ''))}
-        </div>
-      ) : groups.filter(([, list]) => list.length).map(([title, list]) => (
-        <section key={title}>
-          <div className="flex justify-between px-1 pb-1.5 pt-3 text-[13px] font-bold">{title}<span className="font-normal text-muted-foreground">{list.length}</span></div>
-          <div className="overflow-hidden rounded-2xl bg-card">{list.map(({ p, s }) => row(p.id, p.name, dayOf(s!)))}</div>
-        </section>
+        </ListGroup>
+      ) : inHouse === null ? <Loading /> : people.length === 0 ? <Empty text="No one is staying today." /> : groups.filter(([, list]) => list.length).map(([title, list]) => (
+        <ListGroup key={title} title={title} count={list.length}>{list.map(({ p, s }) => row(p.id, p.name, dayOf(s!)))}</ListGroup>
       ))}
-      <Button variant="outline" className="mt-3 h-12 w-full rounded-full" onClick={onAdd}><Plus className="mr-1 h-4 w-4" />New resident</Button>
     </div>
   );
 }
@@ -146,7 +134,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
   const fact = "flex w-full min-h-11 items-center gap-3 border-b border-border px-3 py-2.5 text-left last:border-b-0";
   const label = "mx-1 mb-1.5 mt-3.5 text-xs font-semibold uppercase tracking-[.05em] text-muted-foreground";
   return (
-    <BottomSheet open={!!id} onOpenChange={(o) => { if (!o) onClose(); }} title={d?.name || 'Resident'}>
+    <BottomSheet open={!!id} onOpenChange={(o) => { if (!o) onClose(); }} title={d?.name || 'Patient'}>
       {d ? (
         <div className="-mt-2 max-h-[70dvh] overflow-y-auto">
           <div className="text-[13px] text-muted-foreground">
@@ -306,7 +294,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         template_id: newPatient.templateId || undefined,
       }),
     });
-    if (!res.ok) { toast.error('Could not save the resident'); return; }
+    if (!res.ok) { toast.error('Could not save the patient'); return; }
     const created = await res.json();
     setPatients((prev) => [...prev, toRow(created)]);
     toast.success(`${created.name} added, ${stayDay(newPatient.arriving)} to ${stayDay(newPatient.leaving)}`);
@@ -385,11 +373,13 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     return d.toLocaleString('en-IN', { timeZone: ADMIN_TZ, year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
   };
 
+  const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
   const [cardId, setCardId] = useState<string | null>(null);
   const [mealsFor, setMealsFor] = useState<{ id: string; name: string } | null>(null);
   const tab = (
     <>
-      <ResidentsList patients={patients} today={today} onOpen={setCardId} onAdd={() => setShowAddPatient(true)} />
+      <ResidentsList patients={patients} today={today} onOpen={setCardId} q={query} />
     </>
   );
 
@@ -409,7 +399,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         book={() => { setCardId(null); book(); }}
         details={(id) => { const row = patients.find((x) => String(x.id) === id); setCardId(null); if (row) showPatientInfo(row); }} />
 
-      <BottomSheet open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) setNewPatient(blankNew()); }} title="New resident">
+      <BottomSheet open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) setNewPatient(blankNew()); }} title="New patient">
         <Text label="Name" value={newPatient.name} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} />
         <Text label="Phone (optional)" type="tel" value={newPatient.phone} onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })} />
         {/* Nothing chosen to start with (#283): a list that opened on Male made every resident one until corrected. */}
@@ -424,7 +414,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           <option value="">Not decided yet</option>
           {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </Dropdown>
-        <Foot label="Add resident" save={saveNewPatient} />
+        <Foot label="Add patient" save={saveNewPatient} />
       </BottomSheet>
       <BottomSheet open={!!stayEdit} onOpenChange={(open) => { if (!open) { setStayEdit(null); setLeftOver([]); } }} title={stayEdit?.id ? 'Stay' : 'New stay'}>
         {stayEdit && leftOver.length === 0 ? (
@@ -540,7 +530,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     </>
   );
 
-  return { tab, dialogs, openResident: setCardId, openMeals: setMealsFor };
+  return { tab, dialogs, openResident: setCardId, openMeals: setMealsFor, openAdd: () => setShowAddPatient(true), query, setQuery, searching, setSearching };
 }
 
 /** What the links recorded on a treatment (#219), in a line: records only, beside the therapy. */

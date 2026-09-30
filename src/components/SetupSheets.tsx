@@ -108,7 +108,7 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove 
       <span className={lbl}>Role</span>
       <Seg options={[["therapist", "Therapist"], ["doctor", "Doctor"]]} value={role} onChange={setRole} />
       <span className={lbl}>Gender</span>
-      <p className="-mt-1 mb-2 text-[13px] text-muted-foreground">Used when a therapy needs a therapist of the resident's gender.</p>
+      <p className="-mt-1 mb-2 text-[13px] text-muted-foreground">Used when a therapy needs a therapist of the patient's gender.</p>
       <Seg options={[["Female", "Female"], ["Male", "Male"]]} value={gender} onChange={setGender} />
       {role === "therapist" ? (<>
         <span className={lbl}>Therapies they give</span>
@@ -157,7 +157,7 @@ export function TherapySheet({ therapy, open, onClose, amenityOptions, onSaved, 
       <Seg options={[[1, "1"], [2, "2"], [3, "3"]]} value={staff} onChange={setStaff} />
       <span className={lbl}>What the room needs</span>
       <Chips options={amenityOptions} value={needs} onChange={setNeeds} addLabel="Something else…" />
-      <Switch label="Therapist of the resident's gender" on={same} set={setSame} />
+      <Switch label="Therapist of the patient's gender" on={same} set={setSame} />
       <span className={lbl}>Readings the therapist takes</span>
       <Chips options={vitalNames} value={vitals.map((k) => VITALS.find(([v]) => v === k)?.[1] || k)} onChange={(v) => setVitals(v.map((l) => VITALS.find(([, x]) => x === l)?.[0] || l))} />
       <span className={lbl}>Checks the therapist ticks</span>

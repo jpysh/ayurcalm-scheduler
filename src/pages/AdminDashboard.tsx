@@ -477,6 +477,7 @@ const AdminDashboard = () => {
 
   const go = (v: string) => {
     setActiveTab(v);
+    if (v !== 'patients') patientsScreen.setSearching(false);
     const uname = location.pathname.split('/').filter(Boolean)[0] || (localStorage.getItem('authUser') || 'admin');
     navigate(`/${uname}/${v}`);
     window.scrollTo(0, 0);
@@ -552,7 +553,7 @@ const AdminDashboard = () => {
               <div className="mt-3 overflow-hidden rounded-2xl bg-card" aria-label="Get started">
                 <div className="px-4 pt-3 text-[13px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Get started</div>
                 {/* Therapies first (#273 U1): a new trial has none, and nothing can be booked or given without them. */}
-                {([["therapies", "Add your therapies", therapies.length], ["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first resident", patients.length]] as const).map(([tab, label, n]) => (
+                {([["therapies", "Add your therapies", therapies.length], ["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first patient", patients.length]] as const).map(([tab, label, n]) => (
                   <button key={tab} type="button" className="flex min-h-14 w-full items-center gap-3 border-b border-border px-4 text-left last:border-b-0" onClick={() => { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); }}>
                     <span className={n ? "text-primary" : "text-muted-foreground"}>{n ? "✓" : "○"}</span>
                     <span className="flex-1 text-[16px]">{label}</span><span className="text-muted-foreground">›</span>
@@ -634,21 +635,23 @@ const AdminDashboard = () => {
           // The two other sheets under the words, not beside them: two buttons in a row squeezed the text to a word a line (#273 O2).
           const more = "min-h-10 rounded-full px-1 text-[15px] font-bold text-[#B9E2C6]";
           toast(<div className="w-full">
-            <div>Resident sheet printed{open ? ` · ${open} still to fix` : ''}</div>
+            <div>Patient sheet printed{open ? ` · ${open} still to fix` : ''}</div>
             <div className="mt-1 flex gap-4">
               <button type="button" className={more} onClick={() => scheduleScreen.printSheet('therapist')}>Therapist sheet</button>
               <button type="button" className={more} onClick={() => scheduleScreen.printSheet('doctor')}>Doctor sheet</button>
             </div>
           </div>, { duration: 10000 });
         }}
-        book={() => { if (readOnly) { toast("The free trial has ended, so nothing new can be booked. Nothing is deleted.", { duration: 10000, action: { label: "Choose a plan", onClick: () => go('settings') } }); return; } go('schedule'); scheduleScreen.openBook(); }}
+        plus={activeTab === 'schedule' ? { adds: 'Book a treatment', run: () => { if (readOnly) { toast("The free trial has ended, so nothing new can be booked. Nothing is deleted.", { duration: 10000, action: { label: "Choose a plan", onClick: () => go('settings') } }); return; } scheduleScreen.openBook(); } }
+          : activeTab === 'patients' ? { adds: 'New patient', run: () => { if (readOnly) { toast("The free trial has ended, so nothing new can be added. Nothing is deleted.", { duration: 10000, action: { label: "Choose a plan", onClick: () => go('settings') } }); return; } patientsScreen.openAdd(); } }
+          : null}
         view={scheduleScreen.view}
         setView={scheduleScreen.setView}
-        query={scheduleScreen.query}
-        setQuery={scheduleScreen.setQuery}
-        searching={scheduleScreen.searching}
-        setSearching={scheduleScreen.setSearching}
-        // A resident with nothing booked is a rest day, not a note (#144).
+        // One search: on Patients it filters that list, anywhere else it searches the day.
+        search={activeTab === 'patients'
+          ? { query: patientsScreen.query, setQuery: patientsScreen.setQuery, on: patientsScreen.searching, setOn: patientsScreen.setSearching, placeholder: 'Search patients', label: 'Search patients', start: () => patientsScreen.setSearching(true) }
+          : { query: scheduleScreen.query, setQuery: scheduleScreen.setQuery, on: scheduleScreen.searching, setOn: scheduleScreen.setSearching, placeholder: 'Name, therapy or room', label: 'Search treatments', start: () => { go('schedule'); scheduleScreen.setSearching(true); } }}
+        // A patient with nothing booked is a rest day, not a note (#144).
         attention={{
           fix: dayCheck.problems.filter((p) => p.problem_class === 'blocking').length,
           // What the app already fixed for the admin: a therapist's day moved.

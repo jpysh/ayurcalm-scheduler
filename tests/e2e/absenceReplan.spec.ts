@@ -115,12 +115,14 @@ test('a therapist off: the pill names it, its fix clears the day, and Undo puts 
   await form.getByRole('button', { name: 'Add leave', exact: true }).click();
   await expect(page.getByText('Time off saved')).toBeVisible({ timeout: 15000 });
 
+  // The date is on the bar only on the day (#285), so go back to it first.
+  await openTab(page, 'Back to the day');
   // The day button on the bottom bar opens the date box, and picking a day shows it.
   await page.getByRole('button', { name: /^Change day/ }).click();
   await page.getByRole('dialog').locator('input[type=date]').fill(DAY);
   await expect(page.getByRole('navigation', { name: 'Main' })).toContainText('13 Mar', { timeout: 15000 });
   // The pill opens its sheet, which names who is off and whose treatment that leaves stranded.
-  await page.getByRole('button', { name: /to fix/ }).click();
+  await page.getByRole('button', { name: /need you/ }).click();
   const verify = page.getByRole('dialog');
   await expect(verify).toContainText(THERAPIST, { timeout: 20000 });
   await expect(verify).toContainText(RESIDENT);
@@ -155,15 +157,15 @@ test('time off saved elsewhere shows in the pill when the app is back in view (#
   await page.getByRole('button', { name: /^Change day/ }).click();
   await page.getByRole('dialog').locator('input[type=date]').fill(DAY);
   await expect(page.getByRole('navigation', { name: 'Main' })).toContainText('13 Mar', { timeout: 15000 });
-  await expect(page.getByRole('button', { name: /to fix/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /need you/ })).toHaveCount(0);
 
   // Another phone marks her off; this one only hears of it when it is looked at again.
   await call('post', '/timeoff', { entity_type: 'staff', entity_id: therapist.id, start_date: DAY, end_date: DAY });
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(page.getByRole('button', { name: /to fix/ })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('button', { name: /need you/ })).toBeVisible({ timeout: 15000 });
 
   // The sheet is about the day on screen, not today (#193).
-  await page.getByRole('button', { name: /to fix/ }).click();
+  await page.getByRole('button', { name: /need you/ }).click();
   await expect(page.getByRole('dialog').getByRole('heading').first()).toHaveText(/^Wed,? 13 Mar$/); // Linux's Chromium puts a comma after the weekday.
 
   await tidy(call);

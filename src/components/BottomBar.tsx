@@ -1,7 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { API_BASE } from "@/lib/apiBase";
-import { Menu, Plus, Printer, Search } from "lucide-react";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Menu, Printer, Search } from "lucide-react";
+import { Bar, BarButton, BarCapsule, BottomSearch, BottomSheet, Pill, PlusButton } from "@/components/kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
  */
 
 export const SCREENS = [
-  ["patients", "Residents", "Who is staying"],
+  ["patients", "Patients", "Who is staying"],
   ["team", "Team and rooms", "Who is in today"],
   ["timeoff", "Leave", "Future time off"],
   ["diet", "Diet plans", "Meals by plan"],
@@ -28,21 +28,7 @@ export const SCREENS = [
 /** The menu's tiles, as the design (#137): the rest open from Team and rooms. */
 const MENU = SCREENS.filter(([, , hint]) => hint);
 
-export function BottomSheet({ open, onOpenChange, title, children }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; children: ReactNode }) {
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" hideClose className="mx-auto max-h-[92dvh] max-w-xl overflow-y-auto rounded-t-2xl bg-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] outline-none"
-        // The sheet takes the focus, not its first field: that raised the phone's keyboard over half the form before it had been read.
-        onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}>
-        {/* Scrolls inside itself (#273 U3): a long sheet, like a therapist with 40 therapies, ran off the top of the phone. */}
-        <div className="mx-auto -mt-2 mb-3 h-1 w-9 rounded-full bg-border" />
-        {/* A sheet with no title in the design still names itself to a screen reader. */}
-        <SheetTitle className={title ? "text-lg mb-3" : "sr-only"}>{title || "Menu"}</SheetTitle>
-        {children}
-      </SheetContent>
-    </Sheet>
-  );
-}
+export { BottomSheet };
 
 type Props = {
   activeTab: string;
@@ -55,14 +41,13 @@ type Props = {
   setDay: (iso: string) => void;
   print: () => void;
   printing: boolean;
-  book: () => void;
-  /** How the day is grouped, and the search over it (#62). */
+  /** What + adds on this screen ("Book a treatment", "New patient"); none on a screen with nothing to add. */
+  plus: { adds: string; run: () => void } | null;
+  /** How the day is grouped (#62). */
   view: string;
   setView: (v: "time" | "therapist" | "room" | "resident") => void;
-  query: string;
-  setQuery: (q: string) => void;
-  searching: boolean;
-  setSearching: (on: boolean) => void;
+  /** The one search: on the day it filters the day, on Patients the list. */
+  search: { query: string; setQuery: (q: string) => void; on: boolean; setOn: (on: boolean) => void; placeholder: string; label: string; start: () => void };
   /** The attention pill: what is waiting on the day, and where tapping goes. */
   attention?: { fix: number; done: number; note: number; open: () => void } | null;
 };
@@ -71,7 +56,7 @@ const label = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 const shift = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
 
-export function BottomBar({ activeTab, go, day, today, now, setDay, print, printing, book, view, setView, query, setQuery, searching, setSearching, attention }: Props) {
+export function BottomBar({ activeTab, go, day, today, now, setDay, print, printing, plus, view, setView, search, attention }: Props) {
   const [sheet, setSheet] = useState<"menu" | "day" | null>(null);
   // Live subtitles, read when the menu opens (#67): who is in house, who is not in.
   const [hints, setHints] = useState<Record<string, string>>({});
@@ -94,40 +79,33 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
       });
     }).catch(() => setHints({}));
   }, [sheet, today, day]);
-  const endSearch = () => { setSearching(false); setQuery(""); };
   const diff = Math.round((Date.parse(day) - Date.parse(today)) / 86400000);
   const when = diff === 0 ? `Today · ${now}` : diff === 1 ? "Tomorrow" : diff === -1 ? "Yesterday" : diff > 0 ? `In ${diff} days` : `${-diff} days ago`;
   const pick = (iso: string) => { setDay(iso); go("schedule"); setSheet(null); };
-  const icon = "h-12 w-12 rounded-full grid place-items-center active:bg-secondary";
+  const onDay = activeTab === "schedule";
+  const pillHere = (onDay || activeTab === "patients") && !search.on;
 
   return (
     <>
-      {attention && (attention.fix || attention.done || attention.note) && activeTab === "schedule" && !searching ? (
-        <button type="button" onClick={attention.open}
-          className="fixed left-1/2 -translate-x-1/2 bottom-[calc(80px+env(safe-area-inset-bottom))] z-40 flex items-center gap-3 min-h-10 px-3.5 rounded-full border bg-card text-sm font-semibold shadow-lg whitespace-nowrap after:content-['›'] after:text-lg after:text-muted-foreground after:-ml-1">
-          {attention.fix ? <span className="inline-flex items-center"><i className="mr-1.5 h-2 w-2 rounded-full bg-destructive" />{attention.fix} to fix</span> : null}
-          {attention.done ? <span className="inline-flex items-center"><i className="mr-1.5 h-2 w-2 rounded-full bg-warning" />{attention.done} done</span> : null}
-          {attention.note ? <span className="inline-flex items-center"><i className="mr-1.5 h-2 w-2 rounded-full bg-muted-foreground/60" />{attention.note} note{attention.note === 1 ? "" : "s"}</span> : null}
-        </button>
-      ) : null}
-      {searching ? (
-        <nav aria-label="Search" className="fixed inset-x-2.5 bottom-[calc(10px+env(safe-area-inset-bottom))] z-40 mx-auto max-w-xl grid grid-cols-[auto_1fr_auto] items-center h-[60px] p-1 rounded-full border bg-card/95 backdrop-blur shadow-lg">
-          <Search className="ml-3 h-5 w-5 text-muted-foreground" />
-          <input autoFocus type="text" enterKeyHint="search" placeholder="Name, therapy or room" aria-label="Search treatments" autoComplete="off"
-            className="min-w-0 h-12 px-2 bg-transparent text-base outline-none" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <button type="button" className="min-h-12 px-3.5 rounded-full font-semibold text-primary" onClick={endSearch}>Cancel</button>
-        </nav>
+      {pillHere && attention ? <Pill need={attention.fix} info={attention.done + attention.note} onClick={attention.open} /> : null}
+      {search.on ? (
+        <BottomSearch value={search.query} onChange={search.setQuery} onClose={() => { search.setOn(false); search.setQuery(""); }} placeholder={search.placeholder} label={search.label} />
       ) : (
-      <nav aria-label="Main" className="fixed inset-x-2.5 bottom-[calc(10px+env(safe-area-inset-bottom))] z-40 mx-auto max-w-xl grid grid-cols-[auto_auto_1fr_auto_auto] items-center gap-1 h-[60px] p-1 rounded-full border bg-card/95 backdrop-blur shadow-lg">
-        <button type="button" className={icon} aria-label="Menu" onClick={() => setSheet("menu")}><Menu className="h-6 w-6" /></button>
-        <button type="button" className={icon} aria-label="Search treatments" onClick={() => { go("schedule"); setSearching(true); }}><Search className="h-6 w-6" /></button>
-        <button type="button" className="h-[52px] min-w-0 rounded-full flex flex-col items-center justify-center leading-tight active:bg-secondary" aria-label={`Change day, now ${label(day)}`} onClick={() => setSheet("day")}>
-          <span className="text-base font-semibold whitespace-nowrap">{label(day)}</span>
-          <span className={`text-xs whitespace-nowrap ${diff === 0 ? "text-now font-semibold" : "text-muted-foreground"}`}>{when}</span>
-        </button>
-        <button type="button" className={icon} aria-label="Print the day's sheets" disabled={printing} onClick={print}><Printer className="h-6 w-6" /></button>
-        <button type="button" className="h-[52px] w-[52px] rounded-full grid place-items-center bg-primary text-primary-foreground" aria-label="Book a treatment" onClick={book}><Plus className="h-6 w-6" /></button>
-      </nav>
+        <Bar grow={onDay}
+          left={<>
+            <BarButton label="Menu" onClick={() => setSheet("menu")}><Menu className="h-6 w-6" /></BarButton>
+            <BarButton label={search.label} onClick={search.start}><Search className="h-6 w-6" /></BarButton>
+            {onDay ? (
+              <button type="button" className="ml-1 flex h-12 min-w-0 flex-1 flex-col items-center justify-center rounded-full leading-tight active:bg-secondary" aria-label={`Change day, now ${label(day)}`} onClick={() => setSheet("day")}>
+                <span className="whitespace-nowrap text-base font-semibold">{label(day)}</span>
+                <span className={`whitespace-nowrap text-xs ${diff === 0 ? "font-semibold text-now" : "text-muted-foreground"}`}>{when}</span>
+              </button>
+            ) : null}
+          </>}
+          right={<>
+            {onDay ? <BarCapsule label="Print the day's sheets" disabled={printing} onClick={print}><Printer className="h-6 w-6" /></BarCapsule> : null}
+            {plus ? <PlusButton adds={plus.adds} onClick={plus.run} /> : null}
+          </>} />
       )}
 
       <BottomSheet open={sheet === "menu"} onOpenChange={(o) => setSheet(o ? "menu" : null)} title="">
@@ -137,7 +115,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
             <button key={v} type="button" aria-pressed={activeTab === "schedule" && view === v}
               className="min-h-10 rounded-lg text-[13px] font-semibold text-center text-muted-foreground aria-pressed:bg-card aria-pressed:text-foreground aria-pressed:shadow"
               onClick={() => { setView(v); go("schedule"); setSheet(null); }}>
-              {v[0].toUpperCase() + v.slice(1)}
+              {v === "resident" ? "Patient" : v[0].toUpperCase() + v.slice(1)}
             </button>
           ))}
         </div>

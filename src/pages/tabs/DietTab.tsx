@@ -270,7 +270,7 @@ const DietTab = ({
 
           <Card className="border-0 bg-transparent shadow-none">
             <CardContent className="p-0">
-              <Input placeholder="Search residents" aria-label="Search residents" value={q} onChange={(e) => setQ(e.target.value)} className="mb-2 h-11 rounded-full text-base" />
+              <Input placeholder="Search patients" aria-label="Search patients" value={q} onChange={(e) => setQ(e.target.value)} className="mb-2 h-11 rounded-full text-base" />
               <Table className="cards-sm">
                 <TableHeader>
                   <TableRow>
@@ -1244,7 +1244,7 @@ export function useDietScreen({ patients, setPatients, therapies, therapyNameByI
             <button type="button" className="min-h-11 pr-2 text-primary" onClick={() => setPlanOpen(false)}>‹ Back</button>
             <b className="flex-1 text-lg">{selectedDietTemplateId ? dietDraft.name || 'Plan' : 'New plan'}</b>
           </div>
-          {dietDraft.patients ? <p className="text-[13px] text-muted-foreground">{dietDraft.patients} resident{dietDraft.patients === 1 ? '' : 's'} on this plan. Saving changes what they eat from their next sheet, except where something was written for one of them.</p> : null}
+          {dietDraft.patients ? <p className="text-[13px] text-muted-foreground">{dietDraft.patients} patient{dietDraft.patients === 1 ? '' : 's'} on this plan. Saving changes what they eat from their next sheet, except where something was written for one of them.</p> : null}
           {field('name', 'Plan name')}
           {field('description', 'Description')}
           {meals.map(([day, rest, label]) => (
@@ -1256,7 +1256,7 @@ export function useDietScreen({ patients, setPatients, therapies, therapyNameByI
           {field('medication', 'Medication')}
           {field('preTherapyNotes', 'Before treatment')}
           {field('postTherapyNotes', 'After treatment')}
-          <p className="text-[13px] text-muted-foreground">Medication prints in the resident's own row. The two treatment notes print once, under "Around treatment".</p>
+          <p className="text-[13px] text-muted-foreground">Medication prints in the patient's own row. The two treatment notes print once, under "Around treatment".</p>
           <Button className="min-h-11 w-full rounded-full" onClick={async () => { await saveDietTemplate(); setPlanOpen(false); }}>{selectedDietTemplateId ? 'Save changes' : 'Create plan'}</Button>
           {selectedDietTemplateId ? <Button variant="outline" className="min-h-11 w-full rounded-full" onClick={async () => { await retireDietTemplate(selectedDietTemplateId); setPlanOpen(false); }}>Retire this plan</Button> : null}
         </>)}
