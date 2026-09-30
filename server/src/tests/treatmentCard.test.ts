@@ -110,7 +110,20 @@ async function main() {
     assert.equal(new Set(times.map((x) => x.start_time)).size, 3, 'the three times are not different');
     await call('POST', '/appointments/one', { patient_id: sita.id, therapy_id: therapy.id, date: DAY, start_time: times[2].start_time, staff_id: times[2].staff_id, room_id: times[2].room_id });
 
-    console.log("Treatment card: every time and room offered saves, a busy therapist isn't offered, a no-show frees theirs, and History says what changed; a suggested booking saves once and not twice; a chosen resident gets three free times.");
+    // A therapy given by two (#273): each time comes with its second therapist, books with her, and is refused without her.
+    const pair = await call('POST', '/therapies', { name: `${TAG} Pizhichil`, duration_minutes: 60, staff_required: 2 });
+    for (const s of [asha, bina]) await call('PUT', `/staff/${s.id}`, { specializations: [therapy.id, pair.id] });
+    const together = (await call('GET', `/appointments/suggest?date=${DAY}&patient_id=${rekha.id}&therapy_id=${pair.id}`)).suggestions as (typeof one & { co_staff_ids: string[]; staff_name: string })[];
+    assert.ok(together.length > 0, 'no time was offered for a two-therapist therapy');
+    assert.deepEqual([together[0].staff_id, ...together[0].co_staff_ids].sort(), [asha.id, bina.id].sort(), 'the time did not pair both therapists');
+    assert.match(together[0].staff_name, / and /, 'the time does not name both therapists');
+    const two = { patient_id: rekha.id, therapy_id: pair.id, date: DAY, start_time: together[0].start_time, staff_id: together[0].staff_id, room_id: together[0].room_id };
+    const alone = await fetch(`${API_BASE}/appointments/one`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(two) });
+    assert.equal((await alone.json()).reason, 'STAFF_SHORT', 'a two-therapist therapy booked with one therapist was not refused');
+    const booked = await call('POST', '/appointments/one', { ...two, co_staff_ids: together[0].co_staff_ids });
+    assert.deepEqual(booked.co_staff_ids, together[0].co_staff_ids, 'the second therapist was not saved on the booking');
+
+    console.log("Treatment card: every time and room offered saves, a busy therapist isn't offered, a no-show frees theirs, and History says what changed; a suggested booking saves once and not twice; a chosen resident gets three free times; a two-therapist therapy books with both.");
   } finally {
     await tidy(prisma).catch(() => {});
     await prisma.$disconnect();
