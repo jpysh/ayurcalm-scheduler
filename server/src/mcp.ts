@@ -1,7 +1,8 @@
 /**
  * AyurCalm over MCP: the centre's day, read from the admin's own AI assistant
- * (#119, spec in #102). This first step only reads. The tools call the same
- * functions the screens and the day sheet call, and decide nothing themselves.
+ * (#119, spec in #102), and a day re-planned on the admin's yes (#120). The
+ * tools call the same functions the screens and the day sheet call, and decide
+ * nothing themselves.
  *
  * Tools are grouped by what they act on, each with an `action`, so the list
  * stays short as later issues add writes (#120, #121, #124, #125).
@@ -18,9 +19,10 @@ import { toNodeHandler } from '@modelcontextprotocol/node';
 import * as z from 'zod';
 import { prisma } from './server.js';
 import { requireAdmin } from './settings.js';
-import { loadDay, staffDay } from './appointmentGuard.js';
+import { findConflict, loadDay, nearestFreeTime, staffDay } from './appointmentGuard.js';
 import { activeEventsOnDay, toMinutes, type EventRow } from './availability.js';
-import { checkDay } from './dayCheck.js';
+import { checkDay, rowOptions } from './dayCheck.js';
+import { acceptPlan, planDay, undoReplan, type Pin } from './replan.js';
 import { loadDietsForDay } from './dietResolution.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import { generateTherapistRotaPdf } from './pdf/therapistRotaPdf.js';
@@ -295,6 +297,53 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 const READ = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
 
+// ---------------------------------------------------------------- planning a day (#120)
+
+const WRITE = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
+const PROPOSAL_MINUTES = 30;
+type NotPlaced = { treatment_id: string; resident: string; therapy: string; start_time: string; reason: string };
+
+/**
+ * A plan the admin has not said yes to yet, kept as an AuditLog row so `apply`
+ * writes exactly what was shown and nothing the model re-typed.
+ */
+async function propose(date: string, pins: Pin[], not_placed: NotPlaced[]) {
+  const [appts, staff, rooms, patients, therapies] = await Promise.all([
+    prisma.appointment.findMany({ where: { id: { in: pins.map((p) => p.appointment_id) } } }),
+    prisma.staff.findMany(), prisma.therapyRoom.findMany(), prisma.patient.findMany(), prisma.therapy.findMany(),
+  ]);
+  const name = (id: string | null) => staff.find((s) => s.id === id)?.name || 'nobody';
+  const place = (d: string, start_time: string, lead: string | null, others: string[], room_id: string | null) => ({
+    date: d, start_time, team: { lead: lead ? { id: lead, name: name(lead) } : null, others: others.map((id) => ({ id, name: name(id) })) },
+    room: room_id ? { id: room_id, name: rooms.find((r) => r.id === room_id)?.name || 'Room' } : null,
+  });
+  const moves = pins.flatMap((p) => {
+    const a = appts.find((x) => x.id === p.appointment_id);
+    if (!a) return [];
+    const before = [a.staff_id, ...a.co_staff_ids].filter(Boolean) as string[];
+    const after = [p.staff_id, ...(p.co_staff_ids ?? [])].filter(Boolean) as string[];
+    const stays = before.filter((id) => after.includes(id)), out = before.filter((id) => !after.includes(id)), come = after.filter((id) => !before.includes(id));
+    return [{
+      treatment_id: a.id,
+      resident: patients.find((x) => x.id === a.patient_id)?.name || 'Resident',
+      therapy: therapies.find((t) => t.id === a.therapy_id)?.name || 'Treatment',
+      from: place(ymd(a.scheduled_date), a.start_time, a.staff_id, a.co_staff_ids, a.room_id),
+      to: p.cancel ? null : place(p.date, p.start_time, p.staff_id, p.co_staff_ids ?? [], p.room_id),
+      // Who stays and who replaces whom, when a team changes.
+      note: p.cancel ? 'cancelled' : out.length && come.length ? `${stays.length ? `${stays.map(name).join(' and ')} stays; ` : ''}${come.map(name).join(' and ')} replaces ${out.map(name).join(' and ')}` : undefined,
+    }];
+  });
+  if (!moves.length) return { proposal_id: null, expires_at: null, date, summary: `Nothing to move on ${date}.`, moves, not_placed };
+  const row = await prisma.auditLog.create({ data: { admin_id: 'mcp', action: 'mcp_proposal', entity_type: 'day', entity_id: date, new_value: { date, pins } as object } });
+  return {
+    proposal_id: row.id,
+    expires_at: new Date(row.timestamp.getTime() + PROPOSAL_MINUTES * 60000).toISOString(),
+    date,
+    summary: `${plural(moves.length, 'treatment')} to move on ${date}${not_placed.length ? `, ${not_placed.length} with nowhere to go` : ''}. Nothing is changed until the admin says yes.`,
+    moves, not_placed,
+  };
+}
+
 export function buildServer() {
   const server = new McpServer(
     { name: 'ayurcalm', version: '1.0.0' },
@@ -434,6 +483,103 @@ export function buildServer() {
       const therapists = await therapistsFree(on, therapy_id, resident_id);
       const free = therapists.filter((t) => t.free.length > 0);
       return reply(`${on}: ${plural(free.length, 'therapist')} with free time${free.length ? ` — ${free.map((t) => t.name).join(', ')}` : ''}.`, { date: on, therapists });
+    },
+  );
+
+  server.registerTool(
+    'plan',
+    {
+      title: 'Plan a day',
+      description:
+        'Re-plan a day: propose, show the admin, apply on their yes. Nothing changes before apply. ' +
+        '"propose_day": one plan for everything day/check finds wrong on `date`: moves (from, to, note) and not_placed with reasons. absent_therapist_id plans a therapist\'s day away before their leave is recorded; allow_other_therapist lets a resident kept to their own therapist go to another. ' +
+        '"propose_move": one treatment. With `to`: a proposal, or `refused` with the reason and nearest free time. Without: up to 3 alternatives. ' +
+        '"apply": write a proposal as one batch, which history/undo reverses. After 30 minutes, or if the day changed, nothing is written and the answer says so.',
+      inputSchema: z.object({
+        action: z.enum(['propose_day', 'propose_move', 'apply']),
+        date: DATE.optional(),
+        absent_therapist_id: z.string().optional(),
+        allow_other_therapist: z.boolean().optional(),
+        treatment_id: z.string().optional(),
+        to: z.object({
+          date: z.string(), start_time: z.string(), therapist_id: z.string().nullable().describe('The lead.'),
+          other_therapist_ids: z.array(z.string()), room_id: z.string().nullable(),
+        }).partial().optional().describe('Only what changes.'),
+        proposal_id: z.string().optional(),
+      }),
+      annotations: WRITE,
+    },
+    async ({ action, date, absent_therapist_id, allow_other_therapist, treatment_id, to, proposal_id }) => {
+      if (action === 'propose_day') {
+        if (!date) return refuse('Which date? Ask centre/today if you need today.');
+        // ponytail: no `keep` (rows the admin placed themselves) yet; the planner takes pins, so add it when a conversation needs it (#121).
+        const opts = { relaxPreferredStaff: allow_other_therapist };
+        let plan: Pin[], not_placed: NotPlaced[];
+        if (absent_therapist_id) {
+          // Never apply: true, which writes without the guard (#102).
+          const r = await planDay(absent_therapist_id, dayOf(date), prisma, { ...opts, apply: false });
+          plan = [...r.moved, ...r.proposed].map((m) => ({ appointment_id: m.appointment_id, staff_id: m.to.staff_id, co_staff_ids: m.to.co_staff_ids, start_time: m.to.start_time, date: m.to.date, room_id: m.to.room_id, cancel: m.cancel }));
+          not_placed = r.unplaced.map((u) => ({ treatment_id: u.appointment_id, resident: u.patient_name, therapy: u.therapy_name, start_time: u.start_time, reason: u.reason }));
+        } else {
+          const c = await checkDay(dayOf(date), prisma, opts);
+          plan = c.plan.map((f) => ({ appointment_id: f.appointment_id, staff_id: f.staff_id, co_staff_ids: f.co_staff_ids, start_time: f.start_time, date: f.date, room_id: f.room_id, cancel: f.cancel }));
+          not_placed = c.problems.filter((p) => p.appointment_id && !p.fix && p.no_fix_reason)
+            .map((p) => ({ treatment_id: p.appointment_id!, resident: p.patient_name, therapy: p.who.split(' — ')[1] || '', start_time: p.start_time || '', reason: p.no_fix_reason! }));
+        }
+        const proposal = await propose(date, plan, not_placed);
+        return reply(`${proposal.summary}${proposal.proposal_id ? ' Show the admin each move and ask before applying.' : ''}`, proposal);
+      }
+
+      if (action === 'propose_move') {
+        const a = treatment_id ? await prisma.appointment.findUnique({ where: { id: treatment_id } }) : null;
+        if (!a) return refuse('Which treatment? Take its treatment_id from day/read.');
+        if (!to) {
+          const options = await rowOptions(a.id, a.scheduled_date, prisma);
+          const alternatives = options.map((f) => ({ label: f.label, to: { date: f.date, start_time: f.start_time, therapist_id: f.staff_id, other_therapist_ids: f.co_staff_ids, room_id: f.room_id } }));
+          return reply(alternatives.length ? `${plural(alternatives.length, 'other place')} for it: ${alternatives.map((x) => x.label).join('; ')}. Call propose_move again with the one the admin picks.` : 'There is nowhere else to put it on that day.', { alternatives });
+        }
+        const pin: Pin = { appointment_id: a.id, date: to.date ?? ymd(a.scheduled_date), start_time: to.start_time ?? a.start_time, staff_id: to.therapist_id === undefined ? a.staff_id : to.therapist_id, co_staff_ids: to.other_therapist_ids ?? a.co_staff_ids, room_id: to.room_id === undefined ? a.room_id : to.room_id };
+        const candidate = { id: a.id, scheduled_date: dayOf(pin.date), start_time: pin.start_time, duration_minutes: a.duration_minutes, staff_id: pin.staff_id, co_staff_ids: pin.co_staff_ids, room_id: pin.room_id, patient_id: a.patient_id, therapy_id: a.therapy_id };
+        const ctx = await loadDay(candidate.scheduled_date, prisma);
+        const conflict = findConflict(candidate, ctx);
+        if (conflict) {
+          const nearest_free_time = nearestFreeTime(candidate, ctx);
+          return reply(`${conflict.message}${nearest_free_time ? ` The nearest free time is ${nearest_free_time}.` : ''}`, { refused: { rule: conflict.reason, message: conflict.message }, nearest_free_time });
+        }
+        const proposal = await propose(pin.date, [pin], []);
+        return reply(`That move is possible. Ask the admin before applying.`, proposal);
+      }
+
+      const row = proposal_id ? await prisma.auditLog.findUnique({ where: { id: proposal_id } }) : null;
+      if (!row || row.action !== 'mcp_proposal') return refuse('No plan with that id. Make a fresh one with propose_day or propose_move.');
+      const stored = row.new_value as unknown as { date: string; pins: Pin[]; batch_id?: string; applied?: number };
+      // The same yes twice is one batch.
+      if (stored.batch_id) return reply(`That plan is already applied: ${plural(stored.applied ?? 0, 'treatment')} moved.`, { applied: stored.applied, batch_id: stored.batch_id });
+      if (Date.now() - row.timestamp.getTime() > PROPOSAL_MINUTES * 60000) {
+        return reply(`That plan is more than half an hour old, so I haven't used it. Shall I make a fresh one for ${stored.date}?`, { expired: true });
+      }
+      const done = await acceptPlan(stored.pins, prisma);
+      if (!('batch_id' in done)) {
+        const made = new Intl.DateTimeFormat('en-GB', { timeZone: (await centreNow()).timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(row.timestamp);
+        const what = 'conflict' in done ? done.conflict.message : 'A treatment in it no longer exists.';
+        return reply(`That plan was made at ${made}, and the day has changed since: ${what} I haven't changed anything. Shall I make a fresh plan?`, { stale: true, reason: what });
+      }
+      await prisma.auditLog.update({ where: { id: row.id }, data: { new_value: { ...stored, ...done } as object } });
+      return reply(`Done: ${plural(done.applied, 'treatment')} moved on ${stored.date}. history/undo with this batch_id puts the day back.`, { applied: done.applied, batch_id: done.batch_id });
+    },
+  );
+
+  server.registerTool(
+    'history',
+    {
+      title: 'Undo',
+      description: '"undo": put back everything one applied plan changed. batch_id comes from plan/apply.',
+      inputSchema: z.object({ action: z.enum(['undo']), batch_id: z.string() }),
+      annotations: WRITE,
+    },
+    async ({ batch_id }) => {
+      const undone = await undoReplan(batch_id, prisma);
+      return undone ? reply('Undone: the day is as it was before that plan.', { undone: true, batch_id }) : refuse('Nothing to undo with that id, or it is already undone.');
     },
   );
 
