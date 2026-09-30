@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { Chips, Foot, Seg, Switch, field, lbl, say, wide } from "@/components/kit";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
@@ -10,13 +11,6 @@ import type { UiRoom, UiStaff, UiTherapy } from "@/pages/tabs/shared";
  * header, plain rows, and one bottom sheet to add or change an entry, with only
  * the fields a centre fills. Replaces the old desktop tables and dialogs.
  */
-
-const field = "h-11 w-full rounded-xl border bg-background px-3 text-base";
-const lbl = "mt-3 mb-1 block text-[13px] font-semibold text-muted-foreground";
-const chip = "min-h-10 rounded-full border px-3.5 text-sm font-semibold aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground";
-// Seeded names are stored as massage_table; the admin reads "massage table".
-const say = (s: string) => s.replace(/_/g, " ");
-const wide = "min-h-11 w-full rounded-full font-semibold";
 
 export function SetupPage({ title, note, add, extra, search, setSearch, placeholder, children }: {
   title: string; note?: ReactNode; add: [string, () => void]; extra?: ReactNode; search: string; setSearch: (s: string) => void; placeholder: string; children: ReactNode;
@@ -43,51 +37,6 @@ export const Row = ({ name, sub, onClick, dim }: { name: string; sub: string; on
     <span className="text-muted-foreground">›</span>
   </button>
 );
-
-function Chips({ options, value, onChange, addLabel }: { options: string[]; value: string[]; onChange: (v: string[]) => void; addLabel?: string }) {
-  const [draft, setDraft] = useState("");
-  const all = [...new Set([...options, ...value])].sort((a, b) => a.localeCompare(b));
-  const toggle = (o: string) => onChange(value.includes(o) ? value.filter((x) => x !== o) : [...value, o]);
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {all.map((o) => <button key={o} type="button" className={chip} aria-pressed={value.includes(o)} onClick={() => toggle(o)}>{say(o)}</button>)}
-      {addLabel ? (
-        <input className="h-10 min-w-0 flex-1 rounded-full border bg-background px-3 text-sm" placeholder={addLabel} aria-label={addLabel} value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && draft.trim()) { e.preventDefault(); onChange([...new Set([...value, draft.trim()])]); setDraft(""); } }}
-          onBlur={() => { if (draft.trim()) { onChange([...new Set([...value, draft.trim()])]); setDraft(""); } }} />
-      ) : null}
-    </div>
-  );
-}
-
-function Seg<T extends string | number>({ options, value, onChange }: { options: [T, string][]; value: T; onChange: (v: T) => void }) {
-  return (
-    <div className="grid gap-1 rounded-xl bg-background p-1" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
-      {options.map(([v, l]) => (
-        <button key={String(v)} type="button" aria-pressed={value === v} onClick={() => onChange(v)}
-          className="min-h-10 rounded-lg text-sm font-semibold text-muted-foreground aria-pressed:bg-card aria-pressed:text-foreground aria-pressed:shadow">{l}</button>
-      ))}
-    </div>
-  );
-}
-
-export const Switch = ({ label, on, set }: { label: string; on: boolean; set: (v: boolean) => void }) => (
-  <label className="mt-3 flex min-h-11 items-center justify-between gap-3 text-base">
-    {label}
-    <input type="checkbox" role="switch" className="h-6 w-11 accent-[hsl(var(--primary))]" checked={on} onChange={(e) => set(e.target.checked)} />
-  </label>
-);
-
-/** Save and, for an existing entry, Remove: the sheet's own foot. */
-function Foot({ busy, save, remove, ok }: { busy: boolean; save: () => void; remove?: () => void; ok: boolean }) {
-  return (
-    <div className="mt-4 grid gap-2">
-      <button type="button" className={`${wide} bg-primary text-primary-foreground disabled:opacity-50`} disabled={busy || !ok} onClick={save}>{busy ? "Saving…" : "Save"}</button>
-      {remove ? <button type="button" className={`${wide} text-destructive`} onClick={remove}>Remove</button> : null}
-    </div>
-  );
-}
 
 async function send(path: string, method: string, body: unknown) {
   const r = await fetch(`${API_BASE}${path}`, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });

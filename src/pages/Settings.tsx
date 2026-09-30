@@ -1,4 +1,6 @@
 import { PRODUCT, PLANS, SALES_WHATSAPP } from "../../server/src/product";
+import { Days, Dropdown, Foot, Group, Seg, SheetNote, Switch, TimeList, timesBetween } from "@/components/kit";
+import { TIMEZONES } from "@/pages/SetupWizard";
 import { useTrial } from "@/lib/centreName";
 import { useEffect, useState, type ReactNode } from "react";
 import { confirmSheet } from "@/components/ConfirmSheet";
@@ -8,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { UsersSection, ChangePasswordCard } from "@/components/UsersSection";
@@ -16,7 +17,7 @@ import { AssistantSection } from "@/components/AssistantSection";
 import { BottomSheet } from "@/components/BottomBar";
 import PageHead from "@/components/PageHead";
 
-const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
+const DAY_TIMES = timesBetween("00:00", "23:30", 30);
 const SLOT_OPTIONS = [15, 20, 30, 60];
 const MAX_LOGO_BYTES = 500 * 1024;
 const KEEPS: [string, string][] = [["therapies", "Therapies"], ["rooms", "Rooms"], ["team", "Therapists, doctors and their leave"], ["events", "Classes, events and holidays"]];
@@ -84,14 +85,6 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
 
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     setSettings((s) => (s ? { ...s, [key]: value } : s));
-
-  const toggleDay = (day: string) => {
-    if (!settings) return;
-    const next = settings.working_days.includes(day)
-      ? settings.working_days.filter((d) => d !== day)
-      : [...settings.working_days, day];
-    update("working_days", next);
-  };
 
   const onLogoPicked = (file: File | undefined) => {
     if (!file) return;
@@ -455,105 +448,28 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
         ))}
       </div>
       </>)}
-      {sheet("hours", "Opening hours", <>
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base md:text-lg">Opening hours</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            These decide which time rows the schedule shows and which days can be booked.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="opening_time">Opens</Label>
-              <Input
-                id="opening_time"
-                type="time"
-                value={settings.opening_time}
-                onChange={(e) => update("opening_time", e.target.value)}
-                disabled={!isAdmin}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="closing_time">Closes</Label>
-              <Input
-                id="closing_time"
-                type="time"
-                value={settings.closing_time}
-                onChange={(e) => update("closing_time", e.target.value)}
-                disabled={!isAdmin}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Slot length</Label>
-              <Select
-                value={String(settings.slot_minutes)}
-                onValueChange={(v) => update("slot_minutes", Number(v))}
-                disabled={!isAdmin}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {SLOT_OPTIONS.map((m) => (
-                    <SelectItem key={m} value={String(m)}>{m} minutes</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      {/* Built from the form kit (#283), straight in the sheet so Save stays in view at its foot. */}
+      <BottomSheet open={openSheet === "hours"} onOpenChange={(o) => setOpenSheet(o ? "hours" : null)} title="Opening hours">
+        <SheetNote>The times the day shows, and the days that can be booked.</SheetNote>
+        <fieldset disabled={!isAdmin} className="m-0 min-w-0 border-0 p-0">
+          <div className="grid grid-cols-2 gap-3">
+            <TimeList label="Opens" times={DAY_TIMES} value={settings.opening_time} onChange={(t) => update("opening_time", t)} />
+            <TimeList label="Closes" times={DAY_TIMES} after={settings.opening_time} value={settings.closing_time} onChange={(t) => update("closing_time", t)} />
           </div>
-
-          <div className="space-y-2">
-            <Label>Gender matching</Label>
-            <label className="flex items-start gap-2 text-sm">
-              <Checkbox
-                checked={settings.enforce_gender_match !== false}
-                onCheckedChange={(v) => update("enforce_gender_match", !!v)}
-                disabled={!isAdmin}
-              />
-              <span>
-                Only book a therapy that requires a gender match with a matching therapist.
-                <span className="block text-muted-foreground text-xs">Turn this off only if your centre asks the resident and works to their answer.</span>
-              </span>
-            </label>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Working days</Label>
-            <div className="flex flex-wrap gap-3">
-              {WEEKDAYS.map((day) => (
-                <label key={day} className="flex items-center gap-2 text-sm capitalize">
-                  <Checkbox
-                    checked={settings.working_days.includes(day)}
-                    onCheckedChange={() => toggleDay(day)}
-                    disabled={!isAdmin}
-                  />
-                  {day.slice(0, 3)}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-1 max-w-xs">
-            <Label htmlFor="timezone">Timezone</Label>
-            <Input
-              id="timezone"
-              value={settings.timezone}
-              onChange={(e) => update("timezone", e.target.value)}
-              placeholder="Asia/Kolkata"
-              disabled={!isAdmin}
-            />
-            <p className="text-xs text-muted-foreground">An IANA name, such as Asia/Kolkata.</p>
-          </div>
-        </CardContent>
-      </Card>
-      {isAdmin && (
-        <div>
-          <Button className="min-h-11 w-full rounded-full" onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
-          </Button>
-        </div>
-      )}
-      </>)}
+          <Group label="Open on">
+            <Days value={settings.working_days} onChange={(d) => update("working_days", d)} />
+          </Group>
+          <Group label="Each time slot is">
+            <Seg options={[...new Set([...SLOT_OPTIONS, settings.slot_minutes])].sort((a, b) => a - b).map((m) => [m, `${m} min`] as [number, string])} value={settings.slot_minutes} onChange={(m) => update("slot_minutes", m)} />
+          </Group>
+          <Dropdown label="Timezone" id="timezone" value={settings.timezone} onChange={(e) => update("timezone", e.target.value)}>
+            {[...new Set([...TIMEZONES, settings.timezone])].map((z) => <option key={z} value={z}>{z.replace(/_/g, " ")}</option>)}
+          </Dropdown>
+          <Switch label="Match the therapist's gender" note="Only for therapies that ask for it."
+            on={settings.enforce_gender_match !== false} set={(v) => update("enforce_gender_match", v)} />
+        </fieldset>
+        {isAdmin ? <Foot busy={saving} save={save} /> : null}
+      </BottomSheet>
       {sheet("support", "Support contacts", <>
       <Card>
         <CardHeader className="pb-2">

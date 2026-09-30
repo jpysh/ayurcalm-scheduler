@@ -3,16 +3,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/SetupSheets";
+import { DateRow, Days, Dropdown, Foot, Switch, Text, TimeList } from "@/components/kit";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
-import { API_TOKEN, leaveWhen, toHHMM, toLocalInput, type UiTimeOff, type UiStaff, type UiRoom, type UiTherapy, type Patient } from "./shared";
+import { API_TOKEN, leaveWhen, toLocalInput, type UiTimeOff, type UiStaff, type UiRoom, type UiTherapy, type Patient } from "./shared";
 import PageHead from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
 import { HolidaysSheet } from "@/components/HolidaysSheet";
@@ -299,12 +298,14 @@ const TimeOffTab = ({
 export default TimeOffTab;
 
 /** The Time off screen: its filters, the Add dialog and the tab, held by the dashboard so they last as long as it does. */
-export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, isMobile, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey }: {
+export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, isMobile, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, timeSlots }: {
   timeOffs: UiTimeOff[]; setTimeOffs: React.Dispatch<React.SetStateAction<UiTimeOff[]>>;
   staff: UiStaff[]; roomsList: UiRoom[]; therapies: UiTherapy[]; patients: Patient[];
   staffNameById: Record<string, string>; roomNameById: Record<string, string>; therapyNameById: Record<string, string>; patientNameById: Record<string, string>;
   isMobile: boolean; requestDelete: (kind: "timeoff", id: string, name?: string) => void;
   loadReplans: () => void; refreshAppointmentsForDate: (iso: string, silent?: boolean) => Promise<void>; todayKey: string;
+  /** The centre's slot times, "HH:MM": what part-day leave starts and ends on. */
+  timeSlots: string[];
 }) {
   const [holidayTypeFilter, setHolidayTypeFilter] = useState<'all' | 'Center' | 'Staff' | 'Room' | 'Therapy' | 'Patient'>('all');
   const [holidayViewMode, setHolidayViewMode] = useState<'all'|'upcoming'|'past'>('upcoming');
@@ -326,6 +327,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     entity: "",
     fullDay: true,
     description: "",
+    startTime: "", endTime: "",
+    recurrence: undefined as 'weekly' | undefined, weekdays: undefined as UiTimeOff['weekdays'],
   });
 
   const [editingTimeOffId, setEditingTimeOffId] = useState<string | null>(null);
@@ -430,72 +433,46 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
       <HolidaysSheet open={showHolidays} onOpenChange={setShowHolidays} closed={closedDays} today={todayKey}
         onAdded={(rows) => setTimeOffs((prev) => [...prev, ...rows.map((x) => ({ id: x.id, date: new Date(x.date).toISOString(), type: "Center" as const, entity: "All", description: x.description }))])} />
       <BottomSheet open={showAddTimeOff} onOpenChange={setShowAddTimeOff} title="Add leave">
-        <div className="max-h-[75dvh] overflow-y-auto">
-          {/* Who first, as one list (#265 H1): the old form asked for a "type" before the person. */}
-          <div className="grid grid-cols-1 gap-2">
-            <Label htmlFor="leaveWho">Who or what</Label>
-            <select id="leaveWho" className="h-11 rounded-md border bg-background px-3 text-[16px]"
-              value={newTimeOff.type === 'Center' ? 'Center:All' : newTimeOff.entity ? `${newTimeOff.type}:${newTimeOff.entity}` : ''}
-              onChange={(e) => { const [type, ...id] = e.target.value.split(':'); setNewTimeOff({ ...newTimeOff, type: type as UiTimeOff['type'], entity: id.join(':') }); }}>
-              <option value="" disabled>Choose…</option>
-              <optgroup label="Therapists and doctors">{staff.map((x) => <option key={x.id} value={`Staff:${x.id}`}>{x.name}</option>)}</optgroup>
-              <optgroup label="Rooms">{roomsList.map((r) => <option key={r.id} value={`Room:${r.id}`}>{r.name}</option>)}</optgroup>
-              <optgroup label="The whole centre"><option value="Center:All">The centre is closed</option></optgroup>
-              <optgroup label="Therapies">{therapies.map((t) => <option key={String(t.id ?? t.name)} value={`Therapy:${String(t.id ?? t.name)}`}>{t.name}</option>)}</optgroup>
-              <optgroup label="Residents">{patients.map((x) => <option key={x.id} value={`Patient:${x.id}`}>{x.name}</option>)}</optgroup>
-            </select>
-            <Switch label="Full day" on={newTimeOff.fullDay} set={(v) => setNewTimeOff({ ...newTimeOff, fullDay: v })} />
-            <Label>Start</Label>
-            {newTimeOff.fullDay ? (
-              <Input type="date" className="h-8" value={newTimeOff.date} onChange={(e) => setNewTimeOff({ ...newTimeOff, date: e.target.value })} />
-            ) : (
-              <Input type="datetime-local" step="60" className="h-8" value={newTimeOff.date} onChange={(e) => setNewTimeOff({ ...newTimeOff, date: e.target.value })} />
-            )}
-            <Label>End</Label>
-            {newTimeOff.fullDay ? (
-              <Input type="date" className="h-8" value={newTimeOff.endDate || newTimeOff.date} onChange={(e) => setNewTimeOff({ ...newTimeOff, endDate: e.target.value })} />
-            ) : (
-              <Input type="datetime-local" step="60" className="h-8" value={newTimeOff.endDate || newTimeOff.date} onChange={(e) => setNewTimeOff({ ...newTimeOff, endDate: e.target.value })} />
-            )}
-            <div>
-              <Switch label="Every week" on={newTimeOff.recurrence === 'weekly'} set={(v) => setNewTimeOff({ ...newTimeOff, recurrence: v ? 'weekly' : undefined, weekdays: v ? (newTimeOff.weekdays || ['sunday']) : undefined })} />
-              {newTimeOff.recurrence === 'weekly' && (
-                <div className="flex gap-1 flex-wrap">
-                  {(['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const).map((wd) => {
-                    const selected = (newTimeOff.weekdays || []).includes(wd);
-                    return (
-                      <Button key={wd} type="button" variant={selected ? 'default' : 'outline'} className="h-7 px-2 py-0 text-xs"
-                        onClick={() => {
-                          const set = new Set(newTimeOff.weekdays || []);
-                          if (set.has(wd)) set.delete(wd); else set.add(wd);
-                          setNewTimeOff({ ...newTimeOff, weekdays: Array.from(set) as UiTimeOff['weekdays'] });
-                        }}
-                      >
-                        {wd.slice(0,3).toUpperCase()}
-                      </Button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            <Label htmlFor="newTimeOffDescription">Reason (optional)</Label>
-            <Input id="newTimeOffDescription" className="h-8" value={newTimeOff.description} onChange={(e) => setNewTimeOff({ ...newTimeOff, description: e.target.value })} />
-            <div className="pt-2">
-              <Button className="min-h-11 w-full rounded-full" onClick={async () => {
+        {/* Who first, as one list (#265 H1): the old form asked for a "type" before the person. */}
+        <Dropdown label="Who or what" id="leaveWho" required
+          value={newTimeOff.type === 'Center' ? 'Center:All' : newTimeOff.entity ? `${newTimeOff.type}:${newTimeOff.entity}` : ''}
+          onChange={(e) => { const [type, ...id] = e.target.value.split(':'); setNewTimeOff({ ...newTimeOff, type: type as UiTimeOff['type'], entity: id.join(':') }); }}>
+          <option value="" disabled>Choose…</option>
+          <optgroup label="Therapists and doctors">{staff.map((x) => <option key={x.id} value={`Staff:${x.id}`}>{x.name}</option>)}</optgroup>
+          <optgroup label="Rooms">{roomsList.map((r) => <option key={r.id} value={`Room:${r.id}`}>{r.name}</option>)}</optgroup>
+          <optgroup label="The whole centre"><option value="Center:All">The centre is closed</option></optgroup>
+          <optgroup label="Therapies">{therapies.map((t) => <option key={String(t.id ?? t.name)} value={`Therapy:${String(t.id ?? t.name)}`}>{t.name}</option>)}</optgroup>
+          <optgroup label="Residents">{patients.map((x) => <option key={x.id} value={`Patient:${x.id}`}>{x.name}</option>)}</optgroup>
+        </Dropdown>
+        <div className="grid grid-cols-2 gap-3">
+          <DateRow label="From" value={newTimeOff.date} onChange={(v) => setNewTimeOff({ ...newTimeOff, date: v, endDate: newTimeOff.endDate < v ? v : newTimeOff.endDate })} />
+          <DateRow label="To" value={newTimeOff.endDate} min={newTimeOff.date} onChange={(v) => setNewTimeOff({ ...newTimeOff, endDate: v })} />
+        </div>
+        <Switch label="Full day" on={newTimeOff.fullDay} set={(v) => setNewTimeOff({ ...newTimeOff, fullDay: v })} />
+        {newTimeOff.fullDay ? null : (
+          <div className="grid grid-cols-2 gap-3">
+            <TimeList label="Starts" times={timeSlots} value={newTimeOff.startTime || timeSlots[0] || '09:00'} onChange={(t) => setNewTimeOff({ ...newTimeOff, startTime: t })} />
+            <TimeList label="Ends" times={timeSlots} after={newTimeOff.date === newTimeOff.endDate ? (newTimeOff.startTime || timeSlots[0]) : undefined} value={newTimeOff.endTime || timeSlots[timeSlots.length - 1] || '18:00'} onChange={(t) => setNewTimeOff({ ...newTimeOff, endTime: t })} />
+          </div>
+        )}
+        <Switch label="Every week" on={newTimeOff.recurrence === 'weekly'} set={(v) => setNewTimeOff({ ...newTimeOff, recurrence: v ? 'weekly' : undefined, weekdays: v ? (newTimeOff.weekdays || [(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const)[new Date(`${newTimeOff.date}T00:00:00Z`).getUTCDay()]]) : undefined })} />
+        {newTimeOff.recurrence === 'weekly' ? <Days value={newTimeOff.weekdays || []} onChange={(v) => setNewTimeOff({ ...newTimeOff, weekdays: v as UiTimeOff['weekdays'] })} /> : null}
+        <Text label="Reason (optional)" id="newTimeOffDescription" value={newTimeOff.description} onChange={(e) => setNewTimeOff({ ...newTimeOff, description: e.target.value })} />
+        <Foot label="Add leave" save={async () => {
                 if (newTimeOff.type !== 'Center' && !newTimeOff.entity) {
                   toast.error('Choose who is away first');
                   return;
                 }
                 const entity_type = newTimeOff.type.toLowerCase();
                 const tempId = `temp-${Date.now()}`;
-                const baseStart = newTimeOff.date;
-                const baseEnd = newTimeOff.endDate || newTimeOff.date;
-                const startIso = newTimeOff.fullDay ? setTimeHM(baseStart, 9, 0) : baseStart;
-                const endIso = newTimeOff.fullDay ? setTimeHM(baseEnd, 18, 0) : baseEnd;
+                const startTime = newTimeOff.startTime || timeSlots[0] || '09:00';
+                const endTime = newTimeOff.endTime || timeSlots[timeSlots.length - 1] || '18:00';
+                const startIso = newTimeOff.fullDay ? setTimeHM(newTimeOff.date, 9, 0) : `${newTimeOff.date}T${startTime}`;
+                const endIso = newTimeOff.fullDay ? setTimeHM(newTimeOff.endDate, 18, 0) : `${newTimeOff.endDate}T${endTime}`;
                 const optimistic: UiTimeOff = { id: tempId, startDate: startIso, endDate: endIso, recurrence: newTimeOff.recurrence, weekdays: newTimeOff.weekdays as UiTimeOff['weekdays'], type: newTimeOff.type, entity: newTimeOff.type === 'Center' ? 'All' : (newTimeOff.entity || ''), description: newTimeOff.description };
                 setTimeOffs((prev) => [...prev, optimistic]);
                 setShowAddTimeOff(false);
-                setNewTimeOff({ date: todayKey, endDate: todayKey, type: 'Staff', entity: '', fullDay: true, description: '', recurrence: undefined, weekdays: undefined });
+                setNewTimeOff({ date: todayKey, endDate: todayKey, type: 'Staff', entity: '', fullDay: true, description: '', startTime: '', endTime: '', recurrence: undefined, weekdays: undefined });
                 toast.success('Time off saved');
                 try {
                   const res = await fetch(`${API_BASE}/timeoff`, {
@@ -506,8 +483,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
                       entity_id: optimistic.entity === 'All' ? null : (optimistic.entity || null),
                       start_date: optimistic.startDate,
                       end_date: optimistic.endDate,
-                      start_time: newTimeOff.fullDay ? null : toHHMM(optimistic.startDate),
-                      end_time: newTimeOff.fullDay ? null : toHHMM(optimistic.endDate),
+                      start_time: newTimeOff.fullDay ? null : startTime,
+                      end_time: newTimeOff.fullDay ? null : endTime,
                       recurrence: optimistic.recurrence,
                       weekdays: optimistic.weekdays,
                       description: optimistic.description,
@@ -526,10 +503,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
                 } catch {
                   toast.error('The leave was not saved. Try again.');
                 }
-              }}>Save</Button>
-            </div>
-          </div>
-        </div>
+        }} />
       </BottomSheet>
     </>
   );
