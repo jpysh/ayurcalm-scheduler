@@ -54,7 +54,8 @@ test('H2: Someone else… books any resident in a sheet, not the old Auto-Assign
   const sheet = page.getByRole('dialog');
   await expect(sheet).toContainText('Book someone else');
   await expect(page.getByText('Auto-Assign')).toHaveCount(0);
-  await sheet.getByRole('button').nth(2).click();
+  // A resident by what it is not: counting buttons picked Close while the list was still loading.
+  await sheet.getByRole('button').filter({ hasNotText: /Back|A course over|Close/ }).first().click();
   await sheet.getByLabel('Therapy').selectOption({ label: 'Thalam' });
   await expect(sheet.getByRole('button', { name: /^\d\d:\d\d/ }).first().or(sheet.getByText(/No free time/))).toBeVisible({ timeout: 15000 });
 });
