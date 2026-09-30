@@ -253,6 +253,13 @@ and adds the job to `BLOCKING`.
 **Design for the admin's phone.** One operator, one centre, and they may never
 open a desktop after setup.
 
+**Design system and stories (#285).** Before touching any screen read
+`docs/design/DESIGN.md` (rules, kit, 17-line checklist) and the story it serves in
+`docs/design/STORIES.md`. Start from the story's outcome, never from the current
+screen; build only from `src/components/kit.tsx`, and extend it rather than write
+a one-off. Until the closing session of #285 only `qa` and the tap-count check
+block a merge; the rest of e2e is advisory.
+
 **Build to the approved phone design.** `docs/design/phone.html`, approved in
 #144 (decisions in its comments): click through it at phone width before touching
 a screen. Phone is the primary layout; a desktop only widens it. The old desktop
