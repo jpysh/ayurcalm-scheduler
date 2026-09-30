@@ -72,7 +72,7 @@ function Seg<T extends string | number>({ options, value, onChange }: { options:
   );
 }
 
-const Switch = ({ label, on, set }: { label: string; on: boolean; set: (v: boolean) => void }) => (
+export const Switch = ({ label, on, set }: { label: string; on: boolean; set: (v: boolean) => void }) => (
   <label className="mt-3 flex min-h-11 items-center justify-between gap-3 text-base">
     {label}
     <input type="checkbox" role="switch" className="h-6 w-11 accent-[hsl(var(--primary))]" checked={on} onChange={(e) => set(e.target.checked)} />

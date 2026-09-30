@@ -198,7 +198,11 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     // From the day: a treatment's row, then the resident's name opens their card with today's meals.
     await job(page, rows, "A resident's meals today", async (tap) => {
       await showDay(page, today);
-      await tap(activePanel(page).getByRole('button', { name: /^\d\d:\d\d/ }).first());
+      // Any row on screen: the day opens at now, so after the morning the first row is above the fold.
+      const treatments = activePanel(page).getByRole('button', { name: /^\d\d:\d\d/ });
+      await treatments.first().waitFor();
+      const onScreen = await treatments.evaluateAll((els) => Math.max(0, els.findIndex((el) => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight - 80; })));
+      await tap(treatments.nth(onScreen));
       await tap(page.getByRole('dialog').locator('button.text-\\[22px\\]'));
       await expect(page.getByRole('dialog')).toContainText('Meals today');
     });

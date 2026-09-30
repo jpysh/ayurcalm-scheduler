@@ -176,7 +176,9 @@ const SetupWizard = () => {
               </div>
               <div className="space-y-1 max-w-xs">
                 <Label htmlFor="w_tz">Timezone</Label>
-                <Input id="w_tz" value={form.timezone} onChange={(e) => set("timezone", e.target.value)} />
+                <select id="w_tz" className="h-11 w-full rounded-md border bg-background px-3 text-base" value={form.timezone} onChange={(e) => set("timezone", e.target.value)}>
+                  {TIMEZONES.map((z) => <option key={z} value={z}>{z.replace(/_/g, " ")}</option>)}
+                </select>
               </div>
               <p className="text-xs text-muted-foreground">
                 These decide which time rows the schedule shows. You can change them later in Settings.
@@ -223,5 +225,8 @@ const SetupWizard = () => {
     </div>
   );
 };
+
+// The zones a wellness centre is likely to be in; any other is set in Settings.
+const TIMEZONES = ["Asia/Kolkata", "Asia/Colombo", "Asia/Kathmandu", "Asia/Dubai", "Asia/Bangkok", "Asia/Singapore", "Asia/Tokyo", "Australia/Sydney", "Europe/London", "Europe/Berlin", "Europe/Prague", "Europe/Madrid", "Africa/Johannesburg", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Sao_Paulo", "UTC"];
 
 export default SetupWizard;
