@@ -1,0 +1,212 @@
+<!doctype html><meta charset="utf-8"><title>Direction mocks v3 (#285)</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+:root{--text:#1F2A30;--muted:#5B6A70;--faint:#8A979C;--surface:#F4F7F2;--card:#fff;--sage:#E3ECE0;--primary:#3D6B4F;--border:#7A8E7F;--line:#E6ECE3;--alert:#A94A26;--alert-bg:#FBEAE3;--amber:#B8862B;--amber-bg:#FBF0D9;--notice:#6E4A0E;--now:#C2410C;--shadow:0 4px 18px rgba(31,42,48,.14)}
+*{box-sizing:border-box}body{margin:0;background:#888;font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--text);display:flex;gap:16px;flex-wrap:wrap;padding:16px}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;text-align:left}
+.p{width:375px;height:812px;background:var(--surface);position:relative;overflow:hidden;flex:none}
+.scroll{padding:0 12px;height:100%;overflow:hidden}
+.st{height:44px}
+.dim::after{content:"";position:absolute;inset:0;background:rgba(20,30,28,.4)}
+.hd{display:flex;justify-content:space-between;align-items:baseline;padding:8px 4px 8px}.hd h1{font-size:22px;margin:0;font-weight:700}.hd span{font-size:13px;color:var(--muted)}
+.chips{display:flex;gap:8px;padding:0 0 10px;overflow:hidden}
+.chip{min-height:40px;padding:0 14px;border-radius:18px;border:1.5px solid var(--line);background:var(--card);font-size:14px;display:inline-flex;align-items:center;white-space:nowrap}
+.chip[aria-pressed=true]{border-color:var(--primary);background:var(--sage);font-weight:600}
+.chip i{font-style:normal;color:var(--alert);font-weight:700;margin-left:6px}
+.cap{font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:14px 4px 6px;display:flex;justify-content:space-between}
+.list{background:var(--card);border-radius:12px;overflow:hidden}
+.row{display:flex;gap:12px;padding:10px 14px;min-height:60px;border-bottom:1px solid var(--line);align-items:flex-start;position:relative}
+.row:last-child{border-bottom:0}
+.row .m{flex:1;min-width:0}.n{font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.s{font-size:14px;color:var(--muted)}
+.fl{font-size:13px;font-weight:600;color:var(--alert);margin-top:2px}.fl.n2{color:var(--notice)}
+.rt{font-size:12px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.tm{width:48px;flex:none;font-weight:600;font-variant-numeric:tabular-nums;font-size:15px}.tm small{display:block;font-weight:400;color:var(--faint);font-size:12px}
+.stripe{position:absolute;left:0;top:0;bottom:0;width:4px}
+.row.flag{box-shadow:inset 3px 0 0 var(--alert)}
+.bar{position:absolute;left:10px;right:10px;bottom:10px;height:60px;border-radius:30px;background:rgba(255,255,255,.96);border:1px solid var(--line);box-shadow:var(--shadow);display:grid;align-items:center;padding:4px;z-index:4}
+.bar.day{grid-template-columns:auto auto 1fr auto auto}.bar.min{grid-template-columns:auto auto 1fr auto}
+.ib{width:46px;height:46px;border-radius:23px;display:grid;place-items:center}.ib svg{width:22px;height:22px}
+.plus{background:var(--primary);color:#fff;width:50px;height:50px;border-radius:25px;display:grid;place-items:center}
+.plus svg{width:24px;height:24px}
+.plus.lab{width:auto;padding:0 18px 0 14px;gap:6px;display:flex;font-weight:600;font-size:15px;white-space:nowrap}
+.plus.lab svg{width:20px;height:20px}
+.dt{text-align:center;line-height:1.15}.dt b{display:block;font-size:16px}.dt span{font-size:12px;color:var(--now);font-weight:650}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--card);border-radius:20px 20px 0 0;padding:8px 16px 0;z-index:8;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.grab{width:36px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 10px}
+.sheet h2{font-size:22px;margin:0 0 2px}.sub{font-size:13px;color:var(--muted);margin-bottom:10px}
+.foot{margin:12px -16px 0;padding:10px 16px 28px;background:var(--card);border-top:1px solid var(--line);display:grid;gap:4px}
+.btn{min-height:48px;border-radius:24px;background:var(--primary);color:#fff;font-weight:600;display:flex;align-items:center;justify-content:center}
+.btn.q{background:none;color:var(--alert);min-height:44px;font-size:14px}.btn.o{background:var(--card);border:1.5px solid var(--border);color:var(--text)}
+.opt{border:1.5px solid var(--line);border-radius:12px;padding:8px 12px;min-height:56px;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.opt[aria-pressed=true]{border-color:var(--primary);background:var(--sage)}
+.tag{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--sage);color:var(--primary);font-weight:600;white-space:nowrap}
+.tag.a{background:var(--alert-bg);color:var(--alert)}
+.facts{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.fact{display:flex;gap:12px;align-items:center;min-height:50px;padding:0 12px;border-top:1px solid var(--line);font-size:15px}.fact:first-child{border-top:0}
+.fact .k{width:74px;flex:none;color:var(--muted);font-size:13px}.fact .v{flex:1;min-width:0}.fact .c{color:var(--faint);font-size:20px}
+.stat{display:inline-block;font-size:12px;font-weight:700;padding:3px 10px;border-radius:12px;background:var(--surface);color:var(--muted)}
+.prob{background:var(--alert-bg);border-radius:12px;padding:10px 12px;margin:10px 0;font-size:14px}.prob b{color:var(--alert);display:block}
+.field{margin-top:12px}.field label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:4px}
+.in{height:44px;border:1.5px solid rgba(122,142,127,.6);border-radius:12px;background:var(--card);padding:0 14px;display:flex;align-items:center;font-size:16px;justify-content:space-between}
+.in.focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(61,107,79,.18)}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface);border-radius:12px;padding:3px;gap:3px}.seg button{min-height:38px;border-radius:10px;font-size:14px;font-weight:600;text-align:center;color:var(--muted)}.seg button[aria-pressed=true]{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.14)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.more{display:flex;justify-content:space-between;align-items:center;min-height:48px;border-top:1px solid var(--line);margin-top:14px;font-weight:600;color:var(--primary)}.more span{color:var(--muted);font-weight:400;font-size:13px}
+.kb{position:absolute;left:0;right:0;bottom:0;height:300px;background:#D1D5DB;z-index:6;padding:10px 4px;display:grid;gap:9px}
+.kb div{display:flex;gap:5px;justify-content:center}.kb i{width:32px;height:42px;border-radius:5px;background:#fff;box-shadow:0 1px 0 #888}
+.sf{position:absolute;left:10px;right:10px;bottom:310px;z-index:7;height:52px;border-radius:26px;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow);display:flex;align-items:center;padding:0 8px 0 16px;gap:8px;font-size:16px}
+.sf svg{width:20px;height:20px;color:var(--muted)}.sf .x{margin-left:auto;color:var(--primary);font-weight:600;padding:0 8px}
+mark{background:#F6E3A8;color:inherit;border-radius:3px}
+.scope{font-size:13px;color:var(--muted);margin:10px 4px 4px}
+.pill{position:absolute;left:50%;transform:translateX(-50%);bottom:82px;z-index:5;display:flex;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:22px;min-height:40px;padding:0 14px;font-size:14px;font-weight:600;box-shadow:var(--shadow);white-space:nowrap}
+.pill i{width:8px;height:8px;border-radius:4px;background:var(--alert)}
+.prog{height:6px;border-radius:3px;background:var(--sage);margin-top:8px;overflow:hidden}.prog i{display:block;height:100%;background:var(--primary)}
+.note{position:absolute;top:0;left:0;right:0;z-index:20;font-size:11px;background:#1F2A30;color:#fff;padding:3px 8px;text-align:center}
+</style><style>
+.att{background:var(--alert-bg);border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.att b{color:var(--alert);font-size:17px;display:block}.att span{font-size:14px;color:var(--text)}.att i{font-style:normal;font-size:22px;color:var(--alert)}
+.att.ok{background:var(--sage)}.att.ok b{color:var(--primary)}
+.toast{position:absolute;left:12px;right:12px;bottom:82px;background:var(--text);color:#fff;border-radius:12px;padding:4px 4px 4px 14px;display:flex;justify-content:space-between;align-items:center;font-size:15px;z-index:9;min-height:48px}
+.toast button{color:#B9E2C6;font-weight:700;min-height:44px;padding:0 12px}
+.plan{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:8px 0}
+.plan div{display:flex;justify-content:space-between;gap:8px;padding:10px 12px;border-top:1px solid var(--line);font-size:15px}.plan div:first-child{border-top:0}.plan em{font-style:normal;color:var(--muted);font-variant-numeric:tabular-nums}
+.cons{font-size:14px;color:var(--notice);background:var(--amber-bg);border-radius:10px;padding:8px 12px;margin-top:12px}
+.chk{color:var(--primary);font-weight:700}
+.opt2{color:var(--muted);font-weight:400}
+.step{display:flex;align-items:center;gap:12px;min-height:52px;border-top:1px solid var(--line);font-size:16px}.step:first-child{border-top:0}
+.step .o{width:22px;height:22px;border-radius:11px;border:2px solid var(--border);flex:none}.step .o.d{background:var(--primary);border-color:var(--primary);color:#fff;font-size:13px;display:grid;place-items:center}
+.step .c{margin-left:auto;color:var(--faint);font-size:20px}
+.times{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.times button{min-height:44px;border:1.5px solid var(--line);border-radius:12px;text-align:center;font-weight:600;font-variant-numeric:tabular-nums}
+.times button[aria-pressed=true]{border-color:var(--primary);background:var(--sage)}
+.story{position:absolute;top:0;left:0;right:0;z-index:30;background:rgba(31,42,48,.86);color:#fff;font-size:11px;padding:3px 10px}
+.hd h1{font-size:24px}.cap{font-size:12px}.sheet h2{font-size:24px}.sub{font-size:14px}.field label{font-size:14px}
+</style><style>
+.bar{background:none;border:0;box-shadow:none;left:10px;right:10px;bottom:10px;height:56px;display:flex;justify-content:space-between;align-items:center;padding:0;gap:8px}
+.cap1,.cap2{height:56px;border-radius:28px;background:rgba(255,255,255,.97);border:1px solid var(--line);box-shadow:var(--shadow);display:flex;align-items:center;padding:0 5px}
+.cap1 .ib{width:44px;height:44px}.dt{padding:0 12px 0 6px}
+.right{display:flex;gap:8px;align-items:center}
+.plus{box-shadow:var(--shadow);width:56px;height:56px;border-radius:28px}
+.ibp{width:56px;height:56px;border-radius:28px;background:rgba(255,255,255,.97);border:1px solid var(--line);box-shadow:var(--shadow);display:grid;place-items:center}.ibp svg{width:22px;height:22px}
+.pill{bottom:80px}.pill i.y{background:var(--amber)}
+.gear{width:44px;height:44px;display:grid;place-items:center;color:var(--muted);font-size:20px}
+.sec{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px;display:flex;justify-content:space-between}
+.it{display:flex;gap:10px;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:12px;background:var(--alert-bg);margin-bottom:6px}.it b{display:block;font-size:16px}.it span{font-size:14px;color:var(--muted)}
+.it.info{background:var(--surface)}.it.warn{background:var(--amber-bg)}
+.it .go{min-height:40px;padding:0 14px;border-radius:20px;background:var(--primary);color:#fff;font-weight:600;font-size:14px;display:flex;align-items:center;white-space:nowrap}
+.it .go.q{background:none;color:var(--primary)}
+.ck{display:flex;justify-content:space-between;align-items:center;min-height:52px;padding:0 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);margin:10px 0 4px}.ck b{font-size:16px}
+.tl{border:1px solid var(--line);border-radius:12px;overflow:hidden}.tl div{padding:10px 12px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:8px}.tl div:first-child{border-top:0}
+.tl small{display:block;color:var(--muted);font-size:14px}
+.sw{width:51px;height:31px;border-radius:16px;background:var(--primary);position:relative;flex:none}.sw::after{content:"";position:absolute;right:2px;top:2px;width:27px;height:27px;border-radius:14px;background:#fff}.sw.off{background:#C9D2CC}.sw.off::after{right:auto;left:2px}
+.rowsw{display:flex;justify-content:space-between;align-items:center;min-height:52px;gap:12px}
+.pk{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pk button{border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;min-height:64px}.pk button[aria-pressed=true]{border-color:var(--primary);background:var(--sage)}.pk b{font-size:17px;display:block}.pk span{font-size:14px;color:var(--muted)}
+.hint{font-size:14px;color:var(--muted)}
+</style><style>
+.bar{background:none;border:0;box-shadow:none;left:10px;right:10px;bottom:10px;height:56px;display:flex;justify-content:space-between;align-items:center;padding:0;gap:8px}
+.cap1,.cap2{height:56px;border-radius:28px;background:rgba(255,255,255,.97);border:1px solid var(--line);box-shadow:var(--shadow);display:flex;align-items:center;padding:0 5px}
+.cap1 .ib{width:44px;height:44px}.dt{padding:0 12px 0 6px}
+.right{display:flex;gap:8px;align-items:center}
+.plus{box-shadow:var(--shadow);width:56px;height:56px;border-radius:28px}
+.ibp{width:56px;height:56px;border-radius:28px;background:rgba(255,255,255,.97);border:1px solid var(--line);box-shadow:var(--shadow);display:grid;place-items:center}.ibp svg{width:22px;height:22px}
+.pill{bottom:80px}.pill i.y{background:var(--amber)}
+.gear{width:44px;height:44px;display:grid;place-items:center;color:var(--muted);font-size:20px}
+.sec{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px;display:flex;justify-content:space-between}
+.it{display:flex;gap:10px;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:12px;background:var(--alert-bg);margin-bottom:6px}.it b{display:block;font-size:16px}.it span{font-size:14px;color:var(--muted)}
+.it.info{background:var(--surface)}.it.warn{background:var(--amber-bg)}
+.it .go{min-height:40px;padding:0 14px;border-radius:20px;background:var(--primary);color:#fff;font-weight:600;font-size:14px;display:flex;align-items:center;white-space:nowrap}
+.it .go.q{background:none;color:var(--primary)}
+.ck{display:flex;justify-content:space-between;align-items:center;min-height:52px;padding:0 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);margin:10px 0 4px}.ck b{font-size:16px}
+.tl{border:1px solid var(--line);border-radius:12px;overflow:hidden}.tl div{padding:10px 12px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:8px}.tl div:first-child{border-top:0}
+.tl small{display:block;color:var(--muted);font-size:14px}
+.sw{width:51px;height:31px;border-radius:16px;background:var(--primary);position:relative;flex:none}.sw::after{content:"";position:absolute;right:2px;top:2px;width:27px;height:27px;border-radius:14px;background:#fff}.sw.off{background:#C9D2CC}.sw.off::after{right:auto;left:2px}
+.rowsw{display:flex;justify-content:space-between;align-items:center;min-height:52px;gap:12px}
+.pk{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pk button{border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;min-height:64px}.pk button[aria-pressed=true]{border-color:var(--primary);background:var(--sage)}.pk b{font-size:17px;display:block}.pk span{font-size:14px;color:var(--muted)}
+.hint{font-size:14px;color:var(--muted)}
+</style><body><svg style="display:none"><symbol id="menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></symbol><symbol id="srch" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M16 16l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol><symbol id="print" viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H5v-7h14v7h-2M7 14h10v6H7z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/></symbol><symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol></symbol></svg>
+
+<section class="p" id="f1"><div class="story">Story 1 · the pill stays; the bar is two floating pieces</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Today</h1><span>168 treatments · 22 rooms</span></div><div class="cap" style="margin-top:4px"><span style="color:var(--now)">Now · 09:00</span><span>26 starting</span></div><div class="list">
+<div class="row"><i class="stripe" style="background:#4C7A9E"></i><div class="tm">09:00<small>10:00</small></div><div class="m"><div class="n">Krishna Singh</div><div class="s">Greeva Vasti · Rohit Joshi</div></div><div class="rt">Chandra</div></div>
+<div class="row flag"><i class="stripe" style="background:#9A5E86"></i><div class="tm">09:00<small>09:20</small></div><div class="m"><div class="n">Diya Patel</div><div class="s">Thalam · Kriti Reddy</div><div class="fl">Therapist not in</div></div><div class="rt">Dasra</div></div>
+<div class="row"><i class="stripe" style="background:#5E8A5A"></i><div class="tm">09:00<small>10:00</small></div><div class="m"><div class="n">Aarav Reddy</div><div class="s">Kashaya Vasti · Suresh C.</div></div><div class="rt">Dhanvantari</div></div>
+<div class="row"><i class="stripe" style="background:#8C7A5B"></i><div class="tm">09:00<small>10:15</small></div><div class="m"><div class="n">Aditya Sharma</div><div class="s">Podikizhi · Manish C. &amp; Dev Y.</div></div><div class="rt">Ganesha</div></div>
+<div class="row"><i class="stripe" style="background:#3E7F86"></i><div class="tm">09:00<small>09:30</small></div><div class="m"><div class="n">Arjun Singh</div><div class="s">Nadi Sweda · Ravi Verma</div></div><div class="rt">Hanuman</div></div></div></div><div class="pill"><i></i>4 need you ›</div><div class="bar"><div class="cap1"><button class="ib"><svg><use href="#menu"/></svg></button><button class="ib"><svg><use href="#srch"/></svg></button><div class="dt"><b>Wed 30 Sept</b><span>Today · 09:12</span></div></div><div class="right"><button class="ibp"><svg><use href="#print"/></svg></button><button class="plus" aria-label="New treatment"><svg><use href="#plus"/></svg></button></div></div></section><section class="p" id="f2"><div class="story">Story 2 · print unchanged; Open and Share added to the toast</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Today</h1><span>168 treatments · 22 rooms</span></div><div class="cap" style="margin-top:4px"><span style="color:var(--now)">Now · 09:00</span><span>26 starting</span></div><div class="list">
+<div class="row"><i class="stripe" style="background:#4C7A9E"></i><div class="tm">09:00<small>10:00</small></div><div class="m"><div class="n">Krishna Singh</div><div class="s">Greeva Vasti · Rohit Joshi</div></div><div class="rt">Chandra</div></div>
+<div class="row flag"><i class="stripe" style="background:#9A5E86"></i><div class="tm">09:00<small>09:20</small></div><div class="m"><div class="n">Diya Patel</div><div class="s">Thalam · Kriti Reddy</div><div class="fl">Therapist not in</div></div><div class="rt">Dasra</div></div>
+<div class="row"><i class="stripe" style="background:#5E8A5A"></i><div class="tm">09:00<small>10:00</small></div><div class="m"><div class="n">Aarav Reddy</div><div class="s">Kashaya Vasti · Suresh C.</div></div><div class="rt">Dhanvantari</div></div>
+<div class="row"><i class="stripe" style="background:#8C7A5B"></i><div class="tm">09:00<small>10:15</small></div><div class="m"><div class="n">Aditya Sharma</div><div class="s">Podikizhi · Manish C. &amp; Dev Y.</div></div><div class="rt">Ganesha</div></div>
+<div class="row"><i class="stripe" style="background:#3E7F86"></i><div class="tm">09:00<small>09:30</small></div><div class="m"><div class="n">Arjun Singh</div><div class="s">Nadi Sweda · Ravi Verma</div></div><div class="rt">Hanuman</div></div></div></div><div class="toast" style="bottom:80px;flex-direction:column;align-items:stretch;padding:8px 8px 6px 14px"><div style="min-height:28px;display:flex;align-items:center">Day sheet printed · 4 still to fix</div><div style="display:grid;grid-template-columns:1fr 1fr"><button>Open</button><button>Share</button><button>Therapist sheet</button><button>Doctor sheet</button></div></div><div class="bar"><div class="cap1"><button class="ib"><svg><use href="#menu"/></svg></button><button class="ib"><svg><use href="#srch"/></svg></button><div class="dt"><b>Wed 30 Sept</b><span>Today · 09:12</span></div></div><div class="right"><button class="ibp"><svg><use href="#print"/></svg></button><button class="plus" aria-label="New treatment"><svg><use href="#plus"/></svg></button></div></div></section><section class="p" id="f3"><div class="story">Stories 1, 3 · the pill is the inbox for the whole app</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Today</h1></div></div><div class="dim"></div><div class="sheet" style="top:64px;padding-bottom:0;overflow:hidden"><div class="grab"></div><h2>4 need you</h2><div class="sub">Across the day, patients and team.</div>
+<div class="sec" style="margin-top:4px"><span>Day</span><span>2</span></div>
+<div class="it"><span style="flex:1"><b>Kriti Reddy is not in</b>4 treatments · one plan moves them all</span><span class="go">Plan</span></div>
+<div class="it"><span style="flex:1"><b>Room 14 is out of use</b>1 treatment 14:00</span><span class="go">Fix</span></div>
+<div class="sec"><span>Patients</span><span>1</span></div>
+<div class="it warn"><span style="flex:1"><b>Ishita Nair leaves today</b>Discharge summary 5 of 8 ready</span><span class="go q">Open</span></div>
+<div class="sec"><span>Team · for information</span><span>1</span></div>
+<div class="it info"><span style="flex:1"><b>Kriti Reddy on leave today</b>Back Wed 7 Oct</span></div>
+<div class="foot" style="margin-top:8px"><div class="btn">Plan the day for Kriti</div></div></div></section><section class="p" id="f4a"><div class="story">Stories 1, 4 · Patients: flags only when needed, gear for its rules</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Patients</h1><span style="display:flex;align-items:center">71 in house<button class="gear">⚙</button></span></div>
+<div class="chips"><button class="chip" aria-pressed="true">Needs attention<i>3</i></button><button class="chip">Arriving</button><button class="chip">Leaving</button></div>
+<div class="cap" style="margin-top:0"><span>Needs attention</span><span>3</span></div><div class="list">
+<div class="row flag"><div class="m"><div class="n">Ishita Nair</div><div class="s">Day 21 of 21 · leaves today</div><div class="fl">Discharge summary 5 of 8 ready</div></div></div>
+<div class="row flag"><div class="m"><div class="n">Ananya Patel</div><div class="s">Day 2 of 14 · leaves 13 Oct</div><div class="fl">No diet plan · 26 hours</div></div></div>
+<div class="row flag"><div class="m"><div class="n">Kit Check</div><div class="s">Day 2 of 14 · leaves 13 Oct</div><div class="fl">Arrival steps open (3) · 26 hours</div></div></div></div>
+<div class="cap"><span>Everyone else</span><span>68</span></div><div class="list"><div class="row"><div class="m"><div class="n">Aarav Gupta</div><div class="s">Day 6 of 21 · leaves 15 Oct</div></div></div><div class="row"><div class="m"><div class="n">Vihaan Iyer</div><div class="s">Day 12 of 14 · leaves 2 Oct</div></div></div></div></div><div class="pill"><i></i>4 need you ›</div><div class="bar"><div class="cap1"><button class="ib"><svg><use href="#menu"/></svg></button><button class="ib"><svg><use href="#srch"/></svg></button></div><button class="plus" aria-label="New patient"><svg><use href="#plus"/></svg></button></div></section><section class="p" id="f4b"><div class="story">Story 4 · new patient, one step, nothing forced</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Patients</h1></div></div><div class="dim"></div><div class="sheet" style="padding-bottom:0"><div class="grab"></div><h2>New patient</h2>
+<div class="field" style="margin-top:0"><label>Name</label><div class="in focus"><span>Meera Nair<span style="border-left:2px solid var(--primary);margin-left:1px"></span></span><span class="chk">✓</span></div></div>
+<div class="field"><label>Gender</label><div class="seg"><button aria-pressed="true">Female</button><button>Male</button><button>Other</button></div></div>
+<div class="two"><div class="field"><label>Arriving</label><div class="in"><span>Wed 30 Sept</span><span style="color:var(--faint)">›</span></div></div><div class="field"><label>Leaving</label><div class="in"><span>Tue 13 Oct</span><span style="color:var(--faint)">›</span></div></div></div>
+<div class="rowsw"><span><b>Stays on site</b><br><span class="hint">Off for a day patient</span></span><span class="sw"></span></div>
+<div class="facts" style="margin-top:4px"><div class="fact"><span class="v"><b>First consultation</b><br><span class="hint">Wed 30 Sept · 11:00 · Dr Menon</span></span><span class="c" style="font-size:14px;color:var(--primary);font-weight:600">Change · Later</span></div></div>
+<div class="more" style="margin-top:8px">More details <span>phone, passport… (optional) ›</span></div>
+<div class="foot"><div class="btn">Add Meera Nair</div></div></div></section><section class="p" id="f4c"><div class="story">Story 4 · their card: everything else is a row with an arrow</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Patients</h1></div></div><div class="dim"></div><div class="sheet" style="top:70px;padding-bottom:0"><div class="grab"></div><span class="stat" style="background:var(--sage);color:var(--primary);align-self:flex-start">Added · day 1 of 14 · on site</span><h2 style="margin-top:8px">Meera Nair</h2><div class="sub" style="margin-bottom:6px">30 Sept to 13 Oct</div>
+<div class="facts"><div class="fact"><span class="k">Consult</span><span class="v">Wed 30 Sept · 11:00</span><span class="c">›</span></div><div class="fact"><span class="k">Package</span><span class="v" style="color:var(--faint)">Not decided yet</span><span class="c">›</span></div><div class="fact"><span class="k">Diet</span><span class="v" style="color:var(--faint)">Not chosen yet</span><span class="c">›</span></div><div class="fact"><span class="k">Room</span><span class="v" style="color:var(--faint)">Not chosen yet</span><span class="c">›</span></div><div class="fact"><span class="k">Therapies</span><span class="v" style="color:var(--faint)">None booked</span><span class="c">›</span></div><div class="fact"><span class="k">Details</span><span class="v">Add phone, emergency contact…</span><span class="c">›</span></div></div>
+<div class="foot"><div class="btn">Book a treatment</div></div></div></section><section class="p" id="f5a"><div class="story">Story 5 · booking: who is a search at the bottom</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Today</h1></div></div><div class="dim"></div><div class="sheet" style="bottom:372px;padding-bottom:0"><div class="grab"></div><h2>Book a treatment</h2><div class="sub">Who is it for?</div>
+<div class="cap" style="margin:0 0 6px"><span>No treatment yet today</span><span>9</span></div>
+<button class="opt"><span><b>Ananya Patel</b><br><span class="s">Day 2 of 14 · last: Abhyanga 29 Sept</span></span></button>
+<button class="opt"><span><b>Vihaan Nair</b><br><span class="s">Day 5 of 14 · last: Shirodhara 29 Sept</span></span></button>
+<div class="cap" style="margin:6px 0 6px"><span>Recent</span></div><button class="opt"><span><b>Riya Verma</b><br><span class="s">Day 2 of 14 · last: Kati Vasti 30 Sept</span></span></button></div>
+<div class="sf" style="z-index:9"><svg><use href="#srch"/></svg><span style="color:var(--faint)">Patient name</span><span class="x">Cancel</span></div>
+<div class="kb" style="z-index:8"><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></section><section class="p" id="f5b"><div class="story">Story 5 · one sheet, filled in, every field yours to change</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Today</h1></div></div><div class="dim"></div><div class="sheet" style="padding-bottom:0"><div class="grab"></div><h2>Ananya Patel</h2><div class="sub">Day 2 of 14 · no treatment yet today</div>
+<div class="field" style="margin-top:0"><label>Therapy · last: Abhyanga, 29 Sept</label><div class="in"><span>Abhyanga · 45 min</span><span style="color:var(--faint)">⌄</span></div></div>
+<div class="two"><div class="field"><label>Date</label><div class="in"><span>Wed 30 Sept</span><span style="color:var(--faint)">›</span></div></div><div class="field"><label>Time</label><div class="in focus"><span>10:45</span><span class="tag">best</span></div></div></div>
+<div class="two"><div class="field"><label>Therapist</label><div class="in"><span>Sushruta R.</span><span style="color:var(--faint)">⌄</span></div></div><div class="field"><label>Room</label><div class="in"><span>Dhanvantari</span><span style="color:var(--faint)">⌄</span></div></div></div>
+<div class="hint" style="margin-top:8px">Chosen automatically: free at 10:45 and she has nothing else that morning. Change anything above.</div>
+<div class="foot"><div class="btn">Book Ananya, Wed 10:45</div></div></div></section><section class="p" id="f6"><div class="story">Story 6 · search at the bottom, the fact you asked about</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Patients</h1><span>71 in house</span></div><div class="scope">Patients matching “sha” · 3</div><div class="list">
+<div class="row"><div class="m"><div class="n">Riya <mark>Sha</mark>rma</div><div class="s">Day 9 of 14 · Diet: light, no curd</div></div></div>
+<div class="row"><div class="m"><div class="n">Aditya <mark>Sha</mark>rma</div><div class="s">Day 7 of 14 · Diet: not chosen</div></div></div>
+<div class="row"><div class="m"><div class="n">Vihaan <mark>Sha</mark>rma</div><div class="s">Day 18 of 21 · Diet: pitta</div><div class="fl n2">Leaves in 3 days</div></div></div></div>
+<button class="s" style="display:block;margin:12px 4px;color:var(--primary);font-weight:600;font-size:16px;min-height:44px">Search everything for “sha” ›</button></div>
+<div class="sf"><svg><use href="#srch"/></svg><span>sha<span style="border-left:2px solid var(--primary);margin-left:1px"></span></span><span class="x">Cancel</span></div>
+<div class="kb"><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></section><section class="p" id="f7a"><div class="story">Story 7 · diet by date: a short timeline</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Patients</h1></div></div><div class="dim"></div><div class="sheet" style="top:150px;padding-bottom:0"><div class="grab"></div><h2>Diet for Ananya</h2><div class="sub">Runs to her leaving date, 13 Oct. Each change starts where the last ended.</div>
+<div class="tl"><div><span><b>From 30 Sept</b><small>Light · no curd</small></span><span style="color:var(--faint);font-size:20px">›</span></div><div><span><b>From 5 Oct</b><small>Pitta-pacifying</small></span><span style="color:var(--faint);font-size:20px">›</span></div></div>
+<div class="btn o" style="margin-top:10px;min-height:44px">Change diet from a date</div>
+<div class="foot" style="margin-top:8px"><div class="btn">Done</div></div></div></section><section class="p" id="f7b"><div class="story">Story 7 · pick a template, edit it for yourself or for everyone</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Patients</h1></div></div><div class="dim"></div><div class="sheet" style="top:70px;padding-bottom:0"><div class="grab"></div><h2>Diet from 5 Oct</h2><div class="sub">Pick a plan. Edit a plan to change its meals.</div>
+<button class="opt"><span><b>Light · no curd</b><br><span class="s">Kitchari, soups, warm water · 3 patients</span></span><span class="s" style="color:var(--primary);font-weight:600">Edit</span></button>
+<button class="opt" aria-pressed="true"><span><b>Pitta-pacifying</b><br><span class="s">Cooling, no chilli or sour · 11 patients</span></span><span class="chk">✓</span></button>
+<button class="opt"><span><b>Kapha-balancing</b><br><span class="s">Light, warm, dry, spiced · 6 patients</span></span><span class="s" style="color:var(--primary);font-weight:600">Edit</span></button>
+<div class="cons">Editing Pitta-pacifying changes it for 11 patients. Choose “Only for Ananya” to change her copy alone.</div>
+<div class="two" style="margin-top:8px"><div class="btn o" style="min-height:44px">Only for Ananya</div><div class="btn o" style="min-height:44px">Everyone on it</div></div>
+<div class="foot" style="margin-top:8px"><div class="btn">Start Pitta-pacifying on 5 Oct</div></div></div></section><section class="p" id="f8"><div class="story">Story 8 · discharge: a checklist that never blocks</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Patients</h1></div></div><div class="dim"></div><div class="sheet" style="top:80px;padding-bottom:0"><div class="grab"></div><span class="stat" style="background:var(--amber-bg);color:var(--notice);align-self:flex-start">Leaves today</span><h2 style="margin-top:8px">Ishita Nair</h2><div class="sub" style="margin-bottom:0">Day 21 of 21 · 10 Sept to 30 Sept</div>
+<button class="ck"><span><b>Discharge summary</b><br><span class="hint">5 of 8 ready · address, registration no., emergency phone missing</span></span><span style="color:var(--faint);font-size:20px">›</span></button><div class="prog" style="margin:0 0 8px"><i style="width:62%"></i></div>
+<div class="facts"><div class="fact"><span class="k">Package</span><span class="v">Panchakarma 21 days</span><span class="c">›</span></div><div class="fact"><span class="k">Diet</span><span class="v">Pitta-pacifying</span><span class="c">›</span></div><div class="fact"><span class="k">Doctor</span><span class="v">Dr Menon · last today 09:40</span><span class="c">›</span></div></div>
+<div class="foot"><div class="btn">Print summary</div><div class="hint" style="text-align:center">Missing items print as blank lines to fill in by hand.</div></div></div></section><section class="p" id="f9"><div class="story">Story 9 · leave: plan now or later</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Leave</h1></div></div><div class="dim"></div><div class="sheet" style="padding-bottom:0"><div class="grab"></div><h2>New leave</h2>
+<div class="field" style="margin-top:0"><label>Who</label><div class="in"><span>Kriti Reddy</span><span style="color:var(--faint)">⌄</span></div></div>
+<div class="two"><div class="field"><label>From</label><div class="in focus"><span>Mon 5 Oct</span><span style="color:var(--faint)">›</span></div></div><div class="field"><label>To</label><div class="in"><span>Mon 5 Oct</span><span style="color:var(--faint)">›</span></div></div></div>
+<div class="field"><label>Reason <span class="opt2">(optional)</span></label><div class="in"><span style="color:var(--faint)">e.g. family wedding</span></div></div>
+<div class="cons">3 treatments that day will need a new therapist.</div>
+<div class="foot"><div class="btn">Save and plan the day</div><div class="btn q" style="color:var(--primary)">Save, plan later</div></div></div></section><section class="p" id="f10"><div class="story">Story 10 · stay: cancelled, kept in the record</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Patients</h1></div></div><div class="dim"></div><div class="sheet" style="padding-bottom:0"><div class="grab"></div><h2>Stay for Aarav Gupta</h2><div class="sub">Now 25 Sept to 15 Oct · day 6 of 21</div>
+<div class="two"><div class="field" style="margin-top:0"><label>Arrived</label><div class="in"><span>Fri 25 Sept</span><span style="color:var(--faint)">›</span></div></div><div class="field" style="margin-top:0"><label>Leaving</label><div class="in focus"><span>Sat 10 Oct</span><span style="color:var(--faint)">›</span></div></div></div>
+<div class="cons">5 days shorter. 3 treatments after 10 Oct will be marked cancelled (stay shortened) and stay in his record. Meals stop that day. Accommodation: 15 nights, Rs 24,000.</div>
+<div class="foot"><div class="btn">Leave on 10 Oct</div></div></div></section><section class="p" id="f11"><div class="story">Story 11 · package: one figure, changeable any time</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Patients</h1></div></div><div class="dim"></div><div class="sheet" style="top:70px;padding-bottom:0"><div class="grab"></div><h2>Package for Ananya</h2><div class="sub">Stay 30 Sept to 13 Oct · 14 days. Change it whenever they decide.</div>
+<div class="pk"><button aria-pressed="false"><b>7 days</b><span>Rs 37,200</span></button><button aria-pressed="false"><b>10 days</b><span>Rs 51,200</span></button><button aria-pressed="true"><b>14 days</b><span>Rs 70,750</span></button><button aria-pressed="false"><b>21 days</b><span>Rs 98,750</span></button></div>
+<div class="hint" style="margin-top:8px">Price includes the registration charge. For reference, not an invoice.</div>
+<div class="cons">14 days ends 13 Oct, the same as the stay. Nothing to match.</div>
+<div class="foot"><div class="btn">Use 14 days</div><div class="btn q" style="color:var(--primary)">Edit packages</div></div></div></section><section class="p" id="f12"><div class="story">Story 12 · accommodation: pick a type, add or remove any time</div><div class="scroll"><div class="st"></div><div class="hd"><h1>Patients</h1></div></div><div class="dim"></div><div class="sheet" style="top:70px;padding-bottom:0"><div class="grab"></div><h2>Accommodation for Ananya</h2><div class="sub">13 nights, 30 Sept to 13 Oct.</div>
+<button class="opt"><span><b>Trishul House</b><br><span class="s">Rs 1,600 a day</span></span><span class="s">Rs 20,800</span></button>
+<button class="opt" aria-pressed="true"><span><b>Nanda House</b><br><span class="s">Rs 2,500 a day</span></span><span class="chk">✓ Rs 32,500</span></button>
+<button class="opt"><span><b>Special Apartments</b><br><span class="s">Rs 4,000 a day</span></span><span class="s">Rs 52,000</span></button>
+<button class="opt"><span><b>Huts</b><br><span class="s">Rs 4,000 a day</span></span><span class="s">Rs 52,000</span></button>
+<div class="field" style="margin-top:4px"><label>Room number <span class="opt2">(optional)</span></label><div class="in"><span style="color:var(--faint)">e.g. N-4</span></div></div>
+<div class="foot"><div class="btn">Use Nanda House</div><div class="btn q" style="color:var(--muted)">No accommodation</div></div></div></section><section class="p" id="f13"><div class="story">Story 1 · Settings › What needs you (gear on Patients and Team opens this)</div><div class="scroll"><div class="st"></div><div class="hd"><h1>What needs you</h1></div></div><div class="dim"></div><div class="sheet" style="top:64px;padding-bottom:0;overflow:hidden"><div class="grab"></div><h2>What needs you</h2><div class="sub">Items you switch on appear on the pill. Some can’t be switched off.</div>
+<div class="facts"><div class="fact"><span class="v">Therapist not in, room out, clashes<br><span class="hint">Always on</span></span><span class="sw" style="opacity:.5"></span></div>
+<div class="fact"><span class="v">Leaves today, no summary</span><span class="sw"></span></div>
+<div class="fact"><span class="v">Arrival steps open<br><span class="hint">after <b>24</b> hours</span></span><span class="sw"></span></div>
+<div class="fact"><span class="v">No diet plan<br><span class="hint">after <b>24</b> hours</span></span><span class="sw"></span></div>
+<div class="fact"><span class="v">Vitals not recorded<br><span class="hint">after <b>4</b> hours · for therapies set to need vitals</span></span><span class="sw"></span></div>
+<div class="fact"><span class="v">Who is on leave today<br><span class="hint">Information only</span></span><span class="sw"></span></div>
+<div class="fact"><span class="v">Leaves tomorrow, summary not started</span><span class="sw off"></span></div></div></div></section></body>
