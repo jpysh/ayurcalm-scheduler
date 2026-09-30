@@ -130,3 +130,35 @@ test('U3: a long sheet scrolls inside the phone, its top still reachable', async
   await sheet.getByRole('button', { name: 'Save' }).scrollIntoViewIfNeeded();
   await expect(sheet.getByRole('button', { name: 'Save' })).toBeInViewport();
 });
+
+test('P1: Add leave has Full day and Every week as switches, not Yes / None dropdowns', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Leave/ }).click();
+  await page.getByRole('button', { name: 'Add leave' }).click();
+  const form = page.getByRole('dialog');
+  await expect(form.getByRole('switch', { name: 'Full day' })).toBeChecked();
+  await form.getByRole('switch', { name: 'Every week' }).click();
+  await expect(form.getByRole('button', { name: 'SUN' })).toBeVisible();
+  await expect(form.getByRole('combobox').filter({ hasText: /^(Yes|No|None|Weekly)$/ })).toHaveCount(0);
+});
+
+test('P2: the wizard picks the timezone from a list', async ({ page }) => {
+  // Setup unfinished for this page only: nothing is written to the centre.
+  await page.route('**/api/settings', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const res = await route.fetch();
+    await route.fulfill({ response: res, json: { ...(await res.json()), setup_complete: false } });
+  });
+  await page.goto('/login');
+  await page.getByLabel('Email').fill('admin@example.com');
+  await page.getByLabel('Password').fill('demo1234');
+  await page.getByLabel('Password').press('Enter');
+  await page.waitForURL(/\/setup/);
+  await page.getByLabel(/name/i).first().fill('E2E Centre');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  const tz = page.getByLabel('Timezone');
+  await expect(tz).toHaveValue('Asia/Kolkata');
+  await tz.selectOption('Europe/Prague');
+  await expect(tz).toHaveValue('Europe/Prague');
+});

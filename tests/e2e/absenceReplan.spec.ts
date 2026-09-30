@@ -109,7 +109,7 @@ test('a therapist off: the pill names it, its fix clears the day, and Undo puts 
   const form = page.getByRole('dialog');
   // Who first, from one list (#265).
   await form.getByLabel('Who or what').selectOption({ label: THERAPIST });
-  await expect(form.getByRole('combobox').nth(1)).toHaveText('Yes');
+  await expect(form.getByRole('switch', { name: 'Full day' })).toBeChecked();
   await form.locator('input[type=date]').nth(0).fill(DAY);
   await form.locator('input[type=date]').nth(1).fill(DAY);
   await form.getByRole('button', { name: 'Save', exact: true }).click();

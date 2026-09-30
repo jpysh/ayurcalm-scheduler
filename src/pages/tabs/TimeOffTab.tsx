@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/SetupSheets";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Plus, Trash2 } from "lucide-react";
@@ -180,9 +181,9 @@ const TimeOffTab = ({
                   </TableCell>
                   <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
                     {editingTimeOffId === holiday.id ? (
-                      <Select value={isFullDay(holiday) ? 'yes' : 'no'} onValueChange={(v: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => {
+                      <input type="checkbox" role="switch" className="h-6 w-11 accent-[hsl(var(--primary))]" aria-label="Full day" checked={isFullDay(holiday)} onChange={(e) => { const v = e.target.checked; setTimeOffs((prev: any[]) => prev.map((h: any) => {
                         if (h.id !== holiday.id) return h;
-                        if (v === 'yes') {
+                        if (v) {
                           const sBase = h.startDate || h.date;
                           const eBase = h.endDate || h.date;
                           const sIso = sBase ? new Date(sBase) : undefined;
@@ -191,25 +192,13 @@ const TimeOffTab = ({
                           return { ...h, startDate: sIso ? setHM(sIso, 9, 0) : h.startDate, endDate: eIso ? setHM(eIso, 18, 0) : h.endDate, startTime: undefined, endTime: undefined };
                         }
                         return { ...h, startTime: h.startTime || '09:00', endTime: h.endTime || '18:00' };
-                      }))}>
-                        <SelectTrigger className="h-7"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="no">No</SelectItem>
-                          <SelectItem value="yes">Yes</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      })); }} />
                     ) : null /* The hours are already in the date line (#178). */}
                   </TableCell>
                   <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
                     {editingTimeOffId === holiday.id ? (
                       <div className="flex items-center gap-2">
-                        <Select value={holiday.recurrence || 'none'} onValueChange={(v: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, recurrence: (v === 'none' ? undefined : 'weekly'), weekdays: v === 'weekly' ? (h.weekdays || ['sunday']) : undefined } : h)))}>
-                          <SelectTrigger className="h-7"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">None</SelectItem>
-                            <SelectItem value="weekly">Weekly</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <input type="checkbox" role="switch" className="h-6 w-11 accent-[hsl(var(--primary))]" aria-label="Every week" checked={holiday.recurrence === 'weekly'} onChange={(e) => { const v = e.target.checked; setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, recurrence: v ? 'weekly' : undefined, weekdays: v ? (h.weekdays || ['sunday']) : undefined } : h))); }} />
                         {holiday.recurrence === 'weekly' && (
                           <div className="flex gap-1 flex-wrap">
                             {(['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const).map((wd) => {
@@ -455,16 +444,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
               <optgroup label="Therapies">{therapies.map((t) => <option key={String(t.id ?? t.name)} value={`Therapy:${String(t.id ?? t.name)}`}>{t.name}</option>)}</optgroup>
               <optgroup label="Residents">{patients.map((x) => <option key={x.id} value={`Patient:${x.id}`}>{x.name}</option>)}</optgroup>
             </select>
-            <Label>Full day</Label>
-            <Select value={newTimeOff.fullDay ? 'yes' : 'no'} onValueChange={(v) => setNewTimeOff({ ...newTimeOff, fullDay: v === 'yes' })}>
-              <SelectTrigger className="h-8">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="no">No</SelectItem>
-                <SelectItem value="yes">Yes</SelectItem>
-              </SelectContent>
-            </Select>
+            <Switch label="Full day" on={newTimeOff.fullDay} set={(v) => setNewTimeOff({ ...newTimeOff, fullDay: v })} />
             <Label>Start</Label>
             {newTimeOff.fullDay ? (
               <Input type="date" className="h-8" value={newTimeOff.date} onChange={(e) => setNewTimeOff({ ...newTimeOff, date: e.target.value })} />
@@ -477,15 +457,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
             ) : (
               <Input type="datetime-local" step="60" className="h-8" value={newTimeOff.endDate || newTimeOff.date} onChange={(e) => setNewTimeOff({ ...newTimeOff, endDate: e.target.value })} />
             )}
-            <Label>Recurring</Label>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Select value={newTimeOff.recurrence || 'none'} onValueChange={(v) => setNewTimeOff({ ...newTimeOff, recurrence: (v === 'none' ? undefined : 'weekly'), weekdays: v === 'weekly' ? (newTimeOff.weekdays || ['sunday']) : undefined })}>
-                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                </SelectContent>
-              </Select>
+            <div>
+              <Switch label="Every week" on={newTimeOff.recurrence === 'weekly'} set={(v) => setNewTimeOff({ ...newTimeOff, recurrence: v ? 'weekly' : undefined, weekdays: v ? (newTimeOff.weekdays || ['sunday']) : undefined })} />
               {newTimeOff.recurrence === 'weekly' && (
                 <div className="flex gap-1 flex-wrap">
                   {(['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const).map((wd) => {
