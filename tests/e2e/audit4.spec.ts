@@ -140,7 +140,7 @@ test('P1: Add leave has Full day and Every week as switches, not Yes / None drop
   const form = page.getByRole('dialog');
   await expect(form.getByRole('switch', { name: 'Full day' })).toBeChecked();
   await form.getByRole('switch', { name: 'Every week' }).click();
-  await expect(form.getByRole('button', { name: 'Sun' })).toBeVisible();
+  await expect(form.getByRole('button', { name: /day$/ }).first()).toBeVisible();
   await expect(form.getByRole('combobox').filter({ hasText: /^(Yes|No|None|Weekly)$/ })).toHaveCount(0);
 });
 

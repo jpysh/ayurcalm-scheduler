@@ -148,12 +148,12 @@
   /* A yes/no choice is a switch (#273 P1): a checkbox drawn as one, so it keeps
      its keyboard and screen-reader behaviour. */
   input[role="switch"] {
-    appearance: none; flex: none; position: relative; width: 52px; min-width: 52px; height: 32px; min-height: 32px;
-    border-radius: 9999px; background: hsl(var(--input)); cursor: pointer; transition: background 0.15s;
+    appearance: none; flex: none; position: relative; width: 51px; min-width: 51px; height: 31px; min-height: 31px;
+    border-radius: 9999px; background: hsl(var(--input) / 0.45); cursor: pointer; transition: background 0.2s;
   }
   input[role="switch"]::before {
-    content: ""; position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 9999px;
-    background: hsl(var(--background)); box-shadow: 0 1px 3px rgb(0 0 0 / 0.3); transition: transform 0.15s;
+    content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 9999px;
+    background: #fff; box-shadow: 0 1px 1px rgb(0 0 0 / 0.12), 0 2px 5px rgb(0 0 0 / 0.2); transition: transform 0.2s;
   }
   input[role="switch"]:checked { background: hsl(var(--primary)); }
   input[role="switch"]:checked::before { transform: translateX(20px); }

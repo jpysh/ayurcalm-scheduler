@@ -6,10 +6,12 @@ import { useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttr
  * from the room, therapist and therapy sheets, which are the reference look.
  */
 
-export const field = "h-11 w-full rounded-xl border bg-background px-3 text-base";
+// The boundary is dark enough to read as a box to type in; focus is a soft halo on the box itself.
+export const field = `h-11 w-full rounded-xl border border-[hsl(var(--input)/0.45)] bg-background px-3.5 text-base tabular-nums transition-shadow placeholder:text-muted-foreground/70 focus:border-primary focus:shadow-[0_0_0_3px_hsl(var(--primary)/0.18)] focus-visible:outline-none disabled:opacity-60`;
+const chevron = <svg aria-hidden viewBox="0 0 16 16" className="pointer-events-none h-4 w-4 flex-none text-muted-foreground"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 export const lbl = "mt-3 mb-1 block text-[13px] font-semibold text-muted-foreground";
 export const noteText = "text-[13px] text-muted-foreground";
-const chip = "min-h-10 rounded-full border px-3.5 text-sm font-semibold aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground";
+const chip = "min-h-10 rounded-full border border-[hsl(var(--input)/0.45)] px-3.5 text-sm font-semibold aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground";
 export const wide = "min-h-11 w-full rounded-full font-semibold";
 // Seeded names are stored as massage_table; the admin reads "massage table".
 export const say = (s: string) => s.replace(/_/g, " ");
@@ -39,9 +41,14 @@ export const Text = ({ label, note, className = "", ...rest }: { label: string; 
   <Field label={label} note={note}><input className={`${field} ${className}`} {...rest} /></Field>
 );
 
-/** The phone's own list: one tap opens it, one picks. */
+/** The phone's own list: one tap opens it, one picks. `required` with nothing chosen reads as a prompt, in grey. */
 export const Dropdown = ({ label, note, children, ...rest }: { label: string; note?: ReactNode; children: ReactNode } & SelectHTMLAttributes<HTMLSelectElement>) => (
-  <Field label={label} note={note}><select className={field} {...rest}>{children}</select></Field>
+  <Field label={label} note={note}>
+    <span className="relative block">
+      <select className={`${field} appearance-none pr-10 ${rest.value === "" && rest.required ? "text-muted-foreground" : ""}`} {...rest}>{children}</select>
+      <span className="absolute inset-y-0 right-3.5 flex items-center">{chevron}</span>
+    </span>
+  </Field>
 );
 
 /** "Wed 30 Sept", the stored calendar day read as itself, never through a clock (#189). Linux adds a comma. */
@@ -56,10 +63,10 @@ export function DateRow({ label, value, onChange, min }: { label: string; value:
   return (
     <div className="min-w-0">
       <span className={lbl} aria-hidden>{label}</span>
-      <div className={`${field} relative flex items-center justify-between focus-within:outline focus-within:outline-[3px] focus-within:outline-offset-2 focus-within:outline-ring`}>
+      <div className={`${field} relative flex items-center justify-between gap-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_hsl(var(--primary)/0.18)]`}>
         <span className="truncate">{value ? dayText(value) : "Choose"}</span>
-        <span className="text-muted-foreground" aria-hidden>›</span>
-        <input type="date" aria-label={label} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" value={value.slice(0, 10)} min={min}
+        <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4 flex-none text-muted-foreground"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        <input type="date" aria-label={label} className="absolute inset-0 h-full w-full cursor-pointer opacity-0 focus-visible:outline-none" value={value.slice(0, 10)} min={min}
           // A desktop opens its calendar only from the box's small icon.
           onClick={(e) => { try { (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* already open */ } }}
           onChange={(e) => { if (e.target.value) onChange(e.target.value); }} />
@@ -77,16 +84,16 @@ export const timesBetween = (from: string, to: string, step: number) => {
 };
 
 /** A time picked from a list, 24-hour: no clock face and no AM/PM. A stored time off the list stays in it. */
-export const TimeList = ({ label, value, onChange, times }: { label: string; value: string; onChange: (t: string) => void; times: string[] }) => (
+export const TimeList = ({ label, value, onChange, times, after }: { label: string; value: string; onChange: (t: string) => void; times: string[]; /** Only later times than this are offered. */ after?: string }) => (
   <Dropdown label={label} value={value} onChange={(e) => onChange(e.target.value)}>
-    {[...new Set([...times, value])].filter(Boolean).sort().map((t) => <option key={t}>{t}</option>)}
+    {[...new Set([...times.filter((t) => !after || t > after), value])].filter(Boolean).sort().map((t) => <option key={t}>{t}</option>)}
   </Dropdown>
 );
 
 /** A yes/no choice. */
 export const Switch = ({ label, note, on, set }: { label: string; note?: ReactNode; on: boolean; set: (v: boolean) => void }) => (
-  <label className="mt-3 flex min-h-11 items-center justify-between gap-3 text-base">
-    <span>{label}{note ? <span className={`block ${noteText}`}>{note}</span> : null}</span>
+  <label className="mt-4 flex min-h-11 items-center justify-between gap-4 text-base">
+    <span className="min-w-0">{label}{note ? <span className={`mt-0.5 block ${noteText}`}>{note}</span> : null}</span>
     <input type="checkbox" role="switch" checked={on} onChange={(e) => set(e.target.checked)} />
   </label>
 );
@@ -102,10 +109,10 @@ export const Tick = ({ label, on, set }: { label: ReactNode; on: boolean; set: (
 /** One of a few, all in view. */
 export function Seg<T extends string | number>({ options, value, onChange }: { options: [T, string][]; value: T; onChange: (v: T) => void }) {
   return (
-    <div className="grid gap-1 rounded-xl bg-background p-1" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
+    <div className="grid gap-1 rounded-xl bg-secondary p-1" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
       {options.map(([v, l]) => (
         <button key={String(v)} type="button" aria-pressed={value === v} onClick={() => onChange(v)}
-          className="min-h-10 min-w-0 rounded-lg text-sm font-semibold text-muted-foreground aria-pressed:bg-card aria-pressed:text-foreground aria-pressed:shadow">{l}</button>
+          className="min-h-9 min-w-0 rounded-lg text-[15px] font-medium text-foreground/75 transition-colors aria-pressed:bg-card aria-pressed:font-semibold aria-pressed:text-foreground aria-pressed:shadow-[0_1px_3px_rgb(0_0_0/0.18)]">{l}</button>
       ))}
     </div>
   );
@@ -130,12 +137,12 @@ export function Chips({ options, value, onChange, addLabel }: { options: string[
 }
 
 export const WEEK = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
-/** The week as seven chips on one line. */
+/** The week as seven round buttons, two letters each: a full "Wed" does not fit a thumb-sized button on a phone. */
 export const Days = ({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) => (
-  <div className="grid grid-cols-7 gap-1">
+  <div className="grid grid-cols-7 justify-items-center gap-1.5">
     {WEEK.map((d) => (
-      <button key={d} type="button" aria-pressed={value.includes(d)} onClick={() => onChange(value.includes(d) ? value.filter((x) => x !== d) : [...value, d])}
-        className={`${chip} min-w-0 px-0 text-[13px] capitalize`}>{d.slice(0, 3)}</button>
+      <button key={d} type="button" aria-label={d[0].toUpperCase() + d.slice(1)} aria-pressed={value.includes(d)} onClick={() => onChange(value.includes(d) ? value.filter((x) => x !== d) : [...value, d])}
+        className="aspect-square min-h-0 w-full min-w-0 max-w-11 rounded-full border border-[hsl(var(--input)/0.45)] text-sm font-semibold capitalize text-foreground/75 transition-colors aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground">{d.slice(0, 2)}</button>
     ))}
   </div>
 );

@@ -450,23 +450,23 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
       </>)}
       {/* Built from the form kit (#283), straight in the sheet so Save stays in view at its foot. */}
       <BottomSheet open={openSheet === "hours"} onOpenChange={(o) => setOpenSheet(o ? "hours" : null)} title="Opening hours">
-        <SheetNote>These decide which times the day shows and which days can be booked.</SheetNote>
+        <SheetNote>The times the day shows, and the days that can be booked.</SheetNote>
         <fieldset disabled={!isAdmin} className="m-0 min-w-0 border-0 p-0">
           <div className="grid grid-cols-2 gap-3">
             <TimeList label="Opens" times={DAY_TIMES} value={settings.opening_time} onChange={(t) => update("opening_time", t)} />
-            <TimeList label="Closes" times={DAY_TIMES} value={settings.closing_time} onChange={(t) => update("closing_time", t)} />
+            <TimeList label="Closes" times={DAY_TIMES} after={settings.opening_time} value={settings.closing_time} onChange={(t) => update("closing_time", t)} />
           </div>
-          <Group label="Slot length, in minutes">
-            <Seg options={[...new Set([...SLOT_OPTIONS, settings.slot_minutes])].sort((a, b) => a - b).map((m) => [m, `${m}`] as [number, string])} value={settings.slot_minutes} onChange={(m) => update("slot_minutes", m)} />
-          </Group>
-          <Group label="Working days">
+          <Group label="Open on">
             <Days value={settings.working_days} onChange={(d) => update("working_days", d)} />
           </Group>
-          <Switch label="Match the therapist's gender" note="For therapies that ask for it. Turn off only if your centre asks each resident instead."
-            on={settings.enforce_gender_match !== false} set={(v) => update("enforce_gender_match", v)} />
+          <Group label="Each time slot is">
+            <Seg options={[...new Set([...SLOT_OPTIONS, settings.slot_minutes])].sort((a, b) => a - b).map((m) => [m, `${m} min`] as [number, string])} value={settings.slot_minutes} onChange={(m) => update("slot_minutes", m)} />
+          </Group>
           <Dropdown label="Timezone" id="timezone" value={settings.timezone} onChange={(e) => update("timezone", e.target.value)}>
             {[...new Set([...TIMEZONES, settings.timezone])].map((z) => <option key={z} value={z}>{z.replace(/_/g, " ")}</option>)}
           </Dropdown>
+          <Switch label="Match the therapist's gender" note="Only for therapies that ask for it."
+            on={settings.enforce_gender_match !== false} set={(v) => update("enforce_gender_match", v)} />
         </fieldset>
         {isAdmin ? <Foot busy={saving} save={save} /> : null}
       </BottomSheet>

@@ -434,7 +434,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
         onAdded={(rows) => setTimeOffs((prev) => [...prev, ...rows.map((x) => ({ id: x.id, date: new Date(x.date).toISOString(), type: "Center" as const, entity: "All", description: x.description }))])} />
       <BottomSheet open={showAddTimeOff} onOpenChange={setShowAddTimeOff} title="Add leave">
         {/* Who first, as one list (#265 H1): the old form asked for a "type" before the person. */}
-        <Dropdown label="Who or what" id="leaveWho"
+        <Dropdown label="Who or what" id="leaveWho" required
           value={newTimeOff.type === 'Center' ? 'Center:All' : newTimeOff.entity ? `${newTimeOff.type}:${newTimeOff.entity}` : ''}
           onChange={(e) => { const [type, ...id] = e.target.value.split(':'); setNewTimeOff({ ...newTimeOff, type: type as UiTimeOff['type'], entity: id.join(':') }); }}>
           <option value="" disabled>Choose…</option>
@@ -452,13 +452,13 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
         {newTimeOff.fullDay ? null : (
           <div className="grid grid-cols-2 gap-3">
             <TimeList label="Starts" times={timeSlots} value={newTimeOff.startTime || timeSlots[0] || '09:00'} onChange={(t) => setNewTimeOff({ ...newTimeOff, startTime: t })} />
-            <TimeList label="Ends" times={timeSlots} value={newTimeOff.endTime || timeSlots[timeSlots.length - 1] || '18:00'} onChange={(t) => setNewTimeOff({ ...newTimeOff, endTime: t })} />
+            <TimeList label="Ends" times={timeSlots} after={newTimeOff.date === newTimeOff.endDate ? (newTimeOff.startTime || timeSlots[0]) : undefined} value={newTimeOff.endTime || timeSlots[timeSlots.length - 1] || '18:00'} onChange={(t) => setNewTimeOff({ ...newTimeOff, endTime: t })} />
           </div>
         )}
-        <Switch label="Every week" on={newTimeOff.recurrence === 'weekly'} set={(v) => setNewTimeOff({ ...newTimeOff, recurrence: v ? 'weekly' : undefined, weekdays: v ? (newTimeOff.weekdays || ['sunday']) : undefined })} />
+        <Switch label="Every week" on={newTimeOff.recurrence === 'weekly'} set={(v) => setNewTimeOff({ ...newTimeOff, recurrence: v ? 'weekly' : undefined, weekdays: v ? (newTimeOff.weekdays || [(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const)[new Date(`${newTimeOff.date}T00:00:00Z`).getUTCDay()]]) : undefined })} />
         {newTimeOff.recurrence === 'weekly' ? <Days value={newTimeOff.weekdays || []} onChange={(v) => setNewTimeOff({ ...newTimeOff, weekdays: v as UiTimeOff['weekdays'] })} /> : null}
         <Text label="Reason (optional)" id="newTimeOffDescription" value={newTimeOff.description} onChange={(e) => setNewTimeOff({ ...newTimeOff, description: e.target.value })} />
-        <Foot save={async () => {
+        <Foot label="Add leave" save={async () => {
                 if (newTimeOff.type !== 'Center' && !newTimeOff.entity) {
                   toast.error('Choose who is away first');
                   return;

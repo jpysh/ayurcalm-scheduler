@@ -112,7 +112,7 @@ test('a therapist off: the pill names it, its fix clears the day, and Undo puts 
   await expect(form.getByRole('switch', { name: 'Full day' })).toBeChecked();
   await form.locator('input[type=date]').nth(0).fill(DAY);
   await form.locator('input[type=date]').nth(1).fill(DAY);
-  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await form.getByRole('button', { name: 'Add leave', exact: true }).click();
   await expect(page.getByText('Time off saved')).toBeVisible({ timeout: 15000 });
 
   // The day button on the bottom bar opens the date box, and picking a day shows it.
