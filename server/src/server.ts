@@ -9,7 +9,7 @@ import { dischargeOf, saveDischarge } from './discharge.js';
 import { staffWeek } from './staffWeek.js';
 import { newLinkToken } from './links.js';
 import { findConflict, HAPPENING, loadDay, nearestFreeTime, staffDay } from './appointmentGuard.js';
-import { replanStaffDay, applyPlan, undoReplan, type Pin } from './replan.js';
+import { replanStaffDay, acceptPlan, undoReplan, type Pin } from './replan.js';
 import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
 import { centreClock, eventClashes, type EventRow } from './availability.js';
 import { bookingSuggestions, cardChoices, whyNoTime } from './cardChoices.js';
@@ -859,26 +859,10 @@ app.get('/day-check/options', async (req: Request, res: Response) => {
  */
 app.post('/day-check/accept', async (req: Request, res: Response) => {
   const body = z.object({ date: z.string(), moves: z.array(pinSchema) }).parse(req.body);
-  for (const m of body.moves) {
-    // Cancelling frees a slot; there is nothing for the guard to refuse.
-    if (m.cancel) continue;
-    const appt = await prisma.appointment.findUnique({ where: { id: m.appointment_id } });
-    if (!appt) { res.status(404).json({ error: 'Appointment not found' }); return; }
-    const ctx = await loadDay(new Date(m.date), prisma);
-    const conflict = findConflict({
-      id: appt.id,
-      scheduled_date: new Date(m.date),
-      start_time: m.start_time,
-      duration_minutes: appt.duration_minutes,
-      staff_id: m.staff_id,
-      co_staff_ids: m.co_staff_ids,
-      room_id: m.room_id,
-      patient_id: appt.patient_id,
-      therapy_id: appt.therapy_id,
-    }, ctx);
-    if (conflict) { res.status(409).json({ ...conflict, appointment_id: m.appointment_id }); return; }
-  }
-  res.json(await applyPlan(body.moves, prisma));
+  const done = await acceptPlan(body.moves as Pin[], prisma);
+  if ('missing' in done) { res.status(404).json({ error: 'Appointment not found' }); return; }
+  if ('conflict' in done) { res.status(409).json(done.conflict); return; }
+  res.json(done);
 });
 
 app.post('/replan', async (req: Request, res: Response) => {

@@ -159,8 +159,8 @@ async function main() {
 
     const list = await rpc(key, 'tools/list');
     const names = list.body.result.tools.map((t: { name: string }) => t.name).sort();
-    assert.deepEqual(names, ['centre', 'day', 'residents', 'therapists'], 'the read tools changed');
-    for (const t of list.body.result.tools) assert.equal(t.annotations?.readOnlyHint, true, `${t.name} is not marked read-only`);
+    assert.deepEqual(names, ['centre', 'day', 'history', 'plan', 'residents', 'therapists'], 'the tools changed');
+    for (const t of list.body.result.tools) assert.equal(t.annotations?.readOnlyHint, !['plan', 'history'].includes(t.name), `${t.name} is wrongly marked read-only or not`);
     const size = Buffer.byteLength(JSON.stringify(list.body.result.tools));
     assert.ok(size <= TOOL_LIST_BUDGET_BYTES, `the tool list is ${size} bytes, over its ${TOOL_LIST_BUDGET_BYTES} budget`);
 

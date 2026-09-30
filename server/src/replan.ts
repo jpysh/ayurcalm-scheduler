@@ -21,7 +21,7 @@
  */
 import { PrismaClient, Prisma } from '@prisma/client';
 import { centreClock, offOnDay, stayOn, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow } from './availability.js';
-import { HAPPENING } from './appointmentGuard.js';
+import { HAPPENING, findConflict, loadDay, type Conflict } from './appointmentGuard.js';
 
 /** Which of the tier 4 choices a move is. */
 export type Choice = 'this_time_only' | 'next_free_day' | 'cancel';
@@ -542,6 +542,37 @@ export async function applyPlan(
     },
   });
   return { batch_id: row.id, applied: writes.length };
+}
+
+/**
+ * Accept a plan: every move goes through the guard a booking goes through, and
+ * only if all pass is anything written. Verify's Accept and the assistant's
+ * plan/apply (#120) both come here, so neither can write what the other refuses.
+ */
+export async function acceptPlan(
+  moves: Pin[],
+  prisma: PrismaClient,
+): Promise<{ batch_id: string; applied: number } | { missing: string } | { conflict: Conflict & { appointment_id: string } }> {
+  for (const m of moves) {
+    // Cancelling frees a slot; there is nothing for the guard to refuse.
+    if (m.cancel) continue;
+    const appt = await prisma.appointment.findUnique({ where: { id: m.appointment_id } });
+    if (!appt) return { missing: m.appointment_id };
+    const ctx = await loadDay(new Date(m.date), prisma);
+    const conflict = findConflict({
+      id: appt.id,
+      scheduled_date: new Date(m.date),
+      start_time: m.start_time,
+      duration_minutes: appt.duration_minutes,
+      staff_id: m.staff_id,
+      co_staff_ids: m.co_staff_ids,
+      room_id: m.room_id,
+      patient_id: appt.patient_id,
+      therapy_id: appt.therapy_id,
+    }, ctx);
+    if (conflict) return { conflict: { ...conflict, appointment_id: m.appointment_id } };
+  }
+  return applyPlan(moves, prisma);
 }
 
 /**

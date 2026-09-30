@@ -29,6 +29,7 @@
     "test:day-sheet": "tsx src/tests/daySheet.test.ts",
     "test:onboarding": "tsx src/tests/onboarding.test.ts",
     "test:mcp": "tsx src/tests/mcp.test.ts",
+    "test:mcp-plan": "tsx src/tests/mcpPlan.test.ts",
     "test:stay": "tsx src/tests/residentStay.test.ts",
     "test:card": "tsx src/tests/treatmentCard.test.ts",
     "test:search": "tsx src/tests/search.test.ts",
