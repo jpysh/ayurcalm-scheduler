@@ -203,3 +203,20 @@ export async function bookingSuggestions(dayISO: string, nowMinutes: number | nu
   }
   return out;
 }
+
+/**
+ * Why a chosen resident and therapy got no time at all, when the reason is the
+ * team and not the day: "no free time" would send the admin hunting for another day.
+ */
+export async function whyNoTime(dayISO: string, pick: { patient_id: string; therapy_id: string }, prisma: PrismaClient): Promise<string | undefined> {
+  const ctx = await loadDay(new Date(`${dayISO}T00:00:00.000Z`), prisma);
+  const therapy = ctx.therapies.find((t) => t.id === pick.therapy_id);
+  const patient = ctx.patients.find((x) => x.id === pick.patient_id);
+  if (!therapy || !patient) return undefined;
+  const sameGender = therapy.requires_gender_match && ctx.settings?.enforce_gender_match !== false;
+  const able = ctx.staff.filter((s) => s.is_active && (!s.specializations.length || s.specializations.includes(therapy.id)) && (!sameGender || s.gender === patient.gender)).length;
+  const needed = therapy.staff_required ?? 1;
+  if (able >= needed) return undefined;
+  const who = `${needed === 1 ? 'a therapist' : `${needed} therapists together`}${sameGender ? ` of ${patient.name.split(' ')[0]}'s gender` : ''}`;
+  return `${therapy.name} needs ${who}, and ${able === 0 ? 'nobody here gives it yet' : `only ${able} here ${able === 1 ? 'gives' : 'give'} it`}. Add one in Team and rooms.`;
+}

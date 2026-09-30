@@ -396,6 +396,7 @@ function SomeoneElse({ day, isToday, nowMinutes, opt, back, course, choose }: {
   const [who, setWho] = useState<{ id: string; name: string } | null>(null);
   const [what, setWhat] = useState("");
   const [times, setTimes] = useState<Suggestion[] | null>(null);
+  const [why, setWhy] = useState("");
   useEffect(() => {
     fetch(`${API_BASE}/patients?resident_on=${day}`).then((r) => (r.ok ? r.json() : [])).then(setResidents).catch(() => setResidents([]));
     fetch(`${API_BASE}/therapies`).then((r) => (r.ok ? r.json() : [])).then((t: { id: string; name: string }[]) => setTherapies([...t].sort((a, b) => a.name.localeCompare(b.name)))).catch(() => setTherapies([]));
@@ -404,7 +405,7 @@ function SomeoneElse({ day, isToday, nowMinutes, opt, back, course, choose }: {
     if (!who || !what) { setTimes(null); return; }
     setTimes(null);
     fetch(`${API_BASE}/appointments/suggest?date=${day}&patient_id=${who.id}&therapy_id=${what}${isToday ? `&now=${hm(nowMinutes)}` : ""}`)
-      .then((r) => (r.ok ? r.json() : { suggestions: [] })).then((d) => setTimes(d.suggestions || []));
+      .then((r) => (r.ok ? r.json() : { suggestions: [] })).then((d) => { setTimes(d.suggestions || []); setWhy(d.why || ""); });
   }, [who, what, day, isToday, nowMinutes]);
   const shown = residents.filter((p) => !q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 6);
   const input = "h-11 w-full rounded-xl border bg-background px-3 text-base";
@@ -430,7 +431,7 @@ function SomeoneElse({ day, isToday, nowMinutes, opt, back, course, choose }: {
                 <span>{t.start_time}<small className="block text-[13px] text-muted-foreground">with {t.staff_name} · {t.room_name}</small></span><span>›</span>
               </button>
             ))
-              : <p className="text-sm text-muted-foreground">No free time for {who.name.split(" ")[0]} on this day. Try another day or therapy.</p>
+              : <p className="text-sm text-muted-foreground">{why || `No free time for ${who.name.split(" ")[0]} on this day. Try another day or therapy.`}</p>
         ) : null}
       </>)}
       <button type="button" className="text-sm text-muted-foreground underline" onClick={course}>A course over several days…</button>

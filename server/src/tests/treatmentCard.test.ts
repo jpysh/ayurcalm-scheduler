@@ -123,6 +123,12 @@ async function main() {
     const booked = await call('POST', '/appointments/one', { ...two, co_staff_ids: together[0].co_staff_ids });
     assert.deepEqual(booked.co_staff_ids, together[0].co_staff_ids, 'the second therapist was not saved on the booking');
 
+    // With only one of them trained for it there is no time, and the answer says why instead of "no free time".
+    await call('PUT', `/staff/${bina.id}`, { specializations: [therapy.id] });
+    const short = await call('GET', `/appointments/suggest?date=${DAY}&patient_id=${sita.id}&therapy_id=${pair.id}`);
+    assert.equal(short.suggestions.length, 0, 'a two-therapist therapy was offered with one trained therapist');
+    assert.match(short.why, /needs 2 therapists together.*only 1 here gives it/, `the reason was not given: ${short.why}`);
+
     console.log("Treatment card: every time and room offered saves, a busy therapist isn't offered, a no-show frees theirs, and History says what changed; a suggested booking saves once and not twice; a chosen resident gets three free times; a two-therapist therapy books with both.");
   } finally {
     await tidy(prisma).catch(() => {});

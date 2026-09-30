@@ -12,7 +12,7 @@ import { findConflict, HAPPENING, loadDay, nearestFreeTime, staffDay } from './a
 import { replanStaffDay, applyPlan, undoReplan, type Pin } from './replan.js';
 import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
 import { centreClock, eventClashes, type EventRow } from './availability.js';
-import { bookingSuggestions, cardChoices } from './cardChoices.js';
+import { bookingSuggestions, cardChoices, whyNoTime } from './cardChoices.js';
 import { historyOf } from './history.js';
 import { searchTreatments } from './search.js';
 import { residentDay } from './residentDay.js';
@@ -1455,7 +1455,8 @@ app.get('/appointments/suggest', async (req: Request, res: Response) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { res.status(400).json({ error: 'date required' }); return; }
   const now = typeof req.query.now === 'string' && /^\d\d:\d\d$/.test(req.query.now) ? Number(req.query.now.slice(0, 2)) * 60 + Number(req.query.now.slice(3)) : null;
   const pick = z.object({ patient_id: z.string().uuid(), therapy_id: z.string().uuid() }).safeParse(req.query);
-  res.json({ suggestions: await bookingSuggestions(date, now, prisma, 3, pick.success ? pick.data : undefined) });
+  const suggestions = await bookingSuggestions(date, now, prisma, 3, pick.success ? pick.data : undefined);
+  res.json({ suggestions, why: pick.success && !suggestions.length ? await whyNoTime(date, pick.data, prisma) : undefined });
 });
 
 // Book one treatment at an exact time, therapist and room: what the + sheet
