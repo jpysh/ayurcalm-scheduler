@@ -24,7 +24,7 @@ export function useTherapiesScreen({ therapies, setTherapies, amenityOptions, re
   totalRef.current = rows.length;
 
   const tab = (
-    <SetupPage title="Therapies" note={`${therapies.length}`} add={["Add therapy", () => setOpen("new")]}
+    <SetupPage title="Therapies" note={`${therapies.length}`}
       extra={<button type="button" className="min-h-11 rounded-full border px-4 font-semibold" onClick={() => setShowLibrary(true)}>From library</button>}
       search={search} setSearch={setSearch} placeholder="Search therapies">
       {rows.map((t) => <Row key={t.id} name={t.name} sub={therapySub(t)} onClick={() => setOpen(t)} />)}
@@ -36,5 +36,5 @@ export function useTherapiesScreen({ therapies, setTherapies, amenityOptions, re
       onSaved={(x) => setTherapies((prev) => prev.some((t) => t.id === x.id) ? prev.map((t) => t.id === x.id ? x : t) : [...prev, x])}
       remove={(t) => requestDelete("therapy", String(t.id), t.name)} />
   </>);
-  return { tab, dialogs, setVisibleRows: (_: number) => {}, totalRef, openLibrary: () => setShowLibrary(true) };
+  return { tab, dialogs, setVisibleRows: (_: number) => {}, totalRef, openAdd: () => setOpen("new"), openLibrary: () => setShowLibrary(true) };
 }

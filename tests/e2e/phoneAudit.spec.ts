@@ -46,7 +46,7 @@ test('B2: resident details never say "Not staying" for someone in house', async 
   await page.getByRole('button', { name: /^Details/ }).last().click();
   const sheet = page.getByRole('dialog').last();
   await expect(sheet).not.toContainText('Not staying');
-  await expect(sheet).toContainText('→', { timeout: 10000 });
+  await expect(sheet).toContainText(/\d+ \w{3} to \d+ \w{3}/, { timeout: 10000 });
   await expect(sheet).not.toContainText('Not staying');
 });
 

@@ -13,7 +13,7 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '@
  * Everything a job changes is undone, and the two days it touches are
  * compared back through the API.
  */
-const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Patient didn't come", 'Patient late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day', "A patient's meals today"]);
+const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Patient didn't come", 'Patient late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day', "A patient's meals today", 'Add an arriving patient', 'Find a patient']);
 
 /** The design's order, which is the order the table prints in. */
 const JOBS: [string, number][] = [
@@ -26,9 +26,14 @@ const JOBS: [string, number][] = [
   ['Therapist not in', 3],
   // Row, Something wrong?, the room: the design's 2 starts from the card open.
   ['Room out of use', 3],
-  ['Book one treatment', 2],
+  // Who, then Book: one tap more than the old suggestion, bought by a choice of who, therapist, room and time (story 5, accepted).
+  ['Book one treatment', 3],
   ["A patient's meals today", 2],
   ["Print today's sheets", 1],
+  // From the Patients screen. Story 4 says 2; the gender is one tap because nothing is chosen for them (#283).
+  ['Add an arriving patient', 3],
+  // From the Patients screen: Search, then the person (typing is not counted).
+  ['Find a patient', 2],
 ];
 
 const ADMIN = { email: 'admin@example.com', password: 'demo1234' };
@@ -215,10 +220,11 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       return 'the therapist rota is a second tap, on the note that follows';
     });
 
-    // + offers the server's next free time for the residents furthest behind (#136).
+    // + asks who, then fills the rest in with a free time, therapist and room (#285 story 5).
     await job(page, rows, 'Book one treatment', async (tap) => {
       await showDay(page, day);
       await tap(page.getByRole('button', { name: 'Book a treatment' }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /Day \d+ of/ }).first());
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Book / }));
       const note = page.locator('[data-sonner-toast]').filter({ hasText: /^Booked/ });
       await expect(note).toBeVisible({ timeout: 20000 });
@@ -264,6 +270,32 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await expect(note).toBeVisible({ timeout: 20000 });
       await note.getByRole('button', { name: 'Undo' }).click();
       return 'the design counts the card as open';
+    });
+
+    await job(page, rows, 'Add an arriving patient', async (tap) => {
+      await page.goto('/admin/patients');
+      await page.getByRole('button', { name: 'New patient' }).waitFor();
+      await tap(page.getByRole('button', { name: 'New patient' }));
+      await page.getByRole('dialog').getByLabel('Name', { exact: true }).fill('Tapcount Meera');
+      await tap(page.getByRole('dialog').getByRole('button', { name: 'Female' }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: 'Add Tapcount Meera' }));
+      await expect(page.getByRole('dialog').last().getByRole('button', { name: /^Diet/ })).toBeVisible({ timeout: 15000 });
+      const mine = ((await call.get('/patients')) as { id: string; name: string }[]).filter((p) => p.name === 'Tapcount Meera');
+      for (const p of mine) await must(`DELETE /patients/${p.id}`, await call.del(`/patients/${p.id}`));
+      await page.keyboard.press('Escape');
+      return 'from the Patients screen; the consultation is pre-booked';
+    });
+
+    await job(page, rows, 'Find a patient', async (tap) => {
+      await page.goto('/admin/patients');
+      await tap(page.getByRole('button', { name: /^Search patients/ }));
+      await page.keyboard.type('sha');
+      await tap(page.getByText(/Diet:/).first());
+      await expect(page.getByRole('dialog').last().getByRole('button', { name: /^Diet/ })).toBeVisible({ timeout: 15000 });
+      // Closing the card returns to the results; the search is left with its own Cancel.
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await page.getByRole('button', { name: /^Cancel/ }).click();
     });
 
     await job(page, rows, 'Therapist not in', async (tap) => {

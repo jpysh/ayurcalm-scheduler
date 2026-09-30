@@ -12,7 +12,8 @@ import { findConflict, HAPPENING, loadDay, nearestFreeTime, staffDay } from './a
 import { replanStaffDay, acceptPlan, undoReplan, type Pin } from './replan.js';
 import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
 import { centreClock, eventClashes, type EventRow } from './availability.js';
-import { bookingSuggestions, cardChoices, whyNoTime } from './cardChoices.js';
+import { loadDietsForDay } from './dietResolution.js';
+import { bookingOptions, bookingSuggestions, bookingWho, cardChoices, nextConsultations, whyNoTime } from './cardChoices.js';
 import { historyOf } from './history.js';
 import { searchTreatments } from './search.js';
 import { residentDay } from './residentDay.js';
@@ -443,6 +444,24 @@ app.get('/patients', async (req: Request, res: Response) => {
   res.json(data);
 });
 
+// The Patients search (#285 story 6): by name or by the diet plan they are on, each with the facts a decision needs.
+app.get('/patients/find', async (req: Request, res: Response) => {
+  const q = z.object({ q: z.string().trim().min(1).max(100), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
+  const day = new Date(`${q.date}T00:00:00.000Z`);
+  const [patients, diets] = await Promise.all([prisma.patient.findMany({ include: { Stays: { orderBy: { start_date: 'desc' } } } }), loadDietsForDay(day, prisma)]);
+  const ql = q.q.toLowerCase();
+  const found = patients.map((p) => {
+    const stay = p.Stays.find((s) => s.start_date <= day && s.end_date >= day);
+    return { p, stay, plan: stay ? diets.dietFor(p, false).planName || '' : '' };
+  }).filter((x) => x.p.name.toLowerCase().includes(ql) || x.plan.toLowerCase().includes(ql)).sort((a, b) => Number(!!b.stay) - Number(!!a.stay) || a.p.name.localeCompare(b.p.name)).slice(0, 40);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  res.json({ patients: found.map(({ p, stay, plan }) => ({
+    id: p.id, name: p.name, plan,
+    stay: stay ? { start: iso(stay.start_date), end: iso(stay.end_date) } : null,
+    last_end: stay ? null : p.Stays[0] ? iso(p.Stays[0].end_date) : null,
+  })) });
+});
+
 app.post('/patients', async (req: Request, res: Response) => {
   const schema = z.object({
     name: z.string(),
@@ -452,23 +471,41 @@ app.post('/patients', async (req: Request, res: Response) => {
     date_of_birth: z.string().optional(),
     emergency_contact: z.string().optional(),
     emergency_phone: z.string().optional(),
+    address: z.string().optional(),
+    country: z.string().optional(),
+    id_number: z.string().optional(),
+    registration_number: z.string().optional(),
     medical_notes: z.string().optional(),
     preferred_staff_id: z.string().uuid().nullable().optional(),
     requires_preferred_staff: z.boolean().optional(),
+    /** False for a day patient. */
+    on_site: z.boolean().default(true),
+    /** The consultation to book with them, as `/consultations/next` offered it; none if left out. */
+    consultation: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), start_time: z.string().regex(/^\d\d:\d\d$/), staff_id: z.string().uuid(), room_id: z.string().uuid() }).optional(),
     /** Arriving and leaving. Without a stay a resident is never "in house" and never on the day sheet (#142). */
     stay: staySchema.optional(),
     /** The diet plan they follow for the whole stay. */
     template_id: z.string().uuid().optional(),
   });
   const body = schema.parse(req.body);
-  const data: any = { name: body.name, gender: body.gender, phone: body.phone, email: body.email, emergency_contact: body.emergency_contact, emergency_phone: body.emergency_phone, medical_notes: body.medical_notes, preferred_staff_id: body.preferred_staff_id, requires_preferred_staff: body.requires_preferred_staff };
+  const data: any = { name: body.name, gender: body.gender, phone: body.phone, email: body.email, emergency_contact: body.emergency_contact, emergency_phone: body.emergency_phone, address: body.address, country: body.country, id_number: body.id_number, registration_number: body.registration_number, medical_notes: body.medical_notes, preferred_staff_id: body.preferred_staff_id, requires_preferred_staff: body.requires_preferred_staff };
   if (body.date_of_birth) data.date_of_birth = new Date(body.date_of_birth);
-  // One save: the resident, their stay and their diet plan, or none of them.
+  // The consultation goes through the same guard as any booking, before anything is saved.
+  const visit = body.consultation && body.stay ? body.consultation : null;
+  const consult = visit ? await prisma.therapy.findFirst({ where: { is_consultation: true } }) : null;
+  if (visit && consult) {
+    if (body.stay && (visit.date < body.stay.start_date || visit.date > body.stay.end_date)) { res.status(409).json({ reason: 'NOT_STAYING', message: 'The consultation is outside the stay.' }); return; }
+    const day = new Date(`${visit.date}T00:00:00.000Z`);
+    const conflict = findConflict({ scheduled_date: day, start_time: visit.start_time, duration_minutes: consult.duration_minutes, staff_id: visit.staff_id, co_staff_ids: [], room_id: visit.room_id, patient_id: '', therapy_id: consult.id }, await loadDay(day, prisma));
+    if (conflict) { res.status(409).json(conflict); return; }
+  }
+  // One save: the resident, their stay, their diet plan and their consultation, or none of them.
   const p = await prisma.$transaction(async (tx) => {
     const created = await tx.patient.create({ data });
     if (body.stay) {
       const stay = stayData(body.stay);
-      await tx.patientStay.create({ data: { patient_id: created.id, ...stay } });
+      await tx.patientStay.create({ data: { patient_id: created.id, ...stay, on_site: body.on_site } });
+      if (visit && consult) await tx.appointment.create({ data: { patient_id: created.id, therapy_id: consult.id, staff_id: visit.staff_id, room_id: visit.room_id, scheduled_date: new Date(`${visit.date}T00:00:00.000Z`), start_time: visit.start_time, duration_minutes: consult.duration_minutes, co_staff_ids: [], session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
       if (body.template_id) await tx.dietPlanSegment.create({ data: { patient_id: created.id, start_date: stay.start_date, end_date: stay.end_date, template_id: body.template_id } });
     }
     return tx.patient.findUnique({ where: { id: created.id }, include: { Stays: true } });
@@ -486,6 +523,10 @@ app.put('/patients/:id', async (req: Request, res: Response) => {
     date_of_birth: z.string().optional(),
     emergency_contact: z.string().optional(),
     emergency_phone: z.string().optional(),
+    address: z.string().optional(),
+    country: z.string().optional(),
+    id_number: z.string().optional(),
+    registration_number: z.string().optional(),
     medical_notes: z.string().optional(),
     preferred_staff_id: z.string().uuid().nullable().optional(),
     requires_preferred_staff: z.boolean().optional(),
@@ -1441,6 +1482,24 @@ app.get('/appointments/suggest', async (req: Request, res: Response) => {
   const pick = z.object({ patient_id: z.string().uuid(), therapy_id: z.string().uuid() }).safeParse(req.query);
   const suggestions = await bookingSuggestions(date, now, prisma, 3, pick.success ? pick.data : undefined);
   res.json({ suggestions, why: pick.success && !suggestions.length ? await whyNoTime(date, pick.data, prisma) : undefined });
+});
+
+// The one booking sheet (#285 story 5): who to offer, and the free times, therapists and rooms for the one chosen.
+app.get('/appointments/who', async (req: Request, res: Response) => {
+  const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.query.date);
+  res.json(await bookingWho(date, prisma));
+});
+app.get('/appointments/options', async (req: Request, res: Response) => {
+  const q = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), patient_id: z.string().uuid(), therapy_id: z.string().uuid(), at: z.string().regex(/^\d\d:\d\d$/).optional(), now: z.string().regex(/^\d\d:\d\d$/).optional() }).parse(req.query);
+  const out = await bookingOptions(q.date, q.now ? Number(q.now.slice(0, 2)) * 60 + Number(q.now.slice(3)) : null, q, q.at, prisma);
+  if (!out) { res.status(404).json({ error: 'Patient or therapy not found' }); return; }
+  res.json(out);
+});
+
+// The consultation a new patient is pre-booked into (#285 story 4): the next free doctor and room.
+app.get('/consultations/next', async (req: Request, res: Response) => {
+  const q = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), now: z.string().regex(/^\d\d:\d\d$/).optional() }).parse(req.query);
+  res.json({ slots: await nextConsultations(q.date, q.now ? Number(q.now.slice(0, 2)) * 60 + Number(q.now.slice(3)) : null, prisma) });
 });
 
 // Book one treatment at an exact time, therapist and room: what the + sheet

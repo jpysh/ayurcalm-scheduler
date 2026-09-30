@@ -32,6 +32,7 @@
     "test:mcp-plan": "tsx src/tests/mcpPlan.test.ts",
     "test:stay": "tsx src/tests/residentStay.test.ts",
     "test:card": "tsx src/tests/treatmentCard.test.ts",
+    "test:new-patient": "tsx src/tests/newPatient.test.ts",
     "test:search": "tsx src/tests/search.test.ts",
     "test:resident-day": "tsx src/tests/residentDay.test.ts",
     "test:log": "tsx src/tests/changeLog.test.ts"

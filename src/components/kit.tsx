@@ -40,9 +40,29 @@ export const Group = ({ label, note, children }: { label: string; note?: ReactNo
   </div>
 );
 
-export const Text = ({ label, note, className = "", ...rest }: { label: string; note?: ReactNode } & InputHTMLAttributes<HTMLInputElement>) => (
-  <Field label={label} note={note}><input className={`${field} ${className}`} {...rest} /></Field>
+/** `valid` puts the green check at the end of the box: the field is right, nothing more to do here. */
+export const Text = ({ label, note, valid, className = "", ...rest }: { label: string; note?: ReactNode; valid?: boolean } & InputHTMLAttributes<HTMLInputElement>) => (
+  <Field label={label} note={note}>
+    <span className="relative block">
+      <input className={`${field} ${valid ? "pr-10" : ""} ${className}`} {...rest} />
+      {valid ? <span aria-hidden className="absolute inset-y-0 right-3.5 flex items-center font-bold text-primary">✓</span> : null}
+    </span>
+  </Field>
 );
+
+/** "More details (optional)": what is not needed yet stays folded, one tap away. */
+export function More({ label = "More details", hint, children }: { label?: string; hint?: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-3">
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-dashed px-3 text-left">
+        <span className="font-semibold">{label}</span>
+        <span className={`flex min-w-0 items-center gap-1 ${noteText}`}><span className="truncate">{hint}</span><span aria-hidden>{open ? "⌄" : "›"}</span></span>
+      </button>
+      {open ? <div className="pt-1">{children}</div> : null}
+    </div>
+  );
+}
 
 /** The phone's own list: one tap opens it, one picks. `required` with nothing chosen reads as a prompt, in grey. */
 export const Dropdown = ({ label, note, children, ...rest }: { label: string; note?: ReactNode; children: ReactNode } & SelectHTMLAttributes<HTMLSelectElement>) => (
@@ -340,26 +360,57 @@ export const ErrorLine = ({ text, retry }: { text: string; retry?: () => void })
 );
 
 /**
- * Booking on one sheet (story 5). "Who" first: at most five suggestions, then the
- * search field at the bottom above the keyboard; choosing one fills the rest in place.
+ * Booking on one sheet (story 5). "Who" first: at most five suggestions, and the
+ * search field (`SearchField`, in the sheet's foot, at the bottom above the keyboard)
+ * filters everyone. Choosing one fills the rest in place.
  */
-export function WhoPicker<T extends { id: string; name: string; note?: string }>({ suggestions, all, chosen, onChoose }: { suggestions: T[]; all: T[]; chosen: string | null; onChoose: (p: T) => void }) {
-  const [q, setQ] = useState("");
+export function WhoPicker<T extends { id: string; name: string; note?: string }>({ groups, all, q, chosen, onChoose }: { groups: { title: string; list: T[] }[]; all: T[]; q: string; chosen: string | null; onChoose: (p: T) => void }) {
   const ql = q.trim().toLowerCase();
-  const list = ql ? all.filter((p) => p.name.toLowerCase().includes(ql)).slice(0, 8) : suggestions.slice(0, 5);
-  return (
-    <div>
-      <ListGroup title={ql ? "Matches" : "No treatment yet today"}>
-        {list.length ? list.map((p) => <Row key={p.id} title={p.name} facts={p.note} trailing={chosen === p.id ? "✓" : undefined} onClick={() => onChoose(p)} />) : <Empty text="No one found." />}
-      </ListGroup>
-      <input className={`${field} mt-3`} placeholder="Search patients" aria-label="Search patients" value={q} onChange={(e) => setQ(e.target.value)} />
-    </div>
-  );
+  const row = (p: T) => <Row key={p.id} title={p.name} facts={p.note} trailing={chosen === p.id ? "✓" : undefined} onClick={() => onChoose(p)} />;
+  if (ql) {
+    const list = all.filter((p) => p.name.toLowerCase().includes(ql)).slice(0, 8);
+    return <ListGroup title="Matches">{list.length ? list.map(row) : <Empty text="No one found." />}</ListGroup>;
+  }
+  const shown = groups.filter((g) => g.list.length);
+  return <div>{shown.length ? shown.map((g) => <ListGroup key={g.title} title={g.title} count={g.list.length}>{g.list.map(row)}</ListGroup>) : <Empty text="No one is staying on this day." />}</div>;
 }
 
-/** A booking line: label over the value, tap to change ("Therapist · Kriti ›"). */
-export const ChangeLine = ({ label, value, onClick }: { label: string; value: ReactNode; onClick: () => void }) => (
-  <button type="button" onClick={onClick} className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-border text-left last:border-b-0">
-    <span className={noteText}>{label}</span><span className="flex min-w-0 items-center gap-1 font-semibold"><span className="truncate">{value}</span><span aria-hidden className="text-muted-foreground">›</span></span>
-  </button>
+/** The field at the bottom of a sheet, above the keyboard: the same box as Search in the bar. */
+export const SearchField = ({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) => (
+  <div className="flex h-12 items-center gap-2 rounded-full border bg-background px-3 focus-within:border-primary focus-within:shadow-[0_0_0_3px_hsl(var(--primary)/0.18)]">
+    <SearchIcon className="h-5 w-5 flex-none text-muted-foreground" />
+    <input type="text" enterKeyHint="search" autoComplete="off" placeholder={placeholder} aria-label={placeholder} className="h-full min-w-0 flex-1 bg-transparent text-base outline-none" value={value} onChange={(e) => onChange(e.target.value)} />
+  </div>
+);
+
+/**
+ * A line: label on the left, the value on the right, tap to change ("Therapist · Kriti ›").
+ * With `select` (a <select> or date box) the phone's own list opens under the tap, so a
+ * line changes in one tap. With no `onClick` and no `select` it only tells.
+ */
+export const ChangeLine = ({ label, value, onClick, select, faint }: { label: string; value: ReactNode; onClick?: () => void; select?: ReactNode; faint?: boolean }) => {
+  const cls = "relative flex min-h-12 w-full items-center justify-between gap-3 border-b border-border text-left last:border-b-0";
+  const inner = (
+    <>
+      <span className={noteText}>{label}</span>
+      <span className={`flex min-w-0 items-center gap-1 ${faint ? "text-muted-foreground" : "font-semibold"}`}><span className="truncate">{value}</span>{onClick || select ? <span aria-hidden className="text-muted-foreground">›</span> : null}</span>
+      {select}
+    </>
+  );
+  return onClick ? <button type="button" onClick={onClick} className={cls}>{inner}</button> : <div className={cls}>{inner}</div>;
+};
+
+/** The phone's calendar laid over a ChangeLine, the way DateRow does it. */
+export const LineDate = ({ label, value, onChange, min }: { label: string; value: string; onChange: (iso: string) => void; min?: string }) => (
+  <input type="date" aria-label={label} value={value.slice(0, 10)} min={min} className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+    onClick={(e) => { try { (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* already open */ } }}
+    onChange={(e) => { if (e.target.value) onChange(e.target.value); }} />
+);
+
+/** The <select> laid over a ChangeLine: invisible, whole-row, so the tap lands on it. Free choices first; busy ones stay in the list, greyed. */
+export const LineSelect = ({ label, value, onChange, free, busy = [] }: { label: string; value: string; onChange: (v: string) => void; free: { id: string; name: string; tag?: string }[]; busy?: { id: string; name: string; why?: string }[] }) => (
+  <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
+    {free.map((o) => <option key={o.id} value={o.id}>{o.name}{o.tag ? ` · ${o.tag}` : ""}</option>)}
+    {busy.length ? <optgroup label="Busy then">{busy.map((o) => <option key={o.id} value={o.id} disabled>{o.name}{o.why ? ` · ${o.why}` : ""}</option>)}</optgroup> : null}
+  </select>
 );

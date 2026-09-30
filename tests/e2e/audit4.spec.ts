@@ -24,7 +24,8 @@ test('H1: rooms, therapists and therapies are plain rows with one sheet to add',
   const panel = page.locator('[role=tabpanel][data-state=active]');
   await expect(panel).not.toContainText('Status');
   await expect(panel).not.toContainText('Amenities');
-  await panel.getByRole('button', { name: /Add room/ }).click();
+  // + adds what the screen is about (#285): its name says what.
+  await page.getByRole('button', { name: 'Add room' }).click();
   const sheet = page.getByRole('dialog');
   await sheet.getByLabel('Name').fill('E2E Room');
   // A new room starts with what the therapies need ticked (#273 U2); the admin unticks what it lacks.
@@ -42,22 +43,21 @@ test('H1: rooms, therapists and therapies are plain rows with one sheet to add',
     await page.goto('/admin/team');
     await page.getByRole('button', { name: list, exact: true }).click();
     await expect(panel).not.toContainText(word);
-    await panel.getByRole('button', { name: /^\+ Add/ }).click();
+    await page.getByRole('button', { name: list === 'Therapists' ? 'Add therapist or doctor' : 'Add therapy' }).click();
     await expect(page.getByRole('dialog').getByLabel('Name')).toBeVisible();
   }
 });
 
-test('H2: Someone else… books any resident in a sheet, not the old Auto-Assign dialog', async ({ page }) => {
+test('H2: booking is one sheet: who, then every line filled in and changeable, and the button names the outcome', async ({ page }) => {
   await signIn(page);
   await page.getByRole('button', { name: 'Book a treatment' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: /^Someone else/ }).click();
   const sheet = page.getByRole('dialog');
-  await expect(sheet).toContainText('Book someone else');
   await expect(page.getByText('Auto-Assign')).toHaveCount(0);
-  // A resident by what it is not: counting buttons picked Close while the list was still loading.
-  await sheet.getByRole('button').filter({ hasNotText: /Back|A course over|Close/ }).first().click();
-  await sheet.getByLabel('Therapy').selectOption({ label: 'Thalam' });
-  await expect(sheet.getByRole('button', { name: /^\d\d:\d\d/ }).first().or(sheet.getByText(/No free time/))).toBeVisible({ timeout: 15000 });
+  await expect(sheet.getByLabel('Search patients')).toBeVisible();
+  await sheet.getByRole('button', { name: /Day \d+ of/ }).first().click();
+  // Therapy, date, time, therapist and room arrive filled, free ones first.
+  for (const line of ['Therapy', 'Date', 'Time', 'Therapist', 'Room']) await expect(sheet.getByLabel(line, { exact: true })).toBeAttached({ timeout: 15000 });
+  await expect(sheet.getByRole('button', { name: /^Book \w+, / })).toBeEnabled();
 });
 
 test('H3: a read-only trial says so on +, and hides Get started', async ({ page }) => {
@@ -123,7 +123,7 @@ test('U1: a centre with no therapies is asked for them first, and the library op
 test('U3: a long sheet scrolls inside the phone, its top still reachable', async ({ page }) => {
   await signIn(page);
   await toList(page, 'Therapists');
-  await page.locator('[role=tabpanel][data-state=active]').getByRole('button', { name: /^\+ Add/ }).click();
+  await page.getByRole('button', { name: 'Add therapist or doctor' }).click();
   const sheet = page.getByRole('dialog');
   const box = (await sheet.boundingBox())!;
   expect(box.y).toBeGreaterThanOrEqual(0);

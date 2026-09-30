@@ -176,32 +176,122 @@ export async function bookingSuggestions(dayISO: string, nowMinutes: number | nu
   for (const r of ranked) {
     const therapy = ctx.therapies.find((t) => t.id === r.therapy_id);
     if (!therapy) continue;
-    const staff = ctx.staff.filter((s) => s.is_active && (!s.specializations.length || s.specializations.includes(therapy.id)));
-    const rooms = ctx.rooms.filter((x) => x.is_active);
     // ponytail: first fit by time, then therapist, then room; the planner's scoring if a centre asks for better.
-    search: for (let t = from; t + therapy.duration_minutes <= close; t += 15) {
-      for (const s of staff) for (const room of rooms) {
-        if (!works(s.weekly_schedule, day, t, therapy.duration_minutes) || !works(room.weekly_schedule, day, t, therapy.duration_minutes)) continue;
-        const c: Candidate = { scheduled_date: day, start_time: hm(t), duration_minutes: therapy.duration_minutes, staff_id: s.id, co_staff_ids: [], room_id: room.id, patient_id: r.stay.patient_id, therapy_id: therapy.id };
-        // A therapy given by two or more: add each further therapist the guard has nothing against but the head count.
-        const co: string[] = [];
-        for (const o of staff) {
-          if (co.length >= (therapy.staff_required ?? 1) - 1) break;
-          if (o.id === s.id || !works(o.weekly_schedule, day, t, therapy.duration_minutes)) continue;
-          const short = findConflict({ ...c, co_staff_ids: [...co, o.id] }, ctx);
-          if (!short || short.reason === 'STAFF_SHORT') co.push(o.id);
-        }
-        c.co_staff_ids = co;
-        if (findConflict(c, ctx)) continue;
-        const p = ctx.patients.find((x) => x.id === r.stay.patient_id);
-        out.push({ patient_id: c.patient_id, patient_name: p?.name || '', therapy_id: therapy.id, therapy_name: therapy.name, start_time: c.start_time, duration_minutes: c.duration_minutes, staff_id: s.id, staff_name: [s, ...co.map((id) => staff.find((x) => x.id === id)!)].map((x) => x.name).join(' and '), co_staff_ids: co, room_id: room.id, room_name: room.name });
-        if (!pick || out.length >= limit) break search;
-        continue search;
-      }
+    for (let t = from; t + therapy.duration_minutes <= close; t += 15) {
+      const a = assign(ctx, day, t, therapy, r.stay.patient_id);
+      if (!a) continue;
+      out.push(a);
+      if (!pick || out.length >= limit) break;
     }
     if (out.length >= limit) break;
   }
   return out;
+}
+
+type Ctx = Awaited<ReturnType<typeof loadDay>>;
+
+/** The first therapist (and co-therapists) and room the guard accepts for this patient and therapy at `t`. */
+function assign(ctx: Ctx, day: Date, t: number, therapy: Ctx['therapies'][number], patientId: string, preferred?: { staff_id?: string; room_id?: string }): Suggestion | null {
+  const staff = ctx.staff.filter((s) => s.is_active && (!s.specializations.length || s.specializations.includes(therapy.id)));
+  const rooms = ctx.rooms.filter((x) => x.is_active);
+  const first = <T extends { id: string }>(l: T[], id?: string) => (id ? [...l.filter((x) => x.id === id), ...l.filter((x) => x.id !== id)] : l);
+  for (const s of first(staff, preferred?.staff_id)) for (const room of first(rooms, preferred?.room_id)) {
+    if (!works(s.weekly_schedule, day, t, therapy.duration_minutes) || !works(room.weekly_schedule, day, t, therapy.duration_minutes)) continue;
+    const c: Candidate = { scheduled_date: day, start_time: hm(t), duration_minutes: therapy.duration_minutes, staff_id: s.id, co_staff_ids: [], room_id: room.id, patient_id: patientId, therapy_id: therapy.id };
+    // A therapy given by two or more: add each further therapist the guard has nothing against but the head count.
+    const co: string[] = [];
+    for (const o of staff) {
+      if (co.length >= (therapy.staff_required ?? 1) - 1) break;
+      if (o.id === s.id || !works(o.weekly_schedule, day, t, therapy.duration_minutes)) continue;
+      const short = findConflict({ ...c, co_staff_ids: [...co, o.id] }, ctx);
+      if (!short || short.reason === 'STAFF_SHORT') co.push(o.id);
+    }
+    c.co_staff_ids = co;
+    if (findConflict(c, ctx)) continue;
+    const p = ctx.patients.find((x) => x.id === patientId);
+    return { patient_id: c.patient_id, patient_name: p?.name || '', therapy_id: therapy.id, therapy_name: therapy.name, start_time: c.start_time, duration_minutes: c.duration_minutes, staff_id: s.id, staff_name: [s, ...co.map((id) => staff.find((x) => x.id === id)!)].map((x) => x.name).join(' and '), co_staff_ids: co, room_id: room.id, room_name: room.name };
+  }
+  return null;
+}
+
+export type Option = { id: string; name: string; free: boolean; why?: string };
+export type BookingOptions = { times: Suggestion[]; staff: Option[]; rooms: Option[]; why?: string };
+
+/**
+ * The one booking sheet's lists (#285 story 5): every free time for this patient
+ * and therapy that day, best first, and for the chosen time each therapist and
+ * room with whether it is free and, if not, why. Busy ones are listed, greyed in
+ * the app, so a clash is never picked by accident.
+ */
+export async function bookingOptions(dayISO: string, nowMinutes: number | null, pick: { patient_id: string; therapy_id: string }, at: string | undefined, prisma: PrismaClient): Promise<BookingOptions | null> {
+  const day = new Date(`${dayISO}T00:00:00.000Z`);
+  const ctx = await loadDay(day, prisma);
+  const therapy = ctx.therapies.find((t) => t.id === pick.therapy_id);
+  const patient = ctx.patients.find((x) => x.id === pick.patient_id);
+  if (!therapy || !patient) return null;
+  const stay = await prisma.patientStay.findFirst({ where: { patient_id: patient.id, start_date: { lte: day }, end_date: { gte: day } } });
+  if (!stay) return { times: [], staff: [], rooms: [], why: `${patient.name.split(' ')[0]} is not staying on that day.` };
+  const open = toM(ctx.settings?.opening_time || '09:00');
+  const close = toM(ctx.settings?.closing_time || '18:00');
+  const times: Suggestion[] = [];
+  // ponytail: every quarter hour of the day, each checked once; fine for a centre's size.
+  for (let t = Math.ceil(Math.max(open, nowMinutes ?? open) / 15) * 15; t + therapy.duration_minutes <= close; t += 15) {
+    const a = assign(ctx, day, t, therapy, patient.id);
+    if (a) times.push(a);
+  }
+  if (!times.length) return { times, staff: [], rooms: [], why: await whyNoTime(dayISO, pick, prisma) };
+  const chosen = times.find((x) => x.start_time === at) || times[0];
+  const base: Candidate = { scheduled_date: day, start_time: chosen.start_time, duration_minutes: chosen.duration_minutes, staff_id: chosen.staff_id, co_staff_ids: chosen.co_staff_ids, room_id: chosen.room_id, patient_id: patient.id, therapy_id: therapy.id };
+  const t0 = toM(chosen.start_time);
+  const staff: Option[] = ctx.staff.filter((s) => s.is_active && (!s.specializations.length || s.specializations.includes(therapy.id))).map((s) => {
+    const off = !works(s.weekly_schedule, day, t0, therapy.duration_minutes);
+    const c = off ? null : findConflict({ ...base, staff_id: s.id, co_staff_ids: base.co_staff_ids?.filter((id) => id !== s.id) }, ctx);
+    return { id: s.id, name: s.name, free: !off && !c, why: off ? 'not working then' : c?.reason === 'STAFF_BUSY' ? 'has a treatment' : c?.reason === 'STAFF_OFF' ? 'not in' : c?.reason === 'STAFF_IN_EVENT' ? 'in an event' : c ? c.message : undefined };
+  });
+  const rooms: Option[] = ctx.rooms.filter((r) => r.is_active).map((r) => {
+    const off = !works(r.weekly_schedule, day, t0, therapy.duration_minutes);
+    const c = off ? null : findConflict({ ...base, room_id: r.id }, ctx);
+    return { id: r.id, name: r.name, free: !off && !c, why: off ? 'closed then' : c?.reason === 'ROOM_BUSY' ? 'in use' : c?.reason === 'ROOM_OFF' ? 'out of use' : c ? c.message : undefined };
+  });
+  const byFree = (a: Option, b: Option) => Number(b.free) - Number(a.free) || a.name.localeCompare(b.name);
+  return { times, staff: staff.sort(byFree), rooms: rooms.sort(byFree) };
+}
+
+/**
+ * Who the booking sheet offers before anyone types (#285 story 5): at most five
+ * in house with nothing booked that day, those furthest behind first, and a few
+ * that were just booked. Everyone in house comes too, for the search under them.
+ */
+export async function bookingWho(dayISO: string, prisma: PrismaClient) {
+  const day = new Date(`${dayISO}T00:00:00.000Z`);
+  const stays = await prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } }, include: { Patient: { select: { id: true, name: true } } } });
+  const ids = stays.map((s) => s.patient_id);
+  const appts = await prisma.appointment.findMany({
+    where: { patient_id: { in: ids }, status: { notIn: ['cancelled', 'no_show'] } },
+    orderBy: [{ scheduled_date: 'desc' }, { start_time: 'desc' }],
+    select: { patient_id: true, therapy_id: true, scheduled_date: true, created_at: true, Therapy: { select: { name: true, is_consultation: true } } },
+  });
+  const dateLabel = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const rows = stays.map((s) => {
+    const mine = appts.filter((a) => a.patient_id === s.patient_id);
+    const last = mine.find((a) => !a.Therapy.is_consultation && a.scheduled_date <= day) ?? mine.find((a) => !a.Therapy.is_consultation);
+    const today = mine.filter((a) => a.scheduled_date.getTime() === day.getTime());
+    const n = Math.round((day.getTime() - s.start_date.getTime()) / DAY_MS) + 1;
+    const of = Math.round((s.end_date.getTime() - s.start_date.getTime()) / DAY_MS) + 1;
+    return {
+      id: s.patient_id, name: s.Patient.name,
+      note: `Day ${n} of ${of}${last ? ` · last: ${last.Therapy.name.replace(/_/g, ' ')} ${dateLabel(last.scheduled_date)}` : ''}`,
+      therapy_id: last?.therapy_id ?? null,
+      last: last ? { name: last.Therapy.name, date: last.scheduled_date.toISOString().slice(0, 10) } : null,
+      today: today.length,
+      done: mine.filter((a) => a.scheduled_date >= s.start_date && a.scheduled_date <= day).length,
+      booked_at: today.reduce((m, a) => Math.max(m, a.created_at.getTime()), 0),
+    };
+  });
+  const none = rows.filter((r) => !r.today).sort((a, b) => a.done - b.done || a.name.localeCompare(b.name)).slice(0, 5);
+  const recent = rows.filter((r) => r.today).sort((a, b) => b.booked_at - a.booked_at).slice(0, 3);
+  const all = [...rows].sort((a, b) => a.name.localeCompare(b.name));
+  return { none, recent, all };
 }
 
 /**
@@ -219,4 +309,34 @@ export async function whyNoTime(dayISO: string, pick: { patient_id: string; ther
   if (able >= needed) return undefined;
   const who = `${needed === 1 ? 'a therapist' : `${needed} therapists together`}${sameGender ? ` of ${patient.name.split(' ')[0]}'s gender` : ''}`;
   return `${therapy.name} needs ${who}, and ${able === 0 ? 'nobody here gives it yet' : `only ${able} here ${able === 1 ? 'gives' : 'give'} it`}. Add one in Team and rooms.`;
+}
+
+export type ConsultationSlot = { date: string; start_time: string; duration_minutes: number; therapy_id: string; staff_id: string; staff_name: string; room_id: string; room_name: string };
+
+/**
+ * The next free consultation for someone about to arrive (#285 story 4): a
+ * doctor and a room, from `fromISO` on, at times the guard accepts. The
+ * patient does not exist yet, so nothing of theirs can clash.
+ */
+export async function nextConsultations(fromISO: string, nowMinutes: number | null, prisma: PrismaClient, limit = 5): Promise<ConsultationSlot[]> {
+  const therapy = await prisma.therapy.findFirst({ where: { is_consultation: true } });
+  if (!therapy) return [];
+  // ponytail: a week ahead; a centre with no free doctor for a week can book by hand.
+  for (let d = 0; d < 7; d++) {
+    const day = new Date(Date.parse(`${fromISO}T00:00:00.000Z`) + d * DAY_MS);
+    const ctx = await loadDay(day, prisma);
+    const doctors = ctx.staff.filter((s) => s.is_active && s.role === 'doctor');
+    const rooms = ctx.rooms.filter((r) => r.is_active);
+    const open = toM(ctx.settings?.opening_time || '09:00');
+    const close = toM(ctx.settings?.closing_time || '18:00');
+    const out: ConsultationSlot[] = [];
+    for (let t = Math.ceil(Math.max(open, d === 0 ? nowMinutes ?? open : open) / 15) * 15; t + therapy.duration_minutes <= close && out.length < limit; t += 15) {
+      const fit = doctors.flatMap((s) => rooms.map((r) => ({ s, r }))).find(({ s, r }) =>
+        works(s.weekly_schedule, day, t, therapy.duration_minutes) && works(r.weekly_schedule, day, t, therapy.duration_minutes)
+        && !findConflict({ scheduled_date: day, start_time: hm(t), duration_minutes: therapy.duration_minutes, staff_id: s.id, co_staff_ids: [], room_id: r.id, patient_id: '', therapy_id: therapy.id }, ctx));
+      if (fit) out.push({ date: day.toISOString().slice(0, 10), start_time: hm(t), duration_minutes: therapy.duration_minutes, therapy_id: therapy.id, staff_id: fit.s.id, staff_name: fit.s.name, room_id: fit.r.id, room_name: fit.r.name });
+    }
+    if (out.length) return out;
+  }
+  return [];
 }

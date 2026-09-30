@@ -28,7 +28,7 @@ const remember = (q: string) => {
 };
 
 /** The text with every case-insensitive match of q marked, as React nodes: no HTML is built from what was typed. */
-function marked(text: string, q: string): ReactNode {
+export function marked(text: string, q: string): ReactNode {
   if (!q) return text;
   const out: ReactNode[] = [];
   const lower = text.toLowerCase(), ql = q.toLowerCase();
