@@ -48,6 +48,12 @@
 
     --now: 17 88% 40%;
 
+    /* Shape and elevation (DESIGN.md §4): one shadow for everything that floats, one bar height. */
+    --shadow-float: 0 4px 18px rgb(31 42 48 / 0.14);
+    --radius-sheet: 20px;
+    --bar-h: 56px;
+    --bar-gap: 10px;
+
     /* Border radius for accessibility */
     --radius: 0.75rem;
 
@@ -234,3 +240,6 @@
     margin: 0 -1rem; padding: 0.75rem 1rem; background: hsl(var(--background)); border-top: 1px solid hsl(var(--border));
   }
 }
+
+/* The bar gives way to any open sheet, form or keyboard-bearing dialog (DESIGN.md §7). */
+body[data-scroll-locked] [data-kit="bar"], body[data-scroll-locked] [data-kit="pill"] { display: none; }

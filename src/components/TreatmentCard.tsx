@@ -77,7 +77,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
 
   if (!appt) return null;
   const nameIn = (list: Named[], id: unknown) => list.find((x) => String(x.id) === String(id))?.name || "";
-  const who = nameIn(patients, appt.patient_id) || "Resident";
+  const who = nameIn(patients, appt.patient_id) || "Patient";
   const first = who.split(" ")[0];
   const team = [appt.staff_id, ...(appt.co_staff_ids || [])].filter((x): x is string => Boolean(x));
   const st = toM(appt.start_time), en = st + appt.duration_minutes;
@@ -311,7 +311,7 @@ type Suggestion = {
 
 /**
  * Book one treatment from + (#136): the server's next free time for the
- * residents furthest behind on their stay, the best one chosen, one tap to book.
+ * patients furthest behind on their stay, the best one chosen, one tap to book.
  * "Someone else…" is the full booking form.
  */
 export function BookSheet({ open, onClose, day, isToday, nowMinutes, refresh, other }: {
@@ -361,7 +361,7 @@ export function BookSheet({ open, onClose, day, isToday, nowMinutes, refresh, ot
       {!other_ ? (
       <div className="flex flex-col gap-3">
         <div className="-mt-2 text-[13px] text-muted-foreground">
-          {list === null ? "Finding the next free time…" : chosen ? `Next free: ${chosen.start_time} · ${chosen.staff_name} · ${chosen.room_name} · residents furthest behind on their stay` : "No suggestion yet: suggestions follow each resident's past treatments. Tap Someone else… to choose."}
+          {list === null ? "Finding the next free time…" : chosen ? `Next free: ${chosen.start_time} · ${chosen.staff_name} · ${chosen.room_name} · patients furthest behind on their stay` : "No suggestion yet: suggestions follow each resident's past treatments. Tap Someone else… to choose."}
         </div>
         <div className="flex flex-col gap-1.5">
           {(list || []).map((s, i) => (
@@ -413,7 +413,7 @@ function SomeoneElse({ day, isToday, nowMinutes, opt, back, course, choose }: {
     <div className="flex flex-col gap-3">
       <button type="button" className="-mt-2 self-start text-sm font-semibold text-primary" onClick={back}>‹ Back</button>
       {!who ? (<>
-        <input autoFocus className={input} placeholder="Resident's name" aria-label="Resident's name" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input autoFocus className={input} placeholder="Patient's name" aria-label="Patient's name" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="flex flex-col gap-1.5">
           {shown.map((p) => <button key={p.id} type="button" className={opt} onClick={() => setWho(p)}>{p.name}</button>)}
           {!shown.length ? <p className="text-sm text-muted-foreground">Nobody staying on this day has that name.</p> : null}

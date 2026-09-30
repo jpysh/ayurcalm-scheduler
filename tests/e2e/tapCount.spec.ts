@@ -13,21 +13,21 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '@
  * Everything a job changes is undone, and the two days it touches are
  * compared back through the API.
  */
-const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Resident didn't come", 'Resident late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day', "A resident's meals today"]);
+const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Patient didn't come", 'Patient late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day', "A patient's meals today"]);
 
 /** The design's order, which is the order the table prints in. */
 const JOBS: [string, number][] = [
   ['See today at a glance', 0],
   ['Warning → fixed day', 2],
-  ["Resident didn't come", 3],
+  ["Patient didn't come", 3],
   // Row, When, a time: the design's 2 starts from the card already open (#136).
-  ['Resident late → move one treatment', 3],
+  ['Patient late → move one treatment', 3],
   // The design's 2 assumes the day is already by therapist; from by time it is 3 (#62).
   ['Therapist not in', 3],
   // Row, Something wrong?, the room: the design's 2 starts from the card open.
   ['Room out of use', 3],
   ['Book one treatment', 2],
-  ["A resident's meals today", 2],
+  ["A patient's meals today", 2],
   ["Print today's sheets", 1],
 ];
 
@@ -196,12 +196,12 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     });
 
     // From the day: a treatment's row, then the resident's name opens their card with today's meals.
-    await job(page, rows, "A resident's meals today", async (tap) => {
+    await job(page, rows, "A patient's meals today", async (tap) => {
       await showDay(page, today);
-      // Any row on screen: the day opens at now, so after the morning the first row is above the fold.
+      // A row a thumb can reach: not under the sticky day header, the pill or the bar. The day opens at now, so which row that is moves through the day.
       const treatments = activePanel(page).getByRole('button', { name: /^\d\d:\d\d/ });
       await treatments.first().waitFor();
-      const onScreen = await treatments.evaluateAll((els) => Math.max(0, els.findIndex((el) => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight - 80; })));
+      const onScreen = await treatments.evaluateAll((els) => Math.max(0, els.findIndex((el) => { const r = el.getBoundingClientRect(); if (r.top < 0 || r.bottom > innerHeight - 130) return false; const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!hit && el.contains(hit); })));
       await tap(treatments.nth(onScreen));
       await tap(page.getByRole('dialog').locator('button.text-\\[22px\\]'));
       await expect(page.getByRole('dialog')).toContainText('Meals today');
@@ -233,7 +233,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       // Arrive at the day afresh, so the app checks it after the room went out.
       await showDay(page, today);
       await showDay(page, day);
-      await tap(page.getByRole('button', { name: /to fix/ }));
+      await tap(page.getByRole('button', { name: /need you/ }));
       const sheet = page.getByRole('dialog');
       // The first action row's own button: the one that does the thing (#164).
       await tap(sheet.locator('[data-main]').first());
@@ -245,7 +245,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     // The treatment card (#136): a treatment still to come on the walk's day.
     // Not a no-show: its card has no "Something wrong?" (#211), and scripts/shots.mjs leaves one behind.
     const upcoming = () => activePanel(page).getByRole('button', { name: /^\d\d:\d\d/ }).filter({ hasNotText: "didn't come" }).first();
-    await job(page, rows, "Resident didn't come", async (tap) => {
+    await job(page, rows, "Patient didn't come", async (tap) => {
       await showDay(page, day);
       await tap(upcoming());
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Something wrong/ }));
@@ -255,7 +255,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await note.getByRole('button', { name: 'Undo' }).click();
     });
 
-    await job(page, rows, 'Resident late → move one treatment', async (tap) => {
+    await job(page, rows, 'Patient late → move one treatment', async (tap) => {
       await showDay(page, day);
       await tap(upcoming());
       await tap(page.getByRole('dialog').getByRole('button', { name: /^When/ }));

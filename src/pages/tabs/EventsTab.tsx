@@ -163,7 +163,7 @@ export function useEventsScreen({ events, setEvents, roomsList, staff, staffName
             </select>
           </label>
           <fieldset className="grid gap-1">
-            <legend className="mb-1 text-[13px] text-muted-foreground">Residents</legend>
+            <legend className="mb-1 text-[13px] text-muted-foreground">Patients</legend>
             <div className="flex flex-wrap gap-2">
               <button type="button" aria-pressed={!form.is_optional} className={chip(!form.is_optional)} onClick={() => set({ is_optional: false })}>Everyone attends</button>
               <button type="button" aria-pressed={form.is_optional} className={chip(form.is_optional)} onClick={() => set({ is_optional: true })}>Optional</button>

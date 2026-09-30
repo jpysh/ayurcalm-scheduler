@@ -77,7 +77,7 @@ export function SearchScreen({ query, setQuery, today, nowMinutes, residents, th
         <div className="flex flex-wrap gap-1.5">{list.map((x) => <button key={x} type="button" className={chipb()} onClick={() => setQuery(x)}>{x}</button>)}</div>
       </>
     ) : null;
-    return <div>{chips("Recent", readRecent())}{chips("Residents", residents.slice(0, 6))}{chips("Therapists", therapists)}</div>;
+    return <div>{chips("Recent", readRecent())}{chips("Patients", residents.slice(0, 6))}{chips("Therapists", therapists)}</div>;
   }
 
   const isPast = (h: Hit) => h.date < today || (h.date === today && toM(h.start_time) + h.duration_minutes <= nowMinutes);

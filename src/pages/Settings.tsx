@@ -51,7 +51,7 @@ const PickImage = ({ id, has, disabled, onPick }: { id: string; has: boolean; di
 const planHint = (t: { ends_at: string | null; read_only: boolean; plan: string | null; paid_until: string | null }) => {
   const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   if (t.plan) return `${PLANS.find((p) => p.id === t.plan)?.name ?? t.plan}${t.paid_until ? `, paid until ${day(t.paid_until)}` : ""}${t.read_only ? " (overdue)" : ""}`;
-  if (!t.ends_at) return "Free trial: 30 days start with your first resident or printed sheet";
+  if (!t.ends_at) return "Free trial: 30 days start with your first patient or printed sheet";
   if (t.read_only) return "Free trial ended: read-only, nothing deleted";
   const d = Math.ceil((Date.parse(t.ends_at) - Date.now()) / 86400000);
   return `Free trial: ${d} ${d === 1 ? "day" : "days"} left`;
@@ -219,7 +219,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
   const clearDemoData = async () => {
     const going = KEEPS.filter(([k]) => !keep.includes(k)).map(([, t]) => t.toLowerCase());
     if (!(await confirmSheet(
-      `Delete the demo residents and bookings${going.length ? `, and ${going.join(", ")}` : ""}?\n\n` +
+      `Delete the demo patients and bookings${going.length ? `, and ${going.join(", ")}` : ""}?\n\n` +
       "Your account and centre settings are kept. This cannot be undone.", "Delete"
     ))) return;
     setClearing(true);
@@ -303,7 +303,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
       {isAdmin && trial ? row("plan", "Plan", planHint(trial)) : null}
       {isAdmin ? (
         // Refer a centre (#249): both get 3 free months when it pays, recorded by hand for now.
-        <a className={rowClass} href={`https://wa.me/?text=${encodeURIComponent(`We run ${settings.centre_name} on ${PRODUCT}: residents, therapists and the day sheet on one phone. Free for 30 days: https://jains.es/ruta?ref=${encodeURIComponent(window.location.host.split(".")[0])}`)}`} target="_blank" rel="noopener noreferrer">
+        <a className={rowClass} href={`https://wa.me/?text=${encodeURIComponent(`We run ${settings.centre_name} on ${PRODUCT}: patients, therapists and the day sheet on one phone. Free for 30 days: https://jains.es/ruta?ref=${encodeURIComponent(window.location.host.split(".")[0])}`)}`} target="_blank" rel="noopener noreferrer">
           <span className="flex-1"><b className="block text-[16px]">Invite a centre</b><span className="block text-[13px] text-muted-foreground">On WhatsApp. When they pay, you both get 3 months free</span></span>
           <span className="text-muted-foreground">›</span>
         </a>
@@ -405,7 +405,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
             <div key={date} className="flex min-h-12 flex-wrap items-center gap-2 border-b border-border px-3 py-2 last:border-b-0">
               <span className="flex-1 font-semibold">{new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}</span>
               {printed.filter((p) => p.date === date).map((p) => (
-                <Button key={p.kind} variant="outline" className="min-h-11 rounded-full" onClick={() => openPrinted(date, p.kind)}>{{ residents: "Residents", therapist: "Therapists", doctor: "Doctors" }[p.kind] ?? p.kind}</Button>
+                <Button key={p.kind} variant="outline" className="min-h-11 rounded-full" onClick={() => openPrinted(date, p.kind)}>{{ residents: "Patients", therapist: "Therapists", doctor: "Doctors" }[p.kind] ?? p.kind}</Button>
               ))}
             </div>
           ))}
@@ -508,8 +508,8 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
               disabled={!isAdmin}
             />
             <p className="text-xs text-muted-foreground">
-              Shown on each resident's own link as <strong className="font-medium">WhatsApp reception</strong>.
-              Hidden while it is the same as the number above, so residents never reach the software maintainer.
+              Shown on each patient's own link as <strong className="font-medium">WhatsApp reception</strong>.
+              Hidden while it is the same as the number above, so patients never reach the software maintainer.
             </p>
           </div>
         </CardContent>
@@ -539,7 +539,7 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
             </p>
             <fieldset className="space-y-1">
               <legend className="text-sm font-semibold">Keep when clearing</legend>
-              <p className="text-xs text-muted-foreground">Residents and bookings always go. Standard therapies can be brought back later from the therapy library.</p>
+              <p className="text-xs text-muted-foreground">Patients and bookings always go. Standard therapies can be brought back later from the therapy library.</p>
               {KEEPS.map(([k, t]) => (
                 <label key={k} className="flex min-h-11 items-center gap-3">
                   <input type="checkbox" className="h-5 w-5 min-h-0 min-w-0 flex-none" checked={keep.includes(k)} onChange={(e) => setKeep(e.target.checked ? [...keep, k] : keep.filter((x) => x !== k))} />

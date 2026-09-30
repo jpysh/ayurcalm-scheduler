@@ -39,8 +39,8 @@ test('B1: Book and search are not covered by a floating button', async ({ page }
 
 test('B2: resident details never say "Not staying" for someone in house', async ({ page }) => {
   await signIn(page);
-  await menuTo(page, /^Residents/);
-  await page.getByRole('button', { name: /day \d+ of \d+/ }).first().click();
+  await menuTo(page, /^Patients/);
+  await page.getByRole('button', { name: /Day \d+ of \d+/ }).first().click();
   // Held open: the empty answer used to show until the stays arrived.
   await page.route('**/stays', async (r) => { await new Promise((ok) => setTimeout(ok, 1500)); await r.continue(); });
   await page.getByRole('button', { name: /^Details/ }).last().click();

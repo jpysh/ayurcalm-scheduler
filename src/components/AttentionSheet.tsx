@@ -9,7 +9,7 @@
  * now. The sheet stays open and redraws as rows are dealt with.
  */
 import { useEffect, useState } from "react";
-import { BottomSheet } from "@/components/BottomBar";
+import { InboxSheet, ListGroup } from "@/components/kit";
 
 export type Fix = {
   label: string;
@@ -163,25 +163,16 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   // The sheet opens on whatever day is on screen, so it names that day (#193).
   const dayName = day === today ? "Today" : new Date(day).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange} title={dayName}>
-      <div className="max-h-[70dvh] space-y-3 overflow-y-auto">
-        {done ? (
-          <div className="flex items-center justify-between gap-2 rounded-[10px] bg-secondary px-3 py-2 text-sm font-semibold text-primary">
-            <span>✓ {done.text}</span>
-            {done.undo ? <button type="button" className={tb()} disabled={busy === "undo"} onClick={undoDone}>Undo</button> : null}
-          </div>
-        ) : null}
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
-        {empty ? <div className="p-4 text-center text-muted-foreground">Nothing else needs you.</div> : null}
-        {act.length ? (
-          <section className="rounded-2xl bg-[#FBEAE3] px-3 py-1">
-            <div className="pb-0.5 pt-2.5 text-xs font-bold uppercase tracking-[.05em] text-destructive">For your action · {act.length}</div>
-            {act.map(actionItem)}
-          </section>
-        ) : null}
-        {didForYou.length + notes.length ? (
-          <section className="rounded-2xl bg-background px-3 py-1">
-            <div className="pb-0.5 pt-2.5 text-xs font-bold uppercase tracking-[.05em] text-muted-foreground">For your information · {didForYou.length + notes.length}</div>
+    <InboxSheet open={open} onOpenChange={onOpenChange} title={dayName} empty="Nothing else needs you."
+      // The one inbox for the whole app (story 1). Patients and Team fill in when their rules exist (Settings, What needs you); empty sections do not show.
+      sections={[{
+        name: "Day", count: act.length,
+        body: act.length + didForYou.length + notes.length === 0 ? null : (
+          <div className="space-y-3">
+            {act.length ? <ListGroup><div className="px-3">{act.map(actionItem)}</div></ListGroup> : null}
+            {didForYou.length + notes.length ? (
+              <div className="rounded-xl bg-background px-3 py-1">
+                <div className="pb-0.5 pt-2.5 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">Information · not counted</div>
             {didForYou.map((b) => item(b.batch_id, `${b.staff_name} is not in ${day === today ? "today" : `on ${dayName}`}`,
               b.moved.length
                 ? `${first(b.staff_name)}'s ${b.moved.length} treatment${b.moved.length === 1 ? "" : "s"} went to ${listed([...new Set(b.moved.map((m) => first(m.to.staff_name)))])}.`
@@ -202,9 +193,18 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
               {p.appointment_id ? <button type="button" className={tb()} onClick={() => seeIt(p.appointment_id!)}>See it</button> : null}
               <button type="button" className={tb()} onClick={() => dismiss(p.id)}>Dismiss</button>
             </>))}
-          </section>
-        ) : null}
-      </div>
-    </BottomSheet>
+              </div>
+            ) : null}
+          </div>
+        ),
+      }]}>
+      {done ? (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-primary">
+          <span>✓ {done.text}</span>
+          {done.undo ? <button type="button" className={tb()} disabled={busy === "undo"} onClick={undoDone}>Undo</button> : null}
+        </div>
+      ) : null}
+      {error ? <p className="mb-2 text-sm text-destructive">{error}</p> : null}
+    </InboxSheet>
   );
 }

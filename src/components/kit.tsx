@@ -1,4 +1,7 @@
-import { useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
+import { useEffect, useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
+import { Plus, Search as SearchIcon } from "lucide-react";
+import { toast } from "sonner";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
 /**
  * The form kit (#283): every form is built from these parts, so a field has one
@@ -159,3 +162,204 @@ export function Foot({ busy, save, label = "Save", remove, ok = true }: { busy?:
     </div>
   );
 }
+
+/* ---- Navigation and feedback (#285, DESIGN.md §7). Colours, radii and the one shadow come from the tokens in index.css. ---- */
+
+/**
+ * A sheet: grab handle, title, one line saying what it is for, body, and a foot
+ * that stays in view however long the body. Scrolls inside itself.
+ */
+export function BottomSheet({ open, onOpenChange, title, note, children, foot }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; note?: ReactNode; children: ReactNode; foot?: ReactNode }) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" hideClose className="mx-auto flex max-h-[88dvh] max-w-xl flex-col rounded-t-sheet bg-card p-0 outline-none"
+        // The sheet takes the focus, not its first field: that raised the phone's keyboard over half the form before it had been read.
+        onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}>
+        <div className="mx-auto mt-2 h-1 w-9 flex-none rounded-full bg-border" />
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
+          {/* A sheet with no title in the design still names itself to a screen reader. */}
+          <SheetTitle className={title ? "mb-3 text-lg font-bold" : "sr-only"}>{title || "Menu"}</SheetTitle>
+          {note ? <p className={`-mt-2 mb-3 ${noteText}`}>{note}</p> : null}
+          {children}
+        </div>
+        {foot ? <div className="flex-none border-t bg-card px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">{foot}</div> : <div className="h-[env(safe-area-inset-bottom)] flex-none" />}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/** The bar: two floating pieces, left and right, nothing white between them. Gives way to any open sheet (index.css). */
+export const Bar = ({ left, right, label = "Main", grow }: { left: ReactNode; right?: ReactNode; label?: string; /** The left piece fills the space (the day, with its date); otherwise it hugs its buttons. */ grow?: boolean }) => (
+  <nav aria-label={label} data-kit="bar" className="pointer-events-none fixed inset-x-[var(--bar-gap)] bottom-[calc(var(--bar-gap)+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl items-center justify-between gap-2">
+    <div className={`pointer-events-auto flex h-[var(--bar-h)] min-w-0 items-center gap-1 rounded-full border bg-card/[0.97] p-1 shadow-float ${grow ? "flex-1" : "flex-none"}`}>{left}</div>
+    {right ? <div className="pointer-events-auto flex flex-none items-center gap-2">{right}</div> : null}
+  </nav>
+);
+
+/** A round button in the bar, 48 across. */
+export const BarButton = ({ label, onClick, children, disabled }: { label: string; onClick: () => void; children: ReactNode; disabled?: boolean }) => (
+  <button type="button" aria-label={label} disabled={disabled} onClick={onClick} className="grid h-12 w-12 flex-none place-items-center rounded-full active:bg-secondary disabled:opacity-50">{children}</button>
+);
+
+/** Print, in its own small capsule beside the +. */
+export const BarCapsule = ({ label, onClick, children, disabled }: { label: string; onClick: () => void; children: ReactNode; disabled?: boolean }) => (
+  <button type="button" aria-label={label} disabled={disabled} onClick={onClick} className="grid h-[var(--bar-h)] w-[var(--bar-h)] place-items-center rounded-full border bg-card/[0.97] shadow-float active:bg-secondary disabled:opacity-50">{children}</button>
+);
+
+/** The adaptive +: always a plus, its name says what it adds ("New patient"). */
+export const PlusButton = ({ adds, onClick }: { adds: string; onClick: () => void }) => (
+  <button type="button" aria-label={adds} onClick={onClick} className="grid h-[var(--bar-h)] w-[var(--bar-h)] place-items-center rounded-full bg-primary text-primary-foreground shadow-float active:bg-[hsl(var(--primary-hover))]"><Plus className="h-6 w-6" /></button>
+);
+
+/** Search takes the bar's place: its field sits at the bottom, above the keyboard. */
+export const BottomSearch = ({ value, onChange, onClose, placeholder, label }: { value: string; onChange: (v: string) => void; onClose: () => void; placeholder: string; label: string }) => (
+  <nav aria-label="Search" data-kit="bar" className="fixed inset-x-[var(--bar-gap)] bottom-[calc(var(--bar-gap)+env(safe-area-inset-bottom))] z-40 mx-auto grid h-[var(--bar-h)] max-w-xl grid-cols-[auto_1fr_auto] items-center rounded-full border bg-card p-1 shadow-float">
+    <SearchIcon className="ml-3 h-5 w-5 text-muted-foreground" />
+    <input autoFocus type="text" enterKeyHint="search" placeholder={placeholder} aria-label={label} autoComplete="off" className="h-12 min-w-0 bg-transparent px-2 text-base outline-none" value={value} onChange={(e) => onChange(e.target.value)} />
+    <button type="button" className="min-h-12 rounded-full px-3.5 font-semibold text-primary" onClick={onClose}>Cancel</button>
+  </nav>
+);
+
+/** The pill above the bar. Red-dotted while something needs the admin; grey when it only informs. */
+export const Pill = ({ need, info, onClick }: { need: number; info: number; onClick: () => void }) => {
+  if (!need && !info) return null;
+  return (
+    <button type="button" data-kit="pill" onClick={onClick}
+      className="fixed bottom-[calc(var(--bar-h)+var(--bar-gap)*2+env(safe-area-inset-bottom))] left-1/2 z-40 flex min-h-10 -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border bg-card px-3.5 text-sm font-semibold shadow-float after:-ml-0.5 after:text-lg after:text-muted-foreground after:content-['›']">
+      <i className={`h-2 w-2 rounded-full ${need ? "bg-destructive" : "bg-muted-foreground/60"}`} />
+      {need ? `${need} need you` : `${info} to know`}
+    </button>
+  );
+};
+
+/** One row: title, up to two facts, one trailing fact, and a flag line only when something needs doing. */
+export const Row = ({ title, facts, trailing, flag, onClick }: { title: ReactNode; facts?: ReactNode; trailing?: ReactNode; flag?: ReactNode; onClick?: () => void }) => {
+  const body = (
+    <>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-base font-semibold">{title}</span>
+        {facts ? <span className="block truncate text-[13px] text-muted-foreground">{facts}</span> : null}
+        {flag ? <span className="block text-[13px] font-semibold text-destructive">{flag}</span> : null}
+      </span>
+      {trailing ? <span className="flex-none text-[13px] text-muted-foreground">{trailing}</span> : null}
+    </>
+  );
+  const cls = "flex min-h-[56px] w-full items-center gap-3 border-b border-border px-3 py-2 text-left last:border-b-0";
+  return onClick ? <button type="button" className={cls} onClick={onClick}>{body}</button> : <div className={cls}>{body}</div>;
+};
+
+/** White, radius 12, hairlines, a caption header with a count. */
+export const ListGroup = ({ title, count, children }: { title?: string; count?: number; children: ReactNode }) => (
+  <section>
+    {title ? <div className="flex justify-between px-1 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{title}{count !== undefined ? <span className="font-normal normal-case tracking-normal">{count}</span> : null}</div> : null}
+    <div className="overflow-hidden rounded-xl bg-card">{children}</div>
+  </section>
+);
+
+/** The inbox behind the pill: sections, each a list of rows; empty sections do not show. */
+export function InboxSheet({ open, onOpenChange, title, sections, empty = "Nothing needs you.", children }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; sections: { name: string; /** What needs action; information rows are not counted. */ count: number; body: ReactNode }[]; empty?: string; children?: ReactNode }) {
+  const shown = sections.filter((x) => x.body);
+  return (
+    <BottomSheet open={open} onOpenChange={onOpenChange} title={title}>
+      {children}
+      {shown.length ? shown.map((x) => <div key={x.name}><div className="pb-1 pt-3 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{x.name}{x.count > 0 ? ` · ${x.count}` : ""}</div>{x.body}</div>) : <Empty text={empty} />}
+    </BottomSheet>
+  );
+}
+
+/** Under a field that changes other things: one live line saying what will change. */
+export const Consequence = ({ children }: { children: ReactNode }) => <p role="status" className="mt-2 rounded-xl bg-secondary px-3 py-2 text-[13px] font-semibold text-primary">{children}</p>;
+
+/** "Discharge summary · 5 of 8 ready", with a slim line. Informs, never blocks. */
+export const ChecklistBar = ({ label, done, total, onClick }: { label: string; done: number; total: number; onClick: () => void }) => (
+  <button type="button" onClick={onClick} className="block w-full rounded-xl border bg-card px-3 py-2.5 text-left">
+    <span className="flex justify-between text-sm font-semibold"><span>{label}</span><span className="text-muted-foreground">{done} of {total} ready</span></span>
+    <span className="mt-2 block h-1 overflow-hidden rounded-full bg-secondary"><span className="block h-full rounded-full bg-primary" style={{ width: `${total ? (done / total) * 100 : 0}%` }} /></span>
+  </button>
+);
+
+/** Dated changes in order; each starts where the last ended. */
+export const Timeline = ({ items }: { items: { key: string; from: string; title: string; note?: string; onClick?: () => void }[] }) => (
+  <ol className="border-l-2 border-primary/30 pl-3">
+    {items.map((i) => (
+      <li key={i.key} className="py-1.5">
+        <button type="button" disabled={!i.onClick} onClick={i.onClick} className="block min-h-10 w-full text-left">
+          <span className="block text-[13px] font-semibold text-muted-foreground">From {i.from}</span>
+          <span className="block text-base font-semibold">{i.title}</span>
+          {i.note ? <span className={`block ${noteText}`}>{i.note}</span> : null}
+        </button>
+      </li>
+    ))}
+  </ol>
+);
+
+/** A list of options: name, one line, a trailing fact; the chosen one has a border and a check. Edit opens the catalogue. */
+export function Picker<T extends string>({ options, value, onChange, onEdit }: { options: { id: T; name: string; note?: string; fact?: string }[]; value: T | ""; onChange: (id: T) => void; onEdit?: () => void }) {
+  return (
+    <div className="grid gap-2">
+      {options.map((o) => (
+        <button key={o.id} type="button" aria-pressed={value === o.id} onClick={() => onChange(o.id)}
+          className="flex min-h-14 items-center gap-3 rounded-xl border-[1.5px] border-border px-3 py-2 text-left aria-pressed:border-primary aria-pressed:bg-secondary">
+          <span className="min-w-0 flex-1"><b className="block text-base">{o.name}</b>{o.note ? <span className={`block ${noteText}`}>{o.note}</span> : null}</span>
+          {o.fact ? <span className="flex-none text-[13px] text-muted-foreground">{o.fact}</span> : null}
+          {value === o.id ? <span aria-hidden className="flex-none font-bold text-primary">✓</span> : null}
+        </button>
+      ))}
+      {onEdit ? <button type="button" className="min-h-11 text-sm font-semibold text-primary" onClick={onEdit}>Edit the list</button> : null}
+    </div>
+  );
+}
+
+/** The main action, and beneath it one quiet alternative. Never two fills. */
+export const TwoFoot = ({ main, onMain, alt, onAlt, busy, ok = true }: { main: string; onMain: () => void; alt: string; onAlt: () => void; busy?: boolean; ok?: boolean }) => (
+  <div className="grid gap-1">
+    <button type="button" className={`${wide} bg-primary text-primary-foreground disabled:opacity-50`} disabled={busy || !ok} onClick={onMain}>{busy ? "Saving…" : main}</button>
+    <button type="button" className={`${wide} text-sm font-semibold text-primary`} disabled={busy} onClick={onAlt}>{alt}</button>
+  </div>
+);
+
+/** Done, with a way back: one line, one Undo, five seconds. */
+export const toastUndo = (text: string, undo: () => void | Promise<void>) => toast(text, { duration: 5000, action: { label: "Undo", onClick: () => { void undo(); } } });
+
+/** Empty: one line saying why, and the action if there is one. */
+export const Empty = ({ text, action }: { text: string; action?: ReactNode }) => (
+  <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-[15px] text-muted-foreground"><span>{text}</span>{action}</div>
+);
+
+/** Loading: rows the height of real ones, and nothing at all for the first 300ms. */
+export function Loading({ rows = 4 }: { rows?: number }) {
+  const [late, setLate] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setLate(true), 300); return () => clearTimeout(t); }, []);
+  if (!late) return null;
+  return <div aria-busy="true" aria-label="Loading" className="overflow-hidden rounded-xl bg-card">{Array.from({ length: rows }, (_, i) => <div key={i} className="h-14 animate-pulse border-b border-border bg-secondary/40 last:border-b-0" />)}</div>;
+}
+
+/** Error: where it happened, what failed, a retry. */
+export const ErrorLine = ({ text, retry }: { text: string; retry?: () => void }) => (
+  <div role="alert" className="flex items-center justify-between gap-3 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive"><span>{text}</span>{retry ? <button type="button" className="min-h-10 flex-none font-semibold" onClick={retry}>Try again</button> : null}</div>
+);
+
+/**
+ * Booking on one sheet (story 5). "Who" first: at most five suggestions, then the
+ * search field at the bottom above the keyboard; choosing one fills the rest in place.
+ */
+export function WhoPicker<T extends { id: string; name: string; note?: string }>({ suggestions, all, chosen, onChoose }: { suggestions: T[]; all: T[]; chosen: string | null; onChoose: (p: T) => void }) {
+  const [q, setQ] = useState("");
+  const ql = q.trim().toLowerCase();
+  const list = ql ? all.filter((p) => p.name.toLowerCase().includes(ql)).slice(0, 8) : suggestions.slice(0, 5);
+  return (
+    <div>
+      <ListGroup title={ql ? "Matches" : "No treatment yet today"}>
+        {list.length ? list.map((p) => <Row key={p.id} title={p.name} facts={p.note} trailing={chosen === p.id ? "✓" : undefined} onClick={() => onChoose(p)} />) : <Empty text="No one found." />}
+      </ListGroup>
+      <input className={`${field} mt-3`} placeholder="Search patients" aria-label="Search patients" value={q} onChange={(e) => setQ(e.target.value)} />
+    </div>
+  );
+}
+
+/** A booking line: label over the value, tap to change ("Therapist · Kriti ›"). */
+export const ChangeLine = ({ label, value, onClick }: { label: string; value: ReactNode; onClick: () => void }) => (
+  <button type="button" onClick={onClick} className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-border text-left last:border-b-0">
+    <span className={noteText}>{label}</span><span className="flex min-w-0 items-center gap-1 font-semibold"><span className="truncate">{value}</span><span aria-hidden className="text-muted-foreground">›</span></span>
+  </button>
+);

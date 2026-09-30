@@ -193,7 +193,7 @@ const SetupWizard = () => {
           {step === 3 && (
             <>
               <p className="text-sm text-muted-foreground">
-                This install came with an example centre: residents, therapists, rooms, therapies
+                This install came with an example centre: patients, therapists, rooms, therapies
                 and three months of bookings, so you could see how it works.
               </p>
               {/* The recommended start comes first: a real centre edits the example therapies and rooms
@@ -206,7 +206,7 @@ const SetupWizard = () => {
                   Keep the example data for now
                 </Button>
                 <Button variant="ghost" className="h-auto min-h-12 whitespace-normal py-2 text-destructive"
-                  onClick={async () => { if (await confirmSheet("Delete all the example residents, therapists, rooms, therapies and bookings?\n\nThis cannot be undone.", "Delete")) finish("none"); }}
+                  onClick={async () => { if (await confirmSheet("Delete all the example patients, therapists, rooms, therapies and bookings?\n\nThis cannot be undone.", "Delete")) finish("none"); }}
                   disabled={busy}>
                   Start completely empty
                 </Button>

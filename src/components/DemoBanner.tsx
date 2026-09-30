@@ -21,7 +21,7 @@ export function DemoBanner() {
   const mins = Math.max(1, Math.round((Date.parse(demo.next_reset) - Date.now()) / 60000));
   return (
     <div role="status" className="bg-amber-100 text-amber-950 text-xs text-center px-4 py-1.5">
-      Demo centre with made-up residents. Anything you change is put back at {at} (in {mins} min).
+      Demo centre with made-up patients. Anything you change is put back at {at} (in {mins} min).
     </div>
   );
 }
