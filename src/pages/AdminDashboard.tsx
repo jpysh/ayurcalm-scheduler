@@ -18,6 +18,8 @@ import { useDietScreen } from "./tabs/DietTab";
 import { usePatientsScreen } from "./tabs/PatientsTab";
 import { useScheduleScreen } from "./tabs/ScheduleTab";
 import Settings from "./Settings";
+import { RulesSheet } from "@/components/RulesSheet";
+import { useAttention, type AttentionItem } from "@/lib/attention";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout, API_TOKEN, type ApiAppointment, type ApiProgramEvent, type Patient, type UiRoom, type UiStaff, type UiTherapy, type UiTimeOff } from "./tabs/shared";
 import PageHead from "@/components/PageHead";
@@ -132,6 +134,9 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("schedule");
   const [showAutoAssign, setShowAutoAssign] = useState(false);
   const [showAttention, setShowAttention] = useState(false);
+  // What needs you (#288): the rules and the patient and team items they raise; the rules sheet opens from Settings, the pill and the gear on Patients and Team.
+  const attention = useAttention();
+  const [rules, setRules] = useState<{ section: "Day" | "Patients" | "Team" | null } | null>(null);
   // A link on another screen to a Settings list ("Edit the list" on a picker).
   const [settingsSheet, setSettingsSheet] = useState<string | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentDetailed | null>(null);
@@ -504,6 +509,7 @@ const AdminDashboard = () => {
     book: (p) => { go('schedule'); scheduleScreen.openBook(p); },
     // The same words, over every treatment: the day's own search.
     openCatalogue: (which) => { setSettingsSheet(which); go('settings'); },
+    openRules: () => setRules({ section: 'Patients' }),
     searchEverything: (q) => { patientsScreen.setSearching(false); patientsScreen.setQuery(''); go('schedule'); scheduleScreen.setQuery(q); scheduleScreen.setSearching(true); } });
   residentOpener.current = patientsScreen.openResident;
   // The adaptive + (#285): it adds what the screen is about. A trial that has ended adds nothing and says so.
@@ -557,16 +563,15 @@ const AdminDashboard = () => {
             }}>
             {/* A new centre's first steps, until it can book (#60): each row opens the screen that adds it. */}
             {!loaded || readOnly ? null : therapies.length === 0 || staff.length === 0 || roomsList.length === 0 || patients.length === 0 ? (
-              <div className="mt-3 overflow-hidden rounded-2xl bg-card" aria-label="Get started">
-                <div className="px-4 pt-3 text-[13px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Get started</div>
+              <div aria-label="Get started">
                 {/* Therapies first (#273 U1): a new trial has none, and nothing can be booked or given without them. */}
-                {([["therapies", "Add your therapies", therapies.length], ["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first patient", patients.length]] as const).map(([tab, label, n]) => (
-                  <button key={tab} type="button" className="flex min-h-14 w-full items-center gap-3 border-b border-border px-4 text-left last:border-b-0" onClick={() => { if (tab === "rooms" || tab === "staff") { go("team"); (tab === "rooms" ? roomsScreen : staffScreen).openAdd(); } else { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); } }}>
-                    <span className={n ? "text-primary" : "text-muted-foreground"}>{n ? "✓" : "○"}</span>
-                    <span className="flex-1 text-[16px]">{label}</span><span className="text-muted-foreground">›</span>
-                  </button>
-                ))}
-                <div className="px-4 py-3 text-[13px] text-muted-foreground">Then tap + to book the first treatment.</div>
+                <ListGroup title="Get started">
+                  {([["therapies", "Add your therapies", therapies.length], ["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first patient", patients.length]] as const).map(([tab, label, n]) => (
+                    <Row key={tab} title={label} facts={n ? `${n} added` : "Not yet"} trailing={n ? "✓" : "Add ›"}
+                      onClick={() => { if (tab === "rooms" || tab === "staff") { go("team"); (tab === "rooms" ? roomsScreen : staffScreen).openAdd(); } else { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); } }} />
+                  ))}
+                </ListGroup>
+                <p className="px-1 pt-2 text-[13px] text-muted-foreground">Then tap + to book the first treatment.</p>
               </div>
             ) : null}
             {loaded && scheduleScreen.tab}
@@ -585,7 +590,7 @@ const AdminDashboard = () => {
               nowHM={new Date().toLocaleTimeString("en-GB", { timeZone: ADMIN_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}
               opening={centreHours.opening_time} closing={centreHours.closing_time}
               refresh={() => refreshAppointmentsForDate(ymdInTZ(new Date()), true)}
-              openPerson={staffScreen.openEdit} openRoom={roomsScreen.openEdit} openScreen={go} />
+              openPerson={staffScreen.openEdit} openRoom={roomsScreen.openEdit} openScreen={go} openRules={() => setRules({ section: 'Team' })} />
           </TabsContent>
 
           {/* Therapies Tab */}
@@ -602,7 +607,8 @@ const AdminDashboard = () => {
           </TabsContent>
 
           <TabsContent value="settings" data-testid="tabpanel-settings">
-            <Settings signOut={signOut} openLog={() => go("log")} initialSheet={settingsSheet} sheetOpened={() => setSettingsSheet(null)} />
+            <Settings signOut={signOut} openLog={() => go("log")} initialSheet={settingsSheet} sheetOpened={() => setSettingsSheet(null)}
+              attention={attention} openRules={() => setRules({ section: null })} openHolidays={timeOffScreen.openHolidays} />
           </TabsContent>
 
           <TabsContent value="diet" className="space-y-6" forceMount>
@@ -651,12 +657,12 @@ const AdminDashboard = () => {
           : { query: scheduleScreen.query, setQuery: scheduleScreen.setQuery, on: scheduleScreen.searching, setOn: scheduleScreen.setSearching, placeholder: 'Name, therapy or room', label: 'Search treatments', start: () => { go('schedule'); scheduleScreen.setSearching(true); } }}
         // A patient with nothing booked is a rest day, not a note (#144).
         attention={{
-          fix: dayCheck.problems.filter((p) => p.problem_class === 'blocking').length,
+          fix: dayCheck.problems.filter((p) => p.problem_class === 'blocking').length + attention.items.filter((i) => i.kind === 'action').length,
           // What the app already fixed for the admin: a therapist's day moved.
           done: visibleReplans.length,
           note: dayCheck.problems.filter((p) => p.problem_class === 'worth_knowing' && p.kind !== 'IDLE_RESIDENT' && !dismissed.includes(p.id)).length,
           // Checked again on opening: a booking made since can have taken the answer's slot.
-          open: () => { loadDayCheck(); loadReplans(); setShowAttention(true); },
+          open: () => { loadDayCheck(); loadReplans(); attention.reload(); setShowAttention(true); },
         }}
       />
 
@@ -681,6 +687,13 @@ const AdminDashboard = () => {
         dismissed={dismissed}
         dismiss={dismiss}
         undoReplan={undoReplanBatch}
+        items={attention.items}
+        openRules={() => setRules({ section: null })}
+        onItem={(i: AttentionItem) => {
+          setShowAttention(false);
+          if (i.action === 'diet') patientsScreen.openMeals({ id: i.patient_id!, name: i.who });
+          else patientsScreen.openResident(i.patient_id!);
+        }}
         afterConsultation={(p, what) => {
           setShowAttention(false);
           dismiss(p.id);
@@ -700,6 +713,7 @@ const AdminDashboard = () => {
           }, 350);
         }}
       />
+      <RulesSheet open={!!rules} onOpenChange={(o) => { if (!o) setRules(null); }} section={rules?.section} attention={attention} reload={attention.reload} />
       <AppointmentDialog 
         appointment={selectedAppointment} 
         open={!!selectedAppointment} 

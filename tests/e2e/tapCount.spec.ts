@@ -13,7 +13,7 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '@
  * Everything a job changes is undone, and the two days it touches are
  * compared back through the API.
  */
-const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Patient didn't come", 'Patient late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day', "A patient's meals today", 'Add an arriving patient', 'Find a patient', "Change a patient's meals from a date", "Choose a patient's package", "Choose a patient's accommodation", "Change a patient's stay", "Print a patient's discharge summary", "Record a therapist's leave", 'Edit a diet plan']);
+const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Patient didn't come", 'Patient late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day', "A patient's meals today", 'Add an arriving patient', 'Find a patient', "Change a patient's meals from a date", "Choose a patient's package", "Choose a patient's accommodation", "Change a patient's stay", "Print a patient's discharge summary", "Record a therapist's leave", 'Edit a diet plan', 'Change what needs you', 'Open the Log']);
 
 /** The design's order, which is the order the table prints in. */
 const JOBS: [string, number][] = [
@@ -44,6 +44,10 @@ const JOBS: [string, number][] = [
   ["Record a therapist's leave", 4],
   // Menu, Diet plans, the plan, Save (#285 session 6).
   ['Edit a diet plan', 4],
+  // Menu, Settings, What needs you, a switch (#285 session 7, #288).
+  ['Change what needs you', 4],
+  // Menu, Settings, Log.
+  ['Open the Log', 3],
 ];
 
 const ADMIN = { email: 'admin@example.com', password: 'demo1234' };
@@ -379,6 +383,26 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await tap(activePanel(page).getByRole('button', { name: /patients?$|Not used$/ }).first());
       await tap(page.getByRole('dialog').getByRole('button', { name: 'Save the plan' }));
       await expect(page.locator('[data-sonner-toast]').filter({ hasText: /saved$/ })).toBeVisible({ timeout: 20000 });
+    });
+
+    // A rule switched on and off again: the switch is the fourth tap; putting it back is not counted.
+    await job(page, rows, 'Change what needs you', async (tap) => {
+      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Settings/ }));
+      await tap(activePanel(page).getByRole('button', { name: /^What needs you/ }));
+      const rule = page.getByRole('dialog').getByRole('switch', { name: /^Leaves tomorrow/ });
+      await tap(rule);
+      await expect(rule).toBeChecked({ timeout: 15000 });
+      await rule.click();
+      await expect(rule).not.toBeChecked({ timeout: 15000 });
+      await page.keyboard.press('Escape');
+    });
+
+    await job(page, rows, 'Open the Log', async (tap) => {
+      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Settings/ }));
+      await tap(activePanel(page).getByRole('button', { name: /^Log\b/ }));
+      await expect(activePanel(page).getByRole('heading', { name: 'Log' })).toBeVisible({ timeout: 15000 });
     });
 
     await job(page, rows, 'Therapist not in', async (tap) => {

@@ -1,4 +1,4 @@
-import { ChangeLine, Consequence, DateRow, Days, Dropdown, Empty, Foot, ListGroup, Row, Seg, Switch, Text, TimeList, TwoFoot } from "@/components/kit";
+import { Consequence, DateRow, Days, Dropdown, Empty, Foot, ListGroup, Row, Seg, Switch, Text, TimeList, TwoFoot } from "@/components/kit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
@@ -10,10 +10,10 @@ import { HolidaysSheet } from "@/components/HolidaysSheet";
 const sortKey = (h: UiTimeOff) => h.startDate || h.date || '';
 
 /** Leave (#285 story 9): one row each, who and when; a tap opens the same sheet that adds one. */
-const TimeOffTab = ({ timeOffs, viewMode, setViewMode, visibleRows, totalRef, nameOf, isFullDay, weeklyLabel, openEdit, setShowHolidays }: {
+const TimeOffTab = ({ timeOffs, viewMode, setViewMode, visibleRows, totalRef, nameOf, isFullDay, weeklyLabel, openEdit }: {
   timeOffs: UiTimeOff[]; viewMode: 'all' | 'upcoming' | 'past'; setViewMode: (v: 'all' | 'upcoming' | 'past') => void;
   visibleRows: number; totalRef: { current: number }; nameOf: (h: UiTimeOff) => string;
-  isFullDay: (h: UiTimeOff) => boolean; weeklyLabel: (w?: UiTimeOff['weekdays']) => string; openEdit: (h: UiTimeOff) => void; setShowHolidays: (v: boolean) => void;
+  isFullDay: (h: UiTimeOff) => boolean; weeklyLabel: (w?: UiTimeOff['weekdays']) => string; openEdit: (h: UiTimeOff) => void;
 }) => {
   const today = new Date(new Date().toDateString());
   const rows = timeOffs.filter((h) => {
@@ -29,9 +29,6 @@ const TimeOffTab = ({ timeOffs, viewMode, setViewMode, visibleRows, totalRef, na
     <div data-testid="timeoff-table">
       <PageHead title="Leave" note={`${rows.length} ${viewMode === 'all' ? '' : viewMode}`.trim()} />
       <Seg<'upcoming' | 'past' | 'all'> value={viewMode} onChange={setViewMode} options={[['upcoming', 'Upcoming'], ['past', 'Past'], ['all', 'All']]} />
-      <ListGroup>
-        <ChangeLine label="Public holidays" value="Closed days" onClick={() => setShowHolidays(true)} />
-      </ListGroup>
       {rows.length === 0 ? <Empty text={viewMode === 'past' ? 'No past leave.' : 'No leave booked. Tap + to add some.'} /> : (
         <ListGroup>
           {rows.slice(0, visibleRows).map((h) => (
@@ -139,7 +136,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
 
   const tab = (
     <TimeOffTab timeOffs={timeOffs} viewMode={holidayViewMode} setViewMode={setHolidayViewMode} visibleRows={visibleTimeOffRows} totalRef={timeoffTotalRef}
-      nameOf={nameOf} isFullDay={isFullDay} weeklyLabel={weeklyLabel} openEdit={openEdit} setShowHolidays={setShowHolidays} />
+      nameOf={nameOf} isFullDay={isFullDay} weeklyLabel={weeklyLabel} openEdit={openEdit} />
   );
 
   /** Records the leave; the day is planned now (the plan is shown to accept) or left waiting on the pill. */
@@ -226,5 +223,6 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     </>
   );
 
-  return { tab, dialogs, setVisibleRows: setVisibleTimeOffRows, totalRef: timeoffTotalRef, openAdd };
+  /** Public holidays live with Opening hours in Settings (#288); the sheet is here because it adds to this list. */
+  return { tab, dialogs, setVisibleRows: setVisibleTimeOffRows, totalRef: timeoffTotalRef, openAdd, openHolidays: () => setShowHolidays(true) };
 }

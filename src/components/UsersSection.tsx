@@ -1,176 +1,97 @@
+/**
+ * Settings → People with access and Your account, from the kit (#285 session 7).
+ * People are rows; a tap opens one sheet for that person, and "Add someone" is
+ * a row that opens one sheet. Staff run the schedule; administrators also change
+ * settings and manage people.
+ */
 import { useEffect, useState } from "react";
-import { confirmSheet } from "@/components/ConfirmSheet";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { confirmSheet } from "@/components/ConfirmSheet";
 import { API_BASE } from "@/lib/apiBase";
+import { BottomSheet, Empty, ListGroup, Row, Seg, SheetFoot, Switch, Text, noteText } from "@/components/kit";
 
-type User = {
-  id: string;
-  email: string;
-  name: string | null;
-  role: "admin" | "staff";
-  is_active: boolean;
-  last_login: string | null;
-};
+type Role = "admin" | "staff";
+type User = { id: string; email: string; name: string | null; role: Role; is_active: boolean; last_login: string | null };
 
-const blankDraft = { email: "", name: "", role: "staff" as const, password: "" };
+const blankDraft = { email: "", name: "", role: "staff" as Role, password: "" };
+const sent = (path: string, method: string, body?: unknown) => fetch(`${API_BASE}${path}`, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
 
-/** Administrator-only list of logins, plus the form to add one. */
-export const UsersSection = () => {
-  const [users, setUsers] = useState<User[]>([]);
-  const [draft, setDraft] = useState<typeof blankDraft>(blankDraft);
+export const UsersSection = ({ onCount }: { onCount?: (n: number) => void }) => {
+  const [users, setUsers] = useState<User[] | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState(blankDraft);
+  const [one, setOne] = useState<User | null>(null);
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const load = () =>
-    fetch(`${API_BASE}/users`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then(setUsers)
-      .catch(() => toast.error("Could not load users"));
-
-  useEffect(() => { load(); }, []);
+  const load = () => fetch(`${API_BASE}/users`).then((r) => (r.ok ? r.json() : [])).then((u: User[]) => { setUsers(u); onCount?.(u.length); }).catch(() => toast.error("Could not load the people"));
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const create = async () => {
     setBusy(true);
     try {
-      const res = await fetch(`${API_BASE}/users`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...draft, name: draft.name || null }),
-      });
+      const res = await sent("/users", "POST", { ...draft, name: draft.name || null });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data?.error || "Could not add the user");
-        return;
-      }
+      if (!res.ok) { toast.error(data?.error || "Could not add them"); return; }
       toast.success(`Added ${data.email}`);
-      setDraft(blankDraft);
-      load();
-    } finally {
-      setBusy(false);
-    }
+      setDraft(blankDraft); setAdding(false); load();
+    } finally { setBusy(false); }
   };
-
   const patch = async (user: User, changes: Partial<Pick<User, "role" | "is_active">>) => {
-    const res = await fetch(`${API_BASE}/users/${user.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(changes),
-    });
+    const res = await sent(`/users/${user.id}`, "PUT", changes);
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      toast.error(data?.error || "Could not update the user");
-      return;
-    }
+    if (!res.ok) { toast.error(data?.error || "Could not change them"); return; }
+    setOne({ ...user, ...changes });
     load();
   };
-
-  const setPassword = async (user: User) => {
-    const next = window.prompt(`New password for ${user.email} (at least 8 characters)`);
-    if (!next) return;
-    const res = await fetch(`${API_BASE}/users/${user.id}/set-password`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ new_password: next }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      toast.error(data?.error || "Could not set the password");
-      return;
-    }
-    toast.success(`Password updated for ${user.email}`);
+  const setPass = async (user: User) => {
+    setBusy(true);
+    try {
+      const res = await sent(`/users/${user.id}/set-password`, "POST", { new_password: password });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(data?.error || "Could not set the password"); return; }
+      toast.success(`Password updated for ${user.email}`);
+      setPassword("");
+    } finally { setBusy(false); }
   };
-
   const remove = async (user: User) => {
+    setOne(null);
     if (!(await confirmSheet(`Delete ${user.email}?\n\nThis cannot be undone.`, "Delete"))) return;
-    const res = await fetch(`${API_BASE}/users/${user.id}`, { method: "DELETE" });
+    const res = await sent(`/users/${user.id}`, "DELETE");
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      toast.error(data?.error || "Could not delete the user");
-      return;
-    }
+    if (!res.ok) { toast.error(data?.error || "Could not delete them"); return; }
     toast.success(`Deleted ${user.email}`);
     load();
   };
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base md:text-lg">People with access</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Administrators can change settings and manage users. Staff can run the schedule.
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* One card per person: a table was wider than the phone (#265 B4). */}
-        <div className="overflow-hidden rounded-xl border">
-          {users.map((u) => (
-            <div key={u.id} className="space-y-2 border-b px-3 py-3 last:border-b-0">
-              <div className="flex items-start gap-2">
-                <span className="min-w-0 flex-1"><b className="block text-[16px]">{u.name || u.email}</b><span className="block break-all text-[13px] text-muted-foreground">{u.email}</span></span>
-                <Select value={u.role} onValueChange={(v) => patch(u, { role: v as User["role"] })}>
-                  <SelectTrigger className="h-11 w-28" aria-label={`Role for ${u.email}`}><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="staff">Staff</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" className="min-h-11 rounded-full" onClick={() => patch(u, { is_active: !u.is_active })}>{u.is_active ? "Can sign in · turn off" : "Turned off · turn on"}</Button>
-                <Button variant="outline" className="min-h-11 rounded-full" onClick={() => setPassword(u)}>Set password</Button>
-                <Button variant="outline" className="min-h-11 rounded-full text-destructive" onClick={() => remove(u)}>Delete</Button>
-              </div>
-            </div>
-          ))}
-        </div>
+    <div>
+      <p className={`mb-2 ${noteText}`}>Administrators can change settings and manage people. Staff run the schedule.</p>
+      <ListGroup>
+        <Row title={<span className="text-primary">Add someone</span>} trailing="›" onClick={() => setAdding(true)} />
+        {users === null ? null : users.length ? users.map((u) => (
+          <Row key={u.id} title={u.name || u.email} facts={u.name ? u.email : undefined} trailing={`${u.role === "admin" ? "Admin" : "Staff"}${u.is_active ? "" : " · off"}`} onClick={() => { setOne(u); setPassword(""); }} />
+        )) : <Empty text="No one yet." />}
+      </ListGroup>
 
-        <div className="border-t pt-3 space-y-2">
-          <p className="text-sm font-medium">Add someone</p>
-          <div className="grid gap-2 md:grid-cols-4">
-            <div className="space-y-1">
-              <Label htmlFor="new_email" className="text-xs">Email</Label>
-              <Input id="new_email" type="email" value={draft.email}
-                onChange={(e) => setDraft({ ...draft, email: e.target.value })} className="h-9" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="new_name" className="text-xs">Name</Label>
-              <Input id="new_name" value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="h-9" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Role</Label>
-              <Select value={draft.role} onValueChange={(v) => setDraft({ ...draft, role: v as "staff" })}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="staff">Staff</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="new_password" className="text-xs">Temporary password</Label>
-              <Input id="new_password" type="text" value={draft.password}
-                onChange={(e) => setDraft({ ...draft, password: e.target.value })} className="h-9" />
-            </div>
-          </div>
-          <Button
-            onClick={create}
-            disabled={busy || !draft.email || draft.password.length < 8}
-            className="h-9"
-          >
-            {busy ? "Adding…" : "Add user"}
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Share the temporary password with them and ask them to change it from
-            <span className="font-medium"> Your account</span> after signing in.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+      <BottomSheet open={adding} onOpenChange={setAdding} title="Add someone" note="Email and a temporary password are needed. Name is optional."
+        foot={<SheetFoot busy={busy} ok={!!draft.email && draft.password.length >= 8} save={create} label={`Add ${draft.email || "them"}`} />}>
+        <Text label="Email" type="email" inputMode="email" autoComplete="off" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
+        <Text label="Name (optional)" autoComplete="off" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+        <div className="mt-3"><Seg<Role> options={[["staff", "Staff"], ["admin", "Admin"]]} value={draft.role} onChange={(role) => setDraft({ ...draft, role })} /></div>
+        <Text label="Temporary password" autoComplete="off" note="At least 8 characters. Share it with them and ask them to change it from Your account." value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })} />
+      </BottomSheet>
+
+      <BottomSheet open={!!one} onOpenChange={(o) => { if (!o) setOne(null); }} title={one?.name || one?.email || ""} note={one?.name ? one.email : undefined}
+        foot={one ? <SheetFoot save={() => remove(one)} label="Delete this person" tone="destructive" /> : undefined}>
+        {one ? (<>
+          <div className="mt-1"><Seg<Role> options={[["staff", "Staff"], ["admin", "Admin"]]} value={one.role} onChange={(role) => patch(one, { role })} /></div>
+          <Switch label="Can sign in" note={one.last_login ? `Last signed in ${new Date(one.last_login).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : "Has not signed in yet"} on={one.is_active} set={(v) => patch(one, { is_active: v })} />
+          <Text label="New password" autoComplete="off" note="At least 8 characters." value={password} onChange={(e) => setPassword(e.target.value)} />
+          <button type="button" disabled={busy || password.length < 8} className="mt-2 min-h-11 w-full rounded-full border font-semibold disabled:opacity-50" onClick={() => setPass(one)}>Set their password</button>
+        </>) : null}
+      </BottomSheet>
+    </div>
   );
 };
 
@@ -180,57 +101,24 @@ export const ChangePasswordCard = () => {
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
-
+  const mismatch = confirm !== "" && next !== confirm;
   const submit = async () => {
-    if (next !== confirm) {
-      toast.error("The new passwords do not match");
-      return;
-    }
     setBusy(true);
     try {
-      const res = await fetch(`${API_BASE}/account/change-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ current_password: current, new_password: next }),
-      });
+      const res = await sent("/account/change-password", "POST", { current_password: current, new_password: next });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data?.error || "Could not change your password");
-        return;
-      }
+      if (!res.ok) { toast.error(data?.error || "Could not change your password"); return; }
       toast.success("Password changed");
       setCurrent(""); setNext(""); setConfirm("");
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
-
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base md:text-lg">Your account</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 max-w-sm">
-        <div className="space-y-1">
-          <Label htmlFor="current_password">Current password</Label>
-          <Input id="current_password" type="password" autoComplete="current-password"
-            value={current} onChange={(e) => setCurrent(e.target.value)} />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="next_password">New password</Label>
-          <Input id="next_password" type="password" autoComplete="new-password"
-            value={next} onChange={(e) => setNext(e.target.value)} />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="confirm_password">Confirm new password</Label>
-          <Input id="confirm_password" type="password" autoComplete="new-password"
-            value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-        </div>
-        <Button onClick={submit} disabled={busy || !current || next.length < 8}>
-          {busy ? "Changing…" : "Change password"}
-        </Button>
-        <p className="text-xs text-muted-foreground">At least 8 characters.</p>
-      </CardContent>
-    </Card>
+    <div>
+      <Text label="Current password" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+      <Text label="New password" type="password" autoComplete="new-password" note="At least 8 characters." valid={next.length >= 8} value={next} onChange={(e) => setNext(e.target.value)} />
+      <Text label="New password again" type="password" autoComplete="new-password" valid={!!confirm && !mismatch} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+      {mismatch ? <p role="alert" className="mt-1 text-[13px] font-semibold text-destructive">The two new passwords are different.</p> : null}
+      <button type="button" disabled={busy || !current || next.length < 8 || next !== confirm} className="mt-4 min-h-11 w-full rounded-full bg-primary font-semibold text-primary-foreground disabled:opacity-50" onClick={submit}>{busy ? "Changing…" : "Change my password"}</button>
+    </div>
   );
 };

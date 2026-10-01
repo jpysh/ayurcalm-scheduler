@@ -54,6 +54,7 @@ export default {
           foreground: "hsl(var(--success-foreground))",
         },
         now: "hsl(var(--now))",
+        notice: { DEFAULT: "hsl(var(--notice))", bg: "hsl(var(--notice-bg))" },
         warning: {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",

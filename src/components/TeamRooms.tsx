@@ -19,7 +19,7 @@ import type { UiRoom, UiStaff } from "@/pages/tabs/shared";
 type Pick = { kind: "staff" | "room"; id: string; name: string } | null;
 type Late = "late" | "early" | "away" | null;
 
-export function TeamRooms({ staff, rooms, q, today, nowHM, opening, closing, refresh, openPerson, openRoom, openScreen }: {
+export function TeamRooms({ staff, rooms, q, today, nowHM, opening, closing, refresh, openPerson, openRoom, openScreen, openRules }: {
   staff: UiStaff[];
   rooms: UiRoom[];
   /** The bar's search: filters both lists. */
@@ -34,6 +34,8 @@ export function TeamRooms({ staff, rooms, q, today, nowHM, opening, closing, ref
   openPerson: (id: string) => void;
   openRoom: (id: string) => void;
   openScreen: (screen: "therapies" | "events") => void;
+  /** The gear on the head: the rules for what Team raises (#288). */
+  openRules: () => void;
 }) {
   const [offToday, setOffToday] = useState<Record<string, string | null>>({});
   const [week, setWeek] = useState<Week | null>(null);
@@ -92,7 +94,7 @@ export function TeamRooms({ staff, rooms, q, today, nowHM, opening, closing, ref
 
   return (
     <div>
-      <PageHead title="Team and rooms" note={`${staff.filter(staffActive).length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}`} />
+      <PageHead title="Team and rooms" note={`${staff.filter(staffActive).length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}`} gear={{ label: "What needs you: team rules", run: openRules }} />
       {/* Always there, so the lists do not move under a tap when the week arrives. */}
       <ListGroup><Row title="This week" facts={week ? weekLine(week) : "…"} trailing="›" onClick={week ? () => setShowWeek(true) : undefined} /></ListGroup>
       {none ? <Empty text="No one or no room matches." /> : null}

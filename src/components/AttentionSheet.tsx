@@ -9,7 +9,8 @@
  * now. The sheet stays open and redraws as rows are dealt with.
  */
 import { useEffect, useState } from "react";
-import { InboxSheet, ListGroup } from "@/components/kit";
+import { InboxSheet, ItemRow, ListGroup, Row } from "@/components/kit";
+import type { AttentionItem } from "@/lib/attention";
 
 export type Fix = {
   label: string;
@@ -53,7 +54,7 @@ type Done = { text: string; undo: (() => Promise<boolean>) | null };
 const listed = (names: string[]) => names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 const first = (name: string) => name.split(" ")[0];
 
-export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, replans, dismissed, dismiss, undoReplan, onChanged, seeIt, afterConsultation }: {
+export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, replans, dismissed, dismiss, undoReplan, onChanged, seeIt, afterConsultation, items, onItem, openRules }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   apiBase: string;
@@ -70,6 +71,10 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   seeIt: (appointmentId: string) => void;
   /** After a consultation (#219): straight into the resident's meals or their card, to book. */
   afterConsultation: (p: DayProblem, what: "diet" | "treatments") => void;
+  /** Patient and team items from the rules in Settings, What needs you (#288). */
+  items: AttentionItem[];
+  onItem: (i: AttentionItem) => void;
+  openRules: () => void;
 }) {
   const [done, setDone] = useState<Done | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -79,8 +84,12 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   const act = problems.filter((p) => p.problem_class === "blocking");
   // A resident with nothing booked is a rest day, not a note (#144).
   const notes = problems.filter((p) => p.problem_class === "worth_knowing" && p.kind !== "IDLE_RESIDENT" && !dismissed.includes(p.id));
+  const patientAct = items.filter((i) => i.section === "Patients" && i.kind === "action");
+  const teamAct = items.filter((i) => i.section === "Team" && i.kind === "action");
   const didForYou = replans.filter((b) => !dismissed.includes(b.batch_id));
-  const empty = act.length + notes.length + didForYou.length === 0;
+  // A therapist whose day was moved already has their line under the day.
+  const teamInfo = items.filter((i) => i.kind === "information" && !didForYou.some((b) => b.staff_name === i.who));
+  const empty = act.length + notes.length + didForYou.length + patientAct.length + teamAct.length + teamInfo.length === 0;
 
   // Nothing left: say so, then get out of the way, as the design does. Not
   // while an Undo is showing: with the pill gone it could not be reached again.
@@ -131,14 +140,8 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
     }
   }
 
-  const tb = (main = false) => `min-h-10 px-3 rounded-full text-sm ${main ? "font-bold text-primary" : "font-semibold text-muted-foreground"} disabled:opacity-50`;
-  const item = (key: string, title: string, body: string | null, buttons: React.ReactNode, choose = false) => (
-    <div key={key} className="flex flex-col gap-0.5 border-t border-black/[.07] py-2.5 first-of-type:border-t-0">
-      <b className="text-[15px] leading-snug">{title}</b>
-      {body ? <div className="text-sm text-muted-foreground">{body}</div> : null}
-      <div className={`mt-1 flex ${choose ? "flex-col items-end" : "justify-end"} gap-1`}>{buttons}</div>
-    </div>
-  );
+  const tb = (main = false) => `min-h-11 px-3 rounded-full text-sm ${main ? "font-bold text-primary" : "font-semibold text-muted-foreground"} disabled:opacity-50`;
+  const item = (key: string, title: string, body: string | null, buttons: React.ReactNode, choose = false) => <ItemRow key={key} title={title} facts={body} stacked={choose}>{buttons}</ItemRow>;
 
   const actionItem = (p: DayProblem) => {
     const see = p.appointment_id ? <button type="button" className={tb()} onClick={() => seeIt(p.appointment_id!)}>See it</button> : null;
@@ -164,15 +167,15 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   const dayName = day === today ? "Today" : new Date(day).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   return (
     <InboxSheet open={open} onOpenChange={onOpenChange} title={dayName} empty="Nothing else needs you."
-      // The one inbox for the whole app (story 1). Patients and Team fill in when their rules exist (Settings, What needs you); empty sections do not show.
+      foot={<button type="button" className="min-h-11 w-full text-base font-semibold text-primary" onClick={() => { onOpenChange(false); openRules(); }}>What needs you · change the rules ›</button>}
+      // The one inbox for the whole app (story 1). Patients and Team come from the rules in Settings, What needs you; empty sections do not show.
       sections={[{
         name: "Day", count: act.length,
         body: act.length + didForYou.length + notes.length === 0 ? null : (
           <div className="space-y-3">
-            {act.length ? <ListGroup><div className="px-3">{act.map(actionItem)}</div></ListGroup> : null}
+            {act.length ? <ListGroup>{act.map(actionItem)}</ListGroup> : null}
             {didForYou.length + notes.length ? (
-              <div className="rounded-xl bg-background px-3 py-1">
-                <div className="pb-0.5 pt-2.5 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">Information · not counted</div>
+              <ListGroup title="Information · not counted">
             {didForYou.map((b) => item(b.batch_id, `${b.staff_name} is not in ${day === today ? "today" : `on ${dayName}`}`,
               b.moved.length
                 ? `${first(b.staff_name)}'s ${b.moved.length} treatment${b.moved.length === 1 ? "" : "s"} went to ${listed([...new Set(b.moved.map((m) => first(m.to.staff_name)))])}.`
@@ -193,10 +196,16 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
               {p.appointment_id ? <button type="button" className={tb()} onClick={() => seeIt(p.appointment_id!)}>See it</button> : null}
               <button type="button" className={tb()} onClick={() => dismiss(p.id)}>Dismiss</button>
             </>))}
-              </div>
+              </ListGroup>
             ) : null}
           </div>
         ),
+      }, {
+        name: "Patients", count: patientAct.length,
+        body: patientAct.length ? <ListGroup>{patientAct.map((i) => <Row key={i.id} title={i.who} facts={i.what} trailing={{ card: "Open card ›", diet: "Choose diet ›", summary: "Summary ›" }[i.action ?? "card"]} onClick={() => onItem(i)} />)}</ListGroup> : null,
+      }, {
+        name: "Team", count: teamAct.length,
+        body: teamAct.length + teamInfo.length ? <ListGroup>{[...teamAct, ...teamInfo].map((i) => <Row key={i.id} title={i.kind === "information" ? i.what : i.who} facts={i.kind === "information" ? "Information · not counted" : i.what} />)}</ListGroup> : null,
       }]}>
       {done ? (
         <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-primary">

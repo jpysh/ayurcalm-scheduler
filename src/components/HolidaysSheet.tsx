@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
-import { BottomSheet } from "@/components/BottomBar";
+import { BottomSheet, Empty, ListGroup, SheetFoot, Tick, dayText } from "@/components/kit";
 
 type Holiday = { date: string; name: string };
 
 /**
- * Leave → Public holidays (#219): India's gazetted holidays still to come, all
+ * Settings → Opening hours → Public holidays (#219, #288): India's gazetted holidays still to come, all
  * ticked, so closing the centre on them is one tap. Untick what the centre
  * works through. Days already closed are left out.
  */
@@ -47,32 +47,18 @@ export function HolidaysSheet({ open, onOpenChange, closed, today, onAdded }: {
     onOpenChange(false);
   }
 
-  const fmt = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
-
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange} title="Public holidays">
-      {list === null ? <p className="text-sm text-muted-foreground">Loading…</p>
-        : list.length === 0 ? <p className="text-sm">Every public holiday ahead is already a closed day.</p>
-        : (
-          <div className="grid gap-3">
-            <p className="text-[13px] text-muted-foreground">India's gazetted holidays. Untick the days the centre stays open. Moon-dated days can move by one.</p>
-            <div className="max-h-[50vh] overflow-y-auto rounded-2xl border border-border">
-              {list.map((h) => (
-                <label key={key(h)} className="flex min-h-[54px] items-center gap-3 border-b border-border px-3 last:border-b-0">
-                  <input type="checkbox" className="h-5 w-5 min-h-0 min-w-0 flex-none" checked={!off[key(h)]} onChange={(e) => setOff((o) => ({ ...o, [key(h)]: !e.target.checked }))} />
-                  <span className="grid">
-                    <span className="text-[16px] font-semibold">{h.name}</span>
-                    <span className="text-[13px] text-muted-foreground">{fmt(h.date)}</span>
-                  </span>
-                </label>
-              ))}
+    <BottomSheet open={open} onOpenChange={onOpenChange} title="Public holidays" note="India's gazetted holidays still to come. Untick the days the centre stays open; moon-dated days can move by one."
+      foot={list?.length ? <SheetFoot busy={busy} ok={!!chosen.length} save={add} label={`Close the centre on ${chosen.length} day${chosen.length === 1 ? "" : "s"}`} /> : undefined}>
+      {list === null ? null : list.length === 0 ? <Empty text="Every public holiday ahead is already a closed day." /> : (
+        <ListGroup>
+          {list.map((h) => (
+            <div key={key(h)} className="flex min-h-14 items-center border-b border-border px-3 last:border-b-0">
+              <Tick on={!off[key(h)]} set={(v) => setOff((o) => ({ ...o, [key(h)]: !v }))} label={<span className="grid"><span className="font-semibold">{h.name}</span><span className="text-[13px] text-muted-foreground">{dayText(h.date)}</span></span>} />
             </div>
-            <button type="button" disabled={busy || !chosen.length} onClick={add}
-              className="min-h-11 w-full rounded-full bg-primary px-4 font-semibold text-primary-foreground disabled:opacity-50">
-              {busy ? "Saving…" : `Close the centre on ${chosen.length} day${chosen.length === 1 ? "" : "s"}`}
-            </button>
-          </div>
-        )}
+          ))}
+        </ListGroup>
+      )}
     </BottomSheet>
   );
 }

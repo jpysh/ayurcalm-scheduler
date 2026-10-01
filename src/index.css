@@ -48,6 +48,10 @@
 
     --now: 17 88% 40%;
 
+    /* Done for you, or changed from the default (#288): amber text on its tint. */
+    --notice: 39 77% 24%;
+    --notice-bg: 40 77% 92%;
+
     /* Shape and elevation (DESIGN.md §4): one shadow for everything that floats, one bar height. */
     --shadow-float: 0 4px 18px rgb(31 42 48 / 0.14);
     --radius-sheet: 20px;

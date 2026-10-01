@@ -21,6 +21,7 @@ import { residentDay } from './residentDay.js';
 import { changeLog } from './changeLog.js';
 import { therapyLibrary } from './therapyLibrary.js';
 import { requireAdmin } from './settings.js';
+import { attentionFor, changesSchema } from './attention.js';
 import { indiaHolidays } from './indiaHolidays.js';
 
 if (!process.env.DATABASE_URL) {
@@ -897,6 +898,20 @@ app.post('/patients/:id/link', requireAdmin, async (req: Request, res: Response)
 app.get('/staff-week', async (req: Request, res: Response) => {
   const start = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.query.start);
   res.json(await staffWeek(start, prisma));
+});
+
+/** What needs the admin (#288): the rules with today's counts, and the patient and team items of those that are on. */
+app.get('/attention', async (req: Request, res: Response) => {
+  const date = req.query.date ? String(req.query.date).slice(0, 10) : undefined;
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) { res.status(400).json({ error: 'date=YYYY-MM-DD required' }); return; }
+  res.json(await attentionFor(prisma, date));
+});
+/** Only what the admin changed is kept; `{}` puts every rule back to its default (Reset). */
+app.put('/attention/rules', requireAdmin, async (req: Request, res: Response) => {
+  const parsed = changesSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid rules' }); return; }
+  await prisma.settings.update({ where: { id: 'singleton' }, data: { attention_rules: parsed.data } });
+  res.json(await attentionFor(prisma));
 });
 
 app.get('/staff-day', async (req: Request, res: Response) => {

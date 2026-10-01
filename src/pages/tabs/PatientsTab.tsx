@@ -49,7 +49,7 @@ const DAY_MS = 86400000;
  * Residents (#63, docs/design/phone.html): who is in house today, arriving,
  * staying and leaving, from their stays. Search finds anyone, in house or not.
  */
-function ResidentsList({ patients, today, onOpen, q, everything }: { patients: Patient[]; today: string; onOpen: (id: string) => void; q: string; everything: (q: string) => void }) {
+function ResidentsList({ patients, today, onOpen, q, everything, openRules }: { patients: Patient[]; today: string; onOpen: (id: string) => void; q: string; everything: (q: string) => void; openRules: () => void }) {
   const [inHouse, setInHouse] = useState<InHouse[] | null>(null);
   useEffect(() => {
     fetchJsonWithTimeout<InHouse[]>(`${API_BASE}/patients?resident_on=${today}`).then((r) => setInHouse(Array.isArray(r) ? r : [])).catch(() => setInHouse([]));
@@ -81,7 +81,7 @@ function ResidentsList({ patients, today, onOpen, q, everything }: { patients: P
   const leavesIn = (end: string) => Math.round((Date.parse(end) - Date.parse(`${today}T00:00:00Z`)) / DAY_MS);
   return (
     <div>
-      <PageHead title="Patients" note={inHouse === null ? '' : `${people.length} in house`} />
+      <PageHead title="Patients" note={inHouse === null ? '' : `${people.length} in house`} gear={{ label: 'What needs you: patient rules', run: openRules }} />
       {ql ? (
         found === null ? <Loading rows={3} /> : (<>
           <ListGroup title={`Patients matching “${found.q}”`} count={found.list.length}>
@@ -230,7 +230,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
 }
 
 /** The Patients screen: the Add and Details dialogs and the tab, held by the dashboard so they last as long as it does. */
-export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, openTreatment, book, searchEverything, openCatalogue }: {
+export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, openTreatment, book, searchEverything, openCatalogue, openRules }: {
   patients: PatientRow[]; setPatients: React.Dispatch<React.SetStateAction<PatientRow[]>>; staff: UiStaff[];
   therapyNameById: Record<string, string>; timezone: string;
   /** A treatment on the resident card opens the treatment card, on its day. */
@@ -241,6 +241,8 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   searchEverything: (q: string) => void;
   /** "Edit the list" on a package or accommodation picker opens that list in Settings. */
   openCatalogue: (which: 'packages' | 'accommodation') => void;
+  /** The gear on the head: the rules for what Patients raises (#288). */
+  openRules: () => void;
 }) {
   const ADMIN_TZ = timezone;
   const [showAddPatient, setShowAddPatient] = useState(false);
@@ -364,7 +366,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const backToCard = (close: () => void) => () => { close(); if (back) { setCardId(back); setBack(null); } };
   const tab = (
     <>
-      <ResidentsList patients={patients} today={today} onOpen={setCardId} q={query} everything={searchEverything} />
+      <ResidentsList patients={patients} today={today} onOpen={setCardId} q={query} everything={searchEverything} openRules={openRules} />
     </>
   );
 
