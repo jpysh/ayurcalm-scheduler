@@ -18,7 +18,7 @@ import DayDietDialog from "./DayDietDialog";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
-import { wide, ChangeLine, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText, rupees } from "@/components/kit";
+import { wide, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText, rupees } from "@/components/kit";
 import { AccommodationSheet, DietSheet, DischargeSheet, PackageSheet, StaySheet, type CardStay, type StayTarget } from "@/components/CardSheets";
 import { marked } from "@/components/SearchScreen";
 // removed dialog import to avoid dev parse error
@@ -161,10 +161,10 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, today]);
   const [checklist, setChecklist] = useState(false);
+  const startIntake = (x: ResidentDay) => ({ vitals: x.stay!.vitals || '', concerns: x.stay!.concerns || '', tests: x.stay!.tests || '' });
+  const visit = (v: Visit, withTime: boolean) => `${visitDay(v.date)}${withTime ? ` ${v.start_time}` : ''}${v.doctor ? ` · ${v.doctor}` : ''}`;
   const booked = d ? d.treatments.filter((t) => !t.consultation && t.status !== 'no_show').length : 0;
   const nights = d?.stay ? Math.round((Date.parse(d.stay.end_date) - Date.parse(d.stay.start_date)) / DAY_MS) : 0;
-  const fact = "flex w-full min-h-11 items-center gap-3 border-b border-border px-3 py-2.5 text-left last:border-b-0";
-  const label = "mx-1 mb-1.5 mt-3.5 text-xs font-semibold uppercase tracking-[.05em] text-muted-foreground";
   return (
     <BottomSheet open={!!id} onOpenChange={(o) => { if (!o) onClose(); }} title={d?.name || 'Patient'}>
       {d ? (
@@ -183,85 +183,48 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
           </div>
           {/* Story 8: what the summary still lacks. It informs and never blocks; printing is always there. */}
           {d.stay?.discharge ? <div className="mt-3"><ChecklistBar label="Discharge summary" done={d.stay.discharge.done} total={d.stay.discharge.total} onClick={() => setChecklist(true)} /></div> : null}
-          <div className={label}>Treatments today</div>
-          <div className="overflow-hidden rounded-xl border">
+          <ListGroup title="Treatments today">
             {d.treatments.length ? d.treatments.map((t) => (
-              <button key={t.id} type="button" className={fact} onClick={() => openTreatment(t)}>
-                <span className="w-12 flex-none tabular-nums text-muted-foreground">{t.start_time}</span>
-                <span className="flex-1">{t.status === 'no_show' ? <s>{t.therapy_name}</s> : t.therapy_name} · {t.staff_names.length ? `with ${t.staff_names.join(' & ')}` : 'no therapist'}</span>
-                <span className="text-[13px] text-muted-foreground">{t.room_name}</span>
-              </button>
-            )) : <div className={fact}>Rest day</div>}
-          </div>
+              <Row key={t.id} onClick={() => openTreatment(t)} title={<>{t.start_time} · {t.status === 'no_show' ? <s>{t.therapy_name}</s> : t.therapy_name}</>}
+                facts={t.staff_names.length ? `with ${t.staff_names.join(' & ')}` : 'No therapist yet'} trailing={t.room_name || undefined} />
+            )) : <Empty text="Rest day: nothing booked today." />}
+          </ListGroup>
           {/* Arrival (#219): the first days, until the intake is written. Then the plan follows from the consultation. */}
-          {d.stay && (d.stay.day <= 3 || !d.stay.vitals) ? (<>
-            <div className={label}>Arrival</div>
-            {intake === null ? (
-              <div className="overflow-hidden rounded-xl border">
-                <button type="button" className={fact} onClick={() => setIntake({ vitals: d.stay!.vitals || '', concerns: d.stay!.concerns || '', tests: d.stay!.tests || '' })}>
-                  <span className="w-5 flex-none">{d.stay.vitals && d.stay.concerns ? '✓' : '○'}</span>
-                  <span className="flex-1">{d.stay.vitals || d.stay.concerns ? [d.stay.vitals, d.stay.concerns].filter(Boolean).join(' · ') : 'Vitals and concerns'}</span>
-                  <span className="text-muted-foreground">›</span>
-                </button>
-                <button type="button" className={fact} onClick={() => setIntake({ vitals: d.stay!.vitals || '', concerns: d.stay!.concerns || '', tests: d.stay!.tests || '' })}>
-                  <span className="w-5 flex-none">{d.stay.tests ? '✓' : '○'}</span>
-                  <span className="flex-1">{d.stay.tests ? `Tests: ${d.stay.tests}` : 'External tests, if any'}</span>
-                  <span className="text-muted-foreground">›</span>
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2 rounded-xl border p-3 text-[13px] text-muted-foreground">
-                <label className="grid gap-1">Vitals<input autoFocus className="min-h-11 rounded-lg border px-2 text-[16px] text-foreground" placeholder="BP 130/85, pulse 72, weight 68 kg" value={intake.vitals} onChange={(e) => setIntake({ ...intake, vitals: e.target.value })} /></label>
-                <label className="grid gap-1">What they came about<textarea rows={2} className="rounded-lg border p-2 text-[16px] text-foreground" value={intake.concerns} onChange={(e) => setIntake({ ...intake, concerns: e.target.value })} /></label>
-                <label className="grid gap-1">External tests<input className="min-h-11 rounded-lg border px-2 text-[16px] text-foreground" placeholder="Blood sugar, thyroid" value={intake.tests} onChange={(e) => setIntake({ ...intake, tests: e.target.value })} /></label>
-                <div className="flex justify-end gap-2">
-                  <button type="button" className="min-h-11 rounded-full px-4 font-semibold" onClick={() => setIntake(null)}>Cancel</button>
-                  <button type="button" className="min-h-11 rounded-full bg-primary px-5 font-semibold text-primary-foreground" onClick={saveIntake}>Save</button>
-                </div>
-              </div>
-            )}
-          </>) : null}
-          <div className={label}>Doctor</div>
-          <div className="overflow-hidden rounded-xl border">
-            {([['Last', d.last_consultation], ['Next', d.next_consultation]] as const).map(([k, v]) => {
-              const inner = (<>
-                <span className="w-12 flex-none text-muted-foreground">{k}</span>
-                <span className="flex-1">{v ? `${visitDay(v.date)}${k === 'Next' ? ` ${v.start_time}` : ''}${v.doctor ? ` · ${v.doctor}` : ''}` : k === 'Last' ? 'Not seen yet' : 'None booked · book one'}</span>
-                {!v && k === 'Next' ? <span className="text-muted-foreground">›</span> : null}
-              </>);
-              return !v && k === 'Next' ? <button key={k} type="button" className={fact} onClick={() => book(d)}>{inner}</button> : <div key={k} className={fact}>{inner}</div>;
-            })}
-            {plan === null ? (
-              <button type="button" className={fact} onClick={() => setPlan(d.doctor_plan || '')}>
-                <span className="w-12 flex-none text-muted-foreground">Plan</span>
-                <span className="flex-1">{d.doctor_plan || 'No plan written yet'}</span>
-                <span className="text-muted-foreground">›</span>
-              </button>
-            ) : (
-              <div className="flex flex-col gap-2 p-3">
-                <textarea aria-label="Doctor's plan" autoFocus rows={4} className="w-full rounded-lg border p-2 text-[16px]" value={plan} onChange={(e) => setPlan(e.target.value)} />
-                <div className="flex justify-end gap-2">
-                  <button type="button" className="min-h-11 rounded-full px-4 font-semibold text-muted-foreground" onClick={() => setPlan(null)}>Cancel</button>
-                  <button type="button" className="min-h-11 rounded-full bg-primary px-5 font-semibold text-primary-foreground" onClick={savePlan}>Save plan</button>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className={label}>Meals today{d.plan_name ? ` · ${d.plan_name}` : ''}</div>
-          <div className="overflow-hidden rounded-xl border">
-            {d.meals.length ? d.meals.map((m) => (
-              <div key={m.meal} className={fact}><span className="w-20 flex-none text-muted-foreground">{m.meal}</span><span className="flex-1">{m.text}</span></div>
-            )) : <div className={fact}>No diet plan yet</div>}
-          </div>
+          {d.stay && (d.stay.day <= 3 || !d.stay.vitals) ? (
+            <ListGroup title="Arrival">
+              <TextRow label="Vitals and what they came about" faint={!d.stay.vitals && !d.stay.concerns} onClick={() => setIntake(startIntake(d))}>{d.stay.vitals || d.stay.concerns ? [d.stay.vitals, d.stay.concerns].filter(Boolean).join(' · ') : 'Not written yet'}</TextRow>
+              <TextRow label="External tests" faint={!d.stay.tests} onClick={() => setIntake(startIntake(d))}>{d.stay.tests || 'None recorded'}</TextRow>
+            </ListGroup>
+          ) : null}
+          <ListGroup title="Doctor">
+            <ChangeLine label="Last seen" value={d.last_consultation ? visit(d.last_consultation, false) : 'Not seen yet'} faint={!d.last_consultation} />
+            <ChangeLine label="Next" value={d.next_consultation ? visit(d.next_consultation, true) : 'None booked · book one'} faint={!d.next_consultation} onClick={d.next_consultation ? undefined : () => book(d)} />
+            <TextRow label="Plan" faint={!d.doctor_plan} onClick={() => setPlan(d.doctor_plan || '')}>{d.doctor_plan || 'No plan written yet'}</TextRow>
+          </ListGroup>
+          <ListGroup title={`Meals today${d.plan_name ? ` · ${d.plan_name}` : ''}`}>
+            {d.meals.length ? d.meals.map((m) => <TextRow key={m.meal} label={m.meal}>{m.text}</TextRow>) : <Empty text="No diet plan yet. Tap Diet above to choose one." />}
+          </ListGroup>
           <div className="mt-3 border-t border-border">
             <ChangeLine label="Private link" value="Share their day" onClick={() => shareLink('patients', d.id, d.name)} />
           </div>
         </div>
       ) : <div className="py-6 text-center text-muted-foreground">…</div>}
+      <BottomSheet open={intake !== null} onOpenChange={(o) => { if (!o) setIntake(null); }} title={`Arrival · ${d?.name.split(' ')[0] ?? ''}`} note="Written once, from the first days. Nothing here is required."
+        foot={<Foot label="Save arrival notes" save={saveIntake} />}>
+        {intake ? (<>
+          <Text label="Vitals (optional)" placeholder="BP 130/85, pulse 72, weight 68 kg" value={intake.vitals} onChange={(e) => setIntake({ ...intake, vitals: e.target.value })} />
+          <Area label="What they came about (optional)" rows={3} value={intake.concerns} onChange={(e) => setIntake({ ...intake, concerns: e.target.value })} />
+          <Text label="External tests (optional)" placeholder="Blood sugar, thyroid" value={intake.tests} onChange={(e) => setIntake({ ...intake, tests: e.target.value })} />
+        </>) : null}
+      </BottomSheet>
+      <BottomSheet open={plan !== null} onOpenChange={(o) => { if (!o) setPlan(null); }} title={`Doctor's plan · ${d?.name.split(' ')[0] ?? ''}`} note="Printed on their discharge summary."
+        foot={<Foot label="Save the plan" save={savePlan} />}>
+        {plan !== null ? <Area label="Plan (optional)" rows={6} value={plan} onChange={(e) => setPlan(e.target.value)} /> : null}
+      </BottomSheet>
       {checklist && d ? <DischargeSheet patient={d} stay={d.stay} onClose={() => setChecklist(false)} print={summary}
         openField={(where) => { setChecklist(false); if (where === 'details') details(d.id); else openDischarge(); }} write={() => { setChecklist(false); openDischarge(); }} /> : null}
       <BottomSheet open={!!discharge} onOpenChange={(o) => { if (!o) setDischarge(null); }} title={`Discharge summary · ${d?.name ?? ''}`}>
-        {discharge ? <div className="-mt-2 max-h-[75dvh] overflow-y-auto"><DischargeForm view={discharge} admin doctors={doctors} onSave={saveDischarge} onPdf={summary} /></div> : null}
+        {discharge ? <DischargeForm view={discharge} admin doctors={doctors} onSave={saveDischarge} onPdf={summary} /> : null}
       </BottomSheet>
     </BottomSheet>
   );
@@ -351,11 +314,13 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   // null while loading: an empty list would say "Not staying" and "No treatments" for a moment (#265 B2).
   const [infoAppointments, setInfoAppointments] = useState<ApiAppointment[] | null>(null);
   const [infoStays, setInfoStays] = useState<ApiStay[] | null>(null);
+  const [allTx, setAllTx] = useState(false);
   const showPatientInfo = async (p: PatientRow) => {
     setInfoPatient(p);
     setInfoDraft({ ...p });
     setInfoAppointments(null);
     setInfoStays(null);
+    setAllTx(false);
     try {
       const [appts, stays] = await Promise.all([
         fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?patient_id=${p.id}`),
@@ -488,9 +453,11 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           <ListGroup title="Stays" count={infoStays?.length}>
             {infoStays === null ? <Loading rows={1} /> : infoStays.length ? infoStays.map((st) => <Row key={st.id} title={`${stayDay(st.start_date)} to ${stayDay(st.end_date)}`} facts={`${st.duration_days} days`} onClick={() => { setStayFor({ patient: infoPatient, target: { id: st.id, start: st.start_date.slice(0, 10), end: st.end_date.slice(0, 10), package: null, accommodation: null } }); setInfoPatient(null); }} />) : <Empty text="No stays yet." />}
           </ListGroup>
+          {/* Nearest to today first: that is what is asked about; the rest is one tap away. */}
           <ListGroup title="Treatments" count={infoAppointments?.length}>
-            {infoAppointments === null ? <Loading rows={2} /> : infoAppointments.length ? infoAppointments.map((a) => <Row key={a.id} title={`${longDay(a.scheduled_date)} · ${a.start_time}`} facts={[therapyNameById[String(a.therapy_id)] || 'Treatment', a.status === 'cancelled' ? `Cancelled${a.cancel_reason ? `: ${a.cancel_reason}` : ''}` : '', recordLine(a)].filter(Boolean).join(' · ')} />) : <Empty text="No treatments yet." />}
+            {infoAppointments === null ? <Loading rows={2} /> : infoAppointments.length ? [...infoAppointments].sort((a, b) => Math.abs(Date.parse(a.scheduled_date) - Date.parse(today)) - Math.abs(Date.parse(b.scheduled_date) - Date.parse(today))).slice(0, allTx ? undefined : 8).map((a) => <Row key={a.id} title={`${longDay(a.scheduled_date)} · ${a.start_time}`} facts={[therapyNameById[String(a.therapy_id)] || 'Treatment', recordLine(a)].filter(Boolean).join(' · ')} flag={a.status === 'cancelled' ? `Cancelled${a.cancel_reason ? `: ${a.cancel_reason}` : ''}` : undefined} />) : <Empty text="No treatments yet." />}
           </ListGroup>
+          {infoAppointments && infoAppointments.length > 8 && !allTx ? <button type="button" className="mx-1 mt-2 min-h-11 text-base font-semibold text-primary" onClick={() => setAllTx(true)}>Show all {infoAppointments.length} ›</button> : null}
         </>) : null}
       </BottomSheet>
     </>

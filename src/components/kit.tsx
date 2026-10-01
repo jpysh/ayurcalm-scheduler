@@ -181,11 +181,11 @@ export const Days = ({ value, onChange }: { value: string[]; onChange: (v: strin
  * The sheet's foot: one main button, always in view however long the sheet, and
  * for an existing entry a quiet Remove under it.
  */
-export function Foot({ busy, save, label = "Save", remove, ok = true }: { busy?: boolean; save: () => void; label?: string; remove?: () => void; ok?: boolean }) {
+export function Foot({ busy, save, label = "Save", remove, removeLabel = "Remove", ok = true }: { busy?: boolean; save: () => void; label?: string; remove?: () => void; removeLabel?: string; ok?: boolean }) {
   return (
     <div className="sticky bottom-[calc(-1rem-env(safe-area-inset-bottom))] z-10 -mx-4 -mb-[calc(1rem+env(safe-area-inset-bottom))] mt-4 grid gap-1 bg-card px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
       <button type="button" className={`${wide} bg-primary text-primary-foreground disabled:opacity-50`} disabled={busy || !ok} onClick={save}>{busy ? "Saving…" : label}</button>
-      {remove ? <button type="button" className={`${wide} text-sm text-destructive`} onClick={remove}>Remove</button> : null}
+      {remove ? <button type="button" className={`${wide} text-sm text-destructive`} onClick={remove}>{removeLabel}</button> : null}
     </div>
   );
 }
@@ -408,6 +408,16 @@ export const ChangeLine = ({ label, value, onClick, select, faint }: { label: st
     </>
   );
   return onClick ? <button type="button" onClick={onClick} className={cls}>{inner}</button> : <div className={cls}>{inner}</div>;
+};
+
+/** A fact that needs its whole text (a plan, a meal): label above, the words wrapped below, a › when a tap edits it. */
+export const TextRow = ({ label, children, onClick, faint }: { label: string; children: ReactNode; onClick?: () => void; faint?: boolean }) => {
+  const cls = "flex min-h-12 w-full items-center gap-3 border-b border-border px-3 py-2.5 text-left last:border-b-0";
+  const body = (<>
+    <span className="min-w-0 flex-1"><span className={`block ${noteText}`}>{label}</span><span className={`block whitespace-pre-line text-base ${faint ? "text-muted-foreground" : ""}`}>{children}</span></span>
+    {onClick ? <span aria-hidden className="flex-none text-muted-foreground">›</span> : null}
+  </>);
+  return onClick ? <button type="button" className={cls} onClick={onClick}>{body}</button> : <div className={cls}>{body}</div>;
 };
 
 /** The phone's calendar laid over a ChangeLine, the way DateRow does it. */

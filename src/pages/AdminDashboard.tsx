@@ -514,15 +514,16 @@ const AdminDashboard = () => {
   // The adaptive + (#285): it adds what the screen is about. A trial that has ended adds nothing and says so.
   const [showTeamChoice, setShowTeamChoice] = useState(false);
   const guard = (adds: string, what: string, run: () => void) => ({ adds, run: () => { if (readOnly) { toast(`The free trial has ended, so nothing new can be ${what}. Nothing is deleted.`, { duration: 10000, action: { label: "Choose a plan", onClick: () => go('settings') } }); return; } run(); } });
+  const dietScreen = useDietScreen({ active: activeTab === 'diet' });
   const plusFor = activeTab === 'schedule' ? guard('Book a treatment', 'booked', scheduleScreen.openBook)
     : activeTab === 'patients' ? guard('New patient', 'added', patientsScreen.openAdd)
     : activeTab === 'timeoff' ? guard('Add leave', 'added', timeOffScreen.openAdd)
+    : activeTab === 'diet' ? guard('New diet plan', 'added', dietScreen.openAdd)
     : activeTab === 'team' ? guard('Add to the team', 'added', () => setShowTeamChoice(true))
     : activeTab === 'staff' ? guard('Add therapist or doctor', 'added', staffScreen.openAdd)
     : activeTab === 'rooms' ? guard('Add room', 'added', roomsScreen.openAdd)
     : activeTab === 'therapies' ? guard('Add therapy', 'added', therapiesScreen.openAdd)
     : null;
-  const dietScreen = useDietScreen({ patients, setPatients, therapies, therapyNameById, ymdInTZ, active: activeTab === 'diet' });
 
   // The list screens grow as the admin scrolls to the bottom.
   const listScreens: Record<string, { setVisibleRows: React.Dispatch<React.SetStateAction<number>>; totalRef: React.MutableRefObject<number> }> = {

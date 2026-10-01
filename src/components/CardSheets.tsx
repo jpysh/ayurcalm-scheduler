@@ -32,7 +32,7 @@ type Who = { id: string; name: string };
 
 /* ------------------------------ Story 7: meals by date ------------------------------ */
 
-type Plan = { id: string; name: string; description?: string | null; is_active: boolean; patients: number; medication?: string | null } & Record<string, unknown>;
+export type Plan = { id: string; name: string; description?: string | null; is_active: boolean; patients: number; medication?: string | null } & Record<string, unknown>;
 type DietLine = { id: string; from: string; to: string; template_id: string | null; name: string; patients: number; changed_for_patient: boolean };
 type Line = { stay: { id: string; start: string; end: string }; entries: DietLine[] };
 
@@ -93,45 +93,68 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
   );
 }
 
+export const BLANK_PLAN: Plan = { id: "new", name: "", description: "", is_active: true, patients: 0 };
 const PLAN_FIELDS = MEALS.flatMap(([k, t]) => [[`therapy_${k}`, `${t} · treatment days`], [`rest_${k}`, `${t} · rest days`]] as const);
 
-/** A plan's meals: for everyone on it, or a copy for this patient alone (the segment's overrides win over the plan). */
-function PlanEditor({ plan, patient, segmentId, onClose, onSaved }: { plan: Plan; patient: Who; segmentId: string; onClose: () => void; onSaved: () => void }) {
+/**
+ * A plan's meals: for everyone on it, or a copy for this patient alone (the segment's overrides win over the plan).
+ * With no patient it is the Diet plans screen's editor: the whole plan, new or existing, always for everyone.
+ */
+export function PlanEditor({ plan, patient, segmentId = "", onClose, onSaved }: { plan: Plan; patient?: Who; segmentId?: string; onClose: () => void; onSaved: () => void }) {
   const [over, setOver] = useState<Record<string, string> | null>(null);
   const [text, setText] = useState<Record<string, string> | null>(null);
+  const isNew = plan.id === "new";
   const [scope, setScope] = useState<"me" | "all">(segmentId ? "me" : "all");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     (async () => {
-      const segs = segmentId ? await fetchJsonWithTimeout<{ id: string; overrides: Record<string, string> | null }[]>(`${API_BASE}/dietplans/segments?patient_id=${patient.id}`) : [];
+      const segs = segmentId && patient ? await fetchJsonWithTimeout<{ id: string; overrides: Record<string, string> | null }[]>(`${API_BASE}/dietplans/segments?patient_id=${patient.id}`) : [];
       const o = (Array.isArray(segs) ? segs.find((s) => s.id === segmentId)?.overrides : null) || {};
       setOver(o);
-      const all = [...PLAN_FIELDS.map(([k]) => k), "medication"];
+      const all = [...PLAN_FIELDS.map(([k]) => k), "medication", ...(patient ? [] : ["name", "description", "pre_therapy_notes", "post_therapy_notes"])];
       setText(Object.fromEntries(all.map((k) => [k, String(o[k] ?? plan[k] ?? "")])));
     })();
-  }, [plan, patient.id, segmentId]);
+  }, [plan, patient?.id, segmentId]);
   const save = async () => {
     if (!text) return;
     setBusy(true);
+    if (!patient && !text.name.trim()) { toast.error("Give the plan a name."); setBusy(false); return; }
     const res = scope === "all"
-      ? await fetch(`${API_BASE}/diet-templates/${plan.id}`, { method: "PUT", headers: json, body: JSON.stringify(text) })
+      ? await fetch(`${API_BASE}/diet-templates${isNew ? "" : `/${plan.id}`}`, { method: isNew ? "POST" : "PUT", headers: json, body: JSON.stringify(text) })
       // Only what differs from the plan is kept as this patient's own wording.
       : await fetch(`${API_BASE}/dietplans/segments/${segmentId}`, { method: "PUT", headers: json, body: JSON.stringify({ overrides: Object.fromEntries(Object.entries(text).filter(([k, v]) => v !== String(plan[k] ?? "") || (over && k in over))) }) });
     setBusy(false);
-    if (!res.ok) { toast.error(res.status === 403 ? "Only an administrator can change a plan for everyone." : "The plan was not saved."); return; }
-    toast.success(scope === "all" ? `${plan.name} changed for ${plural(plan.patients, "patient")}` : `${plan.name} changed for ${first(patient.name)} only`);
+    if (!res.ok) { toast.error(res.status === 409 ? "A plan with that name already exists." : res.status === 403 ? "Only an administrator can change a plan for everyone." : "The plan was not saved."); return; }
+    if (!patient) toast.success(isNew ? `${text.name.trim()} added` : `${text.name.trim()} saved`);
+    else toast.success(scope === "all" ? `${plan.name} changed for ${plural(plan.patients, "patient")}` : `${plan.name} changed for ${first(patient.name)} only`);
+    onSaved();
+  };
+  const retire = async () => {
+    const res = await fetch(`${API_BASE}/diet-templates/${plan.id}`, { method: "DELETE" });
+    if (!res.ok) { toast.error("The plan was not retired."); return; }
+    const out = await res.json().catch(() => ({}));
+    toast.success(out.retired ? `Retired. ${plural(out.patients, "patient")} still on it, and their sheets still print.` : "Plan removed");
     onSaved();
   };
   return (
-    <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} title={plan.name} note="Type in a meal to change it. Leave a box empty for no meal."
-      foot={<Foot label="Save the meals" busy={busy} ok={!!text} save={save} />}>
+    <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} title={isNew ? "New diet plan" : plan.name} note={patient ? "Type in a meal to change it. Leave a box empty for no meal." : "A rest-day meal left empty repeats the treatment-day one."}
+      foot={<Foot label={patient ? "Save the meals" : isNew ? "Add this plan" : "Save the plan"} busy={busy} ok={!!text} save={save} remove={!patient && !isNew ? retire : undefined} removeLabel="Retire this plan" />}>
       {text === null ? <Loading rows={3} /> : (<>
-        {segmentId ? (<>
+        {segmentId && patient ? (<>
           <Group label="Change it for"><Seg<"me" | "all"> value={scope} onChange={setScope} options={[["me", `Only ${first(patient.name)}`], ["all", "Everyone on it"]]} /></Group>
           <Consequence>{scope === "all" ? `${plural(plan.patients, "patient")} eat this plan, so it changes for all of them.` : `Only ${first(patient.name)}'s copy changes; the plan stays as it is.`}</Consequence>
-        </>) : <Consequence>{`${plural(plan.patients, "patient")} eat this plan, so it changes for all of them.`}</Consequence>}
+        </>) : plan.patients ? <Consequence>{`${plural(plan.patients, "patient")} eat this plan, so it changes for all of them.`}</Consequence> : null}
+        {!patient ? (<>
+          <Text label="Plan name" maxLength={120} autoComplete="off" value={text.name} onChange={(e) => setText({ ...text, name: e.target.value })} />
+          <Text label="Description (optional)" maxLength={2000} value={text.description} onChange={(e) => setText({ ...text, description: e.target.value })} />
+        </>) : null}
         {PLAN_FIELDS.map(([k, t]) => <Area key={k} label={`${t} (optional)`} rows={2} maxLength={2000} value={text[k]} onChange={(e) => setText({ ...text, [k]: e.target.value })} />)}
         <Text label="Medication (optional)" maxLength={2000} value={text.medication} onChange={(e) => setText({ ...text, medication: e.target.value })} />
+        {!patient ? (<>
+          <Text label="Before treatment (optional)" maxLength={2000} value={text.pre_therapy_notes} onChange={(e) => setText({ ...text, pre_therapy_notes: e.target.value })} />
+          <Text label="After treatment (optional)" maxLength={2000} value={text.post_therapy_notes} onChange={(e) => setText({ ...text, post_therapy_notes: e.target.value })} />
+          <p className={`mt-3 ${noteText}`}>Medication prints in the patient's own row. The two treatment notes print once, under "Around treatment".</p>
+        </>) : null}
       </>)}
     </BottomSheet>
   );
