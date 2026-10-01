@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { therapyLibrary } from './therapyLibrary.js';
 import 'dotenv/config';
 import { ensureStarterDietTemplates } from './dietTemplateSeed.js';
+import { ensureStarterCatalogues } from './catalogueSeed.js';
 import { PrismaClient } from '@prisma/client';
 import { staffEventBusy } from './availability.js';
 import bcrypt from 'bcrypt';
@@ -73,6 +74,7 @@ async function main() {
   if (process.env.ADMIN_EMAIL) {
     await ensureAdmin();
     await ensureStarterDietTemplates(prisma);
+    await ensureStarterCatalogues(prisma);
     const support = process.env.DEFAULT_SUPPORT_WHATSAPP ?? '420777558262';
     await prisma.settings.upsert({ where: { id: 'singleton' }, update: {}, create: { id: 'singleton', setup_complete: false, demo_data: false, support_whatsapp: support || null, patient_support_whatsapp: support || null } });
     console.log('Trial centre ready for its setup wizard');
@@ -433,19 +435,26 @@ async function main() {
   // centre edits them in the Diet tab. Upserted by name, so re-seeding does not
   // overwrite a plan someone has since changed.
   await ensureStarterDietTemplates(prisma);
+  await ensureStarterCatalogues(prisma);
 
   // Residents. Without these the demo has nobody actually staying at the centre,
   // so the day sheet shows neither meals nor the rest-day rows — two features
   // that would look missing rather than unseeded.
   const today = centreToday();
   const templates = await prisma.dietTemplate.findMany({ orderBy: { name: 'asc' } });
+  const packages = await prisma.package.findMany({ orderBy: { days: 'asc' } });
+  const houses = await prisma.accommodationType.findMany({ orderBy: { price_per_day: 'asc' } });
   const DAY_MS = 86400000;
   const residents: { id: string }[] = [];
   let stayCount = 0;
   const concernsSeed = ['Lower back pain, poor sleep', 'Stress and fatigue', 'Joint stiffness in the mornings', 'Digestion, acidity', 'Weight and energy', 'Recovery after illness'];
   const addStay = async (patient_id: string, start_date: Date, end_date: Date) => {
+    const days = Math.round((end_date.getTime() - start_date.getTime()) / DAY_MS) + 1;
     await prisma.patientStay.create({
       data: { patient_id, start_date, end_date, duration_days: Math.round((end_date.getTime() - start_date.getTime()) / DAY_MS) + 1,
+        // Most have chosen, some not yet: the card shows "Not decided yet" honestly (stories 11 and 12).
+        ...(stayCount % 3 !== 2 && packages.length ? { package_id: packages.reduce((best, p) => (Math.abs(p.days - days) < Math.abs(best.days - days) ? p : best)).id } : {}),
+        ...(stayCount % 4 !== 3 && houses.length ? { accommodation_id: houses[stayCount % houses.length].id } : {}),
         // Taken on arrival, so today's arrivals are the ones still to do (#219).
         ...(start_date < today ? { vitals: `BP ${118 + (stayCount * 7) % 30}/${76 + (stayCount * 3) % 14}, pulse ${66 + (stayCount * 5) % 18}`, concerns: concernsSeed[stayCount % concernsSeed.length], tests: stayCount % 4 === 0 ? 'Blood sugar (fasting), lipid profile' : null } : {}) },
     });

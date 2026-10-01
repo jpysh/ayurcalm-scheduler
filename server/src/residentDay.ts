@@ -7,6 +7,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { loadDietsForDay, mealLabel, mealOrder } from './dietResolution.js';
 import { centreClock, startedBefore, toMinutes } from './availability.js';
+import { dischargeOf } from './discharge.js';
 
 const DAY_MS = 86400000;
 
@@ -43,6 +44,13 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
   const team = [...new Set(appts.flatMap((a) => [a.staff_id, ...a.co_staff_ids]).filter((x): x is string => Boolean(x)))];
   const names = new Map((await prisma.staff.findMany({ where: { id: { in: team } }, select: { id: true, name: true } })).map((s) => [s.id, s.name]));
   const diet = diets.dietFor(patient, appts.some((a) => a.status !== 'no_show'));
+  // The plan that takes over later in the stay, so the Diet row can say "then X from 5 Oct".
+  const nextSeg = stay ? await prisma.dietPlanSegment.findFirst({ where: { patient_id: patientId, start_date: { gt: day, lte: stay.end_date } }, orderBy: { start_date: 'asc' }, include: { Template: { select: { name: true } } } }) : null;
+  const [pack, house, discharge] = stay ? await Promise.all([
+    stay.package_id ? prisma.package.findUnique({ where: { id: stay.package_id } }) : null,
+    stay.accommodation_id ? prisma.accommodationType.findUnique({ where: { id: stay.accommodation_id } }) : null,
+    dischargeOf(stay.id, prisma),
+  ]) : [null, null, null];
   return {
     id: patient.id,
     name: patient.name,
@@ -52,7 +60,10 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
       end_date: stay.end_date.toISOString().slice(0, 10),
       day: Math.round((day.getTime() - stay.start_date.getTime()) / DAY_MS) + 1,
       days: Math.round((stay.end_date.getTime() - stay.start_date.getTime()) / DAY_MS) + 1,
-      vitals: stay.vitals, concerns: stay.concerns, tests: stay.tests,
+      vitals: stay.vitals, concerns: stay.concerns, tests: stay.tests, on_site: stay.on_site,
+      package: pack && { id: pack.id, name: pack.name, days: pack.days, price: pack.price },
+      accommodation: house && { id: house.id, name: house.name, price_per_day: house.price_per_day, room_number: stay.room_number },
+      discharge: discharge?.ready ?? null,
     },
     treatments: appts.map(({ Therapy, Room, ...a }) => ({
       ...a,
@@ -65,6 +76,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
     last_consultation: visit(last),
     next_consultation: visit(next),
     plan_name: diet.planName,
+    diet_next: nextSeg && { from: nextSeg.start_date.toISOString().slice(0, 10), name: nextSeg.Template?.name || nextSeg.template_label || 'Own plan' },
     meals: mealOrder.filter((m) => diet.meals[m]).map((m) => ({ meal: mealLabel[m], text: diet.meals[m]! })),
   };
 }

@@ -509,7 +509,7 @@ export async function planDay(
  * whole point of the guard, not a surprise.
  */
 export async function applyPlan(
-  moves: { appointment_id: string; staff_id: string | null; co_staff_ids?: string[]; room_id: string | null; start_time: string; date: string; cancel?: boolean }[],
+  moves: { appointment_id: string; staff_id: string | null; co_staff_ids?: string[]; room_id: string | null; start_time: string; date: string; cancel?: boolean; /** Why it was cancelled, kept on the treatment. */ reason?: string }[],
   prisma: PrismaClient,
 ): Promise<{ batch_id: string; applied: number }> {
   const writes: { appointment_id: string; before: Record<string, unknown>; after: Record<string, unknown> }[] = [];
@@ -518,7 +518,7 @@ export async function applyPlan(
     if (!before) continue;
     if (m.cancel) {
       // Kept, not deleted: Undo puts it back as it was.
-      await prisma.appointment.update({ where: { id: m.appointment_id }, data: { status: 'cancelled' } });
+      await prisma.appointment.update({ where: { id: m.appointment_id }, data: { status: 'cancelled', cancel_reason: m.reason ?? null } });
     } else {
       await prisma.appointment.update({
         where: { id: m.appointment_id },
@@ -602,7 +602,7 @@ export async function undoReplan(batchId: string, prisma: PrismaClient) {
         start_time: w.before.start_time as string,
         scheduled_date: new Date(w.before.scheduled_date as string),
         // Older batches did not record it; they never changed it.
-        ...(w.before.status ? { status: w.before.status as 'pending' } : {}),
+        ...(w.before.status ? { status: w.before.status as 'pending', cancel_reason: null } : {}),
       },
     });
   }

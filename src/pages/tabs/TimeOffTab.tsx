@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DateRow, Days, Dropdown, Foot, Switch, Text, TimeList } from "@/components/kit";
+import { Consequence, DateRow, Days, Dropdown, Switch, Text, TimeList, TwoFoot } from "@/components/kit";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Plus, Trash2 } from "lucide-react";
@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
-import { API_TOKEN, leaveWhen, toLocalInput, type UiTimeOff, type UiStaff, type UiRoom, type UiTherapy, type Patient } from "./shared";
+import { API_TOKEN, fetchJsonWithTimeout, leaveWhen, toLocalInput, type UiTimeOff, type UiStaff, type UiRoom, type UiTherapy, type Patient } from "./shared";
 import PageHead from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
 import { HolidaysSheet } from "@/components/HolidaysSheet";
@@ -295,7 +295,7 @@ const TimeOffTab = ({
 export default TimeOffTab;
 
 /** The Time off screen: its filters, the Add dialog and the tab, held by the dashboard so they last as long as it does. */
-export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, isMobile, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, timeSlots }: {
+export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, isMobile, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, timeSlots, planDay }: {
   timeOffs: UiTimeOff[]; setTimeOffs: React.Dispatch<React.SetStateAction<UiTimeOff[]>>;
   staff: UiStaff[]; roomsList: UiRoom[]; therapies: UiTherapy[]; patients: Patient[];
   staffNameById: Record<string, string>; roomNameById: Record<string, string>; therapyNameById: Record<string, string>; patientNameById: Record<string, string>;
@@ -303,6 +303,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
   loadReplans: () => void; refreshAppointmentsForDate: (iso: string, silent?: boolean) => Promise<void>; todayKey: string;
   /** The centre's slot times, "HH:MM": what part-day leave starts and ends on. */
   timeSlots: string[];
+  /** Save and plan: shows the day of the leave with the plan for it, to accept. */
+  planDay: (iso: string) => void;
 }) {
   const [holidayTypeFilter, setHolidayTypeFilter] = useState<'all' | 'Center' | 'Staff' | 'Room' | 'Therapy' | 'Patient'>('all');
   const [holidayViewMode, setHolidayViewMode] = useState<'all'|'upcoming'|'past'>('upcoming');
@@ -327,6 +329,15 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     startTime: "", endTime: "",
     recurrence: undefined as 'weekly' | undefined, weekdays: undefined as UiTimeOff['weekdays'],
   });
+
+  // The consequence line: how many treatments the days would leave without their therapist (story 9).
+  const [impact, setImpact] = useState<number | null>(null);
+  useEffect(() => {
+    if (!showAddTimeOff || newTimeOff.type !== 'Staff' || !newTimeOff.entity) { setImpact(null); return; }
+    let stale = false;
+    fetchJsonWithTimeout<{ treatments: number }>(`${API_BASE}/timeoff/impact?staff_id=${newTimeOff.entity}&from=${newTimeOff.date}&to=${newTimeOff.endDate}`).then((r) => { if (!stale) setImpact(typeof r?.treatments === 'number' ? r.treatments : null); });
+    return () => { stale = true; };
+  }, [showAddTimeOff, newTimeOff.type, newTimeOff.entity, newTimeOff.date, newTimeOff.endDate]);
 
   const [editingTimeOffId, setEditingTimeOffId] = useState<string | null>(null);
   const [originalTimeOff, setOriginalTimeOff] = useState<UiTimeOff | null>(null);
@@ -425,11 +436,58 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
             />
   );
 
+  /** Records the leave; the day is planned now (the plan is shown to accept) or left waiting on the pill. */
+  const save = async (planNow: boolean) => {
+    if (newTimeOff.type !== 'Center' && !newTimeOff.entity) {
+      toast.error('Choose who is away first');
+      return;
+    }
+    const planFor = newTimeOff.date;
+    const entity_type = newTimeOff.type.toLowerCase();
+    const tempId = `temp-${Date.now()}`;
+    const startTime = newTimeOff.startTime || timeSlots[0] || '09:00';
+    const endTime = newTimeOff.endTime || timeSlots[timeSlots.length - 1] || '18:00';
+    const startIso = newTimeOff.fullDay ? setTimeHM(newTimeOff.date, 9, 0) : `${newTimeOff.date}T${startTime}`;
+    const endIso = newTimeOff.fullDay ? setTimeHM(newTimeOff.endDate, 18, 0) : `${newTimeOff.endDate}T${endTime}`;
+    const optimistic: UiTimeOff = { id: tempId, startDate: startIso, endDate: endIso, recurrence: newTimeOff.recurrence, weekdays: newTimeOff.weekdays as UiTimeOff['weekdays'], type: newTimeOff.type, entity: newTimeOff.type === 'Center' ? 'All' : (newTimeOff.entity || ''), description: newTimeOff.description };
+    setTimeOffs((prev) => [...prev, optimistic]);
+    setShowAddTimeOff(false);
+    setNewTimeOff({ date: todayKey, endDate: todayKey, type: 'Staff', entity: '', fullDay: true, description: '', startTime: '', endTime: '', recurrence: undefined, weekdays: undefined });
+    try {
+      const res = await fetch(`${API_BASE}/timeoff`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entity_type,
+          entity_id: optimistic.entity === 'All' ? null : (optimistic.entity || null),
+          start_date: optimistic.startDate,
+          end_date: optimistic.endDate,
+          start_time: newTimeOff.fullDay ? null : startTime,
+          end_time: newTimeOff.fullDay ? null : endTime,
+          recurrence: optimistic.recurrence,
+          weekdays: optimistic.weekdays,
+          description: optimistic.description,
+          // The plan is shown before it is applied, or waits: the server never rebuilds the day behind the admin's back from here.
+          plan: false,
+        }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const created = await res.json();
+      setTimeOffs((prev) => prev.map((h) => h.id === tempId ? { id: created.id, startDate: created.start_date ? new Date(created.start_date).toISOString() : undefined, endDate: created.end_date ? new Date(created.end_date).toISOString() : undefined, recurrence: created.recurrence || undefined, weekdays: created.weekdays || undefined, type: optimistic.type, entity: created.entity_id ?? optimistic.entity, description: created.description ?? optimistic.description } : h));
+      if (planNow) planDay(planFor);
+      else toast.success('Leave saved. The day still needs planning: it waits under "need you".');
+    } catch {
+      setTimeOffs((prev) => prev.filter((h) => h.id !== tempId));
+      toast.error('The leave was not saved. Try again.');
+    }
+  };
+
   const dialogs = (
     <>
       <HolidaysSheet open={showHolidays} onOpenChange={setShowHolidays} closed={closedDays} today={todayKey}
         onAdded={(rows) => setTimeOffs((prev) => [...prev, ...rows.map((x) => ({ id: x.id, date: new Date(x.date).toISOString(), type: "Center" as const, entity: "All", description: x.description }))])} />
-      <BottomSheet open={showAddTimeOff} onOpenChange={setShowAddTimeOff} title="Add leave">
+      <BottomSheet open={showAddTimeOff} onOpenChange={setShowAddTimeOff} title="New leave" note="Who is away, and when."
+        foot={<TwoFoot main="Save and plan the day" onMain={() => save(true)} alt="Save, plan later" onAlt={() => save(false)} ok={newTimeOff.type === 'Center' || !!newTimeOff.entity} />}>
         {/* Who first, as one list (#265 H1): the old form asked for a "type" before the person. */}
         <Dropdown label="Who or what" id="leaveWho" required
           value={newTimeOff.type === 'Center' ? 'Center:All' : newTimeOff.entity ? `${newTimeOff.type}:${newTimeOff.entity}` : ''}
@@ -455,52 +513,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
         <Switch label="Every week" on={newTimeOff.recurrence === 'weekly'} set={(v) => setNewTimeOff({ ...newTimeOff, recurrence: v ? 'weekly' : undefined, weekdays: v ? (newTimeOff.weekdays || [(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const)[new Date(`${newTimeOff.date}T00:00:00Z`).getUTCDay()]]) : undefined })} />
         {newTimeOff.recurrence === 'weekly' ? <Days value={newTimeOff.weekdays || []} onChange={(v) => setNewTimeOff({ ...newTimeOff, weekdays: v as UiTimeOff['weekdays'] })} /> : null}
         <Text label="Reason (optional)" id="newTimeOffDescription" value={newTimeOff.description} onChange={(e) => setNewTimeOff({ ...newTimeOff, description: e.target.value })} />
-        <Foot label="Add leave" save={async () => {
-                if (newTimeOff.type !== 'Center' && !newTimeOff.entity) {
-                  toast.error('Choose who is away first');
-                  return;
-                }
-                const entity_type = newTimeOff.type.toLowerCase();
-                const tempId = `temp-${Date.now()}`;
-                const startTime = newTimeOff.startTime || timeSlots[0] || '09:00';
-                const endTime = newTimeOff.endTime || timeSlots[timeSlots.length - 1] || '18:00';
-                const startIso = newTimeOff.fullDay ? setTimeHM(newTimeOff.date, 9, 0) : `${newTimeOff.date}T${startTime}`;
-                const endIso = newTimeOff.fullDay ? setTimeHM(newTimeOff.endDate, 18, 0) : `${newTimeOff.endDate}T${endTime}`;
-                const optimistic: UiTimeOff = { id: tempId, startDate: startIso, endDate: endIso, recurrence: newTimeOff.recurrence, weekdays: newTimeOff.weekdays as UiTimeOff['weekdays'], type: newTimeOff.type, entity: newTimeOff.type === 'Center' ? 'All' : (newTimeOff.entity || ''), description: newTimeOff.description };
-                setTimeOffs((prev) => [...prev, optimistic]);
-                setShowAddTimeOff(false);
-                setNewTimeOff({ date: todayKey, endDate: todayKey, type: 'Staff', entity: '', fullDay: true, description: '', startTime: '', endTime: '', recurrence: undefined, weekdays: undefined });
-                toast.success('Time off saved');
-                try {
-                  const res = await fetch(`${API_BASE}/timeoff`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      entity_type,
-                      entity_id: optimistic.entity === 'All' ? null : (optimistic.entity || null),
-                      start_date: optimistic.startDate,
-                      end_date: optimistic.endDate,
-                      start_time: newTimeOff.fullDay ? null : startTime,
-                      end_time: newTimeOff.fullDay ? null : endTime,
-                      recurrence: optimistic.recurrence,
-                      weekdays: optimistic.weekdays,
-                      description: optimistic.description,
-                    }),
-                  });
-                  const created = await res.json();
-                  // Marking a therapist off rebuilds their day on the server.
-                  // Show what it did where the admin is looking next.
-                  if (Array.isArray(created.replan) && created.replan.length > 0) {
-                    const total = created.replan.reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0);
-                    toast.success(`${total} treatment${total === 1 ? '' : 's'} rebooked`);
-                    loadReplans();
-                    refreshAppointmentsForDate(todayKey, true);
-                  }
-                  setTimeOffs((prev) => prev.map((h) => h.id === tempId ? { id: created.id, startDate: created.start_date ? new Date(created.start_date).toISOString() : undefined, endDate: created.end_date ? new Date(created.end_date).toISOString() : undefined, recurrence: created.recurrence || undefined, weekdays: created.weekdays || undefined, type: optimistic.type, entity: created.entity_id ?? optimistic.entity, description: created.description ?? optimistic.description } : h));
-                } catch {
-                  toast.error('The leave was not saved. Try again.');
-                }
-        }} />
+        {impact === null ? null : <Consequence>{impact === 0 ? 'No treatments are booked then.' : `${impact} treatment${impact === 1 ? '' : 's'} ${newTimeOff.date === newTimeOff.endDate ? 'that day' : 'on those days'} will need a new therapist.`}</Consequence>}
       </BottomSheet>
     </>
   );

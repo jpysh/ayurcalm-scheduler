@@ -9,7 +9,8 @@ import { dischargeOf, saveDischarge } from './discharge.js';
 import { staffWeek } from './staffWeek.js';
 import { newLinkToken } from './links.js';
 import { findConflict, HAPPENING, loadDay, nearestFreeTime, staffDay } from './appointmentGuard.js';
-import { replanStaffDay, acceptPlan, undoReplan, type Pin } from './replan.js';
+import { replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
+import { dietTimeline, startDietFrom, extendDiet } from './patientDiet.js';
 import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
 import { centreClock, eventClashes, type EventRow } from './availability.js';
 import { loadDietsForDay } from './dietResolution.js';
@@ -615,26 +616,72 @@ app.post('/patients/:id/stays', async (req: Request, res: Response) => {
   res.status(201).json(created);
 });
 
+/** What a change to a stay would leave behind: the treatments booked after it now ends. Only this stay's own. */
+async function leftOverAfter(patientId: string, stay: { end_date: Date }, newEnd: Date) {
+  if (newEnd >= stay.end_date) return [];
+  const later = await prisma.patientStay.findFirst({ where: { patient_id: patientId, start_date: { gt: stay.end_date } }, orderBy: { start_date: 'asc' } });
+  return prisma.appointment.findMany({
+    where: { patient_id: patientId, ...HAPPENING, scheduled_date: { gt: newEnd, ...(later ? { lt: later.start_date } : {}) } },
+    include: { Therapy: { select: { name: true } } },
+    orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }],
+  });
+}
+
+// The consequence line before Save (#285 story 10): what a shortened stay would cancel.
+app.get('/patients/:id/stays/:stayId/preview', async (req: Request, res: Response) => {
+  const stay = await stayOf(req);
+  if (!stay) { res.status(404).json({ error: 'Stay not found' }); return; }
+  const { end_date } = z.object({ end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
+  const cancels = await leftOverAfter(stay.patient_id, stay, new Date(`${end_date}T00:00:00.000Z`));
+  res.json({ cancels: cancels.map((a) => ({ id: a.id, date: a.scheduled_date.toISOString().slice(0, 10), start_time: a.start_time, therapy_name: a.Therapy.name })) });
+});
+
+const stayExtras = z.object({
+  package_id: z.string().uuid().nullable().optional(),
+  accommodation_id: z.string().uuid().nullable().optional(),
+  room_number: z.string().trim().max(20).nullable().optional(),
+  /** Mark the treatments left after a shortened stay cancelled, "stay shortened", as one batch with one Undo. */
+  cancel_after: z.boolean().optional(),
+});
+
 /**
- * Extend or shorten a stay. A stay that now ends sooner answers with the
- * treatments booked after it, so the admin is offered to cancel them — Cancel,
- * not Delete, through the day-fix batch, so Undo puts them back.
+ * Change a stay: its dates, and the package and accommodation it chose. A stay that now
+ * ends sooner can cancel what is booked after it in the same save: Cancel, not Delete, in
+ * one batch, so Undo puts the treatments back. Meals follow the dates: the plan that ran
+ * to the old leaving date runs to the new one.
  */
 app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
   const id = String(req.params.id);
-  const stay = await prisma.patientStay.findFirst({ where: { id: String(req.params.stayId), patient_id: id } });
+  const stay = await stayOf(req);
   if (!stay) { res.status(404).json({ error: 'Stay not found' }); return; }
-  const next = stayData(staySchema.parse(req.body));
-  const updated = await prisma.patientStay.update({ where: { id: stay.id }, data: next });
-  // Only this stay's own treatments: a later stay's bookings are not left over.
-  const later = await prisma.patientStay.findFirst({ where: { patient_id: id, start_date: { gt: stay.end_date } }, orderBy: { start_date: 'asc' } });
-  const left_over = next.end_date < stay.end_date
-    ? await prisma.appointment.findMany({
-      where: { patient_id: id, ...HAPPENING, scheduled_date: { gt: next.end_date, ...(later ? { lt: later.start_date } : {}) } },
-      orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }],
-    })
-    : [];
-  res.json({ stay: updated, left_over });
+  const extras = stayExtras.parse(req.body);
+  const dates = req.body.start_date || req.body.end_date ? stayData(staySchema.parse(req.body)) : { start_date: stay.start_date, end_date: stay.end_date, duration_days: stay.duration_days };
+  const updated = await prisma.patientStay.update({ where: { id: stay.id }, data: {
+    ...dates, package_id: extras.package_id, accommodation_id: extras.accommodation_id, room_number: extras.room_number,
+  } });
+  await extendDiet(id, stay.end_date, dates.end_date, prisma);
+  const left = await leftOverAfter(id, stay, dates.end_date);
+  let batch_id: string | null = null;
+  let cancelled = 0;
+  if (extras.cancel_after && left.length) {
+    const out = await applyPlan(left.map((a) => ({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: [], room_id: a.room_id, start_time: a.start_time, date: a.scheduled_date.toISOString().slice(0, 10), cancel: true, reason: 'stay shortened' })), prisma);
+    batch_id = out.batch_id; cancelled = out.applied;
+  }
+  res.json({ stay: updated, left_over: extras.cancel_after ? [] : left.map(({ Therapy, ...a }) => a), cancelled, batch_id });
+});
+
+// Meals by date (#285 story 7).
+app.get('/patients/:id/diet', async (req: Request, res: Response) => {
+  const { date } = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
+  const out = await dietTimeline(String(req.params.id), date, prisma);
+  if (!out) { res.status(404).json({ error: 'No stay to plan meals for' }); return; }
+  res.json(out);
+});
+app.post('/patients/:id/diet', async (req: Request, res: Response) => {
+  const body = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), template_id: z.string().uuid() }).parse(req.body);
+  const out = await startDietFrom(String(req.params.id), body.from, body.template_id, prisma);
+  if ('error' in out) { res.status(400).json({ error: out.error }); return; }
+  res.json(await dietTimeline(String(req.params.id), body.from, prisma));
 });
 
 // Maintenance: merge and delete duplicate patients by name
@@ -687,6 +734,8 @@ const timeoffSchema = z.object({
   recurrence: z.enum(['weekly']).optional().nullable(),
   weekdays: z.array(z.enum(['sunday','monday','tuesday','wednesday','thursday','friday','saturday'])).optional().nullable(),
   description: z.string().optional().nullable(),
+  /** False records the leave and leaves the day for the admin to plan (#285 story 9); absent plans it, as the assistant expects. */
+  plan: z.boolean().optional(),
 });
 
 const getTimeOffHandler = async (req: Request, res: Response) => {
@@ -723,7 +772,7 @@ const getTimeOffHandler = async (req: Request, res: Response) => {
 
 const createTimeOffHandler = async (req: Request, res: Response) => {
   try {
-    const body = timeoffSchema.parse(req.body);
+    const { plan, ...body } = timeoffSchema.parse(req.body);
     const data: any = { ...body };
     if (!data.weekdays) data.weekdays = [];
     if (body.date) data.date = new Date(body.date);
@@ -740,7 +789,7 @@ const createTimeOffHandler = async (req: Request, res: Response) => {
     // is the only person here, and a treatment left on the name of someone who
     // is not coming in prints on the day sheet as though it will happen.
     let replan = null;
-    if (h.entity_type === 'staff' && h.entity_id) {
+    if (h.entity_type === 'staff' && h.entity_id && plan !== false) {
       const days = datesCovered(h);
       const results = [];
       for (const d of days) results.push(await replanStaffDay(h.entity_id, d, prisma, { apply: true, timeOffId: h.id }));
@@ -773,7 +822,7 @@ const deleteTimeOffHandler = async (req: Request, res: Response) => {
 const updateTimeOffHandler = async (req: Request, res: Response) => {
   const id = req.params.id;
   try {
-    const body = timeoffSchema.partial().parse(req.body);
+    const { plan: _plan, ...body } = timeoffSchema.partial().parse(req.body);
     const data: any = { ...body };
     if (data.weekdays === null) data.weekdays = [];
     if (body.date) data.date = new Date(body.date);
@@ -930,6 +979,14 @@ app.get('/replan/summary', async (req: Request, res: Response) => {
 app.get('/timeoff', getTimeOffHandler);
 // India's public holidays, for the Leave screen to offer as centre-closed days.
 app.get('/holidays/india', (_req: Request, res: Response) => { res.json(indiaHolidays); });
+// The consequence line under a leave (#285 story 9): how many treatments the days would leave without their therapist.
+app.get('/timeoff/impact', async (req: Request, res: Response) => {
+  const q = z.object({ staff_id: z.string().uuid(), from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
+  const treatments = await prisma.appointment.count({
+    where: { ...HAPPENING, scheduled_date: { gte: new Date(`${q.from}T00:00:00.000Z`), lte: new Date(`${q.to}T00:00:00.000Z`) }, OR: [{ staff_id: q.staff_id }, { co_staff_ids: { has: q.staff_id } }] },
+  });
+  res.json({ treatments });
+});
 app.post('/timeoff', createTimeOffHandler);
 app.delete('/timeoff/:id', deleteTimeOffHandler);
 app.put('/timeoff/:id', updateTimeOffHandler);

@@ -13,7 +13,7 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '@
  * Everything a job changes is undone, and the two days it touches are
  * compared back through the API.
  */
-const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Patient didn't come", 'Patient late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day', "A patient's meals today", 'Add an arriving patient', 'Find a patient']);
+const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Patient didn't come", 'Patient late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day', "A patient's meals today", 'Add an arriving patient', 'Find a patient', "Change a patient's meals from a date", "Choose a patient's package", "Choose a patient's accommodation", "Change a patient's stay", "Print a patient's discharge summary", "Record a therapist's leave"]);
 
 /** The design's order, which is the order the table prints in. */
 const JOBS: [string, number][] = [
@@ -34,6 +34,14 @@ const JOBS: [string, number][] = [
   ['Add an arriving patient', 3],
   // From the Patients screen: Search, then the person (typing is not counted).
   ['Find a patient', 2],
+  // Stories 7 to 12 (#285), from the patient's card already open, as the design counts them.
+  ["Change a patient's meals from a date", 3],
+  ["Choose a patient's package", 3],
+  ["Choose a patient's accommodation", 3],
+  ["Change a patient's stay", 3],
+  ["Print a patient's discharge summary", 3],
+  // From the day: Menu, Leave, +, then Save, plan later. Picking who and typing dates are not counted.
+  ["Record a therapist's leave", 4],
 ];
 
 const ADMIN = { email: 'admin@example.com', password: 'demo1234' };
@@ -90,7 +98,8 @@ type Walk = (tap: (target: Locator) => Promise<void>, swipe: () => void) => Prom
 async function job(page: Page, rows: Row[], name: string, walk: Walk) {
   // The page is not reloaded between jobs: the admin does not, and a reload
   // per job ran into the server's rate limit.
-  await page.keyboard.press('Escape');
+  // A sheet opened from a card gives the card back when it closes, so more than one Escape may be needed.
+  for (let i = 0; i < 4 && (await page.getByRole('dialog').count()); i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(400); }
   await expect(page.getByRole('dialog')).toHaveCount(0);
   // A note from the last job fades by itself; the admin would not be mid-note.
   // Not while the pointer rests on it: a hovered toast never fades, which is
@@ -296,6 +305,69 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await page.keyboard.press('Escape');
       await expect(page.getByRole('dialog')).toHaveCount(0);
       await page.getByRole('button', { name: /^Cancel/ }).click();
+    });
+
+    // Stories 7 to 12 (#285): one patient made for the walk, a card open, the job from there. Deleted afterwards.
+    const story = (await call.post('/patients', { name: 'Tapcount Story', gender: 'female', stay: { start_date: today, end_date: ymd(new Date(Date.now() + 13 * 86400000)) } }).then((r) => r.json())) as { id: string };
+    const card = () => page.getByRole('dialog').last();
+    const openStory = async () => {
+      await page.goto('/admin/patients');
+      await page.getByRole('button', { name: /Tapcount Story/ }).click();
+      await card().getByRole('button', { name: /^Diet/ }).waitFor();
+    };
+    try {
+      await job(page, rows, "Change a patient's meals from a date", async (tap) => {
+        await openStory();
+        await tap(card().getByRole('button', { name: /^Diet/ }));
+        await tap(card().locator('button[aria-pressed]').nth(2));
+        await tap(card().getByRole('button', { name: /^Start this plan/ }));
+        await expect(page.locator('[data-sonner-toast]').filter({ hasText: /from/ })).toBeVisible({ timeout: 20000 });
+        return 'from the card; Today is preselected, Start names the date';
+      });
+      await job(page, rows, "Choose a patient's package", async (tap) => {
+        await openStory();
+        await tap(card().getByRole('button', { name: /^Package/ }));
+        // The package nearest the stay is ready: one tap to use it.
+        await tap(card().getByRole('button', { name: /^Use \d+ days/ }));
+        await expect(page.locator('[data-sonner-toast]').filter({ hasText: /Panchakarma/ })).toBeVisible({ timeout: 20000 });
+      });
+      await job(page, rows, "Choose a patient's accommodation", async (tap) => {
+        await openStory();
+        await tap(card().getByRole('button', { name: /^Accommodation/ }));
+        await tap(card().locator('button[aria-pressed]').nth(1));
+        await tap(card().getByRole('button', { name: /^Use / }));
+        await expect(page.locator('[data-sonner-toast]').filter({ hasText: /Tapcount/ })).toBeVisible({ timeout: 20000 });
+      });
+      await job(page, rows, "Change a patient's stay", async (tap) => {
+        await openStory();
+        await tap(card().getByRole('button', { name: /^Stay/ }));
+        const leaving = card().locator('input[type=date]').nth(1);
+        // The phone's own calendar opens on this tap; choosing a day in it is not a second one.
+        await tap(leaving);
+        await leaving.fill(ymd(new Date(Date.now() + 10 * 86400000)));
+        await tap(card().getByRole('button', { name: /^Leave on/ }));
+        await expect(page.locator('[data-sonner-toast]').filter({ hasText: /Tapcount/ })).toBeVisible({ timeout: 20000 });
+      });
+      await job(page, rows, "Print a patient's discharge summary", async (tap) => {
+        await openStory();
+        await tap(card().getByRole('button', { name: /^Discharge summary/ }));
+        const download = page.waitForEvent('download');
+        await tap(card().getByRole('button', { name: 'Print summary' }));
+        expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
+        return 'missing items print as blank lines; nothing blocks';
+      });
+    } finally {
+      await must(`DELETE /patients/${story.id}`, await call.del(`/patients/${story.id}`));
+    }
+
+    await job(page, rows, "Record a therapist's leave", async (tap) => {
+      await showDay(page, day);
+      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Leave/ }));
+      await tap(page.getByRole('button', { name: 'Add leave' }));
+      await page.getByRole('dialog').getByLabel('Who or what').selectOption({ label: staff.find((x) => x.is_active)!.name });
+      await tap(page.getByRole('dialog').getByRole('button', { name: 'Save, plan later' }));
+      await expect(page.locator('[data-sonner-toast]').filter({ hasText: /Leave saved/ })).toBeVisible({ timeout: 20000 });
     });
 
     await job(page, rows, 'Therapist not in', async (tap) => {

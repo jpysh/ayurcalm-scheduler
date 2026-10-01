@@ -112,8 +112,9 @@ test('a therapist off: the pill names it, its fix clears the day, and Undo puts 
   await expect(form.getByRole('switch', { name: 'Full day' })).toBeChecked();
   await form.locator('input[type=date]').nth(0).fill(DAY);
   await form.locator('input[type=date]').nth(1).fill(DAY);
-  await form.getByRole('button', { name: 'Add leave', exact: true }).click();
-  await expect(page.getByText('Time off saved')).toBeVisible({ timeout: 15000 });
+  // Plan later (#285 story 9): the leave waits on the pill, which is what this walk fixes.
+  await form.getByRole('button', { name: 'Save, plan later', exact: true }).click();
+  await expect(page.getByText(/Leave saved/)).toBeVisible({ timeout: 15000 });
 
   // The date is on the bar only on the day (#285), so go back to it first.
   await openTab(page, 'Back to the day');

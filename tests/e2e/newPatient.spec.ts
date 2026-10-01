@@ -32,7 +32,7 @@ test('a patient is added from four fields, gets a consultation, and lands on the
     await sheet.getByRole('button', { name: 'Add E2E Meera Nair' }).click();
     // Their card, with everything else a row to fill in later.
     const card = page.getByRole('dialog').last();
-    await expect(card.getByRole('button', { name: /^Diet/ })).toContainText('Not chosen yet', { timeout: 15000 });
+    await expect(card.getByRole('button', { name: /^Diet/ })).toContainText('Not decided yet', { timeout: 15000 });
     await expect(card.getByRole('button', { name: /^Therapies/ })).toBeVisible();
     const found = ((await (await request.get('/api/patients', { headers })).json()) as { id: string; name: string }[]).find((p) => p.name === 'E2E Meera Nair');
     expect(found).toBeTruthy();

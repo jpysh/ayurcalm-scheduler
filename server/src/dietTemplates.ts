@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { prisma } from './server.js';
 import { requireAdmin } from './settings.js';
+import { patientsOnPlans } from './patientDiet.js';
 
 /**
  * Reusable diet plans. A patient is normally put on one of these rather than
@@ -53,11 +54,8 @@ const updateSchema = createSchema.partial();
 dietTemplatesRouter.get('/', async (_req: Request, res: Response) => {
   // The count comes with the list because editing a plan changes what every
   // patient on it eats, and whoever is editing should be told that first.
-  const rows = await prisma.dietTemplate.findMany({
-    select: { ...publicFields, _count: { select: { Segments: true } } },
-    orderBy: { name: 'asc' },
-  });
-  res.json(rows.map(({ _count, ...t }) => ({ ...t, patients: _count.Segments })));
+  const [rows, users] = await Promise.all([prisma.dietTemplate.findMany({ select: publicFields, orderBy: { name: 'asc' } }), patientsOnPlans(prisma)]);
+  res.json(rows.map((t) => ({ ...t, patients: users.get(t.id) ?? 0 })));
 });
 
 dietTemplatesRouter.post('/', requireAdmin, async (req: Request, res: Response) => {
