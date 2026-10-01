@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { PRODUCT, PLANS, SALES_WHATSAPP } from "../../server/src/product";
 import { API_BASE } from "@/lib/apiBase";
 import { confirmSheet } from "@/components/ConfirmSheet";
-import { BottomSheet, Empty, ListGroup, Row, SheetFoot, Switch, Tick, dayText, noteText, say, wide } from "@/components/kit";
+import { BottomSheet, Empty, ListGroup, Row, SheetFoot, Switch, Tick, dayText, noteText, say, wide, Btn } from "@/components/kit";
 
 export type Backups = { count: number; latest: { name: string; size: number; at: string } | null };
 export type Trial = { ends_at: string | null; read_only: boolean; plan: string | null; paid_until: string | null };
@@ -67,7 +67,7 @@ export function BackupsSheet({ open, onOpenChange, backups }: { open: boolean; o
   };
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} title="Backups" note="Backed up ten minutes after the app starts and every night at 02:30; the newest 14 stay on the computer that runs it."
-      foot={backups?.latest ? <button type="button" className={`${wide} bg-primary text-primary-foreground`} onClick={download}>Download the newest backup</button> : undefined}>
+      foot={backups?.latest ? <Btn kind="primary" onClick={download}>Download the newest backup</Btn> : undefined}>
       <ListGroup>
         <Row title={backups?.latest ? `Newest ${ago(backups.latest.at)}` : "No backup yet"}
           facts={backups?.latest ? `${(backups.latest.size / 1024 / 1024).toFixed(1)} MB · ${backups.count} kept` : "Ask whoever set up the app to check the backup service is running."} />
@@ -76,7 +76,7 @@ export function BackupsSheet({ open, onOpenChange, backups }: { open: boolean; o
       <ListGroup title={`Move to another ${PRODUCT}`}>
         <div className="grid gap-2 p-3">
           <p className={noteText}>From the cloud to your own computer, or back: download everything as one file, then load it into the other one. Loading replaces whatever that install holds, so do it on a new one.</p>
-          <button type="button" disabled={moving} className={`${wide} border disabled:opacity-50`} onClick={exportCentre}>{moving ? "Working…" : "Download everything"}</button>
+          <Btn kind="secondary" disabled={moving} onClick={exportCentre}>{moving ? "Working…" : "Download everything"}</Btn>
           <label className={`${wide} flex cursor-pointer items-center justify-center border`}>
             Load a centre from a file
             <input type="file" accept=".gz,application/gzip" className="sr-only" disabled={moving} onChange={(e) => { void importCentre(e.target.files?.[0]); e.target.value = ""; }} />
@@ -172,7 +172,7 @@ export function HelpSheet({ open, onOpenChange, centre, supportWhatsapp, trial, 
         </ListGroup>
         <p className={`mt-2 ${noteText}`}>Opens WhatsApp. We reply the same working day with a UPI link. Or run it yourself for free: Download everything from Backups, then install it on your own computer.</p>
         {trial?.plan ? <><Switch label={`"Made with ${PRODUCT}" at the foot of sheets and links`} on={showFooter} set={setShowFooter} />
-          <button type="button" className={`${wide} mt-3 bg-primary text-primary-foreground`} onClick={saveFooter}>Save</button></> : null}
+          <Btn kind="primary" className="mt-3" onClick={saveFooter}>Save</Btn></> : null}
       </BottomSheet>
 
       <BottomSheet open={demoOpen} onOpenChange={setDemoOpen} title="Demo data" note="Example patients, therapists, rooms and bookings so you could try the app. Clear it when you are ready to enter your centre's own; reset it to get four fresh months from today. Your account and settings are kept."

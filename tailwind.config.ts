@@ -54,6 +54,8 @@ export default {
           foreground: "hsl(var(--success-foreground))",
         },
         now: "hsl(var(--now))",
+        faint: "hsl(var(--faint))",
+        "on-dark": "hsl(var(--on-dark))",
         notice: { DEFAULT: "hsl(var(--notice))", bg: "hsl(var(--notice-bg))" },
         warning: {
           DEFAULT: "hsl(var(--warning))",
@@ -61,10 +63,13 @@ export default {
         },
       },
       fontSize: {
-        base: "var(--font-size-base)",
-        lg: "var(--font-size-large)",
-        xl: "var(--font-size-xlarge)",
-        "2xl": "var(--font-size-heading)",
+        // DESIGN.md §3: caption 12 · secondary 14 · body 16 · row title 17 · heading 20 · title 24.
+        xs: ["0.75rem", { lineHeight: "1rem" }],
+        sm: ["0.875rem", { lineHeight: "1.25rem" }],
+        base: ["1rem", { lineHeight: "1.375rem" }],
+        row: ["1.0625rem", { lineHeight: "1.375rem" }],
+        lg: ["1.25rem", { lineHeight: "1.625rem" }],
+        xl: ["1.5rem", { lineHeight: "1.875rem" }],
       },
       borderRadius: {
         lg: "var(--radius)",

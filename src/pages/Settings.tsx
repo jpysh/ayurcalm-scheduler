@@ -16,8 +16,7 @@ import { ChangePasswordCard, UsersSection } from "@/components/UsersSection";
 import PageHead from "@/components/PageHead";
 import type { Attention } from "@/lib/attention";
 import {
-  Area, BottomSheet, ChecklistBar, Days, Dropdown, Group, ListGroup, PickPhoto, Row, Seg, SectionHead, SheetFoot, Switch, Text, TimeList, WEEK, noteText, timesBetween, wide,
-} from "@/components/kit";
+  Area, BottomSheet, ChecklistBar, Days, Dropdown, Group, ListGroup, Loading, PickPhoto, Row, Seg, SectionHead, SheetFoot, Switch, Text, TimeList, WEEK, noteText, timesBetween, Btn } from "@/components/kit";
 
 const DAY_TIMES = timesBetween("00:00", "23:30", 30);
 const SLOT_OPTIONS = [15, 20, 30, 60];
@@ -138,7 +137,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
     if (!res.ok) toast.error(`${d.name} was not saved`);
   };
 
-  if (!settings) return <div className="py-6 text-center text-muted-foreground">Loading settings…</div>;
+  if (!settings) return <Loading rows={6} />;
 
   const rules = attention.rules;
   const raised = rules.filter((r) => r.on && r.kind === "action" && r.id !== "day").reduce((n, r) => n + r.count, 0) + (rules.find((r) => r.id === "day")?.count ?? 0);
@@ -181,7 +180,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
         <Row title="Your account" facts={isAdmin ? "Password and your AI assistant" : "Password"} trailing="›" onClick={() => setSheet("account")} />
         <Row title="Help and plan" facts={trial && isAdmin ? "Report a problem, invite a centre, plan" : "Report a problem"} trailing="›" onClick={() => setSheet("help")} />
       </ListGroup>
-      {signOut ? <button type="button" className={`${wide} mt-4 border bg-card`} onClick={signOut}>Sign out</button> : null}
+      {signOut ? <Btn kind="secondary" className="mt-4" onClick={signOut}>Sign out</Btn> : null}
       {!isAdmin ? <p className={`mt-3 ${noteText}`}>Settings are read-only for staff accounts. Ask an administrator to make changes.</p> : null}
 
       <BottomSheet open={sheet === "checklist"} onOpenChange={(o) => { if (!o) setSheet(null); }} title="Set up your centre" note={`${done} of ${SETUP.length} reviewed. Everything works on the defaults below; review each at your own pace.`}>
@@ -202,7 +201,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
             <div className="flex items-center gap-3">
               {settings.logo ? <img src={settings.logo} alt="Centre logo" className="h-10 w-auto rounded border" /> : null}
               <PickPhoto id="logo" has={!!settings.logo} disabled={!isAdmin} onPick={pick(MAX_LOGO_BYTES, "The logo", (d) => update("logo", d))} />
-              {settings.logo && isAdmin ? <button type="button" className="min-h-11 px-2 text-sm font-semibold text-destructive" onClick={() => update("logo", null)}>Remove</button> : null}
+              {settings.logo && isAdmin ? <Btn kind="destructive" inline onClick={() => update("logo", null)}>Remove</Btn> : null}
             </div>
           </Group>
 
@@ -212,7 +211,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
             <div className="flex items-center gap-3">
               {lh.seal_logo ? <img src={lh.seal_logo} alt="Seal" className="h-10 w-auto rounded border" /> : null}
               <PickPhoto id="seal_logo" has={!!lh.seal_logo} disabled={!isAdmin} onPick={pick(MAX_LOGO_BYTES, "The seal", (d) => setLh("seal_logo", d))} />
-              {lh.seal_logo && isAdmin ? <button type="button" className="min-h-11 px-2 text-sm font-semibold text-destructive" onClick={() => setLh("seal_logo", "")}>Remove</button> : null}
+              {lh.seal_logo && isAdmin ? <Btn kind="destructive" inline onClick={() => setLh("seal_logo", "")}>Remove</Btn> : null}
             </div>
           </Group>
           {LETTERHEAD.map(([k, label, hint]) => <Text key={k} label={`${label} (optional)`} id={`lh_${k}`} placeholder={hint} value={lh[k] ?? ""} onChange={(e) => setLh(k, e.target.value)} />)}
@@ -227,7 +226,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
                 <div className="flex items-center gap-3">
                   {d.signature ? <img src={d.signature} alt={`${d.name}'s signature`} className="h-10 w-auto rounded border bg-white" /> : null}
                   <PickPhoto id={`s_${d.id}`} has={!!d.signature} disabled={!isAdmin} onPick={pick(250 * 1024, "The signature", (s) => saveDoctor(d, { signature: s }))} />
-                  {d.signature && isAdmin ? <button type="button" className="min-h-11 px-2 text-sm font-semibold text-destructive" onClick={() => saveDoctor(d, { signature: null })}>Remove</button> : null}
+                  {d.signature && isAdmin ? <Btn kind="destructive" inline onClick={() => saveDoctor(d, { signature: null })}>Remove</Btn> : null}
                 </div>
               </Group>
               <p className={`mt-1 ${noteText}`}>Saved as you leave each box.</p>

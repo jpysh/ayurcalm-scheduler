@@ -54,7 +54,7 @@ export function HolidaysSheet({ open, onOpenChange, closed, today, onAdded }: {
         <ListGroup>
           {list.map((h) => (
             <div key={key(h)} className="flex min-h-14 items-center border-b border-border px-3 last:border-b-0">
-              <Tick on={!off[key(h)]} set={(v) => setOff((o) => ({ ...o, [key(h)]: !v }))} label={<span className="grid"><span className="font-semibold">{h.name}</span><span className="text-[13px] text-muted-foreground">{dayText(h.date)}</span></span>} />
+              <Tick on={!off[key(h)]} set={(v) => setOff((o) => ({ ...o, [key(h)]: !v }))} label={<span className="grid"><span className="font-semibold">{h.name}</span><span className="text-sm text-muted-foreground">{dayText(h.date)}</span></span>} />
             </div>
           ))}
         </ListGroup>

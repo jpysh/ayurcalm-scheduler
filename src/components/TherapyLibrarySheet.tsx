@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
-import { Empty, ListGroup, Loading, Text, noteText, wide } from "@/components/kit";
+import { Empty, ListGroup, Loading, Text, noteText, Btn } from "@/components/kit";
 
 type Item = {
   name: string; description: string; minutes: number; staff: number;
@@ -60,15 +60,15 @@ export function TherapyLibrarySheet({ open, onOpenChange, onImported }: {
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} title="Add from library" note="Tick what the centre offers. Tap a therapy to change its name or minutes first."
       foot={items && items.length ? (
-        <button type="button" disabled={!chosen.length || busy} onClick={add} className={`${wide} bg-primary text-primary-foreground disabled:opacity-50`}>
+        <Btn kind="primary" disabled={!chosen.length || busy} onClick={add}>
           {busy ? "Adding…" : chosen.length ? `Add ${chosen.length} therap${chosen.length === 1 ? "y" : "ies"}` : "Tick the therapies to add"}
-        </button>
+        </Btn>
       ) : undefined}>
       {items === null ? <Loading /> : items.length === 0 ? <Empty text="You already have every therapy in the library." /> : (<>
-        <button type="button" className="mb-2 min-h-11 text-sm font-semibold text-primary"
+        <Btn kind="quiet" inline className="-ml-2 mb-2"
           onClick={() => setPicked(chosen.length === items.length ? {} : Object.fromEntries(items.map((x) => [x.key, true])))}>
           {chosen.length === items.length ? "Untick all" : `Tick all ${items.length}`}
-        </button>
+        </Btn>
         <ListGroup>
           {items.map((x) => (
             <div key={x.key} className="border-b border-border px-3 py-1 last:border-b-0">

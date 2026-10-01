@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import { confirmSheet } from "@/components/ConfirmSheet";
-import { BottomSheet, Empty, Foot, ListGroup, Loading, Row, Text, noteText, rupees } from "@/components/kit";
+import { BottomSheet, Empty, Foot, ListGroup, Loading, Row, Text, noteText, rupees, Btn } from "@/components/kit";
 
 type Item = { id: string; name: string; notes: string | null; is_active: boolean; patients: number } & Record<string, unknown>;
 type Fields = { key: string; label: string; number?: boolean; optional?: boolean; hint?: string }[];
@@ -48,7 +48,7 @@ function CatalogueEditor({ path, noun, fields, facts, trailing }: { path: string
       {items === null ? <Loading rows={3} /> : items.length ? (
         <ListGroup>{items.map((i) => <Row key={i.id} title={i.name} facts={[facts(i), i.notes].filter(Boolean).join(" · ")} trailing={i.is_active ? trailing(i) : "Retired"} onClick={() => open(i)} />)}</ListGroup>
       ) : <Empty text={`No ${noun}s yet.`} />}
-      <button type="button" className="mt-2 min-h-11 text-base font-semibold text-primary" onClick={() => open()}>Add a {noun}</button>
+      <Btn kind="quiet" inline className="-ml-2 mt-2" onClick={() => open()}>Add a {noun}</Btn>
       <p className={`mt-1 ${noteText}`}>For reference only: nothing here sends an invoice or takes a payment.</p>
       <BottomSheet open={!!edit} onOpenChange={(o) => { if (!o) setEdit(null); }} title={edit?.id ? `Edit ${noun}` : `New ${noun}`}
         foot={<Foot label={edit?.id ? "Save changes" : `Add the ${noun}`} ok={ok} busy={busy} save={save} remove={edit?.id ? remove : undefined} />}>

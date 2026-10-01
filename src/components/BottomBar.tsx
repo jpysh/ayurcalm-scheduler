@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { API_BASE } from "@/lib/apiBase";
 import { Menu, Printer, Search } from "lucide-react";
-import { Bar, BarButton, BarCapsule, BottomSearch, BottomSheet, DateRow, Group, ListGroup, Pill, PlusButton, Row, Seg } from "@/components/kit";
+import { Bar, BarButton, BarCapsule, BottomSearch, BottomSheet, DateRow, Group, ListGroup, Pill, PlusButton, Row, Seg, Btn } from "@/components/kit";
 
 /**
  * The phone frame from docs/design/phone.html (#66): one bar at the bottom, in
@@ -94,7 +94,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
             {onDay ? (
               <button type="button" className="ml-1 flex h-12 min-w-0 flex-1 flex-col items-center justify-center rounded-full leading-tight active:bg-secondary" aria-label={`Change day, now ${label(day)}`} onClick={() => setSheet("day")}>
                 <span className="whitespace-nowrap text-base font-semibold">{label(day)}</span>
-                <span className={`whitespace-nowrap text-xs ${diff === 0 ? "font-semibold text-now" : "text-muted-foreground"}`}>{when}</span>
+                <span className={`whitespace-nowrap text-sm ${diff === 0 ? "font-semibold text-now" : "text-muted-foreground"}`}>{when}</span>
               </button>
             ) : null}
           </>}
@@ -121,9 +121,9 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
 
       <BottomSheet open={sheet === "day"} onOpenChange={(o) => setSheet(o ? "day" : null)} title={label(day)}>
         <div className="grid grid-cols-3 gap-2">
-          <button type="button" className="min-h-11 rounded-full border px-2 text-sm font-semibold" onClick={() => pick(shift(day, -1))}>‹ Day before</button>
-          <button type="button" className="min-h-11 rounded-full bg-primary px-2 text-sm font-semibold text-primary-foreground" onClick={() => pick(today)}>Today</button>
-          <button type="button" className="min-h-11 rounded-full border px-2 text-sm font-semibold" onClick={() => pick(shift(day, 1))}>Next day ›</button>
+          <Btn kind="secondary" inline onClick={() => pick(shift(day, -1))}>‹ Day before</Btn>
+          <Btn kind="primary" inline onClick={() => pick(today)}>Today</Btn>
+          <Btn kind="secondary" inline onClick={() => pick(shift(day, 1))}>Next day ›</Btn>
         </div>
         <div className="mt-3"><DateRow label="Pick a date" value={day} onChange={pick} /></div>
       </BottomSheet>

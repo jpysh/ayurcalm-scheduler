@@ -96,7 +96,7 @@ export function TeamRooms({ staff, rooms, q, today, nowHM, opening, closing, ref
     <div>
       <PageHead title="Team and rooms" note={`${staff.filter(staffActive).length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}`} gear={{ label: "What needs you: team rules", run: openRules }} />
       {/* Always there, so the lists do not move under a tap when the week arrives. */}
-      <ListGroup><Row title="This week" facts={week ? weekLine(week) : "…"} trailing="›" onClick={week ? () => setShowWeek(true) : undefined} /></ListGroup>
+      <ListGroup><Row title="This week" facts={week ? weekLine(week) : undefined} trailing="›" onClick={week ? () => setShowWeek(true) : undefined} /></ListGroup>
       {none ? <Empty text="No one or no room matches." /> : null}
       {team.length ? (
         <ListGroup title="Therapists and doctors" count={team.length}>
@@ -173,18 +173,18 @@ const weekLine = (w: Week) => {
 /** One line a person: their seven days and how full their week is. */
 function WeekList({ week }: { week: Week }) {
   const letter = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "narrow", timeZone: "UTC" });
-  const look = { in: "bg-primary/15 text-foreground", part: "border border-primary/50", away: "bg-destructive/15 text-destructive line-through", off: "text-muted-foreground/60" };
+  const look = { in: "bg-primary/15 text-foreground", part: "border border-primary/50", away: "bg-destructive/15 text-destructive line-through", off: "text-muted-foreground" };
   return (
     <div className="-mt-1 max-h-[70dvh] overflow-y-auto">
-      <p className="mb-2 text-[13px] text-muted-foreground">Week of {new Date(`${week.start}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}. Shaded: in. Outlined: part of the day. Struck through: away.</p>
+      <p className="mb-2 text-sm text-muted-foreground">Week of {new Date(`${week.start}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}. Shaded: in. Outlined: part of the day. Struck through: away.</p>
       <div className="overflow-hidden rounded-xl border">
         {week.rows.map((r) => (
-          <div key={r.id} className="flex min-h-[54px] items-center gap-2 border-b border-border px-3 py-2 last:border-b-0">
-            <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{r.name}</span>
+          <div key={r.id} className="flex min-h-14 items-center gap-2 border-b border-border px-3 py-2 last:border-b-0">
+            <span className="min-w-0 flex-1 truncate text-base font-semibold">{r.name}</span>
             <span className="flex gap-0.5" aria-label={r.week.map((s, i) => `${letter(week.days[i])} ${s}`).join(", ")}>
-              {r.week.map((s, i) => <span key={i} className={`grid h-6 w-5 place-items-center rounded text-xs font-semibold ${look[s]}`}>{letter(week.days[i])}</span>)}
+              {r.week.map((s, i) => <span key={i} className={`grid h-6 w-5 place-items-center rounded-md text-xs font-semibold ${look[s]}`}>{letter(week.days[i])}</span>)}
             </span>
-            <span className="w-16 text-right text-[13px] tabular-nums text-muted-foreground">{hrs(r.booked)}/{hrs(r.capacity)}</span>
+            <span className="w-16 text-right text-sm tabular-nums text-muted-foreground">{hrs(r.booked)}/{hrs(r.capacity)}</span>
           </div>
         ))}
       </div>

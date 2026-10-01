@@ -40,7 +40,7 @@ export async function changeLog(days: number, prisma: PrismaClient): Promise<Log
   /** "Nisha Gupta's Abhyanga", from the treatment as it is now, or as it was when deleted. */
   const whose = (id: string, fallback?: Snap | null) => {
     const a = apptById.get(id) || (fallback as { patient_id?: string; therapy_id?: string } | null) || {};
-    const who = name(patients, a.patient_id) || 'A resident';
+    const who = name(patients, a.patient_id) || 'A patient';
     return `${who}'s ${name(therapies, a.therapy_id) || 'treatment'}`;
   };
 
@@ -53,7 +53,7 @@ export async function changeLog(days: number, prisma: PrismaClient): Promise<Log
     let text = '';
     if (r.entity_type === 'patient') {
       const p = (r.old_value || {}) as { name?: string };
-      text = r.action === 'delete' ? `${p.name || 'A resident'} removed` : `${name(patients, r.entity_id) || p.name || 'A resident'}'s details changed`;
+      text = r.action === 'delete' ? `${p.name || 'A patient'} removed` : `${name(patients, r.entity_id) || p.name || 'A patient'}'s details changed`;
     } else if (r.action === 'delete') {
       const a = (r.old_value || {}) as Snap;
       text = `${whose(r.entity_id, a)} at ${a.start_time || ''} on ${String(a.scheduled_date || '').slice(0, 10)} deleted`;

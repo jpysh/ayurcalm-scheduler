@@ -30,7 +30,7 @@ Green stays. Colour means one thing each; never decorative.
 |---|---|---|---|
 | Text | `--foreground` | #1F2A30 | body, names |
 | Muted | `--muted-foreground` | #5B6A70 | secondary lines (4.5:1 on card) |
-| Faint | `--faint` | #8A979C | finished, disabled, placeholders (never for needed facts) |
+| Faint | `--faint` | #8A979C | disabled controls and an empty stripe only (3:1: never for a fact or a placeholder) |
 | Surface | `--background` | #F4F7F2 | page |
 | Card | `--card` | #FFFFFF | lists, sheets |
 | Sage | `--secondary` | #E3ECE0 | pressed, selected, quiet fills |
@@ -40,7 +40,8 @@ Green stays. Colour means one thing each; never decorative.
 | Alert | `--alert` | #A94A26 on #FBEAE3 | something must be fixed or chosen now |
 | Notice | `--notice` | #6E4A0E on #FBF0D9 | done for you, or worth a look |
 | Now | `--now` | #C2410C | the current time only |
-| Therapist colours | `--t-*` | phone.html | identity stripe on rows; never red, orange or green-primary |
+| Therapist colours | `--t-1`…`--t-8` | index.css | identity stripe on rows; never red, orange or green-primary |
+| On dark | `--on-dark` | #B9E2C6 | Undo and the Print note on the dark toast and bar |
 
 Rules: text on any fill ≥ 4.5:1; large text ≥ 3:1; state is never colour alone (icon or word too).
 Dark mode is not in scope.
@@ -60,6 +61,8 @@ Nothing a decision needs is below 14px; 16px in any input (iOS zooms below it). 
 | Caption | 12 / 16 / 600, caps +0.05em | group headers, tags; never for a needed fact |
 
 Two weights per screen at most beyond 400: 600 for what you tap or scan, 700 for the title.
+
+In code the scale is `tailwind.config.ts`: `text-xs` caption · `text-sm` secondary · `text-base` body · `text-row` row title · `text-lg` heading · `text-xl` title. No `text-[13px]`; 13 and 15 are not on the scale. Any fact the admin needs is `text-sm` or larger; `text-xs` is only for caps captions and tags.
 
 ## 4. Space, radius, elevation
 
@@ -118,7 +121,7 @@ Every list, sheet and button has all of these designed, not left to default.
 - **Buttons in the kit.** `Btn` (primary, secondary, quiet, destructive; `inline` for its own width) and `LinkBtn` for one that leaves the app (WhatsApp, a PDF). A state word on a card is a `Tag`; what is wrong, with its fix under it, is a `Callout` (alert tint only when it must be fixed now). A sheet's second page passes `onBack` to `BottomSheet`: Back sits above the title, never beside it.
 - **Screens that are not the app** (sign-in, setup, a private link) are a `FullPage`: page colour, one centred column, 16 gutter, the same fields, rows and buttons as a sheet. Never a shadcn Card.
 - **Starter kit.** The last setup step offers the kit first and ticked ("Residential Ayurveda starter kit", what it holds, counted from the centre), then "Keep the example data", then "Start completely empty" (asks, as it deletes).
-- **Kit first.** Before writing markup for any of the above, use or extend `src/components/kit.tsx`. A one-off size, colour, radius or shadow in a screen file is a defect.
+- **Kit first.** Before writing markup for any of the above, use or extend `src/components/kit.tsx`. A one-off size, colour, radius or shadow in a screen file is a defect: a button is `Btn`, never a styled `<button>`; a left-aligned text button (`quiet`, `destructive`) carries `-ml-2` so its words sit on the gutter while its 44px target keeps 8px either side.
 - **Chips and segments.** Chips: filters and multi-choice. Segments: one of 2–4 in view.
 - **Toast.** Above the bar, dark, one line, one action (Undo). 5 seconds.
 - **Pill.** Floats above the bar only while something is waiting; says how many and what kind.

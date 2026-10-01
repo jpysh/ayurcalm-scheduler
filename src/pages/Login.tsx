@@ -89,14 +89,14 @@ const Login = () => {
           <div className="space-y-2 py-2 text-sm text-muted-foreground">
             <p>Ask an administrator to set a new one from Settings.</p>
             <p>If you are the only administrator, run this on the machine hosting the app:</p>
-            <code className="block break-all rounded-xl bg-secondary px-3 py-2 font-mono text-xs text-foreground">docker compose exec app npx tsx server/src/scripts/resetPassword.ts your@email.com</code>
+            <code className="block break-all rounded-xl bg-secondary px-3 py-2 font-mono text-sm text-foreground">docker compose exec app npx tsx server/src/scripts/resetPassword.ts your@email.com</code>
             <p>It prints a new password for you.</p>
           </div>
         </More>
       )}
       {trial ? (
         // Pilot notice and contacts (#251): who runs a cloud centre and how to reach them.
-        <p className="mt-4 text-center text-[13px] text-muted-foreground">
+        <p className="mt-4 text-center text-sm text-muted-foreground">
           <a className="underline" href="https://jains.es/ruta/pilot">Pilot notice: your data</a> · <a className="underline" href="https://wa.me/420777558262">WhatsApp</a> · <a className="underline" href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a>
         </p>
       ) : null}

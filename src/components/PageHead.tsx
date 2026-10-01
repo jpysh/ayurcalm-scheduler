@@ -7,7 +7,7 @@ export default function PageHead({ title, note, gear }: { title: string; note?: 
     <div className="flex items-center justify-between px-1 pb-2 pt-3.5">
       <h1 className="m-0 text-lg font-semibold">{title}</h1>
       <span className="flex items-center gap-1">
-        {note ? <span className="text-[13px] text-muted-foreground">{note}</span> : null}
+        {note ? <span className="text-sm text-muted-foreground">{note}</span> : null}
         {gear ? <button type="button" aria-label={gear.label} onClick={gear.run} className="-my-2 -mr-2 grid h-11 w-11 place-items-center rounded-full text-muted-foreground active:bg-secondary"><Settings2 className="h-5 w-5" /></button> : null}
       </span>
     </div>

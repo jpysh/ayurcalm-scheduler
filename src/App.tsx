@@ -1,11 +1,7 @@
-import { Toaster } from "@/components/ui/toaster";
 import { ConfirmHost } from "@/components/ConfirmSheet";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useState } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Callout } from "@/components/kit";
 import { DemoBanner } from "@/components/DemoBanner";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LinkView from "./pages/LinkView";
@@ -15,7 +11,6 @@ import NotFound from "./pages/NotFound";
 import SetupWizard from "./pages/SetupWizard";
 import { API_BASE } from "@/lib/apiBase";
 
-const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
   // Presence of a token only decides which screen renders; the server verifies
@@ -74,28 +69,17 @@ const App = () => {
   }, [serverOk]);
 
 
-  // A private link (#219) is its own small page: none of the admin's chrome.
-  const isLink = window.location.pathname.startsWith("/l/");
-
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
+    <>
         <Sonner />
         <ConfirmHost />
         <div className="min-h-screen flex flex-col">
           <DemoBanner />
           {!serverOk && (
-            <div className="border-b border-destructive/40 bg-destructive/10">
-              <div className="container mx-auto px-3 py-2">
-                <Alert variant="destructive" className="m-0">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Persistence Error</AlertTitle>
-                  <AlertDescription>
-                    {isOnline ? "Database connection is unavailable. Your changes may not save." : "You are offline. Please check your network."}
-                  </AlertDescription>
-                </Alert>
-              </div>
+            <div className="px-3 pt-2">
+              <Callout tone="alert" title={isOnline ? "Changes may not save" : "You are offline"}>
+                {isOnline ? "The centre's database is not answering." : "Check your phone's connection."}
+              </Callout>
             </div>
           )}
           <BrowserRouter>
@@ -120,8 +104,7 @@ const App = () => {
             </Routes>
           </BrowserRouter>
         </div>
-      </TooltipProvider>
-    </QueryClientProvider>
+    </>
   );
 };
 

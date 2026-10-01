@@ -218,7 +218,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   type Group = { key: string; ids: string[]; plan: string; qualifier: string; title: string; body: string };
   const describe = ([key, ids]: [string, string[]]): Group => {
     const n = ids.length;
-    if (key === '\u0000resident') return { key, ids, plan: NO_PLAN, qualifier: '', body: '', title: `No diet plan \u2014 ${n} resident${n === 1 ? '' : 's'}` };
+    if (key === '\u0000resident') return { key, ids, plan: NO_PLAN, qualifier: '', body: '', title: `No diet plan \u2014 ${n} patient${n === 1 ? '' : 's'}` };
     if (key === '\u0000outpatient') return { key, ids, plan: OUTPATIENT, qualifier: '', body: '', title: `Outpatients \u2014 not staying \u2014 ${n} ${n === 1 ? 'person' : 'people'}` };
     const plan = dietByPatient.get(ids[0])?.planName || '';
     // Each meal with the window it is served in, from the centre's own meal events.
@@ -233,7 +233,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     const label = plan || 'Individual instructions';
     return {
       key, ids, plan: label, qualifier, body,
-      title: `${label}${qualifier ? ` \u2014 ${qualifier}` : ''} \u2014 ${ids.length} resident${ids.length === 1 ? '' : 's'}`,
+      title: `${label}${qualifier ? ` \u2014 ${qualifier}` : ''} \u2014 ${ids.length} patient${ids.length === 1 ? '' : 's'}`,
     };
   };
   const described = [...groups.entries()].map(describe);

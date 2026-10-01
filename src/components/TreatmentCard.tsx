@@ -181,9 +181,9 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
           <ChangeLine label="Room" value={nameIn(roomsList, appt.room_id) || "No room"} onClick={locked || busy ? undefined : () => open("room")} />
           <ChangeLine label="Note" faint={!appt.notes} value={appt.notes || "Add a note"} onClick={locked || busy ? undefined : () => setPage("note")} />
           {locked || noShow ? null : <ChangeLine label="Something wrong?" value="Didn't come, late, cancel" onClick={() => setPage("wrong")} />}
-          <ChangeLine label="History" value={latest ? latest.text : "…"} onClick={() => setPage("history")} />
+          <ChangeLine label="History" value={latest ? latest.text : "See all"} onClick={() => setPage("history")} />
         </div>
-        {latest ? <p className="mt-1 text-[13px] text-muted-foreground">{stamp(latest.at)} · {latest.who}</p> : null}
+        {latest ? <p className="mt-1 text-sm text-muted-foreground">{stamp(latest.at)} · {latest.who}</p> : null}
       </>
     );
   } else if (page === "wrong") {
@@ -236,7 +236,6 @@ type Option = { id: string; name: string; free: boolean; why?: string };
 type Options = { times: Slot[]; staff: Option[]; rooms: Option[]; why?: string };
 type Who = { id: string; name: string; note: string; therapy_id: string | null; last: { name: string; date: string } | null };
 
-const shortDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).replace(",", "");
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 /** Why a course could not be placed, in the admin's words. */
 const COURSE_WHY: Record<string, string> = { OUT_OF_RANGE: "The days ran out", NO_MATCHING_TIME_SLOTS: "No free time on those days", NO_ROOM_AVAILABLE: "No room is free", NO_STAFF_AVAILABLE: "No therapist is free", CENTER_HOLIDAY: "The centre is closed", STAFF_IN_EVENT: "The therapist is in an event", WINDOW_TOO_NARROW: "The time is too short" };
@@ -356,7 +355,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
       ) : (
         <div>
           {!patient ? <Btn kind="quiet" inline className="-ml-4" onClick={() => { setChosen(null); setOpts(null); }}>‹ Someone else</Btn> : null}
-          <ChangeLine label={chosen.last ? `Therapy · last: ${say(chosen.last.name)}, ${shortDay(chosen.last.date)}` : "Therapy"} value={therapyName || "Choose"}
+          <ChangeLine label="Therapy" value={therapyName || "Choose"}
             select={<LineSelect label="Therapy" value={therapyId} onChange={setTherapyId} free={therapies.map((t) => ({ id: t.id, name: say(t.name) }))} />} />
           <ChangeLine label={sessions > 1 ? "Starts" : "Date"} value={dayText(date)} select={<LineDate label="Date" value={date} min={today} onChange={setDate} />} />
           <ChangeLine label="Sessions" value={sessions === 1 ? "One" : `${sessions}, one a day`}
@@ -370,7 +369,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
               select={<LineSelect label="Therapist" value={staffId} onChange={setStaffId} free={free(opts.staff)} busy={busyOnes(opts.staff)} />} />
             <ChangeLine label="Room" value={nameOf(opts.rooms, roomId) || slot?.room_name || "None free"}
               select={<LineSelect label="Room" value={roomId} onChange={setRoomId} free={free(opts.rooms)} busy={busyOnes(opts.rooms)} />} />
-            <p className="mt-2 text-[13px] text-muted-foreground">Chosen for you: free at {time}. Change any line.</p>
+            <p className="mt-2 text-sm text-muted-foreground">Chosen for you: free at {time}. Change any line.</p>
             {sessions > 1 ? <Consequence>{sessions} treatments, one a day from {dayText(date)} at {time}. A day {first} is away, or the therapist or room is not free, is skipped; if they do not all fit, nothing is booked.</Consequence> : null}
           </>)}
         </div>

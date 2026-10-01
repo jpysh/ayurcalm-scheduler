@@ -39,7 +39,7 @@ export const starterDietTemplates = [
   {
     name: 'General sattvic plan',
     description:
-      'Everyday plan for a resident with no specific restriction. Freshly cooked, warm, moderate portions, the largest meal at midday.',
+      'Everyday plan for a patient with no specific restriction. Freshly cooked, warm, moderate portions, the largest meal at midday.',
     therapy_breakfast: 'Mung dal porridge or vegetable upma; soaked almonds; ginger tea',
     therapy_lunch: 'Khichdi with seasonal vegetables and ghee; small salad',
     therapy_dinner: 'Light vegetable soup; one chapati with ghee; steamed greens',
@@ -103,7 +103,7 @@ export const starterDietTemplates = [
   {
     name: 'Weight and metabolism (sthaulya)',
     description:
-      'For a resident on a weight or metabolic programme. Drier and lighter than the general plan, with the largest meal at midday and nothing after dark. Written as a regimen, not a calorie count; portions are set per patient.',
+      'For a patient on a weight or metabolic programme. Drier and lighter than the general plan, with the largest meal at midday and nothing after dark. Written as a regimen, not a calorie count; portions are set per patient.',
     therapy_breakfast: 'Warm water with honey if advised; roasted barley or millet porridge, no sugar',
     therapy_lunch: 'Barley or millet roti; mung dal; two cooked vegetables with little oil; small salad',
     therapy_dinner: 'Clear vegetable soup with pepper; no rice, no wheat after dark',

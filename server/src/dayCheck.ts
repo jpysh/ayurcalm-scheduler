@@ -149,7 +149,7 @@ const fixFromMove = (m: Move, sameDay: boolean): Fix => ({
   choice: m.choice,
   cancel: m.cancel,
   choices: m.choices?.map((c) => fixFromMove(c, c.to.date === m.from.date)),
-  cost_note: sameDay || m.cancel ? null : "changes the resident's diet day",
+  cost_note: sameDay || m.cancel ? null : "changes the patient's diet day",
   pinned: Boolean(m.pinned),
   appointment_id: m.appointment_id,
   staff_id: m.to.staff_id,
@@ -295,7 +295,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
   const key = day.toISOString().slice(0, 10);
   // A day either side in UTC covers the centre's day in any time zone; the date check below picks it out.
   const issues = await prisma.linkIssue.findMany({ where: { seen: false, OR: [{ appointment_id: { in: appointments.map((a) => a.id) } }, { appointment_id: null, created_at: { gte: new Date(day.getTime() - 86400000), lt: new Date(day.getTime() + 2 * 86400000) } }] }, orderBy: { created_at: 'asc' } });
-  const ISSUE: Record<string, string> = { room: 'Room not usable', co_therapist: 'Co-therapist not here', patient_absent: 'Resident not here', permission: 'Needs permission', note: 'A note', sos: 'SOS: needs help now' };
+  const ISSUE: Record<string, string> = { room: 'Room not usable', co_therapist: 'Co-therapist not here', patient_absent: 'Patient not here', permission: 'Needs permission', note: 'A note', sos: 'SOS: needs help now' };
   for (const i of issues) {
     const a = i.appointment_id ? appointments.find((x) => x.id === i.appointment_id) : null;
     // Raised on the centre's day, for that day's treatment, or with none: the one the admin is looking at.
@@ -316,7 +316,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
       id: `FEEDBACK:${a.id}`, kind: 'FEEDBACK', problem_class: 'worth_knowing',
       who: `${nameOfPatient(a.patient_id)} — ${nameOfTherapy(a.therapy_id)}`, start_time: a.start_time,
       what: `👎 ${r.feedback_note || 'Did not like it'}`,
-      group_key: 'FEEDBACK', group_label: 'Residents not happy',
+      group_key: 'FEEDBACK', group_label: 'Patients not happy',
       appointment_id: null, patient_id: a.patient_id, patient_name: nameOfPatient(a.patient_id), staff_id: a.staff_id,
       blocked_by_preferred_staff: false, fix: null, choices: [], no_fix_reason: null, cost: COST.IDLE_RESIDENT,
     });
@@ -335,7 +335,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
       start_time: null,
       what: 'Nothing is booked for them today.',
       group_key: 'IDLE_RESIDENT',
-      group_label: 'Residents in house with nothing booked',
+      group_label: 'Patients in house with nothing booked',
       appointment_id: null,
       patient_id: stay.patient_id,
       patient_name: nameOfPatient(stay.patient_id),
@@ -469,7 +469,7 @@ export function headlineFor(all: DayProblem[]): string | null {
   const tail = rest > 0 ? `, and ${rest} more to fix` : '';
 
   const head = worst.kind === 'IDLE_RESIDENT'
-    ? `${names.length} resident${names.length === 1 ? '' : 's'} in house with nothing booked: ${who}`
+    ? `${names.length} patient${names.length === 1 ? '' : 's'} in house with nothing booked: ${who}`
     : worst.kind === 'NO_THERAPIST'
       ? `${sameKind.length} treatment${sameKind.length === 1 ? '' : 's'} with no therapist: ${who}`
       : `${worst.what.replace(/\.$/, '')} — ${who}`;

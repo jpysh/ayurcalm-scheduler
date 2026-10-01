@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
-import { BottomSheet, ListGroup, SwitchRow, noteText, field } from "@/components/kit";
+import { BottomSheet, ListGroup, SwitchRow, noteText, field, Btn } from "@/components/kit";
 import { changesOf, type Attention, type Rule } from "@/lib/attention";
 
 const HOURS = [4, 12, 24, 48];
@@ -60,7 +60,7 @@ export function RulesSheet({ open, onOpenChange, section, attention, reload }: {
 
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} title="What needs you" note={`${on} of ${rules.length} on. Only what needs action counts on the pill; information shows in grey.`}
-      foot={Object.keys(changed).length ? <button type="button" className="min-h-11 w-full rounded-full text-base font-semibold text-primary" onClick={() => put(rules.map((r) => ({ ...r, on: r.default_on, hours: r.default_hours })))}>Reset to the defaults</button> : undefined}>
+      foot={Object.keys(changed).length ? <Btn kind="quiet" onClick={() => put(rules.map((r) => ({ ...r, on: r.default_on, hours: r.default_hours })))}>Reset to the defaults</Btn> : undefined}>
       <div ref={body}>
         {(["Day", "Patients", "Team"] as const).map((s) => (
           <div key={s} data-section={s}>

@@ -79,3 +79,21 @@ Search at the bottom above the keyboard, results with the fact asked for (diet, 
 
 ## What each story asks of the kit
 Two-capsule bar (all) · floating pill and inbox sheet with sections (1, 3) · row with a flag (1, 4, 8) · one-sheet booking with bottom search (5, 6) · timeline list (7) · checklist bar (8) · two-button foot (9) · consequence line (9, 10, 11) · picker list with description and price (7, 11, 12) · switch row (4) · toast with Undo (3, 5, 9). Reference catalogues (templates, packages, accommodation, attention rules) all live in Settings and open from the patient screen through one gear or Edit link.
+
+## Closing walk (1 Oct, #285 session 9)
+Each story walked on a 375 × 812 phone against a fresh demo centre; taps from `tapCount.spec.ts`, counted from the day (or the open card where the story says so). Every job is at or under target.
+
+| # | Story | Path walked | Taps | Target | First view as the story says |
+|---|---|---|---|---|---|
+| 1 | Morning glance | open the app | 0 | 0 | the pill ("9 to know") above the bar; empty sections hidden |
+| 2 | Print the day sheet | Print | 1 | 1 | toast with Open and Share; sheet says "patient" |
+| 3 | Fix the day | pill → Move all | 2 | 2 | who, what breaks, and the plan before applying; Undo |
+| 4 | Add an arriving patient | + → gender → Add | 3 | 2 | four fields, consultation pre-booked; the third tap is the gender, which nothing preselects (#283) |
+| 5 | Book or move | + → who → Book | 3 | 3 | five suggestions, search above the keyboard, every line editable |
+| 6 | Find | Search → the person | 2 | 2 | result with the fact asked for |
+| 7 | Meals by date | card → Diet → plan → Start | 3 | 3 | timeline of plans to the leaving date; Today and Tomorrow chips |
+| 8 | Discharge | card → Discharge summary → Print | 2 | 3 | "1 of 8 ready", Print always on |
+| 9 | Leave | Menu → Leave → + → Save and plan | 4 | 4 | live line "N treatments that day will need a new therapist" |
+| 10 | Change a stay | card → Stay → date → Save | 3 | 3 | Arrived and Leaving as change lines, consequence line on change |
+| 11 | Package | card → Package → pick | 2 | 3 | nearest package preselected, "ends 7 Oct, the same as the stay" |
+| 12 | Accommodation | card → Accommodation → pick | 3 | 3 | "6 nights × Rs 4,000 = Rs 24,000", reference only |
