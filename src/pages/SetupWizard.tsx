@@ -1,18 +1,13 @@
 import { useEffect, useState } from "react";
 import { confirmSheet } from "@/components/ConfirmSheet";
 import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Area, Btn, Days, Dropdown, FullPage, Group, Picker, Seg, Text, TimeList, noteText, timesBetween } from "@/components/kit";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { useTrial } from "@/lib/centreName";
 
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
+type Keep = "templates" | "all" | "none";
 
 /**
  * Shown once, when an administrator signs in to an install whose settings have
@@ -34,9 +29,9 @@ const SetupWizard = () => {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ new_password: pw }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { toast.error(data?.error || "Could not save your password"); return; }
+      if (!res.ok) { toast.error(data?.error || "Your password was not saved. Try again."); return; }
       setStep(1);
-    } catch { toast.error("Could not save your password"); } finally { setBusy(false); }
+    } catch { toast.error("Your password was not saved. Check the connection and try again."); } finally { setBusy(false); }
   };
   // A cloud trial (#247) starts with no example centre, so there is nothing to keep or clear.
   const [hasDemo, setHasDemo] = useState(true);
@@ -57,13 +52,17 @@ const SetupWizard = () => {
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-  const toggleDay = (day: string) =>
-    set("working_days", form.working_days.includes(day)
-      ? form.working_days.filter((d) => d !== day)
-      : [...form.working_days, day]);
+  // What the starter kit holds, counted from the centre itself: therapies and rooms are kept, packages, accommodation and diet plans never go.
+  const [kit, setKit] = useState("");
+  const [start, setStart] = useState<Keep>("templates");
+  useEffect(() => {
+    if (step !== 3) return;
+    const n = (path: string) => fetch(`${API_BASE}/${path}`).then((r) => r.json()).then((l) => (Array.isArray(l) ? l.length : 0)).catch(() => 0);
+    Promise.all(["therapies", "rooms", "packages", "diet-templates"].map(n)).then(([t, r, p, d]) => setKit([`${t} therapies`, `${r} rooms`, `${p} packages`, `${d} diet plans`].join(", ")));
+  }, [step]);
 
   /** all: keep the whole example centre; templates: keep its therapies and rooms only; none: start empty. */
-  const finish = async (keep: "all" | "templates" | "none") => {
+  const finish = async (keep: Keep) => {
     setBusy(true);
     try {
       const res = await fetch(`${API_BASE}/settings`, {
@@ -91,138 +90,65 @@ const SetupWizard = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-muted/30 flex items-start justify-center p-4">
-      <Card className="w-full max-w-lg mt-8">
-        <CardHeader className="pb-2">
-          <p className="text-xs text-muted-foreground">Step {step + (trial ? 1 : 0)} of {(hasDemo ? 3 : 2) + (trial ? 1 : 0)}</p>
-          <CardTitle className="text-lg">
-            {step === 0 && "Choose your password"}
-            {step === 1 && "What is your centre called?"}
-            {step === 2 && "When are you open?"}
-            {step === 3 && "Start with example data?"}
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          {step === 0 && (
-            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); savePassword(); }}>
-              <input type="email" autoComplete="username" value={localStorage.getItem("authUser") ?? ""} readOnly hidden />
-              <div className="space-y-1">
-                <Label htmlFor="w_pw">Password</Label>
-                <Input id="w_pw" type="password" autoFocus autoComplete="new-password" minLength={8} required
-                  value={pw} onChange={(e) => setPw(e.target.value)} />
-                <p className="text-xs text-muted-foreground">At least 8 characters. You sign in with {localStorage.getItem("authUser")} and this password.</p>
-              </div>
-              <div className="flex justify-end">
-                <Button type="submit" disabled={pw.length < 8 || busy}>Continue</Button>
-              </div>
-            </form>
-          )}
-
-          {step === 1 && (
-            <>
-              <div className="space-y-1">
-                <Label htmlFor="w_name">Centre name</Label>
-                <Input id="w_name" autoFocus value={form.centre_name}
-                  onChange={(e) => set("centre_name", e.target.value)}
-                  placeholder="e.g. Green Valley Ayurveda" />
-                <p className="text-xs text-muted-foreground">Appears in the app and on the printed daily schedule.</p>
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="w_address">Address <span className="text-muted-foreground">(optional)</span></Label>
-                <Textarea id="w_address" rows={2} value={form.address}
-                  onChange={(e) => set("address", e.target.value)} />
-              </div>
-              <div className="flex justify-end">
-                <Button onClick={() => setStep(2)} disabled={!form.centre_name.trim()}>Continue</Button>
-              </div>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="w_open">Opens</Label>
-                  <Input id="w_open" type="time" value={form.opening_time}
-                    onChange={(e) => set("opening_time", e.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="w_close">Closes</Label>
-                  <Input id="w_close" type="time" value={form.closing_time}
-                    onChange={(e) => set("closing_time", e.target.value)} />
-                </div>
-                <div className="col-span-2 space-y-1">
-                  <Label>Booking slots</Label>
-                  <Select value={String(form.slot_minutes)} onValueChange={(v) => set("slot_minutes", Number(v))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {[15, 20, 30, 60].map((m) => <SelectItem key={m} value={String(m)}>{m} min</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Working days</Label>
-                <div className="flex flex-wrap gap-3">
-                  {WEEKDAYS.map((d) => (
-                    <label key={d} className="flex items-center gap-2 text-sm capitalize">
-                      <Checkbox checked={form.working_days.includes(d)} onCheckedChange={() => toggleDay(d)} />
-                      {d.slice(0, 3)}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1 max-w-xs">
-                <Label htmlFor="w_tz">Timezone</Label>
-                <select id="w_tz" className="h-11 w-full rounded-md border bg-background px-3 text-base" value={form.timezone} onChange={(e) => set("timezone", e.target.value)}>
-                  {TIMEZONES.map((z) => <option key={z} value={z}>{z.replace(/_/g, " ")}</option>)}
-                </select>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                These decide which time rows the schedule shows. You can change them later in Settings.
-              </p>
-              <div className="flex justify-between">
-                <Button variant="ghost" onClick={() => setStep(1)}>Back</Button>
-                <Button onClick={() => (hasDemo ? setStep(3) : finish("all"))} disabled={form.working_days.length === 0 || busy}>{hasDemo ? "Continue" : "Finish"}</Button>
-              </div>
-            </>
-          )}
-
-          {step === 3 && (
-            <>
-              <p className="text-sm text-muted-foreground">
-                This install came with an example centre: patients, therapists, rooms, therapies
-                and three months of bookings, so you could see how it works.
-              </p>
-              {/* The recommended start comes first: a real centre edits the example therapies and rooms
-                  rather than typing them, and only the example people and bookings are in its way (#60). */}
-              <div className="grid gap-2">
-                <Button className="h-auto min-h-12 whitespace-normal py-2" onClick={() => finish("templates")} disabled={busy}>
-                  {busy ? "Setting up…" : "Start my own centre, with the example therapies and rooms"}
-                </Button>
-                <Button variant="outline" className="h-auto min-h-12 whitespace-normal py-2" onClick={() => finish("all")} disabled={busy}>
-                  Keep the example data for now
-                </Button>
-                <Button variant="ghost" className="h-auto min-h-12 whitespace-normal py-2 text-destructive"
-                  onClick={async () => { if (await confirmSheet("Delete all the example patients, therapists, rooms, therapies and bookings?\n\nThis cannot be undone.", "Delete")) finish("none"); }}
-                  disabled={busy}>
-                  Start completely empty
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                You can clear the example data at any time from Settings. Nothing here deletes
-                your account.
-              </p>
-              <div className="flex justify-start">
-                <Button variant="ghost" onClick={() => setStep(2)} disabled={busy}>Back</Button>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+  const of = (hasDemo ? 3 : 2) + (trial ? 1 : 0);
+  const TITLES = ["Choose your password", "What is your centre called?", "When are you open?", "How do you want to start?"];
+  const next = (to: number, ok: boolean, label = "Continue") => (
+    <div className="mt-5 grid gap-1">
+      <Btn kind="primary" type="submit" disabled={!ok || busy}>{label}</Btn>
+      {to >= 0 ? <Btn kind="quiet" disabled={busy} onClick={() => setStep(to)}>Back</Btn> : null}
     </div>
+  );
+
+  return (
+    <FullPage title={TITLES[step]} note={`Step ${step + (trial ? 1 : 0)} of ${of}. You can change all of this later in Settings.`}>
+      {step === 0 && (
+        <form onSubmit={(e) => { e.preventDefault(); savePassword(); }}>
+          <input type="email" autoComplete="username" value={localStorage.getItem("authUser") ?? ""} readOnly hidden />
+          <Text label="Password" type="password" autoFocus autoComplete="new-password" minLength={8} required value={pw} onChange={(e) => setPw(e.target.value)} valid={pw.length >= 8}
+            note={`At least 8 characters. You sign in with ${localStorage.getItem("authUser")} and this password.`} />
+          {next(-1, pw.length >= 8)}
+        </form>
+      )}
+
+      {step === 1 && (
+        <form onSubmit={(e) => { e.preventDefault(); setStep(2); }}>
+          <Text label="Centre name" autoFocus value={form.centre_name} onChange={(e) => set("centre_name", e.target.value)} placeholder="e.g. Green Valley Ayurveda" note="Appears in the app and on the printed daily schedule." />
+          <Area label="Address (optional)" rows={2} value={form.address} onChange={(e) => set("address", e.target.value)} />
+          {next(trial ? 0 : -1, !!form.centre_name.trim())}
+        </form>
+      )}
+
+      {step === 2 && (
+        <form onSubmit={(e) => { e.preventDefault(); if (hasDemo) setStep(3); else void finish("all"); }}>
+          <div className="grid grid-cols-2 gap-3">
+            <TimeList label="Opens" value={form.opening_time} onChange={(t) => set("opening_time", t)} times={timesBetween("04:00", "14:00", 30)} />
+            <TimeList label="Closes" value={form.closing_time} onChange={(t) => set("closing_time", t)} times={timesBetween("12:00", "23:30", 30)} after={form.opening_time} />
+          </div>
+          <Group label="Booking slots" note="How far apart treatments can start."><Seg options={[[15, "15 min"], [20, "20 min"], [30, "30 min"], [60, "60 min"]]} value={form.slot_minutes} onChange={(m) => set("slot_minutes", m)} /></Group>
+          <Group label="Working days" note="A centre with patients staying treats them every day, weekends included."><Days value={form.working_days} onChange={(v) => set("working_days", v)} /></Group>
+          <Dropdown label="Timezone" value={form.timezone} onChange={(e) => set("timezone", e.target.value)} note="The centre's, not this phone's.">
+            {TIMEZONES.map((z) => <option key={z} value={z}>{z.replace(/_/g, " ")}</option>)}
+          </Dropdown>
+          {next(1, form.working_days.length > 0, hasDemo ? "Continue" : "Finish")}
+        </form>
+      )}
+
+      {step === 3 && (
+        <form onSubmit={(e) => { e.preventDefault(); void (async () => { if (start === "none" && !(await confirmSheet("Delete all the example patients, therapists, rooms, therapies and bookings?\n\nThis cannot be undone.", "Delete"))) return; await finish(start); })(); }}>
+          <p className={`mt-3 ${noteText}`}>This install came with an example centre: patients, therapists, rooms, therapies and three months of bookings, so you could see how it works.</p>
+          {/* The recommended start comes first: a real centre edits the starter therapies and rooms rather than typing them (#60, #288). */}
+          <div className="mt-3">
+            <Picker<Keep> value={start} onChange={setStart} options={[
+              { id: "templates", name: "Residential Ayurveda starter kit", note: "Therapies, rooms, packages, diet plans, rules", fact: "Recommended" },
+              { id: "all", name: "Keep the example data for now", note: "Patients and bookings, to look around" },
+              { id: "none", name: "Start completely empty", note: "Nothing from the examples" },
+            ]} />
+          </div>
+          <p className={`mt-3 ${noteText}`}>{start === "templates" ? `The kit holds ${kit || "the usual set"}, and sets the rules for what needs you. ` : ""}Review each in Settings, at your own pace; everything works as it is. Nothing here deletes your account.</p>
+          {next(2, true, busy ? "Setting up…" : start === "templates" ? "Start with the kit" : start === "all" ? "Keep the example data" : "Start empty")}
+        </form>
+      )}
+    </FullPage>
   );
 };
 

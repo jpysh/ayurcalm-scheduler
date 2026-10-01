@@ -115,6 +115,9 @@ Every list, sheet and button has all of these designed, not left to default.
 - **Preselected best option.** A picker opens with the sensible choice already ticked and in view (the package nearest the stay's length), so the common case is one tap on the foot. Money is `rupees()`: "Rs 70,750", whole rupees, always marked as reference.
 - **Sheet foot and link row.** A sheet's foot is `SheetFoot`: the main button names the outcome ("Add the room"), a quiet destructive line under it for what exists. A list that leads somewhere else starts with `LinkRow` ("Standard therapies · Add from the library ›"). Delete asks in a sheet that says what goes with it, never a dialog.
 - **Settings parts.** The front door is groups of `Row`s that say their own state ("Last backup 2 hours ago"), with one sheet each; a long sheet is headed parts (`SectionHead`) and one Save. A rule is a `SwitchRow`: name, one line of state, the switch, and its "when" inline in the sentence as a value that opens the phone's own list; a changed value is amber (`--notice`). A record is `EntryRow`s under a day (the Log). An inbox item is an `ItemRow`: what it is, its facts, its actions under it. A screen's gear (`PageHead gear`) opens the rules for what that screen raises.
+- **Buttons in the kit.** `Btn` (primary, secondary, quiet, destructive; `inline` for its own width) and `LinkBtn` for one that leaves the app (WhatsApp, a PDF). A state word on a card is a `Tag`; what is wrong, with its fix under it, is a `Callout` (alert tint only when it must be fixed now). A sheet's second page passes `onBack` to `BottomSheet`: Back sits above the title, never beside it.
+- **Screens that are not the app** (sign-in, setup, a private link) are a `FullPage`: page colour, one centred column, 16 gutter, the same fields, rows and buttons as a sheet. Never a shadcn Card.
+- **Starter kit.** The last setup step offers the kit first and ticked ("Residential Ayurveda starter kit", what it holds, counted from the centre), then "Keep the example data", then "Start completely empty" (asks, as it deletes).
 - **Kit first.** Before writing markup for any of the above, use or extend `src/components/kit.tsx`. A one-off size, colour, radius or shadow in a screen file is a defect.
 - **Chips and segments.** Chips: filters and multi-choice. Segments: one of 2–4 in view.
 - **Toast.** Above the bar, dark, one line, one action (Undo). 5 seconds.
@@ -122,7 +125,7 @@ Every list, sheet and button has all of these designed, not left to default.
 
 ## 8. Patterns
 
-- **Booking is one sheet.** Who (search at the bottom, at most five suggestions: no treatment yet today, then recent) → everything else fills in place and stays editable: therapy (last one, with its date), date, time, therapist, room. The button names the outcome. No loading flash, no long lists.
+- **Booking is one sheet.** Who (search at the bottom, at most five suggestions: no treatment yet today, then recent) → everything else fills in place and stays editable: therapy (last one, with its date), date, sessions (one; or 2–21, one a day at the same time and therapist: all of them or none), time, therapist, room. The button names the outcome. No loading flash, no long lists.
 - **Nothing is forced.** A patient can be added with four fields; diet, package, accommodation, consultation and details are rows with arrows, filled when the admin decides. Discharge printing is never blocked by missing data.
 - **Cancelled, never removed.** Anything the admin ends (a treatment after a shortened stay, a leave-affected slot) is marked cancelled with a reason and kept in the patient's record and audit trail.
 - **Decisions sit where they belong**: the suggestion is in the free slot, the fix is on the problem row.

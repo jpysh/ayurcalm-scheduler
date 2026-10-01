@@ -206,12 +206,11 @@ test("a no-show's card stays open, and moving it puts it back on the day (#193)"
     await page.getByRole('button', { name: /^\d\d:\d\d/ }).filter({ hasText: "didn't come" }).first().click();
     const card = page.getByRole('dialog');
     await card.getByRole('button', { name: /^When/ }).click();
-    // The list starts with the time as it stands, and ends with a way to any other day (#201).
-    const now = card.getByRole('button', { name: /✓ now$/ });
-    await expect(now).toBeDisabled();
-    await expect(now).toContainText('10:00');
-    await expect(card.getByRole('button', { name: /^Another day or time/ })).toBeVisible();
-    await card.getByRole('button', { name: /^\d\d:\d\d/ }).and(card.locator(':enabled')).first().click();
+    // The list starts with the time as it stands, ticked, and ends with a way to any other day (#201).
+    const now = card.getByRole('button', { name: /^10:00/ }).and(card.locator('[aria-pressed=true]'));
+    await expect(now).toBeVisible();
+    await expect(card.getByLabel('Another day', { exact: true })).toBeAttached();
+    await card.getByRole('button', { name: /^\d\d:\d\d/ }).and(card.locator('[aria-pressed=false]')).first().click();
     await expect(page.locator('[data-sonner-toast]')).toBeVisible({ timeout: 20000 });
     const after = (await call('get', `/appointments?date=${DAY}`)).find((a: { id: string }) => a.id === mine.id);
     expect(after?.status).toBe('pending');

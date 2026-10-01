@@ -4,11 +4,9 @@ import { useTrial } from "@/lib/centreName";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useLocation, useNavigate } from "react-router-dom";
 import { BottomBar, SCREENS } from "@/components/BottomBar";
-import { AutoAssignDialog } from "@/components/AutoAssignDialog";
 import { TeamRooms } from "@/components/TeamRooms";
 import { LogScreen } from "@/components/LogScreen";
 import { AttentionSheet, type DayProblem, type ReplanBatch } from "@/components/AttentionSheet";
-import { AppointmentDialog } from "@/components/AppointmentDialog";
 import { useStaffScreen } from "./tabs/StaffTab";
 import { useRoomsScreen } from "./tabs/RoomsTab";
 import { useTherapiesScreen } from "./tabs/TherapiesTab";
@@ -89,23 +87,6 @@ const useServerHealth = (base: string) => {
   return { serverOk, isOnline };
 };
 
-type AppointmentDetailed = { id: number; time: string; patient: string; therapy: string; staff: string; room: string } & {
-  roomAmenities?: string[];
-  patientDetails?: {
-    id: string;
-    name: string;
-    phone: string;
-    email: string;
-    gender: string;
-    dob: string;
-    emergencyContact: string;
-    emergencyPhone: string;
-    address: string;
-    medicalNotes: string;
-   
-  };
-};
-
 type ApiTherapy = { id: string; name: string; required_amenities: string[]; duration_minutes: number; requires_gender_match: boolean; staff_required?: number; checklist?: { text: string; required: boolean }[]; vitals?: string[] };
 type ApiStaff = { id: string; name: string; gender: "male" | "female" | "other"; specializations: string[]; phone?: string };
 type ApiRoom = { id: string; name: string; amenities: string[]; is_active: boolean };
@@ -132,14 +113,12 @@ const AdminDashboard = () => {
       .catch(() => { /* falls back to the defaults above */ });
   }, []);
   const [activeTab, setActiveTab] = useState("schedule");
-  const [showAutoAssign, setShowAutoAssign] = useState(false);
   const [showAttention, setShowAttention] = useState(false);
   // What needs you (#288): the rules and the patient and team items they raise; the rules sheet opens from Settings, the pill and the gear on Patients and Team.
   const attention = useAttention();
   const [rules, setRules] = useState<{ section: "Day" | "Patients" | "Team" | null } | null>(null);
   // A link on another screen to a Settings list ("Edit the list" on a picker).
   const [settingsSheet, setSettingsSheet] = useState<string | null>(null);
-  const [selectedAppointment, setSelectedAppointment] = useState<AppointmentDetailed | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
   // Until the first load lands, an empty list means "not yet", not "a new centre" (#220).
   const [loaded, setLoaded] = useState(false);
@@ -495,7 +474,7 @@ const AdminDashboard = () => {
   useEffect(() => { const t = setInterval(() => setMinute((m) => m + 1), 60000); return () => clearInterval(t); }, []);
 
   // Each screen keeps its own state and dialogs in its own file (#147).
-  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), openFullBooking: () => setShowAutoAssign(true), movedFrom, problems: dayCheck.problems, showDay: (iso: string) => { setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id) });
+  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), movedFrom, problems: dayCheck.problems, showDay: (iso: string) => { setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id) });
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, requestDelete });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, requestDelete });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q: listQuery });
@@ -504,7 +483,7 @@ const AdminDashboard = () => {
   // The treatment card opens the resident card, which the Residents screen holds.
   const residentOpener = useRef<((id: string) => void) | null>(null);
   const swipe = useRef<{ x: number; y: number } | null>(null);
-  const patientsScreen = usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ,
+  const patientsScreen = usePatientsScreen({ needs: attention.items.filter((i) => i.section === 'Patients' && i.kind === 'action' && i.patient_id), patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ,
     openTreatment: (a) => { go('schedule'); scheduleScreen.openCard(a); },
     book: (p) => { go('schedule'); scheduleScreen.openBook(p); },
     // The same words, over every treatment: the day's own search.
@@ -666,17 +645,7 @@ const AdminDashboard = () => {
         }}
       />
 
-      {/* Dialogs */}
-      <AutoAssignDialog open={showAutoAssign} onOpenChange={setShowAutoAssign} defaultDateISO={ymdInTZ(currentDate)} onAssigned={async (dates) => {
-        const d = dates[0];
-        if (d) {
-          setCurrentDate(new Date(d));
-          for (const iso of dates) {
-            await refreshAppointmentsForDate(iso, true);
-          }
-        }
-      }} />
-      <AttentionSheet
+            <AttentionSheet
         open={showAttention}
         onOpenChange={setShowAttention}
         apiBase={API_BASE}
@@ -714,16 +683,6 @@ const AdminDashboard = () => {
         }}
       />
       <RulesSheet open={!!rules} onOpenChange={(o) => { if (!o) setRules(null); }} section={rules?.section} attention={attention} reload={attention.reload} />
-      <AppointmentDialog 
-        appointment={selectedAppointment} 
-        open={!!selectedAppointment} 
-        onOpenChange={(open) => !open && setSelectedAppointment(null)}
-        onOpenAssign={() => setShowAutoAssign(true)}
-        onChanged={async () => {
-      const iso = ymdInTZ(currentDate);
-          await refreshAppointmentsForDate(iso, true);
-        }}
-      />
       {patientsScreen.dialogs}
       {/* Choice +: Team can add several kinds of thing, so + asks which (#285). */}
       <BottomSheet open={showTeamChoice} onOpenChange={setShowTeamChoice} title="Add to the team" note="What are you adding?">

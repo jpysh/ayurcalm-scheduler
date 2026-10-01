@@ -1,8 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { BottomSheet } from "@/components/BottomBar";
+import { BottomSheet, Btn, DateRow, SheetFoot, Text } from "@/components/kit";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 
@@ -77,22 +74,16 @@ export default function DayDietDialog({ patient, onClose, onChangePlan }: { pati
   };
 
   return (
-    <BottomSheet open={!!patient} onOpenChange={(v: boolean) => { if (!v) { setDate(localToday()); onClose(); } }} title={`${patient?.name ?? ''}'s meals`}>
-      <div className="max-h-[75dvh] space-y-3 overflow-y-auto">
-        <Input id="day-diet-date" aria-label="Day" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
-        {meals.map((meal) => (
-          <div key={meal} className="space-y-1">
-            <Label htmlFor={`day-diet-${meal}`} className="text-[13px]">{mealTitle[meal]}</Label>
-            <Input id={`day-diet-${meal}`} value={texts[meal]} maxLength={500}
-              placeholder={plan[mealTitle[meal]] || "Nothing on the plan"}
-              onChange={(e) => setTexts((t) => ({ ...t, [meal]: e.target.value }))} />
-          </div>
-        ))}
-        <p className="text-[13px] text-muted-foreground">Type in a meal to change it for this day only. Leave it empty to follow the plan.</p>
-        <Button className="min-h-11 w-full rounded-full" disabled={busy || !date} onClick={save}>{busy ? "Saving…" : "Save"}</Button>
-        {/* The plan itself is one step further in (#178): the day is the daily job. */}
-        {onChangePlan ? <Button variant="outline" className="min-h-11 w-full rounded-full" onClick={onChangePlan}>Change plan…</Button> : null}
-      </div>
+    <BottomSheet open={!!patient} onOpenChange={(v: boolean) => { if (!v) { setDate(localToday()); onClose(); } }} title={`${patient?.name ?? ''}'s meals`}
+      note="Type in a meal to change it for this day only. Leave it empty to follow the plan."
+      foot={<SheetFoot busy={busy} ok={!!date} save={save} label="Save the meals" />}>
+      <DateRow label="Day" value={date} onChange={setDate} />
+      {meals.map((meal) => (
+        <Text key={meal} label={mealTitle[meal]} value={texts[meal]} maxLength={500} placeholder={plan[mealTitle[meal]] || "Nothing on the plan"}
+          onChange={(e) => setTexts((t) => ({ ...t, [meal]: e.target.value }))} />
+      ))}
+      {/* The plan itself is one step further in (#178): the day is the daily job. */}
+      {onChangePlan ? <div className="mt-3"><Btn onClick={onChangePlan}>Change plan…</Btn></div> : null}
     </BottomSheet>
   );
 }
