@@ -11,7 +11,7 @@ export type Patient = {
   /** Every stay, newest first; actualStart/actualEnd are only the newest. */
   stays?: { start_date: string; end_date: string }[]; requiresPreferredStaff?: boolean;
 };
-export type ApiAppointment = { id: string; patient_id: string; therapy_id: string; staff_id: string | null; room_id: string | null; scheduled_date: string; start_time: string; duration_minutes: number; status?: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'rescheduled'; notes?: string | null;
+export type ApiAppointment = { id: string; patient_id: string; therapy_id: string; staff_id: string | null; room_id: string | null; scheduled_date: string; start_time: string; duration_minutes: number; status?: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'rescheduled'; notes?: string | null; cancel_reason?: string | null;
   /** What the private links recorded (#219). */
   record?: { checklist?: Record<string, boolean>; vitals?: Record<string, string>; room_ready?: boolean; feedback?: "up" | "down"; feedback_note?: string } | null };
 export type ApiProgramEvent = { id: string; date?: string | null; start_date?: string | null; end_date?: string | null; start_time: string; end_time: string; activity_name: string; room_id?: string | null; staff_id?: string | null; required_amenities?: string[]; notes?: string | null; recurrence?: string | null; weekdays: string[]; audience?: string | null };

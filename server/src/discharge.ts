@@ -93,10 +93,19 @@ export async function dischargeOf(stayId: string, prisma: PrismaClient) {
     no: '', final: false,
     ...stored,
   };
+  // What the card already holds fills the summary, so a phone number typed there is not typed twice.
+  // An empty stored line is not a decision: it was saved before the card knew.
+  const p0 = stay.Patient;
+  draft.address = stored.address || p0.address || '';
+  draft.country = stored.country || p0.country || '';
+  draft.passport = stored.passport || p0.id_number || '';
+  draft.registration_no = stored.registration_no || p0.registration_number || '';
   const doctor = draft.doctor_id ? await prisma.staff.findUnique({ where: { id: draft.doctor_id }, select: { id: true, name: true, qualification: true, reg_no: true, signature: true, phone: true } }) : null;
   const p = stay.Patient;
   const age = p.date_of_birth ? Math.floor((stay.end_date.getTime() - p.date_of_birth.getTime()) / (365.25 * DAY_MS)) : null;
+  const ready = readiness(draft, p, !!doctor);
   return {
+    ready,
     stay_id: stay.id, patient_id: p.id, saved: !!stay.discharge,
     name: p.name, gender: p.gender, age, phone: p.phone, email: p.email,
     from: ymd(stay.start_date), to: ymd(stay.end_date), days,
@@ -132,4 +141,24 @@ export async function saveDischarge(stayId: string, body: unknown, by: 'admin' |
   const next = { ...before, ...sent, no, final: input.final ?? before.final ?? false };
   await prisma.patientStay.update({ where: { id: stayId }, data: { discharge: next as Prisma.InputJsonValue } });
   return { ok: true as const };
+}
+
+/**
+ * What the summary still lacks, for the card's checklist bar (#285 story 8). It informs and
+ * never blocks: the summary prints with these as blank lines to write by hand. `where` says
+ * which sheet holds the field, so a tap on a missing item opens it.
+ */
+export type Missing = { key: string; label: string; where: 'details' | 'summary' };
+function readiness(d: Discharge, p: { emergency_phone: string | null }, hasDoctor: boolean) {
+  const items: [string, string, 'details' | 'summary', boolean][] = [
+    ['address', 'Address', 'details', !!d.address],
+    ['country', 'Country', 'details', !!d.country],
+    ['passport', 'Passport or ID', 'details', !!d.passport],
+    ['registration_no', 'Registration no.', 'details', !!d.registration_no],
+    ['emergency_phone', 'Emergency phone', 'details', !!p.emergency_phone],
+    ['doctor', 'Doctor to sign', 'summary', hasDoctor],
+    ['diagnosis', 'Final diagnosis', 'summary', !!d.diagnosis],
+    ['follow_up', 'Follow-up', 'summary', !!d.follow_up],
+  ];
+  return { total: items.length, done: items.filter((i) => i[3]).length, missing: items.filter((i) => !i[3]).map(([key, label, where]): Missing => ({ key, label, where })) };
 }

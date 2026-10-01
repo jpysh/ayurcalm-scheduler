@@ -65,6 +65,8 @@ server/                 Express + Prisma + Zod, serves ../dist in production
                         it. The header and Verify read it and decide nothing
   src/dietResolution.ts    What one patient eats on one day — pure, and tested
   src/dietTemplates.ts     Diet plan CRUD, admin-only writes
+  src/patientDiet.ts       A patient's meals by date: the segments of a stay, kept contiguous
+  src/catalogues.ts        Packages and accommodation types (reference lists, never billing)
   src/mcp.ts               The AI assistant's door at /mcp (#119, spec #102):
                         grouped tools that call the functions above and
                         decide nothing. src/mcpb/proxy.cjs is the Claude

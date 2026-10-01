@@ -111,6 +111,8 @@ Every list, sheet and button has all of these designed, not left to default.
 - **Change line.** A label on the left, its value on the right, a `›` when it can change ("Therapist · Priya ›"). One tap opens the phone's own list (`LineSelect`, `LineDate`) laid invisibly over the whole line; free choices come first and busy ones stay listed, greyed and disabled, with why ("Asha · has a treatment"), so a clash is never picked by accident. The same line, with no list, is a card's row with an arrow (Diet, Therapies, Stay, Details); a faint value says nothing is decided yet.
 - **More details.** A folded row, "More details · phone, passport… (optional) ›", for what a form does not need to start. Fields inside say "(optional)".
 - **Search field in a sheet.** When a sheet starts by finding someone, its foot holds the field (`SearchField`, above the keyboard) and the list above it shows at most five suggestions; typing replaces them with matches.
+- **Quick dates.** Today and Tomorrow as two chips above the phone's calendar row (`QuickDates`), for any change that usually starts now: a diet, a stay.
+- **Preselected best option.** A picker opens with the sensible choice already ticked and in view (the package nearest the stay's length), so the common case is one tap on the foot. Money is `rupees()`: "Rs 70,750", whole rupees, always marked as reference.
 - **Kit first.** Before writing markup for any of the above, use or extend `src/components/kit.tsx`. A one-off size, colour, radius or shadow in a screen file is a defect.
 - **Chips and segments.** Chips: filters and multi-choice. Segments: one of 2–4 in view.
 - **Toast.** Above the bar, dark, one line, one action (Undo). 5 seconds.

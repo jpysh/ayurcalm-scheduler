@@ -18,7 +18,8 @@ import DayDietDialog from "./DayDietDialog";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
-import { wide, ChangeLine, DateRow, Empty, Foot, Group, ListGroup, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText } from "@/components/kit";
+import { wide, ChangeLine, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText, rupees } from "@/components/kit";
+import { AccommodationSheet, DietSheet, DischargeSheet, PackageSheet, StaySheet, type CardStay, type StayTarget } from "@/components/CardSheets";
 import { marked } from "@/components/SearchScreen";
 // removed dialog import to avoid dev parse error
 
@@ -34,9 +35,9 @@ const clock = (timeZone: string) => new Date().toLocaleTimeString('en-GB', { tim
 type InHouse = { id: string; name: string; Stays: { id: string; start_date: string; end_date: string }[] };
 type ResidentDay = {
   id: string; name: string;
-  stay: { id: string; start_date: string; end_date: string; day: number; days: number; vitals: string | null; concerns: string | null; tests: string | null } | null;
+  stay: (CardStay & { vitals: string | null; concerns: string | null; tests: string | null }) | null;
   treatments: (CardAppt & { therapy_name: string; consultation: boolean; room_name: string | null; staff_names: string[] })[];
-  plan_name: string; meals: { meal: string; text: string }[];
+  plan_name: string; diet_next: { from: string; name: string } | null; meals: { meal: string; text: string }[];
   doctor_plan: string | null;
   last_consultation: Visit | null; next_consultation: Visit | null;
 };
@@ -104,9 +105,10 @@ function ResidentsList({ patients, today, onOpen, q, everything }: { patients: P
 }
 
 /** One resident: the stay, today's treatments, today's meals, and what to change. */
-function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeStay, book, details, detailsHint }: {
+function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePackage, changeHouse, changeStay, book, details, detailsHint }: {
   id: string | null; today: string; onClose: () => void;
   openTreatment: (a: CardAppt) => void; changeMeals: (p: { id: string; name: string }) => void;
+  changePackage: (p: ResidentDay) => void; changeHouse: (p: ResidentDay) => void;
   changeStay: (p: ResidentDay) => void; book: (p: { id: string; name: string }) => void; details: (id: string) => void;
   /** What the Details row says: what is filled, or what to add. */
   detailsHint: (id: string) => string;
@@ -144,6 +146,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
     const res = await fetch(`${API_BASE}/patients/${d!.id}/stays/${d!.stay!.id}/discharge`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!res.ok) { toast.error("The discharge summary was not saved."); return null; }
     toast.success("Saved");
+    load();
     return (await res.json()) as DischargeView;
   };
   const savePlan = async () => {
@@ -151,11 +154,15 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
     const res = await fetch(`${API_BASE}/patients/${d.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doctor_plan: plan.trim() || null }) });
     if (res.ok) { setD({ ...d, doctor_plan: plan.trim() || null }); setPlan(null); }
   };
+  const load = () => { if (id) fetchJsonWithTimeout<ResidentDay>(`${API_BASE}/patients/${id}/day?date=${today}`).then(setD).catch(() => setD(null)); };
   useEffect(() => {
-    setD(null); setPlan(null); setIntake(null);
-    if (id) fetchJsonWithTimeout<ResidentDay>(`${API_BASE}/patients/${id}/day?date=${today}`).then(setD).catch(() => setD(null));
+    setD(null); setPlan(null); setIntake(null); setChecklist(false);
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, today]);
+  const [checklist, setChecklist] = useState(false);
   const booked = d ? d.treatments.filter((t) => !t.consultation && t.status !== 'no_show').length : 0;
+  const nights = d?.stay ? Math.round((Date.parse(d.stay.end_date) - Date.parse(d.stay.start_date)) / DAY_MS) : 0;
   const fact = "flex w-full min-h-11 items-center gap-3 border-b border-border px-3 py-2.5 text-left last:border-b-0";
   const label = "mx-1 mb-1.5 mt-3.5 text-xs font-semibold uppercase tracking-[.05em] text-muted-foreground";
   return (
@@ -167,11 +174,15 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
           </div>
           {/* Story 4: everything a patient may have is a row with an arrow, filled when it is decided; nothing is forced. */}
           <div className="mt-2 border-t border-border">
-            <ChangeLine label="Diet" value={d.plan_name || "Not chosen yet"} faint={!d.plan_name} onClick={() => changeMeals(d)} />
+            <ChangeLine label="Diet" value={d.plan_name ? (d.diet_next ? `${d.plan_name}, then ${d.diet_next.name} from ${dayText(d.diet_next.from)}` : d.plan_name) : "Not decided yet"} faint={!d.plan_name} onClick={() => changeMeals(d)} />
+            {d.stay ? <ChangeLine label="Package" value={d.stay.package ? `${d.stay.package.days} days · ${rupees(d.stay.package.price)}` : "Not decided yet"} faint={!d.stay.package} onClick={() => changePackage(d)} /> : null}
+            {d.stay && d.stay.on_site !== false ? <ChangeLine label="Accommodation" value={d.stay.accommodation ? `${d.stay.accommodation.name} · ${nights} nights · ${rupees(nights * d.stay.accommodation.price_per_day)}` : "Not decided yet"} faint={!d.stay.accommodation} onClick={() => changeHouse(d)} /> : null}
             <ChangeLine label="Therapies" value={booked ? `${booked} today` : "None booked today"} faint={!booked} onClick={() => book(d)} />
             {d.stay ? <ChangeLine label="Stay" value={`${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)}`} onClick={() => changeStay(d)} /> : <ChangeLine label="Stay" value="Not staying · add a stay" faint onClick={() => changeStay(d)} />}
             <ChangeLine label="Details" value={detailsHint(d.id)} faint onClick={() => details(d.id)} />
           </div>
+          {/* Story 8: what the summary still lacks. It informs and never blocks; printing is always there. */}
+          {d.stay?.discharge ? <div className="mt-3"><ChecklistBar label="Discharge summary" done={d.stay.discharge.done} total={d.stay.discharge.total} onClick={() => setChecklist(true)} /></div> : null}
           <div className={label}>Treatments today</div>
           <div className="overflow-hidden rounded-xl border">
             {d.treatments.length ? d.treatments.map((t) => (
@@ -210,25 +221,6 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
               </div>
             )}
           </>) : null}
-          {/* Departure (#219): the last two days, a closing consultation and the resident's summary. */}
-          {d.stay && d.stay.day >= d.stay.days - 1 ? (<>
-            <div className={label}>Departure</div>
-            <div className="overflow-hidden rounded-xl border">
-              <button type="button" className={fact} onClick={d.next_consultation ? undefined : () => book(d)}>
-                <span className="w-5 flex-none">{d.next_consultation ? '✓' : '○'}</span>
-                <span className="flex-1">{d.next_consultation ? `Closing consultation ${visitDay(d.next_consultation.date)} ${d.next_consultation.start_time}` : 'Book the closing consultation'}</span>
-              </button>
-              <button type="button" className={fact} onClick={openDischarge}>
-                <span className="w-5 flex-none">✎</span>
-                <span className="flex-1">Write the discharge summary</span>
-                <span className="text-muted-foreground">›</span>
-              </button>
-              <button type="button" className={fact} onClick={summary}>
-                <span className="w-5 flex-none">↓</span>
-                <span className="flex-1">Discharge summary for {d.name.split(' ')[0]} (PDF)</span>
-              </button>
-            </div>
-          </>) : null}
           <div className={label}>Doctor</div>
           <div className="overflow-hidden rounded-xl border">
             {([['Last', d.last_consultation], ['Next', d.next_consultation]] as const).map(([k, v]) => {
@@ -266,6 +258,8 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
           </div>
         </div>
       ) : <div className="py-6 text-center text-muted-foreground">…</div>}
+      {checklist && d ? <DischargeSheet patient={d} stay={d.stay} onClose={() => setChecklist(false)} print={summary}
+        openField={(where) => { setChecklist(false); if (where === 'details') details(d.id); else openDischarge(); }} write={() => { setChecklist(false); openDischarge(); }} /> : null}
       <BottomSheet open={!!discharge} onOpenChange={(o) => { if (!o) setDischarge(null); }} title={`Discharge summary · ${d?.name ?? ''}`}>
         {discharge ? <div className="-mt-2 max-h-[75dvh] overflow-y-auto"><DischargeForm view={discharge} admin doctors={doctors} onSave={saveDischarge} onPdf={summary} /></div> : null}
       </BottomSheet>
@@ -274,7 +268,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changeSt
 }
 
 /** The Patients screen: the Add and Details dialogs and the tab, held by the dashboard so they last as long as it does. */
-export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, openTreatment, book, searchEverything }: {
+export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, openTreatment, book, searchEverything, openCatalogue }: {
   patients: PatientRow[]; setPatients: React.Dispatch<React.SetStateAction<PatientRow[]>>; staff: UiStaff[];
   therapyNameById: Record<string, string>; timezone: string;
   /** A treatment on the resident card opens the treatment card, on its day. */
@@ -283,6 +277,8 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   book: (p?: { id: string; name: string }) => void;
   /** "Search everything": the same words, over treatments. */
   searchEverything: (q: string) => void;
+  /** "Edit the list" on a package or accommodation picker opens that list in Settings. */
+  openCatalogue: (which: 'packages' | 'accommodation') => void;
 }) {
   const ADMIN_TZ = timezone;
   const [showAddPatient, setShowAddPatient] = useState(false);
@@ -340,45 +336,14 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     setCardId(created.id);
   };
 
-  // The resident card's stay: one sheet to extend, shorten or end it today.
-  const [stayEdit, setStayEdit] = useState<{ id: string | null; start: string; end: string } | null>(null);
-  const [leftOver, setLeftOver] = useState<ApiAppointment[]>([]);
+  // The card's stay (story 10): one sheet to extend, shorten or end it, which says what follows before the tap.
+  const [stayFor, setStayFor] = useState<{ patient: { id: string; name: string }; target: StayTarget } | null>(null);
   const refreshStays = async (id: string) => {
     const stays = await fetchJsonWithTimeout<ApiStay[]>(`${API_BASE}/patients/${id}/stays`);
     setInfoStays(stays);
     const patch = { actualStart: stays[0]?.start_date || '', actualEnd: stays[0]?.end_date || '' };
     setPatients((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
     setInfoPatient((prev) => (prev ? { ...prev, ...patch } : prev));
-  };
-  const saveStay = async () => {
-    if (!infoPatient || !stayEdit) return;
-    if (stayEdit.end < stayEdit.start) { toast.error('Leaving must be on or after arriving'); return; }
-    const body = JSON.stringify({ start_date: stayEdit.start, end_date: stayEdit.end });
-    const headers = { 'Content-Type': 'application/json' };
-    // No stay, or a stay already over: a returning resident gets a new stay, not a new record.
-    const res = stayEdit.id
-      ? await fetch(`${API_BASE}/patients/${infoPatient.id}/stays/${stayEdit.id}`, { method: 'PUT', headers, body })
-      : await fetch(`${API_BASE}/patients/${infoPatient.id}/stays`, { method: 'POST', headers, body });
-    if (!res.ok) { toast.error('Could not save the stay'); return; }
-    const out = await res.json();
-    await refreshStays(infoPatient.id);
-    if (Array.isArray(out.left_over) && out.left_over.length > 0) { setLeftOver(out.left_over); return; }
-    toast.success(`Stay: ${stayDay(stayEdit.start)} to ${stayDay(stayEdit.end)}`);
-    setStayEdit(null);
-  };
-  /** Cancelled, not deleted, as one batch: Undo puts every one back. */
-  const cancelLeftOver = async () => {
-    const res = await fetch(`${API_BASE}/day-check/accept`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: leftOver[0].scheduled_date.slice(0, 10), moves: leftOver.map((a) => ({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: [], room_id: a.room_id, start_time: a.start_time, date: a.scheduled_date.slice(0, 10), cancel: true })) }),
-    });
-    if (!res.ok) { toast.error('Could not cancel the treatments'); return; }
-    const { batch_id, applied } = await res.json();
-    setLeftOver([]);
-    setStayEdit(null);
-    toast(`${applied} treatment${applied === 1 ? '' : 's'} cancelled`, {
-      action: { label: 'Undo', onClick: () => fetch(`${API_BASE}/replan/undo`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batch_id }) }).then(() => toast.success('Put back as they were')) },
-    });
   };
   const [searchPatients, setSearchPatients] = useState("");
   const [infoPatient, setInfoPatient] = useState<PatientRow | null>(null);
@@ -425,7 +390,14 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [cardId, setCardId] = useState<string | null>(null);
-  const [mealsFor, setMealsFor] = useState<{ id: string; name: string } | null>(null);
+  const [dietFor, setDietFor] = useState<{ id: string; name: string } | null>(null);
+  const [dayMealsFor, setDayMealsFor] = useState<{ id: string; name: string } | null>(null);
+  const [packFor, setPackFor] = useState<{ patient: { id: string; name: string }; stay: CardStay } | null>(null);
+  const [houseFor, setHouseFor] = useState<{ patient: { id: string; name: string }; stay: CardStay } | null>(null);
+  const [stayEnd, setStayEnd] = useState<string | null>(null);
+  // A sheet opened from the card gives the card back when it closes, saved or not: the card re-reads on opening.
+  const [back, setBack] = useState<string | null>(null);
+  const backToCard = (close: () => void) => () => { close(); if (back) { setCardId(back); setBack(null); } };
   const tab = (
     <>
       <ResidentsList patients={patients} today={today} onOpen={setCardId} q={query} everything={searchEverything} />
@@ -435,15 +407,24 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const dialogs = (
     <>
       {/* With the dialogs, not the Residents tab: a card opened from the day changes meals too. */}
-      <DayDietDialog patient={mealsFor} onClose={() => setMealsFor(null)} />
+      <DayDietDialog patient={dayMealsFor} onClose={() => setDayMealsFor(null)} />
+      <DietSheet patient={dietFor} today={today} onClose={backToCard(() => setDietFor(null))} onChanged={() => {}} onDayMeals={(p) => { setDietFor(null); setBack(null); setDayMealsFor(p); }} />
+      <PackageSheet patient={packFor?.patient ?? null} stay={packFor?.stay ?? null} onClose={backToCard(() => setPackFor(null))} onSaved={() => {}}
+        editList={() => { setPackFor(null); setBack(null); openCatalogue('packages'); }}
+        matchStay={(end) => { const f = packFor!; setPackFor(null); setStayFor({ patient: f.patient, target: { id: f.stay.id, start: f.stay.start_date, end: f.stay.end_date, package: f.stay.package, accommodation: f.stay.accommodation } }); setStayEnd(end); }} />
+      <AccommodationSheet patient={houseFor?.patient ?? null} stay={houseFor?.stay ?? null} onClose={backToCard(() => setHouseFor(null))} onSaved={() => {}}
+        editList={() => { setHouseFor(null); setBack(null); openCatalogue('accommodation'); }} />
+      <StaySheet patient={stayFor?.patient ?? null} target={stayFor ? { ...stayFor.target, end: stayEnd ?? stayFor.target.end } : null} today={today}
+        onClose={backToCard(() => { setStayFor(null); setStayEnd(null); })} onSaved={() => { if (stayFor) void refreshStays(stayFor.patient.id); }} />
       <ResidentCard id={cardId} today={today} onClose={() => setCardId(null)}
         openTreatment={(a) => { setCardId(null); openTreatment(a); }}
-        changeMeals={(p) => { setCardId(null); setMealsFor(p); }}
+        changeMeals={(p) => { setBack(p.id); setCardId(null); setDietFor(p); }}
+        changePackage={(p) => { if (p.stay) { setBack(p.id); setCardId(null); setPackFor({ patient: p, stay: p.stay }); } }}
+        changeHouse={(p) => { if (p.stay) { setBack(p.id); setCardId(null); setHouseFor({ patient: p, stay: p.stay }); } }}
         changeStay={(d) => {
-          const row = patients.find((x) => String(x.id) === d.id);
-          if (row) setInfoPatient(row);
+          setBack(d.id);
           setCardId(null);
-          setStayEdit(d.stay ? { id: d.stay.id, start: d.stay.start_date, end: d.stay.end_date } : { id: null, start: today, end: addDays(today, 13) });
+          setStayFor({ patient: d, target: d.stay ? { id: d.stay.id, start: d.stay.start_date, end: d.stay.end_date, package: d.stay.package, accommodation: d.stay.accommodation } : { id: null, start: today, end: addDays(today, 13), package: null, accommodation: null } });
         }}
         book={(p) => { setCardId(null); book(p); }}
         detailsHint={(id) => { const r = patients.find((x) => String(x.id) === id); return r?.phone || r?.emergencyContact ? [r.phone, r.emergencyContact].filter(Boolean).join(' · ') : 'Add phone, emergency contact…'; }}
@@ -489,29 +470,6 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           <Text label="Registration number (optional)" autoComplete="off" value={newPatient.registrationNumber} onChange={(e) => setNewPatient({ ...newPatient, registrationNumber: e.target.value })} />
         </More>
       </BottomSheet>
-      <BottomSheet open={!!stayEdit} onOpenChange={(open) => { if (!open) { setStayEdit(null); setLeftOver([]); } }} title={stayEdit?.id ? 'Stay' : 'New stay'}>
-        {stayEdit && leftOver.length === 0 ? (
-          <div className="grid grid-cols-2 gap-3">
-            <label className="grid gap-1">Arriving<Input type="date" value={stayEdit.start} onChange={(e) => setStayEdit({ ...stayEdit, start: e.target.value })} /></label>
-            <label className="grid gap-1">Leaving<Input type="date" value={stayEdit.end} min={stayEdit.start} onChange={(e) => setStayEdit({ ...stayEdit, end: e.target.value })} /></label>
-            {stayEdit.id && stayEdit.end > today && stayEdit.start <= today ? (
-              <Button variant="outline" className="h-12 rounded-full" onClick={() => setStayEdit({ ...stayEdit, end: today })}>Leaves today</Button>
-            ) : <span />}
-            <Button className="h-12 rounded-full" onClick={saveStay}>Save</Button>
-          </div>
-        ) : null}
-        {leftOver.length > 0 ? (
-          <div className="grid gap-3">
-            <p>Stay saved. {leftOver.length} treatment{leftOver.length === 1 ? ' is' : 's are'} still booked after they leave:</p>
-            <ul className="text-sm text-muted-foreground">
-              {leftOver.slice(0, 6).map((a) => <li key={a.id}>{stayDay(a.scheduled_date)} {a.start_time} · {therapyNameById[String(a.therapy_id)] || 'Treatment'}</li>)}
-              {leftOver.length > 6 ? <li>and {leftOver.length - 6} more</li> : null}
-            </ul>
-            <Button className="h-12 rounded-full" onClick={cancelLeftOver}>Cancel {leftOver.length === 1 ? 'it' : `all ${leftOver.length}`}</Button>
-            <Button variant="outline" className="h-12 rounded-full" onClick={() => { setLeftOver([]); setStayEdit(null); }}>Keep them</Button>
-          </div>
-        ) : null}
-      </BottomSheet>
       {/* Filled over time (story 4): every field is editable at once, one Save, and the history of treatments and stays under it. */}
       <BottomSheet open={!!infoPatient} onOpenChange={(open) => { if (!open) setInfoPatient(null); }} title={infoPatient?.name ?? ''} note="Nothing here is required. Fill in what you have."
         foot={<Foot label={infoPatient ? `Save ${infoPatient.name.split(' ')[0]}'s details` : 'Save'} save={saveDetails} />}>
@@ -528,17 +486,17 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           <Text label="Email (optional)" type="email" inputMode="email" value={infoDraft.email || ''} onChange={(e) => setInfoDraft({ ...infoDraft, email: e.target.value })} />
           <Text label="Medical notes (optional)" value={infoDraft.medicalNotes || ''} onChange={(e) => setInfoDraft({ ...infoDraft, medicalNotes: e.target.value })} />
           <ListGroup title="Stays" count={infoStays?.length}>
-            {infoStays === null ? <Loading rows={1} /> : infoStays.length ? infoStays.map((st) => <Row key={st.id} title={`${stayDay(st.start_date)} to ${stayDay(st.end_date)}`} facts={`${st.duration_days} days`} onClick={() => setStayEdit({ id: st.id, start: st.start_date.slice(0, 10), end: st.end_date.slice(0, 10) })} />) : <Empty text="No stays yet." />}
+            {infoStays === null ? <Loading rows={1} /> : infoStays.length ? infoStays.map((st) => <Row key={st.id} title={`${stayDay(st.start_date)} to ${stayDay(st.end_date)}`} facts={`${st.duration_days} days`} onClick={() => { setStayFor({ patient: infoPatient, target: { id: st.id, start: st.start_date.slice(0, 10), end: st.end_date.slice(0, 10), package: null, accommodation: null } }); setInfoPatient(null); }} />) : <Empty text="No stays yet." />}
           </ListGroup>
           <ListGroup title="Treatments" count={infoAppointments?.length}>
-            {infoAppointments === null ? <Loading rows={2} /> : infoAppointments.length ? infoAppointments.map((a) => <Row key={a.id} title={`${longDay(a.scheduled_date)} · ${a.start_time}`} facts={[therapyNameById[String(a.therapy_id)] || 'Treatment', recordLine(a)].filter(Boolean).join(' · ')} />) : <Empty text="No treatments yet." />}
+            {infoAppointments === null ? <Loading rows={2} /> : infoAppointments.length ? infoAppointments.map((a) => <Row key={a.id} title={`${longDay(a.scheduled_date)} · ${a.start_time}`} facts={[therapyNameById[String(a.therapy_id)] || 'Treatment', a.status === 'cancelled' ? `Cancelled${a.cancel_reason ? `: ${a.cancel_reason}` : ''}` : '', recordLine(a)].filter(Boolean).join(' · ')} />) : <Empty text="No treatments yet." />}
           </ListGroup>
         </>) : null}
       </BottomSheet>
     </>
   );
 
-  return { tab, dialogs, openResident: setCardId, openMeals: setMealsFor, openAdd: () => setShowAddPatient(true), query, setQuery, searching, setSearching };
+  return { tab, dialogs, openResident: setCardId, openMeals: setDietFor, openAdd: () => setShowAddPatient(true), query, setQuery, searching, setSearching };
 }
 
 /** What the links recorded on a treatment (#219), in a line: records only, beside the therapy. */

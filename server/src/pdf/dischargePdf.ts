@@ -54,7 +54,7 @@ export async function generateDischargePdf(v: DischargeView, centre: { name: str
         const x = M + i * cell;
         doc.rect(x, y, cell, 17).lineWidth(0.5).strokeColor(LINE).stroke();
         doc.font('Helvetica').fontSize(7).fillColor('#555').text(k, x + 3, y + 5, { width: 62, height: 10, ellipsis: true, lineBreak: false });
-        doc.font('Helvetica-Bold').fontSize(8).fillColor('#000').text(val || '—', x + 66, y + 4.5, { width: cell - 69, height: 10, ellipsis: true, lineBreak: false });
+        doc.font('Helvetica-Bold').fontSize(8).fillColor('#000').text(val || '', x + 66, y + 4.5, { width: cell - 69, height: 10, ellipsis: true, lineBreak: false });
       });
       doc.x = M; doc.y = y + 17;
     }
@@ -72,16 +72,20 @@ export async function generateDischargePdf(v: DischargeView, centre: { name: str
   ]);
   doc.moveDown(0.6);
 
-  const section = (title: string, body: string) => {
-    if (!body) return;
+  const section = (title: string, body: string, writeIn = false) => {
+    if (!body && !writeIn) return;
     doc.font('Helvetica').fontSize(8.5);
-    room(14 + doc.heightOfString(body, { width: W }));
+    room(14 + (body ? doc.heightOfString(body, { width: W }) : 24));
     doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#1d4d33').text(title.toUpperCase(), M, doc.y, { width: W });
-    doc.font('Helvetica').fontSize(8.5).fillColor('#000').text(body, { width: W });
+    if (body) doc.font('Helvetica').fontSize(8.5).fillColor('#000').text(body, { width: W });
+    else {
+      // Left empty on purpose: two ruled lines to write on by hand, never a silent gap.
+      for (let i = 0; i < 2; i++) { const y = doc.y + 12; doc.moveTo(M, y).lineTo(M + W, y).lineWidth(0.4).strokeColor(LINE).stroke(); doc.y = y; }
+    }
     doc.moveDown(0.5);
   };
   section('Condition at discharge', d.condition);
-  section('Final diagnosis', d.diagnosis);
+  section('Final diagnosis', d.diagnosis, true);
   section('Reason for admission', d.reason);
 
   // The stay day by day. A row never splits across a page.
@@ -130,7 +134,7 @@ export async function generateDischargePdf(v: DischargeView, centre: { name: str
   meds('Medication during stay', d.meds_stay);
   meds(`Advised medicines at discharge${d.meds_home_for ? `, for ${d.meds_home_for}` : ''}`, d.meds_home);
   section('Special instructions', d.instructions);
-  section('Follow-up', d.follow_up);
+  section('Follow-up', d.follow_up, true);
   section('When to obtain urgent care', d.urgent_when);
   section('How to obtain urgent care', d.urgent_how);
 

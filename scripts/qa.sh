@@ -59,6 +59,7 @@ run doctors            "A doctor and their consultations print on the doctor rot
 run daySheet           "The day sheet lists every resident, treatment time and therapist, in its groups, with no empty boxes"
 run unstaffedSheets   "A treatment booked with a therapist who is off shows, marked, on both the patient sheet and the therapist rota"
 run residentStay     "A resident added in the app, with a stay and a diet plan, is on the day sheet; leaving early cancels what is left, and Undo restores it"
+run patientStories   "Meals by date, what a discharge summary lacks, package and accommodation, a shortened stay cancelled with its reason and undone, a leave planned later"
 run newPatient       "A new patient is saved with their details and a consultation booked through the guard, the booking sheet lists free therapists and rooms first, and patient search finds by name"
 run treatmentCard    "Every time and room a treatment card offers saves, a busy therapist is not offered, a no-show frees theirs, and History says what changed"
 run search           "Search finds a resident's treatments on every day in the window, in order, by name, room or any therapist, and leaves out cancelled ones"

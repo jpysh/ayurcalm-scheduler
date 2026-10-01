@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { UsersSection, ChangePasswordCard } from "@/components/UsersSection";
 import { AssistantSection } from "@/components/AssistantSection";
+import { AccommodationEditor, PackagesEditor } from "@/components/Catalogues";
 import { BottomSheet } from "@/components/BottomBar";
 import PageHead from "@/components/PageHead";
 
@@ -68,11 +69,12 @@ const LETTERHEAD: [keyof Letterhead, string, string][] = [
   ["discharge_format", "Discharge number", "DS/{YYYY}/{N}"],
 ];
 
-const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => void }) => {
+const Settings = ({ signOut, openLog, initialSheet, sheetOpened }: { signOut?: () => void; openLog?: () => void; /** A sheet to open at once, from a link on another screen ("Edit the list"). */ initialSheet?: string | null; sheetOpened?: () => void }) => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
-  const [openSheet, setOpenSheet] = useState<string | null>(null);
+  const [openSheet, setOpenSheet] = useState<string | null>(initialSheet ?? null);
+  useEffect(() => { if (initialSheet) sheetOpened?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const trial = useTrial();
   const isAdmin = typeof window !== "undefined" && localStorage.getItem("authRole") === "Admin";
 
@@ -290,6 +292,8 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
       <div className="overflow-hidden rounded-2xl bg-card">
       {row("centre", "Centre details", settings.centre_name || "Name, address and logo")}
       {row("letterhead", "Discharge letterhead", lh.discharge_format ? `Numbers like ${lh.discharge_format}` : "Seal, phones, registration, footer")}
+      {row("packages", "Packages", "Panchakarma packages and their prices")}
+      {row("accommodation", "Accommodation", "Room types and their price a day")}
       {row("hours", "Opening hours", `${settings.opening_time}–${settings.closing_time}`)}
       {row("support", "Support contacts", settings.support_whatsapp ? "WhatsApp button shown" : "No WhatsApp button")}
       {isAdmin ? row("backups", "Backups", backups?.latest ? `Last ${since(backups.latest.at)}` : "No backup yet") : null}
@@ -522,6 +526,8 @@ const Settings = ({ signOut, openLog }: { signOut?: () => void; openLog?: () => 
         </div>
       )}
       </>)}
+      {sheet("packages", "Packages", <PackagesEditor />)}
+      {sheet("accommodation", "Accommodation", <AccommodationEditor />)}
       {sheet("password", "Your password", <ChangePasswordCard />)}
       {sheet("assistant", "Your AI assistant", <AssistantSection />)}
       {sheet("people", "People with access", <UsersSection />)}

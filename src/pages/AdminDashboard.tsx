@@ -134,6 +134,8 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("schedule");
   const [showAutoAssign, setShowAutoAssign] = useState(false);
   const [showAttention, setShowAttention] = useState(false);
+  // A link on another screen to a Settings list ("Edit the list" on a picker).
+  const [settingsSheet, setSettingsSheet] = useState<string | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentDetailed | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
   // Until the first load lands, an empty list means "not yet", not "a new centre" (#220).
@@ -497,7 +499,7 @@ const AdminDashboard = () => {
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, isMobile, requestDelete });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, isMobile, requestDelete });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, isMobile, requestDelete });
-  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, isMobile, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, timeSlots });
+  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, isMobile, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, timeSlots, planDay: (iso) => { go('schedule'); setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); setShowAttention(true); } });
   const eventsScreen = useEventsScreen({ events, setEvents, roomsList, staff, patients, amenityOptions, isMobile, staffNameById, patientNameById });
   // The treatment card opens the resident card, which the Residents screen holds.
   const residentOpener = useRef<((id: string) => void) | null>(null);
@@ -506,6 +508,7 @@ const AdminDashboard = () => {
     openTreatment: (a) => { go('schedule'); scheduleScreen.openCard(a); },
     book: (p) => { go('schedule'); scheduleScreen.openBook(p); },
     // The same words, over every treatment: the day's own search.
+    openCatalogue: (which) => { setSettingsSheet(which); go('settings'); },
     searchEverything: (q) => { patientsScreen.setSearching(false); patientsScreen.setQuery(''); go('schedule'); scheduleScreen.setQuery(q); scheduleScreen.setSearching(true); } });
   residentOpener.current = patientsScreen.openResident;
   // The adaptive + (#285): it adds what the screen is about. A trial that has ended adds nothing and says so.
@@ -619,7 +622,7 @@ const AdminDashboard = () => {
           </TabsContent>
 
           <TabsContent value="settings" data-testid="tabpanel-settings">
-            <Settings signOut={signOut} openLog={() => go("log")} />
+            <Settings signOut={signOut} openLog={() => go("log")} initialSheet={settingsSheet} sheetOpened={() => setSettingsSheet(null)} />
           </TabsContent>
 
           <TabsContent value="diet" className="space-y-6" forceMount>

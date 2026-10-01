@@ -1,4 +1,4 @@
-import { useEffect, useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
+import { useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { Plus, Search as SearchIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -50,6 +50,13 @@ export const Text = ({ label, note, valid, className = "", ...rest }: { label: s
   </Field>
 );
 
+/** A few lines of free text, in the same box as Text. */
+export const Area = ({ label, note, rows = 3, className = "", ...rest }: { label: string; note?: ReactNode; rows?: number } & TextareaHTMLAttributes<HTMLTextAreaElement>) => (
+  <Field label={label} note={note}>
+    <textarea rows={rows} className={`${field} h-auto py-2.5 leading-snug ${className}`} {...rest} />
+  </Field>
+);
+
 /** "More details (optional)": what is not needed yet stays folded, one tap away. */
 export function More({ label = "More details", hint, children }: { label?: string; hint?: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -82,14 +89,14 @@ export const dayText = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00Z`
  * The date box is there, unseen, over the whole row: a tap lands on it, which
  * is the one way every phone opens its calendar.
  */
-export function DateRow({ label, value, onChange, min }: { label: string; value: string; onChange: (iso: string) => void; min?: string }) {
+export function DateRow({ label, value, onChange, min, max }: { label: string; value: string; onChange: (iso: string) => void; min?: string; max?: string }) {
   return (
     <div className="min-w-0">
       <span className={lbl} aria-hidden>{label}</span>
       <div className={`${field} relative flex items-center justify-between gap-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_hsl(var(--primary)/0.18)]`}>
         <span className="truncate">{value ? dayText(value) : "Choose"}</span>
         <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4 flex-none text-muted-foreground"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        <input type="date" aria-label={label} className="absolute inset-0 h-full w-full cursor-pointer opacity-0 focus-visible:outline-none" value={value.slice(0, 10)} min={min}
+        <input type="date" aria-label={label} className="absolute inset-0 h-full w-full cursor-pointer opacity-0 focus-visible:outline-none" value={value.slice(0, 10)} min={min} max={max}
           // A desktop opens its calendar only from the box's small icon.
           onClick={(e) => { try { (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* already open */ } }}
           onChange={(e) => { if (e.target.value) onChange(e.target.value); }} />
@@ -315,12 +322,15 @@ export const Timeline = ({ items }: { items: { key: string; from: string; title:
 
 /** A list of options: name, one line, a trailing fact; the chosen one has a border and a check. Edit opens the catalogue. */
 export function Picker<T extends string>({ options, value, onChange, onEdit }: { options: { id: T; name: string; note?: string; fact?: string }[]; value: T | ""; onChange: (id: T) => void; onEdit?: () => void }) {
+  // Opened with one already chosen (or ready), it is in view rather than somewhere down the list.
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => { box.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: "nearest" }); }, []);
   return (
-    <div className="grid gap-2">
+    <div ref={box} className="grid gap-2">
       {options.map((o) => (
         <button key={o.id} type="button" aria-pressed={value === o.id} onClick={() => onChange(o.id)}
           className="flex min-h-14 items-center gap-3 rounded-xl border-[1.5px] border-border px-3 py-2 text-left aria-pressed:border-primary aria-pressed:bg-secondary">
-          <span className="min-w-0 flex-1"><b className="block text-base">{o.name}</b>{o.note ? <span className={`block ${noteText}`}>{o.note}</span> : null}</span>
+          <span className="min-w-0 flex-1"><b className="block text-base">{o.name}</b>{o.note ? <span className={`block truncate ${noteText}`}>{o.note}</span> : null}</span>
           {o.fact ? <span className="flex-none text-[13px] text-muted-foreground">{o.fact}</span> : null}
           {value === o.id ? <span aria-hidden className="flex-none font-bold text-primary">✓</span> : null}
         </button>
@@ -414,3 +424,25 @@ export const LineSelect = ({ label, value, onChange, free, busy = [] }: { label:
     {busy.length ? <optgroup label="Busy then">{busy.map((o) => <option key={o.id} value={o.id} disabled>{o.name}{o.why ? ` · ${o.why}` : ""}</option>)}</optgroup> : null}
   </select>
 );
+
+/** "Rs 70,750": whole rupees, grouped the Indian way. Reference figures, never an invoice (#53). */
+export const rupees = (n: number) => `Rs ${n.toLocaleString("en-IN")}`;
+
+/**
+ * Today and Tomorrow above the phone's own calendar: most changes start on one of them.
+ * The chosen day is shown on the calendar row either way.
+ */
+export function QuickDates({ label, value, today, onChange, min, max }: { label: string; value: string; today: string; onChange: (iso: string) => void; min?: string; max?: string }) {
+  const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+  const ok = (iso: string) => (!min || iso >= min) && (!max || iso <= max);
+  return (
+    <div>
+      <div className="mt-3 flex gap-1.5">
+        {([["Today", today], ["Tomorrow", tomorrow]] as const).map(([name, iso]) => (
+          <button key={name} type="button" disabled={!ok(iso)} aria-pressed={value === iso} onClick={() => onChange(iso)} className={`${chip} disabled:opacity-40`}>{name}</button>
+        ))}
+      </div>
+      <div className="mt-1"><DateRow label={label} value={value} min={min} max={max} onChange={onChange} /></div>
+    </div>
+  );
+}

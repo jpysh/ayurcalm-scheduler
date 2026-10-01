@@ -63,8 +63,41 @@ model PatientStay {
   /// the admin on the card; `final` is the admin's last word and locks the link.
   /// Shape is `Discharge` in src/discharge.ts.
   discharge     Json?
+  /// What the patient chose from the centre's catalogues (stories 11 and 12), changeable any time in the stay.
+  package_id       String?
+  accommodation_id String?
+  /// Free text, "N-4": rooms are not modelled yet (#286).
+  room_number      String?
 
-  Patient Patient @relation(fields: [patient_id], references: [id])
+  Patient       Patient            @relation(fields: [patient_id], references: [id])
+  Package       Package?           @relation(fields: [package_id], references: [id], onDelete: SetNull)
+  Accommodation AccommodationType? @relation(fields: [accommodation_id], references: [id], onDelete: SetNull)
+}
+
+/// A Panchakarma package the centre sells (#285 story 11). Reference only: the price is one
+/// figure with the registration charge included, and nothing here invoices or takes payment.
+model Package {
+  id        String  @id @default(uuid())
+  name      String  @unique
+  days      Int
+  /// Whole rupees.
+  price     Int
+  notes     String?
+  /// Retired ones stop being offered but stay readable by the stays that chose them.
+  is_active Boolean @default(true)
+
+  Stays PatientStay[]
+}
+
+/// A kind of room a patient may stay in (#285 story 12); the total is price per day times nights.
+model AccommodationType {
+  id            String  @id @default(uuid())
+  name          String  @unique
+  price_per_day Int
+  notes         String?
+  is_active     Boolean @default(true)
+
+  Stays PatientStay[]
 }
 
 model Staff {
@@ -144,6 +177,8 @@ model Appointment {
   status           AppointmentStatus
   assignment_type  AssignmentType
   notes            String?
+  /// Why it was cancelled ("stay shortened"); kept with it, and cleared if it is put back.
+  cancel_reason    String?
   /// What the link views record on it (#219): checklist ticks, vitals, room
   /// ready, the resident's thumbs and note. Records only: never flagged, never printed.
   record           Json?
