@@ -176,7 +176,7 @@ export default function LinkView() {
       ) : null}
 
       <BottomSheet open={!!discharge} onOpenChange={(o) => { if (!o) setDischarge(null); }} title={`Discharge summary · ${discharge?.name ?? ""}`}>
-        {discharge ? <div className="-mt-2 max-h-[75dvh] overflow-y-auto"><DischargeForm view={discharge} admin={false} onSave={saveDischarge} onPdf={() => window.open(`${API_BASE}/public/link/${token}/discharges/${discharge.stay_id}/pdf`, "_blank")} /></div> : null}
+        {discharge ? <DischargeForm view={discharge} admin={false} onSave={saveDischarge} onPdf={() => window.open(`${API_BASE}/public/link/${token}/discharges/${discharge.stay_id}/pdf`, "_blank")} /> : null}
       </BottomSheet>
 
       {staff ? <button type="button" className={`${chip} mt-4 w-full border-destructive text-destructive`} onClick={() => setRaise({})}>Raise an issue or SOS</button> : null}

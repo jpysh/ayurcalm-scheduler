@@ -81,7 +81,7 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
     await expect(activePanel(page)).toContainText(text, { timeout: 15000 });
   }
   // A page has one header line, as the design's (#193): its name, and no "‹ The day" line above it.
-  for (const [tab, title] of [['Patients', 'Patients'], ['Team and rooms', 'Team and rooms'], ['Leave', 'Leave'], ['Diet plans', 'Diet'], ['Settings', 'Settings']]) {
+  for (const [tab, title] of [['Patients', 'Patients'], ['Team and rooms', 'Team and rooms'], ['Leave', 'Leave'], ['Diet plans', 'Diet plans'], ['Settings', 'Settings']]) {
     await openTab(page, tab);
     await expect(activePanel(page).getByRole('heading', { level: 1 })).toHaveText(title);
     await expect(page.getByRole('button', { name: '‹ The day' })).toHaveCount(0);
@@ -290,19 +290,17 @@ test('a room out for some hours reads as the day and those hours in Leave (#189)
   await openTab(page, 'Leave');
   // The seed takes a room out from 14:00 to 20:00 (a plumbing repair). It used to read
   // "27 Sept 2026, 05:30 am": UTC midnight on an Indian clock, with the hours lost.
-  const line = activePanel(page).locator('tr').filter({ hasText: 'Plumbing repair' });
+  await activePanel(page).getByRole('button', { name: 'All', exact: true }).click();
+  const line = activePanel(page).getByRole('button').filter({ hasText: 'Plumbing repair' });
   await expect(line).toContainText(/\d{1,2} \w{3,4}, 14:00–20:00/, { timeout: 15000 });
   await expect(line).not.toContainText('05:30');
-  // Its edit fields read the same day and hours, not the phone's clock (#214).
-  const shown = await line.innerText();
-  await line.getByRole('button', { name: 'Edit' }).click();
-  // Once open, the description is an input, so the row is found by its fields.
-  const form = activePanel(page).locator('tr:has(input[type=date])');
-  await expect(form.locator('input[type=time]').first()).toHaveValue('14:00');
-  await expect(form.locator('input[type=time]').last()).toHaveValue('20:00');
-  const day = await form.locator('input[type=date]').first().inputValue();
-  expect(shown).toContain(new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }));
-  await form.getByRole('button', { name: 'Cancel' }).click();
+  // Its edit sheet reads the same hours, not the phone's clock (#214).
+  await line.click();
+  const sheet = page.getByRole('dialog').last();
+  await expect(sheet.getByLabel('Starts')).toHaveValue('14:00');
+  await expect(sheet.getByLabel('Ends')).toHaveValue('20:00');
+  await expect(sheet.getByRole('button', { name: 'Delete this leave' })).toBeVisible();
+  await page.keyboard.press('Escape');
 });
 
 test('the day by therapist starts where the by-time view does (#193)', async ({ page }) => {
@@ -325,22 +323,17 @@ test('on a phone, lists are plain rows and a tap opens the edit sheet (#178)', a
   await page.setViewportSize({ width: 375, height: 812 });
   await signIn(page);
   await passSetupIfShown(page);
-  // Leave: no raw "No" / "none" fields, and the row opens as a sheet with Delete in it.
+  // Leave: a row opens a sheet with Delete in it.
   await openTab(page, 'Leave');
-  const leave = activePanel(page).locator('tbody tr').first();
+  const leave = activePanel(page).getByRole('button').filter({ hasText: /Personal/ }).first();
   await expect(leave).toBeVisible({ timeout: 15000 });
-  await expect(activePanel(page).locator('tbody td', { hasText: /^(No|Yes|none)$/ })).toHaveCount(0);
   await leave.click();
-  await expect(leave).toHaveCSS('position', 'fixed');
-  await expect(leave.getByRole('button', { name: 'Delete' })).toBeVisible();
-  await leave.getByRole('button', { name: 'Cancel' }).click();
-  // Diet: one tap opens the resident's day; the plan, and Remove plan, are inside it, not on the row.
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Delete this leave' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  // Diet plans: the centre's plans; one opens its editor with Retire in it.
   await openTab(page, 'Diet plans');
-  const diet = activePanel(page).locator('tbody tr').first();
-  await expect(diet.getByRole('button', { name: 'Clear' })).toHaveCount(0);
-  await diet.click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Change plan…' }).click();
-  await expect(page.getByRole('dialog').getByRole('button', { name: 'Remove plan' })).toBeVisible({ timeout: 15000 });
+  await activePanel(page).getByRole('button', { name: /patients?$/ }).first().click();
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Retire this plan' })).toBeVisible({ timeout: 15000 });
   await page.keyboard.press('Escape');
   // Settings: a row opens its form in a sheet.
   await openTab(page, 'Settings');
@@ -389,9 +382,9 @@ test("a resident's card shows the doctor's last and next consultation and a plan
   await expect(card.getByText('Doctor', { exact: true })).toBeVisible({ timeout: 15000 });
   await expect(card.getByText('Next', { exact: true })).toBeVisible();
   await card.getByRole('button', { name: /^Plan/ }).click();
-  await expect(card.getByLabel("Doctor's plan")).toBeVisible();
-  await card.getByRole('button', { name: 'Cancel' }).click();
-  await expect(card.getByLabel("Doctor's plan")).toHaveCount(0);
+  await expect(page.getByLabel('Plan (optional)')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByLabel('Plan (optional)')).toHaveCount(0);
 });
 
 test('after a consultation, the note on the day opens the resident\'s meals in one tap (#219)', async ({ page }) => {

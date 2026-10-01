@@ -1,14 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Consequence, DateRow, Days, Dropdown, Switch, Text, TimeList, TwoFoot } from "@/components/kit";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Badge } from "@/components/ui/badge";
-import { Edit, Plus, Trash2 } from "lucide-react";
+import { ChangeLine, Consequence, DateRow, Days, Dropdown, Empty, Foot, ListGroup, Row, Seg, Switch, Text, TimeList, TwoFoot } from "@/components/kit";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { API_TOKEN, fetchJsonWithTimeout, leaveWhen, toLocalInput, type UiTimeOff, type UiStaff, type UiRoom, type UiTherapy, type Patient } from "./shared";
@@ -16,279 +7,39 @@ import PageHead from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
 import { HolidaysSheet } from "@/components/HolidaysSheet";
 
-const TimeOffTab = ({
-  timeOffs,
-  searchHolidays,
-  setSearchHolidays,
-  holidayTypeFilter,
-  setHolidayTypeFilter,
-  holidayViewMode,
-  setHolidayViewMode,
-  holidayRecurringFilter,
-  setHolidayRecurringFilter,
-  holidayFullDayFilter,
-  setHolidayFullDayFilter,
-  holidaySelectedDate,
-  setHolidaySelectedDate,
-  visibleTimeOffRows,
-  timeoffTotalRef,
-  editingTimeOffId,
-  startEditTimeOff,
-  cancelEditTimeOff,
-  saveEditTimeOff,
-  setTimeOffs,
-  staff,
-  roomsList,
-  therapies,
-  patients,
-  staffNameById,
-  roomNameById,
-  therapyNameById,
-  patientNameById,
-  isFullDay,
-  weeklyLabel,
-  toLocalInput,
-  requestDelete,
-  setShowAddTimeOff,
-  setShowHolidays,
-}: any) => {
+const sortKey = (h: UiTimeOff) => h.startDate || h.date || '';
+
+/** Leave (#285 story 9): one row each, who and when; a tap opens the same sheet that adds one. */
+const TimeOffTab = ({ timeOffs, viewMode, setViewMode, visibleRows, totalRef, nameOf, isFullDay, weeklyLabel, openEdit, setShowHolidays }: {
+  timeOffs: UiTimeOff[]; viewMode: 'all' | 'upcoming' | 'past'; setViewMode: (v: 'all' | 'upcoming' | 'past') => void;
+  visibleRows: number; totalRef: { current: number }; nameOf: (h: UiTimeOff) => string;
+  isFullDay: (h: UiTimeOff) => boolean; weeklyLabel: (w?: UiTimeOff['weekdays']) => string; openEdit: (h: UiTimeOff) => void; setShowHolidays: (v: boolean) => void;
+}) => {
+  const today = new Date(new Date().toDateString());
+  const rows = timeOffs.filter((h) => {
+    if (viewMode === 'all') return true;
+    const start = sortKey(h) ? new Date(sortKey(h)) : undefined;
+    const endRaw = h.endDate || h.date;
+    const end = endRaw ? new Date(endRaw) : undefined;
+    if (viewMode === 'upcoming') return h.recurrence === 'weekly' ? !(end && end < today) : !!start && start >= today;
+    return !!end && end < today;
+  }).sort((a, b) => new Date(sortKey(a)).getTime() - new Date(sortKey(b)).getTime());
+  totalRef.current = rows.length;
   return (
-    <>
-    <PageHead title="Leave" />
-    <Card>
-      <CardHeader className="px-2 md:px-4 pt-2 md:pt-4 pb-1 md:pb-2">
-        <div className="flex items-center justify-center gap-2">
-          <Button size="sm" variant="outline" className="min-h-11 rounded-full px-4" onClick={() => setShowHolidays(true)}>Public holidays</Button>
-        </div>
-        {/* Upcoming, past or all (#273 O1): the one filter a centre uses, in place of a Filter popover. */}
-        <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-background p-1">
-          {([["upcoming", "Upcoming"], ["past", "Past"], ["all", "All"]] as const).map(([v, l]) => (
-            <button key={v} type="button" aria-pressed={holidayViewMode === v} onClick={() => setHolidayViewMode(v)}
-              className="min-h-10 rounded-lg text-sm font-semibold text-muted-foreground aria-pressed:bg-card aria-pressed:text-foreground aria-pressed:shadow">{l}</button>
+    <div data-testid="timeoff-table">
+      <PageHead title="Leave" note={`${rows.length} ${viewMode === 'all' ? '' : viewMode}`.trim()} />
+      <Seg<'upcoming' | 'past' | 'all'> value={viewMode} onChange={setViewMode} options={[['upcoming', 'Upcoming'], ['past', 'Past'], ['all', 'All']]} />
+      <ListGroup>
+        <ChangeLine label="Public holidays" value="Closed days" onClick={() => setShowHolidays(true)} />
+      </ListGroup>
+      {rows.length === 0 ? <Empty text={viewMode === 'past' ? 'No past leave.' : 'No leave booked. Tap + to add some.'} /> : (
+        <ListGroup>
+          {rows.slice(0, visibleRows).map((h) => (
+            <Row key={h.id} title={nameOf(h)} facts={[leaveWhen(h, isFullDay(h)), h.recurrence === 'weekly' ? weeklyLabel(h.weekdays) : '', h.description].filter(Boolean).join(' · ')} onClick={() => openEdit(h)} />
           ))}
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0 p-1 md:p-2">
-        <Table className="cards-sm" data-testid="timeoff-table">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">For</TableHead>
-              <TableHead className="h-7 py-0 text-xs md:text-sm font-normal">From</TableHead>
-              <TableHead className="h-7 py-0 text-xs md:text-sm font-normal">To</TableHead>
-              {/* No header: on a phone the reason simply follows the dates, not "Reason Personal Leave" (#273 O1). */}
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal"></TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">All day</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Repeats</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal">Who or what</TableHead>
-              <TableHead className="h-8 py-0 text-xs md:text-sm font-normal text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(() => {
-              const rows = ((holidayTypeFilter === 'all' ? timeOffs : timeOffs.filter((h: any) => h.type === holidayTypeFilter)))
-                .filter((h: any) => holidayRecurringFilter === 'all' ? true : holidayRecurringFilter === 'weekly' ? h.recurrence === 'weekly' : !h.recurrence)
-                .filter((h: any) => holidayFullDayFilter === 'all' ? true : holidayFullDayFilter === 'full' ? isFullDay(h) : !isFullDay(h))
-                .filter((h: any) => {
-                  if (holidayViewMode === 'all') return true;
-                  const today = new Date();
-                  const onDate = holidaySelectedDate ? new Date(holidaySelectedDate) : undefined;
-                  const startD = h.startDate ? new Date(h.startDate) : (h.date ? new Date(h.date) : undefined);
-                  const endD = h.endDate ? new Date(h.endDate) : (h.date ? new Date(h.date) : undefined);
-                  const weeklyHit = h.recurrence === 'weekly' && Array.isArray(h.weekdays)
-                    ? h.weekdays!.includes(['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][onDate ? onDate.getDay() : today.getDay()])
-                    : false;
-                  const ref = new Date((onDate || today).toDateString());
-                  if (holidayViewMode === 'upcoming') {
-                    if (h.recurrence === 'weekly') {
-                      if (endD && endD < ref) return false;
-                      return weeklyHit || !onDate;
-                    }
-                    return startD ? startD >= ref : false;
-                  }
-                  if (holidayViewMode === 'past') {
-                    if (h.recurrence === 'weekly') {
-                      return endD ? endD < ref : false;
-                    }
-                    return endD ? endD < ref : false;
-                  }
-                  return true;
-                }).filter((h: any) => {
-                  const q = String(searchHolidays || '').trim().toLowerCase();
-                  if (!q) return true;
-                  const startStr = String(h.startDate || h.date || '').toLowerCase();
-                  const endStr = String(h.endDate || h.date || '').toLowerCase();
-                  return h.description.toLowerCase().includes(q) || h.type.toLowerCase().includes(q) || h.entity.toLowerCase().includes(q) || startStr.includes(q) || endStr.includes(q);
-                }).sort((a: any, b: any) => {
-                  const aStart = a.startDate || a.date || '';
-                  const bStart = b.startDate || b.date || '';
-                  return new Date(aStart).getTime() - new Date(bStart).getTime();
-                });
-              timeoffTotalRef.current = rows.length;
-              const shown = rows.slice(0, visibleTimeOffRows);
-              return shown.map((holiday: any) => (
-                <TableRow key={holiday.id} className="h-7">
-                  {/* The name says who; "For Staff" on a phone card said it twice (#265 O3). */}
-                  <TableCell className={`text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2 ${editingTimeOffId === holiday.id ? '' : 'hidden md:table-cell'}`}>
-                    {editingTimeOffId === holiday.id ? (
-                      <Select value={holiday.type} onValueChange={(v: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, type: v as "Center" | "Staff" | "Room" | "Therapy" | "Patient", entity: v === 'Center' ? 'All' : '' } : h)))}>
-                        <SelectTrigger className="h-10">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Center">Centre</SelectItem>
-                          <SelectItem value="Staff">Staff</SelectItem>
-                          <SelectItem value="Room">Room</SelectItem>
-                          <SelectItem value="Therapy">Therapy</SelectItem>
-                          <SelectItem value="Patient">Patient</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Badge variant={holiday.type === "Center" ? "default" : "secondary"}>{holiday.type === "Center" ? "Centre" : holiday.type}</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
-                    {editingTimeOffId === holiday.id ? (
-                      <div className="flex gap-2">
-                        {/* The stored day and HH:MM as they are, never through the phone's clock (#214, as #189). */}
-                        <Input type="date" value={(holiday.startDate || holiday.date || '').slice(0, 10)} onChange={(e: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, startDate: `${e.target.value}T00:00:00.000Z` } : h)))} />
-                        {isFullDay(holiday) ? null : <Input type="time" className="w-32" value={holiday.startTime || ''} onChange={(e: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, startTime: e.target.value } : h)))} />}
-                      </div>
-                    ) : (
-                      leaveWhen(holiday, isFullDay(holiday))
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
-                    {editingTimeOffId === holiday.id ? (
-                      <div className="flex gap-2">
-                        {/* The stored day and HH:MM as they are, never through the phone's clock (#214, as #189). */}
-                        <Input type="date" value={(holiday.endDate || holiday.date || '').slice(0, 10)} onChange={(e: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, endDate: `${e.target.value}T00:00:00.000Z` } : h)))} />
-                        {isFullDay(holiday) ? null : <Input type="time" className="w-32" value={holiday.endTime || ''} onChange={(e: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, endTime: e.target.value } : h)))} />}
-                      </div>
-                    ) : (
-                      null
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs md:text-sm leading-tight py-0.5 pl-1.5 pr-1 md:py-3 md:px-3">
-                    {editingTimeOffId === holiday.id ? (
-                      <Input value={holiday.description} onChange={(e: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, description: e.target.value } : h)))} />
-                    ) : (
-                      holiday.description
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
-                    {editingTimeOffId === holiday.id ? (
-                      <input type="checkbox" role="switch" className="h-6 w-11 accent-[hsl(var(--primary))]" aria-label="Full day" checked={isFullDay(holiday)} onChange={(e) => { const v = e.target.checked; setTimeOffs((prev: any[]) => prev.map((h: any) => {
-                        if (h.id !== holiday.id) return h;
-                        if (v) {
-                          const sBase = h.startDate || h.date;
-                          const eBase = h.endDate || h.date;
-                          const sIso = sBase ? new Date(sBase) : undefined;
-                          const eIso = eBase ? new Date(eBase) : undefined;
-                          const setHM = (d: Date, hh: number, mm: number) => { const nd = new Date(d); nd.setHours(hh, mm, 0, 0); return nd.toISOString(); };
-                          return { ...h, startDate: sIso ? setHM(sIso, 9, 0) : h.startDate, endDate: eIso ? setHM(eIso, 18, 0) : h.endDate, startTime: undefined, endTime: undefined };
-                        }
-                        return { ...h, startTime: h.startTime || '09:00', endTime: h.endTime || '18:00' };
-                      })); }} />
-                    ) : null /* The hours are already in the date line (#178). */}
-                  </TableCell>
-                  <TableCell className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
-                    {editingTimeOffId === holiday.id ? (
-                      <div className="flex items-center gap-2">
-                        <input type="checkbox" role="switch" className="h-6 w-11 accent-[hsl(var(--primary))]" aria-label="Every week" checked={holiday.recurrence === 'weekly'} onChange={(e) => { const v = e.target.checked; setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, recurrence: v ? 'weekly' : undefined, weekdays: v ? (h.weekdays || ['sunday']) : undefined } : h))); }} />
-                        {holiday.recurrence === 'weekly' && (
-                          <div className="flex gap-1 flex-wrap">
-                            {(['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const).map((wd) => {
-                              const selected = (holiday.weekdays || []).includes(wd);
-                              return (
-                                <Button key={wd} type="button" variant={selected ? 'default' : 'outline'} className="h-6 px-2 py-0 text-[11px]"
-                                  onClick={() => setTimeOffs((prev: any[]) => prev.map((h: any) => {
-                                    if (h.id !== holiday.id) return h;
-                                    const set = new Set(h.weekdays || []);
-                                    if (set.has(wd)) set.delete(wd); else set.add(wd);
-                                    return { ...h, weekdays: Array.from(set) };
-                                  }))}
-                                >
-                                  {wd.slice(0,3).toUpperCase()}
-                                </Button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      holiday.recurrence === 'weekly' ? weeklyLabel(holiday.weekdays) : null
-                    )}
-                  </TableCell>
-                  <TableCell data-first className="text-[11px] md:text-xs leading-tight py-0 pl-1 pr-1 md:py-0 md:px-2">
-                    {editingTimeOffId === holiday.id ? (
-                      holiday.type === 'Center' ? (
-                        <Input value="All" readOnly />
-                      ) : holiday.type === 'Staff' ? (
-                        <Select value={holiday.entity} onValueChange={(v: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, entity: v } : h)))}>
-                          <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {staff.map((s: any) => (<SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>))}
-                          </SelectContent>
-                        </Select>
-                      ) : holiday.type === 'Room' ? (
-                        <Select value={holiday.entity} onValueChange={(v: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, entity: v } : h)))}>
-                          <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {roomsList.map((r: any) => (<SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>))}
-                          </SelectContent>
-                        </Select>
-                      ) : holiday.type === 'Therapy' ? (
-                        <Select value={holiday.entity} onValueChange={(v: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, entity: v } : h)))}>
-                          <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {therapies.map((t: any) => (<SelectItem key={String(t.id ?? t.name)} value={String(t.id ?? t.name)}>{t.name}</SelectItem>))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Select value={holiday.entity} onValueChange={(v: any) => setTimeOffs((prev: any[]) => prev.map((h: any) => (h.id === holiday.id ? { ...h, entity: v } : h)))}>
-                          <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {patients.map((p: any) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}
-                          </SelectContent>
-                        </Select>
-                      )
-                    ) : (
-                      holiday.type === 'Center' ? 'Whole centre' : (
-                        holiday.type === 'Staff' ? (staffNameById[holiday.entity] ?? holiday.entity) :
-                        holiday.type === 'Room' ? (roomNameById[holiday.entity] ?? holiday.entity) :
-                        holiday.type === 'Therapy' ? (therapyNameById[holiday.entity] ?? holiday.entity) :
-                        (patientNameById[holiday.entity] ?? holiday.entity)
-                      )
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex gap-2 justify-end">
-                      {editingTimeOffId === holiday.id ? (
-                        <>
-                          <Button variant="outline" size="sm" className="h-10" aria-label="Delete" onClick={() => { cancelEditTimeOff(); requestDelete('timeoff', holiday.id, holiday.description); }}>Delete</Button>
-                          <Button variant="outline" size="sm" className="h-10" onClick={cancelEditTimeOff}>Cancel</Button>
-                          <Button size="sm" className="h-10" onClick={saveEditTimeOff}>Save</Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button aria-label="Edit" variant="outline" size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={() => startEditTimeOff(holiday)}>
-                            <Edit className="w-2 h-2 md:w-4 md:h-4" />
-                          </Button>
-                          <Button variant="outline" size="sm" className="h-5 md:h-8 px-2 md:px-3 text-xs md:text-sm" onClick={() => requestDelete('timeoff', holiday.id, holiday.description)}>
-                            <Trash2 className="w-2 h-2 md:w-4 md:h-4" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ));
-            })()}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-    </>
+        </ListGroup>
+      )}
+    </div>
   );
 };
 
@@ -306,19 +57,19 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
   /** Save and plan: shows the day of the leave with the plan for it, to accept. */
   planDay: (iso: string) => void;
 }) {
-  const [holidayTypeFilter, setHolidayTypeFilter] = useState<'all' | 'Center' | 'Staff' | 'Room' | 'Therapy' | 'Patient'>('all');
   const [holidayViewMode, setHolidayViewMode] = useState<'all'|'upcoming'|'past'>('upcoming');
-  const [holidaySelectedDate, setHolidaySelectedDate] = useState<string>('');
-  const [holidayRecurringFilter, setHolidayRecurringFilter] = useState<'all'|'weekly'|'none'>('all');
-  const [holidayFullDayFilter, setHolidayFullDayFilter] = useState<'all'|'full'|'partial'>('all');
-  const [searchHolidays, setSearchHolidays] = useState("");
-  const [showAddTimeOff, setShowAddTimeOff] = useState(false);
+  const [sheet, setSheet] = useState<'new' | 'edit' | null>(null);
+  const [editing, setEditing] = useState<UiTimeOff | null>(null);
   const [showHolidays, setShowHolidays] = useState(false);
   const closedDays = useMemo(() => new Set(timeOffs.filter((h) => h.type === "Center").map((h) => (h.date || h.startDate || "").slice(0, 10))), [timeOffs]);
   const [visibleTimeOffRows, setVisibleTimeOffRows] = useState(isMobile ? 20 : 40);
   const timeoffTotalRef = useRef(0);
-  useEffect(() => { setVisibleTimeOffRows(isMobile ? 20 : 40); }, [searchHolidays, timeOffs, holidayTypeFilter, holidayViewMode, holidayRecurringFilter, holidayFullDayFilter, holidaySelectedDate, isMobile]);
+  useEffect(() => { setVisibleTimeOffRows(isMobile ? 20 : 40); }, [timeOffs, holidayViewMode, isMobile]);
   // Most leave is a therapist's whole day, starting today (#137).
+  const blank = () => ({
+    date: todayKey, endDate: todayKey, type: "Staff" as "Center" | "Staff" | "Room" | "Therapy" | "Patient", entity: "", fullDay: true, description: "", startTime: "", endTime: "",
+    recurrence: undefined as 'weekly' | undefined, weekdays: undefined as UiTimeOff['weekdays'],
+  });
   const [newTimeOff, setNewTimeOff] = useState({
     date: todayKey,
     endDate: todayKey,
@@ -333,14 +84,11 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
   // The consequence line: how many treatments the days would leave without their therapist (story 9).
   const [impact, setImpact] = useState<number | null>(null);
   useEffect(() => {
-    if (!showAddTimeOff || newTimeOff.type !== 'Staff' || !newTimeOff.entity) { setImpact(null); return; }
+    if (!sheet || newTimeOff.type !== 'Staff' || !newTimeOff.entity) { setImpact(null); return; }
     let stale = false;
     fetchJsonWithTimeout<{ treatments: number }>(`${API_BASE}/timeoff/impact?staff_id=${newTimeOff.entity}&from=${newTimeOff.date}&to=${newTimeOff.endDate}`).then((r) => { if (!stale) setImpact(typeof r?.treatments === 'number' ? r.treatments : null); });
     return () => { stale = true; };
-  }, [showAddTimeOff, newTimeOff.type, newTimeOff.entity, newTimeOff.date, newTimeOff.endDate]);
-
-  const [editingTimeOffId, setEditingTimeOffId] = useState<string | null>(null);
-  const [originalTimeOff, setOriginalTimeOff] = useState<UiTimeOff | null>(null);
+  }, [sheet, newTimeOff.type, newTimeOff.entity, newTimeOff.date, newTimeOff.endDate]);
 
   const setTimeHM = (iso: string, hh: number, mm: number) => {
     const d = new Date(iso);
@@ -357,83 +105,41 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     return `Weekly: ${weekdays.map((w) => map[w] || w).join(', ')}`;
   };
 
-  const startEditTimeOff = (h: UiTimeOff) => {
-    setEditingTimeOffId(h.id);
-    setOriginalTimeOff({ ...h });
+  const nameOf = (h: UiTimeOff) => h.type === 'Center' ? 'Whole centre' : (h.type === 'Staff' ? staffNameById[h.entity] : h.type === 'Room' ? roomNameById[h.entity] : h.type === 'Therapy' ? therapyNameById[h.entity] : patientNameById[h.entity]) ?? h.entity;
+  const openEdit = (h: UiTimeOff) => {
+    setEditing(h);
+    setNewTimeOff({ date: (h.startDate || h.date || todayKey).slice(0, 10), endDate: (h.endDate || h.date || todayKey).slice(0, 10), type: h.type, entity: h.entity, fullDay: isFullDay(h), description: h.description || '', startTime: h.startTime || '', endTime: h.endTime || '', recurrence: h.recurrence, weekdays: h.weekdays });
+    setSheet('edit');
   };
+  const openAdd = () => { setEditing(null); setNewTimeOff(blank()); setSheet('new'); };
+  const closeSheet = (o: boolean) => { if (!o) { setSheet(null); setEditing(null); } };
 
-  const saveEditTimeOff = async () => {
-    if (!editingTimeOffId) return;
-    const h = timeOffs.find((x) => x.id === editingTimeOffId);
-    if (!h) return;
+  const saveEdit = async () => {
+    if (!editing) return;
+    const n = newTimeOff;
+    const startTime = n.startTime || timeSlots[0] || '09:00';
+    const endTime = n.endTime || timeSlots[timeSlots.length - 1] || '18:00';
     const payload = {
-      entity_type: h.type.toLowerCase(),
-      entity_id: h.type === 'Center' ? null : h.entity,
-      date: h.date,
-      start_date: h.startDate,
-      end_date: h.endDate,
-      start_time: isFullDay(h) ? null : h.startTime,
-      end_time: isFullDay(h) ? null : h.endTime,
-      recurrence: h.recurrence,
-      weekdays: h.weekdays,
-      description: h.description,
+      entity_type: n.type.toLowerCase(), entity_id: n.type === 'Center' ? null : n.entity,
+      start_date: `${n.date}T00:00:00.000Z`, end_date: `${n.endDate}T00:00:00.000Z`,
+      start_time: n.fullDay ? null : startTime, end_time: n.fullDay ? null : endTime,
+      recurrence: n.recurrence, weekdays: n.weekdays, description: n.description,
     };
     try {
-      const res = await fetch(`${API_BASE}/timeoff/${h.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
-      const updated = await res.json();
-      setTimeOffs((prev) => prev.map((x) => x.id === h.id ? { ...x, date: updated.date ? new Date(updated.date).toISOString() : undefined, startDate: updated.start_date ? new Date(updated.start_date).toISOString() : undefined, endDate: updated.end_date ? new Date(updated.end_date).toISOString() : undefined, startTime: updated.start_time || undefined, endTime: updated.end_time || undefined, recurrence: updated.recurrence || undefined, weekdays: updated.weekdays || undefined } : x));
-      setEditingTimeOffId(null);
-      setOriginalTimeOff(null);
+      const res = await fetch(`${API_BASE}/timeoff/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error(String(res.status));
+      const u = await res.json();
+      setTimeOffs((prev) => prev.map((x) => x.id === editing.id ? { ...x, type: n.type, entity: n.type === 'Center' ? 'All' : n.entity, description: n.description, date: u.date ? new Date(u.date).toISOString() : undefined, startDate: u.start_date ? new Date(u.start_date).toISOString() : undefined, endDate: u.end_date ? new Date(u.end_date).toISOString() : undefined, startTime: u.start_time || undefined, endTime: u.end_time || undefined, recurrence: u.recurrence || undefined, weekdays: u.weekdays || undefined } : x));
+      toast.success('Leave saved');
+      closeSheet(false);
     } catch {
       toast.error('The leave was not saved. Try again.');
     }
   };
 
-  const cancelEditTimeOff = () => {
-    if (originalTimeOff) {
-      setTimeOffs((prev) => prev.map((x) => (x.id === originalTimeOff.id ? originalTimeOff : x)));
-    }
-    setEditingTimeOffId(null);
-    setOriginalTimeOff(null);
-  };
-
   const tab = (
-            <TimeOffTab
-              timeOffs={timeOffs}
-              searchHolidays={searchHolidays}
-              setSearchHolidays={setSearchHolidays}
-              holidayTypeFilter={holidayTypeFilter}
-              setHolidayTypeFilter={setHolidayTypeFilter}
-              holidayViewMode={holidayViewMode}
-              setHolidayViewMode={setHolidayViewMode}
-              holidayRecurringFilter={holidayRecurringFilter}
-              setHolidayRecurringFilter={setHolidayRecurringFilter}
-              holidayFullDayFilter={holidayFullDayFilter}
-              setHolidayFullDayFilter={setHolidayFullDayFilter}
-              holidaySelectedDate={holidaySelectedDate}
-              setHolidaySelectedDate={setHolidaySelectedDate}
-              visibleTimeOffRows={visibleTimeOffRows}
-              timeoffTotalRef={timeoffTotalRef}
-              editingTimeOffId={editingTimeOffId}
-              startEditTimeOff={startEditTimeOff}
-              cancelEditTimeOff={cancelEditTimeOff}
-              saveEditTimeOff={saveEditTimeOff}
-              setTimeOffs={setTimeOffs}
-              staff={staff}
-              roomsList={roomsList}
-              therapies={therapies}
-              patients={patients}
-              staffNameById={staffNameById}
-              roomNameById={roomNameById}
-              therapyNameById={therapyNameById}
-              patientNameById={patientNameById}
-              isFullDay={isFullDay}
-              weeklyLabel={weeklyLabel}
-              toLocalInput={toLocalInput}
-              requestDelete={requestDelete}
-              setShowAddTimeOff={setShowAddTimeOff}
-              setShowHolidays={setShowHolidays}
-            />
+    <TimeOffTab timeOffs={timeOffs} viewMode={holidayViewMode} setViewMode={setHolidayViewMode} visibleRows={visibleTimeOffRows} totalRef={timeoffTotalRef}
+      nameOf={nameOf} isFullDay={isFullDay} weeklyLabel={weeklyLabel} openEdit={openEdit} setShowHolidays={setShowHolidays} />
   );
 
   /** Records the leave; the day is planned now (the plan is shown to accept) or left waiting on the pill. */
@@ -451,8 +157,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     const endIso = newTimeOff.fullDay ? setTimeHM(newTimeOff.endDate, 18, 0) : `${newTimeOff.endDate}T${endTime}`;
     const optimistic: UiTimeOff = { id: tempId, startDate: startIso, endDate: endIso, recurrence: newTimeOff.recurrence, weekdays: newTimeOff.weekdays as UiTimeOff['weekdays'], type: newTimeOff.type, entity: newTimeOff.type === 'Center' ? 'All' : (newTimeOff.entity || ''), description: newTimeOff.description };
     setTimeOffs((prev) => [...prev, optimistic]);
-    setShowAddTimeOff(false);
-    setNewTimeOff({ date: todayKey, endDate: todayKey, type: 'Staff', entity: '', fullDay: true, description: '', startTime: '', endTime: '', recurrence: undefined, weekdays: undefined });
+    setSheet(null);
+    setNewTimeOff(blank());
     try {
       const res = await fetch(`${API_BASE}/timeoff`, {
         method: "POST",
@@ -486,8 +192,10 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     <>
       <HolidaysSheet open={showHolidays} onOpenChange={setShowHolidays} closed={closedDays} today={todayKey}
         onAdded={(rows) => setTimeOffs((prev) => [...prev, ...rows.map((x) => ({ id: x.id, date: new Date(x.date).toISOString(), type: "Center" as const, entity: "All", description: x.description }))])} />
-      <BottomSheet open={showAddTimeOff} onOpenChange={setShowAddTimeOff} title="New leave" note="Who is away, and when."
-        foot={<TwoFoot main="Save and plan the day" onMain={() => save(true)} alt="Save, plan later" onAlt={() => save(false)} ok={newTimeOff.type === 'Center' || !!newTimeOff.entity} />}>
+      <BottomSheet open={sheet !== null} onOpenChange={closeSheet} title={sheet === 'edit' ? 'Change leave' : 'New leave'} note={sheet === 'edit' ? `${editing ? nameOf(editing) : ''}. Change anything, then save.` : 'Who is away, and when.'}
+        foot={sheet === 'edit'
+          ? <Foot label="Save the leave" save={saveEdit} ok={newTimeOff.type === 'Center' || !!newTimeOff.entity} remove={() => { const h = editing; closeSheet(false); if (h) requestDelete('timeoff', h.id, h.description); }} removeLabel="Delete this leave" />
+          : <TwoFoot main="Save and plan the day" onMain={() => save(true)} alt="Save, plan later" onAlt={() => save(false)} ok={newTimeOff.type === 'Center' || !!newTimeOff.entity} />}>
         {/* Who first, as one list (#265 H1): the old form asked for a "type" before the person. */}
         <Dropdown label="Who or what" id="leaveWho" required
           value={newTimeOff.type === 'Center' ? 'Center:All' : newTimeOff.entity ? `${newTimeOff.type}:${newTimeOff.entity}` : ''}
@@ -518,5 +226,5 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     </>
   );
 
-  return { tab, dialogs, setVisibleRows: setVisibleTimeOffRows, totalRef: timeoffTotalRef, openAdd: () => setShowAddTimeOff(true) };
+  return { tab, dialogs, setVisibleRows: setVisibleTimeOffRows, totalRef: timeoffTotalRef, openAdd };
 }

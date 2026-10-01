@@ -4,6 +4,7 @@
  * the rest. The admin can mark it final, which closes it to the doctor's link.
  */
 import { useState } from "react";
+import { Area, Dropdown, Text, noteText, wide } from "@/components/kit";
 
 export type Med = { name: string; dose: string; timing: string; from: string; days: string };
 export type DischargeDraft = { meds_stay: Med[]; meds_home: Med[]; no: string; final: boolean; [k: string]: unknown };
@@ -22,6 +23,14 @@ const PARAS: [string, string][] = [["condition", "Condition at discharge"], ["di
 const AFTER: [string, string][] = [["instructions", "Special instructions"], ["follow_up", "Follow-up"], ["urgent_when", "When to obtain urgent care"], ["urgent_how", "How to obtain urgent care"]];
 const blank = (): Med => ({ name: "", dose: "", timing: "", from: "", days: "" });
 
+/** A caption over a group of fields, the kit's group header. */
+const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <section aria-label={title} className="mt-5">
+    <div className="pb-1 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{title}</div>
+    {children}
+  </section>
+);
+
 export default function DischargeForm({ view, admin, onSave, onPdf, doctors }: {
   view: DischargeView; admin: boolean;
   /** The admin chooses who signs; from a doctor's link it is that doctor. */
@@ -33,9 +42,8 @@ export default function DischargeForm({ view, admin, onSave, onPdf, doctors }: {
   const [busy, setBusy] = useState(false);
   const locked = !admin && view.draft.final;
   const set = (k: string, v: unknown) => setD((x) => ({ ...x, [k]: v }));
-  const field = "min-h-11 w-full rounded-lg border px-2 text-[16px] text-foreground disabled:opacity-60";
-  const label = "grid gap-1 text-[13px] text-muted-foreground";
-  const head = "mt-3 text-xs font-semibold uppercase tracking-[.05em] text-muted-foreground";
+  const str = (k: string) => String(d[k] ?? "");
+  const one = (k: string, t: string, hint?: string) => <Text key={k} label={`${t} (optional)`} placeholder={hint} value={str(k)} disabled={locked} onChange={(e) => set(k, e.target.value)} />;
 
   const save = async (extra: Record<string, unknown> = {}) => {
     setBusy(true);
@@ -48,77 +56,67 @@ export default function DischargeForm({ view, admin, onSave, onPdf, doctors }: {
   };
 
   const meds = (key: "meds_stay" | "meds_home", title: string) => (
-    <section aria-label={title}>
-      <div className={head}>{title}</div>
+    <Section title={title}>
       <div className="grid gap-2">
         {d[key].map((m, i) => {
           const put = (k: keyof Med, v: string) => set(key, d[key].map((x, j) => (j === i ? { ...x, [k]: v } : x)));
           return (
-            <div key={i} className="grid grid-cols-2 gap-1.5 rounded-xl border p-2">
-              <div className="col-span-2 flex gap-1.5">
-                <input aria-label="Medicine" className={field} placeholder="Tab. Yograj Guggulu" value={m.name} disabled={locked} onChange={(e) => put("name", e.target.value)} />
-                <button type="button" aria-label={`Remove ${m.name || "medicine"}`} className="min-h-11 min-w-11 rounded-lg border" disabled={locked} onClick={() => set(key, d[key].filter((_, j) => j !== i))}>✕</button>
+            <div key={i} className="rounded-xl border p-3">
+              <Text label="Medicine" placeholder="Tab. Yograj Guggulu" value={m.name} disabled={locked} onChange={(e) => put("name", e.target.value)} />
+              <div className="grid grid-cols-2 gap-x-3">
+                <Text label="Dose (optional)" placeholder="1-X-1" value={m.dose} disabled={locked} onChange={(e) => put("dose", e.target.value)} />
+                <Text label="When (optional)" placeholder="after food" value={m.timing} disabled={locked} onChange={(e) => put("timing", e.target.value)} />
+                <Text label="From (optional)" type="date" value={m.from} disabled={locked} onChange={(e) => put("from", e.target.value)} />
+                <Text label="Days (optional)" inputMode="numeric" placeholder="10" value={m.days} disabled={locked} onChange={(e) => put("days", e.target.value)} />
               </div>
-              {([["dose", "Dose", "1-X-1", "text"], ["timing", "When", "after food", "text"], ["from", "From", "", "date"], ["days", "Days", "10", "numeric"]] as const).map(([k, t, hint, kind]) => (
-                <label key={k} className="grid gap-0.5 text-[12px] text-muted-foreground">{t}
-                  <input className={field} type={kind === "date" ? "date" : "text"} inputMode={kind === "numeric" ? "numeric" : undefined} placeholder={hint} value={m[k]} disabled={locked} onChange={(e) => put(k, e.target.value)} />
-                </label>
-              ))}
+              {locked ? null : <button type="button" className="mt-2 min-h-11 text-sm font-semibold text-destructive" onClick={() => set(key, d[key].filter((_, j) => j !== i))}>Remove {m.name || "this medicine"}</button>}
             </div>
           );
         })}
         {locked ? null : (
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="min-h-11 rounded-full border px-4 font-semibold" onClick={() => set(key, [...d[key], blank()])}>+ Add a medicine</button>
+            <button type="button" className={`${wide} border border-primary text-primary sm:w-auto sm:px-5`} onClick={() => set(key, [...d[key], blank()])}>Add a medicine</button>
             {key === "meds_stay" && d.meds_stay.length ? (
-              <button type="button" className="min-h-11 rounded-full border px-4 font-semibold"
+              <button type="button" className={`${wide} text-sm text-primary sm:w-auto sm:px-5`}
                 onClick={() => set("meds_home", [...d.meds_home, ...d.meds_stay.filter((m) => m.name.trim() && !d.meds_home.some((h) => h.name === m.name)).map((m) => ({ ...m, from: "", days: "" }))])}>Copy to take-home</button>
             ) : null}
           </div>
         )}
       </div>
-    </section>
+    </Section>
   );
 
   return (
-    <div className="grid gap-2">
-      <div className="text-[13px] text-muted-foreground">
-        {d.no ? `No. ${d.no} · ` : ""}{view.days} days{view.doctor ? ` · ${view.doctor.name}` : ""}{d.final ? " · final" : " · draft"}
-      </div>
-      {locked ? <div className="rounded-xl bg-muted p-3 text-[14px]">The centre has made this summary final. Ask them if something needs changing.</div> : null}
+    <div>
+      <p className={noteText}>{d.no ? `No. ${d.no} · ` : ""}{view.days} days{view.doctor ? ` · ${view.doctor.name}` : ""}{d.final ? " · final" : " · draft"}. Nothing here is required; what is blank prints as a line to fill in by hand.</p>
+      {locked ? <p className="mt-3 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold">The centre has made this summary final. Ask them if something needs changing.</p> : null}
       {LINES.map((group, g) => (
-        <div key={g} className="grid grid-cols-2 gap-2">
-          {group.map(([k, t, hint]) => (
-            <label key={k} className={`${label} ${k === "address" ? "col-span-2" : ""}`}>{t}
-              <input className={field} placeholder={hint} value={String(d[k] ?? "")} disabled={locked} onChange={(e) => set(k, e.target.value)} />
-            </label>
-          ))}
-        </div>
+        <Section key={g} title={["The stay", "Where from", "On leaving", "Payment"][g]}>
+          <div className="grid grid-cols-2 gap-x-3">
+            {group.map(([k, t, hint]) => <div key={k} className={k === "address" ? "col-span-2" : ""}>{one(k, t, hint)}</div>)}
+          </div>
+        </Section>
       ))}
-      {PARAS.map(([k, t]) => (
-        <label key={k} className={label}>{t}<textarea rows={2} className={`${field} py-2`} value={String(d[k] ?? "")} disabled={locked} onChange={(e) => set(k, e.target.value)} /></label>
-      ))}
+      <Section title="Condition and diagnosis">{PARAS.map(([k, t]) => <Area key={k} label={`${t} (optional)`} rows={2} value={str(k)} disabled={locked} onChange={(e) => set(k, e.target.value)} />)}</Section>
       {meds("meds_stay", "Medication during the stay")}
       {meds("meds_home", "Medicines to take home")}
-      <label className={label}>Take-home medicines for<input className={field} placeholder="1 month" value={String(d.meds_home_for ?? "")} disabled={locked} onChange={(e) => set("meds_home_for", e.target.value)} /></label>
-      {AFTER.map(([k, t]) => (
-        <label key={k} className={label}>{t}<textarea rows={2} className={`${field} py-2`} value={String(d[k] ?? "")} disabled={locked} onChange={(e) => set(k, e.target.value)} /></label>
-      ))}
-      {doctors?.length ? (
-        <label className={label}>Signed by
-          <select className={field} value={String(d.doctor_id ?? "")} disabled={locked} onChange={(e) => set("doctor_id", e.target.value || null)}>
+      {one("meds_home_for", "Take-home medicines for", "1 month")}
+      <Section title="After they leave">{AFTER.map(([k, t]) => <Area key={k} label={`${t} (optional)`} rows={2} value={str(k)} disabled={locked} onChange={(e) => set(k, e.target.value)} />)}</Section>
+      <Section title="Signed">
+        {doctors?.length ? (
+          <Dropdown label="Signed by" value={str("doctor_id")} disabled={locked} onChange={(e) => set("doctor_id", e.target.value || null)}>
             <option value="">No doctor</option>
             {doctors.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-          </select>
-        </label>
-      ) : null}
-      <label className={label}>Signed on (date and time)<input className={field} placeholder="2026-10-01 11:00" value={String(d.signed_at ?? "")} disabled={locked} onChange={(e) => set("signed_at", e.target.value)} /></label>
-      <div className="sticky bottom-0 mt-2 flex flex-wrap justify-end gap-2 bg-background py-2">
-        <button type="button" className="min-h-11 rounded-full border px-4 font-semibold" disabled={busy} onClick={async () => { if (locked || (await save())) onPdf(); }}>PDF</button>
-        {admin ? (
-          <button type="button" className="min-h-11 rounded-full border px-4 font-semibold" disabled={busy} onClick={() => save({ final: !d.final })}>{d.final ? "Reopen for the doctor" : "Make final"}</button>
+          </Dropdown>
         ) : null}
-        {locked ? null : <button type="button" className="min-h-11 rounded-full bg-primary px-5 font-semibold text-primary-foreground" disabled={busy} onClick={() => save()}>Save</button>}
+        {one("signed_at", "Signed on (date and time)", "2026-10-01 11:00")}
+      </Section>
+      <div className="sticky bottom-0 -mx-4 -mb-4 mt-4 grid gap-1 border-t bg-card px-4 pb-3 pt-3">
+        {locked ? null : <button type="button" className={`${wide} bg-primary text-primary-foreground disabled:opacity-50`} disabled={busy} onClick={() => save()}>{busy ? "Saving…" : "Save the summary"}</button>}
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" className={`${wide} text-sm text-primary`} disabled={busy} onClick={async () => { if (locked || (await save())) onPdf(); }}>Print summary</button>
+          {admin ? <button type="button" className={`${wide} text-sm text-primary`} disabled={busy} onClick={() => save({ final: !d.final })}>{d.final ? "Reopen for the doctor" : "Make final"}</button> : <span />}
+        </div>
       </div>
     </div>
   );

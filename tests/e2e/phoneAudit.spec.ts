@@ -53,10 +53,8 @@ test('B2: resident details never say "Not staying" for someone in house', async 
 test('B3: diet plans fit the phone', async ({ page }) => {
   await signIn(page);
   await menuTo(page, /^Diet/);
-  await page.getByRole('button', { name: /^Plans$/ }).click();
-  await expect(page.getByRole('dialog').getByRole('button', { name: /^New plan/ })).toBeVisible();
-  expect(await fitsWidth(page)).toBe(true);
-  await page.getByRole('dialog').getByRole('button', { name: /›$/ }).first().click();
+  await expect(page.getByRole('heading', { name: 'Diet plans' })).toBeVisible();
+  await page.getByRole('button', { name: /patients?$/ }).first().click();
   await expect(page.getByLabel('Plan name')).not.toHaveValue('');
   expect(await fitsWidth(page)).toBe(true);
 });
