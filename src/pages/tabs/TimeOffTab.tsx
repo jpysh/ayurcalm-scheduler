@@ -46,11 +46,11 @@ const TimeOffTab = ({ timeOffs, viewMode, setViewMode, visibleRows, totalRef, na
 export default TimeOffTab;
 
 /** The Time off screen: its filters, the Add dialog and the tab, held by the dashboard so they last as long as it does. */
-export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, isMobile, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, timeSlots, planDay }: {
+export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, timeSlots, planDay }: {
   timeOffs: UiTimeOff[]; setTimeOffs: React.Dispatch<React.SetStateAction<UiTimeOff[]>>;
   staff: UiStaff[]; roomsList: UiRoom[]; therapies: UiTherapy[]; patients: Patient[];
   staffNameById: Record<string, string>; roomNameById: Record<string, string>; therapyNameById: Record<string, string>; patientNameById: Record<string, string>;
-  isMobile: boolean; requestDelete: (kind: "timeoff", id: string, name?: string) => void;
+  requestDelete: (kind: "timeoff", id: string, name?: string) => void;
   loadReplans: () => void; refreshAppointmentsForDate: (iso: string, silent?: boolean) => Promise<void>; todayKey: string;
   /** The centre's slot times, "HH:MM": what part-day leave starts and ends on. */
   timeSlots: string[];
@@ -62,9 +62,9 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
   const [editing, setEditing] = useState<UiTimeOff | null>(null);
   const [showHolidays, setShowHolidays] = useState(false);
   const closedDays = useMemo(() => new Set(timeOffs.filter((h) => h.type === "Center").map((h) => (h.date || h.startDate || "").slice(0, 10))), [timeOffs]);
-  const [visibleTimeOffRows, setVisibleTimeOffRows] = useState(isMobile ? 20 : 40);
+  const [visibleTimeOffRows, setVisibleTimeOffRows] = useState(20);
   const timeoffTotalRef = useRef(0);
-  useEffect(() => { setVisibleTimeOffRows(isMobile ? 20 : 40); }, [timeOffs, holidayViewMode, isMobile]);
+  useEffect(() => { setVisibleTimeOffRows(20); }, [timeOffs, holidayViewMode]);
   // Most leave is a therapist's whole day, starting today (#137).
   const blank = () => ({
     date: todayKey, endDate: todayKey, type: "Staff" as "Center" | "Staff" | "Room" | "Therapy" | "Patient", entity: "", fullDay: true, description: "", startTime: "", endTime: "",

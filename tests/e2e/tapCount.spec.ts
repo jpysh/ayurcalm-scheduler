@@ -13,7 +13,7 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '@
  * Everything a job changes is undone, and the two days it touches are
  * compared back through the API.
  */
-const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Patient didn't come", 'Patient late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day', "A patient's meals today", 'Add an arriving patient', 'Find a patient', "Change a patient's meals from a date", "Choose a patient's package", "Choose a patient's accommodation", "Change a patient's stay", "Print a patient's discharge summary", "Record a therapist's leave"]);
+const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Patient didn't come", 'Patient late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day', "A patient's meals today", 'Add an arriving patient', 'Find a patient', "Change a patient's meals from a date", "Choose a patient's package", "Choose a patient's accommodation", "Change a patient's stay", "Print a patient's discharge summary", "Record a therapist's leave", 'Edit a diet plan']);
 
 /** The design's order, which is the order the table prints in. */
 const JOBS: [string, number][] = [
@@ -42,6 +42,8 @@ const JOBS: [string, number][] = [
   ["Print a patient's discharge summary", 3],
   // From the day: Menu, Leave, +, then Save, plan later. Picking who and typing dates are not counted.
   ["Record a therapist's leave", 4],
+  // Menu, Diet plans, the plan, Save (#285 session 6).
+  ['Edit a diet plan', 4],
 ];
 
 const ADMIN = { email: 'admin@example.com', password: 'demo1234' };
@@ -368,6 +370,15 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await page.getByRole('dialog').getByLabel('Who or what').selectOption({ label: staff.find((x) => x.is_active)!.name });
       await tap(page.getByRole('dialog').getByRole('button', { name: 'Save, plan later' }));
       await expect(page.locator('[data-sonner-toast]').filter({ hasText: /Leave saved/ })).toBeVisible({ timeout: 20000 });
+    });
+
+    // Menu, Diet plans, a plan, then Save. Typing is not counted; the walk saves the plan as it is, so nothing changes.
+    await job(page, rows, 'Edit a diet plan', async (tap) => {
+      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Diet plans/ }));
+      await tap(activePanel(page).getByRole('button', { name: /patients?$|Not used$/ }).first());
+      await tap(page.getByRole('dialog').getByRole('button', { name: 'Save the plan' }));
+      await expect(page.locator('[data-sonner-toast]').filter({ hasText: /saved$/ })).toBeVisible({ timeout: 20000 });
     });
 
     await job(page, rows, 'Therapist not in', async (tap) => {

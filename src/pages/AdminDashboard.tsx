@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useTrial } from "@/lib/centreName";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useLocation, useNavigate } from "react-router-dom";
 import { BottomBar, SCREENS } from "@/components/BottomBar";
@@ -10,7 +9,6 @@ import { TeamRooms } from "@/components/TeamRooms";
 import { LogScreen } from "@/components/LogScreen";
 import { AttentionSheet, type DayProblem, type ReplanBatch } from "@/components/AttentionSheet";
 import { AppointmentDialog } from "@/components/AppointmentDialog";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useStaffScreen } from "./tabs/StaffTab";
 import { useRoomsScreen } from "./tabs/RoomsTab";
 import { useTherapiesScreen } from "./tabs/TherapiesTab";
@@ -24,7 +22,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout, API_TOKEN, type ApiAppointment, type ApiProgramEvent, type Patient, type UiRoom, type UiStaff, type UiTherapy, type UiTimeOff } from "./tabs/shared";
 import PageHead from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
-import { ListGroup, Row } from "@/components/kit";
+import { Consequence, ListGroup, Row, SheetFoot } from "@/components/kit";
 
 /** Builds the schedule's time rows from the centre's opening hours. */
 const buildTimeSlots = (openingTime: string, closingTime: string, slotMinutes: number) => {
@@ -175,13 +173,9 @@ const AdminDashboard = () => {
     return `${y}-${m}-${d}`;
   };
 
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 768);
-    onResize();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
+  // The bar's search on the Team, Therapies and Events lists: it filters the list on screen.
+  const [listQuery, setListQuery] = useState('');
+  const [listSearching, setListSearching] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -482,6 +476,7 @@ const AdminDashboard = () => {
   const go = (v: string) => {
     setActiveTab(v);
     if (v !== 'patients') patientsScreen.setSearching(false);
+    setListSearching(false); setListQuery('');
     const uname = location.pathname.split('/').filter(Boolean)[0] || (localStorage.getItem('authUser') || 'admin');
     navigate(`/${uname}/${v}`);
     window.scrollTo(0, 0);
@@ -496,11 +491,11 @@ const AdminDashboard = () => {
 
   // Each screen keeps its own state and dialogs in its own file (#147).
   const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), openFullBooking: () => setShowAutoAssign(true), movedFrom, problems: dayCheck.problems, showDay: (iso: string) => { setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id) });
-  const staffScreen = useStaffScreen({ staff, setStaff, therapies, isMobile, requestDelete });
-  const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, isMobile, requestDelete });
-  const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, isMobile, requestDelete });
-  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, isMobile, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, timeSlots, planDay: (iso) => { go('schedule'); setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); setShowAttention(true); } });
-  const eventsScreen = useEventsScreen({ events, setEvents, roomsList, staff, patients, amenityOptions, isMobile, staffNameById, patientNameById });
+  const staffScreen = useStaffScreen({ staff, setStaff, therapies, requestDelete });
+  const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, requestDelete });
+  const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q: listQuery });
+  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, timeSlots, planDay: (iso) => { go('schedule'); setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); setShowAttention(true); } });
+  const eventsScreen = useEventsScreen({ events, setEvents, roomsList, staff, staffNameById, q: listQuery });
   // The treatment card opens the resident card, which the Residents screen holds.
   const residentOpener = useRef<((id: string) => void) | null>(null);
   const swipe = useRef<{ x: number; y: number } | null>(null);
@@ -520,27 +515,20 @@ const AdminDashboard = () => {
     : activeTab === 'timeoff' ? guard('Add leave', 'added', timeOffScreen.openAdd)
     : activeTab === 'diet' ? guard('New diet plan', 'added', dietScreen.openAdd)
     : activeTab === 'team' ? guard('Add to the team', 'added', () => setShowTeamChoice(true))
-    : activeTab === 'staff' ? guard('Add therapist or doctor', 'added', staffScreen.openAdd)
-    : activeTab === 'rooms' ? guard('Add room', 'added', roomsScreen.openAdd)
     : activeTab === 'therapies' ? guard('Add therapy', 'added', therapiesScreen.openAdd)
+    : activeTab === 'events' ? guard('Add event', 'added', eventsScreen.openAdd)
     : null;
 
-  // The list screens grow as the admin scrolls to the bottom.
-  const listScreens: Record<string, { setVisibleRows: React.Dispatch<React.SetStateAction<number>>; totalRef: React.MutableRefObject<number> }> = {
-    staff: staffScreen, rooms: roomsScreen, therapies: therapiesScreen, timeoff: timeOffScreen, events: eventsScreen,
-  };
+  // Leave grows as the admin scrolls to the bottom; the other lists are short.
   useEffect(() => {
+    if (activeTab !== 'timeoff') return;
     const onScroll = () => {
-      const nearBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 24;
-      if (!nearBottom) return;
-      const batch = isMobile ? 20 : 40;
-      const list = listScreens[activeTab];
-      if (list) list.setVisibleRows((prev) => Math.min(prev + batch, list.totalRef.current));
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 24) timeOffScreen.setVisibleRows((prev) => Math.min(prev + 20, timeOffScreen.totalRef.current));
     };
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, isMobile]);
+  }, [activeTab]);
 
 
   const signOut = () => {
@@ -554,7 +542,7 @@ const AdminDashboard = () => {
       {/* Main Content */}
       {/* The phone design widened on a desktop, never a second layout (#67): one centred column. */}
       {/* No top padding: each screen's own header carries the design's 12–14px (#193). */}
-      <div className="mx-auto w-full max-w-4xl px-3 md:px-4 pb-3 md:pb-6">
+      <div className="mx-auto w-full max-w-xl px-3 pb-3">
         <Tabs value={activeTab} onValueChange={go} className="space-y-6 [&>[role=tabpanel]]:mt-0">
           {/* Swipe the day left and right, as the date sheet says (#67). */}
           <TabsContent value="schedule" className="space-y-6"
@@ -573,7 +561,7 @@ const AdminDashboard = () => {
                 <div className="px-4 pt-3 text-[13px] font-semibold uppercase tracking-[.05em] text-muted-foreground">Get started</div>
                 {/* Therapies first (#273 U1): a new trial has none, and nothing can be booked or given without them. */}
                 {([["therapies", "Add your therapies", therapies.length], ["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first patient", patients.length]] as const).map(([tab, label, n]) => (
-                  <button key={tab} type="button" className="flex min-h-14 w-full items-center gap-3 border-b border-border px-4 text-left last:border-b-0" onClick={() => { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); }}>
+                  <button key={tab} type="button" className="flex min-h-14 w-full items-center gap-3 border-b border-border px-4 text-left last:border-b-0" onClick={() => { if (tab === "rooms" || tab === "staff") { go("team"); (tab === "rooms" ? roomsScreen : staffScreen).openAdd(); } else { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); } }}>
                     <span className={n ? "text-primary" : "text-muted-foreground"}>{n ? "✓" : "○"}</span>
                     <span className="flex-1 text-[16px]">{label}</span><span className="text-muted-foreground">›</span>
                   </button>
@@ -593,20 +581,11 @@ const AdminDashboard = () => {
           </TabsContent>
 
           <TabsContent value="team" data-testid="tabpanel-team">
-            <TeamRooms staff={staff} rooms={roomsList} today={ymdInTZ(new Date())}
+            <TeamRooms staff={staff} rooms={roomsList} q={listQuery} today={ymdInTZ(new Date())}
               nowHM={new Date().toLocaleTimeString("en-GB", { timeZone: ADMIN_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}
               opening={centreHours.opening_time} closing={centreHours.closing_time}
-              refresh={() => refreshAppointmentsForDate(ymdInTZ(new Date()), true)} edit={go} />
-          </TabsContent>
-
-          {/* Staff Tab */}
-          <TabsContent value="staff" data-testid="tabpanel-staff">
-            {staffScreen.tab}
-          </TabsContent>
-
-          {/* Rooms Tab */}
-          <TabsContent value="rooms" data-testid="tabpanel-rooms">
-            {roomsScreen.tab}
+              refresh={() => refreshAppointmentsForDate(ymdInTZ(new Date()), true)}
+              openPerson={staffScreen.openEdit} openRoom={roomsScreen.openEdit} openScreen={go} />
           </TabsContent>
 
           {/* Therapies Tab */}
@@ -665,7 +644,9 @@ const AdminDashboard = () => {
         view={scheduleScreen.view}
         setView={scheduleScreen.setView}
         // One search: on Patients it filters that list, anywhere else it searches the day.
-        search={activeTab === 'patients'
+        search={['team', 'therapies', 'events'].includes(activeTab)
+          ? { query: listQuery, setQuery: setListQuery, on: listSearching, setOn: setListSearching, placeholder: activeTab === 'team' ? 'Search the team and rooms' : `Search ${activeTab}`, label: `Search ${activeTab === 'team' ? 'the team' : activeTab}`, start: () => setListSearching(true) }
+          : activeTab === 'patients'
           ? { query: patientsScreen.query, setQuery: patientsScreen.setQuery, on: patientsScreen.searching, setOn: patientsScreen.setSearching, placeholder: 'Search patients', label: 'Search patients', start: () => patientsScreen.setSearching(true) }
           : { query: scheduleScreen.query, setQuery: scheduleScreen.setQuery, on: scheduleScreen.searching, setOn: scheduleScreen.setSearching, placeholder: 'Name, therapy or room', label: 'Search treatments', start: () => { go('schedule'); scheduleScreen.setSearching(true); } }}
         // A patient with nothing booked is a rest day, not a note (#144).
@@ -733,8 +714,8 @@ const AdminDashboard = () => {
       {/* Choice +: Team can add several kinds of thing, so + asks which (#285). */}
       <BottomSheet open={showTeamChoice} onOpenChange={setShowTeamChoice} title="Add to the team" note="What are you adding?">
         <ListGroup>
-          {([['Therapist or doctor', 'Someone who gives treatments or consultations', 'staff', staffScreen.openAdd], ['Room', 'Where treatments happen', 'rooms', roomsScreen.openAdd], ['Therapy', 'A treatment the centre offers', 'therapies', therapiesScreen.openAdd]] as const).map(([name, note, to, add]) => (
-            <Row key={name} title={name} facts={note} trailing="›" onClick={() => { setShowTeamChoice(false); go(to); add(); }} />
+          {([['Therapist or doctor', 'Someone who gives treatments or consultations', staffScreen.openAdd], ['Room', 'Where treatments happen', roomsScreen.openAdd], ['Therapy', 'A treatment the centre offers', therapiesScreen.openAdd], ['Class or event', 'Yoga, meals, prayers: the centre\'s round', eventsScreen.openAdd]] as const).map(([name, note, add]) => (
+            <Row key={name} title={name} facts={note} trailing="›" onClick={() => { setShowTeamChoice(false); add(); }} />
           ))}
         </ListGroup>
       </BottomSheet>
@@ -745,32 +726,18 @@ const AdminDashboard = () => {
       {therapiesScreen.dialogs}
 
       {timeOffScreen.dialogs}
-      <Dialog open={!!confirmDelete} onOpenChange={(open) => !open && setConfirmDelete(null)}>
-        <DialogContent className="max-w-[92vw] sm:max-w-sm p-3">
-          <div className="space-y-2">
-            <div className="text-sm font-semibold">Confirm Delete</div>
-            {confirmDelete && (
-              <div className="text-xs text-muted-foreground">
-                <div>Type: {confirmDelete.kind}</div>
-                {confirmDelete.name ? <div>Name: {confirmDelete.name}</div> : null}
-                {typeof confirmDelete.counts?.appointments === 'number' ? (
-                  <div className="mt-1">Affected appointments to be deleted: {confirmDelete.counts.appointments}</div>
-                ) : null}
-                {confirmDelete.counts ? (
-                  <div className="mt-1">
-                    {Object.entries(confirmDelete.counts).filter(([k]) => k !== 'appointments').map(([k,v]) => (
-                      <div key={k}>{k}: {v}</div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            )}
-            <div className="flex items-center justify-end mt-2">
-              <Button variant="destructive" size="sm" className="h-7 px-2 text-xs" onClick={executeDelete}>Delete</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* What a delete takes with it, in words, before it happens (it cannot be undone). */}
+      <BottomSheet open={!!confirmDelete} onOpenChange={(open) => !open && setConfirmDelete(null)} title={confirmDelete ? `Delete ${confirmDelete.name || `this ${confirmDelete.kind}`}?` : ''}
+        note="This cannot be undone."
+        foot={<SheetFoot save={executeDelete} label="Delete" tone="destructive" />}>
+        {confirmDelete?.counts ? (
+          <Consequence>{[
+            confirmDelete.counts.appointments ? `${confirmDelete.counts.appointments} treatment${confirmDelete.counts.appointments === 1 ? '' : 's'} booked will go with it.` : '',
+            confirmDelete.counts.timeoff ? `${confirmDelete.counts.timeoff} leave entr${confirmDelete.counts.timeoff === 1 ? 'y' : 'ies'} will go too.` : '',
+            confirmDelete.counts.dietplans ? `${confirmDelete.counts.dietplans} diet plan${confirmDelete.counts.dietplans === 1 ? '' : 's'} will go too.` : '',
+          ].filter(Boolean).join(' ') || 'Nothing else depends on it.'}</Consequence>
+        ) : null}
+      </BottomSheet>
     </div>
   );
 };

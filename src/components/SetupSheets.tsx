@@ -1,39 +1,15 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Chips, Foot, Seg, Switch, field, lbl, say, wide } from "@/components/kit";
+import { useEffect, useState } from "react";
+import { Chips, Dropdown, Group, More, Seg, SheetFoot, Switch, Text, noteText, say, field } from "@/components/kit";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
-import PageHead from "@/components/PageHead";
 import type { UiRoom, UiStaff, UiTherapy } from "@/pages/tabs/shared";
 
 /**
- * Therapists, rooms and therapies as the phone design's lists (#273 H1): a page
- * header, plain rows, and one bottom sheet to add or change an entry, with only
- * the fields a centre fills. Replaces the old desktop tables and dialogs.
+ * One sheet each to add or change a therapist, a room or a therapy (#285 session 6):
+ * the fields a centre fills first, the rest under "More details". Opened from the
+ * Team screen's rows, the Therapies list and the choice +.
  */
-
-export function SetupPage({ title, note, extra, search, setSearch, placeholder, children }: {
-  title: string; note?: ReactNode; extra?: ReactNode; search: string; setSearch: (s: string) => void; placeholder: string; children: ReactNode;
-}) {
-  return (
-    <div className="pb-28">
-      <PageHead title={title} note={note} />
-      {extra ? <div className="mb-2 flex gap-2">{extra}</div> : null}
-      <input className={`${field} mb-2 rounded-full`} placeholder={placeholder} aria-label={placeholder} value={search} onChange={(e) => setSearch(e.target.value)} />
-      <div className="overflow-hidden rounded-2xl bg-card">{children}</div>
-    </div>
-  );
-}
-
-export const Row = ({ name, sub, onClick, dim }: { name: string; sub: string; onClick: () => void; dim?: boolean }) => (
-  <button type="button" onClick={onClick} className="flex min-h-[58px] w-full items-center gap-2 border-b px-3 py-2 text-left last:border-b-0 active:bg-secondary">
-    <span className="min-w-0 flex-1">
-      <span className={`block font-semibold ${dim ? "text-muted-foreground" : ""}`}>{name}</span>
-      <span className="block truncate text-[13px] text-muted-foreground">{sub}</span>
-    </span>
-    <span className="text-muted-foreground">›</span>
-  </button>
-);
 
 async function send(path: string, method: string, body: unknown) {
   const r = await fetch(`${API_BASE}${path}`, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -61,13 +37,12 @@ export function RoomSheet({ room, open, onClose, amenityOptions, onSaved, remove
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
   return (
-    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={room ? room.name : "Add room"}>
-      <label className={lbl} htmlFor="room-name">Name</label>
-      <input id="room-name" className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Room 4 or Dhanvantari" />
-      <span className={lbl}>What it has</span>
-      <p className="-mt-1 mb-2 text-[13px] text-muted-foreground">A therapy that needs something is only booked into a room that has it. Untick what this room does not have.</p>
-      <Chips options={amenityOptions} value={has} onChange={setHas} addLabel="Something else…" />
-      <Foot busy={busy} ok={!!name.trim()} save={save} remove={room ? () => { onClose(); remove(room); } : undefined} />
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={room ? room.name : "Add room"} note={room ? "Change anything, then save." : "Give it a name and tick what it has."}
+      foot={<SheetFoot busy={busy} ok={!!name.trim()} save={save} label={room ? "Save the room" : "Add the room"} remove={room ? () => { onClose(); remove(room); } : undefined} removeLabel="Delete this room" />}>
+      <Text label="Name" id="room-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Room 4 or Dhanvantari" />
+      <Group label="What it has" note="A therapy that needs something is only booked into a room that has it.">
+        <Chips options={amenityOptions} value={has} onChange={setHas} addLabel="Something else…" />
+      </Group>
     </BottomSheet>
   );
 }
@@ -99,21 +74,17 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove 
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
   return (
-    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={person ? person.name : "Add therapist or doctor"}>
-      <label className={lbl} htmlFor="person-name">Name</label>
-      <input id="person-name" className={field} value={name} onChange={(e) => setName(e.target.value)} />
-      <span className={lbl}>Role</span>
-      <Seg options={[["therapist", "Therapist"], ["doctor", "Doctor"]]} value={role} onChange={setRole} />
-      <span className={lbl}>Gender</span>
-      <p className="-mt-1 mb-2 text-[13px] text-muted-foreground">Used when a therapy needs a therapist of the patient's gender.</p>
-      <Seg options={[["Female", "Female"], ["Male", "Male"]]} value={gender} onChange={setGender} />
-      {role === "therapist" ? (<>
-        <span className={lbl}>Therapies they give</span>
-        {therapies.length ? <Chips options={therapies.map((t) => t.name)} value={gives} onChange={setGives} /> : <p className="text-sm text-muted-foreground">Add therapies first, then tick the ones they give.</p>}
-      </>) : null}
-      <label className={lbl} htmlFor="person-phone">Phone (optional)</label>
-      <input id="person-phone" className={field} type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
-      <Foot busy={busy} ok={!!name.trim()} save={save} remove={person ? () => { onClose(); remove(person); } : undefined} />
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={person ? person.name : "Add therapist or doctor"} note={person ? "Change anything, then save." : "Name, role and gender are needed. The rest can wait."}
+      foot={<SheetFoot busy={busy} ok={!!name.trim()} save={save} label={person ? "Save" : `Add ${name.trim() || "them"}`} remove={person ? () => { onClose(); remove(person); } : undefined} removeLabel="Delete this person" />}>
+      <Text label="Name" id="person-name" value={name} onChange={(e) => setName(e.target.value)} />
+      <Group label="Role"><Seg<"therapist" | "doctor"> options={[["therapist", "Therapist"], ["doctor", "Doctor"]]} value={role} onChange={setRole} /></Group>
+      <Group label="Gender" note="Used when a therapy needs a therapist of the patient's gender."><Seg<"Female" | "Male"> options={[["Female", "Female"], ["Male", "Male"]]} value={gender} onChange={setGender} /></Group>
+      {role === "therapist" ? (
+        <Group label="Therapies they give (optional)">
+          {therapies.length ? <Chips options={therapies.map((t) => t.name)} value={gives} onChange={setGives} /> : <p className={noteText}>Add therapies first, then tick the ones they give.</p>}
+        </Group>
+      ) : null}
+      <Text label="Phone (optional)" id="person-phone" type="tel" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} />
     </BottomSheet>
   );
 }
@@ -144,30 +115,31 @@ export function TherapySheet({ therapy, open, onClose, amenityOptions, onSaved, 
   };
   const vitalNames = VITALS.map(([, l]) => l);
   return (
-    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={therapy ? therapy.name : "Add therapy"}>
-      <label className={lbl} htmlFor="therapy-name">Name</label>
-      <input id="therapy-name" className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Abhyanga" />
-      <span className={lbl}>How long</span>
-      <Seg options={[...new Set([20, 30, 45, 60, 75, 90, mins])].sort((a, b) => a - b).map((m) => [m, `${m}`] as [number, string])} value={mins} onChange={setMins} />
-      <p className="mt-1 text-[13px] text-muted-foreground">minutes</p>
-      <span className={lbl}>Therapists needed</span>
-      <Seg options={[[1, "1"], [2, "2"], [3, "3"]]} value={staff} onChange={setStaff} />
-      <span className={lbl}>What the room needs</span>
-      <Chips options={amenityOptions} value={needs} onChange={setNeeds} addLabel="Something else…" />
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={therapy ? therapy.name : "Add therapy"} note={therapy ? "Change anything, then save." : "Name and length are needed. The rest can wait."}
+      foot={<SheetFoot busy={busy} ok={!!name.trim() && mins > 0} save={save} label={therapy ? "Save the therapy" : "Add the therapy"} remove={therapy ? () => { onClose(); remove(therapy); } : undefined} removeLabel="Delete this therapy" />}>
+      <Text label="Name" id="therapy-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Abhyanga" />
+      <Dropdown label="How long" value={String(mins)} onChange={(e) => setMins(Number(e.target.value))}>
+        {[...new Set([15, 20, 30, 45, 60, 75, 90, 105, 120, mins])].sort((a, b) => a - b).map((m) => <option key={m} value={m}>{m} minutes</option>)}
+      </Dropdown>
+      <Group label="Therapists needed"><Seg<number> options={[[1, "1"], [2, "2"], [3, "3"]]} value={staff} onChange={setStaff} /></Group>
+      <Group label="What the room needs (optional)"><Chips options={amenityOptions} value={needs} onChange={setNeeds} addLabel="Something else…" /></Group>
       <Switch label="Therapist of the patient's gender" on={same} set={setSame} />
-      <span className={lbl}>Readings the therapist takes</span>
-      <Chips options={vitalNames} value={vitals.map((k) => VITALS.find(([v]) => v === k)?.[1] || k)} onChange={(v) => setVitals(v.map((l) => VITALS.find(([, x]) => x === l)?.[0] || l))} />
-      <span className={lbl}>Checks the therapist ticks</span>
-      <div className="grid gap-2">
-        {checks.map((c, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <input className={`${field} flex-1`} aria-label="Check" value={c.text} onChange={(e) => setChecks(checks.map((x, j) => j === i ? { ...x, text: e.target.value } : x))} />
-            <button type="button" aria-label="Remove check" className="h-11 w-11 rounded-full text-muted-foreground" onClick={() => setChecks(checks.filter((_, j) => j !== i))}>✕</button>
+      <More hint="readings, checks (optional)">
+        <Group label="Readings the therapist takes">
+          <Chips options={vitalNames} value={vitals.map((k) => VITALS.find(([v]) => v === k)?.[1] || k)} onChange={(v) => setVitals(v.map((l) => VITALS.find(([, x]) => x === l)?.[0] || l))} />
+        </Group>
+        <Group label="Checks the therapist ticks">
+          <div className="grid gap-2">
+            {checks.map((c, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input className={`${field} flex-1`} aria-label="Check" value={c.text} onChange={(e) => setChecks(checks.map((x, j) => j === i ? { ...x, text: e.target.value } : x))} />
+                <button type="button" aria-label="Remove check" className="h-11 w-11 flex-none rounded-full text-muted-foreground" onClick={() => setChecks(checks.filter((_, j) => j !== i))}>✕</button>
+              </div>
+            ))}
+            <button type="button" className="min-h-11 text-sm font-semibold text-primary" onClick={() => setChecks([...checks, { text: "", required: false }])}>Add a check</button>
           </div>
-        ))}
-        <button type="button" className={`${wide} border`} onClick={() => setChecks([...checks, { text: "", required: false }])}>Add a check</button>
-      </div>
-      <Foot busy={busy} ok={!!name.trim() && mins > 0} save={save} remove={therapy ? () => { onClose(); remove(therapy); } : undefined} />
+        </Group>
+      </More>
     </BottomSheet>
   );
 }

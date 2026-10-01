@@ -38,10 +38,10 @@ async function showDay(page: Page, day: string) {
 /** Screens are reached from the bottom bar's menu (#66). A tap while the last screen is still loading can be lost, so retry. */
 async function openTab(page: Page, name: string) {
   // The editors for the lists open from Team and rooms, not the menu (#137).
-  const fromTeam: Record<string, string> = { Therapists: 'Therapists', Rooms: 'Rooms', Therapies: 'Therapies', Events: 'Classes and events' };
+  const fromTeam: Record<string, RegExp> = { Therapies: /^Therapies/, Events: /^Classes and events/ };
   if (fromTeam[name]) {
     await openTab(page, 'Team and rooms');
-    await activePanel(page).getByRole('button', { name: fromTeam[name], exact: true }).click();
+    await activePanel(page).getByRole('button', { name: fromTeam[name] }).click();
     return;
   }
   await expect(async () => {
@@ -66,9 +66,7 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
   await signIn(page);
   await passSetupIfShown(page);
   for (const [tab, text] of [
-    ['Team and rooms', 'Working today'],
-    ['Therapists', 'Therapists and doctors'],
-    ['Rooms', 'Rooms'],
+    ['Team and rooms', 'Therapists and doctors'],
     ['Therapies', 'Therapies'],
     ['Diet plans', 'Plans'],
     ['Leave', 'Upcoming'],
@@ -118,15 +116,16 @@ test('day sheet PDF prints for today', async ({ page, request }) => {
 test('an edit to a room is still there after a reload', async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  await openTab(page, 'Rooms');
+  await openTab(page, 'Team and rooms');
   // A centre edits its own data on day one, and an edit that looks saved but is
   // not is the failure nobody notices until the schedule is already wrong.
   // Each room is a row; a tap opens its sheet (#273).
   const rows = activePanel(page).getByRole('button', { name: /Has |Nothing special/ });
   const rename = async (from: string, to: string) => {
     await activePanel(page).getByRole('button', { name: new RegExp(`^${from}`) }).first().click();
+    await page.getByRole('dialog').getByRole('button', { name: /^Details/ }).click();
     await page.getByRole('dialog').getByLabel('Name').fill(to);
-    await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Save the room' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
   };
 
@@ -137,7 +136,7 @@ test('an edit to a room is still there after a reload', async ({ page }) => {
 
   await page.reload();
   await passSetupIfShown(page);
-  await openTab(page, 'Rooms');
+  await openTab(page, 'Team and rooms');
   await expect(activePanel(page)).toContainText(edited, { timeout: 15000 });
 
   // Put the name back, so the day sheet and the next run see the centre as it was.
@@ -406,7 +405,7 @@ test('Therapies offers the standard library, and a seeded centre already has all
   await signIn(page);
   await passSetupIfShown(page);
   await openTab(page, 'Therapies');
-  await activePanel(page).getByRole('button', { name: 'From library' }).click();
+  await activePanel(page).getByRole('button', { name: /Standard therapies/ }).click();
   await expect(page.getByRole('dialog').getByText('You already have every therapy in the library.')).toBeVisible({ timeout: 15000 });
 });
 
@@ -414,7 +413,7 @@ test('leave for a day ahead is marked from Team, and a whole day carries no hour
   await signIn(page);
   await passSetupIfShown(page);
   await openTab(page, 'Team and rooms');
-  await activePanel(page).getByRole('button', { name: /Working today|Not in today/ }).first().click();
+  await activePanel(page).getByRole('button', { name: /\b(Therapist|Doctor)\b/ }).first().click();
   const sheet = page.getByRole('dialog');
   await sheet.getByRole('button', { name: 'Away another day' }).click();
   // A fixed day far ahead, so the demo's own days are never touched.
@@ -517,15 +516,15 @@ test('an event is added, edited and deleted from one labelled sheet (#227)', asy
   await passSetupIfShown(page);
   await openTab(page, 'Events');
   const name = `E2E Walk ${Date.now()}`;
-  await activePanel(page).getByRole('button', { name: 'Add event' }).click();
+  await page.getByRole('button', { name: 'Add event' }).click();
   const sheet = page.getByRole('dialog').last();
   await sheet.getByLabel('Name', { exact: true }).fill(name);
-  await sheet.getByLabel('From', { exact: true }).fill('06:00');
-  await sheet.getByLabel('To', { exact: true }).fill('06:30');
+  await sheet.getByLabel(/^From/).selectOption('06:00');
+  await sheet.getByLabel(/^To/).selectOption('06:30');
   await sheet.getByRole('button', { name: 'Some days' }).click();
   await sheet.getByRole('button', { name: 'sunday' }).click();
   await sheet.getByRole('button', { name: 'Optional' }).click();
-  await sheet.getByRole('button', { name: 'Add', exact: true }).click();
+  await sheet.getByRole('button', { name: 'Add the event' }).click();
   const row = activePanel(page).getByRole('button', { name: new RegExp(name) });
   await expect(row).toContainText('Sun');
   await expect(row).toContainText('optional');
@@ -534,8 +533,8 @@ test('an event is added, edited and deleted from one labelled sheet (#227)', asy
   const edit = page.getByRole('dialog').last();
   await expect(edit.getByLabel('Name', { exact: true })).toHaveValue(name);
   expect(await edit.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-  await edit.getByLabel('To', { exact: true }).fill('06:45');
-  await edit.getByRole('button', { name: 'Save' }).click();
+  await edit.getByLabel(/^To/).selectOption('06:45');
+  await edit.getByRole('button', { name: 'Save the event' }).click();
   await expect(row).toContainText('06:00–06:45');
   await row.click();
   await page.getByRole('dialog').last().getByRole('button', { name: 'Delete' }).click();
@@ -554,8 +553,8 @@ test('editing an event in the sheet keeps the dates it runs between (#227)', asy
     await passSetupIfShown(page);
     await openTab(page, 'Events');
     await activePanel(page).getByRole('button', { name: new RegExp(name) }).click();
-    await page.getByRole('dialog').last().getByLabel('To', { exact: true }).fill('05:45');
-    await page.getByRole('dialog').last().getByRole('button', { name: 'Save' }).click();
+    await page.getByRole('dialog').last().getByLabel(/^To/).selectOption('05:45');
+    await page.getByRole('dialog').last().getByRole('button', { name: 'Save the event' }).click();
     await expect(activePanel(page).getByRole('button', { name: new RegExp(name) })).toContainText('05:00–05:45');
     const ev = ((await (await request.get('/api/program-events', { headers })).json()) as { id: string; start_date: string; end_date: string }[]).find((e) => e.id === id)!;
     expect(ev.start_date.slice(0, 10)).toBe('2030-01-01');

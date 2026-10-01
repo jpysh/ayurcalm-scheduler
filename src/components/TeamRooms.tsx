@@ -1,32 +1,39 @@
 /**
- * Team and rooms (#137, docs/design/phone.html): who is working today and
- * which rooms there are, and the one thing each is asked most: a therapist not
- * in, in late or leaving early; a room out of use. Each is time off from now,
- * the same as the day's headings, so the server moves what it touches at once,
- * and Undo removes it.
+ * Team and rooms (#137, docs/design/phone.html; rebuilt from the kit in #285 session 6):
+ * who is working today and which rooms there are, and the one thing each is asked
+ * most: a therapist not in, in late or leaving early; a room out of use. Each is
+ * time off from now, the same as the day's headings, so the server moves what it
+ * touches at once, and Undo removes it. Details and therapies are one more row on
+ * the same sheet, so editing is a tap on the thing itself.
  */
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { BottomSheet } from "@/components/BottomBar";
 import { API_BASE } from "@/lib/apiBase";
 import PageHead from "@/components/PageHead";
+import { BottomSheet } from "@/components/BottomBar";
 import { shareLink } from "@/lib/shareLink";
+import { ChangeLine, DateRow, Empty, ListGroup, Row, SheetFoot, TimeList, timesBetween } from "@/components/kit";
+import { roomSub } from "@/components/SetupSheets";
+import type { UiRoom, UiStaff } from "@/pages/tabs/shared";
 
-type Named = { id: string | number; name: string; is_active?: boolean; status?: string };
 type Pick = { kind: "staff" | "room"; id: string; name: string } | null;
 type Late = "late" | "early" | "away" | null;
 
-export function TeamRooms({ staff, rooms, today, nowHM, opening, closing, refresh, edit }: {
-  staff: Named[];
-  rooms: Named[];
+export function TeamRooms({ staff, rooms, q, today, nowHM, opening, closing, refresh, openPerson, openRoom, openScreen }: {
+  staff: UiStaff[];
+  rooms: UiRoom[];
+  /** The bar's search: filters both lists. */
+  q: string;
   /** YYYY-MM-DD and "14:35", on the centre's clock. */
   today: string;
   nowHM: string;
   opening: string;
   closing: string;
   refresh: () => Promise<void>;
-  /** The full editors, for adding and changing therapists, rooms, therapies and events. */
-  edit: (screen: "staff" | "rooms" | "therapies" | "events") => void;
+  /** The details sheets, for changing a therapist or a room. */
+  openPerson: (id: string) => void;
+  openRoom: (id: string) => void;
+  openScreen: (screen: "therapies" | "events") => void;
 }) {
   const [offToday, setOffToday] = useState<Record<string, string | null>>({});
   const [week, setWeek] = useState<Week | null>(null);
@@ -48,9 +55,16 @@ export function TeamRooms({ staff, rooms, today, nowHM, opening, closing, refres
     fetch(`${API_BASE}/staff-week?start=${monday}`).then((r) => (r.ok ? r.json() : null)).then(setWeek).catch(() => setWeek(null));
   }, [today]);
 
-  const active = (x: Named) => x.is_active !== false && x.status !== "Inactive";
-  const team = staff.filter(active).sort((a, b) => a.name.localeCompare(b.name));
-  const notIn = team.filter((s) => offToday[String(s.id)]);
+  const ql = q.trim().toLowerCase();
+  const staffActive = (s: UiStaff) => s.status === "Active";
+  const roomActive = (r: UiRoom) => r.status === "Active";
+  const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { numeric: true });
+  const match = (n: string) => !ql || n.toLowerCase().includes(ql);
+  const team = staff.filter((s) => staffActive(s) && match(s.name)).sort(byName);
+  const notIn = staff.filter((s) => staffActive(s) && offToday[String(s.id)]);
+  const roomRows = rooms.filter((r) => roomActive(r) && match(r.name)).sort(byName);
+  const idle = [...staff.filter((s) => !staffActive(s) && match(s.name)).map((s) => ({ kind: "staff" as const, id: String(s.id), name: s.name, facts: "Not working here now" })),
+    ...rooms.filter((r) => !roomActive(r) && match(r.name)).map((r) => ({ kind: "room" as const, id: String(r.id), name: r.name, facts: "Out of use" }))].sort(byName);
 
   /** Time off between from and until; null means the edge of the day. Days default to today. */
   async function takeOut(kind: "staff" | "room", id: string, name: string, from: string | null, until: string | null, what: string, days = { start: today, end: today }) {
@@ -71,87 +85,72 @@ export function TeamRooms({ staff, rooms, today, nowHM, opening, closing, refres
     });
   }
 
-  const row = (key: string, name: string, sub: React.ReactNode, onClick: () => void) => (
-    <button key={key} type="button" onClick={onClick} className="flex w-full min-h-[54px] flex-col justify-center border-b border-border px-3 py-2 text-left last:border-b-0">
-      <span className="text-[16px] font-semibold">{name}</span>
-      {sub ? <span className="text-[13px] text-muted-foreground">{sub}</span> : null}
-    </button>
-  );
-  const label = "mx-1 mb-1.5 mt-3.5 text-xs font-semibold uppercase tracking-[.05em] text-muted-foreground";
-  const btn = "min-h-11 w-full rounded-full px-4 font-semibold";
+  const times = timesBetween(opening, closing, 15);
+  const from = nowHM > opening ? nowHM : null;
+  const close = () => { setPick(null); setLate(null); };
+  const none = !team.length && !roomRows.length && !idle.length;
 
   return (
     <div>
-      <PageHead title="Team and rooms" note={`${team.length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}`} />
-      {/* Always there, so the list does not move under a tap when the week arrives. */}
-      <div className="mb-3 overflow-hidden rounded-2xl bg-card">
-        {row("week", "This week", week ? weekLine(week) : "…", () => week && setShowWeek(true))}
-      </div>
-      <div className="overflow-hidden rounded-2xl bg-card">
-        {team.map((s) => row(String(s.id), s.name,
-          offToday[String(s.id)] ? <span className="text-destructive">Not in today</span> : "Working today",
-          () => setPick({ kind: "staff", id: String(s.id), name: s.name })))}
-      </div>
-      <div className={label}>Rooms</div>
-      <div className="overflow-hidden rounded-2xl bg-card">
-        {rooms.filter(active).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-          .map((r) => row(String(r.id), r.name, null, () => setPick({ kind: "room", id: String(r.id), name: r.name })))}
-      </div>
-      <div className={label}>Change the lists</div>
-      <div className="overflow-hidden rounded-2xl bg-card">
-        {([["staff", "Therapists"], ["rooms", "Rooms"], ["therapies", "Therapies"], ["events", "Classes and events"]] as const)
-          .map(([k, t]) => row(k, t, null, () => edit(k)))}
-      </div>
+      <PageHead title="Team and rooms" note={`${staff.filter(staffActive).length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}`} />
+      {/* Always there, so the lists do not move under a tap when the week arrives. */}
+      <ListGroup><Row title="This week" facts={week ? weekLine(week) : "…"} trailing="›" onClick={week ? () => setShowWeek(true) : undefined} /></ListGroup>
+      {none ? <Empty text="No one or no room matches." /> : null}
+      {team.length ? (
+        <ListGroup title="Therapists and doctors" count={team.length}>
+          {team.map((s) => (
+            <Row key={s.id} title={s.name} facts={s.role === "doctor" ? "Doctor" : "Therapist"} flag={offToday[String(s.id)] ? "Not in today" : undefined} trailing="›"
+              onClick={() => setPick({ kind: "staff", id: String(s.id), name: s.name })} />
+          ))}
+        </ListGroup>
+      ) : null}
+      {roomRows.length ? (
+        <ListGroup title="Rooms" count={roomRows.length}>
+          {roomRows.map((r) => <Row key={r.id} title={r.name} facts={roomSub(r)} trailing="›" onClick={() => setPick({ kind: "room", id: String(r.id), name: r.name })} />)}
+        </ListGroup>
+      ) : null}
+      {idle.length ? (
+        <ListGroup title="Not in use" count={idle.length}>
+          {idle.map((x) => <Row key={`${x.kind}${x.id}`} title={x.name} facts={x.facts} trailing="›" onClick={() => (x.kind === "staff" ? openPerson(x.id) : openRoom(x.id))} />)}
+        </ListGroup>
+      ) : null}
+      <ListGroup title="The centre's lists">
+        <div className="px-3">
+          <ChangeLine label="Therapies" value="What the centre offers" onClick={() => openScreen("therapies")} />
+          <ChangeLine label="Classes and events" value="The daily round" onClick={() => openScreen("events")} />
+        </div>
+      </ListGroup>
 
       <BottomSheet open={showWeek} onOpenChange={setShowWeek} title="This week">
         {week ? <WeekList week={week} /> : null}
       </BottomSheet>
 
-      <BottomSheet open={!!pick} onOpenChange={(o) => { if (!o) { setPick(null); setLate(null); } }} title={pick?.name || ""}>
+      <BottomSheet open={!!pick} onOpenChange={(o) => { if (!o) close(); }} title={pick?.name || ""}
+        note={pick?.kind === "room" ? "What would you like to do with this room?" : late === null ? "What changes for them today?" : late === "away" ? "Which days are they away?" : late === "late" ? "When do they start?" : "When do they leave?"}
+        foot={pick && late === "away" ? <SheetFoot ok={!!at && !!until && until >= at} save={() => takeOut("staff", pick.id, pick.name, null, null, "Leave", { start: at, end: until })} label="Mark leave, move what they miss" />
+          : pick && late ? <SheetFoot ok={!!at} save={() => (late === "late" ? takeOut("staff", pick.id, pick.name, opening, at, `In late, at ${at}`) : takeOut("staff", pick.id, pick.name, at, closing, `Leaving early, at ${at}`))} label="Move what they miss" /> : undefined}>
         {pick?.kind === "room" ? (
-          <button type="button" className={`${btn} border-[1.5px] border-destructive text-destructive`}
-            onClick={() => takeOut("room", pick.id, pick.name, nowHM > opening ? nowHM : null, null, "Out of use from now")}>Out of use from now</button>
+          <ListGroup>
+            <Row title="Out of use from now" facts="Moves what is booked in it" trailing="›" onClick={() => takeOut("room", pick.id, pick.name, from, null, "Out of use from now")} />
+            <Row title="Details" facts="Name and what it has" trailing="›" onClick={() => { close(); openRoom(pick.id); }} />
+          </ListGroup>
         ) : pick && late === null ? (
-          <div className="grid gap-2">
-            <button type="button" className={`${btn} border-[1.5px] border-destructive text-destructive`}
-              onClick={() => takeOut("staff", pick.id, pick.name, nowHM > opening ? nowHM : null, null, "Not in from now")}>Not in from now</button>
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" className={`${btn} border-[1.5px] border-border bg-card`} onClick={() => { setLate("late"); setAt(nowHM > opening ? nowHM : opening); }}>In late</button>
-              <button type="button" className={`${btn} border-[1.5px] border-border bg-card`} onClick={() => { setLate("early"); setAt(closing); }}>Leaving early</button>
-            </div>
-            <button type="button" className={`${btn} border-[1.5px] border-border bg-card`} onClick={() => { const t = nextDay(today); setLate("away"); setAt(t); setUntil(t); }}>Away another day</button>
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" className={`${btn} border-[1.5px] border-border bg-card`} onClick={() => shareLink("staff", pick.id, pick.name)}>Share their link</button>
-              <button type="button" className={`${btn} text-muted-foreground`} onClick={() => shareLink("staff", pick.id, pick.name, true)}>New link</button>
-            </div>
-          </div>
+          <ListGroup>
+            <Row title="Not in from now" facts="Moves what they miss" trailing="›" onClick={() => takeOut("staff", pick.id, pick.name, from, null, "Not in from now")} />
+            <Row title="In late" facts="Choose the time they start" trailing="›" onClick={() => { setLate("late"); setAt(nowHM > opening ? nowHM : opening); }} />
+            <Row title="Leaving early" facts="Choose the time they leave" trailing="›" onClick={() => { setLate("early"); setAt(closing); }} />
+            <Row title="Away another day" facts="Choose the days" trailing="›" onClick={() => { const t = nextDay(today); setLate("away"); setAt(t); setUntil(t); }} />
+            <Row title="Share their link" facts="Their day on their own phone" trailing="›" onClick={() => shareLink("staff", pick.id, pick.name)} />
+            <Row title="Make a new link" facts="The old one stops working" trailing="›" onClick={() => shareLink("staff", pick.id, pick.name, true)} />
+            <Row title="Details and therapies" facts="Name, role, gender, phone" trailing="›" onClick={() => { close(); openPerson(pick.id); }} />
+          </ListGroup>
         ) : pick && late === "away" ? (
-          <div className="grid gap-2">
-            <div className="grid grid-cols-2 gap-2">
-              <label className="grid gap-1 text-[13px] text-muted-foreground">From
-                <input type="date" className="min-h-11 rounded-xl border-[1.5px] border-border bg-card px-3 text-base text-foreground" min={today} value={at} onChange={(e) => { setAt(e.target.value); if (until < e.target.value) setUntil(e.target.value); }} />
-              </label>
-              <label className="grid gap-1 text-[13px] text-muted-foreground">To
-                <input type="date" className="min-h-11 rounded-xl border-[1.5px] border-border bg-card px-3 text-base text-foreground" min={at} value={until} onChange={(e) => setUntil(e.target.value)} />
-              </label>
-            </div>
-            <button type="button" className={`${btn} bg-primary text-primary-foreground`} disabled={!at || !until || until < at}
-              onClick={() => takeOut("staff", pick.id, pick.name, null, null, "Leave", { start: at, end: until })}>
-              Mark leave, move what they miss
-            </button>
+          <div className="grid grid-cols-2 gap-3">
+            <DateRow label="From" value={at} min={today} onChange={(d) => { setAt(d); if (until < d) setUntil(d); }} />
+            <DateRow label="To" value={until} min={at} onChange={setUntil} />
           </div>
         ) : pick ? (
-          <div className="grid gap-2">
-            <label className="grid gap-1 text-[13px] text-muted-foreground">{late === "late" ? "In at" : "Leaving at"}
-              <input type="time" className="min-h-11 rounded-xl border-[1.5px] border-border bg-card px-3 text-base text-foreground" value={at} onChange={(e) => setAt(e.target.value)} />
-            </label>
-            <button type="button" className={`${btn} bg-primary text-primary-foreground`} disabled={!at}
-              onClick={() => (late === "late"
-                ? takeOut("staff", pick.id, pick.name, opening, at, `In late, at ${at}`)
-                : takeOut("staff", pick.id, pick.name, at, closing, `Leaving early, at ${at}`))}>
-              Move what they miss
-            </button>
-          </div>
+          <TimeList label={late === "late" ? "In at" : "Leaving at"} times={times} value={at} onChange={setAt} />
         ) : null}
       </BottomSheet>
     </div>
@@ -172,16 +171,16 @@ const weekLine = (w: Week) => {
 /** One line a person: their seven days and how full their week is. */
 function WeekList({ week }: { week: Week }) {
   const letter = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "narrow", timeZone: "UTC" });
-  const look = { in: "bg-primary/15 text-foreground", part: "bg-amber-200 text-amber-900", away: "bg-destructive/15 text-destructive line-through", off: "text-muted-foreground/60" };
+  const look = { in: "bg-primary/15 text-foreground", part: "border border-primary/50", away: "bg-destructive/15 text-destructive line-through", off: "text-muted-foreground/60" };
   return (
     <div className="-mt-1 max-h-[70dvh] overflow-y-auto">
-      <p className="mb-2 text-[13px] text-muted-foreground">Week of {new Date(`${week.start}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}. Shaded: in. Amber: part of the day. Red: away.</p>
+      <p className="mb-2 text-[13px] text-muted-foreground">Week of {new Date(`${week.start}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}. Shaded: in. Outlined: part of the day. Struck through: away.</p>
       <div className="overflow-hidden rounded-xl border">
         {week.rows.map((r) => (
           <div key={r.id} className="flex min-h-[54px] items-center gap-2 border-b border-border px-3 py-2 last:border-b-0">
             <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{r.name}</span>
             <span className="flex gap-0.5" aria-label={r.week.map((s, i) => `${letter(week.days[i])} ${s}`).join(", ")}>
-              {r.week.map((s, i) => <span key={i} className={`grid h-6 w-5 place-items-center rounded text-[11px] font-semibold ${look[s]}`}>{letter(week.days[i])}</span>)}
+              {r.week.map((s, i) => <span key={i} className={`grid h-6 w-5 place-items-center rounded text-xs font-semibold ${look[s]}`}>{letter(week.days[i])}</span>)}
             </span>
             <span className="w-16 text-right text-[13px] tabular-nums text-muted-foreground">{hrs(r.booked)}/{hrs(r.capacity)}</span>
           </div>

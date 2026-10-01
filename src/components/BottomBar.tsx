@@ -19,8 +19,6 @@ export const SCREENS = [
   ["settings", "Settings", "Centre, users, AI"],
   ["schedule", "Back to the day", "The list"],
   // Reached from Team and rooms, not the menu (#137).
-  ["staff", "Therapists", ""],
-  ["rooms", "Rooms", ""],
   ["therapies", "Therapies", ""],
   ["events", "Events", ""],
   ["log", "Log", ""],
