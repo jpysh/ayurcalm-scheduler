@@ -78,7 +78,7 @@ test('Help · WhatsApp sits after Settings in the menu, only with a number', asy
     await set('420777558262');
     await signIn(page);
     await page.getByRole('button', { name: 'Menu', exact: true }).click();
-    const tiles = page.getByRole('dialog').locator('.grid-cols-2 > *');
+    const tiles = page.getByRole('dialog').locator('section').locator('a, button');
     await expect(page.getByRole('link', { name: /^Help · WhatsApp/ })).toBeVisible();
     const names = await tiles.allInnerTexts();
     const at = names.findIndex((t) => t.startsWith('Settings'));

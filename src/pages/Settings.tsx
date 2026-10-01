@@ -1,63 +1,36 @@
-import { PRODUCT, PLANS, SALES_WHATSAPP } from "../../server/src/product";
-import { Days, Dropdown, Foot, Group, Seg, SheetNote, Switch, TimeList, timesBetween } from "@/components/kit";
-import { TIMEZONES } from "@/pages/SetupWizard";
-import { useTrial } from "@/lib/centreName";
-import { useEffect, useState, type ReactNode } from "react";
-import { confirmSheet } from "@/components/ConfirmSheet";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
+/**
+ * Settings, the front door (#285 session 7, #288): groups of rows that say their
+ * own state, and one sheet each. The setup card above them counts what the admin
+ * has looked at; everything works on the defaults from minute one, so nothing
+ * here blocks.
+ */
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
-import { UsersSection, ChangePasswordCard } from "@/components/UsersSection";
+import { useTrial } from "@/lib/centreName";
+import { TIMEZONES } from "@/pages/SetupWizard";
 import { AssistantSection } from "@/components/AssistantSection";
 import { AccommodationEditor, PackagesEditor } from "@/components/Catalogues";
-import { BottomSheet } from "@/components/BottomBar";
+import { BackupsSheet, HelpSheet, PrintedSheet, ago, type Backups } from "@/components/SettingsMore";
+import { ChangePasswordCard, UsersSection } from "@/components/UsersSection";
 import PageHead from "@/components/PageHead";
+import type { Attention } from "@/lib/attention";
+import {
+  Area, BottomSheet, ChecklistBar, Days, Dropdown, Group, ListGroup, PickPhoto, Row, Seg, SectionHead, SheetFoot, Switch, Text, TimeList, WEEK, noteText, timesBetween, wide,
+} from "@/components/kit";
 
 const DAY_TIMES = timesBetween("00:00", "23:30", 30);
 const SLOT_OPTIONS = [15, 20, 30, 60];
 const MAX_LOGO_BYTES = 500 * 1024;
-const KEEPS: [string, string][] = [["therapies", "Therapies"], ["rooms", "Rooms"], ["team", "Therapists, doctors and their leave"], ["events", "Classes, events and holidays"]];
 
-type Settings = {
-  centre_name: string;
-  address: string | null;
-  timezone: string;
-  opening_time: string;
-  closing_time: string;
-  slot_minutes: number;
-  working_days: string[];
-  logo: string | null;
-  demo_data: boolean;
-  support_whatsapp: string | null;
-  patient_support_whatsapp: string | null;
-  setup_complete: boolean;
-  enforce_gender_match: boolean;
-  letterhead: Letterhead | null;
-  plan: string | null;
-  show_footer: boolean;
-};
-/** A photo picker as a button (#265 P4): the browser's own "Choose File · No file chosen" is cut off on a phone. */
-const PickImage = ({ id, has, disabled, onPick }: { id: string; has: boolean; disabled?: boolean; onPick: (f?: File) => void }) => (
-  <label className="flex min-h-11 cursor-pointer items-center rounded-full border px-4 font-semibold">
-    {has ? "Change photo" : "Choose a photo"}
-    <input id={id} type="file" accept="image/png,image/jpeg" className="sr-only" disabled={disabled} onChange={(e) => { onPick(e.target.files?.[0]); e.target.value = ""; }} />
-  </label>
-);
-
-const planHint = (t: { ends_at: string | null; read_only: boolean; plan: string | null; paid_until: string | null }) => {
-  const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-  if (t.plan) return `${PLANS.find((p) => p.id === t.plan)?.name ?? t.plan}${t.paid_until ? `, paid until ${day(t.paid_until)}` : ""}${t.read_only ? " (overdue)" : ""}`;
-  if (!t.ends_at) return "Free trial: 30 days start with your first patient or printed sheet";
-  if (t.read_only) return "Free trial ended: read-only, nothing deleted";
-  const d = Math.ceil((Date.parse(t.ends_at) - Date.now()) / 86400000);
-  return `Free trial: ${d} ${d === 1 ? "day" : "days"} left`;
-};
 type Letterhead = { seal_logo: string; name_local: string; registration_line: string; accreditation_line: string; phones: string; email: string; website: string; footer_line: string; discharge_format: string };
+type Settings = {
+  centre_name: string; address: string | null; timezone: string; opening_time: string; closing_time: string; slot_minutes: number; working_days: string[];
+  logo: string | null; demo_data: boolean; support_whatsapp: string | null; patient_support_whatsapp: string | null; setup_complete: boolean;
+  enforce_gender_match: boolean; letterhead: Letterhead | null; plan: string | null; show_footer: boolean; setup_reviewed: string[];
+};
+type Doc = { id: string; name: string; role: string; qualification: string | null; reg_no: string | null; signature: string | null };
+
 const LETTERHEAD: [keyof Letterhead, string, string][] = [
   ["name_local", "Name in a second language", "हिमालय आयुर्वेद रिट्रीट"],
   ["registration_line", "Registration line", "Registered under the Societies Registration Act…"],
@@ -68,506 +41,246 @@ const LETTERHEAD: [keyof Letterhead, string, string][] = [
   ["footer_line", "Footer line", "Corporate office: …"],
   ["discharge_format", "Discharge number", "DS/{YYYY}/{N}"],
 ];
+const SHORT = (d: string) => d[0].toUpperCase() + d.slice(1, 3);
+/** "Mon–Sat", or the days named when they are not one run. */
+export const daysText = (days: string[]) => {
+  const on = WEEK.filter((d) => days.includes(d));
+  const first = WEEK.indexOf(on[0]);
+  const run = on.length > 2 && on.every((d, i) => WEEK[first + i] === d);
+  return run ? `${SHORT(on[0])}–${SHORT(on[on.length - 1])}` : on.map(SHORT).join(", ") || "Closed";
+};
 
-const Settings = ({ signOut, openLog, initialSheet, sheetOpened }: { signOut?: () => void; openLog?: () => void; /** A sheet to open at once, from a link on another screen ("Edit the list"). */ initialSheet?: string | null; sheetOpened?: () => void }) => {
+type Sheet = "centre" | "hours" | "catalogues" | "people" | "account" | "backups" | "printed" | "help" | "checklist";
+/** Opening a sheet counts as looking at its setup items; one sheet can cover two. */
+const REVIEWS: Partial<Record<Sheet, string>> = { centre: "centre", hours: "hours", catalogues: "catalogues", people: "people" };
+
+const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, openRules, openHolidays }: {
+  signOut?: () => void; openLog?: () => void;
+  /** A sheet to open at once, from a link on another screen ("Edit the list"). */
+  initialSheet?: string | null; sheetOpened?: () => void;
+  attention: Attention; openRules: () => void; openHolidays: () => void;
+}) => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
-  const [clearing, setClearing] = useState(false);
-  const [openSheet, setOpenSheet] = useState<string | null>(initialSheet ?? null);
+  const [sheet, setSheet] = useState<Sheet | null>(initialSheet === "packages" || initialSheet === "accommodation" ? "catalogues" : null);
   useEffect(() => { if (initialSheet) sheetOpened?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const trial = useTrial();
   const isAdmin = typeof window !== "undefined" && localStorage.getItem("authRole") === "Admin";
 
   useEffect(() => {
-    fetch(`${API_BASE}/settings`)
-      .then((r) => r.json())
-      .then(setSettings)
-      .catch(() => toast.error("Could not load settings"));
+    fetch(`${API_BASE}/settings`).then((r) => r.json()).then(setSettings).catch(() => toast.error("Could not load settings"));
   }, []);
+  const update = <K extends keyof Settings>(key: K, value: Settings[K]) => setSettings((s) => (s ? { ...s, [key]: value } : s));
 
-  const update = <K extends keyof Settings>(key: K, value: Settings[K]) =>
-    setSettings((s) => (s ? { ...s, [key]: value } : s));
-
-  const onLogoPicked = (file: File | undefined) => {
-    if (!file) return;
-    if (file.size > MAX_LOGO_BYTES) {
-      toast.error("Logo must be under 500KB");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => update("logo", String(reader.result));
-    reader.readAsDataURL(file);
-  };
-
-  // The doctors' own lines under their signature: kept on each staff record.
-  type Doc = { id: string; name: string; role: string; qualification: string | null; reg_no: string | null; signature: string | null };
-  const [doctors, setDoctors] = useState<Doc[]>([]);
+  const [backups, setBackups] = useState<Backups | null>(null);
+  const [people, setPeople] = useState<number | null>(null);
+  const [lastPrint, setLastPrint] = useState<string | null>(null);
+  const [lastChange, setLastChange] = useState<string | null>(null);
   useEffect(() => {
-    if (openSheet !== "letterhead") return;
-    fetch(`${API_BASE}/staff`).then((r) => r.json()).then((all: Doc[]) => setDoctors(all.filter((x) => x.role === "doctor"))).catch(() => setDoctors([]));
-  }, [openSheet]);
-  const saveDoctor = async (d: Doc, patch: Partial<Doc>) => {
-    setDoctors((all) => all.map((x) => (x.id === d.id ? { ...x, ...patch } : x)));
-    const res = await fetch(`${API_BASE}/staff/${d.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
-    if (!res.ok) toast.error(`${d.name} was not saved`);
-  };
-  const onSignaturePicked = (d: Doc, file: File | undefined) => {
-    if (!file) return;
-    if (file.size > 250 * 1024) { toast.error("Signature must be under 250KB"); return; }
-    const reader = new FileReader();
-    reader.onload = () => saveDoctor(d, { signature: String(reader.result) });
-    reader.readAsDataURL(file);
-  };
-  // Printed sheets (#145): what was on the notice board, day by day.
-  const [printed, setPrinted] = useState<{ date: string; kind: string; printed_at: string }[] | null>(null);
+    fetch(`${API_BASE}/log`).then((r) => (r.ok ? r.json() : { entries: [] })).then((d: { entries?: { at: string }[] }) => setLastChange(d.entries?.[0]?.at ?? null)).catch(() => setLastChange(null));
+  }, []);
   useEffect(() => {
-    if (openSheet === "printed") fetch(`${API_BASE}/printed-sheets`).then((r) => r.json()).then(setPrinted).catch(() => setPrinted([]));
-  }, [openSheet]);
-  const openPrinted = async (date: string, kind: string) => {
-    const tab = window.open("", "_blank");
-    const res = await fetch(`${API_BASE}/printed-sheets/${date}/${kind}`);
-    if (!res.ok) { tab?.close(); toast.error("That copy could not be opened"); return; }
-    const url = URL.createObjectURL(await res.blob());
-    if (tab) tab.location.href = url; else window.location.href = url;
-  };
-  // Backups (#236): when the last one ran, and a copy to keep off the machine.
-  const [backups, setBackups] = useState<{ count: number; latest: { name: string; size: number; at: string } | null } | null>(null);
-  useEffect(() => {
-    if (isAdmin) fetch(`${API_BASE}/settings/backups`).then((r) => (r.ok ? r.json() : null)).then(setBackups).catch(() => setBackups(null));
+    if (!isAdmin) return;
+    fetch(`${API_BASE}/settings/backups`).then((r) => (r.ok ? r.json() : null)).then(setBackups).catch(() => setBackups(null));
+    fetch(`${API_BASE}/printed-sheets`).then((r) => (r.ok ? r.json() : [])).then((l: { date: string }[]) => setLastPrint(l[0]?.date ?? null)).catch(() => setLastPrint(null));
   }, [isAdmin]);
-  const downloadBackup = async () => {
-    const res = await fetch(`${API_BASE}/settings/backups/latest`);
-    if (!res.ok) { toast.error("No backup to download yet"); return; }
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(await res.blob());
-    a.download = backups?.latest?.name || "ayurcalm-backup.sql.gz";
-    a.click();
-  };
-  // Moving to or from another install (#231): one file with the whole centre.
-  const [moving, setMoving] = useState(false);
-  const exportCentre = async () => {
-    setMoving(true);
-    try {
-      const res = await fetch(`${API_BASE}/settings/export`);
-      if (!res.ok) { toast.error("The export could not be made"); return; }
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(await res.blob());
-      a.download = `ayurcalm-export-${new Date().toISOString().slice(0, 10)}.json.gz`;
-      a.click();
-    } finally { setMoving(false); }
-  };
-  const importCentre = async (file: File | undefined) => {
-    if (!file) return;
-    if (!(await confirmSheet("Replace everything in this app with the centre in this file?\n\nEveryone signs in again afterwards, with the passwords from the other install.", "Replace"))) return;
-    setMoving(true);
-    try {
-      const res = await fetch(`${API_BASE}/settings/import`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: file });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { toast.error(data?.error || "That file could not be loaded", { duration: 10000 }); return; }
-      toast.success("Loaded. Sign in again.");
-      setTimeout(() => signOut ? signOut() : window.location.reload(), 1200);
-    } finally { setMoving(false); }
-  };
-  const since = (iso: string) => new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: settings?.timezone || "Asia/Kolkata" });
-  const lh = (settings?.letterhead || {}) as Partial<Letterhead>;
-  const setLh = (k: keyof Letterhead, v: string) => update("letterhead", { ...lh, [k]: v } as Letterhead);
-  const onSealPicked = (file: File | undefined) => {
-    if (!file) return;
-    if (file.size > MAX_LOGO_BYTES) { toast.error("Seal must be under 500KB"); return; }
-    const reader = new FileReader();
-    reader.onload = () => setLh("seal_logo", String(reader.result));
-    reader.readAsDataURL(file);
-  };
+
+  const reviewed = useCallback((item: string) => {
+    if (!isAdmin) return;
+    setSettings((s) => (s && !s.setup_reviewed.includes(item) ? { ...s, setup_reviewed: [...s.setup_reviewed, item] } : s));
+    fetch(`${API_BASE}/settings/setup-reviewed`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ item }) }).catch(() => { /* counted again next time */ });
+  }, [isAdmin]);
+  const show = (s: Sheet) => { setSheet(s); const item = REVIEWS[s]; if (item) reviewed(item); };
+  const showRules = () => { reviewed("rules"); openRules(); };
 
   const save = async () => {
     if (!settings) return;
     setSaving(true);
     try {
       const res = await fetch(`${API_BASE}/settings`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          centre_name: settings.centre_name,
-          address: settings.address,
-          timezone: settings.timezone,
-          opening_time: settings.opening_time,
-          closing_time: settings.closing_time,
-          slot_minutes: settings.slot_minutes,
-          working_days: settings.working_days,
-          logo: settings.logo,
-          support_whatsapp: settings.support_whatsapp ?? "",
-          patient_support_whatsapp: settings.patient_support_whatsapp ?? "",
-          enforce_gender_match: settings.enforce_gender_match !== false,
-          show_footer: settings.show_footer !== false,
+          centre_name: settings.centre_name, address: settings.address, timezone: settings.timezone, opening_time: settings.opening_time, closing_time: settings.closing_time,
+          slot_minutes: settings.slot_minutes, working_days: settings.working_days, logo: settings.logo,
+          support_whatsapp: settings.support_whatsapp ?? "", patient_support_whatsapp: settings.patient_support_whatsapp ?? "",
+          enforce_gender_match: settings.enforce_gender_match !== false, show_footer: settings.show_footer !== false,
           ...(settings.letterhead ? { letterhead: settings.letterhead } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data?.error || "Could not save settings");
-        return;
-      }
+      if (!res.ok) { toast.error(data?.error || "Could not save settings"); return; }
       setSettings(data);
       toast.success("Settings saved");
       // The schedule grid is built from opening hours, so reload to apply them.
       setTimeout(() => window.location.reload(), 600);
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
-  // What to keep when the demo goes (#108): its therapies and rooms, by default, to edit rather than retype.
-  const [keep, setKeep] = useState<string[]>(["therapies", "rooms"]);
-  const clearDemoData = async () => {
-    const going = KEEPS.filter(([k]) => !keep.includes(k)).map(([, t]) => t.toLowerCase());
-    if (!(await confirmSheet(
-      `Delete the demo patients and bookings${going.length ? `, and ${going.join(", ")}` : ""}?\n\n` +
-      "Your account and centre settings are kept. This cannot be undone.", "Delete"
-    ))) return;
-    setClearing(true);
-    try {
-      const res = await fetch(`${API_BASE}/settings/clear-demo-data`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keep }) });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data?.error || "Could not clear demo data");
-        return;
-      }
-      const d = data.deleted || {};
-      toast.success(`Removed ${d.patients ?? 0} patients and ${d.appointments ?? 0} appointments`);
-      setTimeout(() => window.location.reload(), 900);
-    } finally {
-      setClearing(false);
-    }
+  const pick = (max: number, what: string, then: (data: string) => void) => (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > max) { toast.error(`${what} must be under ${Math.round(max / 1024)}KB`); return; }
+    const reader = new FileReader();
+    reader.onload = () => then(String(reader.result));
+    reader.readAsDataURL(file);
+  };
+  const lh = (settings?.letterhead || {}) as Partial<Letterhead>;
+  const setLh = (k: keyof Letterhead, v: string) => update("letterhead", { ...lh, [k]: v } as Letterhead);
+
+  // The doctors' own lines under their signature: kept on each staff record, saved as each box is left.
+  const [doctors, setDoctors] = useState<Doc[]>([]);
+  useEffect(() => {
+    if (sheet !== "centre") return;
+    fetch(`${API_BASE}/staff`).then((r) => r.json()).then((all: Doc[]) => setDoctors(all.filter((x) => x.role === "doctor"))).catch(() => setDoctors([]));
+  }, [sheet]);
+  const saveDoctor = async (d: Doc, patch: Partial<Doc>) => {
+    setDoctors((all) => all.map((x) => (x.id === d.id ? { ...x, ...patch } : x)));
+    const res = await fetch(`${API_BASE}/staff/${d.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+    if (!res.ok) toast.error(`${d.name} was not saved`);
   };
 
-  const resetDemoData = async () => {
-    if (!(await confirmSheet(
-      "Replace the demo data with a fresh four months starting today?\n\n" +
-      "Any changes made to demo patients and bookings are lost. Your account and centre settings are kept.", "Replace"
-    ))) return;
-    setClearing(true);
-    try {
-      const res = await fetch(`${API_BASE}/settings/reset-demo-data`, { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data?.error || "Could not reset demo data");
-        return;
-      }
-      toast.success("Demo data rebuilt from today");
-      setTimeout(() => window.location.reload(), 900);
-    } finally {
-      setClearing(false);
-    }
-  };
+  if (!settings) return <div className="py-6 text-center text-muted-foreground">Loading settings…</div>;
 
-  // The design's pattern (#178): a plain list of rows; each opens its form in a bottom sheet.
-  const rowClass = "flex min-h-14 w-full items-center border-b border-border px-4 py-2 text-left last:border-b-0";
-  const row = (key: string, title: string, hint: string) => (
-    <button key={key} type="button" className={rowClass} onClick={() => setOpenSheet(key)}>
-      <span className="flex-1"><b className="block text-[16px]">{title}</b><span className="block text-[13px] text-muted-foreground">{hint}</span></span>
-      <span className="text-muted-foreground">›</span>
-    </button>
-  );
-  // The section's own card loses its frame and heading inside the sheet, which names it already.
-  const sheet = (key: string, title: string, content: ReactNode) => (
-    <BottomSheet open={openSheet === key} onOpenChange={(o) => setOpenSheet(o ? key : null)} title={title}>
-      <div className="max-h-[75dvh] space-y-3 overflow-y-auto [&_.rounded-lg.border]:border-0 [&_.rounded-lg.border]:shadow-none [&_h3]:hidden [&_.p-6]:px-0">{content}</div>
-    </BottomSheet>
-  );
-
-  if (!settings) {
-    return <div className="container mx-auto p-6 text-sm text-muted-foreground">Loading settings…</div>;
-  }
+  const rules = attention.rules;
+  const raised = rules.filter((r) => r.on && r.kind === "action" && r.id !== "day").reduce((n, r) => n + r.count, 0) + (rules.find((r) => r.id === "day")?.count ?? 0);
+  const rulesFact = rules.length ? `${rules.filter((r) => r.on).length} of ${rules.length} on · ${raised ? `the pill shows ${raised} today` : "nothing on the pill today"}` : "What shows on the pill";
+  const hoursFact = `${daysText(settings.working_days)} · ${settings.opening_time}–${settings.closing_time}`;
+  const SETUP: { key: string; sheet: () => void; title: string; now: string }[] = [
+    { key: "hours", title: "Opening hours", now: hoursFact, sheet: () => show("hours") },
+    { key: "rules", title: "What needs you", now: rulesFact, sheet: showRules },
+    { key: "centre", title: "Centre and letterhead", now: settings.centre_name, sheet: () => show("centre") },
+    { key: "catalogues", title: "Packages and accommodation", now: "The lists a patient's card picks from", sheet: () => show("catalogues") },
+    { key: "people", title: "People with access", now: "Who can sign in", sheet: () => show("people") },
+  ];
+  const done = SETUP.filter((x) => settings.setup_reviewed.includes(x.key)).length;
 
   return (
-    <div className="space-y-4">
+    <div>
       <PageHead title="Settings" />
-      {/* Here rather than on the menu, as the design has it (#67). */}
-      {openLog ? (
-        <button type="button" className="flex min-h-12 w-full items-center rounded-2xl bg-card px-4 text-left" onClick={openLog}>
-          <span className="flex-1"><b className="block text-[16px]">Log</b><span className="block text-[13px] text-muted-foreground">Everything that changed, and who changed it</span></span>
-          <span className="text-muted-foreground">›</span>
-        </button>
-      ) : null}
-      <div className="overflow-hidden rounded-2xl bg-card">
-      {row("centre", "Centre details", settings.centre_name || "Name, address and logo")}
-      {row("letterhead", "Discharge letterhead", lh.discharge_format ? `Numbers like ${lh.discharge_format}` : "Seal, phones, registration, footer")}
-      {row("packages", "Packages", "Panchakarma packages and their prices")}
-      {row("accommodation", "Accommodation", "Room types and their price a day")}
-      {row("hours", "Opening hours", `${settings.opening_time}–${settings.closing_time}`)}
-      {row("support", "Support contacts", settings.support_whatsapp ? "WhatsApp button shown" : "No WhatsApp button")}
-      {isAdmin ? row("backups", "Backups", backups?.latest ? `Last ${since(backups.latest.at)}` : "No backup yet") : null}
-      {row("printed", "Printed sheets", "Each day's sheets as last printed, 90 days")}
-      {settings.support_whatsapp ? (
-        <a className={rowClass} href={`https://wa.me/${settings.support_whatsapp}?text=${encodeURIComponent(PRODUCT + ": a problem or an idea from " + settings.centre_name + ": ")}`} target="_blank" rel="noopener noreferrer">
-          <span className="flex-1"><b className="block text-[16px]">Report a problem or an idea</b><span className="block text-[13px] text-muted-foreground">On WhatsApp, straight to whoever looks after this app</span></span>
-          <span className="text-muted-foreground">›</span>
-        </a>
-      ) : null}
-      {isAdmin && trial ? row("plan", "Plan", planHint(trial)) : null}
+      {isAdmin && done < SETUP.length ? <div className="mb-1"><ChecklistBar label="Set up your centre" unit="reviewed" done={done} total={SETUP.length} onClick={() => setSheet("checklist")} /></div> : null}
+
       {isAdmin ? (
-        // Refer a centre (#249): both get 3 free months when it pays, recorded by hand for now.
-        <a className={rowClass} href={`https://wa.me/?text=${encodeURIComponent(`We run ${settings.centre_name} on ${PRODUCT}: patients, therapists and the day sheet on one phone. Free for 30 days: https://jains.es/ruta?ref=${encodeURIComponent(window.location.host.split(".")[0])}`)}`} target="_blank" rel="noopener noreferrer">
-          <span className="flex-1"><b className="block text-[16px]">Invite a centre</b><span className="block text-[13px] text-muted-foreground">On WhatsApp. When they pay, you both get 3 months free</span></span>
-          <span className="text-muted-foreground">›</span>
-        </a>
+        <ListGroup title="Every day">
+          <Row title="What needs you" facts={rulesFact} trailing="›" onClick={showRules} />
+          <Row title="Printed sheets" facts={lastPrint ? `Last printed for ${new Date(`${lastPrint}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).replace(",", "")}` : "Nothing printed yet"} trailing="›" onClick={() => setSheet("printed")} />
+          <Row title="People with access" facts={people === null ? "Who can sign in" : `${people} ${people === 1 ? "person" : "people"} can sign in`} trailing="›" onClick={() => show("people")} />
+        </ListGroup>
       ) : null}
-      {row("password", "Your password", "Change it")}
-      {isAdmin ? row("assistant", "Your AI assistant", "Optional: connect Claude") : null}
-      {isAdmin ? row("people", "People with access", "Who can sign in") : null}
-      {settings.demo_data && isAdmin ? row("demo", "Demo data", "Clear it, or reset it from today") : null}
-      </div>
-      {signOut ? <Button variant="outline" className="min-h-11 w-full rounded-full" onClick={signOut}>Sign out</Button> : null}
 
-      {sheet("centre", "Centre details", <>
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base md:text-lg">Centre details</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Shown in the app header and printed at the top of the daily schedule.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1">
-            <Label htmlFor="centre_name">Centre name</Label>
-            <Input
-              id="centre_name"
-              value={settings.centre_name}
-              onChange={(e) => update("centre_name", e.target.value)}
-              disabled={!isAdmin}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="address">Address</Label>
-            <Textarea
-              id="address"
-              rows={2}
-              value={settings.address ?? ""}
-              onChange={(e) => update("address", e.target.value)}
-              disabled={!isAdmin}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="logo">Logo</Label>
+      <ListGroup title="Your centre">
+        <Row title="Centre and letterhead" facts={settings.centre_name} trailing="›" onClick={() => show("centre")} />
+        <Row title="Opening hours and holidays" facts={hoursFact} trailing="›" onClick={() => show("hours")} />
+        {isAdmin ? <Row title="Packages and accommodation" facts="The lists a patient's card picks from" trailing="›" onClick={() => show("catalogues")} /> : null}
+      </ListGroup>
+
+      <ListGroup title="Safety">
+        {isAdmin ? <Row title="Backups" facts={backups?.latest ? `Last backup ${ago(backups.latest.at)}` : "No backup yet"} trailing="›" onClick={() => setSheet("backups")} /> : null}
+        {openLog ? <Row title="Log" facts={lastChange ? `Last change ${ago(lastChange)}` : "Everything that changed, and who changed it"} trailing="›" onClick={openLog} /> : null}
+      </ListGroup>
+
+      <ListGroup title="You and the app">
+        <Row title="Your account" facts={isAdmin ? "Password and your AI assistant" : "Password"} trailing="›" onClick={() => setSheet("account")} />
+        <Row title="Help and plan" facts={trial && isAdmin ? "Report a problem, invite a centre, plan" : "Report a problem"} trailing="›" onClick={() => setSheet("help")} />
+      </ListGroup>
+      {signOut ? <button type="button" className={`${wide} mt-4 border bg-card`} onClick={signOut}>Sign out</button> : null}
+      {!isAdmin ? <p className={`mt-3 ${noteText}`}>Settings are read-only for staff accounts. Ask an administrator to make changes.</p> : null}
+
+      <BottomSheet open={sheet === "checklist"} onOpenChange={(o) => { if (!o) setSheet(null); }} title="Set up your centre" note={`${done} of ${SETUP.length} reviewed. Everything works on the defaults below; review each at your own pace.`}>
+        <ListGroup>
+          {SETUP.map((x) => (
+            <Row key={x.key} title={x.title} facts={`Now: ${x.now}`} trailing={settings.setup_reviewed.includes(x.key) ? "✓ Reviewed" : "Review ›"} onClick={() => { setSheet(null); x.sheet(); }} />
+          ))}
+        </ListGroup>
+      </BottomSheet>
+
+      {/* Centre, letterhead and the support numbers: one scroll, headed parts, one Save. */}
+      <BottomSheet open={sheet === "centre"} onOpenChange={(o) => { if (!o) setSheet(null); }} title="Centre and letterhead" note="Printed at the top of every sheet, and on each discharge summary."
+        foot={isAdmin ? <SheetFoot busy={saving} save={save} label="Save" /> : undefined}>
+        <fieldset disabled={!isAdmin} className="m-0 min-w-0 border-0 p-0">
+          <Text label="Centre name" id="centre_name" value={settings.centre_name} onChange={(e) => update("centre_name", e.target.value)} />
+          <Area label="Address (optional)" id="address" rows={2} value={settings.address ?? ""} onChange={(e) => update("address", e.target.value)} />
+          <Group label="Logo (optional)" note="PNG or JPG, under 500KB.">
             <div className="flex items-center gap-3">
-              {settings.logo && (
-                <img src={settings.logo} alt="Centre logo" className="h-10 w-auto rounded border" />
-              )}
-              <PickImage id="logo" has={!!settings.logo} disabled={!isAdmin} onPick={onLogoPicked} />
-              {settings.logo && isAdmin && (
-                <Button variant="ghost" size="sm" onClick={() => update("logo", null)}>Remove</Button>
-              )}
+              {settings.logo ? <img src={settings.logo} alt="Centre logo" className="h-10 w-auto rounded border" /> : null}
+              <PickPhoto id="logo" has={!!settings.logo} disabled={!isAdmin} onPick={pick(MAX_LOGO_BYTES, "The logo", (d) => update("logo", d))} />
+              {settings.logo && isAdmin ? <button type="button" className="min-h-11 px-2 text-sm font-semibold text-destructive" onClick={() => update("logo", null)}>Remove</button> : null}
             </div>
-            <p className="text-xs text-muted-foreground">PNG or JPG, under 500KB.</p>
-          </div>
-        </CardContent>
-      </Card>
-      {isAdmin && (
-        <div>
-          <Button className="min-h-11 w-full rounded-full" onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
-          </Button>
-        </div>
-      )}
-      </>)}
-      {sheet("backups", "Backups", <>
-      <p className="text-sm text-muted-foreground">Everything in the app is backed up ten minutes after it starts and every night at 02:30, and the newest 14 are kept on the computer that runs it. Keep a copy somewhere else too: download the newest now and then, and save it to your phone or email it to yourself.</p>
-      <div className="rounded-xl border p-3 text-[15px]">
-        {backups?.latest ? <>Newest: <b>{since(backups.latest.at)}</b> · {(backups.latest.size / 1024 / 1024).toFixed(1)} MB · {backups.count} kept</> : "No backup yet. Ask whoever set up the app to check the backup service is running."}
-      </div>
-      {backups?.latest ? <Button className="min-h-11 w-full rounded-full" onClick={downloadBackup}>Download the newest backup</Button> : null}
-      <div className="mt-2 border-t pt-3">
-        <b className="block text-[15px]">Move to another {PRODUCT}</b>
-        <p className="text-sm text-muted-foreground">From the cloud to your own computer, or back: download everything here as one file, then load it into the other one. Loading replaces whatever that install holds, so do it on a new one.</p>
-      </div>
-      <Button variant="outline" className="min-h-11 w-full rounded-full" disabled={moving} onClick={exportCentre}>{moving ? "Working…" : "Download everything"}</Button>
-      <label className="flex min-h-11 w-full cursor-pointer items-center justify-center rounded-full border font-semibold">
-        Load a centre from a file
-        <input type="file" accept=".gz,application/gzip" className="sr-only" disabled={moving} onChange={(e) => { importCentre(e.target.files?.[0]); e.target.value = ""; }} />
-      </label>
-      </>)}
-      {trial ? sheet("plan", "Plan", <div className="space-y-3 text-[15px]">
-        <p>{planHint(trial)}.</p>
-        {PLANS.map((p) => (
-          <a key={p.id} className="flex min-h-12 items-center rounded-xl border border-border px-4" target="_blank" rel="noopener noreferrer"
-            href={`https://wa.me/${SALES_WHATSAPP}?text=${encodeURIComponent(`${settings.centre_name} (${window.location.host}) would like ${p.name}, ${p.price}.`)}`}>
-            <span className="flex-1"><b className="block">Choose {p.name}</b><span className="block text-[13px] text-muted-foreground">{p.price}</span></span>›
-          </a>
-        ))}
-        <p className="text-[13px] text-muted-foreground">Opens WhatsApp. We reply the same working day with a UPI link. Or run it yourself for free: Download everything, then install it on your own computer.</p>
-        {trial.plan ? (
-          <label className="flex items-center gap-3"><Checkbox checked={settings.show_footer !== false} onCheckedChange={(v) => setSettings({ ...settings, show_footer: v === true })} />"Made with {PRODUCT}" at the foot of sheets and links</label>
-        ) : null}
-        {trial.plan ? <Button className="w-full" onClick={save} disabled={saving}>Save</Button> : null}
-      </div>) : null}
+          </Group>
 
-      {sheet("printed", "Printed sheets", <>
-      <p className="text-xs text-muted-foreground">The last copy printed for each day. Printing a day again replaces its copy; copies older than 90 days are removed.</p>
-      {printed === null ? <div className="py-4 text-center text-muted-foreground">…</div> : printed.length === 0 ? <div className="py-4 text-center text-muted-foreground">Nothing printed yet.</div> : (
-        <div className="overflow-hidden rounded-xl border">
-          {[...new Set(printed.map((p) => p.date))].map((date) => (
-            <div key={date} className="flex min-h-12 flex-wrap items-center gap-2 border-b border-border px-3 py-2 last:border-b-0">
-              <span className="flex-1 font-semibold">{new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}</span>
-              {printed.filter((p) => p.date === date).map((p) => (
-                <Button key={p.kind} variant="outline" className="min-h-11 rounded-full" onClick={() => openPrinted(date, p.kind)}>{{ residents: "Patients", therapist: "Therapists", doctor: "Doctors" }[p.kind] ?? p.kind}</Button>
-              ))}
+          <SectionHead>Discharge letterhead</SectionHead>
+          <p className={`mb-1 ${noteText}`}>Printed under the name and logo. {"{YYYY}"} in the number is the year, {"{N}"} counts summaries. All optional.</p>
+          <Group label="Right-hand logo or seal (optional)">
+            <div className="flex items-center gap-3">
+              {lh.seal_logo ? <img src={lh.seal_logo} alt="Seal" className="h-10 w-auto rounded border" /> : null}
+              <PickPhoto id="seal_logo" has={!!lh.seal_logo} disabled={!isAdmin} onPick={pick(MAX_LOGO_BYTES, "The seal", (d) => setLh("seal_logo", d))} />
+              {lh.seal_logo && isAdmin ? <button type="button" className="min-h-11 px-2 text-sm font-semibold text-destructive" onClick={() => setLh("seal_logo", "")}>Remove</button> : null}
+            </div>
+          </Group>
+          {LETTERHEAD.map(([k, label, hint]) => <Text key={k} label={`${label} (optional)`} id={`lh_${k}`} placeholder={hint} value={lh[k] ?? ""} onChange={(e) => setLh(k, e.target.value)} />)}
+
+          {doctors.length ? <SectionHead>Doctors under their signature</SectionHead> : null}
+          {doctors.map((d) => (
+            <div key={d.id} role="group" aria-label={`Doctor ${d.name}`} className="mb-2 rounded-xl border px-3 pb-3 pt-2">
+              <div className="text-base font-semibold">{d.name}</div>
+              <Text label="Qualification (optional)" id={`q_${d.id}`} placeholder="BAMS, MD (Panchakarma)" defaultValue={d.qualification ?? ""} onBlur={(e) => e.target.value !== (d.qualification ?? "") && saveDoctor(d, { qualification: e.target.value })} />
+              <Text label="Registration number (optional)" id={`r_${d.id}`} defaultValue={d.reg_no ?? ""} onBlur={(e) => e.target.value !== (d.reg_no ?? "") && saveDoctor(d, { reg_no: e.target.value })} />
+              <Group label="Signature, a photo (optional)">
+                <div className="flex items-center gap-3">
+                  {d.signature ? <img src={d.signature} alt={`${d.name}'s signature`} className="h-10 w-auto rounded border bg-white" /> : null}
+                  <PickPhoto id={`s_${d.id}`} has={!!d.signature} disabled={!isAdmin} onPick={pick(250 * 1024, "The signature", (s) => saveDoctor(d, { signature: s }))} />
+                  {d.signature && isAdmin ? <button type="button" className="min-h-11 px-2 text-sm font-semibold text-destructive" onClick={() => saveDoctor(d, { signature: null })}>Remove</button> : null}
+                </div>
+              </Group>
+              <p className={`mt-1 ${noteText}`}>Saved as you leave each box.</p>
             </div>
           ))}
-        </div>
-      )}
-      </>)}
-      {sheet("letterhead", "Discharge letterhead", <>
-      <div className="space-y-3">
-        <p className="text-xs text-muted-foreground">Printed at the top of every discharge summary, under the centre name, address and logo from Centre details. {"{YYYY}"} in the number is the year, {"{N}"} counts summaries.</p>
-        <div className="space-y-1">
-          <Label htmlFor="seal_logo">Right-hand logo or seal (optional)</Label>
-          <div className="flex items-center gap-3">
-            {lh.seal_logo ? <img src={lh.seal_logo} alt="Seal" className="h-10 w-auto rounded border" /> : null}
-            <PickImage id="seal_logo" has={!!lh.seal_logo} disabled={!isAdmin} onPick={onSealPicked} />
-            {lh.seal_logo && isAdmin ? <Button variant="ghost" size="sm" onClick={() => setLh("seal_logo", "")}>Remove</Button> : null}
-          </div>
-        </div>
-        {LETTERHEAD.map(([k, label, hint]) => (
-          <div key={k} className="space-y-1">
-            <Label htmlFor={`lh_${k}`}>{label}</Label>
-            <Input id={`lh_${k}`} placeholder={hint} value={lh[k] ?? ""} onChange={(e) => setLh(k, e.target.value)} disabled={!isAdmin} />
-          </div>
-        ))}
-        {isAdmin ? <Button className="min-h-11 w-full rounded-full" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save letterhead"}</Button> : null}
-        {doctors.map((d) => (
-          <div key={d.id} className="space-y-2 rounded-xl border p-3" aria-label={`Doctor ${d.name}`}>
-            <div className="font-semibold">{d.name}</div>
-            <p className="text-xs text-muted-foreground">Printed under their signature. Saved as you leave each box.</p>
-            <div className="space-y-1"><Label htmlFor={`q_${d.id}`}>Qualification</Label>
-              <Input id={`q_${d.id}`} placeholder="BAMS, MD (Panchakarma)" defaultValue={d.qualification ?? ""} disabled={!isAdmin} onBlur={(e) => e.target.value !== (d.qualification ?? "") && saveDoctor(d, { qualification: e.target.value })} /></div>
-            <div className="space-y-1"><Label htmlFor={`r_${d.id}`}>Registration no.</Label>
-              <Input id={`r_${d.id}`} defaultValue={d.reg_no ?? ""} disabled={!isAdmin} onBlur={(e) => e.target.value !== (d.reg_no ?? "") && saveDoctor(d, { reg_no: e.target.value })} /></div>
-            <div className="space-y-1"><Label htmlFor={`s_${d.id}`}>Signature (photo, optional)</Label>
-              <div className="flex items-center gap-3">
-                {d.signature ? <img src={d.signature} alt={`${d.name}'s signature`} className="h-10 w-auto rounded border bg-white" /> : null}
-                <PickImage id={`s_${d.id}`} has={!!d.signature} disabled={!isAdmin} onPick={(f) => onSignaturePicked(d, f)} />
-                {d.signature && isAdmin ? <Button variant="ghost" size="sm" onClick={() => saveDoctor(d, { signature: null })}>Remove</Button> : null}
-              </div></div>
-          </div>
-        ))}
-      </div>
-      </>)}
-      {/* Built from the form kit (#283), straight in the sheet so Save stays in view at its foot. */}
-      <BottomSheet open={openSheet === "hours"} onOpenChange={(o) => setOpenSheet(o ? "hours" : null)} title="Opening hours">
-        <SheetNote>The times the day shows, and the days that can be booked.</SheetNote>
+
+          <SectionHead>Support contacts</SectionHead>
+          <p className={`mb-1 ${noteText}`}>WhatsApp numbers shown as a button in the corner. International format, no plus sign or leading zero; empty hides the button.</p>
+          <Text label="Help with this app, for you and your staff (optional)" id="support_whatsapp" inputMode="tel" placeholder="420777558262" note="Whoever supports the software itself. Set to the project maintainer by default." value={settings.support_whatsapp ?? ""} onChange={(e) => update("support_whatsapp", e.target.value)} />
+          <Text label="Contact for patients, your reception (optional)" id="patient_support_whatsapp" inputMode="tel" placeholder="420777558262" note="Shown on each patient's own link as WhatsApp reception. Hidden while it is the same as the number above." value={settings.patient_support_whatsapp ?? ""} onChange={(e) => update("patient_support_whatsapp", e.target.value)} />
+        </fieldset>
+      </BottomSheet>
+
+      <BottomSheet open={sheet === "hours"} onOpenChange={(o) => { if (!o) setSheet(null); }} title="Opening hours and holidays" note="The times the day shows, and the days that can be booked."
+        foot={isAdmin ? <SheetFoot busy={saving} save={save} /> : undefined}>
         <fieldset disabled={!isAdmin} className="m-0 min-w-0 border-0 p-0">
           <div className="grid grid-cols-2 gap-3">
             <TimeList label="Opens" times={DAY_TIMES} value={settings.opening_time} onChange={(t) => update("opening_time", t)} />
             <TimeList label="Closes" times={DAY_TIMES} after={settings.opening_time} value={settings.closing_time} onChange={(t) => update("closing_time", t)} />
           </div>
-          <Group label="Open on">
-            <Days value={settings.working_days} onChange={(d) => update("working_days", d)} />
-          </Group>
+          <Group label="Open on"><Days value={settings.working_days} onChange={(d) => update("working_days", d)} /></Group>
           <Group label="Each time slot is">
             <Seg options={[...new Set([...SLOT_OPTIONS, settings.slot_minutes])].sort((a, b) => a - b).map((m) => [m, `${m} min`] as [number, string])} value={settings.slot_minutes} onChange={(m) => update("slot_minutes", m)} />
           </Group>
           <Dropdown label="Timezone" id="timezone" value={settings.timezone} onChange={(e) => update("timezone", e.target.value)}>
             {[...new Set([...TIMEZONES, settings.timezone])].map((z) => <option key={z} value={z}>{z.replace(/_/g, " ")}</option>)}
           </Dropdown>
-          <Switch label="Match the therapist's gender" note="Only for therapies that ask for it."
-            on={settings.enforce_gender_match !== false} set={(v) => update("enforce_gender_match", v)} />
+          <Switch label="Match the therapist's gender" note="Only for therapies that ask for it." on={settings.enforce_gender_match !== false} set={(v) => update("enforce_gender_match", v)} />
         </fieldset>
-        {isAdmin ? <Foot busy={saving} save={save} /> : null}
+        {isAdmin ? <div className="mt-3"><ListGroup><Row title="Public holidays" facts="Close the centre on India's gazetted days" trailing="›" onClick={() => { setSheet(null); openHolidays(); }} /></ListGroup></div> : null}
       </BottomSheet>
-      {sheet("support", "Support contacts", <>
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base md:text-lg">Support contacts</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Two WhatsApp numbers, shown as a button in the corner to different people.
-            International format, no plus sign or leading zero. Leave one empty to hide
-            its button.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="support_whatsapp">Help with this app — for you and your staff</Label>
-            <Input
-              id="support_whatsapp"
-              className="max-w-xs"
-              value={settings.support_whatsapp ?? ""}
-              onChange={(e) => update("support_whatsapp", e.target.value)}
-              placeholder="420777558262"
-              disabled={!isAdmin}
-            />
-            <p className="text-xs text-muted-foreground">
-              Whoever supports the software itself — bugs, questions, how something works.
-              Shown to signed-in administrators and staff. Set to the project maintainer by
-              default; change it if your organisation has its own IT support.
-            </p>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="patient_support_whatsapp">Contact for patients — your reception</Label>
-            <Input
-              id="patient_support_whatsapp"
-              className="max-w-xs"
-              value={settings.patient_support_whatsapp ?? ""}
-              onChange={(e) => update("patient_support_whatsapp", e.target.value)}
-              placeholder="420777558262"
-              disabled={!isAdmin}
-            />
-            <p className="text-xs text-muted-foreground">
-              Shown on each patient's own link as <strong className="font-medium">WhatsApp reception</strong>.
-              Hidden while it is the same as the number above, so patients never reach the software maintainer.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-      {isAdmin && (
-        <div>
-          <Button className="min-h-11 w-full rounded-full" onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
-          </Button>
-        </div>
-      )}
-      </>)}
-      {sheet("packages", "Packages", <PackagesEditor />)}
-      {sheet("accommodation", "Accommodation", <AccommodationEditor />)}
-      {sheet("password", "Your password", <ChangePasswordCard />)}
-      {sheet("assistant", "Your AI assistant", <AssistantSection />)}
-      {sheet("people", "People with access", <UsersSection />)}
-      {sheet("demo", "Demo data", <>
-        <Card className="border-destructive/40">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base md:text-lg">Demo data</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              This install was seeded with example patients, therapists, rooms, therapies and
-              appointments so you could try the app straight away. Clear it when you are ready to
-              enter your centre's own details, or reset it to get four fresh months of bookings from today.
-              Your account and the settings above are kept.
-            </p>
-            <fieldset className="space-y-1">
-              <legend className="text-sm font-semibold">Keep when clearing</legend>
-              <p className="text-xs text-muted-foreground">Patients and bookings always go. Standard therapies can be brought back later from the therapy library.</p>
-              {KEEPS.map(([k, t]) => (
-                <label key={k} className="flex min-h-11 items-center gap-3">
-                  <input type="checkbox" className="h-5 w-5 min-h-0 min-w-0 flex-none" checked={keep.includes(k)} onChange={(e) => setKeep(e.target.checked ? [...keep, k] : keep.filter((x) => x !== k))} />
-                  <span>{t}</span>
-                </label>
-              ))}
-            </fieldset>
-            <Button variant="destructive" onClick={clearDemoData} disabled={clearing}>
-              {clearing ? "Working… (up to two minutes)" : "Clear demo data"}
-            </Button>
-            <Button variant="outline" className="ml-2" onClick={resetDemoData} disabled={clearing}>
-              Reset demo data from today
-            </Button>
-          </CardContent>
-        </Card>
-      </>)}
 
-      {!isAdmin && (
-        <p className="text-xs text-muted-foreground">
-          Settings are read-only for staff accounts. Ask an administrator to make changes.
-        </p>
-      )}
+      <BottomSheet open={sheet === "catalogues"} onOpenChange={(o) => { if (!o) setSheet(null); }} title="Packages and accommodation" note="The lists a patient's card picks from. Reference only: nothing here bills.">
+        <SectionHead>Packages</SectionHead>
+        <PackagesEditor />
+        <SectionHead>Accommodation</SectionHead>
+        <AccommodationEditor />
+      </BottomSheet>
+
+      <BottomSheet open={sheet === "people"} onOpenChange={(o) => { if (!o) setSheet(null); }} title="People with access">
+        {isAdmin ? <UsersSection onCount={setPeople} /> : null}
+      </BottomSheet>
+
+      <BottomSheet open={sheet === "account"} onOpenChange={(o) => { if (!o) setSheet(null); }} title="Your account">
+        <SectionHead>Password</SectionHead>
+        <ChangePasswordCard />
+        {isAdmin ? <><SectionHead>Your AI assistant</SectionHead><AssistantSection /></> : null}
+      </BottomSheet>
+
+      <BackupsSheet open={sheet === "backups"} onOpenChange={(o) => { if (!o) setSheet(null); }} backups={backups} />
+      <PrintedSheet open={sheet === "printed"} onOpenChange={(o) => { if (!o) setSheet(null); }} />
+      <HelpSheet open={sheet === "help"} onOpenChange={(o) => { if (!o) setSheet(null); }} centre={settings.centre_name} supportWhatsapp={settings.support_whatsapp} trial={trial} demo={settings.demo_data} admin={isAdmin}
+        showFooter={settings.show_footer !== false} setShowFooter={(v) => update("show_footer", v)} saveFooter={save} />
     </div>
   );
 };

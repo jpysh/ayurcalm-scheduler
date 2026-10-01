@@ -377,6 +377,10 @@ model Settings {
   paid_until               DateTime?
   /// "Made with Ruta" on sheets and links (#249). Only a paying centre may turn it off.
   show_footer              Boolean  @default(true)
+  /// What needs the admin (#288): only the rules the admin changed, `{ rule_id: { on?, hours? } }`. Defaults live in src/attention.ts.
+  attention_rules          Json?
+  /// The setup card's items the admin has looked at ("Set up your centre · 3 of 7 reviewed").
+  setup_reviewed           String[] @default([])
   updated_at               DateTime @updatedAt
 }
 

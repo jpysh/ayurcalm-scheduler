@@ -128,6 +128,16 @@ settingsRouter.put('/', requireAdmin, async (req: Request, res: Response) => {
   res.json(saved);
 });
 
+// The setup card (#288): an item is reviewed once the admin has opened it; nothing here blocks anything.
+export const SETUP_ITEMS = ['hours', 'rules', 'centre', 'catalogues', 'people'] as const;
+settingsRouter.put('/setup-reviewed', requireAdmin, async (req: Request, res: Response) => {
+  const parsed = z.object({ item: z.enum(SETUP_ITEMS) }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Unknown setup item' }); return; }
+  const { setup_reviewed } = await getSettings();
+  const saved = await prisma.settings.update({ where: { id: SINGLETON_ID }, data: { setup_reviewed: [...new Set([...setup_reviewed, parsed.data.item])] } });
+  res.json({ setup_reviewed: saved.setup_reviewed });
+});
+
 const clearDemoData = (keep: Keep[] = []) => prisma.$transaction((tx) => wipeDemo(tx, keep), { timeout: 120000 });
 
 // `keep` names what stays (#108); "templates" is the wizard's therapies and rooms.

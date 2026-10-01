@@ -7,13 +7,16 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import PageHead from "@/components/PageHead";
+import { Empty, EntryRow, ErrorLine, ListGroup, Loading } from "@/components/kit";
 
 type Entry = { id: string; at: string; who: "you" | "the app"; text: string; undo: string | null; undone: boolean };
 
 export function LogScreen({ timezone, refresh }: { timezone: string; refresh: () => Promise<void> }) {
   const [entries, setEntries] = useState<Entry[] | null>(null);
+  const [failed, setFailed] = useState(false);
   const load = useCallback(() => {
-    fetch(`${API_BASE}/log`).then((r) => (r.ok ? r.json() : { entries: [] })).then((d) => setEntries(d.entries || [])).catch(() => setEntries([]));
+    setFailed(false);
+    fetch(`${API_BASE}/log`).then((r) => (r.ok ? r.json() : Promise.reject())).then((d) => setEntries(d.entries || [])).catch(() => { setFailed(true); setEntries([]); });
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -42,24 +45,13 @@ export function LogScreen({ timezone, refresh }: { timezone: string; refresh: ()
   return (
     <div>
       <PageHead title="Log" note="Last 30 days" />
-      {entries === null ? <div className="py-6 text-center text-muted-foreground">…</div>
-        : entries.length === 0 ? <div className="py-6 text-center text-muted-foreground">Nothing has changed in the last 30 days.</div>
+      {failed ? <ErrorLine text="The Log could not be loaded." retry={load} />
+        : entries === null ? <Loading rows={5} />
+        : entries.length === 0 ? <Empty text="Nothing has changed in the last 30 days." />
         : days.map(([day, list]) => (
-          <section key={day}>
-            <div className="px-1 pb-1.5 pt-3 text-[13px] font-bold">{heading(day)}</div>
-            <div className="overflow-hidden rounded-2xl bg-card">
-              {list.map((e) => (
-                <div key={e.id} className="flex items-start gap-2.5 border-b border-border px-3 py-2.5 last:border-b-0">
-                  <span className="w-12 flex-none pt-px tabular-nums text-[15px] font-semibold">{time(e.at)}</span>
-                  <span className="flex-1 min-w-0">
-                    <span className={`block text-[15px] leading-snug ${e.undone ? "text-muted-foreground" : ""}`}>{e.text}</span>
-                    <span className="block text-xs text-muted-foreground">{e.who}</span>
-                  </span>
-                  {e.undo ? <button type="button" className="-my-1 min-h-10 rounded-full px-3 text-sm font-bold text-primary" onClick={() => undo(e)}>Undo</button> : null}
-                </div>
-              ))}
-            </div>
-          </section>
+          <ListGroup key={day} title={heading(day)}>
+            {list.map((e) => <EntryRow key={e.id} time={time(e.at)} text={e.text} muted={e.undone} by={e.who} action={e.undo ? { label: "Undo", run: () => undo(e) } : undefined} />)}
+          </ListGroup>
         ))}
     </div>
   );

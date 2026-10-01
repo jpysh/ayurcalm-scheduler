@@ -72,7 +72,7 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
     ['Leave', 'Upcoming'],
     ['Events', 'Events'],
     ['Patients', 'in house'],
-    ['Settings', 'Centre details'],
+    ['Settings', 'Centre and letterhead'],
     ['Back to the day', 'treatments'],
   ]) {
     await openTab(page, tab);
@@ -86,7 +86,7 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
   }
   // The Log opens from Settings with the demo's own changes in words (#130).
   await openTab(page, 'Settings');
-  await activePanel(page).getByRole('button', { name: /^Log Everything/ }).click();
+  await activePanel(page).getByRole('button', { name: /^Log\b/ }).click();
   await expect(activePanel(page)).toContainText(/Today|Yesterday/, { timeout: 15000 });
     // A seeded install has residents in house, and one opens on a card with
   // today's meals (#63); an empty list means the API is not answering.
@@ -431,11 +431,13 @@ test('leave for a day ahead is marked from Team, and a whole day carries no hour
   expect((await request.delete(`/api/timeoff/${created.id}`, { headers: { Authorization: `Bearer ${token}` } })).ok()).toBe(true);
 });
 
-test('Leave offers India\'s public holidays, and a seeded centre is already closed on them (#219)', async ({ page }) => {
+test('Opening hours offers India\'s public holidays, and a seeded centre is already closed on them (#219)', async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  await openTab(page, 'Leave');
-  await activePanel(page).getByRole('button', { name: 'Public holidays' }).click();
+  // Public holidays live with Opening hours in Settings (#288).
+  await openTab(page, 'Settings');
+  await activePanel(page).getByRole('button', { name: /^Opening hours/ }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Public holidays/ }).click();
   await expect(page.getByRole('dialog').getByText('Every public holiday ahead is already a closed day.')).toBeVisible({ timeout: 15000 });
 });
 
@@ -448,14 +450,16 @@ test('a resident leaving today has a departure section and a summary to take hom
   test.skip(!(await leaving.count()), 'nobody leaves today');
   await leaving.first().click();
   const card = page.getByRole('dialog').last();
-  await expect(card.getByText('Departure', { exact: true })).toBeVisible({ timeout: 15000 });
-  const [download] = await Promise.all([page.waitForEvent('download'), card.getByRole('button', { name: /^↓ ?Discharge summary for/ }).click()]);
+  // The checklist bar opens what the summary lacks; printing is always there (story 8).
+  await card.getByRole('button', { name: /^Discharge summary/ }).click({ timeout: 15000 });
+  const checklist = page.getByRole('dialog').last();
+  const [download] = await Promise.all([page.waitForEvent('download'), checklist.getByRole('button', { name: 'Print summary' }).click()]);
   expect(download.suggestedFilename()).toMatch(/discharge summary\.pdf$/);
   // The form opens with what the app knows filled in, and saves.
-  await card.getByRole('button', { name: /Write the discharge summary/ }).click();
+  await checklist.getByRole('button', { name: /Summary/ }).click();
   const form = page.getByRole('dialog').last();
   await expect(form.getByLabel('Condition at discharge')).not.toHaveValue('', { timeout: 15000 });
-  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await form.getByRole('button', { name: 'Save the summary' }).click();
   await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 });
 
@@ -469,7 +473,7 @@ test('a resident arriving today has the arrival steps still to do (#219)', async
   await arriving.first().click();
   const card = page.getByRole('dialog').last();
   await expect(card.getByText('Arrival', { exact: true })).toBeVisible({ timeout: 15000 });
-  await expect(card.getByRole('button', { name: /Vitals and concerns/ })).toBeVisible();
+  await expect(card.getByRole('button', { name: /Vitals and what they came about/ })).toBeVisible();
 });
 
 test('Team shows this week: booked hours against hours in, and each person\'s days (#219)', async ({ page }) => {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
-import { Plus, Search as SearchIcon } from "lucide-react";
+import { Lock, Plus, Search as SearchIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
@@ -260,7 +260,7 @@ export const Pill = ({ need, info, onClick }: { need: number; info: number; onCl
 };
 
 /** One row: title, up to two facts, one trailing fact, and a flag line only when something needs doing. */
-export const Row = ({ title, facts, trailing, flag, onClick }: { title: ReactNode; facts?: ReactNode; trailing?: ReactNode; flag?: ReactNode; onClick?: () => void }) => {
+export const Row = ({ title, facts, trailing, flag, onClick, href }: { title: ReactNode; facts?: ReactNode; trailing?: ReactNode; flag?: ReactNode; onClick?: () => void; /** A row that leaves the app (WhatsApp) is a link, so it can be opened in a new tab. */ href?: string }) => {
   const body = (
     <>
       <span className="min-w-0 flex-1">
@@ -272,6 +272,7 @@ export const Row = ({ title, facts, trailing, flag, onClick }: { title: ReactNod
     </>
   );
   const cls = "flex min-h-[56px] w-full items-center gap-3 border-b border-border px-3 py-2 text-left last:border-b-0";
+  if (href) return <a className={cls} href={href} target="_blank" rel="noopener noreferrer" onClick={onClick}>{body}</a>;
   return onClick ? <button type="button" className={cls} onClick={onClick}>{body}</button> : <div className={cls}>{body}</div>;
 };
 
@@ -284,10 +285,10 @@ export const ListGroup = ({ title, count, children }: { title?: string; count?: 
 );
 
 /** The inbox behind the pill: sections, each a list of rows; empty sections do not show. */
-export function InboxSheet({ open, onOpenChange, title, sections, empty = "Nothing needs you.", children }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; sections: { name: string; /** What needs action; information rows are not counted. */ count: number; body: ReactNode }[]; empty?: string; children?: ReactNode }) {
+export function InboxSheet({ open, onOpenChange, title, sections, empty = "Nothing needs you.", children, foot }: { foot?: ReactNode; open: boolean; onOpenChange: (o: boolean) => void; title: string; sections: { name: string; /** What needs action; information rows are not counted. */ count: number; body: ReactNode }[]; empty?: string; children?: ReactNode }) {
   const shown = sections.filter((x) => x.body);
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange} title={title}>
+    <BottomSheet open={open} onOpenChange={onOpenChange} title={title} foot={foot}>
       {children}
       {shown.length ? shown.map((x) => <div key={x.name}><div className="pb-1 pt-3 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{x.name}{x.count > 0 ? ` · ${x.count}` : ""}</div>{x.body}</div>) : <Empty text={empty} />}
     </BottomSheet>
@@ -298,9 +299,9 @@ export function InboxSheet({ open, onOpenChange, title, sections, empty = "Nothi
 export const Consequence = ({ children }: { children: ReactNode }) => <p role="status" className="mt-2 rounded-xl bg-secondary px-3 py-2 text-[13px] font-semibold text-primary">{children}</p>;
 
 /** "Discharge summary · 5 of 8 ready", with a slim line. Informs, never blocks. */
-export const ChecklistBar = ({ label, done, total, onClick }: { label: string; done: number; total: number; onClick: () => void }) => (
+export const ChecklistBar = ({ label, done, total, onClick, unit = "ready" }: { label: string; done: number; total: number; onClick: () => void; unit?: string }) => (
   <button type="button" onClick={onClick} className="block w-full rounded-xl border bg-card px-3 py-2.5 text-left">
-    <span className="flex justify-between text-sm font-semibold"><span>{label}</span><span className="text-muted-foreground">{done} of {total} ready</span></span>
+    <span className="flex justify-between text-sm font-semibold"><span>{label}</span><span className="text-muted-foreground">{done} of {total} {unit}</span></span>
     <span className="mt-2 block h-1 overflow-hidden rounded-full bg-secondary"><span className="block h-full rounded-full bg-primary" style={{ width: `${total ? (done / total) * 100 : 0}%` }} /></span>
   </button>
 );
@@ -470,4 +471,52 @@ export function SheetFoot({ busy, save, label = "Save", remove, removeLabel = "D
 /** A list's first row when the list has somewhere else to go: "Add from the library ›". */
 export const LinkRow = ({ label, value, onClick }: { label: string; value?: ReactNode; onClick: () => void }) => (
   <div className="px-3"><ChangeLine label={label} value={value ?? ""} onClick={onClick} /></div>
+);
+
+/** A row whose trailing control is a switch: the name, one line of state, and the switch at the right (#288). `locked` shows a lock and cannot be switched. */
+export const SwitchRow = ({ title, facts, on, set, locked, flag, children }: { title: ReactNode; facts?: ReactNode; on: boolean; set: (v: boolean) => void; locked?: boolean; flag?: ReactNode; children?: ReactNode }) => (
+  <div className="border-b border-border px-3 py-2 last:border-b-0">
+    <label className="flex min-h-[48px] items-center gap-3">
+      <span className="min-w-0 flex-1">
+        <span className="block text-base font-semibold">{title}</span>
+        {facts ? <span className="block text-[13px] text-muted-foreground">{facts}</span> : null}
+        {flag ? <span className="block text-[13px] font-semibold text-notice">{flag}</span> : null}
+      </span>
+      {locked ? <Lock aria-label="Always on" className="h-4 w-4 flex-none text-muted-foreground" /> : null}
+      <input type="checkbox" role="switch" aria-label={typeof title === "string" ? title : undefined} checked={on} disabled={locked} onChange={(e) => set(e.target.checked)} />
+    </label>
+    {children}
+  </div>
+);
+
+/** A photo chosen from the phone, as a button: the browser's own "Choose File · No file chosen" is cut off on a phone (#265 P4). */
+export const PickPhoto = ({ id, has, disabled, onPick }: { id: string; has: boolean; disabled?: boolean; onPick: (f?: File) => void }) => (
+  <label className="flex min-h-11 cursor-pointer items-center rounded-full border px-4 font-semibold">
+    {has ? "Change photo" : "Choose a photo"}
+    <input id={id} type="file" accept="image/png,image/jpeg" className="sr-only" disabled={disabled} onChange={(e) => { onPick(e.target.files?.[0]); e.target.value = ""; }} />
+  </label>
+);
+
+/** A caption over a part of a long sheet or page ("Centre", "Letterhead"): the same words ListGroup puts over its list. */
+export const SectionHead = ({ children }: { children: ReactNode }) => <div className="pb-1.5 pt-5 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{children}</div>;
+
+/** One dated line of a record (the Log): time, the sentence wrapped in full, who did it, and one action such as Undo. */
+export const EntryRow = ({ time, text, by, muted, action }: { time: string; text: ReactNode; by?: ReactNode; muted?: boolean; action?: { label: string; run: () => void } }) => (
+  <div className="flex min-h-[56px] items-start gap-3 border-b border-border px-3 py-2.5 last:border-b-0">
+    <span className="w-12 flex-none pt-px text-base font-semibold tabular-nums">{time}</span>
+    <span className="min-w-0 flex-1">
+      <span className={`block text-base leading-snug ${muted ? "text-muted-foreground" : ""}`}>{text}</span>
+      {by ? <span className={`block ${noteText}`}>{by}</span> : null}
+    </span>
+    {action ? <button type="button" className="-my-1 min-h-11 flex-none rounded-full px-3 text-sm font-bold text-primary" onClick={action.run}>{action.label}</button> : null}
+  </div>
+);
+
+/** An inbox item: what it is, one or two facts, and its actions as quiet buttons under it. `stacked` puts a choice of actions one under another. */
+export const ItemRow = ({ title, facts, children, stacked }: { title: ReactNode; facts?: ReactNode; children?: ReactNode; stacked?: boolean }) => (
+  <div className="border-b border-border px-3 py-2.5 last:border-b-0">
+    <span className="block text-base font-semibold leading-snug">{title}</span>
+    {facts ? <span className={`block ${noteText}`}>{facts}</span> : null}
+    {children ? <div className={`mt-1 flex gap-1 ${stacked ? "flex-col items-end" : "flex-wrap justify-end"}`}>{children}</div> : null}
+  </div>
 );

@@ -66,6 +66,9 @@ server/                 Express + Prisma + Zod, serves ../dist in production
   src/dietResolution.ts    What one patient eats on one day — pure, and tested
   src/dietTemplates.ts     Diet plan CRUD, admin-only writes
   src/patientDiet.ts       A patient's meals by date: the segments of a stay, kept contiguous
+  src/attention.ts         What needs the admin beyond the day (#288): the rules, their
+                        defaults, today's counts and the patient and team items
+                        the pill lists. The admin's changes are the only thing stored
   src/catalogues.ts        Packages and accommodation types (reference lists, never billing)
   src/mcp.ts               The AI assistant's door at /mcp (#119, spec #102):
                         grouped tools that call the functions above and

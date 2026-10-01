@@ -459,8 +459,9 @@ async function main() {
         ...(start_date < today ? { vitals: `BP ${118 + (stayCount * 7) % 30}/${76 + (stayCount * 3) % 14}, pulse ${66 + (stayCount * 5) % 18}`, concerns: concernsSeed[stayCount % concernsSeed.length], tests: stayCount % 4 === 0 ? 'Blood sugar (fasting), lipid profile' : null } : {}) },
     });
     // Not everyone: a centre always has someone whose plan has not been set yet,
-    // and the sheet should show that honestly rather than inventing one.
-    const planned = stayCount++ % 6 !== 5 && templates.length > 0;
+    // and the sheet should show that honestly rather than inventing one. Only
+    // those arriving today or later: a patient a day in with no plan is on the pill (#288), and a demo that opens on 16 of them is not the demo.
+    const planned = (stayCount++ % 6 !== 5 || start_date < today) && templates.length > 0;
     if (planned) {
       await prisma.dietPlanSegment.create({
         data: { patient_id, start_date, end_date, template_id: templates[stayCount % templates.length].id },
@@ -498,10 +499,10 @@ async function main() {
   // then, so it shows as closed without adding a problem Verify must solve.
   const afternoon = (t: string) => t >= '14:00';
   const bookedAfternoon = new Set(spare.filter((a) => afternoon(a.start_time)).map((a) => a.room_id));
-  const idleRoom = rooms.find((r) => !bookedAfternoon.has(r.id) && !todaysBookings.some((a) => a.room_id === r.id && afternoon(a.start_time)));
-  if (idleRoom) {
-    await prisma.timeOff.create({ data: { entity_type: 'room', entity_id: idleRoom.id, date: today, start_time: '14:00', end_time: '20:00', description: 'Plumbing repair' } });
-  }
+  // The dense seed books every room most afternoons; then a spare one, made after the booking, takes the repair, so the leave is always there.
+  const idleRoom = rooms.find((r) => !bookedAfternoon.has(r.id) && !todaysBookings.some((a) => a.room_id === r.id && afternoon(a.start_time)))
+    ?? await prisma.therapyRoom.create({ data: { name: 'Annexe', amenities: amenitiesSet, weekly_schedule: scheduleStd, is_active: true } });
+  await prisma.timeOff.create({ data: { entity_type: 'room', entity_id: idleRoom.id, date: today, start_time: '14:00', end_time: '20:00', description: 'Plumbing repair' } });
 
   // Doctors (#219): three, sharing two consultation rooms that no treatment
   // needs. Each stay opens with a consultation and has one a week after it, so

@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
 import { API_BASE } from "@/lib/apiBase";
 import { Menu, Printer, Search } from "lucide-react";
-import { Bar, BarButton, BarCapsule, BottomSearch, BottomSheet, Pill, PlusButton } from "@/components/kit";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Bar, BarButton, BarCapsule, BottomSearch, BottomSheet, DateRow, Group, ListGroup, Pill, PlusButton, Row, Seg } from "@/components/kit";
 
 /**
  * The phone frame from docs/design/phone.html (#66): one bar at the bottom, in
@@ -107,46 +105,27 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
       )}
 
       <BottomSheet open={sheet === "menu"} onOpenChange={(o) => setSheet(o ? "menu" : null)} title="">
-        <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Show the day by</div>
-        <div className="mb-3 grid grid-cols-4 gap-1 rounded-xl bg-background p-1">
-          {(["time", "therapist", "room", "resident"] as const).map((v) => (
-            <button key={v} type="button" aria-pressed={activeTab === "schedule" && view === v}
-              className="min-h-10 rounded-lg text-[13px] font-semibold text-center text-muted-foreground aria-pressed:bg-card aria-pressed:text-foreground aria-pressed:shadow"
-              onClick={() => { setView(v); go("schedule"); setSheet(null); }}>
-              {v === "resident" ? "Patient" : v[0].toUpperCase() + v.slice(1)}
-            </button>
-          ))}
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {MENU.flatMap(([key, name, hint]) => [
-            <button key={key} type="button"
-              className="min-h-[60px] rounded-xl border-2 px-3 py-2 text-left"
-              onClick={() => { go(key); setSheet(null); }}>
-              <b className="block text-base">{name}</b>
-              <span className="block text-xs text-muted-foreground">{hints[key] || hint}</span>
-            </button>,
-            key === "settings" && helpWa ? (
-              <a key="help" href={`https://wa.me/${helpWa}`} target="_blank" rel="noopener noreferrer"
-                className="min-h-[60px] rounded-xl border-2 px-3 py-2 text-left" onClick={() => setSheet(null)}>
-                <b className="block text-base">Help · WhatsApp</b>
-                <span className="block text-xs text-muted-foreground">Ask us anything</span>
-              </a>
-            ) : null,
-          ])}
-
+        <Group label="Show the day by">
+          <Seg<"time" | "therapist" | "room" | "resident"> options={[["time", "Time"], ["therapist", "Therapist"], ["room", "Room"], ["resident", "Patient"]]} value={activeTab === "schedule" ? (view as "time") : ("" as "time")}
+            onChange={(v) => { setView(v); go("schedule"); setSheet(null); }} />
+        </Group>
+        <div className="mt-3">
+          <ListGroup>
+            {MENU.flatMap(([key, name, hint]) => [
+              <Row key={key} title={name} facts={hints[key] || hint} trailing="›" onClick={() => { go(key); setSheet(null); }} />,
+              key === "settings" && helpWa ? <Row key="help" title="Help · WhatsApp" facts="Ask us anything" trailing="›" href={`https://wa.me/${helpWa}`} onClick={() => setSheet(null)} /> : null,
+            ])}
+          </ListGroup>
         </div>
       </BottomSheet>
 
       <BottomSheet open={sheet === "day"} onOpenChange={(o) => setSheet(o ? "day" : null)} title={label(day)}>
         <div className="grid grid-cols-3 gap-2">
-          <Button variant="outline" className="rounded-full px-2 text-sm" onClick={() => pick(shift(day, -1))}>‹ Day before</Button>
-          <Button className="rounded-full px-2 text-sm" onClick={() => pick(today)}>Today</Button>
-          <Button variant="outline" className="rounded-full px-2 text-sm" onClick={() => pick(shift(day, 1))}>Next day ›</Button>
+          <button type="button" className="min-h-11 rounded-full border px-2 text-sm font-semibold" onClick={() => pick(shift(day, -1))}>‹ Day before</button>
+          <button type="button" className="min-h-11 rounded-full bg-primary px-2 text-sm font-semibold text-primary-foreground" onClick={() => pick(today)}>Today</button>
+          <button type="button" className="min-h-11 rounded-full border px-2 text-sm font-semibold" onClick={() => pick(shift(day, 1))}>Next day ›</button>
         </div>
-        <label className="mt-4 flex items-center justify-between gap-3 text-base">
-          Pick a date
-          <Input type="date" className="w-auto" value={day} onChange={(e) => e.target.value && pick(e.target.value)} />
-        </label>
+        <div className="mt-3"><DateRow label="Pick a date" value={day} onChange={pick} /></div>
       </BottomSheet>
     </>
   );
