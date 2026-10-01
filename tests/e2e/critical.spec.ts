@@ -21,7 +21,8 @@ async function passSetupIfShown(page: Page) {
   await page.getByLabel('Centre name').fill('Test Centre');
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: 'Keep the example data for now' }).click();
+  await page.getByRole('button', { name: /^Keep the example data for now/ }).click();
+  await page.getByRole('button', { name: 'Keep the example data' }).click();
   await page.waitForURL(/\/admin/);
 }
 
@@ -144,51 +145,52 @@ test('an edit to a room is still there after a reload', async ({ page }) => {
   await expect(activePanel(page)).not.toContainText(edited, { timeout: 15000 });
 });
 
-test('the booking dialog offers the slots the API found, and books one', async ({ page, request }) => {
-  await signIn(page);
-  await passSetupIfShown(page);
-  await openTab(page, 'Back to the day');
-  await page.getByRole('button', { name: 'Book a treatment' }).click();
-  // + opens one sheet to book one treatment (#285); the full form, for a course, is behind its last link.
-  await page.getByRole('dialog').getByRole('button', { name: /^A course over several days/ }).click();
-
-  // The centre's clock and the browser's clock are rarely the same one. The
-  // dialog used to re-filter the server's slots against the browser's, so a
-  // browser west of the centre saw "No slots available" for slots that exist.
-  // From tomorrow: a run late in the day would otherwise be left with only the
-  // slots the evening programme occupies, and find nothing for reasons that
-  // have nothing to do with what this test is about.
-  const start = new Date();
-  start.setDate(start.getDate() + 1);
-  const end = new Date();
-  end.setDate(end.getDate() + 10);
-  await page.getByLabel('Start Date').fill(start.toISOString().slice(0, 10));
-  await page.getByLabel('End Date').fill(end.toISOString().slice(0, 10));
-  await page.getByRole('button', { name: 'Select patient' }).click();
-  // Someone staying tomorrow: a resident is only booked while they are here (#142).
+test('the booking sheet books a course of sessions in one go, and Undo takes them all back', async ({ page, request }) => {
+  // Its own days in 2030 and its own patient and therapy: nothing on the seeded days can be in the way.
+  const DAY = '2030-04-10';
+  const TAG = 'Course';
   const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
-  const staying = await (await request.get(`/api/patients?resident_on=${start.toISOString().slice(0, 10)}`, { headers: { Authorization: `Bearer ${token}` } })).json();
-  expect(staying.length, 'nobody in the demo is staying tomorrow').toBeGreaterThan(0);
-  // The booking is removed afterwards, so repeated runs on one stack don't fill
-  // the window and leave "No slots available" (#153).
   const headers = { Authorization: `Bearer ${token}` };
-  const bookingsOf = async () => ((await (await request.get(`/api/appointments?patient_id=${staying[0].id}`, { headers })).json()) as { id: string }[]).map((a) => a.id);
-  const before = new Set(await bookingsOf());
+  const call = async (method: 'get' | 'post' | 'delete', path: string, data?: unknown) => {
+    const res = await (request as APIRequestContext)[method](`/api${path}`, { headers, data });
+    expect(res.ok(), `${method} ${path}: ${res.status()}`).toBeTruthy();
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  };
+  const tidy = async () => {
+    for (const p of await call('get', '/patients')) if (p.name.startsWith(TAG)) await call('delete', `/patients/${p.id}`);
+    for (const x of await call('get', '/staff')) if (x.name.startsWith(TAG)) await call('delete', `/staff/${x.id}`);
+    for (const r of await call('get', '/rooms')) if (r.name.startsWith(TAG)) await call('delete', `/rooms/${r.id}`);
+    for (const t of await call('get', '/therapies')) if (t.name.startsWith(TAG)) await call('delete', `/therapies/${t.id}`);
+  };
+  await tidy();
   try {
-  await page.getByPlaceholder('Search patient').fill(staying[0].name);
-  await page.getByRole('option').first().click();
-  await page.getByRole('button', { name: /Select therapy/i }).click();
-  await page.getByPlaceholder(/Search therapy/i).fill('Abhyanga');
-  await page.getByRole('option').first().click();
-
-  await page.getByRole('button', { name: 'Auto-Assign' }).click();
-  await expect(page.getByText(/suggested slot/)).toBeVisible({ timeout: 20000 });
-
-  await page.getByText(/^Option 1$/).click();
-  await page.getByRole('button', { name: 'Confirm Selected Slot' }).click();
-  await expect(page.getByText('Selected slot confirmed')).toBeVisible({ timeout: 20000 });
+    const allWeek = Object.fromEntries(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].map((d) => [d, { start: '09:00', end: '18:00' }]));
+    const therapy = await call('post', '/therapies', { name: `${TAG} Abhyanga`, duration_minutes: 60 });
+    await call('post', '/rooms', { name: `${TAG} Room`, weekly_schedule: allWeek });
+    await call('post', '/staff', { name: `${TAG} Asha`, gender: 'female', specializations: [therapy.id], weekly_schedule: allWeek });
+    const patient = await call('post', '/patients', { name: `${TAG} Rekha`, gender: 'female', stay: { start_date: '2030-04-01', end_date: '2030-04-30' } });
+    await signIn(page);
+    await passSetupIfShown(page);
+    await openTab(page, 'Back to the day');
+    await showDay(page, DAY);
+    await page.getByRole('button', { name: 'Book a treatment' }).click();
+    const sheet = page.getByRole('dialog');
+    await sheet.getByLabel('Search patients').fill(patient.name);
+    await sheet.getByRole('button', { name: new RegExp(`^${patient.name}`) }).first().click();
+    await sheet.getByLabel('Therapy', { exact: true }).selectOption({ label: `${TAG} Abhyanga` });
+    await sheet.getByLabel('Sessions', { exact: true }).selectOption({ label: '3 sessions, one a day' });
+    const book = sheet.getByRole('button', { name: /^Book \w+, 3 days from/ });
+    await expect(book).toBeEnabled({ timeout: 15000 });
+    await book.click();
+    const toast = page.locator('[data-sonner-toast]').filter({ hasText: /3 ×/ });
+    await expect(toast).toBeVisible({ timeout: 20000 });
+    const booked = async () => ((await call('get', `/appointments?patient_id=${patient.id}`)) as { scheduled_date: string }[]).map((a) => a.scheduled_date.slice(0, 10)).sort();
+    expect(await booked()).toEqual(['2030-04-10', '2030-04-11', '2030-04-12']);
+    await toast.getByRole('button', { name: 'Undo' }).click();
+    await expect.poll(booked, { timeout: 15000 }).toEqual([]);
   } finally {
-    for (const id of await bookingsOf()) if (!before.has(id)) await request.delete(`/api/appointments/${id}`, { headers });
+    await tidy();
   }
 });
 
@@ -208,6 +210,8 @@ test("the day's problems are named on the first screen", async ({ page, request 
   const tidy = async () => {
     for (const h of await call('get', '/timeoff')) if (String(h.description).startsWith(TAG)) await call('delete', `/timeoff/${h.id}`);
     for (const p of await call('get', '/patients')) if (p.name.startsWith(TAG)) await call('delete', `/patients/${p.id}`);
+    for (const x of await call('get', '/staff')) if (x.name.startsWith(TAG)) await call('delete', `/staff/${x.id}`);
+    for (const r of await call('get', '/rooms')) if (r.name.startsWith(TAG)) await call('delete', `/rooms/${r.id}`);
     for (const x of await call('get', '/staff')) if (x.name.startsWith(TAG)) await call('delete', `/staff/${x.id}`);
     for (const r of await call('get', '/rooms')) if (r.name.startsWith(TAG)) await call('delete', `/rooms/${r.id}`);
     for (const t of await call('get', '/therapies')) if (t.name.startsWith(TAG)) await call('delete', `/therapies/${t.id}`);
@@ -257,7 +261,8 @@ test('search finds a resident on other days and opens the card with Show this da
   // A resident chip is a full name; therapist chips are first names.
   await page.getByRole('button', { name: /^\S+ \S+/ }).first().click();
   await page.getByRole('button', { name: 'All', exact: true }).click();
-  const result = page.getByRole('button', { name: /^\d\d:\d\d/ }).first();
+  // A result row reads name, therapy, room, then its start and end times.
+  const result = page.getByRole('button', { name: /\d\d:\d\d \d\d:\d\d$/ }).first();
   await expect(result).toBeVisible({ timeout: 15000 });
   // Five earlier searches are kept; opening a result puts this one first and drops the oldest (#193).
   await page.evaluate(() => localStorage.setItem('recentSearches', JSON.stringify(['q1', 'q2', 'q3', 'q4', 'q5'])));
@@ -265,10 +270,11 @@ test('search finds a resident on other days and opens the card with Show this da
   await result.click();
   await expect(page.getByRole('dialog').getByRole('button', { name: 'Show this day' })).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('recentSearches') || '[]'))).toEqual([searched, 'q1', 'q2', 'q3', 'q4']);
-  // History is the design's timeline (#193): a line down the left, one dot per change.
+  // History is its own page of the card, a dated line per change, with a way back.
   await page.getByRole('dialog').getByRole('button', { name: /^History/ }).click();
-  const changes = page.getByRole('dialog').getByRole('list', { name: 'Changes' });
-  await expect(changes).toHaveCSS('border-left-width', '2px');
+  await expect(page.getByRole('dialog').getByRole('heading', { name: 'History' })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: /Back/ }).click();
+  await expect(page.getByRole('dialog').getByRole('button', { name: /^When/ })).toBeVisible();
 });
 
 test('a search match inside a room name keeps the name in one piece (#193)', async ({ page }) => {

@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
 import { useCentreName, useDemo, useTrial } from "@/lib/centreName";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
-import { HelpCircle } from "lucide-react";
+import { Btn, Callout, FullPage, More, QuietLink, Text } from "@/components/kit";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 
@@ -42,7 +38,7 @@ const Login = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(res.status === 429 ? "Server busy: rate limit exceeded" : (data?.error || "Invalid credentials"));
+        toast.error(res.status === 429 ? "Too many tries. Wait a minute and try again." : (data?.error || "That email and password do not match."));
         return;
       }
       localStorage.setItem("authToken", data.token);
@@ -61,113 +57,51 @@ const Login = () => {
       }
       navigate(data.user?.role === "admin" ? "/admin/schedule" : "/staff/schedule");
     } catch {
-      toast.error("Unable to reach server");
+      toast.error("Could not reach the server. Check the connection and try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-muted/20">
-      <header className="bg-card border-b border-border sticky top-0 z-10 shadow-sm">
-        <div className="container mx-auto px-2 py-1 md:px-3 md:py-2">
-          <div className="grid grid-cols-2 items-center">
-            <h1 className="text-sm md:text-lg font-bold justify-self-start">{centreName}</h1>
-            <div className="justify-self-end">
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Help"
-                className="h-6 w-6"
-                onClick={() => { window.open('https://github.com/jpysh/ayurcalm-scheduler#readme', '_blank', 'noopener'); }}
-              >
-                <HelpCircle className="w-3 h-3" />
-              </Button>
-            </div>
-          </div>
+    <FullPage title={centreName} note="Sign in to the centre's schedule.">
+      {demo && (
+        <div className="mt-4">
+          <Callout tone="notice" title="This is a demo" actions={<Btn kind="primary" inline disabled={isLoading} onClick={() => signIn("login", { email: demo.email, password: demo.password })}>Open the demo</Btn>}>
+            Sign in with <span className="font-mono">{demo.email} / {demo.password}</span>
+          </Callout>
         </div>
-      </header>
-
-      <div className="flex items-center justify-center p-1">
-        <Card className="w-full max-w-xs shadow-sm mt-4">
-          <CardContent className="pt-3">
-            {demo && (
-              <div className="mb-3 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950">
-                <p className="font-semibold">This is a demo. Sign in with:</p>
-                <p className="font-mono">{demo.email} / {demo.password}</p>
-                <Button type="button" size="sm" className="mt-2 w-full" onClick={() => signIn("login", { email: demo.email, password: demo.password })} disabled={isLoading}>
-                  Open the demo
-                </Button>
-              </div>
-            )}
-            <form onSubmit={handleLogin} className="space-y-2">
-              <div className="space-y-1">
-                <Label htmlFor="username" className="text-sm">Email</Label>
-                <Input
-                  id="username"
-                  type="email"
-                  autoComplete="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="h-9 text-sm"
-                  required
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="password" className="text-sm">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-9 text-sm"
-                  required
-                />
-              </div>
-              <Button
-                type="submit"
-                className="w-full h-9 text-sm font-semibold"
-                disabled={isLoading}
-              >
-                {isLoading ? "Signing in..." : "Sign In"}
-              </Button>
-            </form>
-            {trial ? (
-              // No email at launch (#247): the maintainer sets a new password and sends it back.
-              <details className="mt-2 text-center">
-                <summary className="cursor-pointer text-sm text-muted-foreground">Forgotten your password?</summary>
-                <p className="mt-2 text-sm">
-                  <a className="underline" href={`https://wa.me/420777558262?text=${encodeURIComponent(`Please reset the password for ${window.location.host}`)}`}>WhatsApp us</a> from your phone and we will send you a new one, usually within a few hours.
-                </p>
-              </details>
-            ) : null}
-            {trial ? (
-              // Pilot notice and contacts (#251): who runs a cloud centre and how to reach them.
-              <p className="mt-4 text-center text-xs text-muted-foreground">
-                <a className="underline" href="https://jains.es/ruta/pilot">Pilot notice: your data</a> · <a className="underline" href="https://wa.me/420777558262">WhatsApp</a> · <a className="underline" href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a>
-              </p>
-            ) : null}
-            {trial ? null : (
-            <details className="mt-2 text-center">
-              <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                Forgotten your password?
-              </summary>
-              <div className="mt-2 space-y-1 text-left text-xs text-muted-foreground">
-                <p>Ask an administrator to set a new one from Settings.</p>
-                <p>
-                  If you are the only administrator, run this on the machine hosting the app:
-                </p>
-                <code className="block break-all rounded bg-muted px-2 py-1 font-mono text-[11px]">
-                  docker compose exec app npx tsx server/src/scripts/resetPassword.ts your@email.com
-                </code>
-                <p>It prints a new password for you.</p>
-              </div>
-            </details>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+      )}
+      <form onSubmit={handleLogin} className="mt-2">
+        <Text label="Email" type="email" inputMode="email" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+        <Text label="Password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <div className="mt-5"><Btn kind="primary" type="submit" disabled={isLoading}>{isLoading ? "Signing in…" : "Sign in"}</Btn></div>
+      </form>
+      {trial ? (
+        // No email at launch (#247): the maintainer sets a new password and sends it back.
+        <More label="Forgotten your password?" hint="">
+          <p className="py-2 text-sm">
+            <QuietLink className="underline" href={`https://wa.me/420777558262?text=${encodeURIComponent(`Please reset the password for ${window.location.host}`)}`}>WhatsApp us</QuietLink> from your phone and we will send you a new one, usually within a few hours.
+          </p>
+        </More>
+      ) : (
+        <More label="Forgotten your password?" hint="">
+          <div className="space-y-2 py-2 text-sm text-muted-foreground">
+            <p>Ask an administrator to set a new one from Settings.</p>
+            <p>If you are the only administrator, run this on the machine hosting the app:</p>
+            <code className="block break-all rounded-xl bg-secondary px-3 py-2 font-mono text-xs text-foreground">docker compose exec app npx tsx server/src/scripts/resetPassword.ts your@email.com</code>
+            <p>It prints a new password for you.</p>
+          </div>
+        </More>
+      )}
+      {trial ? (
+        // Pilot notice and contacts (#251): who runs a cloud centre and how to reach them.
+        <p className="mt-4 text-center text-[13px] text-muted-foreground">
+          <a className="underline" href="https://jains.es/ruta/pilot">Pilot notice: your data</a> · <a className="underline" href="https://wa.me/420777558262">WhatsApp</a> · <a className="underline" href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a>
+        </p>
+      ) : null}
+      <div className="mt-4 text-center"><QuietLink href="https://github.com/jpysh/ayurcalm-scheduler#readme" target="_blank" rel="noopener noreferrer">Help</QuietLink></div>
+    </FullPage>
   );
 };
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { useEffect, useRef, useState, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { Lock, Plus, Search as SearchIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -14,7 +14,7 @@ export const field = `h-11 w-full rounded-xl border border-[hsl(var(--input)/0.4
 const chevron = <svg aria-hidden viewBox="0 0 16 16" className="pointer-events-none h-4 w-4 flex-none text-muted-foreground"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 export const lbl = "mt-3 mb-1 block text-[13px] font-semibold text-muted-foreground";
 export const noteText = "text-[13px] text-muted-foreground";
-const chip = "min-h-10 rounded-full border border-[hsl(var(--input)/0.45)] px-3.5 text-sm font-semibold aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground";
+export const chip = "min-h-10 rounded-full border border-[hsl(var(--input)/0.45)] px-3.5 text-sm font-semibold aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground";
 export const wide = "min-h-11 w-full rounded-full font-semibold";
 // Seeded names are stored as massage_table; the admin reads "massage table".
 export const say = (s: string) => s.replace(/_/g, " ");
@@ -196,7 +196,7 @@ export function Foot({ busy, save, label = "Save", remove, removeLabel = "Remove
  * A sheet: grab handle, title, one line saying what it is for, body, and a foot
  * that stays in view however long the body. Scrolls inside itself.
  */
-export function BottomSheet({ open, onOpenChange, title, note, children, foot }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; note?: ReactNode; children: ReactNode; foot?: ReactNode }) {
+export function BottomSheet({ open, onOpenChange, title, note, children, foot, onBack }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; note?: ReactNode; children: ReactNode; foot?: ReactNode; /** A sheet's second page: Back above the title. */ onBack?: () => void }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" hideClose className="mx-auto flex max-h-[88dvh] max-w-xl flex-col rounded-t-sheet bg-card p-0 outline-none"
@@ -204,6 +204,7 @@ export function BottomSheet({ open, onOpenChange, title, note, children, foot }:
         onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}>
         <div className="mx-auto mt-2 h-1 w-9 flex-none rounded-full bg-border" />
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
+          {onBack ? <BackLink onBack={onBack} /> : null}
           {/* A sheet with no title in the design still names itself to a screen reader. */}
           <SheetTitle className={title ? "mb-3 text-lg font-bold" : "sr-only"}>{title || "Menu"}</SheetTitle>
           {note ? <p className={`-mt-2 mb-3 ${noteText}`}>{note}</p> : null}
@@ -513,10 +514,60 @@ export const EntryRow = ({ time, text, by, muted, action }: { time: string; text
 );
 
 /** An inbox item: what it is, one or two facts, and its actions as quiet buttons under it. `stacked` puts a choice of actions one under another. */
-export const ItemRow = ({ title, facts, children, stacked }: { title: ReactNode; facts?: ReactNode; children?: ReactNode; stacked?: boolean }) => (
+export const ItemRow = ({ title, facts, children, stacked, form }: { title: ReactNode; facts?: ReactNode; children?: ReactNode; stacked?: boolean; /** The children are fields, one under another, not actions. */ form?: boolean }) => (
   <div className="border-b border-border px-3 py-2.5 last:border-b-0">
     <span className="block text-base font-semibold leading-snug">{title}</span>
     {facts ? <span className={`block ${noteText}`}>{facts}</span> : null}
-    {children ? <div className={`mt-1 flex gap-1 ${stacked ? "flex-col items-end" : "flex-wrap justify-end"}`}>{children}</div> : null}
+    {children ? <div className={form ? "mt-1 grid gap-1" : `mt-1 flex gap-1 ${stacked ? "flex-col items-end" : "flex-wrap justify-end"}`}>{children}</div> : null}
   </div>
+);
+
+/* ---- Session 8 (#285): the card, sign-in, setup and the private links ---- */
+
+const btnKinds = { primary: "bg-primary text-primary-foreground", secondary: "border-[1.5px] border-border", quiet: "text-primary", destructive: "text-destructive" };
+const btnClass = (kind: keyof typeof btnKinds, inline?: boolean) => `inline-flex min-h-11 items-center justify-center rounded-full px-4 font-semibold disabled:opacity-50 ${inline ? "" : "w-full"} ${btnKinds[kind]}`;
+
+/** A button that says its action: primary (fill), secondary (border), quiet (text) or destructive (alert text). One primary per view. `inline` gives it its own width, not the row's. */
+export const Btn = ({ kind = "secondary", inline, className = "", ...rest }: { kind?: keyof typeof btnKinds; inline?: boolean } & ButtonHTMLAttributes<HTMLButtonElement>) => (
+  <button type="button" {...rest} className={`${btnClass(kind, inline)} ${className}`} />
+);
+
+/** A button that leaves the app (WhatsApp, a PDF): a link, so it opens in a new tab, in a button's look. */
+export const LinkBtn = ({ kind = "secondary", inline, className = "", ...rest }: { kind?: keyof typeof btnKinds; inline?: boolean } & AnchorHTMLAttributes<HTMLAnchorElement>) => (
+  <a target="_blank" rel="noopener noreferrer" {...rest} className={`${btnClass(kind, inline)} ${className}`} />
+);
+
+/** A small state word on a card ("Finished", "Didn't come", "In progress"). The word carries the state; the tint only backs it. */
+export const Tag = ({ tone = "quiet", children }: { tone?: "quiet" | "good" | "alert" | "now"; children: ReactNode }) => (
+  <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${{ quiet: "bg-secondary text-muted-foreground", good: "bg-secondary text-primary", alert: "bg-destructive/10 text-destructive", now: "bg-now/10 text-now" }[tone]}`}>{children}</span>
+);
+
+/** What is wrong, in words, with the fix under it. Alert tint only when it must be fixed now. */
+export const Callout = ({ tone = "plain", title, children, actions }: { tone?: "alert" | "notice" | "plain"; title: ReactNode; children?: ReactNode; actions?: ReactNode }) => (
+  <div role="group" aria-label={typeof title === "string" ? title : undefined} className={`rounded-xl px-3 py-2.5 ${tone === "alert" ? "bg-destructive/10" : tone === "notice" ? "bg-notice-bg text-notice" : "bg-secondary"}`}>
+    <b className={`block text-sm ${tone === "alert" ? "text-destructive" : ""}`}>{title}</b>
+    {children ? <span className="block text-sm">{children}</span> : null}
+    {actions ? <div className="mt-0.5 flex flex-wrap justify-end gap-1">{actions}</div> : null}
+  </div>
+);
+
+/** Back, for BottomSheet's `onBack`. */
+const BackLink = ({ onBack }: { onBack: () => void }) => (
+  <button type="button" className="-ml-1 -mt-2 mb-1 flex min-h-11 items-center px-1 font-semibold text-primary" onClick={onBack}>‹ Back</button>
+);
+
+/** A screen that is not the app (sign-in, setup, a private link): the page colour, one centred column, the sheet's gutter. */
+export const FullPage = ({ title, note, children }: { title?: ReactNode; note?: ReactNode; children: ReactNode }) => (
+  <main className="min-h-dvh bg-background px-4 pb-10 pt-8">
+    <div className="mx-auto max-w-md">
+      {title ? <h1 className="text-2xl font-bold">{title}</h1> : null}
+      {note ? <p className={`mt-1 ${noteText}`}>{note}</p> : null}
+      {children}
+    </div>
+  </main>
+);
+
+/** Whatever a small link reads as: quiet, primary, 44 high. */
+export const QuietLink = ({ className = "", ...rest }: AnchorHTMLAttributes<HTMLAnchorElement>) => (
+  <a className={`inline-flex min-h-11 items-center text-sm font-semibold text-primary ${className}`} {...rest} />
 );

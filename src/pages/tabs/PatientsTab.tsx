@@ -1,13 +1,4 @@
 import { useEffect, useMemo, useState, useRef } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Plus } from "lucide-react";
-import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { shareLink } from "@/lib/shareLink";
 import { BottomSheet } from "@/components/BottomBar";
@@ -17,10 +8,10 @@ import DayDietDialog from "./DayDietDialog";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
-import { wide, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText, rupees } from "@/components/kit";
+import { chip, wide, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText, rupees } from "@/components/kit";
 import { AccommodationSheet, DietSheet, DischargeSheet, PackageSheet, StaySheet, type CardStay, type StayTarget } from "@/components/CardSheets";
 import { marked } from "@/components/SearchScreen";
-// removed dialog import to avoid dev parse error
+import type { AttentionItem } from "@/lib/attention";
 
 type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; preferredStaffId?: string | null; requiresPreferredStaff?: boolean };
 
@@ -49,7 +40,8 @@ const DAY_MS = 86400000;
  * Residents (#63, docs/design/phone.html): who is in house today, arriving,
  * staying and leaving, from their stays. Search finds anyone, in house or not.
  */
-function ResidentsList({ patients, today, onOpen, q, everything, openRules }: { patients: Patient[]; today: string; onOpen: (id: string) => void; q: string; everything: (q: string) => void; openRules: () => void }) {
+function ResidentsList({ patients, today, onOpen, q, everything, openRules, needs, onNeed }: { patients: Patient[]; today: string; onOpen: (id: string) => void; q: string; everything: (q: string) => void; openRules: () => void; /** What the rules in Settings say needs doing for a patient (#288), and what tapping one opens. */ needs: AttentionItem[]; onNeed: (i: AttentionItem) => void }) {
+  const [onlyNeeds, setOnlyNeeds] = useState(false);
   const [inHouse, setInHouse] = useState<InHouse[] | null>(null);
   useEffect(() => {
     fetchJsonWithTimeout<InHouse[]>(`${API_BASE}/patients?resident_on=${today}`).then((r) => setInHouse(Array.isArray(r) ? r : [])).catch(() => setInHouse([]));
@@ -67,7 +59,11 @@ function ResidentsList({ patients, today, onOpen, q, everything, openRules }: { 
     ['Leaving today', people.filter((x) => x.s!.end_date.slice(0, 10) === today && x.s!.start_date.slice(0, 10) !== today)],
     ['Staying', people.filter((x) => x.s!.start_date.slice(0, 10) !== today && x.s!.end_date.slice(0, 10) !== today)],
   ];
-  const row = (id: string | number, name: string, sub: string) => <Row key={id} title={name} facts={sub} onClick={() => onOpen(String(id))} />;
+  // A flag only when something needs doing: the first thing the rules found, in its own words.
+  const flagOf = (id: string | number) => needs.filter((i) => i.patient_id === String(id)).map((i) => i.what).join(' · ') || undefined;
+  // One row a patient, with everything that needs doing under the name.
+  const needy = [...new Set(needs.map((i) => i.patient_id!))].map((id) => needs.find((i) => i.patient_id === id)!);
+  const row = (id: string | number, name: string, sub: string) => <Row key={id} title={name} facts={sub} flag={flagOf(id)} onClick={() => onOpen(String(id))} />;
   const ql = q.trim();
   // Search (#285 story 6): by name or diet plan, each result with the facts a decision needs and a flag only when it needs doing.
   const [found, setFound] = useState<{ q: string; list: Found[] } | null>(null);
@@ -96,9 +92,17 @@ function ResidentsList({ patients, today, onOpen, q, everything, openRules }: { 
           </ListGroup>
           <button type="button" className="mx-1 mt-3 min-h-11 text-base font-semibold text-primary" onClick={() => everything(found.q)}>Search everything for “{found.q}” ›</button>
         </>)
-      ) : inHouse === null ? <Loading /> : people.length === 0 ? <Empty text="No one is staying today." /> : groups.filter(([, list]) => list.length).map(([title, list]) => (
-        <ListGroup key={title} title={title} count={list.length}>{list.map(({ p, s }) => row(p.id, p.name, dayOf(s!)))}</ListGroup>
-      ))}
+      ) : inHouse === null ? <Loading /> : (<>
+        <div className="flex gap-1.5 px-1 pb-1">
+          <button type="button" className={chip} aria-pressed={!onlyNeeds} onClick={() => setOnlyNeeds(false)}>In house</button>
+          <button type="button" className={chip} aria-pressed={onlyNeeds} onClick={() => setOnlyNeeds(true)}>Needs attention{needy.length ? ` · ${needy.length}` : ""}</button>
+        </div>
+        {onlyNeeds ? (
+          <ListGroup>{needy.length ? needy.map((i) => <Row key={i.id} title={i.who} flag={flagOf(i.patient_id!)} trailing="›" onClick={() => onNeed(i)} />) : <Empty text="Nothing needs attention. The rules are in the gear above." />}</ListGroup>
+        ) : people.length === 0 ? <Empty text="No one is staying today." /> : groups.filter(([, list]) => list.length).map(([title, list]) => (
+          <ListGroup key={title} title={title} count={list.length}>{list.map(({ p, s }) => row(p.id, p.name, dayOf(s!)))}</ListGroup>
+        ))}
+      </>)}
     </div>
   );
 }
@@ -230,7 +234,9 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
 }
 
 /** The Patients screen: the Add and Details dialogs and the tab, held by the dashboard so they last as long as it does. */
-export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, openTreatment, book, searchEverything, openCatalogue, openRules }: {
+export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, openTreatment, book, searchEverything, openCatalogue, openRules, needs }: {
+  /** The patient items the rules raise today: the "Needs attention" chip and the flags on rows. */
+  needs: AttentionItem[];
   patients: PatientRow[]; setPatients: React.Dispatch<React.SetStateAction<PatientRow[]>>; staff: UiStaff[];
   therapyNameById: Record<string, string>; timezone: string;
   /** A treatment on the resident card opens the treatment card, on its day. */
@@ -366,7 +372,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const backToCard = (close: () => void) => () => { close(); if (back) { setCardId(back); setBack(null); } };
   const tab = (
     <>
-      <ResidentsList patients={patients} today={today} onOpen={setCardId} q={query} everything={searchEverything} openRules={openRules} />
+      <ResidentsList patients={patients} today={today} onOpen={setCardId} q={query} everything={searchEverything} openRules={openRules} needs={needs} onNeed={(i) => (i.action === 'diet' ? setDietFor({ id: i.patient_id!, name: i.who }) : setCardId(i.patient_id!))} />
     </>
   );
 

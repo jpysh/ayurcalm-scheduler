@@ -13,7 +13,7 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '@
  * Everything a job changes is undone, and the two days it touches are
  * compared back through the API.
  */
-const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Patient didn't come", 'Patient late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day', "A patient's meals today", 'Add an arriving patient', 'Find a patient', "Change a patient's meals from a date", "Choose a patient's package", "Choose a patient's accommodation", "Change a patient's stay", "Print a patient's discharge summary", "Record a therapist's leave", 'Edit a diet plan', 'Change what needs you', 'Open the Log']);
+const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Patient didn't come", 'Patient late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day', "A patient's meals today", 'Add an arriving patient', 'Find a patient', "Change a patient's meals from a date", "Choose a patient's package", "Choose a patient's accommodation", "Change a patient's stay", "Print a patient's discharge summary", "Record a therapist's leave", 'Edit a diet plan', 'Change what needs you', 'Open the Log', 'See who needs attention']);
 
 /** The design's order, which is the order the table prints in. */
 const JOBS: [string, number][] = [
@@ -48,6 +48,8 @@ const JOBS: [string, number][] = [
   ['Change what needs you', 4],
   // Menu, Settings, Log.
   ['Open the Log', 3],
+  // Menu, Patients, the chip (#285 session 8, story 1): the same items the pill lists, as a list of patients.
+  ['See who needs attention', 3],
 ];
 
 const ADMIN = { email: 'admin@example.com', password: 'demo1234' };
@@ -223,7 +225,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await treatments.first().waitFor();
       const onScreen = await treatments.evaluateAll((els) => Math.max(0, els.findIndex((el) => { const r = el.getBoundingClientRect(); if (r.top < 0 || r.bottom > innerHeight - 130) return false; const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!hit && el.contains(hit); })));
       await tap(treatments.nth(onScreen));
-      await tap(page.getByRole('dialog').locator('button.text-\\[22px\\]'));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Patient/ }));
       await expect(page.getByRole('dialog')).toContainText('Meals today');
     });
 
@@ -403,6 +405,13 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Settings/ }));
       await tap(activePanel(page).getByRole('button', { name: /^Log\b/ }));
       await expect(activePanel(page).getByRole('heading', { name: 'Log' })).toBeVisible({ timeout: 15000 });
+    });
+
+    await job(page, rows, 'See who needs attention', async (tap) => {
+      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Patients/ }));
+      await tap(activePanel(page).getByRole('button', { name: /^Needs attention/ }));
+      await expect(activePanel(page).getByRole('button', { name: /^Needs attention/ })).toHaveAttribute('aria-pressed', 'true');
     });
 
     await job(page, rows, 'Therapist not in', async (tap) => {

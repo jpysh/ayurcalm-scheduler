@@ -25,7 +25,7 @@ const nowInTZ = (timeZone: string) => {
 };
 
 /** The Schedule screen, and the day sheets the bottom bar prints for the day it is on. */
-export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, setSelectedAppointment, closingTime, refreshDay, openFullBooking, movedFrom, problems, showDay, openResident }: Record<string, any>) {
+export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime, refreshDay, movedFrom, problems, showDay, openResident }: Record<string, any>) {
   const [view, setView] = useState<DayView>("time");
   const [query, setQuery] = useState("");
   // Search is its own screen over every day (#165); the day list does not filter.
@@ -71,17 +71,7 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
   const isToday = dayKeyMemo === ymdInTZ(new Date());
   const now = nowInTZ(ADMIN_TZ);
 
-  // The edit dialog's shape. #136 replaces this with the treatment card.
   const nameIn = (list: { id: string | number; name: string }[], id: unknown) => list.find((x) => String(x.id) === String(id))?.name;
-  const openEdit = (a: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any -- the dashboard's edit-dialog shape
-    const room = roomsList.find((r: { id: unknown }) => String(r.id) === String(a.room_id));
-    setSelectedAppointment({
-      ...a, time: a.start_time, duration: a.duration_minutes, co_staff_ids: a.co_staff_ids || [],
-      patient: nameIn(patients, a.patient_id) || "Patient", therapy: therapyNameById[String(a.therapy_id)] || "Therapy",
-      staff: [a.staff_id, ...(a.co_staff_ids || [])].map((id: unknown) => nameIn(staff, id)).filter(Boolean).join(" & "),
-      room: room ? String(room.name) : String(a.room_id || ""), roomAmenities: room?.amenities || [],
-    });
-  };
 
   // "Not in from now" (a therapist) and "out of use from now" (a room): the
   // same time off Verify records, so the server moves the treatments at once;
@@ -163,13 +153,12 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
       onShowDay={fromSearch ? () => { setCard(null); setFromSearch(false); setSearching(false); setQuery(""); setView("time"); showDay(cardDay); } : undefined}
       staffNotIn={notIn}
       roomOut={(id, name) => takeOut("room", id, name)}
-      editAll={(a) => { setCard(null); openEdit(a); }}
     />
   );
 
   const bookSheet = (
     <BookSheet open={booking} onClose={() => setBooking(false)} day={dayKeyMemo} today={ymdInTZ(new Date())} isToday={isToday} nowMinutes={now} patient={bookFor}
-      refresh={() => refreshDay(dayKeyMemo)} other={openFullBooking} />
+      refresh={() => refreshDay(dayKeyMemo)} />
   );
 
   return { tab: <>{tab}{cardSheet}{bookSheet}</>, openBook: (p?: { id: string; name: string }) => { setBookFor(p || null); setBooking(true); }, openCard: setCard, printSheet, pdfLoading, view, setView, query, setQuery, searching, setSearching };

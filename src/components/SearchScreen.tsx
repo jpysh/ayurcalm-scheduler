@@ -5,9 +5,9 @@
  * searches, the residents on the day, the therapists.
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { DoorClosed } from "lucide-react";
 import { API_BASE } from "@/lib/apiBase";
 import type { CardAppt } from "@/components/TreatmentCard";
+import { Empty, ListGroup, Loading, Row, SectionHead, Seg, chip, say } from "@/components/kit";
 
 export type Hit = CardAppt & { date: string; patient_name: string; therapy_name: string; room_name: string | null; staff_names: string[] };
 type Scope = "upcoming" | "past" | "all";
@@ -34,7 +34,7 @@ export function marked(text: string, q: string): ReactNode {
   const lower = text.toLowerCase(), ql = q.toLowerCase();
   let at = 0;
   for (let i = lower.indexOf(ql); i !== -1; i = lower.indexOf(ql, at)) {
-    out.push(text.slice(at, i), <mark key={i} className="rounded-sm bg-[#F6E3A8] px-px text-inherit">{text.slice(i, i + q.length)}</mark>);
+    out.push(text.slice(at, i), <mark key={i} className="rounded-sm bg-notice-bg px-px font-semibold text-notice">{text.slice(i, i + q.length)}</mark>);
     at = i + q.length;
   }
   out.push(text.slice(at));
@@ -67,14 +67,11 @@ export function SearchScreen({ query, setQuery, today, nowMinutes, residents, th
     return () => clearTimeout(t);
   }, [q, today]);
 
-  const chipb = (on = false) => `min-h-9 px-3 rounded-full border-[1.5px] text-sm ${on ? "border-primary bg-secondary font-semibold" : "border-border bg-card"}`;
-  const label = "mx-1 mb-1.5 mt-3.5 text-xs font-semibold uppercase tracking-[.05em] text-muted-foreground";
-
   if (!q) {
     const chips = (title: string, list: string[]) => list.length ? (
       <>
-        <div className={label}>{title}</div>
-        <div className="flex flex-wrap gap-1.5">{list.map((x) => <button key={x} type="button" className={chipb()} onClick={() => setQuery(x)}>{x}</button>)}</div>
+        <SectionHead>{title}</SectionHead>
+        <div className="flex flex-wrap gap-1.5">{list.map((x) => <button key={x} type="button" className={chip} onClick={() => setQuery(x)}>{x}</button>)}</div>
       </>
     ) : null;
     return <div>{chips("Recent", readRecent())}{chips("Patients", residents.slice(0, 6))}{chips("Therapists", therapists)}</div>;
@@ -94,47 +91,22 @@ export function SearchScreen({ query, setQuery, today, nowMinutes, residents, th
 
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5 pt-3">
-        {([["upcoming", "Upcoming"], ["past", "Past"], ["all", "All"]] as const).map(([k, v]) => (
-          <button key={k} type="button" className={chipb(scope === k)} aria-pressed={scope === k} onClick={() => setScope(k)}>{v}</button>
-        ))}
-      </div>
-      {hits === null ? <div className="py-6 text-center text-sm text-muted-foreground">Searching…</div>
-        : shown.length === 0 ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">
-            No {scope === "all" ? "" : `${scope} `}treatments match “{q}”.{all.length ? " Try All." : ""}
-          </div>
-        ) : days.map(([iso, list]) => (
-          <section key={iso}>
-            <div className="sticky top-0 z-10 flex justify-between bg-background px-1 pb-1.5 pt-3 text-[13px] font-bold">
-              {heading(iso)}<span className="font-normal text-muted-foreground">{heading(iso) !== fmt(iso) ? fmt(iso) : ""}</span>
-            </div>
-            <div className="overflow-hidden rounded-2xl bg-card">
-              {list.map((h) => {
-                const p = isPast(h);
-                const others = h.staff_names.filter(Boolean);
-                return (
-                  <button key={h.id} type="button" onClick={() => { remember(q); onOpen(h); }}
-                    className="flex w-full gap-2.5 min-h-[54px] py-2 px-3 border-b border-border last:border-b-0 text-left">
-                    <span className={`w-12 flex-none tabular-nums text-[15px] leading-tight ${p ? "text-muted-foreground font-medium" : "font-semibold"}`}>
-                      {h.start_time}<small className="block text-xs font-normal text-muted-foreground">{hm(toM(h.start_time) + h.duration_minutes)}</small>
-                    </span>
-                    <span className="flex-1 min-w-0">
-                      <span className="flex items-start gap-2">
-                        <span className={`text-[16px] ${p ? "text-muted-foreground font-medium" : "font-semibold"}`}>
-                          {h.status === "no_show" ? <s>{marked(h.patient_name, q)}</s> : marked(h.patient_name, q)}
-                        </span>
-                        <span className="ml-auto pt-0.5 text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1"><DoorClosed className="h-3 w-3" aria-hidden /><span>{marked(h.room_name || "No room", q)}</span></span>
-                      </span>
-                      <span className="block text-[13px] text-muted-foreground">
-                        {marked(h.therapy_name, q)} · {others.length ? <>with {others.map((n, i) => <span key={i}>{i ? " & " : ""}{marked(n, q)}</span>)}</> : "no therapist"}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+      <div className="pt-3"><Seg<Scope> options={[["upcoming", "Upcoming"], ["past", "Past"], ["all", "All"]]} value={scope} onChange={setScope} /></div>
+      {hits === null ? <Loading rows={3} />
+        : shown.length === 0 ? <Empty text={`No ${scope === "all" ? "" : `${scope} `}treatments match “${q}”.${all.length ? " Try All." : ""}`} />
+        : days.map(([iso, list]) => (
+          <ListGroup key={iso} title={heading(iso) === fmt(iso) ? heading(iso) : `${heading(iso)} · ${fmt(iso)}`} count={list.length}>
+            {list.map((h) => {
+              const p = isPast(h);
+              const others = h.staff_names.filter(Boolean);
+              return (
+                <Row key={h.id} onClick={() => { remember(q); onOpen(h); }}
+                  title={<span className={p ? "font-medium text-muted-foreground" : ""}>{h.status === "no_show" ? <s>{marked(h.patient_name, q)}</s> : marked(h.patient_name, q)}</span>}
+                  facts={<>{marked(say(h.therapy_name), q)} · {others.length ? <>with {others.map((n, i) => <span key={i}>{i ? " & " : ""}{marked(n, q)}</span>)}</> : "no therapist"} · {marked(h.room_name || "No room", q)}</>}
+                  trailing={<span className="tabular-nums">{h.start_time}<small className="block text-xs">{hm(toM(h.start_time) + h.duration_minutes)}</small></span>} />
+              );
+            })}
+          </ListGroup>
         ))}
     </div>
   );

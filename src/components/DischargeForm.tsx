@@ -75,9 +75,9 @@ export default function DischargeForm({ view, admin, onSave, onPdf, doctors }: {
         })}
         {locked ? null : (
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={`${wide} border border-primary text-primary sm:w-auto sm:px-5`} onClick={() => set(key, [...d[key], blank()])}>Add a medicine</button>
+            <button type="button" className={`${wide} border border-primary text-primary`} onClick={() => set(key, [...d[key], blank()])}>Add a medicine</button>
             {key === "meds_stay" && d.meds_stay.length ? (
-              <button type="button" className={`${wide} text-sm text-primary sm:w-auto sm:px-5`}
+              <button type="button" className={`${wide} text-sm text-primary`}
                 onClick={() => set("meds_home", [...d.meds_home, ...d.meds_stay.filter((m) => m.name.trim() && !d.meds_home.some((h) => h.name === m.name)).map((m) => ({ ...m, from: "", days: "" }))])}>Copy to take-home</button>
             ) : null}
           </div>
