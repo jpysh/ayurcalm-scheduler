@@ -1585,7 +1585,7 @@ app.post('/appointments/one', async (req: Request, res: Response) => {
   if (!therapy) { res.status(404).json({ error: 'Therapy not found' }); return; }
   const scheduled_date = new Date(`${b.date}T00:00:00.000Z`);
   const stay = await prisma.patientStay.findFirst({ where: { patient_id: b.patient_id, start_date: { lte: scheduled_date }, end_date: { gte: scheduled_date } } });
-  if (!stay) { res.status(409).json({ reason: 'NOT_STAYING', message: 'This resident is not staying on that day.' }); return; }
+  if (!stay) { res.status(409).json({ reason: 'NOT_STAYING', message: 'This patient is not staying on that day.' }); return; }
   const candidate = { scheduled_date, start_time: b.start_time, duration_minutes: therapy.duration_minutes, staff_id: b.staff_id, co_staff_ids: b.co_staff_ids, room_id: b.room_id, patient_id: b.patient_id, therapy_id: b.therapy_id };
   const conflict = findConflict(candidate, await loadDay(scheduled_date, prisma));
   if (conflict) { res.status(409).json(conflict); return; }

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { confirmSheet } from "@/components/ConfirmSheet";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
-import { noteText, wide } from "@/components/kit";
+import { noteText, Btn } from "@/components/kit";
 
 type Status = { connected: boolean; created_at: string | null; last_used_at: string | null };
 
@@ -41,14 +41,14 @@ export const AssistantSection = () => {
   return (
     <div>
       <p className={noteText}>Optional. Ask Claude about your centre: today's day, who is in house, who is free, what is wrong with a day, and the day sheet.</p>
-      <ol className="mt-2 list-decimal space-y-1 pl-5 text-[15px]">
+      <ol className="mt-2 list-decimal space-y-1 pl-5 text-base">
         <li>Install Claude Desktop on this computer, if you have not.</li>
         <li>Download the {PRODUCT} extension below and double-click it. Claude asks to install it: tap Install.</li>
         <li>In Claude, ask: "What's on tomorrow at the centre?"</li>
       </ol>
       {status?.connected ? <p className={`mt-2 ${noteText}`}>Connected {when(status.created_at)}. Last used: {when(status.last_used_at)}. Downloading again replaces the old connection.</p> : null}
-      <button type="button" disabled={busy} className={`${wide} mt-3 bg-primary text-primary-foreground disabled:opacity-50`} onClick={download}>{status?.connected ? "Download again" : "Download for Claude Desktop"}</button>
-      {status?.connected ? <button type="button" className={`${wide} mt-1 text-sm text-destructive`} onClick={revoke}>Disconnect Claude</button> : null}
+      <Btn kind="primary" className="mt-3" disabled={busy} onClick={download}>{status?.connected ? "Download again" : "Download for Claude Desktop"}</Btn>
+      {status?.connected ? <Btn kind="destructive" className="mt-1" onClick={revoke}>Disconnect Claude</Btn> : null}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Chips, Dropdown, Group, More, Seg, SheetFoot, Switch, Text, noteText, say, field } from "@/components/kit";
+import { Chips, Dropdown, Group, More, Seg, SheetFoot, Switch, Text, noteText, say, field, Btn } from "@/components/kit";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
@@ -136,7 +136,7 @@ export function TherapySheet({ therapy, open, onClose, amenityOptions, onSaved, 
                 <button type="button" aria-label="Remove check" className="h-11 w-11 flex-none rounded-full text-muted-foreground" onClick={() => setChecks(checks.filter((_, j) => j !== i))}>✕</button>
               </div>
             ))}
-            <button type="button" className="min-h-11 text-sm font-semibold text-primary" onClick={() => setChecks([...checks, { text: "", required: false }])}>Add a check</button>
+            <Btn kind="quiet" inline className="-ml-2" onClick={() => setChecks([...checks, { text: "", required: false }])}>Add a check</Btn>
           </div>
         </Group>
       </More>

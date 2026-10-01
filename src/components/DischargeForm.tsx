@@ -4,7 +4,7 @@
  * the rest. The admin can mark it final, which closes it to the doctor's link.
  */
 import { useState } from "react";
-import { Area, Dropdown, Text, noteText, wide } from "@/components/kit";
+import { Area, Dropdown, Text, noteText, Btn } from "@/components/kit";
 
 export type Med = { name: string; dose: string; timing: string; from: string; days: string };
 export type DischargeDraft = { meds_stay: Med[]; meds_home: Med[]; no: string; final: boolean; [k: string]: unknown };
@@ -69,16 +69,16 @@ export default function DischargeForm({ view, admin, onSave, onPdf, doctors }: {
                 <Text label="From (optional)" type="date" value={m.from} disabled={locked} onChange={(e) => put("from", e.target.value)} />
                 <Text label="Days (optional)" inputMode="numeric" placeholder="10" value={m.days} disabled={locked} onChange={(e) => put("days", e.target.value)} />
               </div>
-              {locked ? null : <button type="button" className="mt-2 min-h-11 text-sm font-semibold text-destructive" onClick={() => set(key, d[key].filter((_, j) => j !== i))}>Remove {m.name || "this medicine"}</button>}
+              {locked ? null : <Btn kind="destructive" inline className="-ml-2 mt-2" onClick={() => set(key, d[key].filter((_, j) => j !== i))}>Remove {m.name || "this medicine"}</Btn>}
             </div>
           );
         })}
         {locked ? null : (
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={`${wide} border border-primary text-primary`} onClick={() => set(key, [...d[key], blank()])}>Add a medicine</button>
+            <Btn kind="secondary" onClick={() => set(key, [...d[key], blank()])}>Add a medicine</Btn>
             {key === "meds_stay" && d.meds_stay.length ? (
-              <button type="button" className={`${wide} text-sm text-primary`}
-                onClick={() => set("meds_home", [...d.meds_home, ...d.meds_stay.filter((m) => m.name.trim() && !d.meds_home.some((h) => h.name === m.name)).map((m) => ({ ...m, from: "", days: "" }))])}>Copy to take-home</button>
+              <Btn kind="quiet"
+                onClick={() => set("meds_home", [...d.meds_home, ...d.meds_stay.filter((m) => m.name.trim() && !d.meds_home.some((h) => h.name === m.name)).map((m) => ({ ...m, from: "", days: "" }))])}>Copy to take-home</Btn>
             ) : null}
           </div>
         )}
@@ -112,10 +112,10 @@ export default function DischargeForm({ view, admin, onSave, onPdf, doctors }: {
         {one("signed_at", "Signed on (date and time)", "2026-10-01 11:00")}
       </Section>
       <div className="sticky bottom-0 -mx-4 -mb-4 mt-4 grid gap-1 border-t bg-card px-4 pb-3 pt-3">
-        {locked ? null : <button type="button" className={`${wide} bg-primary text-primary-foreground disabled:opacity-50`} disabled={busy} onClick={() => save()}>{busy ? "Saving…" : "Save the summary"}</button>}
+        {locked ? null : <Btn kind="primary" disabled={busy} onClick={() => save()}>{busy ? "Saving…" : "Save the summary"}</Btn>}
         <div className="grid grid-cols-2 gap-2">
-          <button type="button" className={`${wide} text-sm text-primary`} disabled={busy} onClick={async () => { if (locked || (await save())) onPdf(); }}>Print summary</button>
-          {admin ? <button type="button" className={`${wide} text-sm text-primary`} disabled={busy} onClick={() => save({ final: !d.final })}>{d.final ? "Reopen for the doctor" : "Make final"}</button> : <span />}
+          <Btn kind="quiet" disabled={busy} onClick={async () => { if (locked || (await save())) onPdf(); }}>Print summary</Btn>
+          {admin ? <Btn kind="quiet" disabled={busy} onClick={() => save({ final: !d.final })}>{d.final ? "Reopen for the doctor" : "Make final"}</Btn> : <span />}
         </div>
       </div>
     </div>

@@ -7,7 +7,7 @@ export function DemoBanner() {
   if (trial?.ends_at || trial?.read_only) {
     const days = Math.ceil((Date.parse(trial.ends_at) - Date.now()) / 86400000);
     return (
-      <div role="status" className="bg-amber-100 text-amber-950 text-xs text-center px-4 py-1.5">
+      <div role="status" className="bg-notice-bg px-4 py-2 text-center text-sm text-notice">
         {trial.plan
           ? "Payment is overdue, so the centre is read-only. Nothing is deleted: Settings → Plan to carry on."
           : trial.read_only
@@ -20,7 +20,7 @@ export function DemoBanner() {
   const at = new Date(demo.next_reset).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const mins = Math.max(1, Math.round((Date.parse(demo.next_reset) - Date.now()) / 60000));
   return (
-    <div role="status" className="bg-amber-100 text-amber-950 text-xs text-center px-4 py-1.5">
+    <div role="status" className="bg-notice-bg px-4 py-2 text-center text-sm text-notice">
       Demo centre with made-up patients. Anything you change is put back at {at} (in {mins} min).
     </div>
   );

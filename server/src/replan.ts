@@ -463,7 +463,7 @@ export async function planDay(
       start_time: appt.start_time,
       choices,
       reason: candidates.length === 0
-        ? `No other therapist is trained in ${names.therapy_name}${enforceGender && therapy?.requires_gender_match ? ` and matches the resident's gender` : ''}. It can be cancelled.`
+        ? `No other therapist is trained in ${names.therapy_name}${enforceGender && therapy?.requires_gender_match ? ` and matches the patient's gender` : ''}. It can be cancelled.`
         : `Every therapist trained in ${names.therapy_name} is booked for the next 30 days. It can be cancelled.`,
     });
   }

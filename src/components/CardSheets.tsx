@@ -11,8 +11,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import {
   Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, Picker, QuickDates, Row, Seg, Text, Timeline,
-  dayText, noteText, rupees, toastUndo, wide,
-} from "@/components/kit";
+  dayText, noteText, rupees, toastUndo, Btn } from "@/components/kit";
 
 const DAY_MS = 86400000;
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
@@ -86,7 +85,7 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
             options={plans.filter((p) => p.is_active || p.id === chosen).map((p) => ({ id: p.id, name: p.name, note: p.description ? String(p.description) : undefined, fact: p.patients ? plural(p.patients, "patient") : undefined }))} />
         </div>
         {plan ? <ChangeLine label="Edit this plan" value={running ? `${plural(plan.patients, "patient")} on it` : plan.name} onClick={() => setEditing(plan)} /> : null}
-        <button type="button" className="mt-2 min-h-11 text-sm font-semibold text-primary" onClick={() => patient && onDayMeals(patient)}>Change one day's meals</button>
+        <Btn kind="quiet" inline className="-ml-2 mt-2" onClick={() => patient && onDayMeals(patient)}>Change one day's meals</Btn>
       </>)}
       {editing && patient ? <PlanEditor plan={editing} patient={patient} segmentId={line?.entries.find((e) => e.template_id === editing.id && e.id)?.id || ""} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); onChanged(); }} /> : null}
     </BottomSheet>
@@ -207,7 +206,7 @@ export function PackageSheet({ patient, stay, onClose, onSaved, editList, matchS
         {chosen ? (
           <Consequence>
             {chosen.days === days ? `${chosen.days} days ends ${dayText(ends)}, the same as the stay. Nothing to match.` : `${chosen.days} days ends ${dayText(ends)}; the stay ends ${dayText(stay.end_date)}.`}
-            {chosen.days !== days ? <button type="button" className="ml-2 min-h-8 font-semibold underline" onClick={() => matchStay(ends)}>Match the stay</button> : null}
+            {chosen.days !== days ? <button type="button" className="ml-2 min-h-11 font-semibold underline" onClick={() => matchStay(ends)}>Match the stay</button> : null}
           </Consequence>
         ) : null}
         <div className="mt-3">
@@ -313,7 +312,7 @@ export function StaySheet({ patient, target, today, onClose, onSaved }: { patien
         <ChangeLine label="Arrived" value={dayText(start)} select={<LineDate label="Arrived" value={start} onChange={(v) => { setStart(v); if (end < v) setEnd(v); }} />} />
         <ChangeLine label="Leaving" value={dayText(end)} select={<LineDate label="Leaving" value={end} min={start} onChange={setEnd} />} />
       </div>
-      {target.id && start <= today && end > today ? <button type="button" className="mt-1 min-h-11 text-sm font-semibold text-primary" onClick={() => setEnd(today)}>Leaves today</button> : null}
+      {target.id && start <= today && end > today ? <Btn kind="quiet" inline className="-ml-2 mt-1" onClick={() => setEnd(today)}>Leaves today</Btn> : null}
       {lines.length ? <Consequence>{lines.join(" ")}</Consequence> : null}
     </BottomSheet>
   );
@@ -330,7 +329,7 @@ export function DischargeSheet({ patient, stay, onClose, openField, write, print
   const { done, total, missing } = stay.discharge;
   return (
     <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} title={`Discharge summary · ${first(patient.name)}`} note={`${done} of ${total} ready. It prints either way.`}
-      foot={<div className="grid gap-1"><button type="button" className={`${wide} bg-primary text-primary-foreground`} onClick={print}>Print summary</button><p className={`text-center ${noteText}`}>Missing items print as blank lines to fill in by hand.</p></div>}>
+      foot={<div className="grid gap-1"><Btn kind="primary" onClick={print}>Print summary</Btn><p className={`text-center ${noteText}`}>Missing items print as blank lines to fill in by hand.</p></div>}>
       {missing.length ? (
         <ListGroup title="Still missing" count={missing.length}>
           {missing.map((m) => <Row key={m.key} title={m.label} trailing="Add ›" onClick={() => openField(m.where)} />)}

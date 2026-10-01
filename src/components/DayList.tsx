@@ -1,3 +1,4 @@
+import { Btn } from "@/components/kit";
 /**
  * The day as one list (#62), built to docs/design/phone.html: hour groups with
  * sticky headers, finished treatments dimmed above, a line at now, and the
@@ -24,7 +25,7 @@ export type DayView = "time" | "therapist" | "room" | "resident";
 
 // One colour per therapist, as the design does; kept away from red and orange,
 // which mean attention and now.
-const COLOURS = ["#4C7A9E", "#9A5E86", "#5E8A5A", "#8C7A5B", "#3E7F86", "#7A6AA8", "#6B7A8F", "#8A8F3E"];
+const COLOURS = [1, 2, 3, 4, 5, 6, 7, 8].map((i) => `hsl(var(--t-${i}))`);
 const toM = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
 const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 
@@ -93,35 +94,35 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
   const rowEl = (r: Row, top = r.who, line = `${r.therapy} · ${withText(r)}`) => {
     const p = past(r), n = now(r);
     const flag = flags[r.a.id];
-    const stripe = r.team.length > 1 ? `linear-gradient(${r.team[0].colour} 50%, ${r.team[1].colour} 50%)` : r.team[0]?.colour || "#8A979C";
+    const stripe = r.team.length > 1 ? `linear-gradient(${r.team[0].colour} 50%, ${r.team[1].colour} 50%)` : r.team[0]?.colour || "hsl(var(--faint))";
     return (
       <button key={`${r.a.id}-${top}`} type="button" onClick={() => onOpen(r.a)} data-now={n || undefined} data-appt={r.a.id}
-        className={`flex w-full gap-2.5 items-stretch min-h-[54px] py-2 pr-3 border-b border-border last:border-b-0 bg-card text-left ${flag?.blocking ? "shadow-[inset_0_0_0_1.5px_hsl(var(--destructive))]" : ""}`}>
+        className={`flex w-full gap-2.5 items-stretch min-h-14 py-2 pr-3 border-b border-border last:border-b-0 bg-card text-left ${flag?.blocking ? "ring-2 ring-inset ring-destructive" : ""}`}>
         <span className={`w-1 rounded-r flex-none ${p ? "opacity-35" : ""}`} style={{ background: stripe }} />
-        <span className={`w-12 flex-none tabular-nums text-[15px] leading-tight ${p ? "text-muted-foreground font-medium" : "font-semibold"}`}>
+        <span className={`w-12 flex-none tabular-nums text-base leading-tight ${p ? "text-muted-foreground font-medium" : "font-semibold"}`}>
           {hm(r.st)}
           {/* The end, always: a countdown in its place read as the treatment's length. */}
-          <small className={`block text-xs whitespace-nowrap ${n ? "text-now font-semibold" : "font-normal text-muted-foreground"}`}>{hm(r.en)}</small>
+          <small className={`block text-sm whitespace-nowrap ${n ? "text-now font-semibold" : "font-normal text-muted-foreground"}`}>{hm(r.en)}</small>
         </span>
         <span className="flex-1 min-w-0">
           <span className="flex items-start gap-2">
-            <span className={`text-[16px] ${p ? "text-muted-foreground font-medium" : "font-semibold"}`}>
-              {r.a.status === "no_show" ? <><s>{top}</s> <span className="text-xs font-medium text-muted-foreground">didn't come</span></> : top}
+            <span className={`text-base ${p ? "text-muted-foreground font-medium" : "font-semibold"}`}>
+              {r.a.status === "no_show" ? <><s>{top}</s> <span className="text-sm font-medium text-muted-foreground">didn't come</span></> : top}
             </span>
-            <span className="ml-auto pt-0.5 text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1"><DoorClosed className="h-3 w-3" aria-hidden />{r.room}</span>
+            <span className="ml-auto pt-0.5 text-sm text-muted-foreground whitespace-nowrap inline-flex items-center gap-1"><DoorClosed className="h-3 w-3" aria-hidden />{r.room}</span>
           </span>
-          <span className="block text-[13px] text-muted-foreground">{line}</span>
-          {flag ? <span className={`block text-xs ${flag.blocking ? "font-semibold text-destructive" : "text-[#6E4A0E]"}`}>{flag.text}</span> : null}
+          <span className="block text-sm text-muted-foreground">{line}</span>
+          {flag ? <span className={`block text-sm ${flag.blocking ? "font-semibold text-destructive" : "text-notice"}`}>{flag.text}</span> : null}
           {movedFrom[r.a.id] ? (
-            <span className="flex items-center gap-1 text-xs text-[#6E4A0E]"><i className="h-[7px] w-[7px] rounded-full bg-warning" />Was {movedFrom[r.a.id].split(" ")[0]}'s</span>
+            <span className="flex items-center gap-1 text-sm text-notice"><i className="h-2 w-2 rounded-full bg-warning" />Was {movedFrom[r.a.id].split(" ")[0]}'s</span>
           ) : null}
         </span>
       </button>
     );
   };
 
-  const nowLine = <div key="now" id="nowline" className="flex items-center h-[22px] bg-card pointer-events-none after:flex-1 after:h-0.5 after:bg-now after:content-['']">
-    <b className="ml-2 rounded-md bg-now px-1.5 text-[11px] font-bold text-white tabular-nums">{hm(NOW)}</b>
+  const nowLine = <div key="now" id="nowline" className="flex items-center h-6 bg-card pointer-events-none after:flex-1 after:h-0.5 after:bg-now after:content-['']">
+    <b className="ml-2 rounded-md bg-now px-1.5 text-xs font-bold text-white tabular-nums">{hm(NOW)}</b>
   </div>;
   const group = "rounded-xl overflow-hidden bg-card";
   const sticky = "sticky top-0 z-[2] bg-background flex items-baseline gap-2 px-1 pt-3 pb-1.5";
@@ -148,8 +149,8 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
         <section key={H}>
           {lineBefore === H ? <div className="mt-3 overflow-hidden rounded-xl">{nowLine}</div> : null}
           <div id={nowH ? "nowhour" : undefined} className={sticky}>
-            <b className={`text-[15px] tabular-nums ${done ? "text-muted-foreground" : nowH ? "text-now" : ""}`}>{hm(H * 60)}</b>
-            <span className="text-xs text-muted-foreground">{g.length} starting{done ? " · done" : ""}</span>
+            <b className={`text-base tabular-nums ${done ? "text-muted-foreground" : nowH ? "text-now" : ""}`}>{hm(H * 60)}</b>
+            <span className="text-sm text-muted-foreground">{g.length} starting{done ? " · done" : ""}</span>
           </div>
           <div className={group}>{items}</div>
         </section>
@@ -169,12 +170,12 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
       const summary = `${left.length ? `${left.length} to go` : "all done"}${left[0] ? ` · next ${hm(left[0].st)}` : ""}`;
       return (
         <section key={g.label}>
-          <div className={`${sticky} justify-between text-[13px] font-bold`}>
+          <div className={`${sticky} justify-between text-sm font-bold`}>
             {g.label}
             <span className="flex items-baseline gap-2 font-medium text-muted-foreground whitespace-nowrap">
               {summary}
               {view === "therapist" && onNotIn && left.length ? (
-                <button type="button" aria-label={`${g.label} not in`} className="min-h-9 px-2 font-semibold text-primary" onClick={() => onNotIn(g.id!, g.label)}>Not in</button>
+                <Btn kind="quiet" inline aria-label={`${g.label} not in`} onClick={() => onNotIn(g.id!, g.label)}>Not in</Btn>
               ) : null}
             </span>
           </div>
@@ -190,18 +191,18 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
   return (
     <div className="flex flex-col pb-36">
       {view === "time" ? (
-        <div className="sticky top-0 z-[3] bg-background flex justify-between items-baseline px-1 pt-3 pb-1.5 text-[13px] text-muted-foreground">
-          <b className="text-[15px] text-foreground">{isToday ? "Today" : "The day"}</b>
+        <div className="sticky top-0 z-[3] bg-background flex justify-between items-baseline px-1 pt-3 pb-1.5 text-sm text-muted-foreground">
+          <b className="text-base text-foreground">{isToday ? "Today" : "The day"}</b>
           <span className="flex items-center gap-2">{rows.length} treatments{roomCount ? ` · ${roomCount} rooms` : ""}{headerAction}</span>
         </div>
       ) : (
         <div className="flex justify-between items-center px-1 pt-3 text-sm font-semibold">
           By {view}
-          <button type="button" className="min-h-9 px-2.5 rounded-full font-semibold text-primary" onClick={() => setView("time")}>Back to by time</button>
+          <Btn kind="quiet" inline onClick={() => setView("time")}>Back to by time</Btn>
         </div>
       )}
-      {rows.length ? body : <div className="p-3 text-center text-[13px] text-muted-foreground">{q ? `Nothing matches "${query}" on this day.` : "Nothing booked on this day."}</div>}
-      {rows.length ? <div className="p-3 text-center text-[13px] text-muted-foreground">End of the day</div> : null}
+      {rows.length ? body : <div className="p-3 text-center text-sm text-muted-foreground">{q ? `Nothing matches "${query}" on this day.` : "Nothing booked on this day."}</div>}
+      {rows.length ? <div className="p-3 text-center text-sm text-muted-foreground">End of the day</div> : null}
     </div>
   );
 }

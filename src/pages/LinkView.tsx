@@ -8,7 +8,7 @@ import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { useMadeWith, useReception } from "@/lib/centreName";
-import { Area, BottomSheet, Btn, Empty, FullPage, ItemRow, LinkBtn, ListGroup, Loading, Row, Seg, Text, Tick, dayText } from "@/components/kit";
+import { Area, BottomSheet, Btn, Empty, FullPage, ItemRow, LinkBtn, ListGroup, Loading, QuietLink, Row, Seg, Text, Tick, dayText } from "@/components/kit";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 
 type Check = { text: string; required: boolean; done: boolean };
@@ -82,7 +82,7 @@ export default function LinkView() {
     <FullPage title={day.who.name} note={day.centre}>
       <div className="mt-2 grid grid-cols-[auto_1fr_auto] items-center gap-2">
         <Btn inline aria-label="Day before" onClick={() => setDate(shift(day.date, -1))}>‹</Btn>
-        <div className="text-center"><div className="font-semibold">{label}</div>{day.date === day.today ? <div className="text-[13px] font-semibold text-primary">Today</div> : <Btn kind="quiet" inline className="min-h-0 py-1 text-[13px]" onClick={() => setDate(day.today)}>Back to today</Btn>}</div>
+        <div className="text-center"><div className="font-semibold">{label}</div>{day.date === day.today ? <div className="text-sm font-semibold text-primary">Today</div> : <Btn kind="quiet" inline className="min-h-0 py-1 text-sm" onClick={() => setDate(day.today)}>Back to today</Btn>}</div>
         <Btn inline aria-label="Day after" onClick={() => setDate(shift(day.date, 1))}>›</Btn>
       </div>
 
@@ -95,12 +95,12 @@ export default function LinkView() {
               title={<span aria-label={`${it.start_time} ${it.therapy}`}>{it.start_time}–{end} · {it.therapy}</span>}
               facts={[staff ? it.patient : null, it.room, it.with.length ? `with ${it.with.join(" & ")}` : null].filter(Boolean).join(" · ")}>
               {!staff && it.description ? <p className="text-sm">{it.description}</p> : null}
-              {staff && (it.products?.length || it.amenities?.length) ? <p className="text-[13px]">{[...(it.amenities || []), ...(it.products || [])].join(", ")}</p> : null}
+              {staff && (it.products?.length || it.amenities?.length) ? <p className="text-sm">{[...(it.amenities || []), ...(it.products || [])].join(", ")}</p> : null}
 
               {staff ? (
                 <>
                   {it.checklist?.map((c) => (
-                    <Tick key={c.text} label={<>{c.text}{c.required ? <span className="ml-2 text-xs text-muted-foreground">required</span> : null}</>} on={c.done}
+                    <Tick key={c.text} label={<>{c.text}{c.required ? <span className="ml-2 text-sm text-muted-foreground">required</span> : null}</>} on={c.done}
                       set={(on) => save(it, { checklist: { [c.text]: on } }, { checklist: it.checklist!.map((x) => (x.text === c.text ? { ...x, done: on } : x)) })} />
                   ))}
                   {it.vitals?.length ? (
@@ -157,7 +157,7 @@ export default function LinkView() {
           </ListGroup>
         </div>
       </BottomSheet>
-      {made && <p className="mt-8 text-center text-xs text-muted-foreground"><a href="https://jains.es/ruta" className="underline-offset-2 hover:underline">{made}</a></p>}
+      {made && <p className="mt-6 text-center"><QuietLink href="https://jains.es/ruta">{made}</QuietLink></p>}
     </FullPage>
   );
 }

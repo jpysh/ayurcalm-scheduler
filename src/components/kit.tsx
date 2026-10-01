@@ -10,11 +10,11 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
  */
 
 // The boundary is dark enough to read as a box to type in; focus is a soft halo on the box itself.
-export const field = `h-11 w-full rounded-xl border border-[hsl(var(--input)/0.45)] bg-background px-3.5 text-base tabular-nums transition-shadow placeholder:text-muted-foreground/70 focus:border-primary focus:shadow-[0_0_0_3px_hsl(var(--primary)/0.18)] focus-visible:outline-none disabled:opacity-60`;
+export const field = `h-11 w-full rounded-xl border border-[hsl(var(--input)/0.45)] bg-background px-3.5 text-base tabular-nums transition-shadow placeholder:text-muted-foreground focus:border-primary focus:shadow-[0_0_0_3px_hsl(var(--primary)/0.18)] focus-visible:outline-none disabled:opacity-60`;
 const chevron = <svg aria-hidden viewBox="0 0 16 16" className="pointer-events-none h-4 w-4 flex-none text-muted-foreground"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" /></svg>;
-export const lbl = "mt-3 mb-1 block text-[13px] font-semibold text-muted-foreground";
-export const noteText = "text-[13px] text-muted-foreground";
-export const chip = "min-h-10 rounded-full border border-[hsl(var(--input)/0.45)] px-3.5 text-sm font-semibold aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground";
+export const lbl = "mt-3 mb-1 block text-sm font-semibold text-muted-foreground";
+export const noteText = "text-sm text-muted-foreground";
+export const chip = "min-h-11 rounded-full border border-[hsl(var(--input)/0.45)] px-3.5 text-sm font-semibold aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground";
 export const wide = "min-h-11 w-full rounded-full font-semibold";
 // Seeded names are stored as massage_table; the admin reads "massage table".
 export const say = (s: string) => s.replace(/_/g, " ");
@@ -142,7 +142,7 @@ export function Seg<T extends string | number>({ options, value, onChange }: { o
     <div className="grid gap-1 rounded-xl bg-secondary p-1" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
       {options.map(([v, l]) => (
         <button key={String(v)} type="button" aria-pressed={value === v} onClick={() => onChange(v)}
-          className="min-h-9 min-w-0 rounded-lg text-[15px] font-medium text-foreground/75 transition-colors aria-pressed:bg-card aria-pressed:font-semibold aria-pressed:text-foreground aria-pressed:shadow-[0_1px_3px_rgb(0_0_0/0.18)]">{l}</button>
+          className="min-h-11 min-w-0 rounded-lg border border-transparent text-base font-medium text-foreground/75 transition-colors aria-pressed:bg-card aria-pressed:font-semibold aria-pressed:text-foreground aria-pressed:border-input/40">{l}</button>
       ))}
     </div>
   );
@@ -157,7 +157,7 @@ export function Chips({ options, value, onChange, addLabel }: { options: string[
     <div className="flex flex-wrap gap-1.5">
       {all.map((o) => <button key={o} type="button" className={chip} aria-pressed={value.includes(o)} onClick={() => toggle(o)}>{say(o)}</button>)}
       {addLabel ? (
-        <input className="h-10 min-w-0 flex-1 rounded-full border bg-background px-3 text-sm" placeholder={addLabel} aria-label={addLabel} value={draft}
+        <input className="h-11 min-w-0 flex-1 rounded-full border bg-background px-3 text-sm" placeholder={addLabel} aria-label={addLabel} value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && draft.trim()) { e.preventDefault(); onChange([...new Set([...value, draft.trim()])]); setDraft(""); } }}
           onBlur={() => { if (draft.trim()) { onChange([...new Set([...value, draft.trim()])]); setDraft(""); } }} />
@@ -206,7 +206,7 @@ export function BottomSheet({ open, onOpenChange, title, note, children, foot, o
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
           {onBack ? <BackLink onBack={onBack} /> : null}
           {/* A sheet with no title in the design still names itself to a screen reader. */}
-          <SheetTitle className={title ? "mb-3 text-lg font-bold" : "sr-only"}>{title || "Menu"}</SheetTitle>
+          <SheetTitle className={title ? "mb-3 text-xl font-bold" : "sr-only"}>{title || "Menu"}</SheetTitle>
           {note ? <p className={`-mt-2 mb-3 ${noteText}`}>{note}</p> : null}
           {children}
         </div>
@@ -253,7 +253,7 @@ export const Pill = ({ need, info, onClick }: { need: number; info: number; onCl
   if (!need && !info) return null;
   return (
     <button type="button" data-kit="pill" onClick={onClick}
-      className="fixed bottom-[calc(var(--bar-h)+var(--bar-gap)*2+env(safe-area-inset-bottom))] left-1/2 z-40 flex min-h-10 -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border bg-card px-3.5 text-sm font-semibold shadow-float after:-ml-0.5 after:text-lg after:text-muted-foreground after:content-['›']">
+      className="fixed bottom-[calc(var(--bar-h)+var(--bar-gap)*2+env(safe-area-inset-bottom))] left-1/2 z-40 flex min-h-11 -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border bg-card px-3.5 text-sm font-semibold shadow-float after:-ml-0.5 after:text-lg after:text-muted-foreground after:content-['›']">
       <i className={`h-2 w-2 rounded-full ${need ? "bg-destructive" : "bg-muted-foreground/60"}`} />
       {need ? `${need} need you` : `${info} to know`}
     </button>
@@ -265,11 +265,11 @@ export const Row = ({ title, facts, trailing, flag, onClick, href }: { title: Re
   const body = (
     <>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-base font-semibold">{title}</span>
-        {facts ? <span className="block truncate text-[13px] text-muted-foreground">{facts}</span> : null}
-        {flag ? <span className="block text-[13px] font-semibold text-destructive">{flag}</span> : null}
+        <span className="block truncate text-row font-semibold">{title}</span>
+        {facts ? <span className="block truncate text-sm text-muted-foreground">{facts}</span> : null}
+        {flag ? <span className="block text-sm font-semibold text-destructive">{flag}</span> : null}
       </span>
-      {trailing ? <span className="flex-none text-[13px] text-muted-foreground">{trailing}</span> : null}
+      {trailing ? <span className="flex-none text-sm text-muted-foreground">{trailing}</span> : null}
     </>
   );
   const cls = "flex min-h-[56px] w-full items-center gap-3 border-b border-border px-3 py-2 text-left last:border-b-0";
@@ -297,7 +297,7 @@ export function InboxSheet({ open, onOpenChange, title, sections, empty = "Nothi
 }
 
 /** Under a field that changes other things: one live line saying what will change. */
-export const Consequence = ({ children }: { children: ReactNode }) => <p role="status" className="mt-2 rounded-xl bg-secondary px-3 py-2 text-[13px] font-semibold text-primary">{children}</p>;
+export const Consequence = ({ children }: { children: ReactNode }) => <p role="status" className="mt-2 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-primary">{children}</p>;
 
 /** "Discharge summary · 5 of 8 ready", with a slim line. Informs, never blocks. */
 export const ChecklistBar = ({ label, done, total, onClick, unit = "ready" }: { label: string; done: number; total: number; onClick: () => void; unit?: string }) => (
@@ -312,8 +312,8 @@ export const Timeline = ({ items }: { items: { key: string; from: string; title:
   <ol className="border-l-2 border-primary/30 pl-3">
     {items.map((i) => (
       <li key={i.key} className="py-1.5">
-        <button type="button" disabled={!i.onClick} onClick={i.onClick} className="block min-h-10 w-full text-left">
-          <span className="block text-[13px] font-semibold text-muted-foreground">From {i.from}</span>
+        <button type="button" disabled={!i.onClick} onClick={i.onClick} className="block min-h-11 w-full text-left">
+          <span className="block text-sm font-semibold text-muted-foreground">From {i.from}</span>
           <span className="block text-base font-semibold">{i.title}</span>
           {i.note ? <span className={`block ${noteText}`}>{i.note}</span> : null}
         </button>
@@ -333,7 +333,7 @@ export function Picker<T extends string>({ options, value, onChange, onEdit }: {
         <button key={o.id} type="button" aria-pressed={value === o.id} onClick={() => onChange(o.id)}
           className="flex min-h-14 items-center gap-3 rounded-xl border-[1.5px] border-border px-3 py-2 text-left aria-pressed:border-primary aria-pressed:bg-secondary">
           <span className="min-w-0 flex-1"><b className="block text-base">{o.name}</b>{o.note ? <span className={`block truncate ${noteText}`}>{o.note}</span> : null}</span>
-          {o.fact ? <span className="flex-none text-[13px] text-muted-foreground">{o.fact}</span> : null}
+          {o.fact ? <span className="flex-none text-sm text-muted-foreground">{o.fact}</span> : null}
           {value === o.id ? <span aria-hidden className="flex-none font-bold text-primary">✓</span> : null}
         </button>
       ))}
@@ -355,7 +355,7 @@ export const toastUndo = (text: string, undo: () => void | Promise<void>) => toa
 
 /** Empty: one line saying why, and the action if there is one. */
 export const Empty = ({ text, action }: { text: string; action?: ReactNode }) => (
-  <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-[15px] text-muted-foreground"><span>{text}</span>{action}</div>
+  <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-base text-muted-foreground"><span>{text}</span>{action}</div>
 );
 
 /** Loading: rows the height of real ones, and nothing at all for the first 300ms. */
@@ -368,7 +368,7 @@ export function Loading({ rows = 4 }: { rows?: number }) {
 
 /** Error: where it happened, what failed, a retry. */
 export const ErrorLine = ({ text, retry }: { text: string; retry?: () => void }) => (
-  <div role="alert" className="flex items-center justify-between gap-3 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive"><span>{text}</span>{retry ? <button type="button" className="min-h-10 flex-none font-semibold" onClick={retry}>Try again</button> : null}</div>
+  <div role="alert" className="flex items-center justify-between gap-3 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive"><span>{text}</span>{retry ? <button type="button" className="min-h-11 flex-none font-semibold" onClick={retry}>Try again</button> : null}</div>
 );
 
 /**
@@ -401,11 +401,11 @@ export const SearchField = ({ value, onChange, placeholder }: { value: string; o
  * line changes in one tap. With no `onClick` and no `select` it only tells.
  */
 export const ChangeLine = ({ label, value, onClick, select, faint }: { label: string; value: ReactNode; onClick?: () => void; select?: ReactNode; faint?: boolean }) => {
-  const cls = "relative flex min-h-12 w-full items-center justify-between gap-3 border-b border-border text-left last:border-b-0";
+  const cls = "relative flex min-h-12 w-full items-center justify-between gap-3 border-b border-border py-2 text-left last:border-b-0";
   const inner = (
     <>
       <span className={noteText}>{label}</span>
-      <span className={`flex min-w-0 items-center gap-1 ${faint ? "text-muted-foreground" : "font-semibold"}`}><span className="truncate">{value}</span>{onClick || select ? <span aria-hidden className="text-muted-foreground">›</span> : null}</span>
+      <span className={`flex min-w-0 items-center gap-1 ${faint ? "text-muted-foreground" : "font-semibold"}`}><span className="line-clamp-2 text-right">{value}</span>{onClick || select ? <span aria-hidden className="text-muted-foreground">›</span> : null}</span>
       {select}
     </>
   );
@@ -480,8 +480,8 @@ export const SwitchRow = ({ title, facts, on, set, locked, flag, children }: { t
     <label className="flex min-h-[48px] items-center gap-3">
       <span className="min-w-0 flex-1">
         <span className="block text-base font-semibold">{title}</span>
-        {facts ? <span className="block text-[13px] text-muted-foreground">{facts}</span> : null}
-        {flag ? <span className="block text-[13px] font-semibold text-notice">{flag}</span> : null}
+        {facts ? <span className="block text-sm text-muted-foreground">{facts}</span> : null}
+        {flag ? <span className="block text-sm font-semibold text-notice">{flag}</span> : null}
       </span>
       {locked ? <Lock aria-label="Always on" className="h-4 w-4 flex-none text-muted-foreground" /> : null}
       <input type="checkbox" role="switch" aria-label={typeof title === "string" ? title : undefined} checked={on} disabled={locked} onChange={(e) => set(e.target.checked)} />
@@ -525,7 +525,7 @@ export const ItemRow = ({ title, facts, children, stacked, form }: { title: Reac
 /* ---- Session 8 (#285): the card, sign-in, setup and the private links ---- */
 
 const btnKinds = { primary: "bg-primary text-primary-foreground", secondary: "border-[1.5px] border-border", quiet: "text-primary", destructive: "text-destructive" };
-const btnClass = (kind: keyof typeof btnKinds, inline?: boolean) => `inline-flex min-h-11 items-center justify-center rounded-full px-4 font-semibold disabled:opacity-50 ${inline ? "" : "w-full"} ${btnKinds[kind]}`;
+const btnClass = (kind: keyof typeof btnKinds, inline?: boolean) => `inline-flex min-h-11 items-center justify-center rounded-full ${kind === "quiet" || kind === "destructive" ? "px-2" : "px-4"} font-semibold disabled:opacity-50 ${inline ? "" : "w-full"} ${btnKinds[kind]}`;
 
 /** A button that says its action: primary (fill), secondary (border), quiet (text) or destructive (alert text). One primary per view. `inline` gives it its own width, not the row's. */
 export const Btn = ({ kind = "secondary", inline, className = "", ...rest }: { kind?: keyof typeof btnKinds; inline?: boolean } & ButtonHTMLAttributes<HTMLButtonElement>) => (
@@ -560,7 +560,7 @@ const BackLink = ({ onBack }: { onBack: () => void }) => (
 export const FullPage = ({ title, note, children }: { title?: ReactNode; note?: ReactNode; children: ReactNode }) => (
   <main className="min-h-dvh bg-background px-4 pb-10 pt-8">
     <div className="mx-auto max-w-md">
-      {title ? <h1 className="text-2xl font-bold">{title}</h1> : null}
+      {title ? <h1 className="text-xl font-bold">{title}</h1> : null}
       {note ? <p className={`mt-1 ${noteText}`}>{note}</p> : null}
       {children}
     </div>

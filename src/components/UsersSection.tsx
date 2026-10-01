@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { confirmSheet } from "@/components/ConfirmSheet";
 import { API_BASE } from "@/lib/apiBase";
-import { BottomSheet, Empty, ListGroup, Row, Seg, SheetFoot, Switch, Text, noteText } from "@/components/kit";
+import { BottomSheet, Empty, ListGroup, Row, Seg, SheetFoot, Switch, Text, noteText, Btn } from "@/components/kit";
 
 type Role = "admin" | "staff";
 type User = { id: string; email: string; name: string | null; role: Role; is_active: boolean; last_login: string | null };
@@ -88,7 +88,7 @@ export const UsersSection = ({ onCount }: { onCount?: (n: number) => void }) => 
           <div className="mt-1"><Seg<Role> options={[["staff", "Staff"], ["admin", "Admin"]]} value={one.role} onChange={(role) => patch(one, { role })} /></div>
           <Switch label="Can sign in" note={one.last_login ? `Last signed in ${new Date(one.last_login).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : "Has not signed in yet"} on={one.is_active} set={(v) => patch(one, { is_active: v })} />
           <Text label="New password" autoComplete="off" note="At least 8 characters." value={password} onChange={(e) => setPassword(e.target.value)} />
-          <button type="button" disabled={busy || password.length < 8} className="mt-2 min-h-11 w-full rounded-full border font-semibold disabled:opacity-50" onClick={() => setPass(one)}>Set their password</button>
+          <Btn kind="secondary" className="mt-2" disabled={busy || password.length < 8} onClick={() => setPass(one)}>Set their password</Btn>
         </>) : null}
       </BottomSheet>
     </div>
@@ -117,8 +117,8 @@ export const ChangePasswordCard = () => {
       <Text label="Current password" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
       <Text label="New password" type="password" autoComplete="new-password" note="At least 8 characters." valid={next.length >= 8} value={next} onChange={(e) => setNext(e.target.value)} />
       <Text label="New password again" type="password" autoComplete="new-password" valid={!!confirm && !mismatch} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-      {mismatch ? <p role="alert" className="mt-1 text-[13px] font-semibold text-destructive">The two new passwords are different.</p> : null}
-      <button type="button" disabled={busy || !current || next.length < 8 || next !== confirm} className="mt-4 min-h-11 w-full rounded-full bg-primary font-semibold text-primary-foreground disabled:opacity-50" onClick={submit}>{busy ? "Changing…" : "Change my password"}</button>
+      {mismatch ? <p role="alert" className="mt-1 text-sm font-semibold text-destructive">The two new passwords are different.</p> : null}
+      <Btn kind="primary" className="mt-4" disabled={busy || !current || next.length < 8 || next !== confirm} onClick={submit}>{busy ? "Changing…" : "Change my password"}</Btn>
     </div>
   );
 };

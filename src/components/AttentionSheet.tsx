@@ -9,7 +9,7 @@
  * now. The sheet stays open and redraws as rows are dealt with.
  */
 import { useEffect, useState } from "react";
-import { InboxSheet, ItemRow, ListGroup, Row } from "@/components/kit";
+import { InboxSheet, ItemRow, ListGroup, Row, Btn } from "@/components/kit";
 import type { AttentionItem } from "@/lib/attention";
 
 export type Fix = {
@@ -167,7 +167,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   const dayName = day === today ? "Today" : new Date(day).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   return (
     <InboxSheet open={open} onOpenChange={onOpenChange} title={dayName} empty="Nothing else needs you."
-      foot={<button type="button" className="min-h-11 w-full text-base font-semibold text-primary" onClick={() => { onOpenChange(false); openRules(); }}>What needs you · change the rules ›</button>}
+      foot={<Btn kind="quiet" onClick={() => { onOpenChange(false); openRules(); }}>What needs you · change the rules ›</Btn>}
       // The one inbox for the whole app (story 1). Patients and Team come from the rules in Settings, What needs you; empty sections do not show.
       sections={[{
         name: "Day", count: act.length,

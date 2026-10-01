@@ -1,3 +1,4 @@
+import { Btn } from "@/components/kit";
 /**
  * The one confirmation the app asks, as a bottom sheet in the app's own look
  * rather than the browser's pop-up (#67). Only for what cannot be undone;
@@ -22,11 +23,11 @@ export function ConfirmHost() {
   const [first, ...rest] = (ask?.text || "").split("\n\n");
   return (
     <BottomSheet open={!!ask} onOpenChange={(o) => { if (!o) answer(false); }} title="">
-      <p className="text-[16px] font-semibold">{first}</p>
+      <p className="text-base font-semibold">{first}</p>
       {rest.map((r) => <p key={r} className="mt-1 text-sm text-muted-foreground">{r}</p>)}
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <button type="button" className="min-h-11 rounded-full border-[1.5px] border-border bg-card font-semibold" onClick={() => answer(false)}>Cancel</button>
-        <button type="button" className="min-h-11 rounded-full border-[1.5px] border-destructive font-semibold text-destructive" onClick={() => answer(true)}>{ask?.ok}</button>
+        <Btn kind="secondary" inline onClick={() => answer(false)}>Cancel</Btn>
+        <Btn kind="destructive" inline className="border-[1.5px] border-destructive" onClick={() => answer(true)}>{ask?.ok}</Btn>
       </div>
     </BottomSheet>
   );

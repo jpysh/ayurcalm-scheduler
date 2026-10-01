@@ -103,7 +103,7 @@ export function SearchScreen({ query, setQuery, today, nowMinutes, residents, th
                 <Row key={h.id} onClick={() => { remember(q); onOpen(h); }}
                   title={<span className={p ? "font-medium text-muted-foreground" : ""}>{h.status === "no_show" ? <s>{marked(h.patient_name, q)}</s> : marked(h.patient_name, q)}</span>}
                   facts={<>{marked(say(h.therapy_name), q)} · {others.length ? <>with {others.map((n, i) => <span key={i}>{i ? " & " : ""}{marked(n, q)}</span>)}</> : "no therapist"} · {marked(h.room_name || "No room", q)}</>}
-                  trailing={<span className="tabular-nums">{h.start_time}<small className="block text-xs">{hm(toM(h.start_time) + h.duration_minutes)}</small></span>} />
+                  trailing={<span className="tabular-nums">{h.start_time}<small className="block text-sm">{hm(toM(h.start_time) + h.duration_minutes)}</small></span>} />
               );
             })}
           </ListGroup>

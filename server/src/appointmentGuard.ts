@@ -111,7 +111,7 @@ export function findConflict(c: Candidate, ctx: DayContext): Conflict | null {
     if (s) {
       return {
         reason: 'GENDER_MISMATCH',
-        message: `${therapy.name} is given by therapists of the resident's own gender, and ${s.name} is not.`,
+        message: `${therapy.name} is given by therapists of the patient's own gender, and ${s.name} is not.`,
         details: { staff_id: s.id },
       };
     }
@@ -144,7 +144,7 @@ export function findConflict(c: Candidate, ctx: DayContext): Conflict | null {
 
   const patientClash = others.find((a) => a.patient_id === c.patient_id && hits(a));
   if (patientClash) {
-    return { reason: 'PATIENT_BUSY', message: `This resident already has a treatment at ${patientClash.start_time}.`, details: { start_time: patientClash.start_time } };
+    return { reason: 'PATIENT_BUSY', message: `This patient already has a treatment at ${patientClash.start_time}.`, details: { start_time: patientClash.start_time } };
   }
 
   return null;

@@ -550,7 +550,7 @@ const AdminDashboard = () => {
                       onClick={() => { if (tab === "rooms" || tab === "staff") { go("team"); (tab === "rooms" ? roomsScreen : staffScreen).openAdd(); } else { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); } }} />
                   ))}
                 </ListGroup>
-                <p className="px-1 pt-2 text-[13px] text-muted-foreground">Then tap + to book the first treatment.</p>
+                <p className="px-1 pt-2 text-sm text-muted-foreground">Then tap + to book the first treatment.</p>
               </div>
             ) : null}
             {loaded && scheduleScreen.tab}
@@ -616,7 +616,7 @@ const AdminDashboard = () => {
           // the phone does not block its tab as a popup.
           const open = dayCheck.problems.filter((p) => p.problem_class === 'blocking').length;
           // The two other sheets under the words, not beside them: two buttons in a row squeezed the text to a word a line (#273 O2).
-          const more = "min-h-10 rounded-full px-1 text-[15px] font-bold text-[#B9E2C6]";
+          const more = "min-h-11 rounded-full px-1 text-base font-bold text-on-dark";
           toast(<div className="w-full">
             <div>Patient sheet printed{open ? ` · ${open} still to fix` : ''}</div>
             <div className="mt-1 flex gap-4">
@@ -678,7 +678,7 @@ const AdminDashboard = () => {
           setTimeout(() => {
             const row = document.querySelector(`[data-appt="${id}"]`);
             row?.scrollIntoView({ block: 'center' });
-            row?.animate?.([{ background: '#FBEAE3' }, { background: '#fff' }], { duration: 1400 });
+            row?.animate?.([{ background: 'hsl(var(--destructive) / 0.12)' }, { background: 'hsl(var(--card))' }], { duration: 1400 });
           }, 350);
         }}
       />

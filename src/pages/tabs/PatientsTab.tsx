@@ -8,7 +8,7 @@ import DayDietDialog from "./DayDietDialog";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
-import { chip, wide, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText, rupees } from "@/components/kit";
+import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText, rupees, Btn } from "@/components/kit";
 import { AccommodationSheet, DietSheet, DischargeSheet, PackageSheet, StaySheet, type CardStay, type StayTarget } from "@/components/CardSheets";
 import { marked } from "@/components/SearchScreen";
 import type { AttentionItem } from "@/lib/attention";
@@ -90,7 +90,7 @@ function ResidentsList({ patients, today, onOpen, q, everything, openRules, need
                 flag={f.stay && n <= 3 ? (n <= 0 ? 'Leaves today' : n === 1 ? 'Leaves tomorrow' : `Leaves in ${n} days`) : undefined} />;
             }) : <Empty text={`No patient or diet plan matches “${found.q}”.`} />}
           </ListGroup>
-          <button type="button" className="mx-1 mt-3 min-h-11 text-base font-semibold text-primary" onClick={() => everything(found.q)}>Search everything for “{found.q}” ›</button>
+          <Btn kind="quiet" inline className="-ml-1 mt-3" onClick={() => everything(found.q)}>Search everything for “{found.q}” ›</Btn>
         </>)
       ) : inHouse === null ? <Loading /> : (<>
         <div className="flex gap-1.5 px-1 pb-1">
@@ -172,7 +172,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
     <BottomSheet open={!!id} onOpenChange={(o) => { if (!o) onClose(); }} title={d?.name || 'Patient'}>
       {d ? (
         <div className="-mt-2 max-h-[70dvh] overflow-y-auto">
-          <div className="text-[13px] text-muted-foreground">
+          <div className="text-sm text-muted-foreground">
             {d.stay ? `Staying ${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)} · day ${d.stay.day} of ${d.stay.days}` : 'Not staying today'}
           </div>
           {/* Story 4: everything a patient may have is a row with an arrow, filled when it is decided; nothing is forced. */}
@@ -211,7 +211,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
             <ChangeLine label="Private link" value="Share their day" onClick={() => shareLink('patients', d.id, d.name)} />
           </div>
         </div>
-      ) : <div className="py-6 text-center text-muted-foreground">…</div>}
+      ) : <div className="py-6 text-center text-muted-foreground"><Loading rows={4} /></div>}
       <BottomSheet open={intake !== null} onOpenChange={(o) => { if (!o) setIntake(null); }} title={`Arrival · ${d?.name.split(' ')[0] ?? ''}`} note="Written once, from the first days. Nothing here is required."
         foot={<Foot label="Save arrival notes" save={saveIntake} />}>
         {intake ? (<>
@@ -403,7 +403,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         details={(id) => { const row = patients.find((x) => String(x.id) === id); setCardId(null); if (row) showPatientInfo(row); }} />
 
       <BottomSheet open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) setNewPatient(blankNew()); }} title="New patient" note="Only name and gender are needed. Everything else can wait."
-        foot={<button type="button" className={`${wide} bg-primary text-primary-foreground disabled:opacity-50`} disabled={!newPatient.name.trim() || !newPatient.gender || newPatient.leaving < newPatient.arriving} onClick={saveNewPatient}>{newPatient.name.trim() ? `Add ${newPatient.name.trim()}` : 'Add patient'}</button>}>
+        foot={<Btn kind="primary" disabled={!newPatient.name.trim() || !newPatient.gender || newPatient.leaving < newPatient.arriving} onClick={saveNewPatient}>{newPatient.name.trim() ? `Add ${newPatient.name.trim()}` : 'Add patient'}</Btn>}>
         <Text label="Name" autoComplete="off" value={newPatient.name} valid={newPatient.name.trim().length > 1} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} />
         {/* Nothing chosen to start with (#283): a list that opened on Male made every resident one until corrected. */}
         <Group label="Gender">
@@ -422,9 +422,9 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
               <span className="min-w-0"><b className="block">First consultation</b>
                 <span className={`block ${noteText}`}>{consult === 'later' ? 'Later, from their card' : `${dayText(slots[consult].date)} · ${slots[consult].start_time} · ${slots[consult].staff_name}`}</span></span>
               <span className="flex flex-none text-sm font-semibold text-primary">
-                {consult === 'later' ? <button type="button" className="min-h-11 px-2" onClick={() => setConsult(0)}>Book</button> : (<>
-                  <button type="button" className="min-h-11 px-2" aria-expanded={changing} onClick={() => setChanging(!changing)}>Change</button>
-                  <button type="button" className="min-h-11 px-2" onClick={() => { setConsult('later'); setChanging(false); }}>Later</button>
+                {consult === 'later' ? <Btn kind="quiet" inline onClick={() => setConsult(0)}>Book</Btn> : (<>
+                  <Btn kind="quiet" inline aria-expanded={changing} onClick={() => setChanging(!changing)}>Change</Btn>
+                  <Btn kind="quiet" inline onClick={() => { setConsult('later'); setChanging(false); }}>Later</Btn>
                 </>)}
               </span>
             </div>
@@ -464,7 +464,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           <ListGroup title="Treatments" count={infoAppointments?.length}>
             {infoAppointments === null ? <Loading rows={2} /> : infoAppointments.length ? [...infoAppointments].sort((a, b) => Math.abs(Date.parse(a.scheduled_date) - Date.parse(today)) - Math.abs(Date.parse(b.scheduled_date) - Date.parse(today))).slice(0, allTx ? undefined : 8).map((a) => <Row key={a.id} title={`${longDay(a.scheduled_date)} · ${a.start_time}`} facts={[therapyNameById[String(a.therapy_id)] || 'Treatment', recordLine(a)].filter(Boolean).join(' · ')} flag={a.status === 'cancelled' ? `Cancelled${a.cancel_reason ? `: ${a.cancel_reason}` : ''}` : undefined} />) : <Empty text="No treatments yet." />}
           </ListGroup>
-          {infoAppointments && infoAppointments.length > 8 && !allTx ? <button type="button" className="mx-1 mt-2 min-h-11 text-base font-semibold text-primary" onClick={() => setAllTx(true)}>Show all {infoAppointments.length} ›</button> : null}
+          {infoAppointments && infoAppointments.length > 8 && !allTx ? <Btn kind="quiet" inline className="-ml-1 mt-2" onClick={() => setAllTx(true)}>Show all {infoAppointments.length} ›</Btn> : null}
         </>) : null}
       </BottomSheet>
     </>
