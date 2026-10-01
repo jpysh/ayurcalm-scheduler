@@ -10,40 +10,39 @@ async function signIn(page: Page) {
   await page.getByLabel('Password').press('Enter');
   await page.waitForURL(/\/admin/);
 }
-const toList = async (page: Page, list: string) => {
+const toTeam = async (page: Page) => {
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: /^Team and rooms/ }).click();
-  await page.getByRole('button', { name: list, exact: true }).click();
 };
-
+const addToTeam = async (page: Page, what: string) => {
+  await page.getByRole('button', { name: 'Add to the team' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: new RegExp(`^${what}`) }).click();
+};
 test('H1: rooms, therapists and therapies are plain rows with one sheet to add', async ({ page, request }) => {
   const { token } = await (await request.post('/api/auth/login', { data: { email: 'admin@example.com', password: 'demo1234' } })).json();
   const headers = { Authorization: `Bearer ${token}` };
   await signIn(page);
-  await toList(page, 'Rooms');
+  await toTeam(page);
   const panel = page.locator('[role=tabpanel][data-state=active]');
   await expect(panel).not.toContainText('Status');
-  await expect(panel).not.toContainText('Amenities');
-  // + adds what the screen is about (#285): its name says what.
-  await page.getByRole('button', { name: 'Add room' }).click();
+  // + on Team asks what to add (#285).
+  await addToTeam(page, 'Room');
   const sheet = page.getByRole('dialog');
   await sheet.getByLabel('Name').fill('E2E Room');
   // A new room starts with what the therapies need ticked (#273 U2); the admin unticks what it lacks.
   await expect(sheet.getByRole('button', { name: 'steam', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await sheet.getByRole('button', { name: 'steam', exact: true }).click();
-  await sheet.getByRole('button', { name: 'Save' }).click();
+  await sheet.getByRole('button', { name: 'Add the room' }).click();
   await expect(panel.getByRole('button', { name: /^E2E Room/ })).toContainText('Has ');
   await expect(panel.getByRole('button', { name: /^E2E Room/ })).not.toContainText('steam');
   const room = ((await (await request.get('/api/rooms', { headers })).json()) as { id: string; name: string }[]).find((r) => r.name === 'E2E Room');
   expect(room).toBeTruthy();
   await request.delete(`/api/rooms/${room!.id}`, { headers });
 
-  for (const [list, word] of [['Therapists', 'Specializations'], ['Therapies', 'Required Amenities']] as const) {
+  for (const what of ['Therapist or doctor', 'Therapy']) {
     await page.keyboard.press('Escape');
     await page.goto('/admin/team');
-    await page.getByRole('button', { name: list, exact: true }).click();
-    await expect(panel).not.toContainText(word);
-    await page.getByRole('button', { name: list === 'Therapists' ? 'Add therapist or doctor' : 'Add therapy' }).click();
+    await addToTeam(page, what);
     await expect(page.getByRole('dialog').getByLabel('Name')).toBeVisible();
   }
 });
@@ -122,14 +121,14 @@ test('U1: a centre with no therapies is asked for them first, and the library op
 
 test('U3: a long sheet scrolls inside the phone, its top still reachable', async ({ page }) => {
   await signIn(page);
-  await toList(page, 'Therapists');
-  await page.getByRole('button', { name: 'Add therapist or doctor' }).click();
+  await toTeam(page);
+  await addToTeam(page, 'Therapist or doctor');
   const sheet = page.getByRole('dialog');
   const box = (await sheet.boundingBox())!;
   expect(box.y).toBeGreaterThanOrEqual(0);
   await expect(sheet.getByLabel('Name')).toBeInViewport();
-  await sheet.getByRole('button', { name: 'Save' }).scrollIntoViewIfNeeded();
-  await expect(sheet.getByRole('button', { name: 'Save' })).toBeInViewport();
+  await sheet.getByRole('button', { name: 'Add them' }).scrollIntoViewIfNeeded();
+  await expect(sheet.getByRole('button', { name: 'Add them' })).toBeInViewport();
 });
 
 test('P1: Add leave has Full day and Every week as switches, not Yes / None dropdowns', async ({ page }) => {

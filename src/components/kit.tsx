@@ -456,3 +456,18 @@ export function QuickDates({ label, value, today, onChange, min, max }: { label:
     </div>
   );
 }
+
+/** The foot of a BottomSheet (its `foot` slot): one main button, and for something that exists a quiet destructive line under it. */
+export function SheetFoot({ busy, save, label = "Save", remove, removeLabel = "Delete", ok = true, tone }: { tone?: "destructive"; busy?: boolean; save: () => void; label?: string; remove?: () => void; removeLabel?: string; ok?: boolean }) {
+  return (
+    <div className="grid gap-1">
+      <button type="button" className={`${wide} ${tone === "destructive" ? "border-[1.5px] border-destructive text-destructive" : "bg-primary text-primary-foreground"} disabled:opacity-50`} disabled={busy || !ok} onClick={save}>{busy ? "Saving…" : label}</button>
+      {remove ? <button type="button" className={`${wide} text-sm text-destructive`} onClick={remove}>{removeLabel}</button> : null}
+    </div>
+  );
+}
+
+/** A list's first row when the list has somewhere else to go: "Add from the library ›". */
+export const LinkRow = ({ label, value, onClick }: { label: string; value?: ReactNode; onClick: () => void }) => (
+  <div className="px-3"><ChangeLine label={label} value={value ?? ""} onClick={onClick} /></div>
+);

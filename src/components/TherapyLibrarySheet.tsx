@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
+import { Empty, ListGroup, Loading, Text, noteText, wide } from "@/components/kit";
 
 type Item = {
   name: string; description: string; minutes: number; staff: number;
@@ -56,51 +57,41 @@ export function TherapyLibrarySheet({ open, onOpenChange, onImported }: {
     }
   }
 
-  const input = "min-h-11 rounded-lg border px-2 text-[16px]";
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange} title="Add from library">
-      <div className="max-h-[62dvh] overflow-y-auto">
-        {items === null ? <div className="py-6 text-center text-muted-foreground">…</div>
-          : items.length === 0 ? <div className="py-6 text-center text-muted-foreground">You already have every therapy in the library.</div>
-          : (
-            <>
-              <button type="button" className="mb-2 min-h-10 text-sm font-semibold text-primary"
-                onClick={() => setPicked(chosen.length === items.length ? {} : Object.fromEntries(items.map((x) => [x.key, true])))}>
-                {chosen.length === items.length ? "Untick all" : `Tick all ${items.length}`}
-              </button>
-              <div className="overflow-hidden rounded-xl border">
-                {items.map((x) => (
-                  <div key={x.key} className="border-b border-border px-3 py-2.5 last:border-b-0">
-                    <div className="flex items-start gap-3">
-                      <input type="checkbox" aria-label={`Add ${x.key}`} className="mt-1 h-5 w-5 flex-none accent-primary"
-                        checked={!!picked[x.key]} onChange={(e) => setPicked((p) => ({ ...p, [x.key]: e.target.checked }))} />
-                      <button type="button" className="flex-1 text-left" onClick={() => setEditing(editing === x.key ? null : x.key)}>
-                        <div className="text-[16px] font-semibold">{x.name}</div>
-                        <div className="text-[13px] text-muted-foreground">
-                          {x.minutes} min · {x.consultation ? "doctor" : `${x.staff} therapist${x.staff === 1 ? "" : "s"}`}{x.gender ? " · same gender" : ""}
-                        </div>
-                        <div className="text-[13px] text-muted-foreground">{x.description}</div>
-                        {x.products.length ? <div className="text-[13px] text-muted-foreground">Brings: {x.products.join(", ")}</div> : null}
-                      </button>
-                      <span className="text-sm text-muted-foreground">{editing === x.key ? "Done" : "Edit"}</span>
-                    </div>
-                    {editing === x.key ? (
-                      <div className="mt-2 grid grid-cols-[1fr_6rem] gap-2 pl-8">
-                        <input aria-label="Name" className={input} value={x.name} onChange={(e) => change(x.key, { name: e.target.value })} />
-                        <input aria-label="Minutes" className={input} type="number" inputMode="numeric" min={5} max={480} value={x.minutes}
-                          onChange={(e) => change(x.key, { minutes: Number(e.target.value) || 0 })} />
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
+    <BottomSheet open={open} onOpenChange={onOpenChange} title="Add from library" note="Tick what the centre offers. Tap a therapy to change its name or minutes first."
+      foot={items && items.length ? (
+        <button type="button" disabled={!chosen.length || busy} onClick={add} className={`${wide} bg-primary text-primary-foreground disabled:opacity-50`}>
+          {busy ? "Adding…" : chosen.length ? `Add ${chosen.length} therap${chosen.length === 1 ? "y" : "ies"}` : "Tick the therapies to add"}
+        </button>
+      ) : undefined}>
+      {items === null ? <Loading /> : items.length === 0 ? <Empty text="You already have every therapy in the library." /> : (<>
+        <button type="button" className="mb-2 min-h-11 text-sm font-semibold text-primary"
+          onClick={() => setPicked(chosen.length === items.length ? {} : Object.fromEntries(items.map((x) => [x.key, true])))}>
+          {chosen.length === items.length ? "Untick all" : `Tick all ${items.length}`}
+        </button>
+        <ListGroup>
+          {items.map((x) => (
+            <div key={x.key} className="border-b border-border px-3 py-1 last:border-b-0">
+              <div className="flex items-start gap-1">
+                <input type="checkbox" aria-label={`Add ${x.key}`} className="mt-3.5 h-6 min-h-0 w-6 min-w-0 flex-none accent-[hsl(var(--primary))]"
+                  checked={!!picked[x.key]} onChange={(e) => setPicked((p) => ({ ...p, [x.key]: e.target.checked }))} />
+                <button type="button" aria-expanded={editing === x.key} className="min-h-12 min-w-0 flex-1 py-2 pl-2 text-left" onClick={() => setEditing(editing === x.key ? null : x.key)}>
+                  <span className="block text-base font-semibold">{x.name}</span>
+                  <span className={`block ${noteText}`}>{x.minutes} min · {x.consultation ? "doctor" : `${x.staff} therapist${x.staff === 1 ? "" : "s"}`}{x.gender ? " · same gender" : ""}</span>
+                  <span className={`block ${noteText}`}>{x.description}</span>
+                  {x.products.length ? <span className={`block ${noteText}`}>Brings: {x.products.join(", ")}</span> : null}
+                </button>
               </div>
-            </>
-          )}
-      </div>
-      <button type="button" disabled={!chosen.length || busy} onClick={add}
-        className="mt-3 min-h-12 w-full rounded-full bg-primary font-semibold text-primary-foreground disabled:opacity-50">
-        {chosen.length ? `Add ${chosen.length} therap${chosen.length === 1 ? "y" : "ies"}` : "Tick the therapies to add"}
-      </button>
+              {editing === x.key ? (
+                <div className="grid grid-cols-[1fr_7rem] gap-3 pb-2 pl-9">
+                  <Text label="Name" value={x.name} onChange={(e) => change(x.key, { name: e.target.value })} />
+                  <Text label="Minutes" type="number" inputMode="numeric" min={5} max={480} value={x.minutes} onChange={(e) => change(x.key, { minutes: Number(e.target.value) || 0 })} />
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </ListGroup>
+      </>)}
     </BottomSheet>
   );
 }

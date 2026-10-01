@@ -171,60 +171,6 @@
   }
 }
 
-/* The list screens on a phone (#137): one shared pattern. Below 640px a table
-   is a stack of cards, the name first and the facts under it, so nothing that
-   matters sits in a column off the side of the screen. The row's own edit and
-   delete controls stay, and are big enough to tap. */
-@media (max-width: 639px) {
-  .cards-sm thead { display: none; }
-  .cards-sm, .cards-sm tbody { display: block; }
-  .cards-sm tr {
-    display: flex; flex-direction: column; gap: 2px; height: auto !important;
-    margin-bottom: 8px; padding: 10px 12px; border: 0; border-radius: 16px; background: hsl(var(--card));
-  }
-  .cards-sm td { display: block; padding: 0 !important; border: 0; font-size: 13px; color: hsl(var(--muted-foreground)); text-align: left; }
-  .cards-sm td:empty, .cards-sm td.hidden { display: none; }
-  .cards-sm td:first-child, .cards-sm td[data-first] { font-size: 16px; font-weight: 600; color: hsl(var(--foreground)); }
-  .cards-sm td[data-first] { order: -1; }
-  .cards-sm tr:has(td[data-first]) td:first-child { font-size: 13px; font-weight: 400; color: hsl(var(--muted-foreground)); }
-  .cards-sm td:last-child { display: flex; justify-content: flex-end; gap: 4px; }
-  .cards-sm td:last-child button { min-width: 44px; min-height: 44px; }
-
-  /* A card's facts sit on one wrapped line under the name, each after its
-     column's name: a bare "80 · 2" means nothing without its header (#220). */
-  .cards-sm tr:not(:has(input, textarea, [role=combobox])) { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 12px; }
-  .cards-sm tr:not(:has(input, textarea, [role=combobox])) :is(td[data-first], tr:not(:has(td[data-first])) > td:first-child) { flex-basis: 100%; }
-  .cards-sm tr:not(:has(input, textarea, [role=combobox])) td[data-label]:not([data-first]):not(tr:not(:has(td[data-first])) > td:first-child)::before {
-    content: attr(data-label) " "; color: hsl(var(--muted-foreground) / 0.8);
-  }
-  .cards-sm tr:not(:has(input, textarea, [role=combobox])) td:not([data-first]) * {
-    display: inline; width: auto; height: auto; min-width: 0; padding: 0; border: 0; background: none; font: inherit; color: hsl(var(--foreground));
-  }
-
-  /* A card is a plain row, as the design's lists: tapping it opens its edit
-     sheet (table.tsx), where Save, Cancel and Delete are (#178). */
-  .cards-sm tr:not(:has(input, textarea, [role=combobox])) td:last-child { display: none; }
-  .cards-sm tr:not(:has(input, textarea, [role=combobox])) td[data-empty] { display: none; }
-
-  /* The row being edited is a bottom sheet over a dimmed page: each field under
-     its column's name (table.tsx copies it), the buttons at the foot. */
-  .cards-sm tr:has(input, textarea, [role=combobox]) {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; margin: 0; gap: 14px;
-    max-height: 90dvh; overflow-y: auto; border-radius: 16px 16px 0 0;
-    padding: 20px 16px calc(16px + env(safe-area-inset-bottom));
-    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45); background: hsl(var(--card)) !important; isolation: isolate;
-  }
-  .cards-sm tr:has(input, textarea, [role=combobox]) td { font-size: 16px; font-weight: 400; color: hsl(var(--foreground)); }
-  .cards-sm tr:has(input, textarea, [role=combobox]) td[data-label]:not(:last-child)::before {
-    content: attr(data-label); display: block; margin-bottom: 4px; font-size: 13px; color: hsl(var(--muted-foreground));
-  }
-  .cards-sm tr:has(input, textarea, [role=combobox]) td:last-child { position: sticky; bottom: 0; background: hsl(var(--card)); padding-top: 8px !important; }
-  .cards-sm tr:has(input, textarea, [role=combobox]) td:last-child > div { width: 100%; }
-  .cards-sm tr:has(input, textarea, [role=combobox]) td:last-child button { flex: 1; min-height: 48px; border-radius: 9999px; }
-  /* While one sheet is open, a tap on the dimmed page opens nothing else. */
-  .cards-sm:has(tr :is(input, textarea, [role=combobox])) tr:not(:has(input, textarea, [role=combobox])) { pointer-events: none; }
-}
-
 /* Every add and edit form on a phone is a bottom sheet (#137): in reach of the
    thumb, the page still showing above it, and Save kept in view at its foot.
    Done here once rather than in each of the forms. */

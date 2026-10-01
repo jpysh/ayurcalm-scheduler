@@ -1,15 +1,15 @@
-import { useRef, useState } from "react";
-import { Plus } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
 import PageHead from "@/components/PageHead";
-import { API_TOKEN, type ApiProgramEvent, type UiStaff, type UiRoom, type Patient } from "./shared";
+import { DateRow, Days, Dropdown, Empty, ListGroup, Row, Seg, SheetFoot, Text, TimeList, timesBetween, Group } from "@/components/kit";
+import { API_TOKEN, type ApiProgramEvent, type UiStaff, type UiRoom } from "./shared";
 
 /**
  * Classes and events (#227): a list, and one labelled form for adding and
  * editing, as the Leave sheet has: name, time, days, who runs it, room, and
- * whether residents are expected. The old inline table edit overflowed at 375px.
+ * whether patients are expected (#285 session 6: rows and sheet from the kit).
  */
 const WEEK = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
 type Form = {
@@ -43,14 +43,12 @@ const formOf = (ev: ApiProgramEvent): Form => {
   };
 };
 
-export function useEventsScreen({ events, setEvents, roomsList, staff, staffNameById }: {
+export function useEventsScreen({ events, setEvents, roomsList, staff, staffNameById, q }: {
   events: ApiProgramEvent[]; setEvents: React.Dispatch<React.SetStateAction<ApiProgramEvent[]>>;
-  roomsList: UiRoom[]; staff: UiStaff[]; patients: Patient[]; amenityOptions: string[]; isMobile: boolean;
-  staffNameById: Record<string, string>; patientNameById: Record<string, string>;
+  roomsList: UiRoom[]; staff: UiStaff[]; staffNameById: Record<string, string>; q: string;
 }) {
   const [form, setForm] = useState<Form | null>(null);
   const [busy, setBusy] = useState(false);
-  const totalRef = useRef(0);
   const set = (patch: Partial<Form>) => setForm((f) => (f ? { ...f, ...patch } : f));
   const headers = { "Content-Type": "application/json", ...(API_TOKEN ? { "x-api-key": API_TOKEN } : {}) };
 
@@ -94,8 +92,8 @@ export function useEventsScreen({ events, setEvents, roomsList, staff, staffName
 
   // The daily round first, by time of day, then one-off events by their day (#137).
   const once = (x: ApiProgramEvent) => (x.recurrence === "weekly" && (x.weekdays || []).length ? "" : String(x.date || x.start_date || ""));
-  const rows = [...events].sort((a, b) => once(a).localeCompare(once(b)) || (a.start_time || "").localeCompare(b.start_time || "") || a.activity_name.localeCompare(b.activity_name));
-  totalRef.current = rows.length;
+  const ql = q.trim().toLowerCase();
+  const rows = [...events].filter((x) => !ql || x.activity_name.toLowerCase().includes(ql)).sort((a, b) => once(a).localeCompare(once(b)) || (a.start_time || "").localeCompare(b.start_time || "") || a.activity_name.localeCompare(b.activity_name));
   const who = (ev: ApiProgramEvent) => {
     const ids = (ev as ApiProgramEvent & { staff_ids?: string[] }).staff_ids?.length ? (ev as ApiProgramEvent & { staff_ids: string[] }).staff_ids : ev.staff_id ? [String(ev.staff_id)] : [];
     return ids.map((id) => staffNameById[id] || "").filter(Boolean).join(", ");
@@ -104,82 +102,48 @@ export function useEventsScreen({ events, setEvents, roomsList, staff, staffName
 
   const tab = (
     <div>
-      <PageHead title="Events" note={`${rows.length}`} />
-      <div className="overflow-hidden rounded-2xl bg-card">
-        {rows.map((ev) => (
-          <button key={ev.id} type="button" className="flex min-h-[54px] w-full items-center gap-3 border-b border-border px-3 py-2 text-left last:border-b-0" onClick={() => setForm(formOf(ev))}>
-            <span className="w-24 flex-none tabular-nums text-[14px] text-muted-foreground">{ev.start_time}–{ev.end_time}</span>
-            <span className="flex-1">
-              <b className="block text-[16px] font-semibold">{ev.activity_name}</b>
-              <span className="block text-[13px] text-muted-foreground">{[daysOf(ev), who(ev), roomName(ev.room_id), (ev as ApiProgramEvent & { is_optional?: boolean }).is_optional ? "optional" : null].filter(Boolean).join(" · ")}</span>
-            </span>
-            <span className="text-muted-foreground">›</span>
-          </button>
-        ))}
-      </div>
-      <button type="button" className="mt-3 flex h-12 w-full items-center justify-center rounded-full border font-semibold" onClick={() => setForm(blank())}><Plus className="mr-1 h-4 w-4" />Add event</button>
+      <PageHead title="Events" note={`${events.length}`} />
+      {rows.length === 0 ? <Empty text={ql ? "No event matches." : "No classes or events yet. Tap + to add one."} /> : (
+        <ListGroup>
+          {rows.map((ev) => (
+            <Row key={ev.id} title={ev.activity_name} trailing={`${ev.start_time}–${ev.end_time}`}
+              facts={[daysOf(ev), who(ev), roomName(ev.room_id), (ev as ApiProgramEvent & { is_optional?: boolean }).is_optional ? "optional" : null].filter(Boolean).join(" · ")} onClick={() => setForm(formOf(ev))} />
+          ))}
+        </ListGroup>
+      )}
     </div>
   );
 
-  const label = "grid gap-1 text-[13px] text-muted-foreground";
-  const field = "min-h-11 w-full rounded-lg border bg-background px-2 text-[16px] text-foreground";
-  const chip = (on: boolean) => `min-h-11 rounded-full border px-3 text-[15px] font-semibold ${on ? "border-primary bg-primary text-primary-foreground" : "border-border"}`;
+  // Every quarter hour of a day: a time is picked, in 24-hour, never typed on a clock face.
+  const times = timesBetween("00:00", "23:45", 15);
   const dialogs = (
-    <BottomSheet open={!!form} onOpenChange={(o) => { if (!o) setForm(null); }} title={form?.id ? "Edit event" : "Add event"}>
-      {form ? (
-        <div className="-mt-2 grid max-h-[75dvh] gap-3 overflow-y-auto pb-1">
-          <label className={label}>Name<input className={field} placeholder="Morning Yoga" value={form.activity_name} onChange={(e) => set({ activity_name: e.target.value })} /></label>
-          <div className="grid grid-cols-2 gap-2">
-            <label className={label}>From<input type="time" step={900} className={field} value={form.start_time} onChange={(e) => set({ start_time: e.target.value })} /></label>
-            <label className={label}>To<input type="time" step={900} className={field} value={form.end_time} onChange={(e) => set({ end_time: e.target.value })} /></label>
-          </div>
-          <fieldset className="grid gap-2">
-            <legend className="mb-1 text-[13px] text-muted-foreground">Days</legend>
-            <div className="flex flex-wrap gap-2">
-              {([["daily", "Every day"], ["weekdays", "Some days"], ["once", "One day"]] as const).map(([k, t]) => (
-                <button key={k} type="button" aria-pressed={form.days === k} className={chip(form.days === k)} onClick={() => set({ days: k })}>{t}</button>
-              ))}
-            </div>
-            {form.days === "weekdays" ? (
-              <div className="flex flex-wrap gap-1.5">
-                {WEEK.map((w) => (
-                  <button key={w} type="button" aria-pressed={form.weekdays.includes(w)} aria-label={w} className={chip(form.weekdays.includes(w))}
-                    onClick={() => set({ weekdays: form.weekdays.includes(w) ? form.weekdays.filter((x) => x !== w) : [...form.weekdays, w] })}>{w[0].toUpperCase() + w.slice(1, 3)}</button>
-                ))}
-              </div>
-            ) : null}
-            {form.days === "once" ? <label className={label}>On<input type="date" className={field} value={form.date} onChange={(e) => set({ date: e.target.value })} /></label> : null}
-          </fieldset>
-          <label className={label}>Run by
-            <select className={field} value={form.staff_ids[0] || ""} onChange={(e) => set({ staff_ids: e.target.value ? [e.target.value, ...form.staff_ids.slice(1).filter((x) => x !== e.target.value)] : [] })}>
-              <option value="">Nobody from the team</option>
-              {staff.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
-            </select>
-          </label>
-          <label className={label}>Room
-            <select className={field} value={form.room_id} onChange={(e) => set({ room_id: e.target.value })}>
-              <option value="">No room (outdoors, the hall)</option>
-              {roomsList.map((r) => <option key={r.id} value={String(r.id)}>{r.name}</option>)}
-            </select>
-          </label>
-          <fieldset className="grid gap-1">
-            <legend className="mb-1 text-[13px] text-muted-foreground">Patients</legend>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" aria-pressed={!form.is_optional} className={chip(!form.is_optional)} onClick={() => set({ is_optional: false })}>Everyone attends</button>
-              <button type="button" aria-pressed={form.is_optional} className={chip(form.is_optional)} onClick={() => set({ is_optional: true })}>Optional</button>
-            </div>
-            <span className="text-[12px] text-muted-foreground">No treatment is booked across an event everyone attends.</span>
-          </fieldset>
-          <div className="sticky bottom-0 flex gap-2 bg-card pt-2">
-            {form.id ? <button type="button" className="min-h-11 rounded-full px-4 font-semibold text-destructive" onClick={remove}>Delete</button> : null}
-            <span className="flex-1" />
-            <button type="button" className="min-h-11 rounded-full px-4 font-semibold" onClick={() => setForm(null)}>Cancel</button>
-            <button type="button" className="min-h-11 rounded-full bg-primary px-5 font-semibold text-primary-foreground" disabled={busy} onClick={save}>{form.id ? "Save" : "Add"}</button>
-          </div>
+    <BottomSheet open={!!form} onOpenChange={(o) => { if (!o) setForm(null); }} title={form?.id ? "Edit event" : "Add event"} note="A class or event on the centre's round. Name and time are needed."
+      foot={form ? <SheetFoot busy={busy} save={save} label={form.id ? "Save the event" : "Add the event"} remove={form.id ? remove : undefined} removeLabel="Delete this event" /> : undefined}>
+      {form ? (<>
+        <Text label="Name" value={form.activity_name} placeholder="Morning Yoga" onChange={(e) => set({ activity_name: e.target.value })} />
+        <div className="grid grid-cols-2 gap-3">
+          <TimeList label="From" times={times} value={form.start_time} onChange={(t) => set({ start_time: t })} />
+          <TimeList label="To" times={times} after={form.start_time} value={form.end_time} onChange={(t) => set({ end_time: t })} />
         </div>
-      ) : null}
+        <Group label="Days">
+          <Seg options={[["daily", "Every day"], ["weekdays", "Some days"], ["once", "One day"]]} value={form.days} onChange={(d) => set({ days: d })} />
+        </Group>
+        {form.days === "weekdays" ? <div className="mt-2"><Days value={form.weekdays} onChange={(v) => set({ weekdays: v })} /></div> : null}
+        {form.days === "once" ? <DateRow label="On" value={form.date} onChange={(d) => set({ date: d })} /> : null}
+        <Dropdown label="Run by (optional)" value={form.staff_ids[0] || ""} onChange={(e) => set({ staff_ids: e.target.value ? [e.target.value, ...form.staff_ids.slice(1).filter((x) => x !== e.target.value)] : [] })}>
+          <option value="">Nobody from the team</option>
+          {staff.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
+        </Dropdown>
+        <Dropdown label="Room (optional)" value={form.room_id} onChange={(e) => set({ room_id: e.target.value })}>
+          <option value="">No room (outdoors, the hall)</option>
+          {roomsList.map((r) => <option key={r.id} value={String(r.id)}>{r.name}</option>)}
+        </Dropdown>
+        <Group label="Patients" note="No treatment is booked across an event everyone attends.">
+          <Seg options={[["all", "Everyone attends"], ["optional", "Optional"]]} value={form.is_optional ? "optional" : "all"} onChange={(v) => set({ is_optional: v === "optional" })} />
+        </Group>
+      </>) : null}
     </BottomSheet>
   );
 
-  return { tab, dialogs, setVisibleRows: (_n: number) => {}, totalRef };
+  return { tab, dialogs, openAdd: () => setForm(blank()) };
 }
