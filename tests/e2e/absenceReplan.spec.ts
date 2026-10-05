@@ -110,6 +110,9 @@ test('@smoke a therapist off: the pill names it, its fix clears the day, and Und
   await openTab(page, 'Leave');
   await page.getByRole('button', { name: 'Add leave', exact: true }).click();
   const form = page.getByRole('dialog');
+  // Nobody chosen yet: neither save can be tapped, and the sheet says why (#337).
+  await expect(form.getByRole('button', { name: 'Save, plan later', exact: true })).toBeDisabled();
+  await expect(form.getByText('Choose who is away to save.')).toBeVisible();
   // Who first, from one list (#265).
   await form.getByRole('button', { name: /^Who or what/ }).click();
   await page.getByRole('dialog').last().getByRole('button', { name: THERAPIST, exact: true }).click();
