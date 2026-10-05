@@ -161,10 +161,11 @@ export function WeekStrip({ day, today, setDay }: { day: string; today: string; 
   const month = new Date(`${shift(shown, 3)}T00:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
 
   // Past the first screenful the week folds to one line, as Apple Calendar does, and hands the rows back their room (#313 follow-up).
-  // Two thresholds so a flick does not flip it; the list is moved by exactly what the strip lost so nothing jumps.
+  // It unfolds only at the very top: the strip is taller than any gap between two thresholds, so unfolding
+  // lower pushed the page back past the fold point and it flickered (#332). The list is moved by exactly what the strip lost so nothing jumps.
   const bar = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const on = () => setCompact((c) => (c ? window.scrollY > 40 : window.scrollY > 140));
+    const on = () => setCompact((c) => (c ? window.scrollY > 0 : window.scrollY > 140));
     window.addEventListener("scroll", on, { passive: true });
     return () => window.removeEventListener("scroll", on);
   }, []);
