@@ -135,6 +135,16 @@ async function main() {
     assert.match(late.why, /Today's hours are over/);
     assert.match(late.actions[0].label, /Book tomorrow at/);
 
+    // With the centre closed tomorrow, the offer skips to the next open day (#344).
+    const shut = await prisma.timeOff.create({ data: { entity_type: 'center', date: new Date('2030-04-18T00:00:00.000Z'), description: 'Holiday' } });
+    try {
+      const closed = await options(meera.id, shiro.id, DAY, '17:30');
+      assert.equal(closed.actions[0].date, '2030-04-19', 'the offer named a day the centre is closed');
+      assert.match(closed.actions[0].label, /Book Fri 19 Apr at/);
+    } finally {
+      await prisma.timeOff.delete({ where: { id: shut.id } });
+    }
+
     // Dead end 4: not enough therapists of the patient's gender. Add one, or allow any.
     const gender = await options(meera.id, vamana.id);
     assert.equal(gender.times.length, 0);
