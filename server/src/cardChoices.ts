@@ -22,6 +22,10 @@ const works = (weekly: unknown, day: Date, start: number, minutes: number) => {
   return start >= s && start + minutes <= e;
 };
 
+/** Who can give a therapy: a consultation is the doctor's and a doctor gives nothing else (#320); anyone else is trained for it, or the centre has not said who is. */
+const gives = (s: { role: string; specializations: string[] }, t: { id: string; is_consultation: boolean }) =>
+  s.role === 'doctor' ? t.is_consultation : !t.is_consultation && (!s.specializations.length || s.specializations.includes(t.id));
+
 /** How many rows a list shows: enough to choose, few enough to read on a phone. */
 const MAX = 5;
 const DAY_MS = 86400000;
@@ -102,10 +106,11 @@ export async function cardChoices(appointmentId: string, kind: Kind, nowMinutes:
   const offered = () => out.length - 1;
 
   if (kind === 'staff') {
+    const held = ctx.therapies.find((x) => x.id === a.therapy_id);
     for (const s of ctx.staff) {
       if (!s.is_active || s.id === a.staff_id || a.co_staff_ids.includes(s.id)) continue;
-      // Only someone trained for it, when the centre has said who is.
-      if (s.specializations.length && !s.specializations.includes(a.therapy_id)) continue;
+      // Only someone who can give it.
+      if (!held || !gives(s, held)) continue;
       if (!works(s.weekly_schedule, a.scheduled_date, toM(a.start_time), a.duration_minutes)) continue;
       if (fits({ staff_id: s.id })) out.push({ label: s.name, best: offered() === 0, change: { staff_id: s.id } });
       if (offered() >= MAX) break;
@@ -128,7 +133,7 @@ export async function cardChoices(appointmentId: string, kind: Kind, nowMinutes:
     if (t.id === a.therapy_id) continue;
     const staffOk = [a.staff_id, ...a.co_staff_ids].filter(Boolean).every((id) => {
       const s = ctx.staff.find((x) => x.id === id);
-      return !s || !s.specializations.length || s.specializations.includes(t.id);
+      return !s || gives(s, t);
     });
     if (!staffOk) continue;
     if (fits({ therapy_id: t.id, duration_minutes: t.duration_minutes })) {
@@ -192,7 +197,7 @@ type Ctx = Awaited<ReturnType<typeof loadDay>>;
 
 /** The first therapist (and co-therapists) and room the guard accepts for this patient and therapy at `t`. */
 function assign(ctx: Ctx, day: Date, t: number, therapy: Ctx['therapies'][number], patientId: string, preferred?: { staff_id?: string; room_id?: string }): Suggestion | null {
-  const staff = ctx.staff.filter((s) => s.is_active && (!s.specializations.length || s.specializations.includes(therapy.id)));
+  const staff = ctx.staff.filter((s) => s.is_active && gives(s, therapy));
   const rooms = ctx.rooms.filter((x) => x.is_active);
   const first = <T extends { id: string }>(l: T[], id?: string) => (id ? [...l.filter((x) => x.id === id), ...l.filter((x) => x.id !== id)] : l);
   for (const s of first(staff, preferred?.staff_id)) for (const room of first(rooms, preferred?.room_id)) {
@@ -243,7 +248,7 @@ export async function bookingOptions(dayISO: string, nowMinutes: number | null, 
   const chosen = times.find((x) => x.start_time === at) || times[0];
   const base: Candidate = { scheduled_date: day, start_time: chosen.start_time, duration_minutes: chosen.duration_minutes, staff_id: chosen.staff_id, co_staff_ids: chosen.co_staff_ids, room_id: chosen.room_id, patient_id: patient.id, therapy_id: therapy.id };
   const t0 = toM(chosen.start_time);
-  const staff: Option[] = ctx.staff.filter((s) => s.is_active && (!s.specializations.length || s.specializations.includes(therapy.id))).map((s) => {
+  const staff: Option[] = ctx.staff.filter((s) => s.is_active && gives(s, therapy)).map((s) => {
     const off = !works(s.weekly_schedule, day, t0, therapy.duration_minutes);
     const c = off ? null : findConflict({ ...base, staff_id: s.id, co_staff_ids: base.co_staff_ids?.map((id) => (id === s.id ? base.staff_id! : id)) }, ctx);
     return { id: s.id, name: s.name, free: !off && !c, why: off ? 'not working then' : c?.reason === 'STAFF_BUSY' ? 'has a treatment' : c?.reason === 'STAFF_OFF' ? 'not in' : c?.reason === 'STAFF_IN_EVENT' ? 'in an event' : c ? c.message : undefined };
@@ -304,7 +309,7 @@ export async function whyNoTime(dayISO: string, pick: { patient_id: string; ther
   const patient = ctx.patients.find((x) => x.id === pick.patient_id);
   if (!therapy || !patient) return undefined;
   const sameGender = therapy.requires_gender_match && ctx.settings?.enforce_gender_match !== false;
-  const able = ctx.staff.filter((s) => s.is_active && (!s.specializations.length || s.specializations.includes(therapy.id)) && (!sameGender || s.gender === patient.gender)).length;
+  const able = ctx.staff.filter((s) => s.is_active && gives(s, therapy) && (!sameGender || s.gender === patient.gender)).length;
   const needed = therapy.staff_required ?? 1;
   if (able >= needed) return undefined;
   const who = `${needed === 1 ? 'a therapist' : `${needed} therapists together`}${sameGender ? ` of ${patient.name.split(' ')[0]}'s gender` : ''}`;

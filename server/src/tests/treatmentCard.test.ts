@@ -129,6 +129,19 @@ async function main() {
     assert.equal(short.suggestions.length, 0, 'a two-therapist therapy was offered with one trained therapist');
     assert.match(short.why, /needs 2 therapists together.*only 1 here gives it/, `the reason was not given: ${short.why}`);
 
+    // A consultation is the doctor's: a therapist with nothing ticked is not offered it, and a doctor is not offered other therapies (#320).
+    const consult = await call('POST', '/therapies', { name: `${TAG} Consultation`, duration_minutes: 20, is_consultation: true });
+    await call('POST', '/staff', { name: `${TAG} Doctor`, gender: 'male', role: 'doctor', weekly_schedule: allWeek });
+    await call('POST', '/staff', { name: `${TAG} Open`, gender: 'female', weekly_schedule: allWeek });
+    const guest = await call('POST', '/patients', { name: `${TAG} Guest`, gender: 'female', stay: { start_date: '2030-04-10', end_date: '2030-04-25' } });
+    const whoFor = async (t: { id: string }) => ((await call('GET', `/appointments/options?date=${DAY}&patient_id=${guest.id}&therapy_id=${t.id}`)).staff as { name: string }[]).map((x) => x.name);
+    const forConsult = await whoFor(consult);
+    assert.ok(forConsult.includes(`${TAG} Doctor`), `the doctor was not offered a consultation: ${forConsult}`);
+    assert.ok(!forConsult.includes(`${TAG} Open`), `a therapist with nothing ticked was offered a consultation: ${forConsult}`);
+    const forMassage = await whoFor(therapy);
+    assert.ok(!forMassage.includes(`${TAG} Doctor`), `the doctor was offered a massage: ${forMassage}`);
+    assert.ok(forMassage.includes(`${TAG} Asha`), `a trained therapist was not offered it: ${forMassage}`);
+
     console.log("Treatment card: every time and room offered saves, a busy therapist isn't offered, a no-show frees theirs, and History says what changed; a suggested booking saves once and not twice; a chosen resident gets three free times; a two-therapist therapy books with both.");
   } finally {
     await tidy(prisma).catch(() => {});
