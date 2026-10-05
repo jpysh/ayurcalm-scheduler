@@ -14,7 +14,7 @@ import { dietTimeline, startDietFrom, extendDiet } from './patientDiet.js';
 import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
 import { centreClock, eventClashes, type EventRow } from './availability.js';
 import { loadDietsForDay } from './dietResolution.js';
-import { bookingOptions, bookingSuggestions, bookingWho, cardChoices, nextConsultations, whyNoTime } from './cardChoices.js';
+import { bookingOptions, bookingSuggestions, bookingWho, cardChoices, nextConsultations, whyNoConsultation, whyNoTime } from './cardChoices.js';
 import { historyOf } from './history.js';
 import { searchTreatments } from './search.js';
 import { residentDay } from './residentDay.js';
@@ -1571,7 +1571,8 @@ app.get('/appointments/options', async (req: Request, res: Response) => {
 // The consultation a new patient is pre-booked into (#285 story 4): the next free doctor and room.
 app.get('/consultations/next', async (req: Request, res: Response) => {
   const q = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), now: z.string().regex(/^\d\d:\d\d$/).optional() }).parse(req.query);
-  res.json({ slots: await nextConsultations(q.date, q.now ? Number(q.now.slice(0, 2)) * 60 + Number(q.now.slice(3)) : null, prisma) });
+  const slots = await nextConsultations(q.date, q.now ? Number(q.now.slice(0, 2)) * 60 + Number(q.now.slice(3)) : null, prisma);
+  res.json({ slots, why: slots.length ? undefined : await whyNoConsultation(prisma) });
 });
 
 // Book one treatment at an exact time, therapist and room: what the + sheet

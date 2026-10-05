@@ -56,5 +56,5 @@ export const therapyLibrary: LibraryTherapy[] = [
   T('Jalaukavacharana', 'Leech therapy on a local area.', 60, 1, table, ['Leeches', 'Turmeric']),
   T('Agnikarma', 'Heat applied with a metal rod to a painful point.', 45, 1, table, ['Panchadhatu rod', 'Aloe vera']),
   T('Mukhabhyanga', 'Face and head massage with oil.', 40, 1, table, ['Kumkumadi oil']),
-  { ...T('Consultation', 'Pulse, BP and a talk with the doctor; the plan is reviewed.', 20, 1, [], []), consultation: true },
+  { ...T('Consultation', 'Pulse, BP and a talk with the doctor; the plan is reviewed.', 20, 1, ['bp_monitor', 'examination_bed'], []), consultation: true },
 ];
