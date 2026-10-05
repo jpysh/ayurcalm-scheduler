@@ -339,7 +339,7 @@ export async function planDay(
         const otherDay = (laterDays[key] ??= await prisma.appointment.findMany({ where: { scheduled_date: other, ...HAPPENING } }));
         const taken = laterTaken.filter((x) => x.date === key);
         // A course is one a day: not onto a day the resident already has this therapy.
-        if (otherDay.some((a) => a.patient_id === appt.patient_id && a.therapy_id === appt.therapy_id && a.id !== appt.id) || taken.some((x) => x.patient === appt.patient_id && x.therapy === appt.therapy_id)) continue;
+        if (appt.total_sessions > 1 && (otherDay.some((a) => a.patient_id === appt.patient_id && a.therapy_id === appt.therapy_id && a.id !== appt.id) || taken.some((x) => x.patient === appt.patient_id && x.therapy === appt.therapy_id))) continue;
         const hits = (a: { start_time: string; duration_minutes: number }, s: number, e: number) =>
           overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, s, e);
         for (let t = open; t + duration <= close; t += 30) {
