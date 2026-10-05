@@ -247,9 +247,13 @@ are the exception.
 `git revert` on the merge commit undoes it cleanly. If the work turns out bigger
 than the issue implies, stop and say so before expanding scope.
 
-**Finish with a "check it yourself" list** — at most five steps, each one
-something the maintainer clicks or looks at, never code to read. A session is not
-done until someone who cannot read the diff can confirm it worked.
+**Finish with a screenshot UAT, not a "check it yourself" list** (decided 5 Oct).
+Claude does the maintainer's five steps itself at 375×812 with `node scripts/uat.mjs <date-slug>`
+(edit its STEPS for the session): a screenshot and a pass/fail line per step in
+`docs/design/uat/<date-slug>/README.md`, committed with the PR so it can be checked later. Report
+the table, not instructions. Only a step that needs a human (a CAPTCHA, a real phone's print, a
+password, an account) goes to the maintainer, one line each. Leave the app open in the browser pane
+(signed in by API token, phone size) at the screen the work touched.
 
 **Count the taps.** `tests/e2e/tapCount.spec.ts` prints each daily job's taps
 beside the design's target. A session that builds a job states before and after,
