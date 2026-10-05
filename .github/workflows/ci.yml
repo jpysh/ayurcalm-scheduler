@@ -78,7 +78,10 @@ jobs:
         run: npm run qa
       # A screen-only change: just the stack, for the smoke set.
       - if: needs.scope.outputs.full != 'true'
-        run: RATE_LIMIT_WRITES=1000 docker compose up -d --build --wait
+        run: |
+          RATE_LIMIT_WRITES=1000 docker compose up -d --build --wait
+          # Healthy is not seeded: the first start still fills the demo data.
+          until curl -sf http://localhost:8080/api/health >/dev/null; do sleep 3; done
       # The smoke set is the only browser gate (#315), on every PR. Everything else
       # runs nightly (nightly.yml) and blocks nothing. qa already ran the
       # therapist-off walk, and a second run would press on the API's write limit.
