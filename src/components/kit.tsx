@@ -265,8 +265,8 @@ export const Row = ({ title, facts, trailing, flag, onClick, href }: { title: Re
   const body = (
     <>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-row font-semibold">{title}</span>
-        {facts ? <span className="block truncate text-sm text-muted-foreground">{facts}</span> : null}
+        <span className="line-clamp-2 text-row font-semibold">{title}</span>
+        {facts ? <span className="line-clamp-2 text-sm text-muted-foreground">{facts}</span> : null}
         {flag ? <span className="block text-sm font-semibold text-destructive">{flag}</span> : null}
       </span>
       {trailing ? <span className="flex-none text-sm text-muted-foreground">{trailing}</span> : null}
@@ -332,7 +332,7 @@ export function Picker<T extends string>({ options, value, onChange, onEdit }: {
       {options.map((o) => (
         <button key={o.id} type="button" aria-pressed={value === o.id} onClick={() => onChange(o.id)}
           className="flex min-h-14 items-center gap-3 rounded-xl border-[1.5px] border-border px-3 py-2 text-left aria-pressed:border-primary aria-pressed:bg-secondary">
-          <span className="min-w-0 flex-1"><b className="block text-base">{o.name}</b>{o.note ? <span className={`block truncate ${noteText}`}>{o.note}</span> : null}</span>
+          <span className="min-w-0 flex-1"><b className="block text-base">{o.name}</b>{o.note ? <span className={`line-clamp-2 ${noteText}`}>{o.note}</span> : null}</span>
           {o.fact ? <span className="flex-none text-sm text-muted-foreground">{o.fact}</span> : null}
           {value === o.id ? <span aria-hidden className="flex-none font-bold text-primary">✓</span> : null}
         </button>
