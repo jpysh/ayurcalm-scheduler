@@ -113,7 +113,6 @@ test('@smoke day sheet PDF prints for today', async ({ page, request }) => {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const res = await request.get(`/api/daily-schedule-pdf?date=${today}`, { headers: { Authorization: `Bearer ${token}` } });
   expect(res.status()).toBe(200);
-  expect(1, 'deliberate break, smoke').toBe(2);
   expect(res.headers()['content-type']).toContain('application/pdf');
   const body = await res.body();
   expect(body.subarray(0, 4).toString()).toBe('%PDF');
