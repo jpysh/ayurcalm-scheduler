@@ -36,47 +36,7 @@ sheet".
 
 ## Layout
 
-```
-src/                    React 18 + Vite + TypeScript + Tailwind + shadcn/ui
-  lib/apiBase.ts        THE API base URL. One definition. Do not add another.
-  main.tsx              Global fetch wrapper: attaches the JWT, handles 401
-  pages/AdminDashboard  The shell: shared data, the day's warnings, Verify, and
-                        which screen is showing
-  components/BottomBar  The phone frame (#66): one hamburger bottom right, its sheet
-                        holds the inbox, the screen's +, search, change day, print and
-                        the screens; WeekStrip is the day's date bar
-  pages/tabs/           One file per screen: its tab, dialogs and useXScreen()
-                        state hook. Shared types and helpers: tabs/shared.ts
-  pages/SetupWizard     First-run flow, shown until settings.setup_complete
-server/                 Express + Prisma + Zod, serves ../dist in production
-  src/index.ts          Middleware order matters — see below
-  src/auth.ts           bcrypt + JWT login, requireAuth
-  src/settings.ts       Centre settings, requireAdmin, public support endpoint
-  src/users.ts          User management, change-password
-  src/seed.ts           Demo and test dataset (120 patients, 4 months of
-                        appointments, residents with diet plans). Settings →
-                        Reset demo data rebuilds it from today
-  src/dietTemplateSeed.ts  The starting diet plans, seeded by name
-  src/availability.ts      When a therapist is not free — events, absences, the
-                        more-specific-event rule. Pure, and tested
-  src/appointmentGuard.ts  Whether one appointment may sit where it is put
-  src/replan.ts            `planDay` — the one planner: an absent therapist's
-                        whole day, or whatever Verify found wrong, in one pass
-  src/dayCheck.ts          What is wrong with a day and the one plan that fixes
-                        it. The header and Verify read it and decide nothing
-  src/dietResolution.ts    What one patient eats on one day — pure, and tested
-  src/dietTemplates.ts     Diet plan CRUD, admin-only writes
-  src/patientDiet.ts       A patient's meals by date: the segments of a stay, kept contiguous
-  src/attention.ts         What needs the admin beyond the day (#288): the rules, their
-                        defaults, today's counts and the patient and team items
-                        the pill lists. The admin's changes are the only thing stored
-  src/catalogues.ts        Packages and accommodation types (reference lists, never billing)
-  src/mcp.ts               The AI assistant's door at /mcp (#119, spec #102):
-                        grouped tools that call the functions above and
-                        decide nothing. src/mcpb/proxy.cjs is the Claude
-                        Desktop extension Settings hands out
-  src/scripts/          resetPassword.ts — lockout recovery
-```
+Front end in `src/` (React, Vite, Tailwind; `AdminDashboard` is the shell, `components/BottomBar` the phone frame, `pages/tabs/` one file per screen, `components/kit.tsx` the only UI kit). Server in `server/src/` (Express, Prisma, Zod; planner `replan.ts`, rules `availability.ts` and `appointmentGuard.ts`, day check `dayCheck.ts`, MCP `mcp.ts`). The full map, file by file, is `docs/architecture.md`; read it when you need to find something.
 
 ## Things that will bite you
 
@@ -162,55 +122,15 @@ runs `qa` plus `npm run test:e2e` (sign-in, every tab, the day sheet, in
 Chromium) on any pull request that touches `server/` or the Docker files, and on
 every merge; other pull requests get the builds and the database-free tests only.
 
-**Test policy until launch (decided 6 Oct; supersedes the list below where they differ).**
-Tests exist to protect the printed day sheet and the planner, not to pin every pixel while the screens
-still change weekly. Before launch:
-- **Blocks a merge:** builds, `tsc` at or under its count, `npm run qa` (the server rule tests: planner,
-  availability, printed sheets, import/export and restore, auth, diet) and a *smoke* set of about six
-  browser tests tagged `@smoke` (sign in, the day shows, book a treatment, print downloads a PDF,
-  therapist off then fix then Undo, a new trial's wizard reaches the day). Nothing else blocks.
-- **Advisory, run nightly and before a release, never fixed inside a feature PR:** every other browser
-  test (audit4, phoneAudit, critical, tapCount and the rest). A red one becomes one issue; a session
-  repairs them together in one weekly "test repair" PR. A feature PR does not edit them unless it is
-  the PR that breaks the smoke set.
-- **Screens are checked by the screenshot UAT**, not by new browser tests. Tap counts are a report, not a gate.
-- **Locally run only** the smoke set and the server tests for the area changed. No full e2e per PR.
-- **New tests:** a server rule or a bug fix gets one (a bug fix always does); a screen change gets none.
-After launch (a real centre using it): server tests stay blocking; the smoke set stays blocking on every
-PR; the full browser set runs nightly and before each release and blocks a release, not a PR; every bug
-found by a user leaves one regression test; production watches (health ping, daily check, a monthly
-restore drill from the backup, alerts to the maintainer) matter more than more browser tests.
+## Tests and checks (detail: `docs/testing.md`)
 
-**What to run before a pull request** (agreed 2026-09-27, while there are no
-users). CI from a fresh database is the gate; don't repeat it locally.
-- Always: front-end `tsc` (0 errors: `npx tsc -p tsconfig.app.json --noEmit`) and the tests for the area changed.
-- Screen change: no browser suite locally (see the test policy above); drive the screen at 375px
-  and run the screenshot UAT when it is big or visual. If you do run `playwright test --grep @smoke`
-  locally, start the stack as CI does (`npm run qa` first, or
-  `RATE_LIMIT_WRITES=1000 docker compose up -d --build`).
-- Screenshots come from Playwright at 375×812 (`scripts/uat.mjs`, `scripts/walk.mjs`), not from the
-  browser pane.
-- Scheduler, planner or day sheet change: `npm run qa` locally too, and read the PDF.
-- Every bug fix leaves one test that would have caught it.
-- A `@smoke` test must not depend on the hour or on where the pointer rests: build its own
-  problem on its own day. One that did broke CI for every pull request after 15:00 (#173).
-- A large issue (a screen plus new server endpoints) goes in parts, merged in
-  order: server with its test, then the screen with its tap counts, then any
-  leftovers. The issue is ticked in #70 when its last part merges. Merge a part
-  before building on it; never stack more than one open PR.
-- A failure unrelated to the change: fix it in the same PR if it blocks the merge
-  and takes under 15 minutes; otherwise note it in the PR and open a small issue
-  in #70's order.
-
-A test that needs a date builds its own fixed day in 2030, as `daySheet.test.ts`
-does, never `new Date()` or the seeded day, which moves with today.
-
-Looking at the PDF is part of the check:
-
-```bash
-pdftotext -layout day.pdf - | head -40      # is the text there at all
-pdftoppm -png -r 75 -f 1 -l 1 day.pdf page  # is it where it should be
-```
+- **Blocks a merge:** builds, `tsc` at 0 errors (`npx tsc -p tsconfig.app.json --noEmit`), `npm run qa` (server rule tests) and the six `@smoke` browser tests. Nothing else blocks.
+- **Advisory, nightly (issue "Nightly browser tests"):** every other browser test and the tap-count report. Never fixed inside a feature PR; one weekly "test repair" PR clears them.
+- Screens are checked by a screenshot UAT (`node scripts/uat.mjs <date-slug>`, committed to `docs/design/uat/`), not new browser tests. Run it for a big or visual change.
+- Locally run only the smoke set and the server tests for the area changed. A bug fix always leaves one test. Dates in tests are a fixed day in 2030, never `new Date()`.
+- Start a local stack for browser tests with `RATE_LIMIT_WRITES=1000 RATE_LIMIT_CALLS=10000`. After `docker compose up --wait`, also wait on `/api/health` (the first start is still seeding).
+- Scheduler, planner or day-sheet change: `npm run qa` and read the PDF (`pdftotext -layout`).
+- After launch the full browser set blocks a release, not a PR; every user-found bug gets a regression test.
 
 ## Conventions
 
@@ -238,6 +158,7 @@ Everything below applies to every session without being restated.
   tried and what you think is wrong. No third attempt.
 - A slow build or test run is fine. Re-running a check without changing
   anything is a loop: stop.
+- A large issue goes in parts merged in order; never stack more than one open dependent PR. A failure unrelated to the change: fix it in the same PR if it blocks the merge and takes under 15 minutes, else open a small issue.
 - Found something outside the issue? Open a small issue, place it in #70's
   order, and leave it out of this PR.
 - Finish by merging the PR once CI is green, ticking #70, giving the "check it
@@ -262,17 +183,11 @@ are the exception.
 `git revert` on the merge commit undoes it cleanly. If the work turns out bigger
 than the issue implies, stop and say so before expanding scope.
 
-**Finish with a screenshot UAT, not a "check it yourself" list** (decided 5 Oct). Run it when a change is big or changes how something looks or moves; small or invisible changes (docs, tests, wording) need only the PR note, and several small changes may share one UAT. Polishing phase: one UAT per batch, before launch.
-Claude does the maintainer's five steps itself at 375×812 with `node scripts/uat.mjs <date-slug>`
-(edit its STEPS for the session): a screenshot and a pass/fail line per step in
-`docs/design/uat/<date-slug>/README.md`, committed with the PR so it can be checked later. Report
-the table, not instructions. Only a step that needs a human (a CAPTCHA, a real phone's print, a
-password, an account) goes to the maintainer, one line each. Leave the app open in the browser pane
-(signed in by API token, phone size) at the screen the work touched.
+**Finish with the UAT table, not a "check it yourself" list.** Report pass/fail with screenshots; only a step that needs a human (a CAPTCHA, a real phone's print, a password, an account) goes to the maintainer, one line each. Leave the app open in the browser pane, signed in by API token, phone size, on the screen the work touched.
 
-**Count the taps.** `tests/e2e/tapCount.spec.ts` prints each daily job's taps
-beside the design's target. It is a report in the nightly run, not a gate. A session that
-builds a job states before and after in the PR.
+**Count the taps.** `tests/e2e/tapCount.spec.ts` prints each job's taps against the design's target (a report, not a gate); a session that changes a job states before and after in the PR.
+
+**Record every decision, keep sessions short** (6 Oct). A decision the maintainer makes in chat becomes a GitHub issue placed in #70's order plus a line in `docs/design/DESIGN.md` before the session ends; before asking, grep issues and DESIGN.md for it. One task per session: after about six merged PRs or one finished UAT, stop, log on #70 with a "decisions this session" list, and write the next prompt there (under 15 lines), not only in chat.
 
 **Design for the admin's phone.** One operator, one centre, and they may never
 open a desktop after setup.
