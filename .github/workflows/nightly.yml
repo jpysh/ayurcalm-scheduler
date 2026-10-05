@@ -23,9 +23,11 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: RATE_LIMIT_WRITES=1000 docker compose up -d --build --wait
+      # --wait returns when the container is healthy; the first seed can still be running.
+      - run: until curl -sf http://localhost:8080/api/health >/dev/null; do sleep 3; done
       - id: run
         continue-on-error: true
-        run: npx playwright test --grep-invert @smoke --reporter=line 2>&1 | tee nightly.log
+        run: npx playwright test --grep-invert @smoke --reporter=line 2>&1 | sed 's/\x1b\[[0-9;]*[A-Za-z]//g' | tee nightly.log
         shell: bash
       - name: File or update the issue
         env:
