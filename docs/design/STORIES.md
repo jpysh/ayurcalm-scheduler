@@ -23,6 +23,8 @@ Format: **Outcome** · **Trigger** · **First view** (facts a decision needs, no
 | 10 | Change a stay | 4 → 3 |
 | 11 | Choose or change a patient's package | new → 3 |
 | 12 | Choose or change a patient's accommodation | new → 3 |
+| 13 | See who is in and when, and fix a gap | (#351) |
+| 14 | Review a patient's week and plan the next | 10 → 3 |
 
 ## 1. Morning glance, and one home for everything that needs the admin
 **Outcome:** I know in three seconds whether I must act, and I never go tab by tab to find out.
@@ -76,6 +78,9 @@ Search at the bottom above the keyboard, results with the fact asked for (diet, 
 
 ## 12. Choose or change a patient's accommodation
 **Outcome:** where the patient stays on site is recorded and changeable. **Reference:** the centre's room types with a per-day price (for example Trishul House, Nanda House, Special Apartments, Huts), editable in Settings → Accommodation (name, per-day price, notes; placeholders for capacity and amenities). **First view:** the Stays-on-site switch (story 4), and on the card an Accommodation row: type, "9 nights · Rs 14,400" (per-day price × nights; no extra charges are modelled, an optional free-text extra line carries none). Picker lists the types; add or remove anytime; optional room number and note. **Path:** card → Accommodation → pick (3). **Later (#286):** rooms with numbers and occupancy, and hotel guests who are not patients, from the same portal.
+
+## 14. Review a patient's week and plan the next
+**Outcome:** after the doctor's weekly review, the patient's next week is booked, and no day before it is empty by accident (#350; decided 6 Oct: the admin books, the doctor writes; reviews are weekly on the same weekday; next week is usually this week with one therapy swapped). **First view:** on the card, **Next days**: each day to the end of the week with what is booked, the review day marked, a day before the review with nothing booked flagged "Nothing booked", empty days after it folded into one "Not planned yet" row; under **Doctor**, the last review's note and the plan. Tapping a day books on that day. **Path:** card → **Plan next week** → Book all (3): one sheet with this week's therapies ticked, each swappable, and the next review a week on; all or nothing, one Undo (#354). **Fails when:** a planned week is only visible on the Day screen, or the doctor's note is not beside the booking it asks for.
 
 ## What each story asks of the kit
 Two-capsule bar (all) · floating pill and inbox sheet with sections (1, 3) · row with a flag (1, 4, 8) · one-sheet booking with bottom search (5, 6) · timeline list (7) · checklist bar (8) · two-button foot (9) · consequence line (9, 10, 11) · picker list with description and price (7, 11, 12) · switch row (4) · toast with Undo (3, 5, 9). Reference catalogues (templates, packages, accommodation, attention rules) all live in Settings and open from the patient screen through one gear or Edit link.

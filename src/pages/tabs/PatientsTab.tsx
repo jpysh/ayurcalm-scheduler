@@ -28,6 +28,7 @@ type ResidentDay = {
   stay: (CardStay & { vitals: string | null; concerns: string | null; tests: string | null }) | null;
   treatments: (CardAppt & { therapy_name: string; consultation: boolean; room_name: string | null; staff_names: string[] })[];
   plan_name: string; diet_next: { from: string; name: string } | null; meals: { meal: string; text: string }[];
+  week: { date: string; treatments: { id: string; start_time: string; therapy_name: string; consultation: boolean; status: string }[] }[];
   doctor_plan: string | null;
   last_consultation: Visit | null; next_consultation: Visit | null;
 };
@@ -112,7 +113,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
   id: string | null; today: string; onClose: () => void;
   openTreatment: (a: CardAppt) => void; changeMeals: (p: { id: string; name: string }) => void;
   changePackage: (p: ResidentDay) => void; changeHouse: (p: ResidentDay) => void;
-  changeStay: (p: ResidentDay) => void; book: (p: { id: string; name: string; consult?: boolean }) => void; details: (id: string) => void;
+  changeStay: (p: ResidentDay) => void; book: (p: { id: string; name: string; consult?: boolean; date?: string }) => void; details: (id: string) => void;
   /** What the Details row says: what is filled, or what to add. */
   detailsHint: (id: string) => string;
 }) {
@@ -192,6 +193,29 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
                 facts={t.staff_names.length ? `with ${t.staff_names.join(' & ')}` : 'No therapist yet'} trailing={t.room_name || undefined} />
             )) : <Empty text="Rest day: nothing booked today." />}
           </ListGroup>
+          {/* Story 14 (#350): the week the doctor planned. A day with nothing booked before the next review needs booking; after it, planning waits for the review. */}
+          {d.week.length > 1 ? (() => {
+            const review = d.next_consultation?.date;
+            const days = d.week.slice(1);
+            // Empty days after the review are one row: planning them is the review's job.
+            const later = days.filter((w) => review && w.date > review && !w.treatments.length && w.date !== d.stay?.end_date);
+            return (
+              <ListGroup title="Next days">
+                {days.filter((w) => !later.includes(w)).map((w) => {
+                  const leaving = w.date === d.stay?.end_date;
+                  const empty = !w.treatments.length;
+                  return (
+                    <Row key={w.date} title={visitDay(w.date)} onClick={() => book({ id: d.id, name: d.name, date: w.date })}
+                      facts={empty ? (leaving ? 'Leaving day' : undefined) : w.treatments.map((t) => `${t.start_time} ${t.therapy_name}`).join(' · ')}
+                      flag={empty && !leaving ? 'Nothing booked' : undefined}
+                      trailing={w.date === review ? 'Review' : undefined} />
+                  );
+                })}
+                {later.length ? <Row title={later.length === 1 ? visitDay(later[0].date) : `${visitDay(later[0].date)} to ${visitDay(later[later.length - 1].date)}`}
+                  facts="Not planned yet: after the review" onClick={() => book({ id: d.id, name: d.name, date: later[0].date })} /> : null}
+              </ListGroup>
+            );
+          })() : null}
           {/* Arrival (#219): the first days, until the intake is written. Then the plan follows from the consultation. */}
           {d.stay && (d.stay.day <= 3 || !d.stay.vitals) ? (
             <ListGroup title="Arrival">
@@ -200,7 +224,8 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
             </ListGroup>
           ) : null}
           <ListGroup title="Doctor">
-            <ChangeLine label="Last seen" value={d.last_consultation ? visit(d.last_consultation, false) : 'Not seen yet'} faint={!d.last_consultation} />
+            {d.last_consultation?.note ? <TextRow label={`Last seen · ${visit(d.last_consultation, false)}`}>{d.last_consultation.note}</TextRow>
+              : <ChangeLine label="Last seen" value={d.last_consultation ? visit(d.last_consultation, false) : 'Not seen yet'} faint={!d.last_consultation} />}
             <ChangeLine label="Next" value={d.next_consultation ? visit(d.next_consultation, true) : 'None booked · book one'} faint={!d.next_consultation} onClick={d.next_consultation ? undefined : () => book({ id: d.id, name: d.name, consult: true })} />
             <TextRow label="Plan" faint={!d.doctor_plan} onClick={() => setPlan(d.doctor_plan || '')}>{d.doctor_plan || 'No plan written yet'}</TextRow>
           </ListGroup>
@@ -242,7 +267,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   /** A treatment on the resident card opens the treatment card, on its day. */
   openTreatment: (a: CardAppt) => void;
   /** A booking, for the patient on a card when there is one. */
-  book: (p?: { id: string; name: string; consult?: boolean }) => void;
+  book: (p?: { id: string; name: string; consult?: boolean; date?: string }) => void;
   /** "Search everything": the same words, over treatments. */
   searchEverything: (q: string) => void;
   /** "Edit the list" on a package or accommodation picker opens that list in Settings. */

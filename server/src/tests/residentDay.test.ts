@@ -49,12 +49,19 @@ async function main() {
     const late = await book('15:00', 'pending');
     await book('11:00', 'cancelled');
     const missed = await book('09:00', 'no_show');
+    const ahead = await prisma.appointment.create({ data: {
+      patient_id: rekha.id, therapy_id: therapy.id, scheduled_date: at('2030-06-14'), start_time: '10:00', duration_minutes: 60,
+      session_number: 1, total_sessions: 1, status: 'pending', assignment_type: 'manual',
+    } });
 
     const res = await fetch(`${API_BASE}/patients/${rekha.id}/day?date=${DAY}`, { headers: { Authorization: `Bearer ${token}` } });
     assert.ok(res.ok, `GET day: ${res.status}`);
     const d = await res.json();
     assert.deepEqual(d.stay && [d.stay.start_date, d.stay.end_date, d.stay.day, d.stay.days], ['2030-06-10', '2030-06-19', 3, 10]);
     assert.deepEqual(d.treatments.map((t: { id: string }) => t.id), [missed.id, late.id], 'today\'s treatments in time order, the cancelled one left out');
+    assert.deepEqual(d.week.map((w: { date: string; treatments: { id: string }[] }) => [w.date, w.treatments.map((t) => t.id)]), [
+      ['2030-06-12', [missed.id, late.id]], ['2030-06-13', []], ['2030-06-14', [ahead.id]], ['2030-06-15', []], ['2030-06-16', []], ['2030-06-17', []], ['2030-06-18', []],
+    ], 'the next seven days, an empty one shown as empty (#350)');
     assert.equal(d.plan_name, plan.name);
     assert.deepEqual(d.meals, [
       { meal: 'Breakfast', text: 'Rice kanji' }, { meal: 'Lunch', text: 'Rice gruel only' }, { meal: 'Dinner', text: 'Moong soup' },

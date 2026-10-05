@@ -1,6 +1,6 @@
 /**
  * One resident's day, for the resident card (#63, docs/design/phone.html): the
- * stay it falls in, today's treatments, and what they eat today with the plan
+ * stay it falls in, today's treatments, the week ahead (#350), and what they eat today with the plan
  * it comes from. Meals resolve through the same code as the day sheet, so the
  * card and the notice board cannot disagree.
  */
@@ -15,12 +15,14 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
   const day = new Date(`${date}T00:00:00.000Z`);
   const patient = await prisma.patient.findUnique({ where: { id: patientId } });
   if (!patient) return null;
-  const [stay, appts, diets] = await Promise.all([
+  // Seven days from today: the weekly doctor review plans about that far ahead (#348).
+  const weekEnd = new Date(day.getTime() + 6 * DAY_MS);
+  const [stay, ahead, diets] = await Promise.all([
     prisma.patientStay.findFirst({ where: { patient_id: patientId, start_date: { lte: day }, end_date: { gte: day } } }),
     // A no-show stays on the card, marked; a cancellation does not.
     prisma.appointment.findMany({
-      where: { patient_id: patientId, scheduled_date: day, status: { not: 'cancelled' } },
-      orderBy: { start_time: 'asc' },
+      where: { patient_id: patientId, scheduled_date: { gte: day, lte: weekEnd }, status: { not: 'cancelled' } },
+      orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }],
       include: { Therapy: { select: { name: true, is_consultation: true } }, Room: { select: { name: true } } },
     }),
     loadDietsForDay(day, prisma),
@@ -40,6 +42,14 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
   const past = visits.filter(held);
   const last = past[past.length - 1] ?? null;
   const next = visits.find((a) => !held(a)) ?? null;
+  const appts = ahead.filter((a) => a.scheduled_date.getTime() === day.getTime());
+  // The days the stay covers, each with what is booked, so an empty one shows (#350).
+  const lastDay = stay && stay.end_date < weekEnd ? stay.end_date : weekEnd;
+  const week = [];
+  for (let t = day.getTime(); t <= lastDay.getTime(); t += DAY_MS) {
+    const iso = new Date(t).toISOString().slice(0, 10);
+    week.push({ date: iso, treatments: ahead.filter((a) => a.scheduled_date.getTime() === t).map((a) => ({ id: a.id, start_time: a.start_time, therapy_name: a.Therapy.name, consultation: a.Therapy.is_consultation, status: a.status })) });
+  }
   const visit = (a: (typeof visits)[number] | null) => a && { id: a.id, date: a.scheduled_date.toISOString().slice(0, 10), start_time: a.start_time, doctor: a.Staff?.name ?? null, note: a.notes };
   const team = [...new Set(appts.flatMap((a) => [a.staff_id, ...a.co_staff_ids]).filter((x): x is string => Boolean(x)))];
   const names = new Map((await prisma.staff.findMany({ where: { id: { in: team } }, select: { id: true, name: true } })).map((s) => [s.id, s.name]));
@@ -72,6 +82,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
       room_name: Room?.name ?? null,
       staff_names: [a.staff_id, ...a.co_staff_ids].filter((x): x is string => Boolean(x)).map((id) => names.get(id) || ''),
     })),
+    week,
     doctor_plan: patient.doctor_plan,
     last_consultation: visit(last),
     next_consultation: visit(next),
