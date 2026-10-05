@@ -225,13 +225,15 @@ export function Foot({ busy, save, label = "Save", remove, removeLabel = "Remove
  * A sheet: grab handle, title, one line saying what it is for, body, and a foot
  * that stays in view however long the body. Scrolls inside itself.
  */
-export function BottomSheet({ open, onOpenChange, title, note, children, foot, onBack, keepFocus }: { open: boolean; /** The menu hands the focus to what it opens (the search field), so closing must not take it back. */ keepFocus?: boolean; onOpenChange: (o: boolean) => void; title: string; note?: ReactNode; children: ReactNode; foot?: ReactNode; /** A sheet's second page: Back above the title. */ onBack?: () => void }) {
+export function BottomSheet({ open, onOpenChange, title, note, children, foot, onBack }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; note?: ReactNode; children: ReactNode; foot?: ReactNode; /** A sheet's second page: Back above the title. */ onBack?: () => void }) {
+  const opener = useRef<HTMLElement | null>(null);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="mx-auto flex max-h-[88dvh] max-w-xl flex-col rounded-t-sheet bg-card p-0 outline-none"
         // The sheet takes the focus, not its first field: that raised the phone's keyboard over half the form before it had been read.
-        onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}
-        onCloseAutoFocus={keepFocus ? (e) => e.preventDefault() : undefined}>
+        onOpenAutoFocus={(e) => { const was = document.activeElement as HTMLElement | null; opener.current = was && was !== document.body ? was : null; e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}
+        // Focus goes back to what opened the sheet; when the menu hands it to Search, Search keeps it (#311).
+        onCloseAutoFocus={(e) => { e.preventDefault(); const from = opener.current; setTimeout(() => { if (document.activeElement && document.activeElement !== document.body) return; (from?.isConnected ? from : document.querySelector<HTMLElement>('button[aria-label=Menu]'))?.focus(); }, 0); }}>
         <div className="mx-auto mt-2 h-1 w-9 flex-none rounded-full bg-border" />
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
           {onBack ? <BackLink onBack={onBack} /> : null}
@@ -252,7 +254,7 @@ export function BottomSearch({ value, onChange, onClose, placeholder, label }: {
   // After the menu's own focus handling has finished; a phone still counts it as the tap that opened search, so the keyboard rises.
   useEffect(() => { const t = setTimeout(() => input.current?.focus(), 30); return () => clearTimeout(t); }, []);
   return (
-  <nav aria-label="Search" data-kit="bar" className="fixed inset-x-[var(--bar-gap)] bottom-[calc(var(--bar-gap)+env(safe-area-inset-bottom))] z-40 mx-auto grid h-[var(--bar-h)] max-w-xl grid-cols-[auto_1fr_auto] items-center rounded-full border bg-card p-1 shadow-float">
+  <nav aria-label="Search" data-kit="bar" onKeyDown={(e) => { if (e.key === "Escape") onClose(); }} className="fixed inset-x-[var(--bar-gap)] bottom-[calc(var(--bar-gap)+env(safe-area-inset-bottom))] z-40 mx-auto grid h-[var(--bar-h)] max-w-xl grid-cols-[auto_1fr_auto] items-center rounded-full border bg-card p-1 shadow-float">
     <SearchIcon className="ml-3 h-5 w-5 text-muted-foreground" />
     <input ref={input} autoFocus type="text" enterKeyHint="search" placeholder={placeholder} aria-label={label} autoComplete="off" className="h-12 min-w-0 bg-transparent px-2 text-base outline-none" value={value} onChange={(e) => onChange(e.target.value)} />
     <button type="button" className="min-h-12 rounded-full px-3.5 font-semibold text-primary" onClick={onClose}>Cancel</button>
