@@ -260,6 +260,13 @@ export function BottomSearch({ value, onChange, onClose, placeholder, label }: {
   );
 }
 
+/** A screen to go to, two across: its name and, when there is one, a live fact ("65 in house"). */
+export const Tile = ({ title, facts, onClick, href }: { title: ReactNode; facts?: ReactNode; onClick?: () => void; href?: string }) => {
+  const cls = "flex min-h-14 flex-col justify-center rounded-xl border bg-card px-3 py-2 text-left active:bg-secondary";
+  const body = <><span className="line-clamp-2 text-row font-semibold leading-snug">{title}</span>{facts ? <span className="line-clamp-1 text-sm text-muted-foreground">{facts}</span> : null}</>;
+  return href ? <a className={cls} href={href} target="_blank" rel="noopener noreferrer" onClick={onClick}>{body}</a> : <button type="button" className={cls} onClick={onClick}>{body}</button>;
+};
+
 /** One row: title, up to two facts, one trailing fact, and a flag line only when something needs doing. */
 export const Row = ({ title, facts, trailing, flag, onClick, href }: { title: ReactNode; facts?: ReactNode; trailing?: ReactNode; flag?: ReactNode; onClick?: () => void; /** A row that leaves the app (WhatsApp) is a link, so it can be opened in a new tab. */ href?: string }) => {
   const body = (

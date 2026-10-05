@@ -30,12 +30,12 @@ test('H1: rooms, therapists and therapies are plain rows with one sheet to add',
   await addToTeam(page, 'Room');
   const sheet = page.getByRole('dialog');
   await sheet.getByLabel('Name').fill('E2E Room');
-  // A new room starts with what the therapies need ticked (#273 U2); the admin unticks what it lacks.
-  await expect(sheet.getByRole('button', { name: 'steam', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  // A new room starts with nothing ticked (#303); the admin ticks what it has.
+  await expect(sheet.getByRole('button', { name: 'steam', exact: true })).toHaveAttribute('aria-pressed', 'false');
   await sheet.getByRole('button', { name: 'steam', exact: true }).click();
   await sheet.getByRole('button', { name: 'Add the room' }).click();
   await expect(panel.getByRole('button', { name: /^E2E Room/ })).toContainText('Has ');
-  await expect(panel.getByRole('button', { name: /^E2E Room/ })).not.toContainText('steam');
+  await expect(panel.getByRole('button', { name: /^E2E Room/ })).toContainText('steam');
   const room = ((await (await request.get('/api/rooms', { headers })).json()) as { id: string; name: string }[]).find((r) => r.name === 'E2E Room');
   expect(room).toBeTruthy();
   await request.delete(`/api/rooms/${room!.id}`, { headers });

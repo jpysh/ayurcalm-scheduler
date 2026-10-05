@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/apiBase";
 import { Menu, Search } from "lucide-react";
-import { BottomSearch, BottomSheet, DateRow, Group, ListGroup, Row, Seg, Btn } from "@/components/kit";
+import { BottomSearch, BottomSheet, DateRow, Group, ListGroup, Row, Seg, Btn, Tile } from "@/components/kit";
 
 /**
  * The phone frame from docs/design/phone.html (#66): one bar at the bottom, in
@@ -99,25 +99,31 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
       )}
 
       {sheet === "menu" ? <BottomSheet open onOpenChange={(o) => setSheet(o ? "menu" : null)} title="" keepFocus>
-        <ListGroup>
-          {inbox ? <Row key="inbox" title={inbox.need ? `${inbox.need} need you` : `${inbox.info} to know`} facts={inbox.need ? "Things to fix or decide" : "For your information"} trailing="›" onClick={close(attention!.open)} /> : null}
-          {plus ? <Row key="plus" title={plus.adds} facts="Add one here" trailing="+" onClick={close(plus.run)} /> : null}
-          <Row key="search" title={search.label} trailing="›" onClick={close(search.start)} />
-          {onDay ? <Row key="day" title="Change day" facts={`${label(day)} · ${when}`} trailing="›" onClick={() => setSheet("day")} /> : null}
-        </ListGroup>
-        <div className="mt-3" />
-        <Group label="Show the day by">
-          <Seg<"time" | "therapist" | "room" | "resident"> options={[["time", "Time"], ["therapist", "Therapist"], ["room", "Room"], ["resident", "Patient"]]} value={activeTab === "schedule" ? (view as "time") : ("" as "time")}
-            onChange={(v) => { setView(v); go("schedule"); setSheet(null); }} />
-        </Group>
-        <div className="mt-3">
+        {/* What needs doing first, then the one main action, then the rest of what can be done here. */}
+        {inbox?.need ? <div className="mb-3"><ListGroup><Row key="inbox" title={`${inbox.need} need you`} facts="Things to fix or decide" trailing="›" onClick={close(attention!.open)} /></ListGroup></div> : null}
+        {plus ? <Btn kind="primary" onClick={close(plus.run)}>{plus.adds}</Btn> : null}
+        <div className="mt-2">
           <ListGroup>
-            {onDay ? <Row key="print" title="Print the day's sheets" facts={printing ? "Making the PDF…" : `${label(day)} · patients, therapists, doctors`} trailing="›" onClick={() => { setSheet(null); if (!printing) print(); }} /> : null}
-            {MENU.flatMap(([key, name, hint]) => [
-              <Row key={key} title={name} facts={hints[key] || hint} trailing="›" onClick={() => { go(key); setSheet(null); }} />,
-              key === "settings" && helpWa ? <Row key="help" title="Help · WhatsApp" facts="Ask us anything" trailing="›" href={`https://wa.me/${helpWa}`} onClick={() => setSheet(null)} /> : null,
-            ])}
+            {inbox && !inbox.need ? <Row key="inbox" title={`${inbox.info} to know`} trailing="›" onClick={close(attention!.open)} /> : null}
+            <Row key="search" title={search.label} trailing="›" onClick={close(search.start)} />
+            {onDay ? <Row key="day" title="Change day" facts={`${label(day)} · ${when}`} trailing="›" onClick={() => setSheet("day")} /> : null}
+            {onDay ? <Row key="print" title="Print the day's sheets" facts={printing ? "Making the PDF…" : undefined} trailing="›" onClick={() => { setSheet(null); if (!printing) print(); }} /> : null}
           </ListGroup>
+        </div>
+        {onDay ? (
+          <div className="mt-3"><Group label="Show the day by">
+            <Seg<"time" | "therapist" | "room" | "resident"> options={[["time", "Time"], ["therapist", "Therapist"], ["room", "Room"], ["resident", "Patient"]]} value={view as "time"}
+              onChange={(v) => { setView(v); setSheet(null); }} />
+          </Group></div>
+        ) : null}
+        <div className="mt-3 pb-3">
+          <div className="mb-1 pt-2 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">Go to</div>
+          <div className="grid grid-cols-2 gap-2">
+            {MENU.filter(([key]) => !(onDay && key === "schedule")).flatMap(([key, name]) => [
+              <Tile key={key} title={name} facts={hints[key]} onClick={() => { go(key); setSheet(null); }} />,
+              key === "settings" && helpWa ? <Tile key="help" title="Help · WhatsApp" facts="Ask us anything" href={`https://wa.me/${helpWa}`} onClick={() => setSheet(null)} /> : null,
+            ])}
+          </div>
         </div>
       </BottomSheet> : null}
 
@@ -152,14 +158,17 @@ export function WeekStrip({ day, today, setDay }: { day: string; today: string; 
     if (Math.abs(el.scrollLeft - left) > 4) el.scrollTo({ left, behavior: first.current ? "auto" : "smooth" });
     first.current = false;
   }, [day, centre]); // eslint-disable-line react-hooks/exhaustive-deps
-  const month = new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+  // The heading names the week on show, not the chosen day, as Apple Calendar does while you swipe.
+  const [shown, setShown] = useState(weekOf(day));
+  useEffect(() => setShown(weekOf(day)), [day]); // eslint-disable-line react-hooks/exhaustive-deps
+  const month = new Date(`${shift(shown, 3)}T00:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
   return (
-    <div className="sticky top-0 z-[4] -mx-1 bg-background px-1 pt-2">
+    <div className="sticky top-0 z-[4] -mx-1 border-b bg-background px-1 pt-2">
       <div className="flex min-h-6 items-center justify-between px-1 text-sm">
         <b className="text-base">{month}</b>
         {day !== today ? <button type="button" className="min-h-11 px-2 font-semibold text-primary -my-2.5" onClick={() => setDay(today)}>Today</button> : null}
       </div>
-      <div ref={box} aria-label="Week" className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div ref={box} aria-label="Week" onScroll={(e) => { const el = e.currentTarget; const w = weeks[Math.round(el.scrollLeft / el.clientWidth)]; if (w && w !== shown) setShown(w); }} className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {weeks.map((w) => (
           <div key={w} className="flex w-full flex-none snap-start justify-between">
             {Array.from({ length: 7 }, (_, i) => shift(w, i)).map((d) => {

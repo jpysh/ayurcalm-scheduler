@@ -29,85 +29,32 @@ const step = async (title, path, run) => {
 const text = (l) => l.innerText();
 // + , search, the pill and change day are rows in the Menu (5 Oct).
 const viaMenu = async (name) => { await go(p.getByRole('button', { name: 'Menu', exact: true })); await go(dlg().getByRole('button', { name })); };
-const nextDay = async () => { const all = p.locator('[aria-label=Week] button'); const i = await all.evaluateAll((bs) => bs.findIndex((x) => x.getAttribute('aria-pressed') === 'true')); await go(all.nth(i + 1)); };
-const iso = (add = 0) => new Date(Date.now() + add * 86400000).toISOString().slice(0, 10);
-const bookFor = async (who) => { await viaMenu(/^(Book a treatment|New patient|Add)/); await go(dlg().getByRole('button', { name: new RegExp(`^${who}`) }).first()); };
-const stay = (name, gender) => api('POST', '/patients', { name, gender, stay: { start_date: iso(), end_date: iso(13) } });
-const ravi = await stay('Ravi Kumar', 'male');
-const sunita = await stay('Sunita Rao', 'female');
+const menu = () => go(p.getByRole('button', { name: 'Menu', exact: true }));
 
-await step('Team: "This week" counts hours for a team whose hours were never set', '/admin/team', async () => {
-  const t = await text(p.locator('body'));
-  const m = t.match(/(\d+)h booked of (\d+)h/);
-  return { ok: !!m && Number(m[2]) > 0, note: m ? m[0] : 'no hours line' };
+await step('Menu on the day: Book a treatment is the one filled button; no "Back to the day"; Show by is there', '/admin/schedule', async () => {
+  await menu();
+  const filled = await dlg().locator('button').evaluateAll((bs) => bs.filter((x) => getComputedStyle(x).backgroundColor !== 'rgba(0, 0, 0, 0)' && /Book a treatment/.test(x.textContent)).length);
+  const t = await text(dlg());
+  return { ok: filled === 1 && !/Back to the day/.test(t) && /show the day by/i.test(t) && /go to/i.test(t), note: `filled Book button ${filled}, order: ${t.split('\n').filter(Boolean).slice(0, 6).join(' | ')}` };
 });
-await step('New patient: a doctor is free, so the consultation is pre-booked (no "No doctor is free")', '/admin/patients', async () => {
-  await viaMenu('New patient');
-  await dlg().getByLabel('Name').fill('Meera Nair'); await dlg().getByRole('button', { name: 'Female', exact: true }).click(); await p.waitForTimeout(1200);
-  const warned = /No doctor is free/.test(await text(dlg()));
-  await go(dlg().getByRole('button', { name: /^Add Meera/ })); await p.waitForTimeout(1500);
-  const card = await text(dlg());
-  return { ok: !warned && !/None booked · book one/.test(card), note: `${warned ? 'warned no doctor' : 'no warning'}; card: ${(card.match(/Next\n([^\n]+)/) || [])[1]}` };
+await step('Menu on Patients: New patient is the filled button, "Back to the day" is there, no Show by', '/admin/patients', async () => {
+  await menu();
+  const t = await text(dlg());
+  return { ok: /New patient/.test(t) && /Back to the day/.test(t) && !/Show the day by/.test(t), note: t.split('\n').filter(Boolean).slice(0, 4).join(' | ') };
 });
-await step('A resident with no consultation: "book one" opens the sheet on Consultation', '/admin/patients', async () => {
-  await go(p.getByRole('button', { name: /^Ravi/ }).first());
-  await go(dlg().getByRole('button', { name: /^Next/ }));
-  const t = (await text(dlg())).match(/Therapy\n([^\n]+)/)?.[1] || '';
-  return { ok: /Consultation/.test(t), note: `Therapy line reads ${t}` };
+await step('Week strip: a rule under it, and the month follows a swipe to another month', '/admin/schedule', async () => {
+  const bw = await p.locator('div.sticky.border-b').first().evaluate((e) => getComputedStyle(e).borderBottomWidth);
+  const before = await text(p.locator('div.sticky.border-b b').first());
+  await p.locator('[aria-label=Week]').evaluate((e) => e.scrollBy({ left: e.clientWidth * 4, behavior: 'instant' })); await p.waitForTimeout(600);
+  const after = await text(p.locator('div.sticky.border-b b').first());
+  return { ok: bw !== '0px' && before !== after, note: `rule ${bw}; heading ${before} to ${after} after four weeks` };
 });
-await step('Booking sheet, 40 therapies: the Therapy line is a search (type "shiro")', '/admin/schedule', async () => {
-  await bookFor('Ravi'); await go(dlg().getByRole('button', { name: /^Therapy/ }));
-  await dlg().getByPlaceholder('Search therapies').fill('shiro'); await p.waitForTimeout(500);
-  const rows = await dlg().getByRole('button').allInnerTexts();
-  const hit = rows.filter((r) => /^Shiro/.test(r)).length;
-  await p.screenshot({ path: `${OUT}/04-search.png` });
-  await go(dlg().getByRole('button', { name: /^Shirodhara/ }));
-  const line = await text(p.getByRole('dialog').last());
-  return { ok: hit === 2 && /Therapy\s*\n?\s*Shirodhara/.test(line), note: `${hit} rows for "shiro" (04-search.png); Therapy line then reads Shirodhara` };
-});
-await step('Two-therapist therapy: both women are offered, no "needs 2 therapists and has 1"', '/admin/schedule', async () => {
-  await bookFor('Sunita');
-  if (await dlg().getByRole('button', { name: /^Therapy/ }).count()) { await go(dlg().getByRole('button', { name: /^Therapy/ })); await dlg().getByPlaceholder('Search therapies').fill('abhyanga'); await go(dlg().getByRole('button', { name: /^Abhyanga/ })); }
-  await p.waitForTimeout(1200);
-  const opts = await dlg().getByLabel('Therapist').evaluate((s) => [...s.options].map((o) => o.text));
-  return { ok: !opts.some((o) => /needs 2 therapists/.test(o)), note: opts.map((o) => o.slice(0, 40)).join(' | ') };
-});
-// Tara takes the only two women therapists first, so Sunita's best time falls on a quarter hour, not a half.
-const tara = await stay('Tara Das', 'female');
-const abh = (await api('GET', '/therapies')).find((t) => t.name === 'Abhyanga');
-const hhmm = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(11, 16);
-const first = (await api('GET', `/appointments/options?date=${iso()}&patient_id=${tara.id}&therapy_id=${abh.id}&now=${hhmm}`)).times[0];
-await api('POST', '/appointments/one', { patient_id: tara.id, therapy_id: abh.id, date: iso(), start_time: first.start_time, staff_id: first.staff_id, co_staff_ids: first.co_staff_ids, room_id: first.room_id });
-let promised = '';
-await step('A five-day course starts at the time the sheet and the toast promise', '/admin/schedule', async () => {
-  await bookFor('Sunita');
-  await go(dlg().getByRole('button', { name: /^Therapy/ })); await dlg().getByPlaceholder('Search therapies').fill('abhyanga'); await go(dlg().getByRole('button', { name: /^Abhyanga/ }));
-  await dlg().getByLabel('Sessions').selectOption({ label: '5 sessions, one a day' }); await p.waitForTimeout(1500);
-  promised = await dlg().getByLabel('Time').evaluate((s) => s.options[s.selectedIndex].text.slice(0, 5));
-  await go(dlg().getByRole('button', { name: /^Book Sunita/ })); await p.waitForTimeout(2000);
-  const day = await api('GET', `/appointments?date=${iso()}`);
-  const mine = day.find((a) => a.patient_id === sunita.id) || (await api('GET', `/appointments?date=${iso(1)}`)).find((a) => a.patient_id === sunita.id);
-  return { ok: !!mine && mine.start_time === promised, note: `sheet promised ${promised}, booked ${mine?.start_time}` };
-});
-await step('Replan after a leave: the moved session never doubles a day of the same course', '/admin/schedule', async () => {
-  const appts = await api('GET', `/appointments?date=${iso(1)}`);
-  const hers = appts.find((a) => a.patient_id === sunita.id);
-  await api('POST', '/timeoff', { entity_type: 'staff', entity_id: hers.staff_id, date: iso(1), start_date: iso(1), end_date: iso(1), description: 'Leave' });
-  await p.reload(); await p.waitForTimeout(1500);
-  await nextDay(); await p.waitForTimeout(800);
-  await viaMenu(/need you/);
-  const moves = dlg().getByRole('button', { name: /^\w{3} \d+ \w{3}, \d\d:\d\d/ });
-  const first = (await moves.first().innerText()).split('\n')[0];
-  await go(moves.first()); await p.waitForTimeout(1500);
-  const perDay = new Map();
-  for (let d = 0; d < 14; d++) for (const a of await api('GET', `/appointments?date=${iso(d)}`)) if (a.patient_id === sunita.id && a.therapy_id === hers.therapy_id && a.status !== 'cancelled') perDay.set(iso(d), (perDay.get(iso(d)) || 0) + 1);
-  const dup = [...perDay.entries()].filter(([, c]) => c > 1);
-  return { ok: !dup.length, note: `moved to "${first}"; days with two: ${dup.length ? dup.map(([d]) => d).join(', ') : 'none'}` };
-});
-await step('Leave toast says who is away and when', '/admin/team', async () => {
-  await go(p.getByRole('button', { name: /^Dev/ })); await go(dlg().getByRole('button', { name: /^Away another day/ })); await go(dlg().getByRole('button', { name: /^Mark leave/ })); await p.waitForTimeout(1200);
-  const toast = await text(p.locator('[data-sonner-toast]').first());
-  return { ok: /^Dev away /.test(toast), note: toast.split('\n')[0] };
+await step('Needs-you row sits above the Book button when something needs fixing', '/admin/schedule', async () => {
+  const day = await api('GET', `/appointments?date=${new Date().toISOString().slice(0, 10)}`);
+  await menu();
+  const t = await text(dlg());
+  const hasNeed = /\d+ need you/.test(t);
+  return { ok: !hasNeed || t.indexOf('need you') < t.indexOf('Book a treatment'), note: hasNeed ? 'need-you row first' : `nothing needs fixing on the seeded day (${day.length} treatments); info row sits under the actions` };
 });
 await b.close();
 writeFileSync(`${OUT}/README.md`, `# UAT ${process.argv[2] || ''}\n\nBase ${APP}, 375x812. Written by scripts/uat.mjs.\n\n| # | Step | Result | Read off the page | Shot |\n|---|---|---|---|---|\n${lines.join('\n')}\n`);

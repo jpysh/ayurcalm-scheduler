@@ -52,6 +52,8 @@ async function openTab(page: Page, name: string) {
     // Some other sheet still open or closing (the last screen's editor): close it, so the menu is the one in view.
     if (await dialog.count() > 0 && await target.count() === 0) { await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0, { timeout: 2000 }); }
     if (await dialog.count() === 0) await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    // The menu has no "Back to the day" while the day is on screen: closing it is the same thing.
+    if (name === 'Back to the day' && await target.count() === 0 && await page.getByRole('dialog').getByText(/^Go to$/i).count() > 0) { await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0, { timeout: 2000 }); return; }
     await target.click({ timeout: 1000 });
     await expect(dialog).toHaveCount(0, { timeout: 1000 });
   }).toPass({ timeout: 15000 });
@@ -475,7 +477,7 @@ test('a resident leaving today has a departure section and a summary to take hom
   // The form opens with what the app knows filled in, and saves.
   await checklist.getByRole('button', { name: /Summary/ }).click();
   const form = page.getByRole('dialog').last();
-  await expect(form.getByLabel('Condition at discharge')).not.toHaveValue('', { timeout: 15000 });
+  await expect(form.getByLabel('Condition at discharge')).toBeVisible({ timeout: 15000 }); // #303: the draft leaves it for the doctor
   await form.getByRole('button', { name: 'Save the summary' }).click();
   await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 });
