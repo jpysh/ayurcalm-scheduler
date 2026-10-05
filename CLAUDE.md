@@ -183,13 +183,13 @@ restore drill from the backup, alerts to the maintainer) matter more than more b
 
 **What to run before a pull request** (agreed 2026-09-27, while there are no
 users). CI from a fresh database is the gate; don't repeat it locally.
-- Always: front-end `tsc` (52 errors or fewer) and the tests for the area changed.
+- Always: front-end `tsc` (0 errors: `npx tsc -p tsconfig.app.json --noEmit`) and the tests for the area changed.
 - Screen change: no browser suite locally (see the test policy above); drive the screen at 375px
   and run the screenshot UAT when it is big or visual. If you do run `playwright test --grep @smoke`
   locally, start the stack as CI does (`npm run qa` first, or
   `RATE_LIMIT_WRITES=1000 docker compose up -d --build`).
-- Screenshots come from Playwright at 375×812, the design served on :8765
-  beside the app, not from the browser pane.
+- Screenshots come from Playwright at 375×812 (`scripts/uat.mjs`, `scripts/walk.mjs`), not from the
+  browser pane.
 - Scheduler, planner or day sheet change: `npm run qa` locally too, and read the PDF.
 - Every bug fix leaves one test that would have caught it.
 - A `@smoke` test must not depend on the hour or on where the pointer rests: build its own
@@ -284,11 +284,10 @@ screen; build only from `src/components/kit.tsx`, and extend it rather than writ
 a one-off. Until the closing session of #285 only `qa` and the tap-count check
 block a merge; the rest of e2e is advisory.
 
-**Build to the approved phone design.** `docs/design/phone.html`, approved in
-#144 (decisions in its comments): click through it at phone width before touching
-a screen. Phone is the primary layout; a desktop only widens it. The old desktop
-screens are not a reference. The mock-up's data and planner answers are made up;
-the real ones come from the server.
+**Build to the design system.** `docs/design/DESIGN.md` is the authority (the bar, the menu, headers
+and the kit have moved on from the mock-up). `docs/design/phone.html`, approved in #144, is history
+only. Phone is the primary layout; a desktop only widens it. The old desktop screens are not a
+reference.
 
 **The printed day sheet is the product.** A screen change either improves it or
 leaves it alone.
