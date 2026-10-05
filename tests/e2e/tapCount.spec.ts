@@ -16,9 +16,10 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '@
 const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Patient didn't come", 'Patient late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day', "A patient's meals today", 'Add an arriving patient', 'Find a patient', "Change a patient's meals from a date", "Choose a patient's package", "Choose a patient's accommodation", "Change a patient's stay", "Print a patient's discharge summary", "Record a therapist's leave", 'Edit a diet plan', 'Change what needs you', 'Open the Log', 'See who needs attention']);
 
 /** The design's order, which is the order the table prints in. */
+// 5 Oct: + , search and the pill moved into the Menu (the maintainer's call), so every job that used one of them costs one tap more.
 const JOBS: [string, number][] = [
   ['See today at a glance', 0],
-  ['Warning → fixed day', 2],
+  ['Warning → fixed day', 3],
   ["Patient didn't come", 3],
   // Row, When, a time: the design's 2 starts from the card already open (#136).
   ['Patient late → move one treatment', 3],
@@ -27,13 +28,13 @@ const JOBS: [string, number][] = [
   // Row, Something wrong?, the room: the design's 2 starts from the card open.
   ['Room out of use', 3],
   // Who, then Book: one tap more than the old suggestion, bought by a choice of who, therapist, room and time (story 5, accepted).
-  ['Book one treatment', 3],
+  ['Book one treatment', 4],
   ["A patient's meals today", 2],
   ["Print today's sheets", 2], // Print moved into the Menu (5 Oct): the bar keeps room for the date
   // From the Patients screen. Story 4 says 2; the gender is one tap because nothing is chosen for them (#283).
-  ['Add an arriving patient', 3],
+  ['Add an arriving patient', 4],
   // From the Patients screen: Search, then the person (typing is not counted).
-  ['Find a patient', 2],
+  ['Find a patient', 3],
   // Stories 7 to 12 (#285), from the patient's card already open, as the design counts them.
   ["Change a patient's meals from a date", 3],
   ["Choose a patient's package", 3],
@@ -41,7 +42,7 @@ const JOBS: [string, number][] = [
   ["Change a patient's stay", 3],
   ["Print a patient's discharge summary", 3],
   // From the day: Menu, Leave, +, then Save, plan later. Picking who and typing dates are not counted.
-  ["Record a therapist's leave", 6], // 4 + open and pick on the searchable Who list (150 names do not fit a phone's wheel)
+  ["Record a therapist's leave", 7], // 4 + open and pick on the searchable Who list (150 names do not fit a phone's wheel)
   // Menu, Diet plans, the plan, Save (#285 session 6).
   ['Edit a diet plan', 4],
   // Menu, Settings, What needs you, a switch (#285 session 7, #288).
@@ -92,7 +93,8 @@ const activePanel = (page: Page) => page.locator('[role=tabpanel][data-state=act
 
 /** Not counted: puts the day on screen before a job starts, from the bottom bar's day button. */
 async function showDay(page: Page, day: string) {
-  await page.getByRole('button', { name: /^Change day/ }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Change day/ }).click();
   const box = page.getByRole('dialog').locator('input[type=date]');
   // Already on that day: nothing changes, so the sheet stays open until closed.
   if ((await box.inputValue()) === day) await page.keyboard.press('Escape');
@@ -241,7 +243,8 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     // + asks who, then fills the rest in with a free time, therapist and room (#285 story 5).
     await job(page, rows, 'Book one treatment', async (tap) => {
       await showDay(page, day);
-      await tap(page.getByRole('button', { name: 'Book a treatment' }));
+      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: 'Book a treatment' }));
       await tap(page.getByRole('dialog').getByRole('button', { name: /Day \d+ of/ }).first());
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Book / }));
       const note = page.locator('[data-sonner-toast]').filter({ hasText: /^Booked/ });
@@ -257,7 +260,8 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       // Arrive at the day afresh, so the app checks it after the room went out.
       await showDay(page, today);
       await showDay(page, day);
-      await tap(page.getByRole('button', { name: /need you/ }));
+      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /need you/ }));
       const sheet = page.getByRole('dialog');
       // The first action row's own button: the one that does the thing (#164).
       await tap(sheet.locator('[data-main]').first());
@@ -292,8 +296,9 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
 
     await job(page, rows, 'Add an arriving patient', async (tap) => {
       await page.goto('/admin/patients');
-      await page.getByRole('button', { name: 'New patient' }).waitFor();
-      await tap(page.getByRole('button', { name: 'New patient' }));
+      await page.getByRole('button', { name: 'Menu', exact: true }).waitFor();
+      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: 'New patient' }));
       await page.getByRole('dialog').getByLabel('Name', { exact: true }).fill('Tapcount Meera');
       await tap(page.getByRole('dialog').getByRole('button', { name: 'Female' }));
       await tap(page.getByRole('dialog').getByRole('button', { name: 'Add Tapcount Meera' }));
@@ -306,7 +311,9 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
 
     await job(page, rows, 'Find a patient', async (tap) => {
       await page.goto('/admin/patients');
-      await tap(page.getByRole('button', { name: /^Search patients/ }));
+      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Search patients/ }));
+      await expect(page.getByPlaceholder('Search patients')).toBeFocused();
       await page.keyboard.type('sha');
       await tap(page.getByText(/Diet:/).first());
       await expect(page.getByRole('dialog').last().getByRole('button', { name: /^Diet/ })).toBeVisible({ timeout: 15000 });
@@ -373,7 +380,8 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await showDay(page, day);
       await tap(page.getByRole('button', { name: 'Menu', exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Leave/ }));
-      await tap(page.getByRole('button', { name: 'Add leave' }));
+      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: 'Add leave' }));
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Who or what/ }));
       await tap(page.getByRole('dialog').last().getByRole('button', { name: staff.find((x) => x.is_active)!.name, exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: 'Save, plan later' }));

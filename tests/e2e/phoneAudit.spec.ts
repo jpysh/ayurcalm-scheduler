@@ -30,10 +30,11 @@ const onTop = (l: Locator) => l.evaluate((el) => {
 const fitsWidth = (page: Page) => page.getByRole('dialog').last().evaluate((d) =>
   [...d.querySelectorAll('*')].every((e) => e.getBoundingClientRect().right <= innerWidth + 1));
 
-test('B1: Book and search are not covered by a floating button', async ({ page }) => {
+test('B1: The menu button and search are not covered by a floating button', async ({ page }) => {
   await signIn(page);
-  expect(await onTop(page.getByRole('button', { name: 'Book a treatment' }))).toBe(true);
-  await page.getByRole('button', { name: /^Search/ }).click();
+  expect(await onTop(page.getByRole('button', { name: 'Menu', exact: true }))).toBe(true);
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Search/ }).click();
   expect(await onTop(page.getByRole('button', { name: /^Cancel/ }))).toBe(true);
 });
 

@@ -27,8 +27,11 @@ const step = async (title, path, run) => {
   console.log(id, ok ? 'pass' : 'FAIL', note);
 };
 const text = (l) => l.innerText();
+// + , search, the pill and change day are rows in the Menu (5 Oct).
+const viaMenu = async (name) => { await go(p.getByRole('button', { name: 'Menu', exact: true })); await go(dlg().getByRole('button', { name })); };
+const nextDay = async () => { const all = p.locator('[aria-label=Week] button'); const i = await all.evaluateAll((bs) => bs.findIndex((x) => x.getAttribute('aria-pressed') === 'true')); await go(all.nth(i + 1)); };
 const iso = (add = 0) => new Date(Date.now() + add * 86400000).toISOString().slice(0, 10);
-const bookFor = async (who) => { await go(p.getByRole('button', { name: /^(New|Book|Add)/ }).last()); await go(dlg().getByRole('button', { name: new RegExp(`^${who}`) }).first()); };
+const bookFor = async (who) => { await viaMenu(/^(Book a treatment|New patient|Add)/); await go(dlg().getByRole('button', { name: new RegExp(`^${who}`) }).first()); };
 const stay = (name, gender) => api('POST', '/patients', { name, gender, stay: { start_date: iso(), end_date: iso(13) } });
 const ravi = await stay('Ravi Kumar', 'male');
 const sunita = await stay('Sunita Rao', 'female');
@@ -39,7 +42,7 @@ await step('Team: "This week" counts hours for a team whose hours were never set
   return { ok: !!m && Number(m[2]) > 0, note: m ? m[0] : 'no hours line' };
 });
 await step('New patient: a doctor is free, so the consultation is pre-booked (no "No doctor is free")', '/admin/patients', async () => {
-  await go(p.getByRole('button', { name: 'New patient' }));
+  await viaMenu('New patient');
   await dlg().getByLabel('Name').fill('Meera Nair'); await dlg().getByRole('button', { name: 'Female', exact: true }).click(); await p.waitForTimeout(1200);
   const warned = /No doctor is free/.test(await text(dlg()));
   await go(dlg().getByRole('button', { name: /^Add Meera/ })); await p.waitForTimeout(1500);
@@ -91,8 +94,8 @@ await step('Replan after a leave: the moved session never doubles a day of the s
   const hers = appts.find((a) => a.patient_id === sunita.id);
   await api('POST', '/timeoff', { entity_type: 'staff', entity_id: hers.staff_id, date: iso(1), start_date: iso(1), end_date: iso(1), description: 'Leave' });
   await p.reload(); await p.waitForTimeout(1500);
-  await go(p.getByRole('button', { name: 'Next day' }).first()); await p.waitForTimeout(800);
-  await go(p.getByRole('button', { name: /need you/ }));
+  await nextDay(); await p.waitForTimeout(800);
+  await viaMenu(/need you/);
   const moves = dlg().getByRole('button', { name: /^\w{3} \d+ \w{3}, \d\d:\d\d/ });
   const first = (await moves.first().innerText()).split('\n')[0];
   await go(moves.first()); await p.waitForTimeout(1500);

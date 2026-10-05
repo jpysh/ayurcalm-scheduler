@@ -18,7 +18,8 @@ test('a patient is added from four fields, gets a consultation, and lands on the
   const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
   const headers = { Authorization: `Bearer ${token}` };
   await signIn(page);
-  await page.getByRole('button', { name: 'New patient' }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'New patient' }).click();
   const sheet = page.getByRole('dialog');
   await expect(sheet.getByRole('button', { name: 'Add patient' })).toBeDisabled();
   await sheet.getByLabel('Name', { exact: true }).fill('E2E Meera Nair');
@@ -46,7 +47,9 @@ test('a patient is added from four fields, gets a consultation, and lands on the
 
 test('Patients search shows the fact asked for and offers everything', async ({ page }) => {
   await signIn(page);
-  await page.getByRole('button', { name: /^Search patients/ }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Search patients/ }).click();
+  await expect(page.getByPlaceholder('Search patients')).toBeFocused();
   await page.keyboard.type('sha');
   await expect(page.getByText(/^Patients matching/)).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/Diet:/).first()).toBeVisible();

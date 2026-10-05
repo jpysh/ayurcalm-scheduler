@@ -125,7 +125,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
     <b className="ml-2 rounded-md bg-now px-1.5 text-xs font-bold text-white tabular-nums">{hm(NOW)}</b>
   </div>;
   const group = "rounded-xl overflow-hidden bg-card";
-  const sticky = "sticky top-[52px] z-[2] bg-background flex items-baseline gap-2 px-1 pt-3 pb-1.5";
+  const sticky = "sticky top-[104px] z-[2] bg-background flex items-baseline gap-2 px-1 pt-3 pb-1.5";
 
   let body: React.ReactNode;
   if (view === "time") {

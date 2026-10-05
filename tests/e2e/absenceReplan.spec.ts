@@ -105,7 +105,8 @@ test('a therapist off: the pill names it, its fix clears the day, and Undo puts 
 
   // Mark her off, the way the admin does.
   await openTab(page, 'Leave');
-  await page.getByRole('button', { name: 'Add leave' }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Add leave' }).click();
   const form = page.getByRole('dialog');
   // Who first, from one list (#265).
   await form.getByRole('button', { name: /^Who or what/ }).click();
@@ -120,11 +121,13 @@ test('a therapist off: the pill names it, its fix clears the day, and Undo puts 
   // The date is on the bar only on the day (#285), so go back to it first.
   await openTab(page, 'Back to the day');
   // The day button on the bottom bar opens the date box, and picking a day shows it.
-  await page.getByRole('button', { name: /^Change day/ }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Change day/ }).click();
   await page.getByRole('dialog').locator('input[type=date]').fill(DAY);
-  await expect(page.getByRole('navigation', { name: 'Main' })).toContainText('13 Mar', { timeout: 15000 });
+  await expect(page.getByRole('button', { name: /13 Mar/, pressed: true })).toBeVisible({ timeout: 15000 });
   // The pill opens its sheet, which names who is off and whose treatment that leaves stranded.
-  await page.getByRole('button', { name: /need you/ }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /need you/ }).click();
   const verify = page.getByRole('dialog');
   await expect(verify).toContainText(THERAPIST, { timeout: 20000 });
   await expect(verify).toContainText(RESIDENT);
@@ -156,18 +159,20 @@ test('time off saved elsewhere shows in the pill when the app is back in view (#
   const { therapist } = await build(call);
 
   await signIn(page);
-  await page.getByRole('button', { name: /^Change day/ }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Change day/ }).click();
   await page.getByRole('dialog').locator('input[type=date]').fill(DAY);
-  await expect(page.getByRole('navigation', { name: 'Main' })).toContainText('13 Mar', { timeout: 15000 });
-  await expect(page.getByRole('button', { name: /need you/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /13 Mar/, pressed: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('nav[data-kit=bar] span[aria-hidden]')).toHaveCount(0);
 
   // Another phone marks her off; this one only hears of it when it is looked at again.
   await call('post', '/timeoff', { entity_type: 'staff', entity_id: therapist.id, start_date: DAY, end_date: DAY });
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(page.getByRole('button', { name: /need you/ })).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('nav[data-kit=bar] span[aria-hidden]')).toBeVisible({ timeout: 15000 });
 
   // The sheet is about the day on screen, not today (#193).
-  await page.getByRole('button', { name: /need you/ }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /need you/ }).click();
   await expect(page.getByRole('dialog').getByRole('heading').first()).toHaveText(/^Wed,? 13 Mar$/); // Linux's Chromium puts a comma after the weekday.
 
   await tidy(call);
@@ -183,9 +188,10 @@ test('the card counts the stay that holds the treatment, not the newest one (#19
   await call('post', `/patients/${resident.id}/stays`, { start_date: '2030-05-01', end_date: '2030-05-10' });
 
   await signIn(page);
-  await page.getByRole('button', { name: /^Change day/ }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Change day/ }).click();
   await page.getByRole('dialog').locator('input[type=date]').fill(DAY);
-  await expect(page.getByRole('navigation', { name: 'Main' })).toContainText('13 Mar', { timeout: 15000 });
+  await expect(page.getByRole('button', { name: /13 Mar/, pressed: true })).toBeVisible({ timeout: 15000 });
   await page.getByRole('button', { name: new RegExp(RESIDENT) }).first().click();
   await expect(page.getByRole('dialog')).toContainText('stay day 13 of 31');
 
@@ -202,7 +208,8 @@ test("a no-show's card stays open, and moving it puts it back on the day (#193)"
     await call('put', `/appointments/${mine.id}`, { status: 'no_show' });
 
     await signIn(page);
-    await page.getByRole('button', { name: /^Change day/ }).click();
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /^Change day/ }).click();
     await page.getByRole('dialog').locator('input[type=date]').fill(DAY);
     await page.getByRole('button', { name: /^\d\d:\d\d/ }).filter({ hasText: "didn't come" }).first().click();
     const card = page.getByRole('dialog');

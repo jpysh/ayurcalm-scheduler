@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
-import { Lock, Plus, Search as SearchIcon } from "lucide-react";
+import { Lock, Search as SearchIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
@@ -225,12 +225,13 @@ export function Foot({ busy, save, label = "Save", remove, removeLabel = "Remove
  * A sheet: grab handle, title, one line saying what it is for, body, and a foot
  * that stays in view however long the body. Scrolls inside itself.
  */
-export function BottomSheet({ open, onOpenChange, title, note, children, foot, onBack }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; note?: ReactNode; children: ReactNode; foot?: ReactNode; /** A sheet's second page: Back above the title. */ onBack?: () => void }) {
+export function BottomSheet({ open, onOpenChange, title, note, children, foot, onBack, keepFocus }: { open: boolean; /** The menu hands the focus to what it opens (the search field), so closing must not take it back. */ keepFocus?: boolean; onOpenChange: (o: boolean) => void; title: string; note?: ReactNode; children: ReactNode; foot?: ReactNode; /** A sheet's second page: Back above the title. */ onBack?: () => void }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" hideClose className="mx-auto flex max-h-[88dvh] max-w-xl flex-col rounded-t-sheet bg-card p-0 outline-none"
         // The sheet takes the focus, not its first field: that raised the phone's keyboard over half the form before it had been read.
-        onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}>
+        onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}
+        onCloseAutoFocus={keepFocus ? (e) => e.preventDefault() : undefined}>
         <div className="mx-auto mt-2 h-1 w-9 flex-none rounded-full bg-border" />
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
           {onBack ? <BackLink onBack={onBack} /> : null}
@@ -245,49 +246,19 @@ export function BottomSheet({ open, onOpenChange, title, note, children, foot, o
   );
 }
 
-/** The bar: two floating pieces, left and right, nothing white between them. Gives way to any open sheet (index.css). */
-export const Bar = ({ left, right, label = "Main", grow }: { left: ReactNode; right?: ReactNode; label?: string; /** The left piece fills the space (the day, with its date); otherwise it hugs its buttons. */ grow?: boolean }) => (
-  <nav aria-label={label} data-kit="bar" className="pointer-events-none fixed inset-x-[var(--bar-gap)] bottom-[calc(var(--bar-gap)+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl items-center justify-between gap-2">
-    <div className={`pointer-events-auto flex h-[var(--bar-h)] min-w-0 items-center gap-1 rounded-full border bg-card/[0.97] p-1 shadow-float ${grow ? "flex-1" : "flex-none"}`}>{left}</div>
-    {right ? <div className="pointer-events-auto flex flex-none items-center gap-2">{right}</div> : null}
-  </nav>
-);
-
-/** A round button in the bar, 48 across. */
-export const BarButton = ({ label, onClick, children, disabled }: { label: string; onClick: () => void; children: ReactNode; disabled?: boolean }) => (
-  <button type="button" aria-label={label} disabled={disabled} onClick={onClick} className="grid h-12 w-12 flex-none place-items-center rounded-full active:bg-secondary disabled:opacity-50">{children}</button>
-);
-
-/** Print, in its own small capsule beside the +. */
-export const BarCapsule = ({ label, onClick, children, disabled }: { label: string; onClick: () => void; children: ReactNode; disabled?: boolean }) => (
-  <button type="button" aria-label={label} disabled={disabled} onClick={onClick} className="grid h-[var(--bar-h)] w-[var(--bar-h)] place-items-center rounded-full border bg-card/[0.97] shadow-float active:bg-secondary disabled:opacity-50">{children}</button>
-);
-
-/** The adaptive +: always a plus, its name says what it adds ("New patient"). */
-export const PlusButton = ({ adds, onClick }: { adds: string; onClick: () => void }) => (
-  <button type="button" aria-label={adds} onClick={onClick} className="grid h-[var(--bar-h)] w-[var(--bar-h)] place-items-center rounded-full bg-primary text-primary-foreground shadow-float active:bg-[hsl(var(--primary-hover))]"><Plus className="h-6 w-6" /></button>
-);
-
 /** Search takes the bar's place: its field sits at the bottom, above the keyboard. */
-export const BottomSearch = ({ value, onChange, onClose, placeholder, label }: { value: string; onChange: (v: string) => void; onClose: () => void; placeholder: string; label: string }) => (
+export function BottomSearch({ value, onChange, onClose, placeholder, label }: { value: string; onChange: (v: string) => void; onClose: () => void; placeholder: string; label: string }) {
+  const input = useRef<HTMLInputElement>(null);
+  // After the menu's own focus handling has finished; a phone still counts it as the tap that opened search, so the keyboard rises.
+  useEffect(() => { const t = setTimeout(() => input.current?.focus(), 30); return () => clearTimeout(t); }, []);
+  return (
   <nav aria-label="Search" data-kit="bar" className="fixed inset-x-[var(--bar-gap)] bottom-[calc(var(--bar-gap)+env(safe-area-inset-bottom))] z-40 mx-auto grid h-[var(--bar-h)] max-w-xl grid-cols-[auto_1fr_auto] items-center rounded-full border bg-card p-1 shadow-float">
     <SearchIcon className="ml-3 h-5 w-5 text-muted-foreground" />
-    <input autoFocus type="text" enterKeyHint="search" placeholder={placeholder} aria-label={label} autoComplete="off" className="h-12 min-w-0 bg-transparent px-2 text-base outline-none" value={value} onChange={(e) => onChange(e.target.value)} />
+    <input ref={input} autoFocus type="text" enterKeyHint="search" placeholder={placeholder} aria-label={label} autoComplete="off" className="h-12 min-w-0 bg-transparent px-2 text-base outline-none" value={value} onChange={(e) => onChange(e.target.value)} />
     <button type="button" className="min-h-12 rounded-full px-3.5 font-semibold text-primary" onClick={onClose}>Cancel</button>
   </nav>
-);
-
-/** The pill above the bar. Red-dotted while something needs the admin; grey when it only informs. */
-export const Pill = ({ need, info, onClick }: { need: number; info: number; onClick: () => void }) => {
-  if (!need && !info) return null;
-  return (
-    <button type="button" data-kit="pill" onClick={onClick}
-      className="fixed bottom-[calc(var(--bar-h)+var(--bar-gap)*2+env(safe-area-inset-bottom))] left-1/2 z-40 flex min-h-11 -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border bg-card px-3.5 text-sm font-semibold shadow-float after:-ml-0.5 after:text-lg after:text-muted-foreground after:content-['›']">
-      <i className={`h-2 w-2 rounded-full ${need ? "bg-destructive" : "bg-muted-foreground/60"}`} />
-      {need ? `${need} need you` : `${info} to know`}
-    </button>
   );
-};
+}
 
 /** One row: title, up to two facts, one trailing fact, and a flag line only when something needs doing. */
 export const Row = ({ title, facts, trailing, flag, onClick, href }: { title: ReactNode; facts?: ReactNode; trailing?: ReactNode; flag?: ReactNode; onClick?: () => void; /** A row that leaves the app (WhatsApp) is a link, so it can be opened in a new tab. */ href?: string }) => {
