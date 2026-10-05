@@ -87,7 +87,8 @@ const tomorrowIso = new Date(Date.now() + 86400000).toLocaleDateString('en-CA', 
 
 await screen('The day', '/admin/schedule');
 await screen('Patients', '/admin/patients');
-await screen('Team and rooms', '/admin/team');
+await screen('Team', '/admin/team');
+await screen('Rooms', '/admin/rooms');
 await screen('Leave', '/admin/timeoff');
 await screen('Diet plans', '/admin/diet');
 await screen('Settings', '/admin/settings');
@@ -99,7 +100,8 @@ await sheet('New patient', '/admin/patients', () => p.getByRole('button', { name
 await sheet('Add leave', '/admin/timeoff', () => p.getByRole('button', { name: 'Add leave', exact: true }).click(), {
   nested: async () => { await dlg().getByRole('button', { name: /^Who or what/ }).click(); },
 });
-await sheet('Add to the team', '/admin/team', () => p.getByRole('button', { name: 'Add to the team', exact: true }).click());
+await sheet('Add a therapist or doctor', '/admin/team', () => p.getByRole('button', { name: 'Add a therapist or doctor', exact: true }).click());
+await sheet('Add a room', '/admin/rooms', () => p.getByRole('button', { name: 'Add a room', exact: true }).click());
 await sheet('Treatment card', '/admin/schedule', async () => { await p.locator('[data-kit=bar]').waitFor(); await p.getByText(/Abhyanga|Shirodhara|Snehapana/).first().click(); });
 await sheet('Change day', '/admin/schedule', async () => { await menu(); await dlg().getByRole('button', { name: /^Change day/ }).click(); });
 await sheet('Backups', '/admin/settings', () => p.getByRole('button', { name: /^Backups/ }).click());

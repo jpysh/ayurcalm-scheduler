@@ -43,6 +43,8 @@ const JOBS: [string, number][] = [
   ["Record a therapist's leave", 6],
   // Menu, Diet plans, the plan, Save (#285 session 6).
   ['Edit a diet plan', 4],
+  // Menu, Rooms, + opens the room form (#328: was Menu, Team and rooms, +, Room).
+  ['Add a room', 3],
   // Menu, Settings, What needs you, a switch (#285 session 7, #288).
   ['Change what needs you', 4],
   // Menu, Settings, Log.
@@ -400,6 +402,15 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await tap(activePanel(page).getByRole('button', { name: /patients?$|Not used$/ }).first());
       await tap(page.getByRole('dialog').getByRole('button', { name: 'Save the plan' }));
       await expect(page.locator('[data-sonner-toast]').filter({ hasText: /saved$/ })).toBeVisible({ timeout: 20000 });
+    });
+
+    // To the form open; nothing is saved, so nothing changes.
+    await job(page, rows, 'Add a room', async (tap) => {
+      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Rooms/ }));
+      await tap(page.getByRole('button', { name: 'Add a room', exact: true }));
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await page.keyboard.press('Escape');
     });
 
     // A rule switched on and off again: the switch is the fourth tap; putting it back is not counted.

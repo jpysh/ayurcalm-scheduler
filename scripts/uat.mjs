@@ -55,9 +55,8 @@ await step('Therapies from the library: tick three, add them', '/admin/schedule'
   const n = (await api('GET', '/therapies')).length;
   return { ok: n === 3, note: `${n} therapies now` };
 });
-await step('Rooms: the form, then rooms made with the fittings the therapies need', '/admin/team', async () => {
-  await go(plusBtn('Add to the team'));
-  await go(dlg().getByRole('button', { name: /^Room/ }));
+await step('Rooms: the form, then rooms made with the fittings the therapies need', '/admin/rooms', async () => {
+  await go(plusBtn('Add a room'));
   const form = await text(dlg());
   await p.keyboard.press('Escape'); await p.waitForTimeout(500);
   for (const [name, am] of [['Room 1', [0, 1, 2]], ['Room 2', [0, 3, 4]], ['Consulting room', [5, 6]]]) await api('POST', '/rooms', { name, amenities: am.map((i) => AM[i]) });
@@ -66,8 +65,7 @@ await step('Rooms: the form, then rooms made with the fittings the therapies nee
   return { ok: rooms === 3, note: `${rooms} rooms; form: ${form.split('\n').filter(Boolean).slice(0, 8).join(' | ')}` };
 });
 await step('Therapists: Asha added on the form, a doctor and two more by API', '/admin/team', async () => {
-  await go(plusBtn('Add to the team'));
-  await go(dlg().getByRole('button', { name: /^Therapist or doctor/ }));
+  await go(plusBtn('Add a therapist or doctor'));
   await dlg().getByLabel('Name').fill('Asha');
   const form = await text(dlg());
   await go(dlg().getByRole('button', { name: /^(Save|Add)/ }).first());
