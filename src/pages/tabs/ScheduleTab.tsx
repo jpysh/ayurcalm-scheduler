@@ -133,6 +133,7 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
       onClose={() => { setCard(null); setFromSearch(false); }}
       isToday={cardDay === todayISO}
       nowMinutes={now}
+      tz={ADMIN_TZ}
       patients={patients}
       staff={staff}
       roomsList={roomsList}

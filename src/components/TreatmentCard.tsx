@@ -34,7 +34,8 @@ const toM = (t: string) => { const [h, m] = t.split(":").map(Number); return h *
 const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 // The day on the centre's clock: scheduled_date is that day at UTC midnight.
 const dayLabel = (iso: string, isToday: boolean) => (isToday ? "Today" : dayText(iso));
-const stamp = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+// On the centre's clock, not the phone's (#304).
+const stamp = (iso: string, timeZone?: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone });
 
 type Props = {
   appt: CardAppt | null;
@@ -42,6 +43,8 @@ type Props = {
   /** The day is on the centre's clock: whether this is today, and minutes past midnight now. */
   isToday: boolean;
   nowMinutes: number;
+  /** The centre's timezone, for the History stamps. */
+  tz?: string;
   patients: Named[];
   staff: Named[];
   roomsList: Named[];
@@ -58,7 +61,7 @@ type Props = {
   problem?: { what: string; short: string; blocking: boolean; fixes: { label: string; move: Record<string, unknown> }[] } | null;
 };
 
-export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, staff, roomsList, therapyNameById, refresh, staffNotIn, roomOut, onShowDay, openResident, problem }: Props) {
+export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients, staff, roomsList, therapyNameById, refresh, staffNotIn, roomOut, onShowDay, openResident, problem }: Props) {
   const [page, setPage] = useState<Page>("card");
   const [choices, setChoices] = useState<Choice[] | null>(null);
   const [history, setHistory] = useState<Entry[] | null>(null);
@@ -183,7 +186,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
           {locked || noShow ? null : <ChangeLine label="Something wrong?" value="Didn't come, late, cancel" onClick={() => setPage("wrong")} />}
           <ChangeLine label="History" value={latest ? latest.text : "See all"} onClick={() => setPage("history")} />
         </div>
-        {latest ? <p className="mt-1 text-sm text-muted-foreground">{stamp(latest.at)} · {latest.who}</p> : null}
+        {latest ? <p className="mt-1 text-sm text-muted-foreground">{stamp(latest.at, tz)} · {latest.who}</p> : null}
       </>
     );
   } else if (page === "wrong") {
@@ -200,7 +203,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, patients, st
   } else if (page === "history") {
     title = "History";
     note$ = "Everything that changed on this treatment, newest first";
-    body = <><ListGroup>{history === null ? <Loading rows={2} /> : history.length ? history.map((e, i) => <EntryRow key={i} time={new Date(e.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} text={e.text} by={`${new Date(e.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} · ${e.who}`} />) : <Empty text="Nothing has changed yet." />}</ListGroup></>;
+    body = <><ListGroup>{history === null ? <Loading rows={2} /> : history.length ? history.map((e, i) => <EntryRow key={i} time={new Date(e.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tz })} text={e.text} by={`${new Date(e.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: tz })} · ${e.who}`} />) : <Empty text="Nothing has changed yet." />}</ListGroup></>;
   } else if (page === "note") {
     title = "Note";
     foot = <SheetFoot busy={busy} ok={note.trim() !== (appt.notes || "").trim()} label={!note.trim() && appt.notes ? "Remove the note" : "Save the note"} save={() => apply({ notes: note.trim() }, note.trim() ? "Note saved" : "Note removed")} />;
