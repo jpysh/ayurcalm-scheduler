@@ -266,12 +266,13 @@ export function AccommodationSheet({ patient, stay, onClose, onSaved, editList }
 
 export type StayTarget = { id: string | null; start: string; end: string; package: CardStay["package"]; accommodation: CardStay["accommodation"] };
 
-export function StaySheet({ patient, target, today, onClose, onSaved }: { patient: Who | null; target: StayTarget | null; today: string; onClose: () => void; onSaved: () => void }) {
+/** `cover` is a day the stay should reach (a booking asked for it): the dates open already stretched to it. */
+export function StaySheet({ patient, target, today, cover, onClose, onSaved }: { patient: Who | null; target: StayTarget | null; today: string; cover?: string; onClose: () => void; onSaved: () => void }) {
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [cancels, setCancels] = useState(0);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (target) { setStart(target.start); setEnd(target.end); setCancels(0); } }, [target?.id, target?.start, target?.end]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (target) { setStart(cover && target.id && cover < target.start ? cover : target.start); setEnd(cover && target.id && cover > target.end ? cover : target.end); setCancels(0); } }, [target?.id, target?.start, target?.end, cover]); // eslint-disable-line react-hooks/exhaustive-deps
   // What a shorter stay would cancel, asked of the server before the tap.
   useEffect(() => {
     if (!patient || !target?.id || !end || end >= target.end) { setCancels(0); return; }

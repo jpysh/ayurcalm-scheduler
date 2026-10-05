@@ -81,12 +81,16 @@ seeded `staff@example.com` does not take `demo1234` — create a staff account
 through `/api/users` as the admin when you need one, and check the data is
 actually unchanged after the 403 rather than trusting the status code.
 
-**Seeing the app at a size no demo has.** There is one dataset, not a demo one and a test one: a stress fixture kept
-beside the demo would drift from it, and then a test passes on data no install
-has. To see the app at a size no demo has, raise how much the seed books on an
-empty database:
+**One dataset, two sizes (#348).** The seed is one centre in two sizes, never
+two datasets that drift apart. Full (the default, what tests and CI run on):
+about 45 in house, 16 therapists, 12 rooms, 2 doctors. Lite (`DEMO_MODE` or
+`SEED_SIZE=lite`, the public demo): about 12 in house. Both model the same
+centre: 1 to 3 treatments a day (mostly 2), arrivals and departures every day,
+day visitors and outpatients, and treatments ahead only as far as the doctor
+has planned (a week for most, the whole course for one in five). To see the
+lite one:
 
 ```bash
-APP_PORT=8099 SEED_TREATMENTS_PER_ROOM=8 docker compose -p scale up -d --build
-docker compose -p scale down -v     # when finished
+APP_PORT=8099 SEED_SIZE=lite docker compose -p lite up -d --build
+docker compose -p lite down -v     # when finished
 ```

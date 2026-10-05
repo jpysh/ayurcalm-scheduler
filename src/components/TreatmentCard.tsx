@@ -493,7 +493,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
         {matching.length ? <ListGroup>{matching.map((t) => <Row key={t.id} title={say(t.name)} facts={t.fact} trailing={t.id === therapyId ? "✓" : undefined} onClick={() => { setTherapyId(t.id); setPickTherapy(false); }} />)}</ListGroup> : <Empty text="No therapy matches." />}
       </BottomSheet>
     ) : null}
-    <StaySheet patient={stay && chosen ? chosen : null} target={stay} today={today} onClose={() => setStay(null)} onSaved={() => {
+    <StaySheet patient={stay && chosen ? chosen : null} target={stay} today={today} cover={date} onClose={() => setStay(null)} onSaved={() => {
       load(); setRound((r) => r + 1);
       // The header's "Day 2 of 14" is from the who list, so ask it again for the new stay.
       fetch(`${API_BASE}/appointments/who?date=${day}`).then((r) => (r.ok ? r.json() : null)).then((w) => { if (!w) return; setWho(w); const p = w.all.find((x: Who) => x.id === chosen?.id); if (p) setChosen(p); }).catch(() => {});
