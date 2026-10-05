@@ -95,21 +95,25 @@ async function main() {
     return;
   }
 
+  // Two sizes of one dataset (#348): the full one tests and CI run on, a centre
+  // with about 45 in house; the lite one the public demo and a new install show,
+  // about 12 in house, small enough for an admin to take in at a glance.
+  const LITE = process.env.DEMO_MODE === 'true' || process.env.SEED_SIZE === 'lite';
+  const SIZE = LITE
+    ? { therapists: 6, rooms: 5, doctors: 1, history: 3, arrivals: [0, 1, 1, 2] }
+    : { therapists: 16, rooms: 12, doctors: 2, history: 14, arrivals: [2, 3, 3, 4] };
+
   // Gender follows the first name: 'Aarav Gupta (f)' in the booking picker read
   // as a broken demo (#67). Every other first name in these lists is a woman's.
   const MEN = new Set(['Aarav','Vivaan','Aditya','Vihaan','Arjun','Sai','Krishna','Venkatasubramanian','Raj','Kumar','Ravi','Suresh','Arvind','Kiran','Alok','Manish','Rohit','Dev']);
   const isMale = (name: string) => MEN.has(name.split(' ')[0]);
-  const patients: string[] = [];
+  const names: string[] = [];
   const surnames = ['Sharma','Verma','Iyer','Nair','Reddy','Patel','Singh','Gupta','Joshi','Chatterjee','Das','Banerjee','Mishra','Yadav','Khan'];
   const firstNames = ['Aarav','Vivaan','Aditya','Vihaan','Arjun','Sai','Krishna','Ananya','Diya','Aarohi','Ishita','Sneha','Riya','Nisha','Meera'];
   // Every name distinct: two "Riya Das" rows on the day sheet read as a mistake.
-  for (let i = 0; i < 120; i++) patients.push(`${firstNames[i % 15]} ${surnames[Math.floor(i / 15)]}`);
+  for (let i = 0; i < 225; i++) names.push(`${firstNames[i % 15]} ${surnames[Math.floor(i / 15)]}`);
   // One name long enough to be shortened on the day sheet, as some real ones are.
-  patients[7] = 'Venkatasubramanian Raghunathan';
-
-  const createdPatients = await Promise.all(patients.map((name, idx) => prisma.patient.create({
-    data: { name, gender: isMale(name) ? 'male' : 'female', phone: `+91-9${Math.floor(100000000 + random()*899999999)}` },
-  })));
+  names[48] = 'Venkatasubramanian Raghunathan';
 
   // The library is the demo's treatment list (#219): the same one a new centre
   // imports from, so the demo shows what a centre gets.
@@ -126,14 +130,14 @@ async function main() {
 
   // Every other room is fully equipped; with only the first four amenities
   // everywhere, dhara, kizhi and lepam therapies could never be booked.
-  const rooms = await Promise.all(ayurvedaRoomNames.map((rn, idx) => prisma.therapyRoom.create({
+  const rooms = await Promise.all(ayurvedaRoomNames.slice(0, SIZE.rooms).map((rn, idx) => prisma.therapyRoom.create({
     data: { name: rn, amenities: idx % 2 ? amenitiesSet : amenitiesSet.slice(0, 4), weekly_schedule: scheduleStd, is_active: true },
   })));
 
   // Therapists, not physicians. The 'Dr.' the seed used to carry was wrong for
   // most of them and made every rota column a word narrower.
   const staffNames = ['Priya','Raj','Anjali','Kumar','Neha','Ravi','Asha','Suresh','Meera','Arvind','Pooja','Kiran','Alok','Varsha','Manish','Bhavna','Rohit','Trisha','Dev','Kriti'];
-  const staff = await Promise.all(staffNames.map((n, idx) => prisma.staff.create({
+  const staff = await Promise.all(staffNames.slice(0, SIZE.therapists).map((n, idx) => prisma.staff.create({
     data: {
       name: `${n} ${randomOf(surnames)}`,
       gender: isMale(n) ? 'male' : 'female',
@@ -206,14 +210,13 @@ async function main() {
   // therapist running Evening Yoga is not also giving a Spinal Basti at 17:30.
   const seededEvents = await prisma.programEvent.findMany();
 
-  // Two weeks back as well as four months on: yesterday's day sheet, a Log with
-  // something in it, and past days to check a report against.
-  // Appointments for the next 4 months at ~30% capacity on business days, so a
-  // test install stays useful for a full quarter.
+  // History behind today (yesterday's sheet, a Log, past days for a report) and
+  // three weeks of arrivals ahead. Treatments ahead are only what a doctor has
+  // planned: most residents a week at a time, a few their whole course.
   const start = centreToday();
-  start.setDate(start.getDate() - 14);
+  start.setDate(start.getDate() - SIZE.history);
   const end = centreToday();
-  end.setMonth(end.getMonth() + 4);
+  end.setDate(end.getDate() + 21);
   // The centre this dataset models treats from 09:00 to 13:00 and again from
   // 14:00 to 20:00, so the seed books across both halves — an evening with
   // nothing in it let the rota's evening column go untested for a release.
@@ -224,28 +227,29 @@ async function main() {
   const dayTimes = ['09:00','09:30','10:00','10:30','11:00','11:30','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30'];
   // One knob, not a second dataset: a stress fixture kept beside the demo one
   // drifts from it, and then a test passes on data no install has.
-  const treatmentsPerRoom = Math.max(1, Math.min(dayTimes.length, Number(process.env.SEED_TREATMENTS_PER_ROOM) || 10));
-  // Patients are taken in rotation rather than at random so a day's bookings
-  // land on ~40 different people. A real centre of this size treats most of its
-  // residents each day, and picking at random gave the same dozen names twice
-  // over and a day sheet that looked half empty.
-  // Stays first, then treatments inside them (#220 F8): a residential centre
-  // has people on 7 to 21 day courses, a few arriving and leaving each day.
-  // Deriving stays from scattered bookings made 38 one-day arrivals today.
+  // Each day brings a few arrivals of four kinds (#348): a residential course
+  // (14 or 21 days), a short one (7), a day visitor, and an outpatient who comes
+  // on separate days without staying. One in five has the whole course planned
+  // on arrival; the rest are planned a week at a time, at the doctor's review.
   const DAY = 86400000;
-  const staysOf = new Map<string, { s: Date; e: Date }[]>();
-  createdPatients.forEach((p, i) => {
-    // First arrival anywhere in one course-plus-gap cycle before the window, so the
-    // centre is as full on day one as on any other day.
-    let cursor = new Date(start.getTime() - Math.floor(random() * 34) * DAY);
-    const list: { s: Date; e: Date }[] = [];
-    while (cursor <= end) {
-      const days = randomOf([7, 10, 14, 14, 21]);
-      list.push({ s: new Date(cursor), e: new Date(cursor.getTime() + (days - 1) * DAY) });
-      cursor = new Date(cursor.getTime() + (days + 3 + Math.floor(random() * 14)) * DAY);
+  type Stay = { s: Date; e: Date; kind: 'course' | 'short' | 'day' | 'out'; full: boolean };
+  const kinds: Stay['kind'][] = [...Array(12).fill('course'), ...Array(5).fill('short'), 'day', 'day', 'out'];
+  const people: { name: string; stays: Stay[] }[] = [];
+  for (let d = new Date(start.getTime() - 21 * DAY); d <= end; d = new Date(d.getTime() + DAY)) {
+    for (let n = randomOf(SIZE.arrivals); n > 0; n--) {
+      const kind = randomOf(kinds);
+      const full = random() < 0.2;
+      // A step of 16 moves both the first name and the surname, so a small demo is not all Sharmas.
+      const name = names[(people.length * 16) % names.length];
+      if (kind === 'out') { people.push({ name, stays: [0, 3, 6].map((k) => ({ s: new Date(d.getTime() + k * DAY), e: new Date(d.getTime() + k * DAY), kind, full })) }); continue; }
+      const days = kind === 'course' ? randomOf([14, 21]) : kind === 'short' ? 7 : 1;
+      people.push({ name, stays: [{ s: new Date(d), e: new Date(d.getTime() + (days - 1) * DAY), kind, full }] });
     }
-    staysOf.set(p.id, list);
-  });
+  }
+  const createdPatients = await Promise.all(people.map(({ name }) => prisma.patient.create({
+    data: { name, gender: isMale(name) ? 'male' : 'female', phone: `+91-9${Math.floor(100000000 + random()*899999999)}` },
+  })));
+  const staysOf = new Map<string, Stay[]>(createdPatients.map((p, i) => [p.id, people[i].stays]));
   // A few leave every day in a real centre, so today always has departures to
   // write discharge summaries for: two stays running past today end today.
   {
@@ -258,10 +262,8 @@ async function main() {
       if (ymdOf(x.s) < t && ymdOf(x.e) > t) { x.e = new Date(`${t}T00:00:00.000Z`); short--; }
     }
   }
-  const inStay = (patientId: string, dateKey: string) => (staysOf.get(patientId) || []).some((x) => x.s.toISOString().slice(0, 10) <= dateKey && dateKey <= x.e.toISOString().slice(0, 10));
   // Required meals are the resident's own time: no treatment runs through one.
   const meals = seededEvents.filter((e) => !e.is_optional && e.activity_name !== 'Temple Havan Ritual').map((e) => ({ s: toMinutes(e.start_time), e: toMinutes(e.end_time) }));
-  let patientCursor = 0;
   const busy: Record<string, { staff: Record<string, { s: number; e: number }[]>; room: Record<string, { s: number; e: number }[]>; patient: Record<string, { s: number; e: number }[]> }> = {};
   const centerHolidays = await prisma.timeOff.findMany({ where: { entity_type: 'center', date: { gte: start, lte: end } } });
   const staffHolidaysByDay: Record<string, Set<string>> = {};
@@ -272,88 +274,76 @@ async function main() {
     if (h.entity_id) staffHolidaysByDay[key].add(h.entity_id);
   }
   const todayKey = centreYmd(new Date());
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const weekday = d.getDay();
-    const dateKey = d.toISOString().slice(0,10);
-    // A residential centre treats every day of the week; weekends are not skipped.
-    if (centerHolidays.some(h => h.date && h.date.toISOString().slice(0,10) === dateKey)) continue;
+  const ymd = (d: Date) => d.toISOString().slice(0, 10);
+  // Each week of a stay has its pair of therapies; at a review a third of plans swap one (#348).
+  const pairs = new Map<string, typeof therapies>();
+  const pairFor = (pid: string, week: number): typeof therapies => {
+    const key = `${pid}|${week}`;
+    if (!pairs.has(key)) {
+      const prev = week > 0 ? pairFor(pid, week - 1) : null;
+      const pick = () => randomOf(therapies);
+      const pair = prev ? (random() < 1 / 3 ? [prev[0], pick()] : prev) : [pick(), pick()];
+      pairs.set(key, pair[0].id === pair[1].id ? [pair[0], pick()] : pair);
+    }
+    return pairs.get(key)!;
+  };
+  for (let d = new Date(start); d <= end; d = new Date(d.getTime() + DAY)) {
+    const dateKey = ymd(d);
+    if (centerHolidays.some(h => h.date && ymd(h.date) === dateKey)) continue;
     busy[dateKey] ??= {
       staff: Object.fromEntries(staff.map((s) => [s.id, staffEventBusy(seededEvents, s.id, new Date(dateKey)).map((b) => ({ s: b.s, e: b.e }))])),
       room: {}, patient: {},
     };
-    // heuristic capacity: aim ~2 slots per room per day for 30% (assuming ~6 possible)
-    for (const r of rooms) {
-      const rDay = (scheduleStd as any)[['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][weekday]];
-      if (!rDay) continue;
-      // Four treatments per room per day: a resident on a course has two or
-      // three a day, and about forty are in house, which the day sheet must hold.
-      // Three left some days with under thirty residents treated.
-      // SEED_TREATMENTS_PER_ROOM raises that for checking how the sheet and the
-      // screens behave at a size no demo install has.
-      let slotsCreatedForRoom = 0;
-      // Each room starts its rotation at a different hour. Walking dayTimes from
-      // the front gave every room the two earliest starts, so the afternoon and
-      // the evening were empty in a dataset that claims to cover them.
-      const firstTime = (rooms.indexOf(r) * 3) % dayTimes.length;
-      for (let ti = 0; ti < dayTimes.length; ti++) {
-        const time = dayTimes[(firstTime + ti) % dayTimes.length];
-        if (slotsCreatedForRoom >= treatmentsPerRoom) break;
-        // A few therapies tried per slot: one that does not fit the room or
-        // finds no free therapist should not cost the room its hour.
-        for (let attempt = 0; attempt < 15; attempt++) {
-          const th = randomOf(therapies);
-          if (!th.required_amenities.every(a => r.amenities.includes(a))) continue;
-          // Next patient in rotation who is free at this time, so one person's
-          // clash does not cost the slot.
-          const slotS = toMinutes(time);
-          const slotE = slotS + th.duration_minutes;
-          // The treatment itself must finish before the room closes; the buffer
-          // after it is the patient's rest, not the room's next booking.
-          if (slotS < toMinutes(rDay.start) || slotS + th.duration_minutes > toMinutes(rDay.end)) continue;
-          const p = createdPatients
-            .map((_, k) => createdPatients[(patientCursor + k) % createdPatients.length])
-            .find((c) => inStay(c.id, dateKey) && ![...meals, ...(busy[dateKey].patient[c.id] || [])].some(b => overlaps(b.s, b.e, slotS, slotE)));
-          if (!p) continue;
-          patientCursor++;
-          const sCandidates = staff.filter(s => s.specializations.includes(th.id) && (!th.requires_gender_match || s.gender === p.gender));
-          // The first qualified therapist who is neither on leave nor already
-          // busy. Taking the first qualified one and giving up when they were
-          // booked was losing most of the day's slots to one person's diary.
-          const staffOnLeave = staffHolidaysByDay[dateKey] || new Set<string>();
-          // As many as the therapy needs, or the slot goes to something else.
-          const team = sCandidates.filter(sc => !staffOnLeave.has(sc.id) &&
-            !(busy[dateKey].staff[sc.id] || []).some(b => overlaps(b.s, b.e, slotS, slotE))).slice(0, th.staff_required);
-          if (team.length < th.staff_required) continue;
-          const [s, ...co] = team;
+    for (const [pi, p] of createdPatients.entries()) {
+      const st = staysOf.get(p.id)!.find((x) => ymd(x.s) <= dateKey && dateKey <= ymd(x.e));
+      if (!st) continue;
+      const sKey = ymd(st.s);
+      // Nothing is planned for someone who has not arrived, and a weekly plan
+      // reaches only to the next review: seven days on from arrival, and every seven after.
+      if (dateKey > todayKey) {
+        if (sKey > todayKey) continue;
+        const nextReview = new Date(st.s.getTime() + Math.ceil((centreToday().getTime() - st.s.getTime() + 1) / (7 * DAY)) * 7 * DAY);
+        if (!st.full && dateKey >= ymd(nextReview)) continue;
+      }
+      // Two a day, now and then three, one on a rest day and on arrival and departure days.
+      const r = random();
+      const count = st.kind === 'out' ? 1 : st.kind === 'day' ? (r < 0.5 ? 1 : 2)
+        : dateKey === sKey || dateKey === ymd(st.e) ? 1 : r < 0.1 ? 1 : r < 0.9 ? 2 : 3;
+      const pair = pairFor(p.id, Math.floor((d.getTime() - st.s.getTime()) / (7 * DAY)));
+      const wanted = [...pair, randomOf(therapies)].slice(0, count);
+      const given = new Set<string>();
+      for (const want of wanted) {
+        // A therapy with no free hands or room that day gives way to another, as the admin would book it.
+        placed: for (const th of [want, ...Array.from({ length: 8 }, () => randomOf(therapies))].filter((t) => !given.has(t.id)))
+        // Each resident starts the search at a different hour, so the day is spread over both halves.
+        for (let ti = 0; ti < dayTimes.length; ti++) {
+          const time = dayTimes[(pi * 5 + ti) % dayTimes.length];
           const sMin = toMinutes(time);
-          // Busy intervals carry the buffer, so the seed obeys the same rest and
-          // cleanup rule the scheduler enforces.
           const eMin = sMin + th.duration_minutes;
-          const rBusy = busy[dateKey].room[r.id] ??= [];
-          const sBusy = busy[dateKey].staff[s.id] ??= [];
+          if (eMin > toMinutes('20:00')) continue;
           const pBusy = busy[dateKey].patient[p.id] ??= [];
-          const conflict = rBusy.some(b => overlaps(b.s, b.e, sMin, eMin)) || sBusy.some(b => overlaps(b.s, b.e, sMin, eMin)) || pBusy.some(b => overlaps(b.s, b.e, sMin, eMin));
-          if (conflict) continue;
-          for (const c of co) (busy[dateKey].staff[c.id] ??= []).push({ s: sMin, e: eMin });
-          await prisma.appointment.create({ data: {
-            patient_id: p.id,
-            therapy_id: th.id,
-            staff_id: s.id,
-            co_staff_ids: co.map((c) => c.id),
-            room_id: r.id,
-            scheduled_date: new Date(dateKey),
-            start_time: time,
-            duration_minutes: th.duration_minutes,
-            session_number: 1,
-            total_sessions: 1,
-            status: dateKey < todayKey ? 'completed' : 'pending',
-            assignment_type: 'auto',
-          } });
-          rBusy.push({ s: sMin, e: eMin });
-          sBusy.push({ s: sMin, e: eMin });
-          pBusy.push({ s: sMin, e: eMin });
-          slotsCreatedForRoom++;
-          break;
+          if ([...meals, ...pBusy].some((b) => overlaps(b.s, b.e, sMin, eMin))) continue;
+          const staffOnLeave = staffHolidaysByDay[dateKey] || new Set<string>();
+          const team = staff.filter((sc) => sc.specializations.includes(th.id) && (!th.requires_gender_match || sc.gender === p.gender) && !staffOnLeave.has(sc.id)
+            && !(busy[dateKey].staff[sc.id] || []).some((b) => overlaps(b.s, b.e, sMin, eMin))).slice(0, th.staff_required);
+          if (team.length < th.staff_required) continue;
+          for (let k = 0; k < rooms.length; k++) {
+            const room = rooms[(pi + k) % rooms.length];
+            if (!th.required_amenities.every((a) => room.amenities.includes(a))) continue;
+            const rBusy = busy[dateKey].room[room.id] ??= [];
+            if (rBusy.some((b) => overlaps(b.s, b.e, sMin, eMin))) continue;
+            const [lead, ...co] = team;
+            await prisma.appointment.create({ data: {
+              patient_id: p.id, therapy_id: th.id, staff_id: lead.id, co_staff_ids: co.map((c) => c.id), room_id: room.id,
+              scheduled_date: new Date(dateKey), start_time: time, duration_minutes: th.duration_minutes,
+              session_number: 1, total_sessions: 1, status: dateKey < todayKey ? 'completed' : 'pending', assignment_type: 'auto',
+            } });
+            rBusy.push({ s: sMin, e: eMin });
+            pBusy.push({ s: sMin, e: eMin });
+            for (const t of team) (busy[dateKey].staff[t.id] ??= []).push({ s: sMin, e: eMin });
+            given.add(th.id);
+            break placed;
+          }
         }
       }
     }
@@ -448,20 +438,21 @@ async function main() {
   const residents: { id: string }[] = [];
   let stayCount = 0;
   const concernsSeed = ['Lower back pain, poor sleep', 'Stress and fatigue', 'Joint stiffness in the mornings', 'Digestion, acidity', 'Weight and energy', 'Recovery after illness'];
-  const addStay = async (patient_id: string, start_date: Date, end_date: Date) => {
+  const addStay = async (patient_id: string, start_date: Date, end_date: Date, on_site: boolean) => {
     const days = Math.round((end_date.getTime() - start_date.getTime()) / DAY_MS) + 1;
     await prisma.patientStay.create({
-      data: { patient_id, start_date, end_date, duration_days: Math.round((end_date.getTime() - start_date.getTime()) / DAY_MS) + 1,
+      data: { patient_id, start_date, end_date, on_site, duration_days: Math.round((end_date.getTime() - start_date.getTime()) / DAY_MS) + 1,
         // Most have chosen, some not yet: the card shows "Not decided yet" honestly (stories 11 and 12).
-        ...(stayCount % 3 !== 2 && packages.length ? { package_id: packages.reduce((best, p) => (Math.abs(p.days - days) < Math.abs(best.days - days) ? p : best)).id } : {}),
-        ...(stayCount % 4 !== 3 && houses.length ? { accommodation_id: houses[stayCount % houses.length].id } : {}),
+        ...(on_site && stayCount % 3 !== 2 && packages.length ? { package_id: packages.reduce((best, p) => (Math.abs(p.days - days) < Math.abs(best.days - days) ? p : best)).id } : {}),
+        ...(on_site && stayCount % 4 !== 3 && houses.length ? { accommodation_id: houses[stayCount % houses.length].id } : {}),
         // Taken on arrival, so today's arrivals are the ones still to do (#219).
         ...(start_date < today ? { vitals: `BP ${118 + (stayCount * 7) % 30}/${76 + (stayCount * 3) % 14}, pulse ${66 + (stayCount * 5) % 18}`, concerns: concernsSeed[stayCount % concernsSeed.length], tests: stayCount % 4 === 0 ? 'Blood sugar (fasting), lipid profile' : null } : {}) },
     });
     // Not everyone: a centre always has someone whose plan has not been set yet,
     // and the sheet should show that honestly rather than inventing one. Only
     // those arriving today or later: a patient a day in with no plan is on the pill (#288), and a demo that opens on 16 of them is not the demo.
-    const planned = (stayCount++ % 6 !== 5 || start_date < today) && templates.length > 0;
+    // Someone not staying eats at home: no plan for a day visitor or an outpatient.
+    const planned = on_site && (stayCount++ % 6 !== 5 || start_date < today) && templates.length > 0;
     if (planned) {
       await prisma.dietPlanSegment.create({
         data: { patient_id, start_date, end_date, template_id: templates[stayCount % templates.length].id },
@@ -470,7 +461,7 @@ async function main() {
     if (planned && start_date <= today && today <= end_date) residents.push({ id: patient_id });
   };
   for (const [patientId, list] of staysOf) {
-    for (const x of list) await addStay(patientId, x.s, x.e);
+    for (const x of list) await addStay(patientId, x.s, x.e, x.kind !== 'day' && x.kind !== 'out');
   }
 
   // The rest of an ordinary day's changes, each once, so every row flag and
@@ -508,10 +499,10 @@ async function main() {
   // needs. Each stay opens with a consultation and has one a week after it, so
   // the card shows a last and a next, and the doctor rota has a morning on it.
   const consultation = allTherapies.find((t) => t.is_consultation)!;
-  const consultRooms = await Promise.all(['Charaka', 'Sushruta'].map((name) => prisma.therapyRoom.create({
+  const consultRooms = await Promise.all(['Charaka', 'Sushruta'].slice(0, SIZE.doctors).map((name) => prisma.therapyRoom.create({
     data: { name, amenities: ['bp_monitor', 'examination_bed'], weekly_schedule: scheduleStd, is_active: true },
   })));
-  const doctors = await Promise.all([['Dr Lakshmi Menon', 'female'], ['Dr Vikram Rao', 'male'], ['Dr Farah Siddiqui', 'female']].map(([name, gender]) =>
+  const doctors = await Promise.all([['Dr Lakshmi Menon', 'female'], ['Dr Vikram Rao', 'male'], ['Dr Farah Siddiqui', 'female']].slice(0, SIZE.doctors).map(([name, gender]) =>
     prisma.staff.create({ data: { name, gender: gender as 'male' | 'female', role: 'doctor', specializations: [consultation.id], weekly_schedule: scheduleStd, is_active: true, phone: `+91-7${Math.floor(100000000 + random() * 899999999)}` } })));
   const holidayKeys = new Set(centerHolidays.map((h) => h.date && h.date.toISOString().slice(0, 10)));
   const consultSlots = Array.from({ length: 12 }, (_, i) => { const m = 9 * 60 + i * 20; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; });
