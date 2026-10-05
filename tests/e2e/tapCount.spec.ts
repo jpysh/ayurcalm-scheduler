@@ -26,11 +26,11 @@ const JOBS: [string, number][] = [
   // Row, Something wrong?, the room: the design's 2 starts from the card open.
   ['Room out of use', 3],
   // Who, then Book: one tap more than the old suggestion, bought by a choice of who, therapist, room and time (story 5, accepted).
-  ['Book one treatment', 4],
+  ['Book one treatment', 3], // 6 Oct (#313): + is on the bar again, so who, then Book
   ["A patient's meals today", 2],
   ["Print today's sheets", 2], // Print moved into the Menu (5 Oct): the bar keeps room for the date
   // From the Patients screen. Story 4 says 2; the gender is one tap because nothing is chosen for them (#283).
-  ['Add an arriving patient', 4],
+  ['Add an arriving patient', 3], // 6 Oct (#313): +, gender, Add
   // From the Patients screen: Search, then the person (typing is not counted).
   ['Find a patient', 3],
   // Stories 7 to 12 (#285), from the patient's card already open, as the design counts them.
@@ -39,8 +39,8 @@ const JOBS: [string, number][] = [
   ["Choose a patient's accommodation", 3],
   ["Change a patient's stay", 3],
   ["Print a patient's discharge summary", 3],
-  // From the day: Menu, Leave, +, then Save, plan later. Picking who and typing dates are not counted.
-  ["Record a therapist's leave", 7], // 4 + open and pick on the searchable Who list (150 names do not fit a phone's wheel)
+  // From the day: Menu, Leave, +, Who, a name on the searchable list (150 names do not fit a phone's wheel), Save, plan later (#313: + is on the bar, was 7).
+  ["Record a therapist's leave", 6],
   // Menu, Diet plans, the plan, Save (#285 session 6).
   ['Edit a diet plan', 4],
   // Menu, Settings, What needs you, a switch (#285 session 7, #288).
@@ -241,8 +241,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     // + asks who, then fills the rest in with a free time, therapist and room (#285 story 5).
     await job(page, rows, 'Book one treatment', async (tap) => {
       await showDay(page, day);
-      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
-      await tap(page.getByRole('dialog').getByRole('button', { name: 'Book a treatment' }));
+      await tap(page.getByRole('button', { name: 'Book a treatment', exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: /Day \d+ of/ }).first());
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Book / }));
       const note = page.locator('[data-sonner-toast]').filter({ hasText: /^Booked/ });
@@ -294,9 +293,8 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
 
     await job(page, rows, 'Add an arriving patient', async (tap) => {
       await page.goto('/admin/patients');
-      await page.getByRole('button', { name: 'Menu', exact: true }).waitFor();
-      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
-      await tap(page.getByRole('dialog').getByRole('button', { name: 'New patient' }));
+      await page.getByRole('button', { name: 'New patient', exact: true }).waitFor();
+      await tap(page.getByRole('button', { name: 'New patient', exact: true }));
       await page.getByRole('dialog').getByLabel('Name', { exact: true }).fill('Tapcount Meera');
       await tap(page.getByRole('dialog').getByRole('button', { name: 'Female' }));
       await tap(page.getByRole('dialog').getByRole('button', { name: 'Add Tapcount Meera' }));
@@ -378,8 +376,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await showDay(page, day);
       await tap(page.getByRole('button', { name: 'Menu', exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Leave/ }));
-      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
-      await tap(page.getByRole('dialog').getByRole('button', { name: 'Add leave' }));
+      await tap(page.getByRole('button', { name: 'Add leave', exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Who or what/ }));
       await tap(page.getByRole('dialog').last().getByRole('button', { name: staff.find((x) => x.is_active)!.name, exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: 'Save, plan later' }));

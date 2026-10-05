@@ -94,7 +94,7 @@ Every list, sheet and button has all of these designed, not left to default.
 
 ## 7. Components (all live in `src/components/kit.tsx`)
 
-- **Bottom bar** (5 Oct, the maintainer's call): one round button, bottom right, on every screen: the hamburger, 56 high, 10 from the edges, the one shadow, with a count badge when something needs the admin (red) or is for their information (grey). Everything else is in its sheet, in this order: what needs you (only when something does, red), the screen's one main action as the filled button ("Book a treatment", "New patient"…), then Search, Change day and Print (day only), the info-only inbox row among them, and "Go to" the screens as two-across tiles (Patients 65 in house, Team 2 not in; "Back to the day" only when away from it), so the whole menu fits a 375×812 phone without scrolling. Search, when chosen, takes the bar's place with its field above the keyboard. Hidden while a sheet, form or the keyboard is open.
+- **Bottom bar** (5 Oct, amended 6 Oct #313): the hamburger stays at the same pixel bottom right on every screen (56 high, 10 from the edges, the one shadow, a count badge when something needs the admin (red) or is for their information (grey)). On a screen that adds something, the screen's one main action is a filled round **+** beside it, to its left (Day: Book a treatment; Patients: New patient; Team and rooms: Add to the team; Leave: Add leave; Diet plans: New diet plan; Therapies and Events: Add). Settings, Help and Log have none. Every screen except the day has a slim header: **‹ Day** (or ‹ the screen the admin came from) at the left, the title, its count; the phone's back keeps working. The Menu is for going places and secondary actions, in this order: what needs you (only when something does, red), Search, Change day and Print (day only), the info-only inbox row, and "Go to" the screens as two-across tiles ("Back to the day" first tile away from it). It never repeats the main action. Search, when chosen, takes the bar's place with its field above the keyboard. Hidden while a sheet, form or the keyboard is open.
   - Anchors: the button is at the same pixel on every screen. A task that used + , Search or the pill costs one tap more than before, accepted.
   - **Week strip** (the day screen's top, replacing the ‹ › header): one week, Sunday first as Apple Calendar draws it, swipe for the next or last week, tap a day; today has a ring, the chosen day is filled, "Today" appears when away from it. Far dates: Menu, Change day.
 - **+ (adaptive).** 50px green circle, always a plus. It adds what the screen is about: day → treatment, Patients → patient, Leave → leave, Team → therapist / room / therapy (a small choice sheet). Editing is a tap on the thing itself. Its accessible name says what it adds ("New patient").
@@ -141,7 +141,7 @@ Every list, sheet and button has all of these designed, not left to default.
 A screen is done when every line is a yes. The audit for a group quotes the lines it fails.
 
 1. **The facts a decision needs are on the first view**; everything else is one tap away.
-2. One main action, green, reachable by thumb; other actions are quieter.
+2. One main action, green, reachable by thumb (the + beside the menu); other actions are quieter.
 3. The bar shows only what means something here; hidden over sheets and forms.
 4. Every control is ≥ 44 × 44; nothing tappable is only an icon without an accessible name.
 5. Text contrast ≥ 4.5:1; state never by colour alone.

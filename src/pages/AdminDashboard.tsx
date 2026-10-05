@@ -20,7 +20,7 @@ import { RulesSheet } from "@/components/RulesSheet";
 import { useAttention, type AttentionItem } from "@/lib/attention";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout, API_TOKEN, type ApiAppointment, type ApiProgramEvent, type Patient, type UiRoom, type UiStaff, type UiTherapy, type UiTimeOff } from "./tabs/shared";
-import PageHead from "@/components/PageHead";
+import PageHead, { BackContext } from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
 import { Consequence, ListGroup, Row, SheetFoot } from "@/components/kit";
 
@@ -444,6 +444,8 @@ const AdminDashboard = () => {
     const next = TAB_ORDER.includes(tabSeg as any) ? tabSeg : 'schedule';
     if (next !== activeTab) {
       setActiveTab(next);
+      // The phone's own back: keep ‹ in step with it.
+      setTrail((t) => (t[t.length - 1] === next ? t.slice(0, -1) : t));
     }
   }, [location.pathname]);
   // Loaded on every tab, not only Events: the headline card counts them too and
@@ -457,7 +459,10 @@ const AdminDashboard = () => {
     })();
   }, [activeTab]);
 
-  const go = (v: string) => {
+  // The screens the admin came through, for ‹ (#313). The day clears it.
+  const [trail, setTrail] = useState<string[]>([]);
+  const go = (v: string, back = false) => {
+    if (v !== activeTab && !back) setTrail((t) => (v === 'schedule' ? [] : [...t.slice(-9), activeTab]));
     setActiveTab(v);
     if (v !== 'patients') patientsScreen.setSearching(false);
     setListSearching(false); setListQuery('');
@@ -522,7 +527,14 @@ const AdminDashboard = () => {
     navigate("/login");
   };
 
+  const cameFrom = trail[trail.length - 1] ?? 'schedule';
+  const backTo = activeTab === 'schedule' ? null : {
+    label: cameFrom === 'schedule' ? 'Day' : (SCREENS.find(([k]) => k === cameFrom)?.[1] ?? 'Day'),
+    run: () => { setTrail((t) => t.slice(0, -1)); go(cameFrom, true); },
+  };
+
   return (
+    <BackContext.Provider value={backTo}>
     <div className="min-h-screen bg-background overflow-x-clip pb-28">
       {/* Main Content */}
       {/* The phone design widened on a desktop, never a second layout (#67): one centred column. */}
@@ -711,6 +723,7 @@ const AdminDashboard = () => {
         ) : null}
       </BottomSheet>
     </div>
+    </BackContext.Provider>
   );
 };
 export default AdminDashboard;
