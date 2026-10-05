@@ -1611,7 +1611,8 @@ app.post('/appointments/one', async (req: Request, res: Response) => {
     return;
   }
   const appt = await prisma.appointment.create({ data: { ...candidate, session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
-  res.status(201).json(appt);
+  // The booked panel says how full their day is now.
+  res.status(201).json({ ...appt, day_count: ctx.appointments.filter((a) => a.patient_id === b.patient_id).length + 1 });
 });
 
 app.get('/appointments/:id/history', async (req: Request, res: Response) => {

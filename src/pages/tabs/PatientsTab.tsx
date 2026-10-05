@@ -253,6 +253,8 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const ADMIN_TZ = timezone;
   const [showAddPatient, setShowAddPatient] = useState(false);
   const [newPatient, setNewPatient] = useState(blankNew);
+  // Started from the booking sheet (#330): the name is filled in, no consultation is pre-booked, and the person goes back to the booking.
+  const [inline, setInline] = useState<((p: { id: string; name: string }) => void) | null>(null);
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
   // Opening Add fills in the likely stay: arriving today, a fortnight.
@@ -281,7 +283,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   });
   const saveNewPatient = async () => {
     const n = newPatient;
-    const visit = consult === 'later' ? null : slots?.[consult];
+    const visit = inline || consult === 'later' ? null : slots?.[consult];
     const blank = (v: string) => v.trim() || undefined;
     const res = await fetch(`${API_BASE}/patients`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -303,6 +305,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     toast.success(`${created.name} added${visit ? `, consultation ${dayText(visit.date)} ${visit.start_time}` : ''}`);
     setShowAddPatient(false);
     setNewPatient(blankNew());
+    if (inline) { inline({ id: created.id, name: created.name }); setInline(null); return; }
     // They land on their card, with everything else a row to fill in when it is decided.
     setCardId(created.id);
   };
@@ -403,7 +406,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         detailsHint={(id) => { const r = patients.find((x) => String(x.id) === id); return r?.phone || r?.emergencyContact ? [r.phone, r.emergencyContact].filter(Boolean).join(' · ') : 'Add phone, emergency contact…'; }}
         details={(id) => { const row = patients.find((x) => String(x.id) === id); setCardId(null); if (row) showPatientInfo(row); }} />
 
-      <BottomSheet open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) setNewPatient(blankNew()); }} title="New patient" note="Only name and gender are needed. Everything else can wait."
+      <BottomSheet open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) { setNewPatient(blankNew()); setInline(null); } }} title="New patient" note="Only name and gender are needed. Everything else can wait."
         foot={<Btn kind="primary" disabled={!newPatient.name.trim() || !newPatient.gender || newPatient.leaving < newPatient.arriving} onClick={saveNewPatient}>{newPatient.name.trim() ? `Add ${newPatient.name.trim()}` : 'Add patient'}</Btn>}>
         <Text label="Name" autoComplete="off" value={newPatient.name} valid={newPatient.name.trim().length > 1} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} />
         {/* Nothing chosen to start with (#283): a list that opened on Male made every resident one until corrected. */}
@@ -415,7 +418,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           <DateRow label="Leaving" value={newPatient.leaving} min={newPatient.arriving} onChange={(v) => setNewPatient({ ...newPatient, leaving: v })} />
         </div>
         <Switch label="Stays on site" note="Off for a day patient" on={newPatient.onSite} set={(onSite) => setNewPatient({ ...newPatient, onSite })} />
-        {slots === null || slots.length === 0 ? (
+        {inline ? null : slots === null || slots.length === 0 ? (
           slots?.length === 0 ? <p className={`mt-3 ${noteText}`}>{why || 'No doctor is free before they leave, so no consultation is booked. Book one from their card.'}</p> : null
         ) : (
           <div className="mt-3 rounded-xl border p-3">
@@ -471,7 +474,10 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     </>
   );
 
-  return { tab, dialogs, openResident: setCardId, openMeals: setDietFor, openAdd: () => setShowAddPatient(true), query, setQuery, searching, setSearching };
+  return { tab, dialogs, openResident: setCardId, openMeals: setDietFor, openAdd: (from?: { name: string; arriving: string; done: (p: { id: string; name: string }) => void }) => {
+    if (from) { setNewPatient({ ...blankNew(), name: from.name, arriving: from.arriving, leaving: addDays(from.arriving, 13) }); setInline(() => from.done); }
+    setShowAddPatient(true);
+  }, query, setQuery, searching, setSearching };
 }
 
 /** What the links recorded on a treatment (#219), in a line: records only, beside the therapy. */

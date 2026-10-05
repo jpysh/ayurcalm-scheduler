@@ -385,11 +385,12 @@ export const ErrorLine = ({ text, retry }: { text: string; retry?: () => void })
  * search field (`SearchField`, in the sheet's foot, at the bottom above the keyboard)
  * filters everyone. Choosing one fills the rest in place.
  */
-export function WhoPicker<T extends { id: string; name: string; note?: string }>({ groups, all, q, chosen, onChoose }: { groups: { title: string; list: T[] }[]; all: T[]; q: string; chosen: string | null; onChoose: (p: T) => void }) {
+export function WhoPicker<T extends { id: string; name: string; note?: string }>({ groups, all, q, chosen, onChoose, onAdd }: { groups: { title: string; list: T[] }[]; all: T[]; q: string; chosen: string | null; onChoose: (p: T) => void; /** When nobody matches: the typed name as a new patient (#330). */ onAdd?: (name: string) => void }) {
   const ql = q.trim().toLowerCase();
   const row = (p: T) => <Row key={p.id} title={p.name} facts={p.note} trailing={chosen === p.id ? "✓" : undefined} onClick={() => onChoose(p)} />;
   if (ql) {
     const list = all.filter((p) => p.name.toLowerCase().includes(ql)).slice(0, 8);
+    if (!list.length && onAdd) return <ListGroup title="No one found"><Row title={`Add “${q.trim()}” as a new patient`} trailing="+" onClick={() => onAdd(q.trim())} /></ListGroup>;
     return <ListGroup title="Matches">{list.length ? list.map(row) : <Empty text="No one found." />}</ListGroup>;
   }
   const shown = groups.filter((g) => g.list.length);

@@ -89,7 +89,7 @@ async function main() {
     assert.match(askedBody.message, /already has .*at 09:00/);
     assert.ok((askedBody.actions as Act[]).some((a) => a.kind === 'book_anyway'), 'no Book anyway offered');
     assert.equal((await prisma.appointment.count({ where: { patient_id: gita.id } })), 1, 'it was booked before being confirmed');
-    await call('POST', '/appointments/one', { ...again, confirm: true });
+    assert.equal((await call('POST', '/appointments/one', { ...again, confirm: true })).day_count, 2, 'the booked panel is not told how full the day is');
 
     // Over the daily limit: four booked, the fifth is asked about, and then booked.
     for (const [i, t] of ['10:00', '11:00', '12:00', '13:00'].entries()) await put(meera.id, i % 2 ? shiro.id : abhyanga.id, t, i % 2 ? bina.id : asha.id, i % 2 ? roomB.id : roomA.id);
