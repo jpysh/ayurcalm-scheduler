@@ -76,7 +76,6 @@ test('H3: a read-only trial says so on +, and hides Get started', async ({ page 
 });
 
 test('O1: Leave has Upcoming · Past · All, not a Filter popover', async ({ page }) => {
-  expect(1, 'deliberate break, advisory').toBe(2);
   await signIn(page);
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: /^Leave/ }).click();
