@@ -162,6 +162,25 @@ runs `qa` plus `npm run test:e2e` (sign-in, every tab, the day sheet, in
 Chromium) on any pull request that touches `server/` or the Docker files, and on
 every merge; other pull requests get the builds and the database-free tests only.
 
+**Test policy until launch (decided 6 Oct; supersedes the list below where they differ).**
+Tests exist to protect the printed day sheet and the planner, not to pin every pixel while the screens
+still change weekly. Before launch:
+- **Blocks a merge:** builds, `tsc` at or under its count, `npm run qa` (the server rule tests: planner,
+  availability, printed sheets, import/export and restore, auth, diet) and a *smoke* set of about six
+  browser tests tagged `@smoke` (sign in, the day shows, book a treatment, print downloads a PDF,
+  therapist off then fix then Undo, a new trial's wizard reaches the day). Nothing else blocks.
+- **Advisory, run nightly and before a release, never fixed inside a feature PR:** every other browser
+  test (audit4, phoneAudit, critical, tapCount and the rest). A red one becomes one issue; a session
+  repairs them together in one weekly "test repair" PR. A feature PR does not edit them unless it is
+  the PR that breaks the smoke set.
+- **Screens are checked by the screenshot UAT**, not by new browser tests. Tap counts are a report, not a gate.
+- **Locally run only** the smoke set and the server tests for the area changed. No full e2e per PR.
+- **New tests:** a server rule or a bug fix gets one (a bug fix always does); a screen change gets none.
+After launch (a real centre using it): server tests stay blocking; the smoke set stays blocking on every
+PR; the full browser set runs nightly and before each release and blocks a release, not a PR; every bug
+found by a user leaves one regression test; production watches (health ping, daily check, a monthly
+restore drill from the backup, alerts to the maintainer) matter more than more browser tests.
+
 **What to run before a pull request** (agreed 2026-09-27, while there are no
 users). CI from a fresh database is the gate; don't repeat it locally.
 - Always: front-end `tsc` (52 errors or fewer) and the tests for the area changed.
