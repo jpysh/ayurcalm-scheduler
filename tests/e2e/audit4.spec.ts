@@ -57,7 +57,8 @@ test('H2: booking is one sheet: who, then every line filled in and changeable, a
   await expect(sheet.getByLabel('Search patients')).toBeVisible();
   await sheet.getByRole('button', { name: /Day \d+ of/ }).first().click();
   // Therapy, date, time, therapist and room arrive filled, free ones first.
-  for (const line of ['Therapy', 'Date', 'Time', 'Therapist', 'Room']) await expect(sheet.getByLabel(line, { exact: true })).toBeAttached({ timeout: 15000 });
+  await expect(sheet.getByRole('button', { name: /^Therapy/ })).toBeVisible({ timeout: 15000 });
+  for (const line of ['Date', 'Time', 'Therapist', 'Room']) await expect(sheet.getByLabel(line, { exact: true })).toBeAttached({ timeout: 15000 });
   await expect(sheet.getByRole('button', { name: /^Book \w+, / })).toBeEnabled();
 });
 

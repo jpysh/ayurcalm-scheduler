@@ -184,7 +184,9 @@ test('the booking sheet books a course of sessions in one go, and Undo takes the
     const sheet = page.getByRole('dialog');
     await sheet.getByLabel('Search patients').fill(patient.name);
     await sheet.getByRole('button', { name: new RegExp(`^${patient.name}`) }).first().click();
-    await sheet.getByLabel('Therapy', { exact: true }).selectOption({ label: `${TAG} Abhyanga` });
+    await sheet.getByRole('button', { name: /^Therapy/ }).click();
+    await page.getByPlaceholder('Search therapies').fill(`${TAG} Abhyanga`);
+    await page.getByRole('dialog').last().getByRole('button', { name: new RegExp(`^${TAG} Abhyanga`) }).click();
     await sheet.getByLabel('Sessions', { exact: true }).selectOption({ label: '3 sessions, one a day' });
     const book = sheet.getByRole('button', { name: /^Book \w+, 3 days from/ });
     await expect(book).toBeEnabled({ timeout: 15000 });
