@@ -51,6 +51,10 @@ const shift = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:0
 
 export function BottomBar({ activeTab, go, day, today, now, setDay, print, printing, plus, search, attention }: Props) {
   const [sheet, setSheet] = useState<"menu" | "day" | null>(null);
+  // Leaving Search brings the bar back; the keyboard's place goes to the menu button (#311).
+  const menuBtn = useRef<HTMLButtonElement>(null);
+  const wasSearching = useRef(false);
+  useEffect(() => { if (wasSearching.current && !search.on) menuBtn.current?.focus(); wasSearching.current = search.on; }, [search.on]);
   // Live subtitles, read when the menu opens (#67): who is in house, who is not in.
   const [hints, setHints] = useState<Record<string, string>>({});
   // The maintainer's WhatsApp from Settings; the Help tile shows only with one.
@@ -90,14 +94,14 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
         <nav aria-label="Main" data-kit="bar" className="pointer-events-none fixed inset-x-[var(--bar-gap)] bottom-[calc(var(--bar-gap)+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl justify-end gap-3">
           {/* The screen's one main action, beside the menu and only where it means something (#313). */}
           {plus ? <button type="button" aria-label={plus.adds} onClick={plus.run} className="pointer-events-auto grid h-[var(--bar-h)] w-[var(--bar-h)] place-items-center rounded-full bg-primary text-primary-foreground shadow-float active:bg-[hsl(var(--primary-hover))]"><Plus className="h-7 w-7" /></button> : null}
-          <button type="button" aria-label="Menu" onClick={() => setSheet("menu")} className="pointer-events-auto relative grid h-[var(--bar-h)] w-[var(--bar-h)] place-items-center rounded-full bg-primary text-primary-foreground shadow-float active:bg-[hsl(var(--primary-hover))]">
+          <button ref={menuBtn} type="button" aria-label="Menu" onClick={() => setSheet("menu")} className="pointer-events-auto relative grid h-[var(--bar-h)] w-[var(--bar-h)] place-items-center rounded-full bg-primary text-primary-foreground shadow-float active:bg-[hsl(var(--primary-hover))]">
             <Menu className="h-6 w-6" />
             {inbox ? <span aria-hidden className={`absolute -right-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full border-2 border-background px-1 text-xs font-bold text-white ${inbox.need ? "bg-destructive" : "bg-muted-foreground"}`}>{inbox.need || inbox.info}</span> : null}
           </button>
         </nav>
       )}
 
-      {sheet === "menu" ? <BottomSheet open onOpenChange={(o) => setSheet(o ? "menu" : null)} title="" keepFocus>
+      {sheet === "menu" ? <BottomSheet open onOpenChange={(o) => setSheet(o ? "menu" : null)} title="">
         {/* What needs doing first, then the rest of what can be done here. The main action is the + beside the menu. */}
         {inbox?.need ? <div className="mb-3"><ListGroup><Row key="inbox" title={`${inbox.need} need you`} facts="Things to fix or decide" trailing="›" onClick={close(attention!.open)} /></ListGroup></div> : null}
         <div className="mt-2">
