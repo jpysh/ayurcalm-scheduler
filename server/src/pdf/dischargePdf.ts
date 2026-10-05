@@ -84,7 +84,7 @@ export async function generateDischargePdf(v: DischargeView, centre: { name: str
     }
     doc.moveDown(0.5);
   };
-  section('Condition at discharge', d.condition);
+  section('Condition at discharge', d.condition, true);
   section('Final diagnosis', d.diagnosis, true);
   section('Reason for admission', d.reason);
 
