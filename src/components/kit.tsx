@@ -228,7 +228,7 @@ export function Foot({ busy, save, label = "Save", remove, removeLabel = "Remove
 export function BottomSheet({ open, onOpenChange, title, note, children, foot, onBack, keepFocus }: { open: boolean; /** The menu hands the focus to what it opens (the search field), so closing must not take it back. */ keepFocus?: boolean; onOpenChange: (o: boolean) => void; title: string; note?: ReactNode; children: ReactNode; foot?: ReactNode; /** A sheet's second page: Back above the title. */ onBack?: () => void }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" hideClose className="mx-auto flex max-h-[88dvh] max-w-xl flex-col rounded-t-sheet bg-card p-0 outline-none"
+      <SheetContent className="mx-auto flex max-h-[88dvh] max-w-xl flex-col rounded-t-sheet bg-card p-0 outline-none"
         // The sheet takes the focus, not its first field: that raised the phone's keyboard over half the form before it had been read.
         onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}
         onCloseAutoFocus={keepFocus ? (e) => e.preventDefault() : undefined}>
