@@ -613,3 +613,20 @@ test("a treatment's History reads on the centre's clock, not the phone's (#304)"
     await ctx.close();
   }
 });
+
+test('tapping the date from the bottom returns to the top and the week strip settles (#332)', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signIn(page);
+  await passSetupIfShown(page);
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.waitForTimeout(500);
+  await page.getByRole('button', { name: /week ›/ }).click();
+  await page.waitForTimeout(1500);
+  const week = page.getByLabel('Week');
+  await expect(week).toBeVisible();
+  // Still shown a second later: it is not flipping.
+  await page.waitForTimeout(1000);
+  await expect(week).toBeVisible();
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+});
