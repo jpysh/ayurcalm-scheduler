@@ -185,10 +185,11 @@ test('@smoke the booking sheet books a course of sessions in one go, and Undo ta
     const sheet = page.getByRole('dialog');
     await sheet.getByLabel('Search patients').fill(patient.name);
     await sheet.getByRole('button', { name: new RegExp(`^${patient.name}`) }).first().click();
-    await sheet.getByRole('button', { name: /^Therapy/ }).click();
+    // No therapy is chosen for the admin (#330): past a dozen therapies the list is a search.
+    await sheet.getByRole('button', { name: /^Other therapies/ }).click();
     await page.getByPlaceholder('Search therapies').fill(`${TAG} Abhyanga`);
     await page.getByRole('dialog').last().getByRole('button', { name: new RegExp(`^${TAG} Abhyanga`) }).click();
-    await sheet.getByLabel('Sessions', { exact: true }).selectOption({ label: '3 sessions, one a day' });
+    await sheet.getByRole('button', { name: '3', exact: true }).click();
     const book = sheet.getByRole('button', { name: /^Book \w+, 3 days from/ });
     await expect(book).toBeEnabled({ timeout: 15000 });
     await book.click();

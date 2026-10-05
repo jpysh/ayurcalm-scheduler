@@ -332,7 +332,7 @@ export const Timeline = ({ items }: { items: { key: string; from: string; title:
 );
 
 /** A list of options: name, one line, a trailing fact; the chosen one has a border and a check. Edit opens the catalogue. */
-export function Picker<T extends string>({ options, value, onChange, onEdit }: { options: { id: T; name: string; note?: string; fact?: string }[]; value: T | ""; onChange: (id: T) => void; onEdit?: () => void }) {
+export function Picker<T extends string>({ options, value, onChange, onEdit }: { options: { id: T; name: string; note?: string; fact?: string; faint?: boolean }[]; value: T | ""; onChange: (id: T) => void; onEdit?: () => void }) {
   // Opened with one already chosen (or ready), it is in view rather than somewhere down the list.
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => { box.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: "nearest" }); }, []);
@@ -340,7 +340,7 @@ export function Picker<T extends string>({ options, value, onChange, onEdit }: {
     <div ref={box} className="grid gap-2">
       {options.map((o) => (
         <button key={o.id} type="button" aria-pressed={value === o.id} onClick={() => onChange(o.id)}
-          className="flex min-h-14 items-center gap-3 rounded-xl border-[1.5px] border-border px-3 py-2 text-left aria-pressed:border-primary aria-pressed:bg-secondary">
+          className={`flex min-h-14 items-center gap-3 rounded-xl border-[1.5px] border-border px-3 py-2 text-left aria-pressed:border-primary aria-pressed:bg-secondary ${o.faint ? "opacity-60" : ""}`}>
           <span className="min-w-0 flex-1"><b className="block text-base">{o.name}</b>{o.note ? <span className={`line-clamp-2 ${noteText}`}>{o.note}</span> : null}</span>
           {o.fact ? <span className="flex-none text-sm text-muted-foreground">{o.fact}</span> : null}
           {value === o.id ? <span aria-hidden className="flex-none font-bold text-primary">✓</span> : null}

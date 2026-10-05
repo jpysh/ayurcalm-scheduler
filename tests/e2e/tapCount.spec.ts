@@ -26,7 +26,7 @@ const JOBS: [string, number][] = [
   // Row, Something wrong?, the room: the design's 2 starts from the card open.
   ['Room out of use', 3],
   // Who, then Book: one tap more than the old suggestion, bought by a choice of who, therapist, room and time (story 5, accepted).
-  ['Book one treatment', 3], // 6 Oct (#313): + is on the bar again, so who, then Book
+  ['Book one treatment', 4], // #330: no therapy is chosen for the admin, so +, who, a therapy, Book
   ["A patient's meals today", 2],
   ["Print today's sheets", 2], // Print moved into the Menu (5 Oct): the bar keeps room for the date
   // From the Patients screen. Story 4 says 2; the gender is one tap because nothing is chosen for them (#283).
@@ -243,6 +243,8 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await showDay(page, day);
       await tap(page.getByRole('button', { name: 'Book a treatment', exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: /Day \d+ of/ }).first());
+      // The therapy is a visible list with nothing chosen: the first row that is not already booked today.
+      await tap(page.getByRole('dialog').getByRole('button', { pressed: false }).filter({ hasNotText: /already/ }).first());
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Book / }));
       const note = page.locator('[data-sonner-toast]').filter({ hasText: /^Booked/ });
       await expect(note).toBeVisible({ timeout: 20000 });

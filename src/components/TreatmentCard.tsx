@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { BottomSheet, Btn, Callout, ChangeLine, Consequence, EntryRow, Area, Empty, LineDate, LineSelect, ListGroup, Loading, Picker, Row, SearchField, SheetFoot, Tag, WhoPicker, dayText, say } from "@/components/kit";
+import { BottomSheet, Btn, Callout, ChangeLine, Consequence, EntryRow, Area, Empty, Group, LineDate, LineSelect, ListGroup, Loading, Picker, Row, SearchField, SheetFoot, Seg, Tag, WhoPicker, dayText, say } from "@/components/kit";
 import { API_BASE } from "@/lib/apiBase";
 
 export type CardAppt = {
@@ -236,52 +236,80 @@ type Slot = {
   start_time: string; duration_minutes: number; staff_id: string; staff_name: string; co_staff_ids: string[]; room_id: string; room_name: string;
 };
 type Option = { id: string; name: string; free: boolean; why?: string };
-type Options = { times: Slot[]; staff: Option[]; rooms: Option[]; why?: string };
+/** What the server offers beside a refusal or warning (#330); the sheet only carries each kind out. */
+export type BookAction = { kind: "book_at" | "set_date" | "other_therapy" | "add_staff" | "allow_any_gender" | "change_stay" | "book_anyway"; label: string; date?: string; start_time?: string; gender?: string; therapy_id?: string; patient_id?: string };
+type Options = { times: Slot[]; staff: Option[]; rooms: Option[]; why?: string; actions: BookAction[]; warnings: { reason: string; message: string }[] };
 type Who = { id: string; name: string; note: string; therapy_id: string | null; last: { name: string; date: string } | null };
+type TherapyFact = { id: string; name: string; duration_minutes: number; is_consultation: boolean; taken: boolean; repeat: boolean; fact?: string };
 
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 /** Why a course could not be placed, in the admin's words. */
 const COURSE_WHY: Record<string, string> = { OUT_OF_RANGE: "The days ran out", NO_MATCHING_TIME_SLOTS: "No free time on those days", NO_ROOM_AVAILABLE: "No room is free", NO_STAFF_AVAILABLE: "No therapist is free", CENTER_HOLIDAY: "The centre is closed", STAFF_IN_EVENT: "The therapist is in an event", WINDOW_TOO_NARROW: "The time is too short" };
+const COURSE_DAYS = [1, 3, 5, 7, 14];
+/** "Mon 5 to Fri 9 Oct": the month once when both days share it. */
+const span = (from: string, to: string) => {
+  const [a, b] = [dayText(from), dayText(to)];
+  return `${a.split(" ")[2] === b.split(" ")[2] ? a.split(" ").slice(0, 2).join(" ") : a} to ${b}`;
+};
 
 /**
- * Book from + (#285 story 5), on one sheet. Who first (nobody booked today, then
- * recent, a search at the bottom); choosing them fills in the rest in place, every
- * line the admin's to change: their last therapy, the date, how many sessions (one
- * a day, at the same time, therapist and room), the best free time, a free therapist
- * and a free room. The button names the outcome. `patient` skips the first step,
- * for a booking started from their card.
+ * Book from + (#285 story 5, #330), on one sheet. Who first (nobody booked today,
+ * then recent, a search at the bottom); then the therapy, which is never chosen for
+ * the admin: a visible list with when they last had each. Then the date, days in a
+ * row, the best free time, a free therapist and a free room, each the admin's to
+ * change. The button names the outcome. Every refusal comes with the server's
+ * actions beside it, and a soft rule (a long day, the same therapy twice) turns
+ * the button into Book anyway. `patient` skips the first step, for a booking
+ * started from their card.
  */
-export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refresh, patient }: {
+export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refresh, patient, rev, onAction, openResident }: {
   open: boolean; onClose: () => void; day: string; today: string; isToday: boolean; nowMinutes: number;
   refresh: () => Promise<void>; patient?: { id: string; name: string; consult?: boolean } | null;
+  /** Changes when the team does, so the lists are asked again after a therapist is added. */
+  rev?: number;
+  /** Actions that leave the sheet's own screen (adding a therapist). */
+  onAction?: (a: BookAction) => void;
+  openResident?: (patientId: string) => void;
 }) {
   const [who, setWho] = useState<{ none: Who[]; recent: Who[]; all: Who[] } | null>(null);
-  const [therapies, setTherapies] = useState<{ id: string; name: string; is_consultation?: boolean }[]>([]);
+  const [facts, setFacts] = useState<TherapyFact[] | null>(null);
   const [q, setQ] = useState("");
   const [chosen, setChosen] = useState<Who | null>(null);
   const [therapyId, setTherapyId] = useState("");
   const [date, setDate] = useState(day);
   const [sessions, setSessions] = useState(1);
+  const [otherDays, setOtherDays] = useState(false);
   const [opts, setOpts] = useState<Options | null>(null);
   const [time, setTime] = useState("");
   const [staffId, setStaffId] = useState("");
   const [roomId, setRoomId] = useState("");
   const [busy, setBusy] = useState(false);
-  // A centre with the whole library has forty therapies: past a dozen the wheel is a search.
+  // A centre with the whole library has forty therapies: past a dozen the list is the last one had, and a search.
   const [pickTherapy, setPickTherapy] = useState(false);
   const [tq, setTq] = useState("");
   const seq = useRef(0);
+  // A time carried over from "Book that" on another day, applied when that day's times arrive.
+  const pendingAt = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     if (!open) return;
-    setQ(""); setChosen(null); setOpts(null); setDate(day); setWho(null); setSessions(1);
+    setQ(""); setChosen(null); setOpts(null); setDate(day); setWho(null); setSessions(1); setOtherDays(false); setTherapyId(""); setFacts(null);
     fetch(`${API_BASE}/appointments/who?date=${day}`).then((r) => (r.ok ? r.json() : { none: [], recent: [], all: [] })).then(setWho).catch(() => setWho({ none: [], recent: [], all: [] }));
-    fetch(`${API_BASE}/therapies`).then((r) => (r.ok ? r.json() : [])).then((t: { id: string; name: string; is_consultation?: boolean }[]) => setTherapies([...t].sort((a, b) => a.name.localeCompare(b.name)))).catch(() => setTherapies([]));
   }, [open, day]);
 
-  const choose = (p: Who) => { setChosen(p); setTherapyId((patient?.consult && therapies.find((t) => t.is_consultation)?.id) || p.therapy_id || therapies[0]?.id || ""); setDate(day); };
+  const choose = (p: Who) => { setChosen(p); setTherapyId(""); setDate(day); };
+  // The therapy and its facts, for this patient on this day.
+  useEffect(() => {
+    if (!open || !chosen) return;
+    fetch(`${API_BASE}/appointments/therapies?date=${date}&patient_id=${chosen.id}`).then((r) => (r.ok ? r.json() : { therapies: [] })).then((d) => {
+      setFacts(d.therapies);
+      // A consultation is preselected only when the booking starts from a new patient's "book consultation".
+      if (patient?.consult && chosen.id === patient.id) setTherapyId((cur) => cur || d.therapies.find((t: TherapyFact) => t.is_consultation)?.id || "");
+    }).catch(() => setFacts([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, chosen, date, rev]);
   // From their card: the patient is known, so the sheet opens on their lines.
-  useEffect(() => { if (open && patient && who && !chosen) { const p = who.all.find((x) => x.id === patient.id); if (p) choose(p); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [open, patient, who, therapies]);
+  useEffect(() => { if (open && patient && who && !chosen) { const p = who.all.find((x) => x.id === patient.id); if (p) choose(p); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [open, patient, who]);
 
   /** The free times, and for the time chosen (or the best) who is free and which room. */
   const load = (at?: string) => {
@@ -295,20 +323,38 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
         setOpts(o); setTime(slot?.start_time || ""); setStaffId(slot?.staff_id || ""); setRoomId(slot?.room_id || "");
       });
   };
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [chosen, therapyId, date]);
+  useEffect(() => { setOpts(null); const at = pendingAt.current; pendingAt.current = undefined; load(at); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [chosen, therapyId, date, rev]);
 
   const slot = opts?.times.find((t) => t.start_time === time);
   const coStaff = (slot?.co_staff_ids || []).map((id) => (id === staffId ? slot!.staff_id : id));
-  const therapyName = say(therapies.find((t) => t.id === therapyId)?.name || "");
+  const therapyName = say(facts?.find((t) => t.id === therapyId)?.name || "");
   const first = chosen?.name.split(" ")[0] || "";
+  // Soft rules apply to one treatment; a course books one a day through its own route.
+  const warnings = sessions === 1 ? opts?.warnings || [] : [];
+
+  /** Carries out what the server offered beside a refusal. */
+  const carry = (a: BookAction) => {
+    if (a.kind === "set_date" && a.date) setDate(a.date);
+    else if (a.kind === "book_at" && a.date) { pendingAt.current = a.start_time; if (a.date === date) load(a.start_time); else setDate(a.date); }
+    else if (a.kind === "other_therapy") { setTherapyId(""); setOpts(null); }
+    else if (a.kind === "allow_any_gender" && a.therapy_id) {
+      void fetch(`${API_BASE}/therapies/${a.therapy_id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requires_gender_match: false }) }).then((r) => { if (r.ok) { toast(`${therapyName} can now be given by any therapist`); load(); } else toast.error("That could not be saved."); });
+    } else if (a.kind === "change_stay" && chosen) { onClose(); openResident?.(chosen.id); }
+    else if (a.kind === "add_staff") onAction?.(a);
+  };
 
   const bookOne = async () => {
     const res = await fetch(`${API_BASE}/appointments/one`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ patient_id: chosen!.id, therapy_id: therapyId, date, start_time: time, staff_id: staffId, co_staff_ids: coStaff, room_id: roomId }),
+      body: JSON.stringify({ patient_id: chosen!.id, therapy_id: therapyId, date, start_time: time, staff_id: staffId, co_staff_ids: coStaff, room_id: roomId, confirm: warnings.length > 0 }),
     });
     const body = await res.json().catch(() => ({}));
-    if (!res.ok) { toast.error(body.message || "That time has just gone. Choose another."); load(time); return; }
+    if (!res.ok) {
+      const next = (body.actions as BookAction[] | undefined)?.find((a) => a.kind !== "book_anyway");
+      toast.error(body.message || "That time has just gone. Choose another.", next ? { duration: 8000, action: { label: next.label, onClick: () => carry(next) } } : undefined);
+      load(time);
+      return;
+    }
     onClose();
     await refresh();
     toastBooked(`Booked ${first}: ${therapyName} at ${time}`, [body.id]);
@@ -324,7 +370,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
     const made: string[] = (body.appointments || []).map((a: { id: string }) => a.id);
     if (!res.ok) {
       await Promise.all(made.map((id) => fetch(`${API_BASE}/appointments/${id}`, { method: "DELETE" })));
-      toast.error(`${COURSE_WHY[body.conflicts?.reason] || "That course could not be placed"}. Nothing was booked: try fewer sessions, another time or another therapist.`);
+      toast.error(`${COURSE_WHY[body.conflicts?.reason] || "That course could not be placed"}. Nothing was booked: try fewer days, another time or another therapist.`);
       return;
     }
     onClose();
@@ -344,17 +390,19 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   const free = (l: Option[]) => l.filter((o) => o.free);
   const busyOnes = (l: Option[]) => l.filter((o) => !o.free);
   const nameOf = (l: Option[] | undefined, id: string) => l?.find((o) => o.id === id)?.name || "";
-  const when = date === today ? "today" : dayText(date);
   const weekday = new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
-
-  const matching = therapies.filter((t) => say(t.name).toLowerCase().includes(tq.trim().toLowerCase()));
+  const long = (facts?.length ?? 0) > 12;
+  const listed = (facts || []).filter((t) => !long || t.repeat);
+  const matching = (facts || []).filter((t) => say(t.name).toLowerCase().includes(tq.trim().toLowerCase()));
+  const when = `${date === today ? "" : `${weekday} `}${time}`;
+  const label = !therapyId ? "Choose a therapy" : !slot ? `Book ${first}` : warnings.length ? `Book anyway, ${sessions > 1 ? `${sessions} days from ` : ""}${when}` : `Book ${first}, ${sessions > 1 ? `${sessions} days from ` : ""}${when}`;
 
   return (
     <>
     <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={chosen ? chosen.name : "Book a treatment"}
       note={chosen ? chosen.note : "Who is it for?"}
       foot={chosen
-        ? <SheetFoot busy={busy} ok={!!slot} save={book} label={slot ? `Book ${first}, ${sessions > 1 ? `${sessions} days from ${date === today ? "" : `${weekday} `}${time}` : `${date === today ? "" : `${weekday} `}${time}`}` : `Book ${first}`} />
+        ? <SheetFoot busy={busy} ok={!!slot} save={book} label={label} />
         : <SearchField value={q} onChange={setQ} placeholder="Search patients" />}>
       {!chosen ? (
         who === null ? <Loading rows={3} /> : (
@@ -364,16 +412,29 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
       ) : (
         <div>
           {!patient ? <Btn kind="quiet" inline className="-ml-4" onClick={() => { setChosen(null); setOpts(null); }}>‹ Someone else</Btn> : null}
-          {therapies.length > 12
-            ? <ChangeLine label="Therapy" value={therapyName || "Choose"} onClick={() => { setTq(""); setPickTherapy(true); }} />
-            : <ChangeLine label="Therapy" value={therapyName || "Choose"}
-                select={<LineSelect label="Therapy" value={therapyId} onChange={setTherapyId} free={therapies.map((t) => ({ id: t.id, name: say(t.name) }))} />} />}
           <ChangeLine label={sessions > 1 ? "Starts" : "Date"} value={dayText(date)} select={<LineDate label="Date" value={date} min={today} onChange={setDate} />} />
-          <ChangeLine label="Sessions" value={sessions === 1 ? "One" : `${sessions}, one a day`}
-            select={<LineSelect label="Sessions" value={String(sessions)} onChange={(v) => setSessions(Number(v))} free={Array.from({ length: 21 }, (_, i) => ({ id: String(i + 1), name: i === 0 ? "One treatment" : `${i + 1} sessions, one a day` }))} />} />
-          {opts === null ? <Loading rows={3} /> : opts.times.length === 0 ? (
-            <p className="py-3 text-sm text-muted-foreground">{opts.why || `No free time for ${first} ${when}. Try another day or therapy.`}</p>
+          {therapyId ? <ChangeLine label="Therapy" value={therapyName} onClick={() => { setTherapyId(""); setOpts(null); }} /> : facts === null ? <Loading rows={3} /> : (
+            <div className="mt-2">
+              <p className="mb-1 text-sm font-semibold text-muted-foreground">Choose a therapy</p>
+              <Picker value="" onChange={setTherapyId}
+                options={listed.map((t) => ({ id: t.id, name: say(t.name), note: t.repeat ? "Same as last time" : undefined, fact: t.fact, faint: t.taken }))} />
+              {long ? <div className="mt-2"><ListGroup><Row title="Other therapies" trailing="›" onClick={() => { setTq(""); setPickTherapy(true); }} /></ListGroup></div> : null}
+            </div>
+          )}
+          {therapyId ? (
+            <Group label="Days in a row">
+              <Seg<number> options={[...COURSE_DAYS.map((n) => [n, n === 1 ? "One" : String(n)] as [number, string]), [0, "Other"]]} value={otherDays || !COURSE_DAYS.includes(sessions) ? 0 : sessions}
+                onChange={(n) => { if (n === 0) { setOtherDays(true); if (COURSE_DAYS.includes(sessions)) setSessions(2); } else { setOtherDays(false); setSessions(n); } }} />
+              {otherDays || !COURSE_DAYS.includes(sessions) ? (
+                <ChangeLine label="Days" value={String(sessions)} select={<LineSelect label="Days in a row" value={String(sessions)} onChange={(v) => setSessions(Number(v))} free={Array.from({ length: 20 }, (_, i) => ({ id: String(i + 2), name: `${i + 2} days in a row` }))} />} />
+              ) : null}
+            </Group>
+          ) : null}
+          {!therapyId ? null : opts === null ? <Loading rows={3} /> : opts.times.length === 0 ? (
+            <Callout tone="notice" title={opts.why || `No free time for ${first}.`}
+              actions={opts.actions.map((a, i) => <Btn key={a.label} kind={i === 0 ? "primary" : "secondary"} inline onClick={() => carry(a)}>{a.label}</Btn>)} />
           ) : (<>
+            {warnings.length ? <div className="mb-2 mt-2"><Callout tone="notice" title={warnings.map((w) => w.message).join(" ")}>Booking it is still possible.</Callout></div> : null}
             <ChangeLine label="Time" value={<>{time}{time === opts.times[0].start_time ? <span className="ml-2"><Tag tone="good">best</Tag></span> : null}</>}
               select={<LineSelect label="Time" value={time} onChange={(t) => load(t)} free={opts.times.map((t, i) => ({ id: t.start_time, name: t.start_time, tag: i === 0 ? "best" : undefined }))} />} />
             <ChangeLine label="Therapist" value={nameOf(opts.staff, staffId) || slot?.staff_name || "None free"}
@@ -381,14 +442,14 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
             <ChangeLine label="Room" value={nameOf(opts.rooms, roomId) || slot?.room_name || "None free"}
               select={<LineSelect label="Room" value={roomId} onChange={setRoomId} free={free(opts.rooms)} busy={busyOnes(opts.rooms)} />} />
             <p className="mt-2 text-sm text-muted-foreground">Chosen for you: free at {time}. Change any line.</p>
-            {sessions > 1 ? <Consequence>{sessions} treatments, one a day from {dayText(date)} at {time}. A day {first} is away, or the therapist or room is not free, is skipped; if they do not all fit, nothing is booked.</Consequence> : null}
+            <Consequence>{sessions === 1 ? `One treatment, ${dayText(date)}, at ${time}` : `One a day, ${span(date, addDays(date, sessions - 1))}, at ${time}. A day ${first} is away, or the therapist or room is not free, is skipped; if they do not all fit, nothing is booked.`}</Consequence>
           </>)}
         </div>
       )}
     </BottomSheet>
-    {therapies.length > 12 ? (
+    {long ? (
       <BottomSheet open={pickTherapy} onOpenChange={setPickTherapy} title="Therapy" foot={<SearchField value={tq} onChange={setTq} placeholder="Search therapies" />}>
-        {matching.length ? <ListGroup>{matching.map((t) => <Row key={t.id} title={say(t.name)} trailing={t.id === therapyId ? "✓" : undefined} onClick={() => { setTherapyId(t.id); setPickTherapy(false); }} />)}</ListGroup> : <Empty text="No therapy matches." />}
+        {matching.length ? <ListGroup>{matching.map((t) => <Row key={t.id} title={say(t.name)} facts={t.fact} trailing={t.id === therapyId ? "✓" : undefined} onClick={() => { setTherapyId(t.id); setPickTherapy(false); }} />)}</ListGroup> : <Empty text="No therapy matches." />}
       </BottomSheet>
     ) : null}
     </>
