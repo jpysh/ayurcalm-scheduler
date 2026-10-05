@@ -142,6 +142,7 @@ Every list, sheet and button has all of these designed, not left to default.
 - **Anything that changes the bar's height moves only at the very top of the page**, or the page can bounce between two states (#332). Test it by tapping the date from the bottom.
 - **A dead end opens the fix already filled in.** "Change their stay" opens the stay sheet over the booking with Leaving already on the asked-for day; save returns to the booking on that day (#343).
 - **Demo and test data model a real week** (#348): mostly 2 treatments a day, rarely 3; most patients planned a week ahead at the doctor's review; arrivals, departures, day visitors and outpatients every day. Lite for the demo, full for tests.
+- **Team is read by day, not by grid** (#351): a week strip, then Doctors and Therapists, each row with their hours that day and how much is booked; away is struck through with the reason. Hours are a weekly pattern on the person's card; a one-off change is leave for part of the day.
 - **Language:** "patient" (never "resident"), British spelling, sentence case, times in 24-hour, dates "Wed 30 Sept". No jargon, no raw ids, no snake_case.
 
 ## 9. Per-screen checklist
