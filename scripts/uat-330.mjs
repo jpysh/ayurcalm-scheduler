@@ -74,10 +74,10 @@ await step(`Choose ${A}: the best time, therapist and room fill in; Days in a ro
   const t = await text();
   return { ok: /Days in a row/.test(t) && /One a day|One treatment/.test(t) && /Book Meera/.test(t), note: flat(t) };
 });
-await step('Book: the sheet stays on Booked with Add another and Done, the toast keeps Undo', async () => {
+await step('Book: the sheet stays on Booked with Add another, Done and Undo (the note with Undo comes when it closes)', async () => {
   await go(dlg().getByRole('button', { name: /^Book Meera/ }));
-  const t = await text(); const toast = await p.locator('[data-sonner-toast]').first().innerText().catch(() => '');
-  return { ok: /Booked/.test(t) && /Add another/.test(t) && /has 1/.test(t) && /Undo/.test(toast), note: `${flat(t)} | toast: ${flat(toast)}` };
+  const t = await text();
+  return { ok: /Booked/.test(t) && /Add another/.test(t) && /has 1/.test(t) && /Undo/.test(t), note: flat(t) };
 });
 await step(`Add another: the same patient, no therapy chosen; ${A} is greyed "already at"; choosing it warns`, async () => {
   await go(dlg().getByRole('button', { name: 'Add another' }));
@@ -140,21 +140,21 @@ await step('Allow any gender: a time appears', async () => {
   return { ok: /Book Meera/.test(t) && !/Allow any gender/.test(t), note: flat(t) };
 });
 await step('New patient inline: nobody matches, so the name is offered as a new patient', async () => {
-  await open(); await dlg().getByLabel('Search patients').fill('Zed Uat'); await p.waitForTimeout(500);
+  await open(); await dlg().getByLabel('Search patients').fill(`Zed Uat${run}`); await p.waitForTimeout(500);
   const t = await text();
-  return { ok: /Add .Zed Uat. as a new patient/.test(t), note: flat(t) };
+  return { ok: /as a new patient/.test(t), note: flat(t) };
 });
 await step('The short form has the name filled in and no consultation to choose', async () => {
   await go(dlg().getByRole('button', { name: /as a new patient/ }));
   const t = await text();
-  return { ok: /Zed Uat/.test(await dlg().getByLabel('Name').inputValue()) && !/First consultation/.test(t), note: flat(t) };
+  return { ok: new RegExp(`Zed Uat${run}`).test(await dlg().getByLabel('Name').inputValue()) && !/First consultation/.test(t), note: flat(t) };
 });
 await step('Add: back on the booking with Zed chosen and the therapy list', async () => {
   await go(dlg().getByRole('button', { name: 'Female', exact: true }));
-  await go(dlg().getByRole('button', { name: /^Add Zed Uat/ }));
+  await go(dlg().getByRole('button', { name: new RegExp(`^Add Zed Uat${run}`) }));
   await p.waitForTimeout(1200);
   const t = await text();
-  return { ok: /Zed Uat/.test(t) && /Choose a therapy/.test(t), note: flat(t) };
+  return { ok: new RegExp(`Zed Uat${run}`).test(t) && /Choose a therapy/.test(t), note: flat(t) };
 });
 
 writeFileSync(`${OUT}/README.md`, `# UAT booking from + (#330)\n\nBase ${APP}, 375x812. Written by scripts/uat-330.mjs; it seeds its own "Uat" people and therapies. The hours-over step needs the centre's clock past closing.\n\n| # | Step | Result | Read off the page | Shot |\n|---|---|---|---|---|\n${lines.join('\n')}\n`);
