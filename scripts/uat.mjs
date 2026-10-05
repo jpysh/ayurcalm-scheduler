@@ -46,7 +46,7 @@ await step('The day: a "By time" chip beside the count opens the grouping, and c
 await step('Leave: the team\'s leave only, with one row for the centre\'s closed days', '/admin/timeoff', async () => {
   await p.getByRole('button', { name: /^All$/ }).click(); await p.waitForTimeout(500);
   const t = await text(p.locator('body'));
-  return { ok: !/Whole centre/.test(t) && /Centre closed days/.test(t), note: (t.match(/Centre closed days\n[^\n]+/) || [''])[0].replace('\n', ' | ') };
+  return { ok: !/Whole centre/.test(t) && /Centre closed days/.test(t), note: (t.match(/Centre closed days\n[^\n]+/) || [''])[0].replace(/\n/g, ' | ') };
 });
 await step('Centre closed days opens the holidays sheet', '/admin/timeoff', async () => {
   await go(p.getByRole('button', { name: /^Centre closed days/ }));
