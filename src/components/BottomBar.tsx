@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/apiBase";
 import { Menu, Search } from "lucide-react";
-import { BottomSearch, BottomSheet, DateRow, Group, ListGroup, Row, Seg, Btn } from "@/components/kit";
+import { BottomSearch, BottomSheet, DateRow, Group, ListGroup, Row, Seg, Btn, Tile } from "@/components/kit";
 
 /**
  * The phone frame from docs/design/phone.html (#66): one bar at the bottom, in
@@ -102,9 +102,9 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
         {/* What needs doing first, then the one main action, then the rest of what can be done here. */}
         {inbox?.need ? <div className="mb-3"><ListGroup><Row key="inbox" title={`${inbox.need} need you`} facts="Things to fix or decide" trailing="›" onClick={close(attention!.open)} /></ListGroup></div> : null}
         {plus ? <Btn kind="primary" onClick={close(plus.run)}>{plus.adds}</Btn> : null}
-        <div className="mt-3">
+        <div className="mt-2">
           <ListGroup>
-            {inbox && !inbox.need ? <Row key="inbox" title={`${inbox.info} to know`} facts="For your information" trailing="›" onClick={close(attention!.open)} /> : null}
+            {inbox && !inbox.need ? <Row key="inbox" title={`${inbox.info} to know`} trailing="›" onClick={close(attention!.open)} /> : null}
             <Row key="search" title={search.label} trailing="›" onClick={close(search.start)} />
             {onDay ? <Row key="day" title="Change day" facts={`${label(day)} · ${when}`} trailing="›" onClick={() => setSheet("day")} /> : null}
             {onDay ? <Row key="print" title="Print the day's sheets" facts={printing ? "Making the PDF…" : undefined} trailing="›" onClick={() => { setSheet(null); if (!printing) print(); }} /> : null}
@@ -117,12 +117,13 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
           </Group></div>
         ) : null}
         <div className="mt-3 pb-3">
-          <ListGroup title="Go to">
+          <div className="mb-1 pt-2 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">Go to</div>
+          <div className="grid grid-cols-2 gap-2">
             {MENU.filter(([key]) => !(onDay && key === "schedule")).flatMap(([key, name]) => [
-              <Row key={key} title={name} facts={hints[key]} trailing="›" onClick={() => { go(key); setSheet(null); }} />,
-              key === "settings" && helpWa ? <Row key="help" title="Help · WhatsApp" facts="Ask us anything" trailing="›" href={`https://wa.me/${helpWa}`} onClick={() => setSheet(null)} /> : null,
+              <Tile key={key} title={name} facts={hints[key]} onClick={() => { go(key); setSheet(null); }} />,
+              key === "settings" && helpWa ? <Tile key="help" title="Help · WhatsApp" facts="Ask us anything" href={`https://wa.me/${helpWa}`} onClick={() => setSheet(null)} /> : null,
             ])}
-          </ListGroup>
+          </div>
         </div>
       </BottomSheet> : null}
 
