@@ -70,7 +70,10 @@ async function signIn(page: Page) {
 async function openTab(page: Page, name: string) {
   await expect(async () => {
     if (await page.getByRole('dialog').count() === 0) await page.getByRole('button', { name: 'Menu', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: new RegExp(`^${name}\\b`) }).click({ timeout: 1000 });
+    const target = page.getByRole('dialog').getByRole('button', { name: new RegExp(`^${name}\\b`) });
+    // The menu has no "Back to the day" while the day is on screen: closing it is the same thing.
+    if (name === 'Back to the day' && await target.count() === 0 && await page.getByRole('dialog').getByText(/^Go to$/i).count() > 0) { await page.keyboard.press('Escape'); await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 2000 }); return; }
+    await target.click({ timeout: 1000 });
     await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 1000 });
   }).toPass({ timeout: 15000 });
 }

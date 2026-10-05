@@ -53,7 +53,7 @@ async function openTab(page: Page, name: string) {
     if (await dialog.count() > 0 && await target.count() === 0) { await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0, { timeout: 2000 }); }
     if (await dialog.count() === 0) await page.getByRole('button', { name: 'Menu', exact: true }).click();
     // The menu has no "Back to the day" while the day is on screen: closing it is the same thing.
-    if (name === 'Back to the day' && await target.count() === 0) { await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0, { timeout: 2000 }); return; }
+    if (name === 'Back to the day' && await target.count() === 0 && await page.getByRole('dialog').getByText(/^Go to$/i).count() > 0) { await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0, { timeout: 2000 }); return; }
     await target.click({ timeout: 1000 });
     await expect(dialog).toHaveCount(0, { timeout: 1000 });
   }).toPass({ timeout: 15000 });
