@@ -1,4 +1,4 @@
-import { Consequence, DateRow, Days, Empty, PickField, Foot, ListGroup, Row, Seg, Switch, Text, TimeList, TwoFoot } from "@/components/kit";
+import { Consequence, DateRow, Days, Empty, PickField, SheetNote, Foot, ListGroup, Row, Seg, Switch, Text, TimeList, TwoFoot } from "@/components/kit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
@@ -208,6 +208,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
             { title: 'Therapies', options: therapies.map((t) => ({ id: `Therapy:${String(t.id ?? t.name)}`, name: t.name })) },
             { title: 'Patients', options: patients.map((x) => ({ id: `Patient:${x.id}`, name: x.name })) },
           ]} />
+        {sheet === 'new' && newTimeOff.type !== 'Center' && !newTimeOff.entity ? <SheetNote>Choose who is away to save.</SheetNote> : null}
         <div className="grid grid-cols-2 gap-3">
           <DateRow label="From" value={newTimeOff.date} onChange={(v) => setNewTimeOff({ ...newTimeOff, date: v, endDate: newTimeOff.endDate < v ? v : newTimeOff.endDate })} />
           <DateRow label="To" value={newTimeOff.endDate} min={newTimeOff.date} onChange={(v) => setNewTimeOff({ ...newTimeOff, endDate: v })} />
