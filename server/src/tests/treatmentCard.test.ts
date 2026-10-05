@@ -98,7 +98,7 @@ async function main() {
     const suggested = ((await call('GET', `/appointments/suggest?date=${DAY}`)).suggestions as { patient_id: string; therapy_id: string; start_time: string; staff_id: string; room_id: string }[])
       .find((x) => x.patient_id === rekha.id || x.patient_id === sita.id);
     assert.ok(suggested, 'nobody staying was suggested for an almost empty day');
-    const one = { patient_id: suggested.patient_id, therapy_id: suggested.therapy_id, date: DAY, start_time: suggested.start_time, staff_id: suggested.staff_id, room_id: suggested.room_id };
+    const one = { patient_id: suggested.patient_id, therapy_id: suggested.therapy_id, date: DAY, start_time: suggested.start_time, staff_id: suggested.staff_id, room_id: suggested.room_id, confirm: true };
     await call('POST', '/appointments/one', one);
     const again = await fetch(`${API_BASE}/appointments/one`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(one) });
     assert.equal(again.status, 409, 'the same slot booked twice was not refused');
@@ -108,7 +108,7 @@ async function main() {
     assert.equal(times.length, 3, `expected three times for the chosen resident, got ${times.length}`);
     assert.ok(times.every((x) => x.patient_id === sita.id && x.therapy_id === therapy.id), 'a time for someone else was offered');
     assert.equal(new Set(times.map((x) => x.start_time)).size, 3, 'the three times are not different');
-    await call('POST', '/appointments/one', { patient_id: sita.id, therapy_id: therapy.id, date: DAY, start_time: times[2].start_time, staff_id: times[2].staff_id, room_id: times[2].room_id });
+    await call('POST', '/appointments/one', { patient_id: sita.id, therapy_id: therapy.id, date: DAY, start_time: times[2].start_time, staff_id: times[2].staff_id, room_id: times[2].room_id, confirm: true });
 
     // A therapy given by two (#273): each time comes with its second therapist, books with her, and is refused without her.
     const pair = await call('POST', '/therapies', { name: `${TAG} Pizhichil`, duration_minutes: 60, staff_required: 2 });

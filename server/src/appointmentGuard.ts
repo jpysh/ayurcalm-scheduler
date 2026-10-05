@@ -185,3 +185,43 @@ export function staffDay(ctx: DayContext) {
     return { staff_id: s.id, off: off ? off.label : null, busy };
   });
 }
+
+/**
+ * What the screen offers next to a refusal or a warning (#330). The server
+ * decides which; the screen only knows how to carry each kind out. A refusal
+ * with no way forward is a dead end.
+ */
+export type Action = {
+  kind: 'book_at' | 'set_date' | 'other_therapy' | 'add_staff' | 'allow_any_gender' | 'change_stay' | 'book_anyway';
+  label: string;
+  date?: string;
+  start_time?: string;
+  gender?: string;
+  therapy_id?: string;
+  patient_id?: string;
+};
+
+export type Soft = { reason: 'DAY_FULL' | 'SAME_THERAPY'; message: string; actions: Action[] };
+
+export const DEFAULT_MAX_PER_DAY = 4;
+
+/**
+ * Soft rules: a day with the resident's limit already reached, and the same
+ * therapy twice in a day. Asked, never refused: the admin may know better, so
+ * the booking goes through with `confirm`. A multi-day course books one a day
+ * through another route and is never asked.
+ */
+export function softWarnings(c: { id?: string; patient_id: string; therapy_id?: string }, ctx: DayContext): Soft[] {
+  const mine = ctx.appointments.filter((a) => a.patient_id === c.patient_id && a.id !== c.id);
+  const first = (ctx.patients.find((p) => p.id === c.patient_id)?.name || 'They').split(' ')[0];
+  const anyway: Action = { kind: 'book_anyway', label: 'Book anyway' };
+  const out: Soft[] = [];
+  const max = ctx.settings?.max_treatments_per_day ?? DEFAULT_MAX_PER_DAY;
+  if (mine.length >= max) out.push({ reason: 'DAY_FULL', message: `${first} already has ${mine.length} treatments that day.`, actions: [anyway] });
+  const twin = c.therapy_id ? mine.find((a) => a.therapy_id === c.therapy_id) : undefined;
+  if (twin) {
+    const name = ctx.therapies.find((t) => t.id === c.therapy_id)?.name.replace(/_/g, ' ') || 'that treatment';
+    out.push({ reason: 'SAME_THERAPY', message: `${first} already has ${name} at ${twin.start_time}.`, actions: [anyway] });
+  }
+  return out;
+}

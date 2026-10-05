@@ -8,13 +8,13 @@ import { renderDischarge } from './pdf/dischargePdf.js';
 import { dischargeOf, saveDischarge } from './discharge.js';
 import { staffWeek } from './staffWeek.js';
 import { newLinkToken } from './links.js';
-import { findConflict, HAPPENING, loadDay, nearestFreeTime, staffDay } from './appointmentGuard.js';
+import { findConflict, HAPPENING, loadDay, nearestFreeTime, softWarnings, staffDay, type Action } from './appointmentGuard.js';
 import { replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
 import { dietTimeline, startDietFrom, extendDiet } from './patientDiet.js';
 import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
 import { centreClock, eventClashes, type EventRow } from './availability.js';
 import { loadDietsForDay } from './dietResolution.js';
-import { bookingOptions, bookingSuggestions, bookingWho, cardChoices, nextConsultations, whyNoConsultation, whyNoTime } from './cardChoices.js';
+import { bookingOptions, bookingSuggestions, bookingWho, cardChoices, nextConsultations, notStaying, therapyFacts, whyNoConsultation, whyNoTime } from './cardChoices.js';
 import { historyOf } from './history.js';
 import { searchTreatments } from './search.js';
 import { residentDay } from './residentDay.js';
@@ -1568,6 +1568,12 @@ app.get('/appointments/options', async (req: Request, res: Response) => {
   res.json(out);
 });
 
+// The therapy list under the + sheet: each with when they last had it, and any already booked that day (#330).
+app.get('/appointments/therapies', async (req: Request, res: Response) => {
+  const q = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), patient_id: z.string().uuid() }).parse(req.query);
+  res.json({ therapies: await therapyFacts(q.date, q.patient_id, prisma) });
+});
+
 // The consultation a new patient is pre-booked into (#285 story 4): the next free doctor and room.
 app.get('/consultations/next', async (req: Request, res: Response) => {
   const q = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), now: z.string().regex(/^\d\d:\d\d$/).optional() }).parse(req.query);
@@ -1581,15 +1587,29 @@ app.post('/appointments/one', async (req: Request, res: Response) => {
   const b = z.object({
     patient_id: z.string().uuid(), therapy_id: z.string().uuid(), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     start_time: z.string().regex(/^\d\d:\d\d$/), staff_id: z.string().uuid(), co_staff_ids: z.array(z.string().uuid()).default([]), room_id: z.string().uuid(),
+    // "Book anyway": the daily limit and a repeated therapy are asked about, never refused.
+    confirm: z.boolean().default(false),
   }).parse(req.body);
   const therapy = await prisma.therapy.findUnique({ where: { id: b.therapy_id } });
   if (!therapy) { res.status(404).json({ error: 'Therapy not found' }); return; }
   const scheduled_date = new Date(`${b.date}T00:00:00.000Z`);
   const stay = await prisma.patientStay.findFirst({ where: { patient_id: b.patient_id, start_date: { lte: scheduled_date }, end_date: { gte: scheduled_date } } });
-  if (!stay) { res.status(409).json({ reason: 'NOT_STAYING', message: 'This patient is not staying on that day.' }); return; }
+  if (!stay) { res.status(409).json({ reason: 'NOT_STAYING', ...(await notStaying(b.patient_id, scheduled_date, prisma)), message: 'This patient is not staying on that day.' }); return; }
   const candidate = { scheduled_date, start_time: b.start_time, duration_minutes: therapy.duration_minutes, staff_id: b.staff_id, co_staff_ids: b.co_staff_ids, room_id: b.room_id, patient_id: b.patient_id, therapy_id: b.therapy_id };
-  const conflict = findConflict(candidate, await loadDay(scheduled_date, prisma));
-  if (conflict) { res.status(409).json(conflict); return; }
+  const ctx = await loadDay(scheduled_date, prisma);
+  const conflict = findConflict(candidate, ctx);
+  if (conflict) {
+    // Every refusal carries a way forward: the nearest time that works, else another therapy.
+    const alt = nearestFreeTime(candidate, ctx);
+    const actions: Action[] = [alt ? { kind: 'book_at', label: `Book at ${alt}`, date: b.date, start_time: alt } : { kind: 'other_therapy', label: 'Try another therapy' }];
+    res.status(409).json({ ...conflict, actions });
+    return;
+  }
+  const soft = softWarnings(candidate, ctx);
+  if (soft.length && !b.confirm) {
+    res.status(409).json({ soft: true, reason: soft[0].reason, message: soft.map((w) => w.message).join(' '), warnings: soft, actions: [{ kind: 'book_anyway', label: 'Book anyway' }] });
+    return;
+  }
   const appt = await prisma.appointment.create({ data: { ...candidate, session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
   res.status(201).json(appt);
 });

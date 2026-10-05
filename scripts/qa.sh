@@ -62,6 +62,7 @@ run residentStay     "A resident added in the app, with a stay and a diet plan, 
 run patientStories   "Meals by date, what a discharge summary lacks, package and accommodation, a shortened stay cancelled with its reason and undone, a leave planned later"
 run newPatient       "A new patient is saved with their details and a consultation booked through the guard, the booking sheet lists free therapists and rooms first, and patient search finds by name"
 run treatmentCard    "Every time and room a treatment card offers saves, a busy therapist is not offered, a no-show frees theirs, and History says what changed"
+run bookingRules    "Booking from +: a repeated therapy or a long day is asked about and books on Book anyway, and every dead end carries a way forward"
 run search           "Search finds a resident's treatments on every day in the window, in order, by name, room or any therapist, and leaves out cancelled ones"
 run residentDay      "A resident's card shows which day of their stay it is, today's treatments without cancelled ones, and meals as the day sheet prints them"
 run attention       "What needs you: patient items follow the rules, a changed 'when' or an off switch changes them, the locked rule stays on, and Reset restores the defaults"
