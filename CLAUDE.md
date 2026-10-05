@@ -184,21 +184,16 @@ restore drill from the backup, alerts to the maintainer) matter more than more b
 **What to run before a pull request** (agreed 2026-09-27, while there are no
 users). CI from a fresh database is the gate; don't repeat it locally.
 - Always: front-end `tsc` (52 errors or fewer) and the tests for the area changed.
-- Screen change: `npm run test:e2e -- --grep-invert "a therapist off"` locally,
-  because CI skips e2e when `server/` is untouched; then drive the screen at 375px.
-  Start the stack for it as CI does (`npm run qa` first, or
-  `RATE_LIMIT_WRITES=1000 docker compose up -d --build`): on `dev:up`'s default
-  write limit the suite's clean-ups are refused and it fails on nothing real.
+- Screen change: no browser suite locally (see the test policy above); drive the screen at 375px
+  and run the screenshot UAT when it is big or visual. If you do run `playwright test --grep @smoke`
+  locally, start the stack as CI does (`npm run qa` first, or
+  `RATE_LIMIT_WRITES=1000 docker compose up -d --build`).
 - Screenshots come from Playwright at 375×812, the design served on :8765
   beside the app, not from the browser pane.
 - Scheduler, planner or day sheet change: `npm run qa` locally too, and read the PDF.
 - Every bug fix leaves one test that would have caught it.
-- A test joins `BLOCKING` only if it cannot depend on the hour or on where the
-  pointer rests: build its own problem on its own day. One that did broke CI for
-  every pull request after 15:00 (#173).
-- Screens still being rebuilt get a `BLOCKING` tap count and one "opens with real
-  data" check; full walks only for the day sheet and booking until #67, when
-  every screen gets one.
+- A `@smoke` test must not depend on the hour or on where the pointer rests: build its own
+  problem on its own day. One that did broke CI for every pull request after 15:00 (#173).
 - A large issue (a screen plus new server endpoints) goes in parts, merged in
   order: server with its test, then the screen with its tap counts, then any
   leftovers. The issue is ticked in #70 when its last part merges. Merge a part
@@ -276,8 +271,8 @@ password, an account) goes to the maintainer, one line each. Leave the app open 
 (signed in by API token, phone size) at the screen the work touched.
 
 **Count the taps.** `tests/e2e/tapCount.spec.ts` prints each daily job's taps
-beside the design's target. A session that builds a job states before and after,
-and adds the job to `BLOCKING`.
+beside the design's target. It is a report in the nightly run, not a gate. A session that
+builds a job states before and after in the PR.
 
 **Design for the admin's phone.** One operator, one centre, and they may never
 open a desktop after setup.

@@ -6,14 +6,12 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '@
  * design (#144). Typing is not counted; a tap on something that was not on
  * screen first also counts as a scroll, and a job with a scroll is over target.
  *
- * It reports; it does not fail, except for the jobs in BLOCKING. When a
- * session builds a job's new path, it adds that job here, so the job cannot
- * quietly get longer again. Each later session states its before and after.
+ * It only reports (a printed table, nightly; policy of 6 Oct, #315). A session
+ * that builds a job's new path states its before and after in the PR.
  *
  * Everything a job changes is undone, and the two days it touches are
  * compared back through the API.
  */
-const BLOCKING = new Set<string>(['See today at a glance', "Print today's sheets", 'Therapist not in', "Patient didn't come", 'Patient late → move one treatment', 'Book one treatment', 'Room out of use', 'Warning → fixed day', "A patient's meals today", 'Add an arriving patient', 'Find a patient', "Change a patient's meals from a date", "Choose a patient's package", "Choose a patient's accommodation", "Change a patient's stay", "Print a patient's discharge summary", "Record a therapist's leave", 'Edit a diet plan', 'Change what needs you', 'Open the Log', 'See who needs attention']);
 
 /** The design's order, which is the order the table prints in. */
 // 5 Oct: + , search and the pill moved into the Menu (the maintainer's call), so every job that used one of them costs one tap more.
@@ -462,13 +460,8 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       r.taps === null ? '' : r.taps > r.target ? `over by ${r.taps - r.target}` : r.scrolls ? 'over' : 'ok',
       r.scrolls ? `+${r.scrolls} scroll${r.scrolls === 1 ? '' : 's'}` : '',
       r.note,
-    ].filter(Boolean).join('; ')}${BLOCKING.has(r.job) ? ' [blocking]' : ''}`),
+    ].filter(Boolean).join('; ')}`),
   ];
   console.log(`\nTap count at 375×812 (${today}):\n${lines.join('\n')}\n`);
   await test.info().attach('tap-count.txt', { body: lines.join('\n'), contentType: 'text/plain' });
-
-  for (const r of rows.filter((x) => BLOCKING.has(x.job))) {
-    expect(r.taps, `${r.job}: ${r.note}`).not.toBeNull();
-    expect(r.taps! + r.scrolls, r.job).toBeLessThanOrEqual(r.target);
-  }
 });

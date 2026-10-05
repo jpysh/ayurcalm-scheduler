@@ -97,7 +97,7 @@ async function build(call: Call) {
   return { therapist, resident };
 }
 
-test('a therapist off: the pill names it, its fix clears the day, and Undo puts the day back', async ({ page, request }) => {
+test('@smoke a therapist off: the pill names it, its fix clears the day, and Undo puts the day back', async ({ page, request }) => {
   test.setTimeout(120000);
   const call = await api(request);
   await tidy(call);

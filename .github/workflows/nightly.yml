@@ -1,0 +1,44 @@
+name: Nightly browser tests
+
+# Everything the PR gate does not run (#315). Advisory: nobody is blocked. A red
+# run files or updates one issue; one weekly "test repair" PR clears it.
+on:
+  schedule:
+    - cron: '30 21 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: RATE_LIMIT_WRITES=1000 docker compose up -d --build --wait
+      - id: run
+        continue-on-error: true
+        run: npx playwright test --grep-invert @smoke --reporter=line 2>&1 | tee nightly.log
+        shell: bash
+      - name: File or update the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          fails=$(grep -E '^\s+[0-9]+\) ' nightly.log | sort -u | head -60 || true)
+          taps=$(sed -n '/^Tap count at/,/^$/p' nightly.log | head -40)
+          n=$(gh issue list --state open --search '"Nightly browser tests" in:title' --json number -q '.[0].number')
+          if [ -z "$fails" ]; then
+            [ -n "$n" ] && gh issue comment "$n" --body "Green on $(date +%F). Closing." && gh issue close "$n"
+            exit 0
+          fi
+          body=$(printf 'Failing on %s ([run](%s/%s/actions/runs/%s)):\n\n```\n%s\n```\n\nTap-count report:\n\n```\n%s\n```\n' "$(date +%F)" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$fails" "$taps")
+          if [ -n "$n" ]; then gh issue comment "$n" --body "$body"
+          else gh issue create --title "Nightly browser tests" --body "$body"; fi

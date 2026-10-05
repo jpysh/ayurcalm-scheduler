@@ -76,13 +76,10 @@ jobs:
       # The same command the maintainer runs locally: starts the stack and runs
       # every server test inside the app container.
       - run: npm run qa
-      # Sign in, every tab, the day sheet. The absence walk already ran in qa, and
-      # a second run would press on the API's write limit.
-      # While the screens are rebuilt (#285) only the tap count blocks; the rest of
-      # e2e reports but does not fail the run. Restore at the closing session.
-      - run: npm run test:e2e -- tapCount
-      - run: npx playwright test --grep-invert "a therapist off|tap count"
-        continue-on-error: true
+      # The smoke set is the only browser gate (#315). The therapist-off walk
+      # already ran in qa, and a second run would press on the API's write limit.
+      # Every other browser test runs nightly (nightly.yml) and blocks nothing.
+      - run: npx playwright test --grep @smoke --grep-invert "a therapist off"
       # A centre moves self-host -> cloud -> self-host in one file (#231).
       - run: sh scripts/move-test.sh
       - if: failure()

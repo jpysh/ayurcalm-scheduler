@@ -70,7 +70,7 @@ test('signed-out visit to a tab goes to login', async ({ page }) => {
   await expect(page).toHaveURL(/\/login/);
 });
 
-test('admin signs in with Enter and every tab shows its content', async ({ page }) => {
+test('@smoke admin signs in with Enter and every tab shows its content', async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
   for (const [tab, text] of [
@@ -105,7 +105,7 @@ test('admin signs in with Enter and every tab shows its content', async ({ page 
   await expect(page.getByRole('dialog')).toContainText('Meals today', { timeout: 15000 });
 });
 
-test('day sheet PDF prints for today', async ({ page, request }) => {
+test('@smoke day sheet PDF prints for today', async ({ page, request }) => {
   await signIn(page);
   await passSetupIfShown(page);
   const token = await page.evaluate(() => localStorage.getItem('authToken'));
@@ -152,7 +152,7 @@ test('an edit to a room is still there after a reload', async ({ page }) => {
   await expect(activePanel(page)).not.toContainText(edited, { timeout: 15000 });
 });
 
-test('the booking sheet books a course of sessions in one go, and Undo takes them all back', async ({ page, request }) => {
+test('@smoke the booking sheet books a course of sessions in one go, and Undo takes them all back', async ({ page, request }) => {
   // Its own days in 2030 and its own patient and therapy: nothing on the seeded days can be in the way.
   const DAY = '2030-04-10';
   const TAG = 'Course';
@@ -204,7 +204,7 @@ test('the booking sheet books a course of sessions in one go, and Undo takes the
   }
 });
 
-test("the day's problems are named on the first screen", async ({ page, request }) => {
+test("@smoke the day's problems are named on the first screen", async ({ page, request }) => {
   // Its own day in 2030: the seeded problem is today's, and once the centre's
   // clock passes its last treatment there is nothing left to fix (#149).
   const DAY = '2030-03-20';
@@ -359,7 +359,7 @@ test('on a phone, lists are plain rows and a tap opens the edit sheet (#178)', a
   await expect(page.getByRole('dialog')).toContainText('Opens');
 });
 
-test('an admin who never finished setup is sent back to it (#60)', async ({ page, request }) => {
+test('@smoke an admin who never finished setup is sent back to it (#60)', async ({ page, request }) => {
   const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
   const headers = { Authorization: `Bearer ${token}` };
   const s = await (await request.get('/api/settings', { headers })).json();
