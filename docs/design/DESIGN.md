@@ -136,6 +136,10 @@ Every list, sheet and button has all of these designed, not left to default.
 - **Cancelled, never removed.** Anything the admin ends (a treatment after a shortened stay, a leave-affected slot) is marked cancelled with a reason and kept in the patient's record and audit trail.
 - **Decisions sit where they belong**: the suggestion is in the free slot, the fix is on the problem row.
 - **Confirm by undo, not by asking**, except for removal of history or anything that cannot be undone.
+- **A button that cannot work is disabled, and the sheet says why** in one line under the field that is missing. Every button in the foot follows the same rule. No error toast for something the form could have said first (#337).
+- **Forms group by kind, not by field.** Ask everything for one kind of thing, then the next: all treatment-day meals, then all rest-day meals (#338).
+- **Space under the last row clears the + and Menu buttons and no more.** The screen supplies it once; a list never adds its own (#335).
+- **Anything that changes the bar's height moves only at the very top of the page**, or the page can bounce between two states (#332). Test it by tapping the date from the bottom.
 - **Language:** "patient" (never "resident"), British spelling, sentence case, times in 24-hour, dates "Wed 30 Sept". No jargon, no raw ids, no snake_case.
 
 ## 9. Per-screen checklist
