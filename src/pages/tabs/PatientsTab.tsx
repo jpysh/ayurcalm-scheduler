@@ -264,12 +264,13 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   // The consultation they are pre-booked into: the next free doctor time from the day they arrive (story 4).
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [consult, setConsult] = useState<number | 'later'>(0);
+  const [why, setWhy] = useState('');
   const [changing, setChanging] = useState(false);
   useEffect(() => {
     if (!showAddPatient || !newPatient.arriving) return;
     setConsult(0); setChanging(false);
-    fetchJsonWithTimeout<{ slots: Slot[] }>(`${API_BASE}/consultations/next?date=${newPatient.arriving}${newPatient.arriving === today ? `&now=${clock(timezone)}` : ''}`)
-      .then((r) => setSlots((r.slots || []).filter((x) => x.date <= newPatient.leaving))).catch(() => setSlots([]));
+    fetchJsonWithTimeout<{ slots: Slot[]; why?: string }>(`${API_BASE}/consultations/next?date=${newPatient.arriving}${newPatient.arriving === today ? `&now=${clock(timezone)}` : ''}`)
+      .then((r) => { setSlots((r.slots || []).filter((x) => x.date <= newPatient.leaving)); setWhy(r.why || ''); }).catch(() => setSlots([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAddPatient, newPatient.arriving]);
   const toRow = (c: any): PatientRow => ({
@@ -415,7 +416,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         </div>
         <Switch label="Stays on site" note="Off for a day patient" on={newPatient.onSite} set={(onSite) => setNewPatient({ ...newPatient, onSite })} />
         {slots === null || slots.length === 0 ? (
-          slots?.length === 0 ? <p className={`mt-3 ${noteText}`}>No doctor is free before they leave, so no consultation is booked. Book one from their card.</p> : null
+          slots?.length === 0 ? <p className={`mt-3 ${noteText}`}>{why || 'No doctor is free before they leave, so no consultation is booked. Book one from their card.'}</p> : null
         ) : (
           <div className="mt-3 rounded-xl border p-3">
             <div className="flex items-center justify-between gap-3">

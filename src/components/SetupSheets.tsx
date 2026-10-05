@@ -25,8 +25,8 @@ export function RoomSheet({ room, open, onClose, amenityOptions, onSaved, remove
   room: UiRoom | null; open: boolean; onClose: () => void; amenityOptions: string[]; onSaved: (r: UiRoom) => void; remove: (r: UiRoom) => void;
 }) {
   const [name, setName] = useState(""); const [has, setHas] = useState<string[]>([]); const [busy, setBusy] = useState(false);
-  // A new room starts with everything the therapies need (#273 U2): with nothing ticked, no therapy fits any room and nothing books.
-  useEffect(() => { if (open) { setName(room?.name ?? ""); setHas(room?.amenities ?? amenityOptions); } }, [open, room]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A new room starts with nothing ticked: a consultation needs a BP monitor and an examination bed, which a therapy room does not have, so ticking everything would send doctors into it. "Something else…" adds equipment the list lacks.
+  useEffect(() => { if (open) { setName(room?.name ?? ""); setHas(room?.amenities ?? []); } }, [open, room]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = async () => {
     setBusy(true);
     try {
@@ -37,11 +37,11 @@ export function RoomSheet({ room, open, onClose, amenityOptions, onSaved, remove
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
   return (
-    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={room ? room.name : "Add room"} note={room ? "Change anything, then save." : "Everything is ticked to start. Untick what this room does not have."}
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={room ? room.name : "Add room"} note={room ? "Change anything, then save." : "Give it a name and tick what it has."}
       foot={<SheetFoot busy={busy} ok={!!name.trim()} save={save} label={room ? "Save the room" : "Add the room"} remove={room ? () => { onClose(); remove(room); } : undefined} removeLabel="Delete this room" />}>
       <Text label="Name" id="room-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Room 4 or Dhanvantari" />
       <Group label="What it has" note="A therapy that needs something is only booked into a room that has it.">
-        <Chips options={amenityOptions} value={has} onChange={setHas} addLabel="Something else…" />
+        <Chips options={[...new Set([...amenityOptions, ...has])]} value={has} onChange={setHas} addLabel="Something else…" />
       </Group>
     </BottomSheet>
   );

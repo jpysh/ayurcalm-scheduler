@@ -318,6 +318,16 @@ export type ConsultationSlot = { date: string; start_time: string; duration_minu
  * doctor and a room, from `fromISO` on, at times the guard accepts. The
  * patient does not exist yet, so nothing of theirs can clash.
  */
+/** Why a new resident has no consultation to book, when the cause is the set-up and not a busy doctor. */
+export async function whyNoConsultation(prisma: PrismaClient): Promise<string | undefined> {
+  const therapy = await prisma.therapy.findFirst({ where: { is_consultation: true } });
+  if (!therapy) return 'Add Consultation from the therapy library to book doctor visits.';
+  if (!(await prisma.staff.count({ where: { is_active: true, role: 'doctor' } }))) return 'Add a doctor in Team and rooms to book consultations.';
+  const rooms = await prisma.therapyRoom.findMany({ where: { is_active: true } });
+  if (!rooms.some((r) => therapy.required_amenities.every((a) => r.amenities.includes(a)))) return `No room is set up for consultations. Add a room that has ${therapy.required_amenities.map((a) => a.replace(/_/g, ' ')).join(' and ')}.`;
+  return undefined;
+}
+
 export async function nextConsultations(fromISO: string, nowMinutes: number | null, prisma: PrismaClient, limit = 5): Promise<ConsultationSlot[]> {
   const therapy = await prisma.therapy.findFirst({ where: { is_consultation: true } });
   if (!therapy) return [];
