@@ -321,7 +321,8 @@ async function noTimeWhy(ctx: Ctx, day: Date, nowMinutes: number | null, therapy
   }
   const why = over ? "Today's hours are over." : `No free time for ${patient.name.split(' ')[0]} that day.`;
   if (!next) return { why: `${why} Nothing is free for the rest of their stay.`, actions: [other, { kind: 'change_stay', label: 'Change their stay', patient_id: patient.id }] };
-  const tomorrow = next.date.getTime() - day.getTime() === DAY_MS;
+  // 'Tomorrow' only when the sheet is on today (it sends the clock only then); on another day it is a date.
+  const tomorrow = nowMinutes !== null && next.date.getTime() - day.getTime() === DAY_MS;
   return { why, actions: [{ kind: 'book_at', label: `Book ${tomorrow ? 'tomorrow' : dayLabel(next.date)} at ${next.start_time}`, date: next.date.toISOString().slice(0, 10), start_time: next.start_time }, other] };
 }
 

@@ -15,7 +15,7 @@ Format: **Outcome** · **Trigger** · **First view** (facts a decision needs, no
 | 2 | Print the day sheet | 1 → 2 (5 Oct, Print in the Menu) |
 | 3 | Fix the day when a therapist or room drops out | 2 → 2 |
 | 4 | Add an arriving patient | 4+ → 2 (3 walked, 6 Oct: + is on the bar) |
-| 5 | Book or move a treatment | 2 → 3 |
+| 5 | Book or move a treatment | 2 → 4 |
 | 6 | Find a patient or a fact | 2 → 2 |
 | 7 | Set or change meals, by date | 4 → 3 |
 | 8 | Discharge a patient | 5 → 3 |
@@ -89,7 +89,7 @@ Each story walked on a 375 × 812 phone against a fresh demo centre; taps from `
 | 2 | Print the day sheet | Menu, Print | 2 | 2 | toast with Open and Share; sheet says "patient" |
 | 3 | Fix the day | pill → Move all | 2 | 2 | who, what breaks, and the plan before applying; Undo |
 | 4 | Add an arriving patient | + → gender → Add | 3 | 2 | four fields, consultation pre-booked; the third tap is the gender, which nothing preselects (#283) |
-| 5 | Book or move | + → who → Book | 3 | 3 | five suggestions, search above the keyboard, every line editable |
+| 5 | Book or move | + → who → therapy → Book | 4 | 4 | five suggestions, search above the keyboard, no therapy chosen for them (#330), every line editable; a second therapy for the same patient is Add another → therapy → Book (3) |
 | 6 | Find | Search → the person | 2 | 2 | result with the fact asked for |
 | 7 | Meals by date | card → Diet → plan → Start | 3 | 3 | timeline of plans to the leaving date; Today and Tomorrow chips |
 | 8 | Discharge | card → Discharge summary → Print | 2 | 3 | "1 of 8 ready", Print always on |

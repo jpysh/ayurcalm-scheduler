@@ -387,7 +387,8 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
     setBooked({ text: `${sessions} × ${therapyName} at ${time}.` });
     toastBooked(`Booked ${first}: ${sessions} × ${therapyName} at ${time}`, made);
   };
-  const toastBooked = (text: string, ids: string[]) => toast(text, { duration: 8000, action: { label: "Undo", onClick: async () => {
+  // At the top: the sheet stays open on Booked, and its buttons are where a bottom toast would land.
+  const toastBooked = (text: string, ids: string[]) => toast(text, { duration: 8000, position: "top-center", action: { label: "Undo", onClick: async () => {
     await Promise.all(ids.map((id) => fetch(`${API_BASE}/appointments/${id}`, { method: "DELETE" })));
     setBooked(null);
     await refresh();
@@ -406,7 +407,8 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   const nameOf = (l: Option[] | undefined, id: string) => l?.find((o) => o.id === id)?.name || "";
   const weekday = new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
   const long = (facts?.length ?? 0) > 12;
-  const listed = (facts || []).filter((t) => !long || t.repeat);
+  // The last one had comes first; what is already booked that day stays in view, greyed, so a repeat is seen before it is chosen.
+  const listed = (facts || []).filter((t) => !long || t.repeat || t.taken).sort((a, b) => Number(b.repeat) - Number(a.repeat));
   const matching = (facts || []).filter((t) => say(t.name).toLowerCase().includes(tq.trim().toLowerCase()));
   const when = `${date === today ? "" : `${weekday} `}${time}`;
   const label = !therapyId ? "Choose a therapy" : !slot ? `Book ${first}` : warnings.length ? `Book anyway, ${sessions > 1 ? `${sessions} days from ` : ""}${when}` : `Book ${first}, ${sessions > 1 ? `${sessions} days from ` : ""}${when}`;
