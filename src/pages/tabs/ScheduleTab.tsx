@@ -25,7 +25,7 @@ const nowInTZ = (timeZone: string) => {
 };
 
 /** The Schedule screen, and the day sheets the bottom bar prints for the day it is on. */
-export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime, refreshDay, movedFrom, problems, showDay, openResident }: Record<string, any>) {
+export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime, refreshDay, movedFrom, problems, showDay, openResident, staffCount, addTherapist }: Record<string, any>) {
   const [view, setView] = useState<DayView>("time");
   const [query, setQuery] = useState("");
   // Search is its own screen over every day (#165); the day list does not filter.
@@ -158,7 +158,8 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
   );
 
   const bookSheet = (
-    <BookSheet open={booking} onClose={() => setBooking(false)} day={dayKeyMemo} today={ymdInTZ(new Date())} isToday={isToday} nowMinutes={now} patient={bookFor}
+    <BookSheet open={booking} onClose={() => setBooking(false)} day={dayKeyMemo} today={ymdInTZ(new Date())} isToday={isToday} nowMinutes={now} patient={bookFor} rev={staffCount}
+      onAction={addTherapist} openResident={openResident}
       refresh={() => refreshDay(dayKeyMemo)} />
   );
 

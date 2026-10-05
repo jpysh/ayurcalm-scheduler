@@ -8,10 +8,11 @@ export function useStaffScreen({ staff, setStaff, therapies, requestDelete }: {
   requestDelete: (kind: "staff", id: string, name?: string) => void;
 }) {
   const [open, setOpen] = useState<UiStaff | "new" | null>(null);
+  const [preset, setPreset] = useState<{ gender?: "Female" | "Male"; gives?: string[] }>();
   const dialogs = (
-    <PersonSheet person={open === "new" ? null : open} open={!!open} onClose={() => setOpen(null)} therapies={therapies}
+    <PersonSheet person={open === "new" ? null : open} open={!!open} onClose={() => setOpen(null)} therapies={therapies} preset={preset}
       onSaved={(x) => setStaff((prev) => prev.some((s) => s.id === x.id) ? prev.map((s) => s.id === x.id ? x : s) : [...prev, x])}
       remove={(s) => requestDelete("staff", String(s.id), s.name)} />
   );
-  return { dialogs, openAdd: () => setOpen("new"), openEdit: (id: string) => { const s = staff.find((x) => String(x.id) === id); if (s) setOpen(s); } };
+  return { dialogs, openAdd: (p?: { gender?: "Female" | "Male"; gives?: string[] }) => { setPreset(p); setOpen("new"); }, openEdit: (id: string) => { const s = staff.find((x) => String(x.id) === id); if (s) setOpen(s); } };
 }

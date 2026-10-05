@@ -305,12 +305,12 @@ async function noTimeWhy(ctx: Ctx, day: Date, nowMinutes: number | null, therapy
     // The gender rule is the cause when, without it, there would be enough hands.
     if (gendered && able >= needed) {
       return { why: team, actions: [
-        { kind: 'add_staff', label: `Add a ${patient.gender === 'female' ? 'female' : 'male'} therapist`, gender: patient.gender },
+        { kind: 'add_staff', label: `Add a ${patient.gender === 'female' ? 'female' : 'male'} therapist`, gender: patient.gender, therapy_id: therapy.id },
         { kind: 'allow_any_gender', label: `Allow any gender for ${therapy.name.replace(/_/g, ' ')}`, therapy_id: therapy.id },
         other,
       ] };
     }
-    return { why: team, actions: [{ kind: 'add_staff', label: 'Add a therapist' }, other] };
+    return { why: team, actions: [{ kind: 'add_staff', label: 'Add a therapist', therapy_id: therapy.id }, other] };
   }
   const next = await nextFreeSlot(day, stay.end_date, therapy, patient.id, prisma);
   // The hours are over when the day would have had a time but for the clock.

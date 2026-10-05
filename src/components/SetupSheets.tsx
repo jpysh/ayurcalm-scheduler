@@ -50,16 +50,19 @@ export function RoomSheet({ room, open, onClose, amenityOptions, onSaved, remove
 // ---- Therapists and doctors ----
 export const personSub = (s: UiStaff) => [s.role === "doctor" ? "Doctor" : "Therapist", s.status !== "Active" ? "not working here now" : `${s.specializations.length} ${s.specializations.length === 1 ? "therapy" : "therapies"}`].join(" · ");
 
-export function PersonSheet({ person, open, onClose, therapies, onSaved, remove }: {
+export function PersonSheet({ person, open, onClose, therapies, onSaved, remove, preset }: {
   person: UiStaff | null; open: boolean; onClose: () => void; therapies: UiTherapy[]; onSaved: (s: UiStaff) => void; remove: (s: UiStaff) => void;
+  /** A new person started from a refusal (#330): the gender and therapy the booking is short of. */
+  preset?: { gender?: "Female" | "Male"; gives?: string[] };
 }) {
   const [name, setName] = useState(""); const [role, setRole] = useState<"therapist" | "doctor">("therapist");
   const [gender, setGender] = useState<"Female" | "Male">("Female"); const [gives, setGives] = useState<string[]>([]);
   const [phone, setPhone] = useState(""); const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!open) return;
-    setName(person?.name ?? ""); setRole(person?.role ?? "therapist"); setGender(person?.gender === "Male" ? "Male" : "Female");
-    setGives(person?.specializations ?? []); setPhone(person?.phone ?? "");
+    setName(person?.name ?? ""); setRole(person?.role ?? "therapist"); setGender(person ? (person.gender === "Male" ? "Male" : "Female") : preset?.gender ?? "Female");
+    setGives(person?.specializations ?? preset?.gives ?? []); setPhone(person?.phone ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, person]);
   const save = async () => {
     setBusy(true);
