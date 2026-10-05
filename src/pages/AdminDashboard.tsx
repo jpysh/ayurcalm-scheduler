@@ -627,14 +627,12 @@ const AdminDashboard = () => {
           </div>, { duration: 10000 });
         }}
         plus={plusFor}
-        view={scheduleScreen.view}
-        setView={scheduleScreen.setView}
         // One search: on Patients it filters that list, anywhere else it searches the day.
         search={['team', 'therapies', 'events'].includes(activeTab)
           ? { query: listQuery, setQuery: setListQuery, on: listSearching, setOn: setListSearching, placeholder: activeTab === 'team' ? 'Search the team and rooms' : `Search ${activeTab}`, label: `Search ${activeTab === 'team' ? 'the team' : activeTab}`, start: () => setListSearching(true) }
           : activeTab === 'patients'
           ? { query: patientsScreen.query, setQuery: patientsScreen.setQuery, on: patientsScreen.searching, setOn: patientsScreen.setSearching, placeholder: 'Search patients', label: 'Search patients', start: () => patientsScreen.setSearching(true) }
-          : { query: scheduleScreen.query, setQuery: scheduleScreen.setQuery, on: scheduleScreen.searching, setOn: scheduleScreen.setSearching, placeholder: 'Name, therapy or room', label: 'Search treatments', start: () => { go('schedule'); scheduleScreen.setSearching(true); } }}
+          : { query: scheduleScreen.query, setQuery: scheduleScreen.setQuery, on: scheduleScreen.searching, setOn: scheduleScreen.setSearching, placeholder: 'Name, therapy or room', label: 'Search', hint: 'Patients, therapists, treatments, any day', start: () => { go('schedule'); scheduleScreen.setSearching(true); } }}
         // A patient with nothing booked is a rest day, not a note (#144).
         attention={{
           fix: dayCheck.problems.filter((p) => p.problem_class === 'blocking').length + attention.items.filter((i) => i.kind === 'action').length,

@@ -39,11 +39,8 @@ type Props = {
   printing: boolean;
   /** What + adds on this screen ("Book a treatment", "New patient"); none on a screen with nothing to add. */
   plus: { adds: string; run: () => void } | null;
-  /** How the day is grouped (#62). */
-  view: string;
-  setView: (v: "time" | "therapist" | "room" | "resident") => void;
   /** The one search: on the day it filters the day, on Patients the list. */
-  search: { query: string; setQuery: (q: string) => void; on: boolean; setOn: (on: boolean) => void; placeholder: string; label: string; start: () => void };
+  search: { query: string; setQuery: (q: string) => void; on: boolean; setOn: (on: boolean) => void; placeholder: string; label: string; /** What it reaches, when the name alone does not say. */ hint?: string; start: () => void };
   /** The attention pill: what is waiting on the day, and where tapping goes. */
   attention?: { fix: number; done: number; note: number; open: () => void } | null;
 };
@@ -52,7 +49,7 @@ const label = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 const shift = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
 
-export function BottomBar({ activeTab, go, day, today, now, setDay, print, printing, plus, view, setView, search, attention }: Props) {
+export function BottomBar({ activeTab, go, day, today, now, setDay, print, printing, plus, search, attention }: Props) {
   const [sheet, setSheet] = useState<"menu" | "day" | null>(null);
   // Live subtitles, read when the menu opens (#67): who is in house, who is not in.
   const [hints, setHints] = useState<Record<string, string>>({});
@@ -105,17 +102,11 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
         <div className="mt-2">
           <ListGroup>
             {inbox && !inbox.need ? <Row key="inbox" title={`${inbox.info} to know`} trailing="›" onClick={close(attention!.open)} /> : null}
-            <Row key="search" title={search.label} trailing="›" onClick={close(search.start)} />
+            <Row key="search" title={search.label} facts={search.hint} trailing="›" onClick={close(search.start)} />
             {onDay ? <Row key="day" title="Change day" facts={`${label(day)} · ${when}`} trailing="›" onClick={() => setSheet("day")} /> : null}
             {onDay ? <Row key="print" title="Print the day's sheets" facts={printing ? "Making the PDF…" : undefined} trailing="›" onClick={() => { setSheet(null); if (!printing) print(); }} /> : null}
           </ListGroup>
         </div>
-        {onDay ? (
-          <div className="mt-3"><Group label="Show the day by">
-            <Seg<"time" | "therapist" | "room" | "resident"> options={[["time", "Time"], ["therapist", "Therapist"], ["room", "Room"], ["resident", "Patient"]]} value={view as "time"}
-              onChange={(v) => { setView(v); setSheet(null); }} />
-          </Group></div>
-        ) : null}
         <div className="mt-3 pb-3">
           <div className="mb-1 pt-2 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">Go to</div>
           <div className="grid grid-cols-2 gap-2">

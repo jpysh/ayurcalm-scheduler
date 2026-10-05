@@ -10,13 +10,16 @@ import { HolidaysSheet } from "@/components/HolidaysSheet";
 const sortKey = (h: UiTimeOff) => h.startDate || h.date || '';
 
 /** Leave (#285 story 9): one row each, who and when; a tap opens the same sheet that adds one. */
-const TimeOffTab = ({ timeOffs, viewMode, setViewMode, visibleRows, totalRef, nameOf, isFullDay, weeklyLabel, openEdit }: {
+const TimeOffTab = ({ timeOffs, viewMode, setViewMode, visibleRows, totalRef, nameOf, isFullDay, weeklyLabel, openEdit, onHolidays }: {
   timeOffs: UiTimeOff[]; viewMode: 'all' | 'upcoming' | 'past'; setViewMode: (v: 'all' | 'upcoming' | 'past') => void;
   visibleRows: number; totalRef: { current: number }; nameOf: (h: UiTimeOff) => string;
-  isFullDay: (h: UiTimeOff) => boolean; weeklyLabel: (w?: UiTimeOff['weekdays']) => string; openEdit: (h: UiTimeOff) => void;
+  isFullDay: (h: UiTimeOff) => boolean; weeklyLabel: (w?: UiTimeOff['weekdays']) => string; openEdit: (h: UiTimeOff) => void; onHolidays: () => void;
 }) => {
   const today = new Date(new Date().toDateString());
-  const rows = timeOffs.filter((h) => {
+  // The centre's closed days are set once a year and live in their own sheet; this list is the team's, which changes daily.
+  const closed = timeOffs.filter((h) => h.type === 'Center').sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+  const nextClosed = closed.find((h) => new Date(sortKey(h)) >= today);
+  const rows = timeOffs.filter((h) => h.type !== 'Center').filter((h) => {
     if (viewMode === 'all') return true;
     const start = sortKey(h) ? new Date(sortKey(h)) : undefined;
     const endRaw = h.endDate || h.date;
@@ -28,8 +31,9 @@ const TimeOffTab = ({ timeOffs, viewMode, setViewMode, visibleRows, totalRef, na
   return (
     <div data-testid="timeoff-table">
       <PageHead title="Leave" note={`${rows.length} ${viewMode === 'all' ? '' : viewMode}`.trim()} />
+      <div className="mb-3"><ListGroup><Row title="Centre closed days" facts={nextClosed ? `Next: ${nextClosed.description || 'Closed'}, ${leaveWhen(nextClosed, true)}` : 'None coming up'} trailing="›" onClick={onHolidays} /></ListGroup></div>
       <Seg<'upcoming' | 'past' | 'all'> value={viewMode} onChange={setViewMode} options={[['upcoming', 'Upcoming'], ['past', 'Past'], ['all', 'All']]} />
-      {rows.length === 0 ? <Empty text={viewMode === 'past' ? 'No past leave.' : 'No leave booked. Tap + to add some.'} /> : (
+      {rows.length === 0 ? <Empty text={viewMode === 'past' ? 'No past leave.' : 'No leave booked. Open the menu to add some.'} /> : (
         <ListGroup>
           {rows.slice(0, visibleRows).map((h) => (
             <Row key={h.id} title={nameOf(h)} facts={[leaveWhen(h, isFullDay(h)), h.recurrence === 'weekly' ? weeklyLabel(h.weekdays) : '', h.description].filter(Boolean).join(' · ')} onClick={() => openEdit(h)} />
@@ -136,7 +140,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
 
   const tab = (
     <TimeOffTab timeOffs={timeOffs} viewMode={holidayViewMode} setViewMode={setHolidayViewMode} visibleRows={visibleTimeOffRows} totalRef={timeoffTotalRef}
-      nameOf={nameOf} isFullDay={isFullDay} weeklyLabel={weeklyLabel} openEdit={openEdit} />
+      nameOf={nameOf} isFullDay={isFullDay} weeklyLabel={weeklyLabel} openEdit={openEdit} onHolidays={() => setShowHolidays(true)} />
   );
 
   /** Records the leave; the day is planned now (the plan is shown to accept) or left waiting on the pill. */
@@ -200,7 +204,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
           groups={[
             { title: 'Therapists and doctors', options: staff.map((x) => ({ id: `Staff:${x.id}`, name: x.name })) },
             { title: 'Rooms', options: roomsList.map((r) => ({ id: `Room:${r.id}`, name: r.name })) },
-            { title: 'The whole centre', options: [{ id: 'Center:All', name: 'The centre is closed' }] },
+            { title: 'The whole centre', options: [{ id: 'Center:All', name: 'Closed for a day' }] },
             { title: 'Therapies', options: therapies.map((t) => ({ id: `Therapy:${String(t.id ?? t.name)}`, name: t.name })) },
             { title: 'Patients', options: patients.map((x) => ({ id: `Patient:${x.id}`, name: x.name })) },
           ]} />
