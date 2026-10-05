@@ -45,6 +45,7 @@ async function tidy(prisma: PrismaClient) {
   await prisma.therapyRoom.deleteMany({ where: { name: { startsWith: TAG } } });
   await prisma.therapy.deleteMany({ where: { name: { startsWith: TAG } } });
   await prisma.dietTemplate.deleteMany({ where: { name: { startsWith: TAG } } });
+  await prisma.programEvent.deleteMany({ where: { activity_name: { startsWith: TAG } } });
 }
 
 /** Dark pixels in each box between two ruled lines, for one greyscale page. */
@@ -152,6 +153,13 @@ async function main() {
     assert.ok(!rotaText.includes('Nasyacancel'), 'A cancelled treatment printed on the therapist sheet');
     assert.match(rotaText, /DIDN'T COME · Sheettest Shirodhara/, "A no-show is not marked on the therapist sheet");
 
+    // Two events that start together print by end time, then name, never in the
+    // order the database returns them: a move between installs reorders rows and
+    // the notice board must not change (#231). Longer one is stored, and named, first.
+    for (const [activity_name, end_time] of [[`${TAG} A long`, '09:30'], [`${TAG} B short`, '09:00']]) {
+      await prisma.programEvent.create({ data: { date: day, start_time: '08:30', end_time, activity_name, required_amenities: [], weekdays: [], patient_ids: [], staff_ids: [] } });
+    }
+
     const pdfPath = join(dir, 'sheet.pdf');
     writeFileSync(pdfPath, await generateDailySchedulePdf(DAY, prisma));
 
@@ -160,6 +168,7 @@ async function main() {
     const text = execFileSync('pdftotext', ['-raw', pdfPath, '-']).toString().replace(/\s+/g, ' ');
 
     assert.ok(!text.includes('Nasyacancel'), 'A cancelled treatment printed on the day sheet');
+    assert.ok(text.indexOf(`${TAG} B short 08:30`) < text.indexOf(`${TAG} A long 08:30`), 'Events starting together are not in end-time order');
     assert.match(text, /18:00 DIDN'T COME · Sheettest Shirodhara/, 'A no-show is not marked on the day sheet');
     // The events line is everything before the table's first heading.
     assert.doesNotMatch(text.split(' Patient ')[0], /\d+m\b/, 'An event for everyone still prints as a length, not its window');
