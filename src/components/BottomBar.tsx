@@ -147,24 +147,52 @@ export function WeekStrip({ day, today, setDay }: { day: string; today: string; 
   const centre = Math.abs(weeksBetween(weekOf(day), weekOf(today))) > 20 ? weekOf(day) : weekOf(today);
   const weeks = Array.from({ length: 53 }, (_, i) => shift(centre, (i - 26) * 7));
   const box = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(false);
   const first = useRef(true);
   useLayoutEffect(() => {
-    const el = box.current; if (!el) return;
+    const el = box.current; if (!el || compact) return;
     const left = (weeks.indexOf(weekOf(day))) * el.clientWidth;
     if (Math.abs(el.scrollLeft - left) > 4) el.scrollTo({ left, behavior: first.current ? "auto" : "smooth" });
     first.current = false;
-  }, [day, centre]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [day, centre, compact]); // eslint-disable-line react-hooks/exhaustive-deps
   // The heading names the week on show, not the chosen day, as Apple Calendar does while you swipe.
   const [shown, setShown] = useState(weekOf(day));
   useEffect(() => setShown(weekOf(day)), [day]); // eslint-disable-line react-hooks/exhaustive-deps
   const month = new Date(`${shift(shown, 3)}T00:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+
+  // Past the first screenful the week folds to one line, as Apple Calendar does, and hands the rows back their room (#313 follow-up).
+  // Two thresholds so a flick does not flip it; the list is moved by exactly what the strip lost so nothing jumps.
+  const bar = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const on = () => setCompact((c) => (c ? window.scrollY > 40 : window.scrollY > 140));
+    window.addEventListener("scroll", on, { passive: true });
+    return () => window.removeEventListener("scroll", on);
+  }, []);
+  const height = useRef(0);
+  useLayoutEffect(() => {
+    const el = bar.current; if (!el) return;
+    const h = el.offsetHeight;
+    if (height.current && h !== height.current && window.scrollY > 0) window.scrollBy(0, h - height.current);
+    height.current = h;
+  }, [compact]);
+  // The day's hour headers stick just under the strip: publish where it ends, whatever its height is.
+  useLayoutEffect(() => {
+    const el = bar.current; if (!el) return;
+    const put = () => document.documentElement.style.setProperty("--strip-h", `${el.offsetHeight}px`);
+    put();
+    const ro = new ResizeObserver(put); ro.observe(el);
+    return () => { ro.disconnect(); document.documentElement.style.removeProperty("--strip-h"); };
+  }, []);
+  const dayName = new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   return (
-    <div className="sticky top-0 z-[4] -mx-1 border-b bg-background px-1 pt-2">
+    <div ref={bar} className="sticky top-0 z-[4] -mx-1 border-b bg-background px-1 pt-2">
       <div className="flex min-h-6 items-center justify-between px-1 text-sm">
-        <b className="text-base">{month}</b>
+        {compact
+          ? <button type="button" className="-my-2.5 min-h-11 text-left text-base font-bold" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>{dayName}<span className="ml-1 font-normal text-muted-foreground">· week ›</span></button>
+          : <b className="text-base">{month}</b>}
         {day !== today ? <button type="button" className="min-h-11 px-2 font-semibold text-primary -my-2.5" onClick={() => setDay(today)}>Today</button> : null}
       </div>
-      <div ref={box} aria-label="Week" onScroll={(e) => { const el = e.currentTarget; const w = weeks[Math.round(el.scrollLeft / el.clientWidth)]; if (w && w !== shown) setShown(w); }} className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div ref={box} aria-label="Week" onScroll={(e) => { const el = e.currentTarget; const w = weeks[Math.round(el.scrollLeft / el.clientWidth)]; if (w && w !== shown) setShown(w); }} className={`${compact ? "hidden" : "flex"} snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}>
         {weeks.map((w) => (
           <div key={w} className="flex w-full flex-none snap-start justify-between">
             {Array.from({ length: 7 }, (_, i) => shift(w, i)).map((d) => {
