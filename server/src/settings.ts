@@ -62,6 +62,7 @@ const settingsSchema = z.object({
   patient_support_whatsapp: z.string().trim().regex(/^\d{8,15}$/, 'Use international format with no + or leading zero, e.g. 420777558262').or(z.literal('')).nullish(),
   setup_complete: z.boolean().optional(),
   enforce_gender_match: z.boolean().optional(),
+  max_treatments_per_day: z.number().int().min(1).max(12).optional(),
   show_footer: z.boolean().optional(),
   letterhead: letterheadSchema.optional(),
 }).refine(

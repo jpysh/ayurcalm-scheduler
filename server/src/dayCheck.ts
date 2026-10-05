@@ -27,7 +27,7 @@
  *                   booked is often a rest day by design.
  */
 import { PrismaClient } from '@prisma/client';
-import { findConflict, loadDay, type Candidate, type DayContext } from './appointmentGuard.js';
+import { DEFAULT_MAX_PER_DAY, findConflict, loadDay, type Candidate, type DayContext } from './appointmentGuard.js';
 import { planDay, type Move, type Pin } from './replan.js';
 import { centreClock, startedBefore, toMinutes, type Clock } from './availability.js';
 
@@ -345,6 +345,21 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
       choices: [],
       no_fix_reason: null,
       cost: COST.IDLE_RESIDENT,
+    });
+  }
+
+  // Over the daily limit (#330): a note, since the admin may have chosen it with Book anyway.
+  const max = ctx.settings?.max_treatments_per_day ?? DEFAULT_MAX_PER_DAY;
+  for (const stay of stays) {
+    const n = appointments.filter((a) => a.patient_id === stay.patient_id).length;
+    if (n <= max) continue;
+    raw.push({
+      id: `DAY_FULL:${stay.patient_id}`, kind: 'DAY_FULL', problem_class: 'worth_knowing',
+      who: nameOfPatient(stay.patient_id), start_time: null,
+      what: `${n} treatments today, more than the usual ${max}.`,
+      group_key: 'DAY_FULL', group_label: 'Patients with a long day',
+      appointment_id: null, patient_id: stay.patient_id, patient_name: nameOfPatient(stay.patient_id), staff_id: null,
+      blocked_by_preferred_staff: false, fix: null, choices: [], no_fix_reason: null, cost: COST.IDLE_RESIDENT,
     });
   }
 

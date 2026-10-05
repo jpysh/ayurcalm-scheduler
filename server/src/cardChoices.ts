@@ -5,7 +5,7 @@
  * refuse. The browser only shows these.
  */
 import type { PrismaClient } from '@prisma/client';
-import { findConflict, loadDay, type Candidate } from './appointmentGuard.js';
+import { findConflict, loadDay, softWarnings, type Action, type Candidate, type Soft } from './appointmentGuard.js';
 
 export type Kind = 'time' | 'staff' | 'room' | 'therapy';
 /** `now` marks the treatment as it stands, listed first so the admin sees what they change from (#201). */
@@ -220,7 +220,7 @@ function assign(ctx: Ctx, day: Date, t: number, therapy: Ctx['therapies'][number
 }
 
 export type Option = { id: string; name: string; free: boolean; why?: string };
-export type BookingOptions = { times: Suggestion[]; staff: Option[]; rooms: Option[]; why?: string };
+export type BookingOptions = { times: Suggestion[]; staff: Option[]; rooms: Option[]; why?: string; actions: Action[]; warnings: Soft[] };
 
 /**
  * The one booking sheet's lists (#285 story 5): every free time for this patient
@@ -235,7 +235,7 @@ export async function bookingOptions(dayISO: string, nowMinutes: number | null, 
   const patient = ctx.patients.find((x) => x.id === pick.patient_id);
   if (!therapy || !patient) return null;
   const stay = await prisma.patientStay.findFirst({ where: { patient_id: patient.id, start_date: { lte: day }, end_date: { gte: day } } });
-  if (!stay) return { times: [], staff: [], rooms: [], why: `${patient.name.split(' ')[0]} is not staying on that day.` };
+  if (!stay) return { times: [], staff: [], rooms: [], ...(await notStaying(patient.id, day, prisma)), warnings: [] };
   const open = toM(ctx.settings?.opening_time || '09:00');
   const close = toM(ctx.settings?.closing_time || '18:00');
   const times: Suggestion[] = [];
@@ -244,7 +244,8 @@ export async function bookingOptions(dayISO: string, nowMinutes: number | null, 
     const a = assign(ctx, day, t, therapy, patient.id);
     if (a) times.push(a);
   }
-  if (!times.length) return { times, staff: [], rooms: [], why: await whyNoTime(dayISO, pick, prisma) };
+  const warnings = softWarnings({ patient_id: patient.id, therapy_id: therapy.id }, ctx);
+  if (!times.length) return { times, staff: [], rooms: [], ...(await noTimeWhy(ctx, day, nowMinutes, therapy, patient, stay, prisma)), warnings };
   const chosen = times.find((x) => x.start_time === at) || times[0];
   const base: Candidate = { scheduled_date: day, start_time: chosen.start_time, duration_minutes: chosen.duration_minutes, staff_id: chosen.staff_id, co_staff_ids: chosen.co_staff_ids, room_id: chosen.room_id, patient_id: patient.id, therapy_id: therapy.id };
   const t0 = toM(chosen.start_time);
@@ -259,7 +260,93 @@ export async function bookingOptions(dayISO: string, nowMinutes: number | null, 
     return { id: r.id, name: r.name, free: !off && !c, why: off ? 'closed then' : c?.reason === 'ROOM_BUSY' ? 'in use' : c?.reason === 'ROOM_OFF' ? 'out of use' : c ? c.message : undefined };
   });
   const byFree = (a: Option, b: Option) => Number(b.free) - Number(a.free) || a.name.localeCompare(b.name);
-  return { times, staff: staff.sort(byFree), rooms: rooms.sort(byFree) };
+  return { times, staff: staff.sort(byFree), rooms: rooms.sort(byFree), actions: [], warnings };
+}
+
+/** The patient's stay nearest the day, said in words, with a way forward: go to a day they are here, or change the stay (#330). */
+export async function notStaying(patientId: string, day: Date, prisma: PrismaClient): Promise<{ why: string; actions: Action[] }> {
+  const stays = await prisma.patientStay.findMany({ where: { patient_id: patientId } });
+  const gap = (s: { start_date: Date; end_date: Date }) => (day < s.start_date ? s.start_date.getTime() - day.getTime() : day.getTime() - s.end_date.getTime());
+  const near = [...stays].sort((a, b) => gap(a) - gap(b))[0];
+  const change: Action = { kind: 'change_stay', label: 'Change their stay', patient_id: patientId };
+  if (!near) return { why: 'They have no stay yet.', actions: [change] };
+  const go = day < near.start_date ? near.start_date : near.end_date;
+  return {
+    why: `Their stay runs ${dayLabel(near.start_date)} to ${dayLabel(near.end_date)}.`,
+    actions: [{ kind: 'set_date', label: `Go to ${dayLabel(go)}`, date: go.toISOString().slice(0, 10) }, change],
+  };
+}
+
+/** The first time on a later day of the stay (to a fortnight on) that the patient, a therapist and a room are all free. */
+async function nextFreeSlot(day: Date, stayEnd: Date, therapy: Ctx['therapies'][number], patientId: string, prisma: PrismaClient): Promise<{ date: Date; start_time: string } | null> {
+  // ponytail: ignores centre holidays; a closed day offers no time only if therapists are marked off.
+  for (let d = 1; d <= 14; d++) {
+    const next = new Date(day.getTime() + d * DAY_MS);
+    if (next > stayEnd) return null;
+    const ctx = await loadDay(next, prisma);
+    const open = toM(ctx.settings?.opening_time || '09:00');
+    const close = toM(ctx.settings?.closing_time || '18:00');
+    for (let t = Math.ceil(open / 15) * 15; t + therapy.duration_minutes <= close; t += 15) {
+      const a = assign(ctx, next, t, therapy, patientId);
+      if (a) return { date: next, start_time: a.start_time };
+    }
+  }
+  return null;
+}
+
+/** Why a chosen therapy has no time that day, and what to do about it: never only text over a greyed button (#330). */
+async function noTimeWhy(ctx: Ctx, day: Date, nowMinutes: number | null, therapy: Ctx['therapies'][number], patient: Ctx['patients'][number], stay: { end_date: Date }, prisma: PrismaClient): Promise<{ why: string; actions: Action[] }> {
+  const other: Action = { kind: 'other_therapy', label: 'Try another therapy' };
+  const team = await whyNoTime(day.toISOString().slice(0, 10), { patient_id: patient.id, therapy_id: therapy.id }, prisma);
+  if (team) {
+    const gendered = therapy.requires_gender_match && ctx.settings?.enforce_gender_match !== false;
+    const needed = therapy.staff_required ?? 1;
+    const able = ctx.staff.filter((s) => s.is_active && gives(s, therapy)).length;
+    // The gender rule is the cause when, without it, there would be enough hands.
+    if (gendered && able >= needed) {
+      return { why: team, actions: [
+        { kind: 'add_staff', label: `Add a ${patient.gender === 'female' ? 'female' : 'male'} therapist`, gender: patient.gender },
+        { kind: 'allow_any_gender', label: `Allow any gender for ${therapy.name.replace(/_/g, ' ')}`, therapy_id: therapy.id },
+        other,
+      ] };
+    }
+    return { why: team, actions: [{ kind: 'add_staff', label: 'Add a therapist' }, other] };
+  }
+  const next = await nextFreeSlot(day, stay.end_date, therapy, patient.id, prisma);
+  // The hours are over when the day would have had a time but for the clock.
+  let over = false;
+  if (nowMinutes !== null) {
+    const close = toM(ctx.settings?.closing_time || '18:00');
+    for (let t = Math.ceil(toM(ctx.settings?.opening_time || '09:00') / 15) * 15; !over && t + therapy.duration_minutes <= close; t += 15) over = !!assign(ctx, day, t, therapy, patient.id);
+  }
+  const why = over ? "Today's hours are over." : `No free time for ${patient.name.split(' ')[0]} that day.`;
+  if (!next) return { why: `${why} Nothing is free for the rest of their stay.`, actions: [other, { kind: 'change_stay', label: 'Change their stay', patient_id: patient.id }] };
+  const tomorrow = next.date.getTime() - day.getTime() === DAY_MS;
+  return { why, actions: [{ kind: 'book_at', label: `Book ${tomorrow ? 'tomorrow' : dayLabel(next.date)} at ${next.start_time}`, date: next.date.toISOString().slice(0, 10), start_time: next.start_time }, other] };
+}
+
+/**
+ * The therapy list's facts for one patient on one day (#330): when they last had
+ * each, and any already booked that day (greyed in the app, a soft rule). The
+ * therapy is never preselected.
+ */
+export async function therapyFacts(dayISO: string, patientId: string, prisma: PrismaClient) {
+  const day = new Date(`${dayISO}T00:00:00.000Z`);
+  const [therapies, mine] = await Promise.all([
+    prisma.therapy.findMany({ orderBy: { name: 'asc' } }),
+    prisma.appointment.findMany({ where: { patient_id: patientId, status: { notIn: ['cancelled', 'no_show'] } }, orderBy: [{ scheduled_date: 'desc' }, { start_time: 'desc' }], select: { therapy_id: true, scheduled_date: true, start_time: true } }),
+  ]);
+  const short = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const repeat = mine.find((a) => a.scheduled_date < day && !therapies.find((t) => t.id === a.therapy_id)?.is_consultation)?.therapy_id;
+  return therapies.map((t) => {
+    const same = mine.find((a) => a.therapy_id === t.id && a.scheduled_date.getTime() === day.getTime());
+    const had = mine.find((a) => a.therapy_id === t.id && a.scheduled_date < day);
+    return {
+      id: t.id, name: t.name, duration_minutes: t.duration_minutes, is_consultation: t.is_consultation,
+      taken: !!same, repeat: t.id === repeat,
+      fact: same ? `already at ${same.start_time}` : had ? `had ${short(had.scheduled_date)}` : undefined,
+    };
+  });
 }
 
 /**

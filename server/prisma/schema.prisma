@@ -363,6 +363,9 @@ model Settings {
   /// Whether a therapy marked as needing a gender match is allowed to be booked
   /// without one. On by default; a centre that asks residents turns it off.
   enforce_gender_match     Boolean  @default(true)
+  /// A soft rule (#330): booking more than this many treatments for one resident
+  /// on one day asks "Book anyway?". Never a refusal.
+  max_treatments_per_day   Int      @default(4)
   /// The discharge summary's letterhead: seal logo, second-language name,
   /// registration and accreditation lines, phones, email, website, footer and
   /// the discharge number format. Shape is `Letterhead` in src/discharge.ts.

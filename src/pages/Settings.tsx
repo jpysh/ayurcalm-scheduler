@@ -26,7 +26,7 @@ type Letterhead = { seal_logo: string; name_local: string; registration_line: st
 type Settings = {
   centre_name: string; address: string | null; timezone: string; opening_time: string; closing_time: string; slot_minutes: number; working_days: string[];
   logo: string | null; demo_data: boolean; support_whatsapp: string | null; patient_support_whatsapp: string | null; setup_complete: boolean;
-  enforce_gender_match: boolean; letterhead: Letterhead | null; plan: string | null; show_footer: boolean; setup_reviewed: string[];
+  enforce_gender_match: boolean; max_treatments_per_day?: number; letterhead: Letterhead | null; plan: string | null; show_footer: boolean; setup_reviewed: string[];
 };
 type Doc = { id: string; name: string; role: string; qualification: string | null; reg_no: string | null; signature: string | null };
 
@@ -102,7 +102,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
           centre_name: settings.centre_name, address: settings.address, timezone: settings.timezone, opening_time: settings.opening_time, closing_time: settings.closing_time,
           slot_minutes: settings.slot_minutes, working_days: settings.working_days, logo: settings.logo,
           support_whatsapp: settings.support_whatsapp ?? "", patient_support_whatsapp: settings.patient_support_whatsapp ?? "",
-          enforce_gender_match: settings.enforce_gender_match !== false, show_footer: settings.show_footer !== false,
+          enforce_gender_match: settings.enforce_gender_match !== false, max_treatments_per_day: settings.max_treatments_per_day ?? 4, show_footer: settings.show_footer !== false,
           ...(settings.letterhead ? { letterhead: settings.letterhead } : {}),
         }),
       });
@@ -254,6 +254,9 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
           <Dropdown label="Timezone" id="timezone" value={settings.timezone} onChange={(e) => update("timezone", e.target.value)}>
             {[...new Set([...TIMEZONES, settings.timezone])].map((z) => <option key={z} value={z}>{z.replace(/_/g, " ")}</option>)}
           </Dropdown>
+          <Group label="Most treatments for one patient in a day">
+            <Seg options={[2, 3, 4, 5, 6, 8].map((n) => [n, String(n)] as [number, string])} value={settings.max_treatments_per_day ?? 4} onChange={(n) => update("max_treatments_per_day", n)} />
+          </Group>
           <Switch label="Match the therapist's gender" note="Only for therapies that ask for it." on={settings.enforce_gender_match !== false} set={(v) => update("enforce_gender_match", v)} />
         </fieldset>
         {isAdmin ? <div className="mt-3"><ListGroup><Row title="Public holidays" facts="Close the centre on India's gazetted days" trailing="›" onClick={() => { setSheet(null); openHolidays(); }} /></ListGroup></div> : null}
