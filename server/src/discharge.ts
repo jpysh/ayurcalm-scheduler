@@ -83,7 +83,7 @@ export async function dischargeOf(stayId: string, prisma: PrismaClient) {
       bp: recordedBp[recordedBp.length - 1] || fromVitals(stay.vitals, 'bp'),
       weight: fromVitals(stay.vitals, 'weight'),
       discharge_type: 'Normal',
-      condition: 'Stable. All vitals stable at the time of discharge.',
+      condition: '',
       reason: stay.concerns || '',
       investigations: stay.tests || '',
       instructions: stay.Patient.doctor_plan || '',

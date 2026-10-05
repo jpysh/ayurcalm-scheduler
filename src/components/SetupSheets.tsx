@@ -37,7 +37,7 @@ export function RoomSheet({ room, open, onClose, amenityOptions, onSaved, remove
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
   return (
-    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={room ? room.name : "Add room"} note={room ? "Change anything, then save." : "Give it a name and tick what it has."}
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={room ? room.name : "Add room"} note={room ? "Change anything, then save." : "Everything is ticked to start. Untick what this room does not have."}
       foot={<SheetFoot busy={busy} ok={!!name.trim()} save={save} label={room ? "Save the room" : "Add the room"} remove={room ? () => { onClose(); remove(room); } : undefined} removeLabel="Delete this room" />}>
       <Text label="Name" id="room-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Room 4 or Dhanvantari" />
       <Group label="What it has" note="A therapy that needs something is only booked into a room that has it.">
