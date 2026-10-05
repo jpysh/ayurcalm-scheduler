@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { API_BASE } from "@/lib/apiBase";
-import { Menu, Printer, Search } from "lucide-react";
-import { Bar, BarButton, BarCapsule, BottomSearch, BottomSheet, DateRow, Group, ListGroup, Pill, PlusButton, Row, Seg, Btn } from "@/components/kit";
+import { Menu, Search } from "lucide-react";
+import { Bar, BarButton, BottomSearch, BottomSheet, DateRow, Group, ListGroup, Pill, PlusButton, Row, Seg, Btn, noteText } from "@/components/kit";
 
 /**
  * The phone frame from docs/design/phone.html (#66): one bar at the bottom, in
@@ -92,14 +92,13 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
             <BarButton label="Menu" onClick={() => setSheet("menu")}><Menu className="h-6 w-6" /></BarButton>
             <BarButton label={search.label} onClick={search.start}><Search className="h-6 w-6" /></BarButton>
             {onDay ? (
-              <button type="button" className="ml-1 flex h-12 min-w-0 flex-1 flex-col items-center justify-center rounded-full leading-tight active:bg-secondary" aria-label={`Change day, now ${label(day)}`} onClick={() => setSheet("day")}>
+              <button type="button" className="mx-1 flex h-12 min-w-0 flex-1 flex-col items-center justify-center rounded-full leading-tight active:bg-secondary" aria-label={`Change day, now ${label(day)}`} onClick={() => setSheet("day")}>
                 <span className="whitespace-nowrap text-base font-semibold">{label(day)}</span>
                 <span className={`whitespace-nowrap text-sm ${diff === 0 ? "font-semibold text-now" : "text-muted-foreground"}`}>{when}</span>
               </button>
             ) : null}
           </>}
           right={<>
-            {onDay ? <BarCapsule label="Print the day's sheets" disabled={printing} onClick={print}><Printer className="h-6 w-6" /></BarCapsule> : null}
             {plus ? <PlusButton adds={plus.adds} onClick={plus.run} /> : null}
           </>} />
       )}
@@ -111,6 +110,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
         </Group>
         <div className="mt-3">
           <ListGroup>
+            {onDay ? <Row key="print" title="Print the day's sheets" facts={printing ? "Making the PDF…" : `${label(day)} · patients, therapists, doctors`} trailing="›" onClick={() => { setSheet(null); if (!printing) print(); }} /> : null}
             {MENU.flatMap(([key, name, hint]) => [
               <Row key={key} title={name} facts={hints[key] || hint} trailing="›" onClick={() => { go(key); setSheet(null); }} />,
               key === "settings" && helpWa ? <Row key="help" title="Help · WhatsApp" facts="Ask us anything" trailing="›" href={`https://wa.me/${helpWa}`} onClick={() => setSheet(null)} /> : null,
@@ -120,13 +120,26 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
       </BottomSheet>
 
       <BottomSheet open={sheet === "day"} onOpenChange={(o) => setSheet(o ? "day" : null)} title={label(day)}>
-        <div className="grid grid-cols-3 gap-2">
-          <Btn kind="secondary" inline onClick={() => pick(shift(day, -1))}>‹ Day before</Btn>
+        <div className="grid grid-cols-[1.25fr_1fr_1.25fr] gap-2 [&>button]:whitespace-nowrap [&>button]:px-2">
+          <Btn kind="secondary" inline onClick={() => pick(shift(day, -1))}>Day before</Btn>
           <Btn kind="primary" inline onClick={() => pick(today)}>Today</Btn>
-          <Btn kind="secondary" inline onClick={() => pick(shift(day, 1))}>Next day ›</Btn>
+          <Btn kind="secondary" inline onClick={() => pick(shift(day, 1))}>Next day</Btn>
         </div>
         <div className="mt-3"><DateRow label="Pick a date" value={day} onChange={pick} /></div>
       </BottomSheet>
     </>
+  );
+}
+
+/** The day's own header, sticky above the list: ‹ and › move one day, the middle says which day it is. */
+export function DayNav({ day, today, setDay }: { day: string; today: string; setDay: (iso: string) => void }) {
+  const diff = Math.round((Date.parse(day) - Date.parse(today)) / 86400000);
+  const rel = diff === 0 ? "Today" : diff === 1 ? "Tomorrow" : diff === -1 ? "Yesterday" : "";
+  return (
+    <div className="sticky top-0 z-[4] -mx-1 flex items-center justify-between bg-background px-1 pt-2">
+      <button type="button" aria-label="Day before" className="grid h-11 w-11 place-items-center rounded-full text-2xl active:bg-secondary" onClick={() => setDay(shift(day, -1))}>‹</button>
+      <div className="min-w-0 text-center leading-tight"><b className="block text-lg">{rel || label(day)}</b>{rel ? <span className={noteText}>{label(day)}</span> : null}</div>
+      <button type="button" aria-label="Next day" className="grid h-11 w-11 place-items-center rounded-full text-2xl active:bg-secondary" onClick={() => setDay(shift(day, 1))}>›</button>
+    </div>
   );
 }

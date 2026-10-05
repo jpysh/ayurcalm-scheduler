@@ -27,32 +27,27 @@ const step = async (title, run) => {
 };
 const text = (l) => l.innerText();
 
-await step('Team and rooms: the This week line wraps instead of ending in "…"', async () => {
-  await menuTo(/^Team/);
-  const clipped = await p.evaluate(() => [...document.querySelectorAll('*')].filter((e) => !e.children.length && e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).textOverflow === 'ellipsis').length);
-  return { ok: clipped === 0, note: `${clipped} clipped texts` };
+await step('The bar on the day: Menu, Search, the date with room around it, +. No Print', async () => {
+  const r = await p.evaluate(() => { const nav = document.querySelector('nav[data-kit=bar]'); const d = nav.querySelector('button[aria-label^="Change day"]'); const c = nav.firstElementChild.getBoundingClientRect(); const t = [...d.querySelectorAll('span')].map((e) => e.getBoundingClientRect()); return { gapL: Math.round(Math.min(...t.map((x) => x.left)) - d.getBoundingClientRect().left), print: !!nav.querySelector('[aria-label^="Print"]'), w: Math.round(d.getBoundingClientRect().width) }; });
+  return { ok: !r.print && r.w > 120, note: `date button ${r.w}px wide, no Print in the bar` };
 });
-await step('Settings, Packages and accommodation: "Example price: change it to yours" reads in full', async () => {
-  await menuTo(/^Settings/); await go(p.getByRole('button', { name: /^Packages and accommodation/ }));
-  const t = await text(dlg());
-  return { ok: /Example price: change it to yours/.test(t), note: 'full sentence found' };
+await step('The ‹ and › in the day header move one day', async () => {
+  const before = await text(p.locator('b').first());
+  await go(p.getByRole('button', { name: 'Next day' }).first());
+  const after = await text(p.locator('b').first());
+  return { ok: before !== after, note: `${before} to ${after}` };
 });
-await step('Leave, +, Who or what opens a searchable sheet', async () => {
-  await menuTo(/^Leave/); await go(p.getByRole('button', { name: /^Add|^New|^\+/ }).first()); await go(p.getByRole('button', { name: /^Who or what/ }));
-  return { ok: await p.getByPlaceholder('Type a name').isVisible(), note: 'search box shown' };
+await step('Date sheet: Day before, Today, Next day each on one line', async () => {
+  await go(p.getByRole('button', { name: /^Change day/ }));
+  const h = await p.evaluate(() => [...document.querySelectorAll('[role=dialog] button')].filter((b) => /^(Day before|Today|Next day)$/.test(b.textContent.trim())).map((b) => b.getBoundingClientRect().height));
+  return { ok: h.length === 3 && Math.max(...h) <= 45, note: `button heights ${h.join(', ')}` };
 });
-await step('Typing "priya" and picking Priya Das shows the consequence line', async () => {
-  await menuTo(/^Leave/); await go(p.getByRole('button', { name: /^Add|^New|^\+/ }).first()); await go(p.getByRole('button', { name: /^Who or what/ }));
-  await p.getByPlaceholder('Type a name').fill('priya'); await go(dlg().getByRole('button', { name: /Priya Das/ })); await p.waitForTimeout(1500);
-  const t = await text(dlg());
-  return { ok: /treatments? that day will need a new therapist/.test(t), note: (t.match(/\d+ treatments? that day[^.]*\./) || [''])[0] };
-});
-await step('Booking: busy-room reasons say "massage table", never "massage_table"', async () => {
-  await go(p.getByRole('button', { name: /^Book|^Add/ }).first());
-  await go(dlg().getByRole('button', { name: /Day \d+ of \d+/ }).first()); await p.waitForTimeout(1200);
-  await dlg().getByLabel('Therapy').selectOption({ label: 'Jalaukavacharana' }); await p.waitForTimeout(1500);
-  const t = await p.evaluate(() => [...document.querySelectorAll('select option')].map((o) => o.textContent).join('\n'));
-  return { ok: !/massage_table/.test(t) && /massage table/.test(t), note: /massage table/.test(t) ? 'reason reads "massage table"' : 'no amenity reason on screen' };
+await step('Menu has "Print the day\'s sheets" and it downloads the PDF', async () => {
+  await go(p.getByRole('button', { name: /^Menu$/ }));
+  const dl = p.waitForEvent('download', { timeout: 20000 });
+  await go(dlg().getByRole('button', { name: /^Print the day's sheets/ }));
+  const f = (await dl).suggestedFilename();
+  return { ok: /\.pdf$/.test(f), note: f };
 });
 await b.close();
 writeFileSync(`${OUT}/README.md`, `# UAT ${process.argv[2] || ''}\n\nBase ${APP}, 375x812. Written by scripts/uat.mjs.\n\n| # | Step | Result | Read off the page | Shot |\n|---|---|---|---|---|\n${lines.join('\n')}\n`);

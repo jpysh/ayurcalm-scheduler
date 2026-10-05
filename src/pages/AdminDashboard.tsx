@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { useTrial } from "@/lib/centreName";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useLocation, useNavigate } from "react-router-dom";
-import { BottomBar, SCREENS } from "@/components/BottomBar";
+import { BottomBar, DayNav, SCREENS } from "@/components/BottomBar";
 import { TeamRooms } from "@/components/TeamRooms";
 import { LogScreen } from "@/components/LogScreen";
 import { AttentionSheet, type DayProblem, type ReplanBatch } from "@/components/AttentionSheet";
@@ -553,6 +553,7 @@ const AdminDashboard = () => {
                 <p className="px-1 pt-2 text-sm text-muted-foreground">Then tap + to book the first treatment.</p>
               </div>
             ) : null}
+            {loaded && !scheduleScreen.searching ? <DayNav day={dayKeyMemo} today={ymdInTZ(new Date())} setDay={(iso) => { const [y, m, d] = iso.split('-').map(Number); setCurrentDate(new Date(y, m - 1, d)); }} /> : null}
             {loaded && scheduleScreen.tab}
           </TabsContent>
 

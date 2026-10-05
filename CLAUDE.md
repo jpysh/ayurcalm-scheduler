@@ -247,7 +247,7 @@ are the exception.
 `git revert` on the merge commit undoes it cleanly. If the work turns out bigger
 than the issue implies, stop and say so before expanding scope.
 
-**Finish with a screenshot UAT, not a "check it yourself" list** (decided 5 Oct).
+**Finish with a screenshot UAT, not a "check it yourself" list** (decided 5 Oct). Run it when a change is big or changes how something looks or moves; small or invisible changes (docs, tests, wording) need only the PR note, and several small changes may share one UAT. Polishing phase: one UAT per batch, before launch.
 Claude does the maintainer's five steps itself at 375×812 with `node scripts/uat.mjs <date-slug>`
 (edit its STEPS for the session): a screenshot and a pass/fail line per step in
 `docs/design/uat/<date-slug>/README.md`, committed with the PR so it can be checked later. Report
