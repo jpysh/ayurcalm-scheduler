@@ -479,7 +479,7 @@ const AdminDashboard = () => {
   useEffect(() => { const t = setInterval(() => setMinute((m) => m + 1), 60000); return () => clearInterval(t); }, []);
 
   // Each screen keeps its own state and dialogs in its own file (#147).
-  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), movedFrom, problems: dayCheck.problems, showDay: (iso: string) => { setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id), staffCount: staff.length, addTherapist: (a: { gender?: string; therapy_id?: string }) => staffAdder.current?.(a) });
+  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), movedFrom, problems: dayCheck.problems, showDay: (iso: string) => { setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id), staffCount: staff.length, addTherapist: (a: { gender?: string; therapy_id?: string }) => staffAdder.current?.(a), addPatient: (name: string, arriving: string, done: (p: { id: string; name: string }) => void) => patientAdder.current?.(name, arriving, done) });
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, requestDelete });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, requestDelete });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q: listQuery });
@@ -490,6 +490,7 @@ const AdminDashboard = () => {
   // A booking short of a therapist opens the new-therapist form over the sheet, filled in with what it lacks (#330).
   const staffAdder = useRef<((a: { gender?: string; therapy_id?: string }) => void) | null>(null);
   staffAdder.current = (a) => staffScreen.openAdd({ gender: a.gender === 'male' ? 'Male' : a.gender === 'female' ? 'Female' : undefined, gives: therapies.filter((t) => t.id === a.therapy_id).map((t) => t.name) });
+  const patientAdder = useRef<((name: string, arriving: string, done: (p: { id: string; name: string }) => void) => void) | null>(null);
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const patientsScreen = usePatientsScreen({ needs: attention.items.filter((i) => i.section === 'Patients' && i.kind === 'action' && i.patient_id), patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ,
     openTreatment: (a) => { go('schedule'); scheduleScreen.openCard(a); },
@@ -499,6 +500,7 @@ const AdminDashboard = () => {
     openRules: () => setRules({ section: 'Patients' }),
     searchEverything: (q) => { patientsScreen.setSearching(false); patientsScreen.setQuery(''); go('schedule'); scheduleScreen.setQuery(q); scheduleScreen.setSearching(true); } });
   residentOpener.current = patientsScreen.openResident;
+  patientAdder.current = (name, arriving, done) => patientsScreen.openAdd({ name, arriving, done });
   // The adaptive + (#285): it adds what the screen is about. A trial that has ended adds nothing and says so.
   const [showTeamChoice, setShowTeamChoice] = useState(false);
   const guard = (adds: string, what: string, run: () => void) => ({ adds, run: () => { if (readOnly) { toast(`The free trial has ended, so nothing new can be ${what}. Nothing is deleted.`, { duration: 10000, action: { label: "Choose a plan", onClick: () => go('settings') } }); return; } run(); } });

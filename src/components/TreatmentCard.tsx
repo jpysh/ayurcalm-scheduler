@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { BottomSheet, Btn, Callout, ChangeLine, Consequence, EntryRow, Area, Empty, Group, LineDate, LineSelect, ListGroup, Loading, Picker, Row, SearchField, SheetFoot, Seg, Tag, WhoPicker, dayText, say } from "@/components/kit";
+import { BottomSheet, Btn, Callout, ChangeLine, Consequence, EntryRow, Area, Empty, Group, LineDate, LineSelect, ListGroup, Loading, Picker, Row, SearchField, SheetFoot, Seg, Tag, TwoFoot, WhoPicker, dayText, say } from "@/components/kit";
 import { API_BASE } from "@/lib/apiBase";
 
 export type CardAppt = {
@@ -262,7 +262,7 @@ const span = (from: string, to: string) => {
  * the button into Book anyway. `patient` skips the first step, for a booking
  * started from their card.
  */
-export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refresh, patient, rev, onAction, openResident }: {
+export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refresh, patient, rev, onAction, openResident, onAddPatient }: {
   open: boolean; onClose: () => void; day: string; today: string; isToday: boolean; nowMinutes: number;
   refresh: () => Promise<void>; patient?: { id: string; name: string; consult?: boolean } | null;
   /** Changes when the team does, so the lists are asked again after a therapist is added. */
@@ -270,6 +270,8 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   /** Actions that leave the sheet's own screen (adding a therapist). */
   onAction?: (a: BookAction) => void;
   openResident?: (patientId: string) => void;
+  /** A name nobody matches becomes a new patient, who comes back chosen (#330). */
+  onAddPatient?: (name: string, arriving: string, done: (p: { id: string; name: string }) => void) => void;
 }) {
   const [who, setWho] = useState<{ none: Who[]; recent: Who[]; all: Who[] } | null>(null);
   const [facts, setFacts] = useState<TherapyFact[] | null>(null);
@@ -284,6 +286,9 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   const [staffId, setStaffId] = useState("");
   const [roomId, setRoomId] = useState("");
   const [busy, setBusy] = useState(false);
+  // After Book the sheet stays on this, so several treatments for one patient are a tap each (#330).
+  const [booked, setBooked] = useState<{ text: string; count?: number; ids: string[]; note: string } | null>(null);
+  const [round, setRound] = useState(0);
   // A centre with the whole library has forty therapies: past a dozen the list is the last one had, and a search.
   const [pickTherapy, setPickTherapy] = useState(false);
   const [tq, setTq] = useState("");
@@ -293,10 +298,15 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
 
   useEffect(() => {
     if (!open) return;
-    setQ(""); setChosen(null); setOpts(null); setDate(day); setWho(null); setSessions(1); setOtherDays(false); setTherapyId(""); setFacts(null);
+    setQ(""); setChosen(null); setOpts(null); setDate(day); setWho(null); setSessions(1); setOtherDays(false); setTherapyId(""); setFacts(null); setBooked(null);
     fetch(`${API_BASE}/appointments/who?date=${day}`).then((r) => (r.ok ? r.json() : { none: [], recent: [], all: [] })).then(setWho).catch(() => setWho({ none: [], recent: [], all: [] }));
   }, [open, day]);
 
+  /** The new patient is in the list the server gave, so ask again and choose them. */
+  const addInline = (name: string) => onAddPatient?.(name, day, async (p) => {
+    const w = await fetch(`${API_BASE}/appointments/who?date=${day}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (w) { setWho(w); const found = w.all.find((x: Who) => x.id === p.id); if (found) choose(found); }
+  });
   const choose = (p: Who) => { setChosen(p); setTherapyId(""); setDate(day); };
   // The therapy and its facts, for this patient on this day.
   useEffect(() => {
@@ -307,7 +317,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
       if (patient?.consult && chosen.id === patient.id) setTherapyId((cur) => cur || d.therapies.find((t: TherapyFact) => t.is_consultation)?.id || "");
     }).catch(() => setFacts([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, chosen, date, rev]);
+  }, [open, chosen, date, rev, round]);
   // From their card: the patient is known, so the sheet opens on their lines.
   useEffect(() => { if (open && patient && who && !chosen) { const p = who.all.find((x) => x.id === patient.id); if (p) choose(p); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [open, patient, who]);
 
@@ -355,9 +365,8 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
       load(time);
       return;
     }
-    onClose();
     await refresh();
-    toastBooked(`Booked ${first}: ${therapyName} at ${time}`, [body.id]);
+    setBooked({ text: `${therapyName} at ${time}.`, count: body.day_count, ids: [body.id], note: `Booked ${first}: ${therapyName} at ${time}` });
   };
   /** A course: one a day from the date, at this time with this therapist and room. All of it or none of it. */
   const bookCourse = async () => {
@@ -373,40 +382,63 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
       toast.error(`${COURSE_WHY[body.conflicts?.reason] || "That course could not be placed"}. Nothing was booked: try fewer days, another time or another therapist.`);
       return;
     }
-    onClose();
     await refresh();
-    toastBooked(`Booked ${first}: ${sessions} × ${therapyName} at ${time}`, made);
+    setBooked({ text: `${sessions} × ${therapyName} at ${time}.`, ids: made, note: `Booked ${first}: ${sessions} × ${therapyName} at ${time}` });
   };
-  const toastBooked = (text: string, ids: string[]) => toast(text, { duration: 8000, action: { label: "Undo", onClick: async () => {
-    await Promise.all(ids.map((id) => fetch(`${API_BASE}/appointments/${id}`, { method: "DELETE" })));
-    await refresh();
-  } } });
+  /** The sheet stays on Booked, so the note with Undo comes when it closes: at the bottom it would cover the buttons. */
+  const close = () => {
+    if (booked) toast(booked.note, { duration: 8000, action: { label: "Undo", onClick: async () => {
+      await Promise.all(booked.ids.map((id) => fetch(`${API_BASE}/appointments/${id}`, { method: "DELETE" })));
+      await refresh();
+    } } });
+    onClose();
+  };
+  const undoBooked = async () => {
+    if (!booked) return;
+    setBusy(true);
+    try {
+      await Promise.all(booked.ids.map((id) => fetch(`${API_BASE}/appointments/${id}`, { method: "DELETE" })));
+      await refresh();
+      setBooked(null); setTherapyId(""); setOpts(null); setRound((n) => n + 1);
+    } finally { setBusy(false); }
+  };
   const book = async () => {
     if (!chosen || !slot) return;
     setBusy(true);
     try { await (sessions > 1 ? bookCourse() : bookOne()); } finally { setBusy(false); }
   };
 
+  /** Same patient, a new therapy at the next free time; the date stays. */
+  const another = () => { setBooked(null); setTherapyId(""); setOpts(null); setSessions(1); setOtherDays(false); setRound((n) => n + 1); };
+
   const free = (l: Option[]) => l.filter((o) => o.free);
   const busyOnes = (l: Option[]) => l.filter((o) => !o.free);
   const nameOf = (l: Option[] | undefined, id: string) => l?.find((o) => o.id === id)?.name || "";
   const weekday = new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
   const long = (facts?.length ?? 0) > 12;
-  const listed = (facts || []).filter((t) => !long || t.repeat);
+  // The last one had comes first; what is already booked that day stays in view, greyed, so a repeat is seen before it is chosen.
+  const listed = (facts || []).filter((t) => !long || t.repeat || t.taken).sort((a, b) => Number(b.repeat) - Number(a.repeat));
   const matching = (facts || []).filter((t) => say(t.name).toLowerCase().includes(tq.trim().toLowerCase()));
   const when = `${date === today ? "" : `${weekday} `}${time}`;
   const label = !therapyId ? "Choose a therapy" : !slot ? `Book ${first}` : warnings.length ? `Book anyway, ${sessions > 1 ? `${sessions} days from ` : ""}${when}` : `Book ${first}, ${sessions > 1 ? `${sessions} days from ` : ""}${when}`;
 
   return (
     <>
-    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={chosen ? chosen.name : "Book a treatment"}
-      note={chosen ? chosen.note : "Who is it for?"}
-      foot={chosen
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) close(); }} title={booked ? "Booked" : chosen ? chosen.name : "Book a treatment"}
+      note={booked ? chosen?.name : chosen ? chosen.note : "Who is it for?"}
+      foot={booked ? undefined
+        : chosen
         ? <SheetFoot busy={busy} ok={!!slot} save={book} label={label} />
         : <SearchField value={q} onChange={setQ} placeholder="Search patients" />}>
-      {!chosen ? (
+      {booked ? (
+        <div>
+          <Consequence>{booked.text}{booked.count ? ` ${first} has ${booked.count} ${date === today ? "today" : "that day"}.` : ""}</Consequence>
+          <div className="mt-3"><TwoFoot main="Add another" onMain={another} alt="Done" onAlt={close} busy={busy} /></div>
+          <div className="mt-1 text-center"><Btn kind="quiet" inline disabled={busy} onClick={undoBooked}>Undo</Btn></div>
+        </div>
+      ) : !chosen ? (
         who === null ? <Loading rows={3} /> : (
-          <WhoPicker q={q} chosen={null} all={who.all} onChoose={choose}
+          <WhoPicker q={q} chosen={null} all={who.all} onChoose={choose} onAdd={onAddPatient ? addInline : undefined}
             groups={[{ title: `No treatment yet ${day === today ? "today" : "that day"}`, list: who.none }, { title: "Recently booked", list: who.recent }]} />
         )
       ) : (

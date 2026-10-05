@@ -152,7 +152,7 @@ async function job(page: Page, rows: Row[], name: string, walk: Walk) {
 }
 
 test('tap count for the daily jobs, against the phone design', async ({ page, request }) => {
-  test.setTimeout(240000);
+  test.setTimeout(300000);
   const call = await api(request);
   const tz = ((await call.get('/settings')).timezone as string) || 'Asia/Kolkata';
   const ymd = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
@@ -241,14 +241,22 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     // + asks who, then fills the rest in with a free time, therapist and room (#285 story 5).
     await job(page, rows, 'Book one treatment', async (tap) => {
       await showDay(page, day);
+      // Someone who has had a treatment before, so the list's first row is the last one they had (#330).
+      let name = '';
+      const who = (await call.get(`/appointments/who?date=${day}`)) as { none: { id: string; name: string }[]; all: { id: string; name: string }[] };
+      for (const p of [...who.none, ...who.all].slice(0, 40)) {
+        if (((await call.get(`/appointments/therapies?date=${day}&patient_id=${p.id}`)) as { therapies: { repeat: boolean }[] }).therapies.some((t) => t.repeat)) { name = p.name; break; }
+      }
+      expect(name, 'nobody in house has had a treatment before').not.toBe('');
       await tap(page.getByRole('button', { name: 'Book a treatment', exact: true }));
-      await tap(page.getByRole('dialog').getByRole('button', { name: /Day \d+ of/ }).first());
-      // The therapy is a visible list with nothing chosen: the first row that is not already booked today.
-      await tap(page.getByRole('dialog').getByRole('button', { pressed: false }).filter({ hasNotText: /already/ }).first());
+      await page.getByRole('dialog').getByLabel('Search patients').fill(name);
+      await tap(page.getByRole('dialog').getByRole('button', { name: new RegExp(`^${name}`) }).first());
+      // The therapy is a visible list with nothing chosen (#330).
+      await tap(page.getByRole('dialog').getByRole('button', { name: /Same as last time/ }).first());
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Book / }));
-      const note = page.locator('[data-sonner-toast]').filter({ hasText: /^Booked/ });
-      await expect(note).toBeVisible({ timeout: 20000 });
-      await note.getByRole('button', { name: 'Undo' }).click();
+      // The sheet stays on Booked (#330); Undo is on it, and is not a tap of the job.
+      await expect(page.getByRole('dialog').getByText(/Booked/).first()).toBeVisible({ timeout: 20000 });
+      await page.getByRole('dialog').getByRole('button', { name: 'Undo', exact: true }).click();
     });
 
     // On the walk's day with a room taken out first: today's own problem has
