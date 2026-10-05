@@ -1,0 +1,249 @@
+[
+ {
+  "id": "01-day",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "02-pill-sheet",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": [
+   "Kriti Reddy is not in today: Personal Le"
+  ]
+ },
+ {
+  "id": "03-treatment-card",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "04-menu",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "05-day-by-therapist",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "06-patients",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "07-needs-attention",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "08-patient-card",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "09-patient-package",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "10-patient-accommodation",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "11-patient-diet",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": [
+   "The graduated return to normal food afte",
+   "The preparatory days that kindle digesti",
+   "Everyday plan for a resident with no spe",
+   "Days on medicated ghee. The dose is set ",
+   "For a resident on a weight or metabolic "
+  ]
+ },
+ {
+  "id": "12-patient-stay",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "13-patient-details",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "14-patient-discharge",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "15-patient-links",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "16-new-patient",
+  "overflowX": 0,
+  "small": 1,
+  "clipped": []
+ },
+ {
+  "id": "17-team",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": [
+   "1000h booked of 1694h (59%) · 6 away som",
+   "Has massage table, shower, steam, herbal",
+   "Has massage table, shower, steam, herbal",
+   "Has massage table, shower, steam, herbal",
+   "Has massage table, shower, steam, herbal",
+   "Has massage table, shower, steam, herbal",
+   "Has massage table, shower, steam, herbal",
+   "Has massage table, shower, steam, herbal"
+  ]
+ },
+ {
+  "id": "18-leave",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "19-leave-new",
+  "overflowX": 0,
+  "small": 2,
+  "clipped": []
+ },
+ {
+  "id": "20-diet-plans",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": [
+   "After purification (samsarjana krama)",
+   "The graduated return to normal food afte",
+   "Before purification (deepana–pachana)",
+   "The preparatory days that kindle digesti",
+   "Everyday plan for a resident with no spe",
+   "Days on medicated ghee. The dose is set ",
+   "Weight and metabolism (sthaulya)",
+   "For a resident on a weight or metabolic "
+  ]
+ },
+ {
+  "id": "21-settings",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "22-settings-centre",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "23-settings-hours",
+  "overflowX": 0,
+  "small": 8,
+  "clipped": []
+ },
+ {
+  "id": "24-settings-catalogues",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": [
+   "3 days · Example price: change it to you",
+   "5 days · Example price: change it to you",
+   "12 days · Example price: change it to yo",
+   "28 days · Example price: change it to yo",
+   "40 days · Example price: change it to yo",
+   "45 days · Example price: change it to yo"
+  ]
+ },
+ {
+  "id": "25-settings-people",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "26-settings-printed",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "27-settings-rules",
+  "overflowX": 0,
+  "small": 7,
+  "clipped": []
+ },
+ {
+  "id": "28-settings-backups",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "29-settings-log",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "30-settings-account",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "31-settings-help",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "32-get-started",
+  "error": "TimeoutError: locator.click: Timeout 4000ms exceeded."
+ },
+ {
+  "id": "33-search",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "34-book",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "35-print",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ },
+ {
+  "id": "36-not-found",
+  "overflowX": 0,
+  "small": 0,
+  "clipped": []
+ }
+]
