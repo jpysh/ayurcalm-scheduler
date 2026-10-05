@@ -8,6 +8,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { BottomSheet, Btn, Callout, ChangeLine, Consequence, EntryRow, Area, Empty, Group, LineDate, LineSelect, ListGroup, Loading, Picker, Row, SearchField, SheetFoot, Seg, Tag, TwoFoot, WhoPicker, dayText, say } from "@/components/kit";
 import { API_BASE } from "@/lib/apiBase";
+import { StaySheet, type StayTarget } from "@/components/CardSheets";
+import type { ApiStay } from "@/pages/tabs/shared";
 
 export type CardAppt = {
   id: string;
@@ -262,14 +264,13 @@ const span = (from: string, to: string) => {
  * the button into Book anyway. `patient` skips the first step, for a booking
  * started from their card.
  */
-export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refresh, patient, rev, onAction, openResident, onAddPatient }: {
+export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refresh, patient, rev, onAction, onAddPatient }: {
   open: boolean; onClose: () => void; day: string; today: string; isToday: boolean; nowMinutes: number;
   refresh: () => Promise<void>; patient?: { id: string; name: string; consult?: boolean } | null;
   /** Changes when the team does, so the lists are asked again after a therapist is added. */
   rev?: number;
   /** Actions that leave the sheet's own screen (adding a therapist). */
   onAction?: (a: BookAction) => void;
-  openResident?: (patientId: string) => void;
   /** A name nobody matches becomes a new patient, who comes back chosen (#330). */
   onAddPatient?: (name: string, arriving: string, done: (p: { id: string; name: string }) => void) => void;
 }) {
@@ -292,6 +293,8 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   // A centre with the whole library has forty therapies: past a dozen the list is the last one had, and a search.
   const [pickTherapy, setPickTherapy] = useState(false);
   const [tq, setTq] = useState("");
+  // "Change their stay" opens the stay over the booking, which comes back on the same date (#343).
+  const [stay, setStay] = useState<StayTarget | null>(null);
   const seq = useRef(0);
   // A time carried over from "Book that" on another day, applied when that day's times arrive.
   const pendingAt = useRef<string | undefined>(undefined);
@@ -349,7 +352,13 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
     else if (a.kind === "other_therapy") { setTherapyId(""); setOpts(null); }
     else if (a.kind === "allow_any_gender" && a.therapy_id) {
       void fetch(`${API_BASE}/therapies/${a.therapy_id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requires_gender_match: false }) }).then((r) => { if (r.ok) { toast(`${therapyName} can now be given by any therapist`); load(); } else toast.error("That could not be saved."); });
-    } else if (a.kind === "change_stay" && chosen) { onClose(); openResident?.(chosen.id); }
+    } else if (a.kind === "change_stay" && chosen) {
+      void fetch(`${API_BASE}/patients/${chosen.id}/stays`).then((r) => (r.ok ? r.json() : [])).then((stays: ApiStay[]) => {
+        const gap = (st: ApiStay) => Math.min(Math.abs(Date.parse(st.start_date) - Date.parse(date)), Math.abs(Date.parse(st.end_date) - Date.parse(date)));
+        const near = [...stays].sort((x, y) => gap(x) - gap(y))[0];
+        setStay(near ? { id: near.id, start: near.start_date.slice(0, 10), end: near.end_date.slice(0, 10), package: null, accommodation: null } : { id: null, start: date, end: addDays(date, 13), package: null, accommodation: null });
+      });
+    }
     else if (a.kind === "add_staff") onAction?.(a);
   };
 
@@ -484,6 +493,11 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
         {matching.length ? <ListGroup>{matching.map((t) => <Row key={t.id} title={say(t.name)} facts={t.fact} trailing={t.id === therapyId ? "✓" : undefined} onClick={() => { setTherapyId(t.id); setPickTherapy(false); }} />)}</ListGroup> : <Empty text="No therapy matches." />}
       </BottomSheet>
     ) : null}
+    <StaySheet patient={stay && chosen ? chosen : null} target={stay} today={today} onClose={() => setStay(null)} onSaved={() => {
+      load(); setRound((r) => r + 1);
+      // The header's "Day 2 of 14" is from the who list, so ask it again for the new stay.
+      fetch(`${API_BASE}/appointments/who?date=${day}`).then((r) => (r.ok ? r.json() : null)).then((w) => { if (!w) return; setWho(w); const p = w.all.find((x: Who) => x.id === chosen?.id); if (p) setChosen(p); }).catch(() => {});
+    }} />
     </>
   );
 }

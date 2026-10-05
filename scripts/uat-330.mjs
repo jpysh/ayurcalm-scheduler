@@ -112,6 +112,17 @@ await step('Dead end, not staying: the stay is named, with a day to go to and Ch
   const t = await text();
   return { ok: /Their stay runs/.test(t) && /Go to/.test(t) && /Change their stay/.test(t), note: flat(t) };
 });
+await step('Change their stay: one tap opens the stay sheet over the booking (#343)', async () => {
+  await go(dlg().getByRole('button', { name: 'Change their stay' }));
+  const t = await text();
+  return { ok: /Stay for Meera/i.test(t) && /Leaving/i.test(t), note: flat(t) };
+});
+await step('Leaving moved past that day and saved: back on the booking, that day now bookable', async () => {
+  await dlg().getByLabel('Leaving').fill(plus(41)); await p.waitForTimeout(500);
+  await go(dlg().getByRole('button', { name: /^Stay until/ })); await p.waitForTimeout(1500);
+  const t = await text();
+  return { ok: /^Book Meera,/m.test(t) && !/Their stay runs/.test(t) && !/Stay for Meera/i.test(t), note: flat(t) };
+});
 await step('Dead end, no free time: the next free day is one tap', async () => {
   await open(); await who(meera); await therapy(`Uat Longday ${run}`);
   const t = await text();
