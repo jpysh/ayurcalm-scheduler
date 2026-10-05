@@ -46,9 +46,13 @@ async function openTab(page: Page, name: string) {
     return;
   }
   await expect(async () => {
-    if (await page.getByRole('dialog').count() === 0) await page.getByRole('button', { name: 'Menu', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: new RegExp(`^${name}\\b`) }).click({ timeout: 1000 });
-    await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 1000 });
+    const dialog = page.getByRole('dialog');
+    const target = dialog.getByRole('button', { name: new RegExp(`^${name}\\b`) });
+    // Some other sheet still open or closing (the last screen's editor): close it, so the menu is the one in view.
+    if (await dialog.count() > 0 && await target.count() === 0) { await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0, { timeout: 2000 }); }
+    if (await dialog.count() === 0) await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await target.click({ timeout: 1000 });
+    await expect(dialog).toHaveCount(0, { timeout: 1000 });
   }).toPass({ timeout: 15000 });
 }
 
@@ -314,7 +318,7 @@ test('the day by therapist starts where the by-time view does (#193)', async ({ 
   await passSetupIfShown(page);
   await showDay(page, '2030-03-13');
   const top = async (l: ReturnType<Page['getByText']>) => (await l.boundingBox())!.y;
-  const byTime = await top(page.getByText(/ treatments/).first());
+  const byTime = await top(page.getByText(/ treatments?\b/).first());
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Therapist', exact: true }).click();
   const back = page.getByRole('button', { name: 'Back to by time' });

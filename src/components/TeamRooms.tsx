@@ -12,7 +12,7 @@ import { API_BASE } from "@/lib/apiBase";
 import PageHead from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
 import { shareLink } from "@/lib/shareLink";
-import { ChangeLine, DateRow, Empty, ListGroup, Row, SheetFoot, TimeList, timesBetween } from "@/components/kit";
+import { ChangeLine, DateRow, Empty, ListGroup, Row, SheetFoot, TimeList, dayText, timesBetween } from "@/components/kit";
 import { roomSub } from "@/components/SetupSheets";
 import type { UiRoom, UiStaff } from "@/pages/tabs/shared";
 
@@ -81,7 +81,8 @@ export function TeamRooms({ staff, rooms, q, today, nowHM, opening, closing, ref
     const moved = (body.replan || []).reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0);
     await refresh();
     load();
-    toast(`${name}: ${what.toLowerCase()}${moved ? ` · ${moved} moved` : ""}`, {
+    const told = what === "Leave" ? `${name} away ${days.start === days.end ? dayText(days.start) : `${dayText(days.start)} to ${dayText(days.end)}`}` : `${name}: ${what.toLowerCase()}`;
+    toast(`${told}${moved ? ` · ${moved} moved` : ""}`, {
       duration: 8000,
       action: { label: "Undo", onClick: async () => { await fetch(`${API_BASE}/timeoff/${body.id}`, { method: "DELETE" }); await refresh(); load(); } },
     });

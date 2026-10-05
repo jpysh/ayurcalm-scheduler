@@ -245,7 +245,7 @@ export async function bookingOptions(dayISO: string, nowMinutes: number | null, 
   const t0 = toM(chosen.start_time);
   const staff: Option[] = ctx.staff.filter((s) => s.is_active && (!s.specializations.length || s.specializations.includes(therapy.id))).map((s) => {
     const off = !works(s.weekly_schedule, day, t0, therapy.duration_minutes);
-    const c = off ? null : findConflict({ ...base, staff_id: s.id, co_staff_ids: base.co_staff_ids?.filter((id) => id !== s.id) }, ctx);
+    const c = off ? null : findConflict({ ...base, staff_id: s.id, co_staff_ids: base.co_staff_ids?.map((id) => (id === s.id ? base.staff_id! : id)) }, ctx);
     return { id: s.id, name: s.name, free: !off && !c, why: off ? 'not working then' : c?.reason === 'STAFF_BUSY' ? 'has a treatment' : c?.reason === 'STAFF_OFF' ? 'not in' : c?.reason === 'STAFF_IN_EVENT' ? 'in an event' : c ? c.message : undefined };
   });
   const rooms: Option[] = ctx.rooms.filter((r) => r.is_active).map((r) => {

@@ -292,8 +292,8 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     // load balancing using prefetch
     staffAvail.sort((a, b) => (staffBusy[a.id]?.length || 0) - (staffBusy[b.id]?.length || 0));
 
-    // search for a concrete slot within preferred window using 30-min steps
-    const step = 30;
+    // search for a concrete slot within preferred window in quarter-hour steps, the grid the booking sheet offers
+    const step = 15;
     let chosen: { room?: TherapyRoom; staff?: Staff; co?: Staff[]; start?: number } = {};
     const seenTimes = new Set<string>();
     const alignedStart = Math.ceil(slotWindowStart / step) * step;

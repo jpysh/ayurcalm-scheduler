@@ -18,6 +18,8 @@ const call = (path: string, body?: unknown) => fetch(`${API}${path}`, {
 assert.ok(therapyLibrary.length >= 35, 'about forty therapies');
 assert.equal(new Set(therapyLibrary.map((t) => t.name)).size, therapyLibrary.length, 'no duplicates in the library');
 
+assert.deepEqual(therapyLibrary.find((t) => t.consultation)?.amenities, [], 'a consultation needs no room fittings, or a new centre has no doctor time to book');
+
 const name = `Library test ${Date.now()}`;
 const item = { name, duration_minutes: 45, staff_required: 1, products: ['Sesame oil'] };
 try {

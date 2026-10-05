@@ -250,10 +250,10 @@ const COURSE_WHY: Record<string, string> = { OUT_OF_RANGE: "The days ran out", N
  */
 export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refresh, patient }: {
   open: boolean; onClose: () => void; day: string; today: string; isToday: boolean; nowMinutes: number;
-  refresh: () => Promise<void>; patient?: { id: string; name: string } | null;
+  refresh: () => Promise<void>; patient?: { id: string; name: string; consult?: boolean } | null;
 }) {
   const [who, setWho] = useState<{ none: Who[]; recent: Who[]; all: Who[] } | null>(null);
-  const [therapies, setTherapies] = useState<{ id: string; name: string }[]>([]);
+  const [therapies, setTherapies] = useState<{ id: string; name: string; is_consultation?: boolean }[]>([]);
   const [q, setQ] = useState("");
   const [chosen, setChosen] = useState<Who | null>(null);
   const [therapyId, setTherapyId] = useState("");
@@ -264,16 +264,19 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   const [staffId, setStaffId] = useState("");
   const [roomId, setRoomId] = useState("");
   const [busy, setBusy] = useState(false);
+  // A centre with the whole library has forty therapies: past a dozen the wheel is a search.
+  const [pickTherapy, setPickTherapy] = useState(false);
+  const [tq, setTq] = useState("");
   const seq = useRef(0);
 
   useEffect(() => {
     if (!open) return;
     setQ(""); setChosen(null); setOpts(null); setDate(day); setWho(null); setSessions(1);
     fetch(`${API_BASE}/appointments/who?date=${day}`).then((r) => (r.ok ? r.json() : { none: [], recent: [], all: [] })).then(setWho).catch(() => setWho({ none: [], recent: [], all: [] }));
-    fetch(`${API_BASE}/therapies`).then((r) => (r.ok ? r.json() : [])).then((t: { id: string; name: string }[]) => setTherapies([...t].sort((a, b) => a.name.localeCompare(b.name)))).catch(() => setTherapies([]));
+    fetch(`${API_BASE}/therapies`).then((r) => (r.ok ? r.json() : [])).then((t: { id: string; name: string; is_consultation?: boolean }[]) => setTherapies([...t].sort((a, b) => a.name.localeCompare(b.name)))).catch(() => setTherapies([]));
   }, [open, day]);
 
-  const choose = (p: Who) => { setChosen(p); setTherapyId(p.therapy_id || therapies[0]?.id || ""); setDate(day); };
+  const choose = (p: Who) => { setChosen(p); setTherapyId((patient?.consult && therapies.find((t) => t.is_consultation)?.id) || p.therapy_id || therapies[0]?.id || ""); setDate(day); };
   // From their card: the patient is known, so the sheet opens on their lines.
   useEffect(() => { if (open && patient && who && !chosen) { const p = who.all.find((x) => x.id === patient.id); if (p) choose(p); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [open, patient, who, therapies]);
 
@@ -292,7 +295,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [chosen, therapyId, date]);
 
   const slot = opts?.times.find((t) => t.start_time === time);
-  const coStaff = (slot?.co_staff_ids || []).filter((id) => id !== staffId);
+  const coStaff = (slot?.co_staff_ids || []).map((id) => (id === staffId ? slot!.staff_id : id));
   const therapyName = say(therapies.find((t) => t.id === therapyId)?.name || "");
   const first = chosen?.name.split(" ")[0] || "";
 
@@ -341,7 +344,10 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   const when = date === today ? "today" : dayText(date);
   const weekday = new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
 
+  const matching = therapies.filter((t) => say(t.name).toLowerCase().includes(tq.trim().toLowerCase()));
+
   return (
+    <>
     <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={chosen ? chosen.name : "Book a treatment"}
       note={chosen ? chosen.note : "Who is it for?"}
       foot={chosen
@@ -355,8 +361,10 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
       ) : (
         <div>
           {!patient ? <Btn kind="quiet" inline className="-ml-4" onClick={() => { setChosen(null); setOpts(null); }}>‹ Someone else</Btn> : null}
-          <ChangeLine label="Therapy" value={therapyName || "Choose"}
-            select={<LineSelect label="Therapy" value={therapyId} onChange={setTherapyId} free={therapies.map((t) => ({ id: t.id, name: say(t.name) }))} />} />
+          {therapies.length > 12
+            ? <ChangeLine label="Therapy" value={therapyName || "Choose"} onClick={() => { setTq(""); setPickTherapy(true); }} />
+            : <ChangeLine label="Therapy" value={therapyName || "Choose"}
+                select={<LineSelect label="Therapy" value={therapyId} onChange={setTherapyId} free={therapies.map((t) => ({ id: t.id, name: say(t.name) }))} />} />}
           <ChangeLine label={sessions > 1 ? "Starts" : "Date"} value={dayText(date)} select={<LineDate label="Date" value={date} min={today} onChange={setDate} />} />
           <ChangeLine label="Sessions" value={sessions === 1 ? "One" : `${sessions}, one a day`}
             select={<LineSelect label="Sessions" value={String(sessions)} onChange={(v) => setSessions(Number(v))} free={Array.from({ length: 21 }, (_, i) => ({ id: String(i + 1), name: i === 0 ? "One treatment" : `${i + 1} sessions, one a day` }))} />} />
@@ -375,5 +383,11 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
         </div>
       )}
     </BottomSheet>
+    {therapies.length > 12 ? (
+      <BottomSheet open={pickTherapy} onOpenChange={setPickTherapy} title="Therapy" foot={<SearchField value={tq} onChange={setTq} placeholder="Search therapies" />}>
+        {matching.length ? <ListGroup>{matching.map((t) => <Row key={t.id} title={say(t.name)} trailing={t.id === therapyId ? "✓" : undefined} onClick={() => { setTherapyId(t.id); setPickTherapy(false); }} />)}</ListGroup> : <Empty text="No therapy matches." />}
+      </BottomSheet>
+    ) : null}
+    </>
   );
 }
