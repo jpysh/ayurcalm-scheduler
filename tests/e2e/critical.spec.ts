@@ -319,9 +319,9 @@ test('the day by therapist starts where the by-time view does (#193)', async ({ 
   await page.getByRole('dialog').getByRole('button', { name: 'Therapist', exact: true }).click();
   const back = page.getByRole('button', { name: 'Back to by time' });
   await expect(back).toBeVisible();
-  // The design puts both headers 12px under the top of the screen; the page used to add 20px more.
-  expect(byTime).toBeLessThan(20);
-  expect(await top(back)).toBeLessThan(20);
+  // Both headers sit just under the day's ‹ › header (52px), the same height in either view.
+  expect(byTime).toBeLessThan(100);
+  expect(Math.abs((await top(back)) - byTime)).toBeLessThan(12);
 });
 
 test('on a phone, lists are plain rows and a tap opens the edit sheet (#178)', async ({ page }) => {

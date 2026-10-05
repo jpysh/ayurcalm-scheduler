@@ -94,8 +94,8 @@ Every list, sheet and button has all of these designed, not left to default.
 
 ## 7. Components (all live in `src/components/kit.tsx`)
 
-- **Bottom bar** (adaptive, two floating pieces, no white between them). Left: a capsule of Menu · Search (on the day, plus the date). Right: **+**, and on the day Print beside it in its own small capsule. 56 high, 10 from the edges, ≥ 96% opaque card, the one shadow. Hidden while a sheet, form or the keyboard is open.
-  - Anchors: Menu is always the first slot, + always the last, Search always second, at the same pixels on every screen. Only the date and Print come and go.
+- **Bottom bar** (adaptive, two floating pieces, no white between them). Left: a capsule of Menu · Search (on the day, plus the date). Right: **+** (Print is a row in the Menu since 5 Oct). 56 high, 10 from the edges, ≥ 96% opaque card, the one shadow. Hidden while a sheet, form or the keyboard is open.
+  - Anchors: Menu is always the first slot, + always the last, Search always second, at the same pixels on every screen. Only the date comes and goes. Print lives in the Menu (5 Oct); ‹ › sit in the day's own sticky header, because the bar has no room for arrows.
 - **+ (adaptive).** 50px green circle, always a plus. It adds what the screen is about: day → treatment, Patients → patient, Leave → leave, Team → therapist / room / therapy (a small choice sheet). Editing is a tap on the thing itself. Its accessible name says what it adds ("New patient").
 - **Search.** One, opened from the bar; the field sits at the bottom above the keyboard (Apple's placement for iPhone), results above it. On a list it filters that list first, then offers "Search everything". No search box at the top of a screen.
 - **Row.** Stripe or nothing, title, one or two second-line facts, one trailing fact (time, room, count). A flag is a line in alert colour under the facts, only when something needs doing.

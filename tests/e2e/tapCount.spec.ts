@@ -29,7 +29,7 @@ const JOBS: [string, number][] = [
   // Who, then Book: one tap more than the old suggestion, bought by a choice of who, therapist, room and time (story 5, accepted).
   ['Book one treatment', 3],
   ["A patient's meals today", 2],
-  ["Print today's sheets", 1],
+  ["Print today's sheets", 2], // Print moved into the Menu (5 Oct): the bar keeps room for the date
   // From the Patients screen. Story 4 says 2; the gender is one tap because nothing is chosen for them (#283).
   ['Add an arriving patient', 3],
   // From the Patients screen: Search, then the person (typing is not counted).
@@ -232,7 +232,8 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     await job(page, rows, "Print today's sheets", async (tap) => {
       await showDay(page, today);
       const download = page.waitForEvent('download');
-      await tap(page.getByRole('button', { name: "Print the day's sheets" }));
+      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Print the day's sheets/ }));
       expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
       return 'the therapist rota is a second tap, on the note that follows';
     });

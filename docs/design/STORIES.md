@@ -12,7 +12,7 @@ Format: **Outcome** · **Trigger** · **First view** (facts a decision needs, no
 | # | Story | Taps now → target |
 |---|---|---|
 | 1 | Morning glance: is today OK, and what needs me? | 0 → 0 |
-| 2 | Print the day sheet | 1 → 1 |
+| 2 | Print the day sheet | 1 → 2 (5 Oct, Print in the Menu) |
 | 3 | Fix the day when a therapist or room drops out | 2 → 2 |
 | 4 | Add an arriving patient | 4+ → 2 |
 | 5 | Book or move a treatment | 2 → 3 |
@@ -44,7 +44,7 @@ A rule that has no data yet (vitals) exists but shows nothing. In-app only: no p
 **Fails when:** a problem needs a tab to be seen, or the day is red because of something normal.
 
 ## 2. Print the day sheet
-Unchanged. Print stays one tap on the day. The toast above the bar gains **Open** and **Share** beside the existing sheet choices.
+Print moved into the Menu on 5 Oct (two taps: Menu, Print the day's sheets) so the bar can give the date room; the maintainer decided it. The toast above the bar gains **Open** and **Share** beside the existing sheet choices.
 
 ## 3. Fix the day when someone drops out
 **Outcome:** everyone affected still has a treatment, and I can undo it. **First view:** on the pill's sheet: who, what breaks, and the whole plan (who moves to whom) as a preview. **Path:** pill → "Move all N treatments" (2), toast with Undo. **Fails when:** applied without showing what moves.
@@ -86,7 +86,7 @@ Each story walked on a 375 × 812 phone against a fresh demo centre; taps from `
 | # | Story | Path walked | Taps | Target | First view as the story says |
 |---|---|---|---|---|---|
 | 1 | Morning glance | open the app | 0 | 0 | the pill ("9 to know") above the bar; empty sections hidden |
-| 2 | Print the day sheet | Print | 1 | 1 | toast with Open and Share; sheet says "patient" |
+| 2 | Print the day sheet | Menu, Print | 2 | 2 | toast with Open and Share; sheet says "patient" |
 | 3 | Fix the day | pill → Move all | 2 | 2 | who, what breaks, and the plan before applying; Undo |
 | 4 | Add an arriving patient | + → gender → Add | 3 | 2 | four fields, consultation pre-booked; the third tap is the gender, which nothing preselects (#283) |
 | 5 | Book or move | + → who → Book | 3 | 3 | five suggestions, search above the keyboard, every line editable |

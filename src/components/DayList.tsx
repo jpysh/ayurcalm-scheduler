@@ -125,7 +125,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
     <b className="ml-2 rounded-md bg-now px-1.5 text-xs font-bold text-white tabular-nums">{hm(NOW)}</b>
   </div>;
   const group = "rounded-xl overflow-hidden bg-card";
-  const sticky = "sticky top-0 z-[2] bg-background flex items-baseline gap-2 px-1 pt-3 pb-1.5";
+  const sticky = "sticky top-[52px] z-[2] bg-background flex items-baseline gap-2 px-1 pt-3 pb-1.5";
 
   let body: React.ReactNode;
   if (view === "time") {
@@ -191,8 +191,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
   return (
     <div className="flex flex-col pb-36">
       {view === "time" ? (
-        <div className="sticky top-0 z-[3] bg-background flex justify-between items-baseline px-1 pt-3 pb-1.5 text-sm text-muted-foreground">
-          <b className="text-base text-foreground">{isToday ? "Today" : "The day"}</b>
+        <div className="flex justify-center items-baseline px-1 pt-1 pb-1.5 text-sm text-muted-foreground">
           <span className="flex items-center gap-2">{rows.length} treatments{roomCount ? ` · ${roomCount} rooms` : ""}{headerAction}</span>
         </div>
       ) : (
