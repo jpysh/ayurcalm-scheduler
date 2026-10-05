@@ -268,7 +268,7 @@ test('search finds a resident on other days and opens the card with Show this da
   // Search covers every day, not the one on screen (#165): a resident from the
   // chips has treatments listed under day headings, and a result opens its card.
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Search treatments' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Search/ }).click();
   await expect(page.getByText('Patients', { exact: true }).first()).toBeVisible({ timeout: 15000 });
   // A resident chip is a full name; therapist chips are first names.
   await page.getByRole('button', { name: /^\S+ \S+/ }).first().click();
@@ -293,7 +293,7 @@ test('a search match inside a room name keeps the name in one piece (#193)', asy
   await signIn(page);
   await passSetupIfShown(page);
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Search treatments' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Search/ }).click();
   await page.getByPlaceholder('Name, therapy or room').fill('ra');
   const mark = page.locator('mark').first();
   await expect(mark).toBeVisible({ timeout: 15000 });
@@ -328,13 +328,13 @@ test('the day by therapist starts where the by-time view does (#193)', async ({ 
   await showDay(page, '2030-03-13');
   const top = async (l: ReturnType<Page['getByText']>) => (await l.boundingBox())!.y;
   const byTime = await top(page.getByText(/ treatments?\b/).first());
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('button', { name: /^Show the day by/ }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Therapist', exact: true }).click();
-  const back = page.getByRole('button', { name: 'Back to by time' });
-  await expect(back).toBeVisible();
-  // Both headers sit just under the day's ‹ › header (52px), the same height in either view.
+  const chip = page.getByRole('button', { name: /^Show the day by, now Therapist/ });
+  await expect(chip).toBeVisible();
+  // The count line and its view chip sit under the week strip, at the same height in either view.
   expect(byTime).toBeLessThan(135);
-  expect(Math.abs((await top(back)) - byTime)).toBeLessThan(12);
+  expect(Math.abs((await top(page.getByText(/ treatments?\b/).first())) - byTime)).toBeLessThan(12);
 });
 
 test('on a phone, lists are plain rows and a tap opens the edit sheet (#178)', async ({ page }) => {

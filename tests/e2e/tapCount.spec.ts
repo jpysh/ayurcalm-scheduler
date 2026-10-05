@@ -426,13 +426,14 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
 
     await job(page, rows, 'Therapist not in', async (tap) => {
       await showDay(page, day);
-      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
+      await tap(page.getByRole('button', { name: /^Show the day by/ }));
       await tap(page.getByRole('dialog').getByRole('button', { name: 'Therapist', exact: true }));
       await tap(activePanel(page).getByRole('button', { name: / not in$/ }).first());
       const note = page.locator('[data-sonner-toast]');
       await expect(note).toContainText('not in all day', { timeout: 20000 });
       await note.getByRole('button', { name: 'Undo' }).click();
-      await activePanel(page).getByRole('button', { name: 'Back to by time' }).click();
+      await activePanel(page).getByRole('button', { name: /^Show the day by/ }).click();
+      await page.getByRole('dialog').getByRole('button', { name: 'Time', exact: true }).click();
     });
 
     // From a treatment in that room: Something wrong? → the room can't be used.

@@ -1,11 +1,11 @@
-import { Btn } from "@/components/kit";
+import { BottomSheet, Btn, Seg } from "@/components/kit";
 /**
  * The day as one list (#62), built to docs/design/phone.html: hour groups with
  * sticky headers, finished treatments dimmed above, a line at now, and the
  * screen opening there. The same rows regroup by therapist, room or resident.
  * Everything shown comes from the server's appointments; the list only sorts.
  */
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { DoorClosed } from "lucide-react";
 
 type Appt = {
@@ -22,6 +22,7 @@ type Appt = {
 };
 type Named = { id: string | number; name: string };
 export type DayView = "time" | "therapist" | "room" | "resident";
+const VIEW_NAMES: Record<DayView, string> = { time: "Time", therapist: "Therapist", room: "Room", resident: "Patient" };
 
 // One colour per therapist, as the design does; kept away from red and orange,
 // which mean attention and now.
@@ -56,6 +57,7 @@ type Props = {
 };
 
 export default function DayList({ appointments, isToday, nowMinutes: NOW, view, setView, query, patients, roomsList, staff, therapyNameById, onOpen, onNotIn, headerAction, movedFrom = {}, roomCount, flags = {} }: Props) {
+  const [pickView, setPickView] = useState(false);
   const name = (list: Named[], id: string | null) => list.find((x) => String(x.id) === String(id))?.name || "";
   const colourOf = (id: string) => COLOURS[Math.max(0, staff.findIndex((s) => String(s.id) === id)) % COLOURS.length];
   const q = query.trim().toLowerCase();
@@ -190,16 +192,13 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
 
   return (
     <div className="flex flex-col pb-36">
-      {view === "time" ? (
-        <div className="flex justify-center items-baseline px-1 pt-1 pb-1.5 text-sm text-muted-foreground">
-          <span className="flex items-center gap-2">{rows.length} {rows.length === 1 ? "treatment" : "treatments"}{roomCount ? ` · ${roomCount} rooms` : ""}{headerAction}</span>
-        </div>
-      ) : (
-        <div className="flex justify-between items-center px-1 pt-3 text-sm font-semibold">
-          By {view}
-          <Btn kind="quiet" inline onClick={() => setView("time")}>Back to by time</Btn>
-        </div>
-      )}
+      <div className="flex items-center justify-between px-1 pb-1 text-sm text-muted-foreground">
+        <span className="flex items-center gap-2">{rows.length} {rows.length === 1 ? "treatment" : "treatments"}{roomCount ? ` · ${roomCount} rooms` : ""}{headerAction}</span>
+        <button type="button" aria-label={`Show the day by, now ${VIEW_NAMES[view]}`} onClick={() => setPickView(true)} className="-my-1.5 min-h-11 rounded-full px-3 font-semibold text-primary active:bg-secondary">By {VIEW_NAMES[view].toLowerCase()} ▾</button>
+      </div>
+      <BottomSheet open={pickView} onOpenChange={setPickView} title="Show the day by" note="The same treatments, grouped another way.">
+        <Seg<DayView> options={[["time", "Time"], ["therapist", "Therapist"], ["room", "Room"], ["resident", "Patient"]]} value={view} onChange={(v) => { setView(v); setPickView(false); }} />
+      </BottomSheet>
       {rows.length ? body : <div className="p-3 text-center text-sm text-muted-foreground">{q ? `Nothing matches "${query}" on this day.` : "Nothing booked on this day."}</div>}
       {rows.length ? <div className="p-3 text-center text-sm text-muted-foreground">End of the day</div> : null}
     </div>
