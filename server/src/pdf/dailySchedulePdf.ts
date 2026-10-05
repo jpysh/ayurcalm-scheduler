@@ -155,7 +155,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     .map((start) => ({ label: bucket > 60 ? `${hhmm(start)}\u2013${hhmm(start + bucket)}` : hhmm(start), start, end: start + bucket }))
     .sort((a, b) => a.start - b.start);
   const everyoneLine = [...sharedEvents]
-    .sort((a, b) => a.start_time.localeCompare(b.start_time))
+    .sort((a, b) => a.start_time.localeCompare(b.start_time) || a.end_time.localeCompare(b.end_time) || a.activity_name.localeCompare(b.activity_name))
     .map(eventWindow)
     .join('  \u00b7  ');
 
@@ -290,7 +290,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
             bold: false,
             text: eventWindow(e),
           })),
-        ].sort((m, n) => m.t.localeCompare(n.t));
+        ].sort((m, n) => m.t.localeCompare(n.t) || String(m.text).localeCompare(String(n.text)));
       });
       items.push({ kind: 'row', name: patientById[id] || id, cells, group });
     }

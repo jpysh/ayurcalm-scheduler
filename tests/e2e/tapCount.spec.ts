@@ -41,7 +41,7 @@ const JOBS: [string, number][] = [
   ["Change a patient's stay", 3],
   ["Print a patient's discharge summary", 3],
   // From the day: Menu, Leave, +, then Save, plan later. Picking who and typing dates are not counted.
-  ["Record a therapist's leave", 4],
+  ["Record a therapist's leave", 6], // 4 + open and pick on the searchable Who list (150 names do not fit a phone's wheel)
   // Menu, Diet plans, the plan, Save (#285 session 6).
   ['Edit a diet plan', 4],
   // Menu, Settings, What needs you, a switch (#285 session 7, #288).
@@ -373,7 +373,8 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await tap(page.getByRole('button', { name: 'Menu', exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Leave/ }));
       await tap(page.getByRole('button', { name: 'Add leave' }));
-      await page.getByRole('dialog').getByLabel('Who or what').selectOption({ label: staff.find((x) => x.is_active)!.name });
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Who or what/ }));
+      await tap(page.getByRole('dialog').last().getByRole('button', { name: staff.find((x) => x.is_active)!.name, exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: 'Save, plan later' }));
       await expect(page.locator('[data-sonner-toast]').filter({ hasText: /Leave saved/ })).toBeVisible({ timeout: 20000 });
     });

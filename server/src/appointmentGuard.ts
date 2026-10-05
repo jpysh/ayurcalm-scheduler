@@ -136,7 +136,7 @@ export function findConflict(c: Candidate, ctx: DayContext): Conflict | null {
     if (room && missing.length > 0) {
       return {
         reason: 'AMENITIES_MISSING',
-        message: `${room.name} has no ${missing.join(' or ')}, which ${therapy.name} needs.`,
+        message: `${room.name} has no ${missing.map((a) => a.replace(/_/g, ' ')).join(' or ')}, which ${therapy.name} needs.`,
         details: { missing },
       };
     }

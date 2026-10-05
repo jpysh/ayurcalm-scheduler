@@ -81,6 +81,35 @@ export const Dropdown = ({ label, note, children, ...rest }: { label: string; no
   </Field>
 );
 
+/**
+ * A long list (more than ~15) is a sheet with a search field, never a phone's wheel of 150 names.
+ * The field looks like a Dropdown; groups keep their headings and typing filters across them.
+ */
+export function PickField({ label, value, placeholder, groups, onPick }: { label: string; value: string; placeholder: string; groups: { title: string; options: { id: string; name: string }[] }[]; onPick: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const all = groups.flatMap((g) => g.options);
+  const chosen = all.find((o) => o.id === value);
+  const needle = q.trim().toLowerCase();
+  const shown = groups.map((g) => ({ ...g, options: g.options.filter((o) => !needle || o.name.toLowerCase().includes(needle)) })).filter((g) => g.options.length);
+  return (
+    <>
+      <Field label={label}>
+      <button type="button" aria-label={`${label}: ${chosen?.name ?? placeholder}`} onClick={() => { setQ(""); setOpen(true); }} className={`${field} flex items-center justify-between text-left ${chosen ? "" : "text-muted-foreground"}`}>
+        <span className="truncate">{chosen?.name ?? placeholder}</span>{chevron}
+      </button>
+      </Field>
+      <BottomSheet open={open} onOpenChange={setOpen} title={label} foot={<SearchField value={q} onChange={setQ} placeholder="Type a name" />}>
+        {shown.length ? shown.map((g) => (
+          <ListGroup key={g.title} title={g.title} count={g.options.length}>
+            {g.options.map((o) => <Row key={o.id} title={o.name} trailing={o.id === value ? "✓" : undefined} onClick={() => { onPick(o.id); setOpen(false); }} />)}
+          </ListGroup>
+        )) : <Empty text="No one by that name." />}
+      </BottomSheet>
+    </>
+  );
+}
+
 /** "Wed 30 Sept", the stored calendar day read as itself, never through a clock (#189). Linux adds a comma. */
 export const dayText = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).replace(",", "");
 
