@@ -1,5 +1,5 @@
 /**
- * Team and rooms (#137, docs/design/phone.html; rebuilt from the kit in #285 session 6):
+ * Team, and Rooms: two screens from one component since #328, each with its own + (#137, docs/design/phone.html; rebuilt from the kit in #285 session 6):
  * who is working today and which rooms there are, and the one thing each is asked
  * most: a therapist not in, in late or leaving early; a room out of use. Each is
  * time off from now, the same as the day's headings, so the server moves what it
@@ -19,10 +19,12 @@ import type { UiRoom, UiStaff } from "@/pages/tabs/shared";
 type Pick = { kind: "staff" | "room"; id: string; name: string } | null;
 type Late = "late" | "early" | "away" | null;
 
-export function TeamRooms({ staff, rooms, q, today, nowHM, opening, closing, refresh, openPerson, openRoom, openScreen, openRules }: {
+export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closing, refresh, openPerson, openRoom, openScreen, openRules }: {
+  /** Which screen: the team (with the week and the centre's lists) or the rooms. */
+  kind: "team" | "rooms";
   staff: UiStaff[];
   rooms: UiRoom[];
-  /** The bar's search: filters both lists. */
+  /** The bar's search: filters the list on screen. */
   q: string;
   /** YYYY-MM-DD and "14:35", on the centre's clock. */
   today: string;
@@ -38,6 +40,7 @@ export function TeamRooms({ staff, rooms, q, today, nowHM, opening, closing, ref
   openRules: () => void;
 }) {
   const [offToday, setOffToday] = useState<Record<string, string | null>>({});
+  const [roomsOff, setRoomsOff] = useState<Set<string>>(new Set());
   const [week, setWeek] = useState<Week | null>(null);
   const [showWeek, setShowWeek] = useState(false);
   const [pick, setPick] = useState<Pick>(null);
@@ -49,6 +52,9 @@ export function TeamRooms({ staff, rooms, q, today, nowHM, opening, closing, ref
     fetch(`${API_BASE}/staff-day?date=${today}`).then((r) => (r.ok ? r.json() : []))
       .then((rows: { staff_id: string; off: string | null }[]) => setOffToday(Object.fromEntries(rows.map((x) => [x.staff_id, x.off]))))
       .catch(() => setOffToday({}));
+    fetch(`${API_BASE}/timeoff?from=${today}&to=${today}`).then((r) => (r.ok ? r.json() : []))
+      .then((rows: { entity_type: string; entity_id: string }[]) => setRoomsOff(new Set(rows.filter((x) => x.entity_type === "room").map((x) => x.entity_id))))
+      .catch(() => setRoomsOff(new Set()));
   }, [today]);
   useEffect(() => { load(); }, [load]);
   // The week this day is in, from Monday: how full the team is, not what they do.
@@ -62,11 +68,14 @@ export function TeamRooms({ staff, rooms, q, today, nowHM, opening, closing, ref
   const roomActive = (r: UiRoom) => r.status === "Active";
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { numeric: true });
   const match = (n: string) => !ql || n.toLowerCase().includes(ql);
-  const team = staff.filter((s) => staffActive(s) && match(s.name)).sort(byName);
+  const isTeam = kind === "team";
+  const team = isTeam ? staff.filter((s) => staffActive(s) && match(s.name)).sort(byName) : [];
   const notIn = staff.filter((s) => staffActive(s) && offToday[String(s.id)]);
-  const roomRows = rooms.filter((r) => roomActive(r) && match(r.name)).sort(byName);
-  const idle = [...staff.filter((s) => !staffActive(s) && match(s.name)).map((s) => ({ kind: "staff" as const, id: String(s.id), name: s.name, facts: "Not working here now" })),
-    ...rooms.filter((r) => !roomActive(r) && match(r.name)).map((r) => ({ kind: "room" as const, id: String(r.id), name: r.name, facts: "Out of use" }))].sort(byName);
+  const roomRows = isTeam ? [] : rooms.filter((r) => roomActive(r) && match(r.name)).sort(byName);
+  const idle = isTeam
+    ? staff.filter((s) => !staffActive(s) && match(s.name)).map((s) => ({ kind: "staff" as const, id: String(s.id), name: s.name, facts: "Not working here now" })).sort(byName)
+    : rooms.filter((r) => !roomActive(r) && match(r.name)).map((r) => ({ kind: "room" as const, id: String(r.id), name: r.name, facts: "Out of use" })).sort(byName);
+  const roomsOut = rooms.filter((r) => roomActive(r) && roomsOff.has(String(r.id))).length;
 
   /** Time off between from and until; null means the edge of the day. Days default to today. */
   async function takeOut(kind: "staff" | "room", id: string, name: string, from: string | null, until: string | null, what: string, days = { start: today, end: today }) {
@@ -95,10 +104,12 @@ export function TeamRooms({ staff, rooms, q, today, nowHM, opening, closing, ref
 
   return (
     <div>
-      <PageHead title="Team and rooms" note={`${staff.filter(staffActive).length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}`} gear={{ label: "What needs you: team rules", run: openRules }} />
-      {/* Always there, so the lists do not move under a tap when the week arrives. */}
-      <ListGroup><Row title="This week" facts={week ? weekLine(week) : undefined} trailing="›" onClick={week ? () => setShowWeek(true) : undefined} /></ListGroup>
-      {none ? <Empty text="No one or no room matches." /> : null}
+      {isTeam ? <>
+        <PageHead title="Team" note={`${staff.filter(staffActive).length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}`} gear={{ label: "What needs you: team rules", run: openRules }} />
+        {/* Always there, so the lists do not move under a tap when the week arrives. */}
+        <ListGroup><Row title="This week" facts={week ? weekLine(week) : undefined} trailing="›" onClick={week ? () => setShowWeek(true) : undefined} /></ListGroup>
+      </> : <PageHead title="Rooms" note={`${rooms.filter(roomActive).length} rooms${roomsOut ? ` · ${roomsOut} out` : ""}`} />}
+      {none ? <Empty text={isTeam ? "No one matches." : "No room matches."} /> : null}
       {team.length ? (
         <ListGroup title="Therapists and doctors" count={team.length}>
           {team.map((s) => (
@@ -109,7 +120,7 @@ export function TeamRooms({ staff, rooms, q, today, nowHM, opening, closing, ref
       ) : null}
       {roomRows.length ? (
         <ListGroup title="Rooms" count={roomRows.length}>
-          {roomRows.map((r) => <Row key={r.id} title={r.name} facts={roomSub(r)} trailing="›" onClick={() => setPick({ kind: "room", id: String(r.id), name: r.name })} />)}
+          {roomRows.map((r) => <Row key={r.id} title={r.name} facts={roomSub(r)} flag={roomsOff.has(String(r.id)) ? "Out of use today" : undefined} trailing="›" onClick={() => setPick({ kind: "room", id: String(r.id), name: r.name })} />)}
         </ListGroup>
       ) : null}
       {idle.length ? (
@@ -117,12 +128,14 @@ export function TeamRooms({ staff, rooms, q, today, nowHM, opening, closing, ref
           {idle.map((x) => <Row key={`${x.kind}${x.id}`} title={x.name} facts={x.facts} trailing="›" onClick={() => (x.kind === "staff" ? openPerson(x.id) : openRoom(x.id))} />)}
         </ListGroup>
       ) : null}
-      <ListGroup title="The centre's lists">
-        <div className="px-3">
-          <ChangeLine label="Therapies" value="What the centre offers" onClick={() => openScreen("therapies")} />
-          <ChangeLine label="Classes and events" value="The daily round" onClick={() => openScreen("events")} />
-        </div>
-      </ListGroup>
+      {isTeam ? (
+        <ListGroup title="The centre's lists">
+          <div className="px-3">
+            <ChangeLine label="Therapies" value="What the centre offers" onClick={() => openScreen("therapies")} />
+            <ChangeLine label="Classes and events" value="The daily round" onClick={() => openScreen("events")} />
+          </div>
+        </ListGroup>
+      ) : null}
 
       <BottomSheet open={showWeek} onOpenChange={setShowWeek} title="This week">
         {week ? <WeekList week={week} /> : null}

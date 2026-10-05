@@ -39,10 +39,10 @@ async function showDay(page: Page, day: string) {
 
 /** Screens are reached from the bottom bar's menu (#66). A tap while the last screen is still loading can be lost, so retry. */
 async function openTab(page: Page, name: string) {
-  // The editors for the lists open from Team and rooms, not the menu (#137).
+  // The editors for the lists open from Team, not the menu (#137).
   const fromTeam: Record<string, RegExp> = { Therapies: /^Therapies/, Events: /^Classes and events/ };
   if (fromTeam[name]) {
-    await openTab(page, 'Team and rooms');
+    await openTab(page, 'Team');
     await activePanel(page).getByRole('button', { name: fromTeam[name] }).click();
     return;
   }
@@ -74,7 +74,8 @@ test('@smoke admin signs in with Enter and every tab shows its content', async (
   await signIn(page);
   await passSetupIfShown(page);
   for (const [tab, text] of [
-    ['Team and rooms', 'Therapists and doctors'],
+    ['Team', 'Therapists and doctors'],
+    ['Rooms', ' rooms'],
     ['Therapies', 'Therapies'],
     ['Diet plans', 'Plans'],
     ['Leave', 'Upcoming'],
@@ -87,7 +88,7 @@ test('@smoke admin signs in with Enter and every tab shows its content', async (
     await expect(activePanel(page)).toContainText(text, { timeout: 15000 });
   }
   // A page has one header line, as the design's (#193): its name, and no "‹ The day" line above it.
-  for (const [tab, title] of [['Patients', 'Patients'], ['Team and rooms', 'Team and rooms'], ['Leave', 'Leave'], ['Diet plans', 'Diet plans'], ['Settings', 'Settings']]) {
+  for (const [tab, title] of [['Patients', 'Patients'], ['Team', 'Team'], ['Rooms', 'Rooms'], ['Leave', 'Leave'], ['Diet plans', 'Diet plans'], ['Settings', 'Settings']]) {
     await openTab(page, tab);
     await expect(activePanel(page).getByRole('heading', { level: 1 })).toHaveText(title);
     await expect(page.getByRole('button', { name: '‹ The day' })).toHaveCount(0);
@@ -124,7 +125,7 @@ test('@smoke day sheet PDF prints for today', async ({ page, request }) => {
 test('an edit to a room is still there after a reload', async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  await openTab(page, 'Team and rooms');
+  await openTab(page, 'Rooms');
   // A centre edits its own data on day one, and an edit that looks saved but is
   // not is the failure nobody notices until the schedule is already wrong.
   // Each room is a row; a tap opens its sheet (#273).
@@ -144,7 +145,7 @@ test('an edit to a room is still there after a reload', async ({ page }) => {
 
   await page.reload();
   await passSetupIfShown(page);
-  await openTab(page, 'Team and rooms');
+  await openTab(page, 'Rooms');
   await expect(activePanel(page)).toContainText(edited, { timeout: 15000 });
 
   // Put the name back, so the day sheet and the next run see the centre as it was.
@@ -431,7 +432,7 @@ test('Therapies offers the standard library, and a seeded centre already has all
 test('leave for a day ahead is marked from Team, and a whole day carries no hours (#219)', async ({ page, request }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  await openTab(page, 'Team and rooms');
+  await openTab(page, 'Team');
   await activePanel(page).getByRole('button', { name: /\b(Therapist|Doctor)\b/ }).first().click();
   const sheet = page.getByRole('dialog');
   await sheet.getByRole('button', { name: 'Away another day' }).click();
@@ -498,7 +499,7 @@ test('a resident arriving today has the arrival steps still to do (#219)', async
 test('Team shows this week: booked hours against hours in, and each person\'s days (#219)', async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  await openTab(page, 'Team and rooms');
+  await openTab(page, 'Team');
   const line = activePanel(page).getByRole('button', { name: /^This week/ });
   await expect(line).toContainText(/\d+h booked of \d+h/, { timeout: 15000 });
   await line.click();

@@ -502,14 +502,14 @@ const AdminDashboard = () => {
   residentOpener.current = patientsScreen.openResident;
   patientAdder.current = (name, arriving, done) => patientsScreen.openAdd({ name, arriving, done });
   // The adaptive + (#285): it adds what the screen is about. A trial that has ended adds nothing and says so.
-  const [showTeamChoice, setShowTeamChoice] = useState(false);
   const guard = (adds: string, what: string, run: () => void) => ({ adds, run: () => { if (readOnly) { toast(`The free trial has ended, so nothing new can be ${what}. Nothing is deleted.`, { duration: 10000, action: { label: "Choose a plan", onClick: () => go('settings') } }); return; } run(); } });
   const dietScreen = useDietScreen({ active: activeTab === 'diet' });
   const plusFor = activeTab === 'schedule' ? guard('Book a treatment', 'booked', scheduleScreen.openBook)
     : activeTab === 'patients' ? guard('New patient', 'added', patientsScreen.openAdd)
     : activeTab === 'timeoff' ? guard('Add leave', 'added', timeOffScreen.openAdd)
     : activeTab === 'diet' ? guard('New diet plan', 'added', dietScreen.openAdd)
-    : activeTab === 'team' ? guard('Add to the team', 'added', () => setShowTeamChoice(true))
+    : activeTab === 'team' ? guard('Add a therapist or doctor', 'added', () => staffScreen.openAdd())
+    : activeTab === 'rooms' ? guard('Add a room', 'added', roomsScreen.openAdd)
     : activeTab === 'therapies' ? guard('Add therapy', 'added', therapiesScreen.openAdd)
     : activeTab === 'events' ? guard('Add event', 'added', eventsScreen.openAdd)
     : null;
@@ -564,7 +564,7 @@ const AdminDashboard = () => {
                 <ListGroup title="Get started">
                   {([["therapies", "Add your therapies", therapies.length], ["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first patient", patients.length]] as const).map(([tab, label, n]) => (
                     <Row key={tab} title={label} facts={n ? `${n} added` : "Not yet"} trailing={n ? "✓" : "Add ›"}
-                      onClick={() => { if (tab === "rooms" || tab === "staff") { go("team"); (tab === "rooms" ? roomsScreen : staffScreen).openAdd(); } else { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); } }} />
+                      onClick={() => { if (tab === "rooms") { go("rooms"); roomsScreen.openAdd(); } else if (tab === "staff") { go("team"); staffScreen.openAdd(); } else { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); } }} />
                   ))}
                 </ListGroup>
                 <p className="px-1 pt-2 text-sm text-muted-foreground">Then tap + to book the first treatment.</p>
@@ -583,7 +583,14 @@ const AdminDashboard = () => {
           </TabsContent>
 
           <TabsContent value="team" data-testid="tabpanel-team">
-            <TeamRooms staff={staff} rooms={roomsList} q={listQuery} today={ymdInTZ(new Date())}
+            <TeamRooms kind="team" staff={staff} rooms={roomsList} q={listQuery} today={ymdInTZ(new Date())}
+              nowHM={new Date().toLocaleTimeString("en-GB", { timeZone: ADMIN_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}
+              opening={centreHours.opening_time} closing={centreHours.closing_time}
+              refresh={() => refreshAppointmentsForDate(ymdInTZ(new Date()), true)}
+              openPerson={staffScreen.openEdit} openRoom={roomsScreen.openEdit} openScreen={go} openRules={() => setRules({ section: 'Team' })} />
+          </TabsContent>
+          <TabsContent value="rooms" data-testid="tabpanel-rooms">
+            <TeamRooms kind="rooms" staff={staff} rooms={roomsList} q={listQuery} today={ymdInTZ(new Date())}
               nowHM={new Date().toLocaleTimeString("en-GB", { timeZone: ADMIN_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}
               opening={centreHours.opening_time} closing={centreHours.closing_time}
               refresh={() => refreshAppointmentsForDate(ymdInTZ(new Date()), true)}
@@ -645,8 +652,8 @@ const AdminDashboard = () => {
         }}
         plus={plusFor}
         // One search: on Patients it filters that list, anywhere else it searches the day.
-        search={['team', 'therapies', 'events'].includes(activeTab)
-          ? { query: listQuery, setQuery: setListQuery, on: listSearching, setOn: setListSearching, placeholder: activeTab === 'team' ? 'Search the team and rooms' : `Search ${activeTab}`, label: `Search ${activeTab === 'team' ? 'the team' : activeTab}`, start: () => setListSearching(true) }
+        search={['team', 'rooms', 'therapies', 'events'].includes(activeTab)
+          ? { query: listQuery, setQuery: setListQuery, on: listSearching, setOn: setListSearching, placeholder: activeTab === 'team' ? 'Search the team' : `Search ${activeTab}`, label: `Search ${activeTab === 'team' ? 'the team' : activeTab}`, start: () => setListSearching(true) }
           : activeTab === 'patients'
           ? { query: patientsScreen.query, setQuery: patientsScreen.setQuery, on: patientsScreen.searching, setOn: patientsScreen.setSearching, placeholder: 'Search patients', label: 'Search patients', start: () => patientsScreen.setSearching(true) }
           : { query: scheduleScreen.query, setQuery: scheduleScreen.setQuery, on: scheduleScreen.searching, setOn: scheduleScreen.setSearching, placeholder: 'Name, therapy or room', label: 'Search', hint: 'Patients, therapists, treatments, any day', start: () => { go('schedule'); scheduleScreen.setSearching(true); } }}
@@ -700,14 +707,6 @@ const AdminDashboard = () => {
       />
       <RulesSheet open={!!rules} onOpenChange={(o) => { if (!o) setRules(null); }} section={rules?.section} attention={attention} reload={attention.reload} />
       {patientsScreen.dialogs}
-      {/* Choice +: Team can add several kinds of thing, so + asks which (#285). */}
-      <BottomSheet open={showTeamChoice} onOpenChange={setShowTeamChoice} title="Add to the team" note="What are you adding?">
-        <ListGroup>
-          {([['Therapist or doctor', 'Someone who gives treatments or consultations', staffScreen.openAdd], ['Room', 'Where treatments happen', roomsScreen.openAdd], ['Therapy', 'A treatment the centre offers', therapiesScreen.openAdd], ['Class or event', 'Yoga, meals, prayers: the centre\'s round', eventsScreen.openAdd]] as const).map(([name, note, add]) => (
-            <Row key={name} title={name} facts={note} trailing="›" onClick={() => { setShowTeamChoice(false); add(); }} />
-          ))}
-        </ListGroup>
-      </BottomSheet>
       {staffScreen.dialogs}
 
       {roomsScreen.dialogs}

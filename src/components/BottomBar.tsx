@@ -11,17 +11,18 @@ import { BottomSearch, BottomSheet, DateRow, Group, ListGroup, Row, Seg, Btn, Ti
 
 export const SCREENS = [
   ["patients", "Patients", "Who is staying"],
-  ["team", "Team and rooms", "Who is in today"],
+  ["team", "Team", "Who is in today"],
+  ["rooms", "Rooms", "Where treatments happen"],
   ["timeoff", "Leave", "Future time off"],
   ["diet", "Diet plans", "Meals by plan"],
   ["settings", "Settings", "Centre, users, AI"],
   ["schedule", "Back to the day", "The list"],
-  // Reached from Team and rooms, not the menu (#137).
+  // Reached from Team, not the menu (#137).
   ["therapies", "Therapies", ""],
   ["events", "Events", ""],
   ["log", "Log", ""],
 ] as const;
-/** The menu's tiles, as the design (#137): the rest open from Team and rooms. */
+/** The menu's tiles, as the design (#137): the rest open from Team. */
 const MENU = SCREENS.filter(([, , hint]) => hint);
 
 export { BottomSheet };
@@ -66,11 +67,15 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
       fetch(`${API_BASE}/staff-day?date=${today}`).then((r) => (r.ok ? r.json() : [])),
       fetch(`${API_BASE}/staff`).then((r) => (r.ok ? r.json() : [])),
       fetch(`${API_BASE}/settings`).then((r) => (r.ok ? r.json() : {})),
-    ]).then(([residents, days, staff, settings]: [unknown[], { staff_id: string; off: string | null }[], { id: string; name: string }[], { support_whatsapp?: string | null }]) => {
+      fetch(`${API_BASE}/rooms`).then((r) => (r.ok ? r.json() : [])),
+      fetch(`${API_BASE}/timeoff?from=${today}&to=${today}`).then((r) => (r.ok ? r.json() : [])),
+    ]).then(([residents, days, staff, settings, rooms, off]: [unknown[], { staff_id: string; off: string | null }[], { id: string; name: string }[], { support_whatsapp?: string | null }, { id: string }[], { entity_type: string; entity_id: string }[]]) => {
+      const roomsOut = new Set(off.filter((x) => x.entity_type === "room").map((x) => x.entity_id)).size;
       setHelpWa(settings.support_whatsapp || null);
       const out = days.filter((d) => d.off).map((d) => staff.find((s) => s.id === d.staff_id)?.name.split(" ")[0]).filter(Boolean);
       setHints({
         patients: `${residents.length} in house`,
+        rooms: `${rooms.length} rooms${roomsOut ? ` · ${roomsOut} out` : ""}`,
         team: out.length === 0 ? "Everyone in" : out.length === 1 ? `${out[0]} not in` : `${out.length} not in`,
         schedule: label(day),
       });
