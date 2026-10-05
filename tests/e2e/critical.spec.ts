@@ -586,3 +586,30 @@ test('editing an event in the sheet keeps the dates it runs between (#227)', asy
     await request.delete(`/api/program-events/${id}`, { headers });
   }
 });
+
+test("a treatment's History reads on the centre's clock, not the phone's (#304)", async ({ browser, request }) => {
+  // A phone in Auckland, a centre in India: the two clocks are hours apart.
+  const ctx = await browser.newContext({ timezoneId: 'Pacific/Auckland', viewport: { width: 375, height: 812 } });
+  const page = await ctx.newPage();
+  try {
+    const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
+    const headers = { Authorization: `Bearer ${token}` };
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const a = ((await (await request.get(`/api/appointments?date=${today}`, { headers })).json()) as { id: string; patient_id: string; notes: string | null }[])[0];
+    const patient = ((await (await request.get('/api/patients', { headers })).json()) as { id: string; name: string }[]).find((p) => p.id === a.patient_id)!;
+    // Any change leaves a History line stamped now.
+    await request.put(`/api/appointments/${a.id}`, { headers, data: { notes: `tz check ${Date.now()}` } });
+    const centreNow = () => new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
+    await signIn(page);
+    await passSetupIfShown(page);
+    await page.getByText(patient.name, { exact: true }).first().click();
+    const line = page.getByRole('dialog').locator('p', { hasText: /^\d+ \w+, \d\d:\d\d · / });
+    await expect(line).toBeVisible({ timeout: 15000 });
+    const shown = (await line.innerText()).match(/(\d\d:\d\d)/)![1];
+    const toMin = (hm: string) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3));
+    const gap = Math.abs(toMin(shown) - toMin(centreNow()));
+    expect(Math.min(gap, 1440 - gap), `shown ${shown}, centre clock ${centreNow()}`).toBeLessThanOrEqual(2);
+  } finally {
+    await ctx.close();
+  }
+});
