@@ -63,7 +63,6 @@ jobs:
   # merge without this.
   full:
     needs: scope
-    if: needs.scope.outputs.full == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -73,17 +72,19 @@ jobs:
       # qa walks one path in a browser, so Chromium goes in first.
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      # The same command the maintainer runs locally: starts the stack and runs
-      # every server test inside the app container.
-      - run: npm run qa
-      # Sign in, every tab, the day sheet. The absence walk already ran in qa, and
-      # a second run would press on the API's write limit.
-      # While the screens are rebuilt (#285) only the tap count blocks; the rest of
-      # e2e reports but does not fail the run. Restore at the closing session.
-      - run: npm run test:e2e -- tapCount
-      - run: npx playwright test --grep-invert "a therapist off|tap count"
-        continue-on-error: true
+      # Server, planner or Docker changes: the same command the maintainer runs
+      # locally, every server test inside the app container.
+      - if: needs.scope.outputs.full == 'true'
+        run: npm run qa
+      # A screen-only change: just the stack, for the smoke set.
+      - if: needs.scope.outputs.full != 'true'
+        run: RATE_LIMIT_WRITES=1000 docker compose up -d --build --wait
+      # The smoke set is the only browser gate (#315), on every PR. Everything else
+      # runs nightly (nightly.yml) and blocks nothing. qa already ran the
+      # therapist-off walk, and a second run would press on the API's write limit.
+      - run: npx playwright test --grep @smoke --grep-invert "${{ needs.scope.outputs.full == 'true' && 'a therapist off' || 'zzz-none' }}"
       # A centre moves self-host -> cloud -> self-host in one file (#231).
-      - run: sh scripts/move-test.sh
+      - if: needs.scope.outputs.full == 'true'
+        run: sh scripts/move-test.sh
       - if: failure()
         run: docker compose logs app | tail -100
