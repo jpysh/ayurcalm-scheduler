@@ -41,3 +41,5 @@ private/
 
 # Screenshots from scripts/shots.mjs (#193)
 docs/design/shots/
+docs/design/uat/*/lines.json
+.uat/
