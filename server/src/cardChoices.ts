@@ -5,6 +5,7 @@
  * refuse. The browser only shows these.
  */
 import type { PrismaClient } from '@prisma/client';
+import { eventHitsDay, type EventRow } from './availability.js';
 import { findConflict, loadDay, softWarnings, type Action, type Candidate, type Soft } from './appointmentGuard.js';
 
 export type Kind = 'time' | 'staff' | 'room' | 'therapy';
@@ -279,11 +280,12 @@ export async function notStaying(patientId: string, day: Date, prisma: PrismaCli
 
 /** The first time on a later day of the stay (to a fortnight on) that the patient, a therapist and a room are all free. */
 async function nextFreeSlot(day: Date, stayEnd: Date, therapy: Ctx['therapies'][number], patientId: string, prisma: PrismaClient): Promise<{ date: Date; start_time: string } | null> {
-  // ponytail: ignores centre holidays; a closed day offers no time only if therapists are marked off.
   for (let d = 1; d <= 14; d++) {
     const next = new Date(day.getTime() + d * DAY_MS);
     if (next > stayEnd) return null;
     const ctx = await loadDay(next, prisma);
+    // The scheduler refuses a centre holiday (CENTER_HOLIDAY), so offering one would fail on tap (#344).
+    if (ctx.timeOff.some((h) => h.entity_type === 'center' && eventHitsDay(h as unknown as EventRow, next))) continue;
     const open = toM(ctx.settings?.opening_time || '09:00');
     const close = toM(ctx.settings?.closing_time || '18:00');
     for (let t = Math.ceil(open / 15) * 15; t + therapy.duration_minutes <= close; t += 15) {
