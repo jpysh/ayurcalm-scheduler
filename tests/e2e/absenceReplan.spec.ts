@@ -108,8 +108,7 @@ test('@smoke a therapist off: the pill names it, its fix clears the day, and Und
 
   // Mark her off, the way the admin does.
   await openTab(page, 'Leave');
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Add leave' }).click();
+  await page.getByRole('button', { name: 'Add leave', exact: true }).click();
   const form = page.getByRole('dialog');
   // Who first, from one list (#265).
   await form.getByRole('button', { name: /^Who or what/ }).click();

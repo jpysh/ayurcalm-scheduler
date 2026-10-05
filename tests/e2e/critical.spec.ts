@@ -181,8 +181,7 @@ test('@smoke the booking sheet books a course of sessions in one go, and Undo ta
     await passSetupIfShown(page);
     await openTab(page, 'Back to the day');
     await showDay(page, DAY);
-    await page.getByRole('button', { name: 'Menu', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Book a treatment' }).click();
+    await page.getByRole('button', { name: 'Book a treatment', exact: true }).click();
     const sheet = page.getByRole('dialog');
     await sheet.getByLabel('Search patients').fill(patient.name);
     await sheet.getByRole('button', { name: new RegExp(`^${patient.name}`) }).first().click();

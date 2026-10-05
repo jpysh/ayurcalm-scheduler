@@ -14,7 +14,7 @@ Format: **Outcome** · **Trigger** · **First view** (facts a decision needs, no
 | 1 | Morning glance: is today OK, and what needs me? | 0 → 0 |
 | 2 | Print the day sheet | 1 → 2 (5 Oct, Print in the Menu) |
 | 3 | Fix the day when a therapist or room drops out | 2 → 2 |
-| 4 | Add an arriving patient | 4+ → 2 |
+| 4 | Add an arriving patient | 4+ → 2 (3 walked, 6 Oct: + is on the bar) |
 | 5 | Book or move a treatment | 2 → 3 |
 | 6 | Find a patient or a fact | 2 → 2 |
 | 7 | Set or change meals, by date | 4 → 3 |

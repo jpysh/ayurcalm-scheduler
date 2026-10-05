@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/apiBase";
-import { Menu, Search } from "lucide-react";
+import { Menu, Plus } from "lucide-react";
 import { BottomSearch, BottomSheet, DateRow, Group, ListGroup, Row, Seg, Btn, Tile } from "@/components/kit";
 
 /**
@@ -87,7 +87,9 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
       {search.on ? (
         <BottomSearch value={search.query} onChange={search.setQuery} onClose={() => { search.setOn(false); search.setQuery(""); }} placeholder={search.placeholder} label={search.label} />
       ) : (
-        <nav aria-label="Main" data-kit="bar" className="pointer-events-none fixed inset-x-[var(--bar-gap)] bottom-[calc(var(--bar-gap)+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl justify-end">
+        <nav aria-label="Main" data-kit="bar" className="pointer-events-none fixed inset-x-[var(--bar-gap)] bottom-[calc(var(--bar-gap)+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl justify-end gap-3">
+          {/* The screen's one main action, beside the menu and only where it means something (#313). */}
+          {plus ? <button type="button" aria-label={plus.adds} onClick={plus.run} className="pointer-events-auto grid h-[var(--bar-h)] w-[var(--bar-h)] place-items-center rounded-full bg-primary text-primary-foreground shadow-float active:bg-[hsl(var(--primary-hover))]"><Plus className="h-7 w-7" /></button> : null}
           <button type="button" aria-label="Menu" onClick={() => setSheet("menu")} className="pointer-events-auto relative grid h-[var(--bar-h)] w-[var(--bar-h)] place-items-center rounded-full bg-primary text-primary-foreground shadow-float active:bg-[hsl(var(--primary-hover))]">
             <Menu className="h-6 w-6" />
             {inbox ? <span aria-hidden className={`absolute -right-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full border-2 border-background px-1 text-xs font-bold text-white ${inbox.need ? "bg-destructive" : "bg-muted-foreground"}`}>{inbox.need || inbox.info}</span> : null}
@@ -96,9 +98,8 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
       )}
 
       {sheet === "menu" ? <BottomSheet open onOpenChange={(o) => setSheet(o ? "menu" : null)} title="" keepFocus>
-        {/* What needs doing first, then the one main action, then the rest of what can be done here. */}
+        {/* What needs doing first, then the rest of what can be done here. The main action is the + beside the menu. */}
         {inbox?.need ? <div className="mb-3"><ListGroup><Row key="inbox" title={`${inbox.need} need you`} facts="Things to fix or decide" trailing="›" onClick={close(attention!.open)} /></ListGroup></div> : null}
-        {plus ? <Btn kind="primary" onClick={close(plus.run)}>{plus.adds}</Btn> : null}
         <div className="mt-2">
           <ListGroup>
             {inbox && !inbox.need ? <Row key="inbox" title={`${inbox.info} to know`} trailing="›" onClick={close(attention!.open)} /> : null}
