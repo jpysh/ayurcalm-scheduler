@@ -93,7 +93,8 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
 }
 
 export const BLANK_PLAN: Plan = { id: "new", name: "", description: "", is_active: true, patients: 0 };
-const PLAN_FIELDS = MEALS.flatMap(([k, t]) => [[`therapy_${k}`, `${t} · treatment days`], [`rest_${k}`, `${t} · rest days`]] as const);
+// Treatment-day meals first, then rest-day meals: the admin plans one kind of day at a time (#338).
+const PLAN_FIELDS = ["therapy", "rest"].flatMap((kind) => MEALS.map(([k]) => `${kind}_${k}` as const));
 
 /**
  * A plan's meals: for everyone on it, or a copy for this patient alone (the segment's overrides win over the plan).
@@ -110,7 +111,7 @@ export function PlanEditor({ plan, patient, segmentId = "", onClose, onSaved }: 
       const segs = segmentId && patient ? await fetchJsonWithTimeout<{ id: string; overrides: Record<string, string> | null }[]>(`${API_BASE}/dietplans/segments?patient_id=${patient.id}`) : [];
       const o = (Array.isArray(segs) ? segs.find((s) => s.id === segmentId)?.overrides : null) || {};
       setOver(o);
-      const all = [...PLAN_FIELDS.map(([k]) => k), "medication", ...(patient ? [] : ["name", "description", "pre_therapy_notes", "post_therapy_notes"])];
+      const all = [...PLAN_FIELDS, "medication", ...(patient ? [] : ["name", "description", "pre_therapy_notes", "post_therapy_notes"])];
       setText(Object.fromEntries(all.map((k) => [k, String(o[k] ?? plan[k] ?? "")])));
     })();
   }, [plan, patient?.id, segmentId]);
@@ -136,7 +137,7 @@ export function PlanEditor({ plan, patient, segmentId = "", onClose, onSaved }: 
     onSaved();
   };
   return (
-    <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} title={isNew ? "New diet plan" : plan.name} note={patient ? "Type in a meal to change it. Leave a box empty for no meal." : "A rest-day meal left empty repeats the treatment-day one."}
+    <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} title={isNew ? "New diet plan" : plan.name} note={patient ? "Type in a meal to change it. Leave a box empty for no meal." : "The meals for a day with treatment, then for a rest day."}
       foot={<Foot label={patient ? "Save the meals" : isNew ? "Add this plan" : "Save the plan"} busy={busy} ok={!!text} save={save} remove={!patient && !isNew ? retire : undefined} removeLabel="Retire this plan" />}>
       {text === null ? <Loading rows={3} /> : (<>
         {segmentId && patient ? (<>
@@ -147,7 +148,11 @@ export function PlanEditor({ plan, patient, segmentId = "", onClose, onSaved }: 
           <Text label="Plan name" maxLength={120} autoComplete="off" value={text.name} onChange={(e) => setText({ ...text, name: e.target.value })} />
           <Text label="Description (optional)" maxLength={2000} value={text.description} onChange={(e) => setText({ ...text, description: e.target.value })} />
         </>) : null}
-        {PLAN_FIELDS.map(([k, t]) => <Area key={k} label={`${t} (optional)`} rows={2} maxLength={2000} value={text[k]} onChange={(e) => setText({ ...text, [k]: e.target.value })} />)}
+        {([["therapy", "On treatment days", undefined], ["rest", "On rest days", patient ? undefined : "A meal left empty repeats the treatment-day one."]] as const).map(([kind, title, note]) => (
+          <Group key={kind} label={title} note={note}>
+            <div className="grid gap-4">{MEALS.map(([m, t]) => <Area key={m} label={`${t} (optional)`} rows={2} maxLength={2000} value={text[`${kind}_${m}`]} onChange={(e) => setText({ ...text, [`${kind}_${m}`]: e.target.value })} />)}</div>
+          </Group>
+        ))}
         <Text label="Medication (optional)" maxLength={2000} value={text.medication} onChange={(e) => setText({ ...text, medication: e.target.value })} />
         {!patient ? (<>
           <Text label="Before treatment (optional)" maxLength={2000} value={text.pre_therapy_notes} onChange={(e) => setText({ ...text, pre_therapy_notes: e.target.value })} />
