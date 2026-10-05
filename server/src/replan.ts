@@ -199,7 +199,7 @@ export async function planDay(
   const proposed: Move[] = [];
   // Later days, read once each, and the slots this plan has already taken on them.
   const laterDays: Record<string, Awaited<ReturnType<typeof prisma.appointment.findMany>>> = {};
-  const laterTaken: { date: string; team: string[]; room: string; patient: string; s: number; e: number }[] = [];
+  const laterTaken: { date: string; team: string[]; room: string; patient: string; therapy: string; s: number; e: number }[] = [];
   const unplaced: Unplaced[] = [];
   const writes: { appointment_id: string; before: Record<string, unknown>; after: Record<string, unknown> }[] = [];
 
@@ -338,6 +338,8 @@ export async function planDay(
         const key = ymd(other);
         const otherDay = (laterDays[key] ??= await prisma.appointment.findMany({ where: { scheduled_date: other, ...HAPPENING } }));
         const taken = laterTaken.filter((x) => x.date === key);
+        // A course is one a day: not onto a day the resident already has this therapy.
+        if (otherDay.some((a) => a.patient_id === appt.patient_id && a.therapy_id === appt.therapy_id && a.id !== appt.id) || taken.some((x) => x.patient === appt.patient_id && x.therapy === appt.therapy_id)) continue;
         const hits = (a: { start_time: string; duration_minutes: number }, s: number, e: number) =>
           overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, s, e);
         for (let t = open; t + duration <= close; t += 30) {
@@ -379,7 +381,7 @@ export async function planDay(
     const hold = (slot: Slot) => {
       const end = slot.start + duration;
       if (slot.date !== ymd(date)) {
-        laterTaken.push({ date: slot.date, team: slot.team, room: slot.room, patient: appt.patient_id, s: slot.start, e: end });
+        laterTaken.push({ date: slot.date, team: slot.team, room: slot.room, patient: appt.patient_id, therapy: appt.therapy_id, s: slot.start, e: end });
         return;
       }
       for (const sid of slot.team) addBusy(staffBusy, sid, slot.start, end);

@@ -90,7 +90,8 @@ const useServerHealth = (base: string) => {
 type ApiTherapy = { id: string; name: string; required_amenities: string[]; duration_minutes: number; requires_gender_match: boolean; staff_required?: number; checklist?: { text: string; required: boolean }[]; vitals?: string[] };
 type ApiStaff = { id: string; name: string; gender: "male" | "female" | "other"; specializations: string[]; phone?: string };
 type ApiRoom = { id: string; name: string; amenities: string[]; is_active: boolean };
-type ApiPatient = { id: string; name: string; gender: "male" | "female" | "other"; phone?: string; email?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; medical_notes?: string | null; Stays?: { start_date: string; end_date: string }[] };
+type ApiTimeOffSimple = { id?: string; entity_type: 'center'|'staff'|'room'|'therapy'|'patient'; entity_id?: string | null };
+type ApiPatient = { id: string; name: string; gender: "male" | "female" | "other"; phone?: string; email?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; date_of_birth?: string | null; medical_notes?: string | null; Stays?: { start_date: string; end_date: string }[] };
 const AdminDashboard = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   // Opening hours drive the schedule's time rows. Defaults match the old
@@ -171,7 +172,7 @@ const AdminDashboard = () => {
         const r: ApiRoom[] = await fetchJsonWithTimeout(`${API_BASE}/rooms`);
         setRoomsList(r.map((x) => ({ id: x.id, name: x.name, amenities: x.amenities, schedule: "", status: x.is_active ? "Active" : "Maintenance" })));
         const p: ApiPatient[] = await fetchJsonWithTimeout(`${API_BASE}/patients`);
-        setPatients(p.map((x) => ({ id: x.id, name: x.name, phone: x.phone ?? "", email: x.email ?? "", gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", dob: x.date_of_birth ? new Date(x.date_of_birth as unknown as string).toISOString().slice(0,10) : "", emergencyContact: x.emergency_contact ?? "", emergencyPhone: x.emergency_phone ?? "", address: (x as { address?: string | null }).address ?? "", country: (x as { country?: string | null }).country ?? "", idNumber: (x as { id_number?: string | null }).id_number ?? "", registrationNumber: (x as { registration_number?: string | null }).registration_number ?? "", medicalNotes: x.medical_notes ?? "", actualStart: x.Stays?.[0]?.start_date || "", actualEnd: x.Stays?.[0]?.end_date || "", stays: x.Stays || [], preferredStaffId: (x as { preferred_staff_id?: string | null }).preferred_staff_id ?? null, requiresPreferredStaff: !!(x as { requires_preferred_staff?: boolean }).requires_preferred_staff })));
+        setPatients(p.map((x) => ({ id: x.id, name: x.name, phone: x.phone ?? "", email: x.email ?? "", gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", dob: x.date_of_birth ? new Date(x.date_of_birth).toISOString().slice(0,10) : "", emergencyContact: x.emergency_contact ?? "", emergencyPhone: x.emergency_phone ?? "", address: (x as { address?: string | null }).address ?? "", country: (x as { country?: string | null }).country ?? "", idNumber: (x as { id_number?: string | null }).id_number ?? "", registrationNumber: (x as { registration_number?: string | null }).registration_number ?? "", medicalNotes: x.medical_notes ?? "", actualStart: x.Stays?.[0]?.start_date || "", actualEnd: x.Stays?.[0]?.end_date || "", stays: x.Stays || [], preferredStaffId: (x as { preferred_staff_id?: string | null }).preferred_staff_id ?? null, requiresPreferredStaff: !!(x as { requires_preferred_staff?: boolean }).requires_preferred_staff })));
       } catch {
         setTherapies([]);
         setStaff([]);
@@ -209,10 +210,10 @@ const AdminDashboard = () => {
         setTimeOffs((merged || []).map((x) => ({
           id: x.id,
           date: x.date ? new Date(x.date).toISOString() : undefined,
-          startDate: (x.start_date || x.startDate) ? new Date(x.start_date || x.startDate).toISOString() : undefined,
-          endDate: (x.end_date || x.endDate) ? new Date(x.end_date || x.endDate).toISOString() : undefined,
-          startTime: x.start_time || x.startTime || undefined,
-          endTime: x.end_time || x.endTime || undefined,
+          startDate: x.start_date ? new Date(x.start_date).toISOString() : undefined,
+          endDate: x.end_date ? new Date(x.end_date).toISOString() : undefined,
+          startTime: x.start_time || undefined,
+          endTime: x.end_time || undefined,
           recurrence: x.recurrence || undefined,
           weekdays: (x.weekdays || undefined) as UiTimeOff['weekdays'],
           type:
@@ -249,7 +250,6 @@ const AdminDashboard = () => {
           return sum + list.filter((a) => a.staff_id === id).length;
         }, 0);
         counts.appointments = weeklyCount;
-        type ApiTimeOffSimple = { entity_type: 'center'|'staff'|'room'|'therapy'|'patient'; entity_id?: string | null };
         const timeoff = await fetchJsonWithTimeout<ApiTimeOffSimple[]>(`${API_BASE}/timeoff`);
         counts.timeoff = (timeoff || []).filter(x => x.entity_type === 'staff' && x.entity_id === id).length;
       } else if (kind === 'room') {

@@ -112,7 +112,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
   id: string | null; today: string; onClose: () => void;
   openTreatment: (a: CardAppt) => void; changeMeals: (p: { id: string; name: string }) => void;
   changePackage: (p: ResidentDay) => void; changeHouse: (p: ResidentDay) => void;
-  changeStay: (p: ResidentDay) => void; book: (p: { id: string; name: string }) => void; details: (id: string) => void;
+  changeStay: (p: ResidentDay) => void; book: (p: { id: string; name: string; consult?: boolean }) => void; details: (id: string) => void;
   /** What the Details row says: what is filled, or what to add. */
   detailsHint: (id: string) => string;
 }) {
@@ -201,7 +201,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
           ) : null}
           <ListGroup title="Doctor">
             <ChangeLine label="Last seen" value={d.last_consultation ? visit(d.last_consultation, false) : 'Not seen yet'} faint={!d.last_consultation} />
-            <ChangeLine label="Next" value={d.next_consultation ? visit(d.next_consultation, true) : 'None booked · book one'} faint={!d.next_consultation} onClick={d.next_consultation ? undefined : () => book(d)} />
+            <ChangeLine label="Next" value={d.next_consultation ? visit(d.next_consultation, true) : 'None booked · book one'} faint={!d.next_consultation} onClick={d.next_consultation ? undefined : () => book({ id: d.id, name: d.name, consult: true })} />
             <TextRow label="Plan" faint={!d.doctor_plan} onClick={() => setPlan(d.doctor_plan || '')}>{d.doctor_plan || 'No plan written yet'}</TextRow>
           </ListGroup>
           <ListGroup title={`Meals today${d.plan_name ? ` · ${d.plan_name}` : ''}`}>
@@ -242,7 +242,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   /** A treatment on the resident card opens the treatment card, on its day. */
   openTreatment: (a: CardAppt) => void;
   /** A booking, for the patient on a card when there is one. */
-  book: (p?: { id: string; name: string }) => void;
+  book: (p?: { id: string; name: string; consult?: boolean }) => void;
   /** "Search everything": the same words, over treatments. */
   searchEverything: (q: string) => void;
   /** "Edit the list" on a package or accommodation picker opens that list in Settings. */

@@ -19,7 +19,9 @@ export async function staffWeek(start: string, prisma: PrismaClient) {
     let capacity = 0;
     let booked = 0;
     const week = ctxs.map((ctx, i) => {
-      const hours = (s.weekly_schedule as Record<string, Hours>)?.[WEEKDAYS[days[i].getUTCDay()]];
+      // Hours never set count as 09:00-18:00 every day, as the scheduler reads them; a week set by hand keeps its days off.
+      const sched = s.weekly_schedule as Record<string, Hours> | null;
+      const hours = sched && Object.keys(sched).length ? sched[WEEKDAYS[days[i].getUTCDay()]] : { start: '09:00', end: '18:00' };
       if (!hours?.start || !hours?.end) return 'off' as const;
       const open = toMinutes(hours.start), close = toMinutes(hours.end);
       const offs = offOnDay(ctx.timeOff, 'staff', s.id, ctx.day);

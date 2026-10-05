@@ -192,7 +192,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
     <div className="flex flex-col pb-36">
       {view === "time" ? (
         <div className="flex justify-center items-baseline px-1 pt-1 pb-1.5 text-sm text-muted-foreground">
-          <span className="flex items-center gap-2">{rows.length} treatments{roomCount ? ` · ${roomCount} rooms` : ""}{headerAction}</span>
+          <span className="flex items-center gap-2">{rows.length} {rows.length === 1 ? "treatment" : "treatments"}{roomCount ? ` · ${roomCount} rooms` : ""}{headerAction}</span>
         </div>
       ) : (
         <div className="flex justify-between items-center px-1 pt-3 text-sm font-semibold">
