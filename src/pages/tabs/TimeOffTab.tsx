@@ -1,4 +1,4 @@
-import { Consequence, DateRow, Days, Dropdown, Empty, Foot, ListGroup, Row, Seg, Switch, Text, TimeList, TwoFoot } from "@/components/kit";
+import { Consequence, DateRow, Days, Empty, PickField, Foot, ListGroup, Row, Seg, Switch, Text, TimeList, TwoFoot } from "@/components/kit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
@@ -194,16 +194,16 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
           ? <Foot label="Save the leave" save={saveEdit} ok={newTimeOff.type === 'Center' || !!newTimeOff.entity} remove={() => { const h = editing; closeSheet(false); if (h) requestDelete('timeoff', h.id, h.description); }} removeLabel="Delete this leave" />
           : <TwoFoot main="Save and plan the day" onMain={() => save(true)} alt="Save, plan later" onAlt={() => save(false)} ok={newTimeOff.type === 'Center' || !!newTimeOff.entity} />}>
         {/* Who first, as one list (#265 H1): the old form asked for a "type" before the person. */}
-        <Dropdown label="Who or what" id="leaveWho" required
+        <PickField label="Who or what" placeholder="Choose…"
           value={newTimeOff.type === 'Center' ? 'Center:All' : newTimeOff.entity ? `${newTimeOff.type}:${newTimeOff.entity}` : ''}
-          onChange={(e) => { const [type, ...id] = e.target.value.split(':'); setNewTimeOff({ ...newTimeOff, type: type as UiTimeOff['type'], entity: id.join(':') }); }}>
-          <option value="" disabled>Choose…</option>
-          <optgroup label="Therapists and doctors">{staff.map((x) => <option key={x.id} value={`Staff:${x.id}`}>{x.name}</option>)}</optgroup>
-          <optgroup label="Rooms">{roomsList.map((r) => <option key={r.id} value={`Room:${r.id}`}>{r.name}</option>)}</optgroup>
-          <optgroup label="The whole centre"><option value="Center:All">The centre is closed</option></optgroup>
-          <optgroup label="Therapies">{therapies.map((t) => <option key={String(t.id ?? t.name)} value={`Therapy:${String(t.id ?? t.name)}`}>{t.name}</option>)}</optgroup>
-          <optgroup label="Patients">{patients.map((x) => <option key={x.id} value={`Patient:${x.id}`}>{x.name}</option>)}</optgroup>
-        </Dropdown>
+          onPick={(v) => { const [type, ...id] = v.split(':'); setNewTimeOff({ ...newTimeOff, type: type as UiTimeOff['type'], entity: id.join(':') }); }}
+          groups={[
+            { title: 'Therapists and doctors', options: staff.map((x) => ({ id: `Staff:${x.id}`, name: x.name })) },
+            { title: 'Rooms', options: roomsList.map((r) => ({ id: `Room:${r.id}`, name: r.name })) },
+            { title: 'The whole centre', options: [{ id: 'Center:All', name: 'The centre is closed' }] },
+            { title: 'Therapies', options: therapies.map((t) => ({ id: `Therapy:${String(t.id ?? t.name)}`, name: t.name })) },
+            { title: 'Patients', options: patients.map((x) => ({ id: `Patient:${x.id}`, name: x.name })) },
+          ]} />
         <div className="grid grid-cols-2 gap-3">
           <DateRow label="From" value={newTimeOff.date} onChange={(v) => setNewTimeOff({ ...newTimeOff, date: v, endDate: newTimeOff.endDate < v ? v : newTimeOff.endDate })} />
           <DateRow label="To" value={newTimeOff.endDate} min={newTimeOff.date} onChange={(v) => setNewTimeOff({ ...newTimeOff, endDate: v })} />
