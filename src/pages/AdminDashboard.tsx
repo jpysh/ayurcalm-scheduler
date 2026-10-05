@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { useTrial } from "@/lib/centreName";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useLocation, useNavigate } from "react-router-dom";
-import { BottomBar, DayNav, SCREENS } from "@/components/BottomBar";
+import { BottomBar, WeekStrip, SCREENS } from "@/components/BottomBar";
 import { TeamRooms } from "@/components/TeamRooms";
 import { LogScreen } from "@/components/LogScreen";
 import { AttentionSheet, type DayProblem, type ReplanBatch } from "@/components/AttentionSheet";
@@ -550,10 +550,10 @@ const AdminDashboard = () => {
                       onClick={() => { if (tab === "rooms" || tab === "staff") { go("team"); (tab === "rooms" ? roomsScreen : staffScreen).openAdd(); } else { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); } }} />
                   ))}
                 </ListGroup>
-                <p className="px-1 pt-2 text-sm text-muted-foreground">Then tap + to book the first treatment.</p>
+                <p className="px-1 pt-2 text-sm text-muted-foreground">Then open the menu and book the first treatment.</p>
               </div>
             ) : null}
-            {loaded && !scheduleScreen.searching ? <DayNav day={dayKeyMemo} today={ymdInTZ(new Date())} setDay={(iso) => { const [y, m, d] = iso.split('-').map(Number); setCurrentDate(new Date(y, m - 1, d)); }} /> : null}
+            {loaded && !scheduleScreen.searching ? <WeekStrip day={dayKeyMemo} today={ymdInTZ(new Date())} setDay={(iso) => { const [y, m, d] = iso.split('-').map(Number); setCurrentDate(new Date(y, m - 1, d)); }} /> : null}
             {loaded && scheduleScreen.tab}
           </TabsContent>
 

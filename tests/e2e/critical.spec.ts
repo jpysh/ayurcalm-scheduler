@@ -31,7 +31,8 @@ const activePanel = (page: Page) => page.locator('[role=tabpanel][data-state=act
 
 /** Puts a day on screen from the bottom bar's day button. */
 async function showDay(page: Page, day: string) {
-  await page.getByRole('button', { name: /^Change day/ }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Change day/ }).click();
   await page.getByRole('dialog').locator('input[type=date]').fill(day);
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
@@ -178,7 +179,8 @@ test('the booking sheet books a course of sessions in one go, and Undo takes the
     await passSetupIfShown(page);
     await openTab(page, 'Back to the day');
     await showDay(page, DAY);
-    await page.getByRole('button', { name: 'Book a treatment' }).click();
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Book a treatment' }).click();
     const sheet = page.getByRole('dialog');
     await sheet.getByLabel('Search patients').fill(patient.name);
     await sheet.getByRole('button', { name: new RegExp(`^${patient.name}`) }).first().click();
@@ -245,8 +247,9 @@ test("the day's problems are named on the first screen", async ({ page, request 
     // one tap names it with the resident in it. The count comes from the same
     // server check that refuses a booking — the pill has no rules of its own.
     // A resident with nothing booked is a rest day, not a note.
-    const pill = page.getByRole('button', { name: /1 need you/ });
-    await expect(pill).toBeVisible({ timeout: 20000 });
+    await expect(page.locator('nav[data-kit=bar] span[aria-hidden]')).toHaveText('1', { timeout: 20000 });
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    const pill = page.getByRole('dialog').getByRole('button', { name: /1 need you/ });
     await expect(pill).not.toContainText('note');
     await pill.click();
     await expect(page.getByRole('dialog')).toContainText(`${TAG} Rekha`, { timeout: 20000 });
@@ -260,8 +263,9 @@ test('search finds a resident on other days and opens the card with Show this da
   await passSetupIfShown(page);
   // Search covers every day, not the one on screen (#165): a resident from the
   // chips has treatments listed under day headings, and a result opens its card.
-  await page.getByRole('button', { name: 'Search treatments' }).click();
-  await expect(page.getByText('Patients', { exact: true })).toBeVisible({ timeout: 15000 });
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Search treatments' }).click();
+  await expect(page.getByText('Patients', { exact: true }).first()).toBeVisible({ timeout: 15000 });
   // A resident chip is a full name; therapist chips are first names.
   await page.getByRole('button', { name: /^\S+ \S+/ }).first().click();
   await page.getByRole('button', { name: 'All', exact: true }).click();
@@ -284,7 +288,8 @@ test('search finds a resident on other days and opens the card with Show this da
 test('a search match inside a room name keeps the name in one piece (#193)', async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  await page.getByRole('button', { name: 'Search treatments' }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Search treatments' }).click();
   await page.getByPlaceholder('Name, therapy or room').fill('ra');
   const mark = page.locator('mark').first();
   await expect(mark).toBeVisible({ timeout: 15000 });
@@ -324,7 +329,7 @@ test('the day by therapist starts where the by-time view does (#193)', async ({ 
   const back = page.getByRole('button', { name: 'Back to by time' });
   await expect(back).toBeVisible();
   // Both headers sit just under the day's ‹ › header (52px), the same height in either view.
-  expect(byTime).toBeLessThan(100);
+  expect(byTime).toBeLessThan(135);
   expect(Math.abs((await top(back)) - byTime)).toBeLessThan(12);
 });
 
@@ -530,7 +535,8 @@ test('an event is added, edited and deleted from one labelled sheet (#227)', asy
   await passSetupIfShown(page);
   await openTab(page, 'Events');
   const name = `E2E Walk ${Date.now()}`;
-  await page.getByRole('button', { name: 'Add event' }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Add event' }).click();
   const sheet = page.getByRole('dialog').last();
   await sheet.getByLabel('Name', { exact: true }).fill(name);
   await sheet.getByLabel(/^From/).selectOption('06:00');

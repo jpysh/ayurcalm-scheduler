@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/apiBase";
 import { Menu, Search } from "lucide-react";
-import { Bar, BarButton, BottomSearch, BottomSheet, DateRow, Group, ListGroup, Pill, PlusButton, Row, Seg, Btn, noteText } from "@/components/kit";
+import { BottomSearch, BottomSheet, DateRow, Group, ListGroup, Row, Seg, Btn } from "@/components/kit";
 
 /**
  * The phone frame from docs/design/phone.html (#66): one bar at the bottom, in
@@ -79,31 +79,33 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
   const when = diff === 0 ? `Today · ${now}` : diff === 1 ? "Tomorrow" : diff === -1 ? "Yesterday" : diff > 0 ? `In ${diff} days` : `${-diff} days ago`;
   const pick = (iso: string) => { setDay(iso); go("schedule"); setSheet(null); };
   const onDay = activeTab === "schedule";
-  const pillHere = (onDay || activeTab === "patients") && !search.on;
+  // The one control the admin sees (5 Oct): everything else is a row in its sheet. The badge keeps what needs them in view.
+  const need = attention?.fix ?? 0;
+  const info = (attention?.done ?? 0) + (attention?.note ?? 0);
+  const inbox = (onDay || activeTab === "patients") && attention && (need || info) ? { need, info } : null;
+  const close = (run: () => void) => () => { setSheet(null); run(); };
 
   return (
     <>
-      {pillHere && attention ? <Pill need={attention.fix} info={attention.done + attention.note} onClick={attention.open} /> : null}
       {search.on ? (
         <BottomSearch value={search.query} onChange={search.setQuery} onClose={() => { search.setOn(false); search.setQuery(""); }} placeholder={search.placeholder} label={search.label} />
       ) : (
-        <Bar grow={onDay}
-          left={<>
-            <BarButton label="Menu" onClick={() => setSheet("menu")}><Menu className="h-6 w-6" /></BarButton>
-            <BarButton label={search.label} onClick={search.start}><Search className="h-6 w-6" /></BarButton>
-            {onDay ? (
-              <button type="button" className="mx-1 flex h-12 min-w-0 flex-1 flex-col items-center justify-center rounded-full leading-tight active:bg-secondary" aria-label={`Change day, now ${label(day)}`} onClick={() => setSheet("day")}>
-                <span className="whitespace-nowrap text-base font-semibold">{label(day)}</span>
-                <span className={`whitespace-nowrap text-sm ${diff === 0 ? "font-semibold text-now" : "text-muted-foreground"}`}>{when}</span>
-              </button>
-            ) : null}
-          </>}
-          right={<>
-            {plus ? <PlusButton adds={plus.adds} onClick={plus.run} /> : null}
-          </>} />
+        <nav aria-label="Main" data-kit="bar" className="pointer-events-none fixed inset-x-[var(--bar-gap)] bottom-[calc(var(--bar-gap)+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl justify-end">
+          <button type="button" aria-label="Menu" onClick={() => setSheet("menu")} className="pointer-events-auto relative grid h-[var(--bar-h)] w-[var(--bar-h)] place-items-center rounded-full bg-primary text-primary-foreground shadow-float active:bg-[hsl(var(--primary-hover))]">
+            <Menu className="h-6 w-6" />
+            {inbox ? <span aria-hidden className={`absolute -right-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full border-2 border-background px-1 text-xs font-bold text-white ${inbox.need ? "bg-destructive" : "bg-muted-foreground"}`}>{inbox.need || inbox.info}</span> : null}
+          </button>
+        </nav>
       )}
 
-      <BottomSheet open={sheet === "menu"} onOpenChange={(o) => setSheet(o ? "menu" : null)} title="">
+      {sheet === "menu" ? <BottomSheet open onOpenChange={(o) => setSheet(o ? "menu" : null)} title="" keepFocus>
+        <ListGroup>
+          {inbox ? <Row key="inbox" title={inbox.need ? `${inbox.need} need you` : `${inbox.info} to know`} facts={inbox.need ? "Things to fix or decide" : "For your information"} trailing="›" onClick={close(attention!.open)} /> : null}
+          {plus ? <Row key="plus" title={plus.adds} facts="Add one here" trailing="+" onClick={close(plus.run)} /> : null}
+          <Row key="search" title={search.label} trailing="›" onClick={close(search.start)} />
+          {onDay ? <Row key="day" title="Change day" facts={`${label(day)} · ${when}`} trailing="›" onClick={() => setSheet("day")} /> : null}
+        </ListGroup>
+        <div className="mt-3" />
         <Group label="Show the day by">
           <Seg<"time" | "therapist" | "room" | "resident"> options={[["time", "Time"], ["therapist", "Therapist"], ["room", "Room"], ["resident", "Patient"]]} value={activeTab === "schedule" ? (view as "time") : ("" as "time")}
             onChange={(v) => { setView(v); go("schedule"); setSheet(null); }} />
@@ -117,7 +119,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
             ])}
           </ListGroup>
         </div>
-      </BottomSheet>
+      </BottomSheet> : null}
 
       <BottomSheet open={sheet === "day"} onOpenChange={(o) => setSheet(o ? "day" : null)} title={label(day)}>
         <div className="grid grid-cols-[1.25fr_1fr_1.25fr] gap-2 [&>button]:whitespace-nowrap [&>button]:px-2">
@@ -131,15 +133,47 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
   );
 }
 
-/** The day's own header, sticky above the list: ‹ and › move one day, the middle says which day it is. */
-export function DayNav({ day, today, setDay }: { day: string; today: string; setDay: (iso: string) => void }) {
-  const diff = Math.round((Date.parse(day) - Date.parse(today)) / 86400000);
-  const rel = diff === 0 ? "Today" : diff === 1 ? "Tomorrow" : diff === -1 ? "Yesterday" : "";
+/**
+ * The day, as Apple Calendar draws it (5 Oct): one week across, swipe for the next or last, tap a day.
+ * Today carries a ring, the chosen day is filled. Far-off dates are in the Menu's Change day.
+ */
+export function WeekStrip({ day, today, setDay }: { day: string; today: string; setDay: (iso: string) => void }) {
+  const dow = (iso: string) => new Date(`${iso}T00:00:00Z`).getUTCDay();
+  const weekOf = (iso: string) => shift(iso, -dow(iso));
+  const weeksBetween = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / (7 * 86400000));
+  // 26 weeks either side of today, or of the chosen day when it was picked from further away.
+  const centre = Math.abs(weeksBetween(weekOf(day), weekOf(today))) > 20 ? weekOf(day) : weekOf(today);
+  const weeks = Array.from({ length: 53 }, (_, i) => shift(centre, (i - 26) * 7));
+  const box = useRef<HTMLDivElement>(null);
+  const first = useRef(true);
+  useLayoutEffect(() => {
+    const el = box.current; if (!el) return;
+    const left = (weeks.indexOf(weekOf(day))) * el.clientWidth;
+    if (Math.abs(el.scrollLeft - left) > 4) el.scrollTo({ left, behavior: first.current ? "auto" : "smooth" });
+    first.current = false;
+  }, [day, centre]); // eslint-disable-line react-hooks/exhaustive-deps
+  const month = new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
   return (
-    <div className="sticky top-0 z-[4] -mx-1 flex items-center justify-between bg-background px-1 pt-2">
-      <button type="button" aria-label="Day before" className="grid h-11 w-11 place-items-center rounded-full text-2xl active:bg-secondary" onClick={() => setDay(shift(day, -1))}>‹</button>
-      <div className="min-w-0 text-center leading-tight"><b className="block text-lg">{rel || label(day)}</b>{rel ? <span className={noteText}>{label(day)}</span> : null}</div>
-      <button type="button" aria-label="Next day" className="grid h-11 w-11 place-items-center rounded-full text-2xl active:bg-secondary" onClick={() => setDay(shift(day, 1))}>›</button>
+    <div className="sticky top-0 z-[4] -mx-1 bg-background px-1 pt-2">
+      <div className="flex min-h-6 items-center justify-between px-1 text-sm">
+        <b className="text-base">{month}</b>
+        {day !== today ? <button type="button" className="min-h-11 px-2 font-semibold text-primary -my-2.5" onClick={() => setDay(today)}>Today</button> : null}
+      </div>
+      <div ref={box} aria-label="Week" className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {weeks.map((w) => (
+          <div key={w} className="flex w-full flex-none snap-start justify-between">
+            {Array.from({ length: 7 }, (_, i) => shift(w, i)).map((d) => {
+              const on = d === day, now = d === today;
+              return (
+                <button key={d} type="button" aria-label={label(d)} aria-pressed={on} onClick={() => setDay(d)} className="flex min-h-14 w-[14.28%] flex-col items-center justify-center gap-0.5">
+                  <span className={`text-xs font-semibold ${dow(d) % 6 === 0 ? "text-muted-foreground" : ""}`}>{"SMTWTFS"[dow(d)]}</span>
+                  <span className={`grid h-10 w-10 place-items-center rounded-xl text-xl ${on ? "bg-primary font-bold text-primary-foreground" : now ? "border-2 border-primary font-bold text-primary" : ""}`}>{Number(d.slice(8))}</span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

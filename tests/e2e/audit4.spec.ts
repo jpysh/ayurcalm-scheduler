@@ -15,7 +15,8 @@ const toTeam = async (page: Page) => {
   await page.getByRole('dialog').getByRole('button', { name: /^Team and rooms/ }).click();
 };
 const addToTeam = async (page: Page, what: string) => {
-  await page.getByRole('button', { name: 'Add to the team' }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Add to the team' }).click();
   await page.getByRole('dialog').getByRole('button', { name: new RegExp(`^${what}`) }).click();
 };
 test('H1: rooms, therapists and therapies are plain rows with one sheet to add', async ({ page, request }) => {
@@ -49,7 +50,8 @@ test('H1: rooms, therapists and therapies are plain rows with one sheet to add',
 
 test('H2: booking is one sheet: who, then every line filled in and changeable, and the button names the outcome', async ({ page }) => {
   await signIn(page);
-  await page.getByRole('button', { name: 'Book a treatment' }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Book a treatment' }).click();
   const sheet = page.getByRole('dialog');
   await expect(page.getByText('Auto-Assign')).toHaveCount(0);
   await expect(sheet.getByLabel('Search patients')).toBeVisible();
@@ -65,7 +67,8 @@ test('H3: a read-only trial says so on +, and hides Get started', async ({ page 
     await route.fulfill({ json: { ...body, trial: { started_at: '2026-01-01', ends_at: '2026-01-31', read_only: true, plan: null, paid_until: null } } });
   });
   await signIn(page);
-  await page.getByRole('button', { name: 'Book a treatment' }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Book a treatment' }).click();
   await expect(page.locator('[data-sonner-toast]')).toContainText('free trial has ended');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByLabel('Get started')).toHaveCount(0);
@@ -136,7 +139,8 @@ test('P1: Add leave has Full day and Every week as switches, not Yes / None drop
   await signIn(page);
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: /^Leave/ }).click();
-  await page.getByRole('button', { name: 'Add leave' }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Add leave' }).click();
   const form = page.getByRole('dialog');
   await expect(form.getByRole('switch', { name: 'Full day' })).toBeChecked();
   await form.getByRole('switch', { name: 'Every week' }).click();
@@ -170,7 +174,8 @@ test('#283: Add leave, New resident and Opening hours show no native date or tim
     await page.goto('/admin/schedule');
     await page.getByRole('button', { name: 'Menu', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: menu }).click();
-    await page.getByRole('button', { name: button }).click();
+    if (typeof button === 'string') { await page.getByRole('button', { name: 'Menu', exact: true }).click(); }
+    await (typeof button === 'string' ? page.getByRole('dialog') : page).getByRole('button', { name: button }).click();
     return page.getByRole('dialog');
   };
   // The date box is still there for the phone's calendar, but unseen under the row that reads "Wed 30 Sept".

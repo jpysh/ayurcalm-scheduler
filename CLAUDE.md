@@ -42,8 +42,9 @@ src/                    React 18 + Vite + TypeScript + Tailwind + shadcn/ui
   main.tsx              Global fetch wrapper: attaches the JWT, handles 401
   pages/AdminDashboard  The shell: shared data, the day's warnings, Verify, and
                         which screen is showing
-  components/BottomBar  The phone frame (#66): menu · day · print · book, and
-                        the bottom sheets they open. Screens are reached from it
+  components/BottomBar  The phone frame (#66): one hamburger bottom right, its sheet
+                        holds the inbox, the screen's +, search, change day, print and
+                        the screens; WeekStrip is the day's date bar
   pages/tabs/           One file per screen: its tab, dialogs and useXScreen()
                         state hook. Shared types and helpers: tabs/shared.ts
   pages/SetupWizard     First-run flow, shown until settings.setup_complete
