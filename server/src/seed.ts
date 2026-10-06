@@ -4,7 +4,7 @@ import 'dotenv/config';
 import { ensureStarterDietTemplates } from './dietTemplateSeed.js';
 import { ensureStarterCatalogues } from './catalogueSeed.js';
 import { PrismaClient } from '@prisma/client';
-import { staffEventBusy } from './availability.js';
+import { hoursOn, staffEventBusy } from './availability.js';
 import bcrypt from 'bcrypt';
 import { DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD } from './auth.js';
 import { indiaHolidays } from "./indiaHolidays.js";
@@ -128,6 +128,12 @@ async function main() {
 
   const scheduleStd = { sunday: { start: '09:00', end: '20:00' }, monday: { start: '09:00', end: '20:00' }, tuesday: { start: '09:00', end: '20:00' }, wednesday: { start: '09:00', end: '20:00' }, thursday: { start: '09:00', end: '20:00' }, friday: { start: '09:00', end: '20:00' }, saturday: { start: '09:00', end: '20:00' } };
 
+  // Shifts as a centre staffs them (#351): early 07:00-15:00 (the morning yoga and prayer),
+  // afternoon 13:00-20:00 (the evening ones), and a day 09:00-18:00; the third therapist has
+  // Wednesday off. The last is the day shift, as they are the one on leave today, with a whole day to move.
+  const week = (start: string, end: string, off: string[] = []) => Object.fromEntries(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].map((d) => [d, off.includes(d) ? null : { start, end }]));
+  const shiftOf = (idx: number, n: number) => idx === n - 1 || idx % 3 === 2 ? week('09:00', '18:00', idx === 2 ? ['wednesday'] : []) : idx % 3 === 0 ? week('07:00', '15:00') : week('13:00', '20:00');
+
   // Every other room is fully equipped; with only the first four amenities
   // everywhere, dhara, kizhi and lepam therapies could never be booked.
   const rooms = await Promise.all(ayurvedaRoomNames.slice(0, SIZE.rooms).map((rn, idx) => prisma.therapyRoom.create({
@@ -143,7 +149,7 @@ async function main() {
       gender: isMale(n) ? 'male' : 'female',
       phone: `+91-8${Math.floor(100000000 + random()*899999999)}`,
       specializations: therapies.filter((_, j) => j % (idx % 3 + 2) === 0).map(t => t.id),
-      weekly_schedule: scheduleStd,
+      weekly_schedule: shiftOf(idx, SIZE.therapists),
       is_active: true,
     },
   })));
@@ -185,8 +191,13 @@ async function main() {
   // person is genuinely unbookable for those hours, and the rota says why.
   const weekdays = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
   const offTodayIds = new Set((await prisma.timeOff.findMany({ where: { entity_type: 'staff', date: centreToday() } })).map((h) => h.entity_id));
-  const yogaStaff = staff.find((s) => s.gender === 'female' && !offTodayIds.has(s.id)) || staff[0];
-  const prayerStaff = staff.find((s) => s.id !== yogaStaff.id && !offTodayIds.has(s.id)) || staff[1];
+  // Morning classes go to the early shift, evening ones to the afternoon shift: each is in their hours.
+  const shift = (start: string) => staff.filter((s) => (s.weekly_schedule as Record<string, { start: string } | null>).monday?.start === start && !offTodayIds.has(s.id));
+  const leader = (list: typeof staff, not?: string) => list.find((s) => s.gender === 'female' && s.id !== not) || list.find((s) => s.id !== not) || staff[0];
+  const yogaStaff = leader(shift('07:00'));
+  const prayerStaff = leader(shift('07:00').filter((s) => s.id !== yogaStaff.id));
+  const eveningYoga = leader(shift('13:00'));
+  const eveningPrayer = leader(shift('13:00').filter((s) => s.id !== eveningYoga.id));
   const event = (over: Record<string, unknown>) => prisma.programEvent.create({ data: {
     recurrence: 'weekly', weekdays, room_id: null, staff_id: null, required_amenities: [],
     notes: '', audience: 'all', patients_scope: 'all', staff_scope: 'none', staff_ids: [],
@@ -199,8 +210,8 @@ async function main() {
   await event({ start_time: '08:00', end_time: '08:45', activity_name: 'Breakfast', notes: 'Diet per plan' });
   await event({ start_time: '12:30', end_time: '13:30', activity_name: 'Lunch' });
   await event({ start_time: '16:30', end_time: '17:00', activity_name: 'Snacks', is_optional: true });
-  await event({ start_time: '17:00', end_time: '18:00', activity_name: 'Evening Yoga', is_optional: true, staff_scope: 'custom', staff_ids: [yogaStaff.id], staff_id: yogaStaff.id });
-  await event({ start_time: '18:00', end_time: '19:00', activity_name: 'Evening Prayer Meditation', is_optional: true, staff_scope: 'custom', staff_ids: [prayerStaff.id], staff_id: prayerStaff.id });
+  await event({ start_time: '17:00', end_time: '18:00', activity_name: 'Evening Yoga', is_optional: true, staff_scope: 'custom', staff_ids: [eveningYoga.id], staff_id: eveningYoga.id });
+  await event({ start_time: '18:00', end_time: '19:00', activity_name: 'Evening Prayer Meditation', is_optional: true, staff_scope: 'custom', staff_ids: [eveningPrayer.id], staff_id: eveningPrayer.id });
   await event({ start_time: '19:30', end_time: '20:15', activity_name: 'Dinner' });
   // Mondays the havan runs over the morning prayer, and replaces it: where two
   // events overlap, the more specific one is the one that happens.
@@ -274,6 +285,7 @@ async function main() {
     if (h.entity_id) staffHolidaysByDay[key].add(h.entity_id);
   }
   const todayKey = centreYmd(new Date());
+  const inHours = (sc: { weekly_schedule: unknown }, dateKey: string, from: number, to: number) => { const h = hoursOn(sc.weekly_schedule, new Date(dateKey)); return !!h && h.s <= from && to <= h.e; };
   const ymd = (d: Date) => d.toISOString().slice(0, 10);
   // Virechana as a centre gives it (#359): once in a course, one morning dose at 09:00-11:00 after
   // three mornings of Snehapana, nothing after it that day, then the after-purification diet.
@@ -345,7 +357,7 @@ async function main() {
           const pBusy = busy[dateKey].patient[p.id] ??= [];
           if ([...meals, ...pBusy].some((b) => overlaps(b.s, b.e, sMin, eMin))) continue;
           const staffOnLeave = staffHolidaysByDay[dateKey] || new Set<string>();
-          const team = staff.filter((sc) => sc.specializations.includes(th.id) && (!th.requires_gender_match || sc.gender === p.gender) && !staffOnLeave.has(sc.id)
+          const team = staff.filter((sc) => sc.specializations.includes(th.id) && (!th.requires_gender_match || sc.gender === p.gender) && !staffOnLeave.has(sc.id) && inHours(sc, dateKey, sMin, eMin)
             && !(busy[dateKey].staff[sc.id] || []).some((b) => overlaps(b.s, b.e, sMin, eMin))).slice(0, th.staff_required);
           if (team.length < th.staff_required) continue;
           for (let k = 0; k < rooms.length; k++) {
@@ -405,6 +417,7 @@ async function main() {
       if (!absent.specializations.includes(a.therapy_id)) return false;
       const s = mins(a.start_time);
       const e = s + a.duration_minutes;
+      if (!inHours(absent, todayKey, s, e)) return false;
       if (taken.some((b) => overlaps(b.s, b.e, s, e))) return false;
       taken.push({ s, e });
       return true;
@@ -414,7 +427,7 @@ async function main() {
   // The one already on leave first; then whoever has least booked today and
   // runs no event, so their being away does not also empty the yoga room.
   const candidates = [onLeaveToday, ...staff
-    .filter((s) => s.id !== onLeaveToday.id && s.id !== yogaStaff.id && s.id !== prayerStaff.id && !offTodayIds.has(s.id))
+    .filter((s) => s.id !== onLeaveToday.id && ![yogaStaff.id, prayerStaff.id, eveningYoga.id, eveningPrayer.id].includes(s.id) && !offTodayIds.has(s.id))
     .sort((a, b) => todays.filter((t) => t.staff_id === a.id).length - todays.filter((t) => t.staff_id === b.id).length)];
   const absent = candidates.find((c) => { const { own, moved } = movableTo(c); const n = own.length + moved.length; return n >= 3 && n <= 4; });
   if (absent) {
@@ -537,7 +550,7 @@ async function main() {
     data: { name, amenities: ['bp_monitor', 'examination_bed'], weekly_schedule: scheduleStd, is_active: true },
   })));
   const doctors = await Promise.all([['Dr Lakshmi Menon', 'female'], ['Dr Vikram Rao', 'male'], ['Dr Farah Siddiqui', 'female']].slice(0, SIZE.doctors).map(([name, gender]) =>
-    prisma.staff.create({ data: { name, gender: gender as 'male' | 'female', role: 'doctor', specializations: [consultation.id], weekly_schedule: scheduleStd, is_active: true, phone: `+91-7${Math.floor(100000000 + random() * 899999999)}` } })));
+    prisma.staff.create({ data: { name, gender: gender as 'male' | 'female', role: 'doctor', specializations: [consultation.id], weekly_schedule: week('08:00', '14:00'), is_active: true, phone: `+91-7${Math.floor(100000000 + random() * 899999999)}` } })));
   const holidayKeys = new Set(centerHolidays.map((h) => h.date && h.date.toISOString().slice(0, 10)));
   const consultSlots = Array.from({ length: 12 }, (_, i) => { const m = 9 * 60 + i * 20; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; });
   const takenBy = new Map<string, Set<string>>(); // "date|time" -> doctor and room ids already booked

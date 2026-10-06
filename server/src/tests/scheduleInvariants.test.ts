@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
-import { staffEventBusy } from '../availability.js';
+import { hoursOn, staffEventBusy, teamOf } from '../availability.js';
 
 /**
  * A double-booked therapist is not a crash — it is a sheet that sends two
@@ -123,6 +123,16 @@ const main = async () => {
         // room's next booking. Only the treatment itself must fit.
         assert.ok(s >= toMinutes(day.start) && s + a.duration_minutes <= toMinutes(day.end),
           `${a.start_time} +${a.duration_minutes}m outside ${day.start}-${day.end} in ${room?.name}`);
+      }
+    }],
+
+    ['every treatment is inside its therapists’ weekly hours (#351)', () => {
+      for (const a of appts.filter((x) => x.status !== 'cancelled')) {
+        for (const id of teamOf(a)) {
+          const h = hoursOn(staffById.get(id)?.weekly_schedule, a.scheduled_date);
+          const s = toMinutes(a.start_time);
+          assert.ok(h !== null && (!h || (s >= h.s && s + a.duration_minutes <= h.e)), `${staffById.get(id)?.name} at ${a.start_time} on ${a.scheduled_date.toISOString().slice(0, 10)} is outside their hours`);
+        }
       }
     }],
 

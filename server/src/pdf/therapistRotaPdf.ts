@@ -1,5 +1,5 @@
 declare module 'pdfkit';
-import { teamOf } from '../availability.js';
+import { hoursOn, teamOf } from '../availability.js';
 import PDFDocument from 'pdfkit';
 import { madeWith } from '../product.js';
 import { PrismaClient } from '@prisma/client';
@@ -64,7 +64,7 @@ export const formatBooked = (min: number) => {
  */
 export const buildRota = (input: {
   day: Date;
-  staff: { id: string; name: string; is_active: boolean }[];
+  staff: { id: string; name: string; is_active: boolean; weekly_schedule?: unknown }[];
   appts: { status?: string; staff_id: string | null; co_staff_ids?: string[]; patient_id: string; therapy_id: string; room_id: string | null; start_time: string; duration_minutes: number }[];
   events: { start_time: string; end_time: string; activity_name: string; staff_id: string | null; staff_scope: string | null; staff_ids: string[] }[];
   timeOff: TimeOffRow[];
@@ -92,7 +92,7 @@ export const buildRota = (input: {
   // A therapist out for the whole day prints no entries, so nothing of theirs
   // should open a column either: their 07:30 class was giving the sheet an empty
   // 07:00 band.
-  const onShift = staff.filter((s) => !(offsByStaff.get(s.id) || []).some(isFullDay));
+  const onShift = staff.filter((s) => !(offsByStaff.get(s.id) || []).some(isFullDay) && hoursOn(s.weekly_schedule, day) !== null);
   const eventsOnStaff = events.filter((e) => onShift.some((s) => eventAppliesToStaff(e, s.id)));
   // Part-day leave makes a band of its own even when nothing is booked in it:
   // an afternoon with no treatments is exactly the afternoon the rota has to
@@ -131,7 +131,9 @@ export const buildRota = (input: {
   const out: RotaRow[] = [];
   for (const s of staff) {
     const offs = offsByStaff.get(s.id) || [];
-    const fullDay = offs.find(isFullDay);
+    // A day off in their weekly hours (#351) is out for the day, as leave is.
+    const hours = hoursOn(s.weekly_schedule, day);
+    const fullDay = offs.find(isFullDay) ?? (hours === null ? { description: 'Day off' } : undefined);
     const reason = (fullDay || offs[0])?.description || '';
     const mine = appts.filter((a) => teamOf(a).includes(s.id));
     if (fullDay) {
@@ -215,7 +217,8 @@ export const buildRota = (input: {
       booked += Math.max(0, to - Math.max(from, reach));
       reach = Math.max(reach, to);
     }
-    working.push({ name: s.name, note: booked ? formatBooked(booked) : '', cells, available: true, booked });
+    // Their hours first (#351): with shifts, who is in at 18:00 is the question the board answers.
+    working.push({ name: s.name, note: [hours ? `${hhmm(hours.s)}–${hhmm(hours.e)}` : '', booked ? formatBooked(booked) : ''].filter(Boolean).join('\n'), cells, available: true, booked });
   }
 
   return { slots, rows: [...unstaffed, ...working, ...out] };
