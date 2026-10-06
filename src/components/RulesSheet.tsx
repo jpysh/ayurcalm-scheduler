@@ -12,6 +12,7 @@ import { BottomSheet, ListGroup, SwitchRow, noteText, field, Btn } from "@/compo
 import { changesOf, type Attention, type Rule } from "@/lib/attention";
 
 const HOURS = [4, 12, 24, 48];
+const hours = (h?: number) => `${h} hour${h === 1 ? "" : "s"}`;
 
 function When({ rule, set }: { rule: Rule; set: (h: number) => void }) {
   const [other, setOther] = useState(false);
@@ -21,11 +22,11 @@ function When({ rule, set }: { rule: Rule; set: (h: number) => void }) {
     <p className={`mt-0.5 pb-1 ${noteText}`}>
       Raise it after{" "}
       <span className="relative inline-block">
-        <span className={`font-semibold underline decoration-dotted underline-offset-2 ${changed ? "text-notice" : "text-primary"}`}>{rule.hours} hours ⌄</span>
+        <span className={`font-semibold underline decoration-dotted underline-offset-2 ${changed ? "text-notice" : "text-primary"}`}>{hours(rule.hours)} ⌄</span>
         <select aria-label={`When: ${rule.name}`} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" value={other ? "other" : rule.hours}
           onChange={(e) => { if (e.target.value === "other") setOther(true); else { setOther(false); set(Number(e.target.value)); } }}>
-          {HOURS.map((h) => <option key={h} value={h}>{h} hours</option>)}
-          {custom ? <option value={rule.hours}>{rule.hours} hours</option> : null}
+          {HOURS.map((h) => <option key={h} value={h}>{hours(h)}</option>)}
+          {custom ? <option value={rule.hours}>{hours(rule.hours)}</option> : null}
           <option value="other">Other…</option>
         </select>
       </span>{" "}{rule.from}
