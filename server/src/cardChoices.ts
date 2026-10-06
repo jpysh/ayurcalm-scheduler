@@ -5,7 +5,7 @@
  * refuse. The browser only shows these.
  */
 import type { PrismaClient } from '@prisma/client';
-import { eventHitsDay, hoursOn, type EventRow } from './availability.js';
+import { centreClosed, eventHitsDay, hoursOn, type EventRow } from './availability.js';
 import { HAPPENING, findConflict, loadDay, oncePerCourse, softWarnings, type Action, type Candidate, type Soft } from './appointmentGuard.js';
 
 export type Kind = 'time' | 'staff' | 'room' | 'therapy';
@@ -285,8 +285,8 @@ async function nextFreeSlot(day: Date, stayEnd: Date, therapy: Ctx['therapies'][
     const next = new Date(day.getTime() + d * DAY_MS);
     if (next > stayEnd) return null;
     const ctx = await loadDay(next, prisma);
-    // The scheduler refuses a centre holiday (CENTER_HOLIDAY), so offering one would fail on tap (#344).
-    if (ctx.timeOff.some((h) => h.entity_type === 'center' && eventHitsDay(h as unknown as EventRow, next))) continue;
+    // The guard refuses a closed day (CENTER_HOLIDAY), so offering one would fail on tap (#344, #393).
+    if (centreClosed(ctx.settings, ctx.timeOff, next)) continue;
     const open = toM(ctx.settings?.opening_time || '09:00');
     const close = toM(ctx.settings?.closing_time || '18:00');
     for (let t = Math.ceil(open / 15) * 15; t + therapy.duration_minutes <= close; t += 15) {
@@ -322,7 +322,8 @@ async function noTimeWhy(ctx: Ctx, day: Date, nowMinutes: number | null, therapy
     const close = toM(ctx.settings?.closing_time || '18:00');
     for (let t = Math.ceil(toM(ctx.settings?.opening_time || '09:00') / 15) * 15; !over && t + therapy.duration_minutes <= close; t += 15) over = !!assign(ctx, day, t, therapy, patient.id);
   }
-  const why = over ? "Today's hours are over." : `No free time for ${patient.name.split(' ')[0]} that day.`;
+  const closed = centreClosed(ctx.settings, ctx.timeOff, day);
+  const why = closed ? `The centre is ${closed}.` : over ? "Today's hours are over." : `No free time for ${patient.name.split(' ')[0]} that day.`;
   if (!next) return { why: `${why} Nothing is free for the rest of their stay.`, actions: [other, { kind: 'change_stay', label: 'Change their stay', patient_id: patient.id }] };
   // 'Tomorrow' only when the sheet is on today (it sends the clock only then); on another day it is a date.
   const tomorrow = nowMinutes !== null && next.date.getTime() - day.getTime() === DAY_MS;

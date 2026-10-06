@@ -175,6 +175,18 @@ export const offOnDay = (rows: OffRow[], type: 'staff' | 'room', id: string, day
       return { s: whole ? 0 : toMinutes(h.start_time!), e: whole ? 24 * 60 : toMinutes(h.end_time!), label: h.description || 'time off', whole };
     });
 
+/**
+ * Why the centre is shut on a day, or null (#393): a weekday unticked in Opening
+ * hours, or a centre closed day on the Leave screen. The guard, the scheduler and
+ * the next-free-day search all ask this, so none offers what another refuses.
+ */
+export function centreClosed(settings: { working_days?: string[] } | null | undefined, rows: OffRow[], day: Date): string | null {
+  const weekday = WEEKDAYS[day.getUTCDay()];
+  if (settings?.working_days?.length && !settings.working_days.includes(weekday)) return `closed on ${weekday[0].toUpperCase()}${weekday.slice(1)}s`;
+  const shut = rows.find((h) => h.entity_type === 'center' && eventHitsDay(h as unknown as EventRow, day));
+  return shut ? `closed${shut.description ? ` for ${shut.description}` : ' that day'}` : null;
+}
+
 /** The bookings a weekly pattern would leave outside a person's hours (#380), so the Hours page can say so before saving. */
 export const outsideHours = <A extends { scheduled_date: Date; start_time: string; duration_minutes: number }>(weekly: unknown, appts: A[]): A[] =>
   appts.filter((a) => {
