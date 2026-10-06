@@ -540,8 +540,7 @@ test('an event is added, edited and deleted from one labelled sheet (#227)', asy
   await passSetupIfShown(page);
   await openTab(page, 'Events');
   const name = `E2E Walk ${Date.now()}`;
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Add event' }).click();
+  await page.getByRole('button', { name: 'Add event', exact: true }).click();
   const sheet = page.getByRole('dialog').last();
   await sheet.getByLabel('Name', { exact: true }).fill(name);
   await sheet.getByLabel(/^From/).selectOption('06:00');
@@ -597,7 +596,9 @@ test("a treatment's History reads on the centre's clock, not the phone's (#304)"
     const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
     const headers = { Authorization: `Bearer ${token}` };
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-    const a = ((await (await request.get(`/api/appointments?date=${today}`, { headers })).json()) as { id: string; patient_id: string; notes: string | null }[])[0];
+    const all = (await (await request.get(`/api/appointments?date=${today}`, { headers })).json()) as { id: string; patient_id: string; notes: string | null }[];
+    // A patient with one treatment today, so tapping their name opens this one and not an older card.
+    const a = all.find((x) => all.filter((y) => y.patient_id === x.patient_id).length === 1)!;
     const patient = ((await (await request.get('/api/patients', { headers })).json()) as { id: string; name: string }[]).find((p) => p.id === a.patient_id)!;
     // Any change leaves a History line stamped now.
     await request.put(`/api/appointments/${a.id}`, { headers, data: { notes: `tz check ${Date.now()}` } });

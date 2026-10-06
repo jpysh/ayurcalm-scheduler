@@ -18,8 +18,7 @@ test('a patient is added from four fields, gets a consultation, and lands on the
   const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
   const headers = { Authorization: `Bearer ${token}` };
   await signIn(page);
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'New patient' }).click();
+  await page.getByRole('button', { name: 'New patient', exact: true }).click();
   const sheet = page.getByRole('dialog');
   await expect(sheet.getByRole('button', { name: 'Add patient' })).toBeDisabled();
   await sheet.getByLabel('Name', { exact: true }).fill('E2E Meera Nair');
