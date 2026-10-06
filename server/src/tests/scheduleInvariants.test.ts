@@ -153,6 +153,8 @@ const main = async () => {
       const off = new Set(leave.filter((h) => h.date?.toISOString().slice(0, 10) === today).map((h) => h.entity_id));
       const stranded = (byDay.get(today) || []).filter((a) => a.status !== 'cancelled' && [a.staff_id, ...a.co_staff_ids].some((id) => id && off.has(id)));
       assert.ok(stranded.length >= 3, `only ${stranded.length} of today's treatments are on a therapist who is off; Settings → Reset demo data, then run again`);
+      // Still there for an evening visitor (#369).
+      assert.ok(stranded.some((a) => a.start_time >= '18:00'), `the therapist off has nothing at or after 18:00 (${stranded.map((a) => a.start_time).join(', ')})`);
     }],
   ];
 
