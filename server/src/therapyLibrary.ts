@@ -9,7 +9,7 @@
  */
 export type LibraryTherapy = {
   name: string; description: string; minutes: number; staff: number;
-  amenities: string[]; products: string[]; gender: boolean; consultation?: boolean; once?: boolean;
+  amenities: string[]; products: string[]; gender: boolean; consultation?: boolean; once?: boolean; before?: boolean;
 };
 
 const T = (name: string, description: string, minutes: number, staff: number, amenities: string[], products: string[], gender = false): LibraryTherapy =>
@@ -47,7 +47,7 @@ export const therapyLibrary: LibraryTherapy[] = [
   T('Thalam', 'Medicated oil and powder on the crown of the head.', 20, 1, [], ['Kachooradi powder', 'Ksheerabala oil']),
   T('Padabhyanga', 'Foot massage with warm oil.', 40, 1, [], ['Ksheerabala oil']),
   T('Marma Massage', 'Gentle pressure on the body\'s marma points with oil.', 75, 1, [...table, 'herbal_oil'], ['Mahanarayana oil'], true),
-  T('Snehapana', 'A measured dose of medicated ghee taken in the morning, before a cleanse.', 20, 1, [], ['Tiktaka ghee']),
+  { ...T('Snehapana', 'A measured dose of medicated ghee taken in the morning, before a cleanse.', 20, 1, [], ['Tiktaka ghee']), before: true },
   { ...T('Vamana', 'Therapeutic vomiting under supervision, one morning of the course.', 120, 2, ['shower'], ['Madanaphala', 'Milk', 'Rock salt'], true), once: true },
   { ...T('Virechana', 'Therapeutic purgation, given in the morning and watched through the day.', 60, 1, [], ['Trivrit lehyam', 'Castor oil']), once: true },
   T('Kashaya Vasti', 'Decoction enema (Niruha), given on an empty stomach.', 60, 1, [...table, 'shower'], ['Dashamoola decoction', 'Honey', 'Rock salt'], true),

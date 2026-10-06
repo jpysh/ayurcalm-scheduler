@@ -119,7 +119,7 @@ async function main() {
   // imports from, so the demo shows what a centre gets.
   const allTherapies = await Promise.all(therapyLibrary.map((t) => prisma.therapy.create({ data: {
     name: t.name, description: t.description, duration_minutes: t.minutes, staff_required: t.staff,
-    required_amenities: t.amenities, products: t.products, requires_gender_match: t.gender, is_consultation: Boolean(t.consultation), once_per_course: Boolean(t.once),
+    required_amenities: t.amenities, products: t.products, requires_gender_match: t.gender, is_consultation: Boolean(t.consultation), once_per_course: Boolean(t.once), before_purification: Boolean(t.before),
     // What the link asks at each (#219): a doctor takes more readings than a therapist.
     checklist: t.consultation ? [] : [{ text: "Room and table prepared", required: true }, { text: "Oils or powders ready", required: true }, { text: "Asked how they feel today", required: false }],
     vitals: t.consultation ? ["bp", "pulse", "weight"] : ["bp"],
