@@ -275,13 +275,26 @@ async function main() {
   }
   const todayKey = centreYmd(new Date());
   const ymd = (d: Date) => d.toISOString().slice(0, 10);
+  // Virechana as a centre gives it (#359): once in a course, one morning dose at 09:00-11:00 after
+  // three mornings of Snehapana, nothing after it that day, then the after-purification diet.
+  // Every third residential course of 12 days or more has one, on its ninth day.
+  const ONCE = ['Vamana', 'Virechana', 'Snehapana'];
+  const pool = therapies.filter((t) => !ONCE.includes(t.name));
+  const virechana = therapies.find((t) => t.name === 'Virechana');
+  const snehapana = therapies.find((t) => t.name === 'Snehapana');
+  const purgeDay = new Map<Stay, string>();
+  let courses = 0;
+  for (const list of staysOf.values()) for (const x of list) {
+    if (x.kind !== 'course' || x.e.getTime() - x.s.getTime() < 11 * DAY) continue;
+    if (courses++ % 3 === 0 && virechana) purgeDay.set(x, new Date(x.s.getTime() + 8 * DAY).toISOString().slice(0, 10));
+  }
   // Each week of a stay has its pair of therapies; at a review a third of plans swap one (#348).
   const pairs = new Map<string, typeof therapies>();
   const pairFor = (pid: string, week: number): typeof therapies => {
     const key = `${pid}|${week}`;
     if (!pairs.has(key)) {
       const prev = week > 0 ? pairFor(pid, week - 1) : null;
-      const pick = () => randomOf(therapies);
+      const pick = () => randomOf(pool);
       const pair = prev ? (random() < 1 / 3 ? [prev[0], pick()] : prev) : [pick(), pick()];
       pairs.set(key, pair[0].id === pair[1].id ? [pair[0], pick()] : pair);
     }
@@ -294,7 +307,9 @@ async function main() {
       staff: Object.fromEntries(staff.map((s) => [s.id, staffEventBusy(seededEvents, s.id, new Date(dateKey)).map((b) => ({ s: b.s, e: b.e }))])),
       room: {}, patient: {},
     };
-    for (const [pi, p] of createdPatients.entries()) {
+    // A Virechana course is booked first on its mornings, so 09:00-11:00 is still free for it.
+    const purgingToday = new Set([...staysOf.entries()].filter(([, l]) => l.some((x) => { const v = purgeDay.get(x); return v && v >= dateKey && Date.parse(v) - Date.parse(dateKey) <= 3 * DAY; })).map(([id]) => id));
+    for (const [pi, p] of [...createdPatients.entries()].sort(([, a], [, b]) => Number(purgingToday.has(b.id)) - Number(purgingToday.has(a.id)))) {
       const st = staysOf.get(p.id)!.find((x) => ymd(x.s) <= dateKey && dateKey <= ymd(x.e));
       if (!st) continue;
       const sKey = ymd(st.s);
@@ -310,14 +325,20 @@ async function main() {
       const count = st.kind === 'out' ? 1 : st.kind === 'day' ? (r < 0.5 ? 1 : 2)
         : dateKey === sKey || dateKey === ymd(st.e) ? 1 : r < 0.1 ? 1 : r < 0.9 ? 2 : 3;
       const pair = pairFor(p.id, Math.floor((d.getTime() - st.s.getTime()) / (7 * DAY)));
-      const wanted = [...pair, randomOf(therapies)].slice(0, count);
+      const purge = purgeDay.get(st);
+      const before = purge ? Math.round((Date.parse(purge) - Date.parse(dateKey)) / DAY) : -1;
+      // The Virechana day holds only Virechana; the three mornings before it start with Snehapana.
+      const wanted = before === 0 ? [virechana!] : before > 0 && before <= 3 && snehapana ? [snehapana, ...pair].slice(0, Math.max(count, 2)) : [...pair, randomOf(pool)].slice(0, count);
       const given = new Set<string>();
       for (const want of wanted) {
-        // A therapy with no free hands or room that day gives way to another, as the admin would book it.
-        placed: for (const th of [want, ...Array.from({ length: 8 }, () => randomOf(therapies))].filter((t) => !given.has(t.id)))
+        const once = ONCE.includes(want.name);
+        // A therapy with no free hands or room that day gives way to another, as the admin would book it; a once-a-course one does not.
+        placed: for (const th of [want, ...(once ? [] : Array.from({ length: 8 }, () => randomOf(pool)))].filter((t) => !given.has(t.id)))
         // Each resident starts the search at a different hour, so the day is spread over both halves.
         for (let ti = 0; ti < dayTimes.length; ti++) {
-          const time = dayTimes[(pi * 5 + ti) % dayTimes.length];
+          const time = once ? dayTimes[ti] : dayTimes[(pi * 5 + ti) % dayTimes.length];
+          // In the morning, on an empty stomach: by 11:00 at the latest.
+          if (once && toMinutes(time) + th.duration_minutes > toMinutes('11:00')) break;
           const sMin = toMinutes(time);
           const eMin = sMin + th.duration_minutes;
           if (eMin > toMinutes('20:00')) continue;
@@ -438,7 +459,8 @@ async function main() {
   const residents: { id: string }[] = [];
   let stayCount = 0;
   const concernsSeed = ['Lower back pain, poor sleep', 'Stress and fatigue', 'Joint stiffness in the mornings', 'Digestion, acidity', 'Weight and energy', 'Recovery after illness'];
-  const addStay = async (patient_id: string, start_date: Date, end_date: Date, on_site: boolean) => {
+  const purging = new Set<string>();
+  const addStay = async (patient_id: string, start_date: Date, end_date: Date, on_site: boolean, purge?: string) => {
     const days = Math.round((end_date.getTime() - start_date.getTime()) / DAY_MS) + 1;
     await prisma.patientStay.create({
       data: { patient_id, start_date, end_date, on_site, duration_days: Math.round((end_date.getTime() - start_date.getTime()) / DAY_MS) + 1,
@@ -453,15 +475,27 @@ async function main() {
     // those arriving today or later: a patient a day in with no plan is on the pill (#288), and a demo that opens on 16 of them is not the demo.
     // Someone not staying eats at home: no plan for a day visitor or an outpatient.
     const planned = on_site && (stayCount++ % 6 !== 5 || start_date < today) && templates.length > 0;
+    if (purge) purging.add(patient_id);
     if (planned) {
-      await prisma.dietPlanSegment.create({
-        data: { patient_id, start_date, end_date, template_id: templates[stayCount % templates.length].id },
-      });
+      // The oleation and after-purification diets belong to a Virechana course only (#359).
+      const named = (n: string) => templates.find((t) => t.name.startsWith(n));
+      const usual = templates.filter((t) => !t.name.startsWith('Internal oleation') && !t.name.startsWith('After purification'));
+      const base = usual[stayCount % usual.length].id;
+      const oleation = named('Internal oleation'), after = named('After purification');
+      const at = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY_MS);
+      // Before: the usual plan; three days of oleation; from Virechana, five days of samsarjana; then the usual plan again.
+      const parts: [Date, Date, string][] = purge && oleation && after
+        ? [[start_date, at(purge, -4), base], [at(purge, -3), at(purge, -1), oleation.id], [at(purge, 0), at(purge, 4), after.id], [at(purge, 5), end_date, (usual.find((t) => !t.name.startsWith('Before purification')) ?? usual[0]).id]]
+        : [[start_date, end_date, base]];
+      for (const [from, to, template_id] of parts) {
+        const end = to > end_date ? end_date : to;
+        if (from <= end) await prisma.dietPlanSegment.create({ data: { patient_id, start_date: from, end_date: end, template_id } });
+      }
     }
     if (planned && start_date <= today && today <= end_date) residents.push({ id: patient_id });
   };
   for (const [patientId, list] of staysOf) {
-    for (const x of list) await addStay(patientId, x.s, x.e, x.kind !== 'day' && x.kind !== 'out');
+    for (const x of list) await addStay(patientId, x.s, x.e, x.kind !== 'day' && x.kind !== 'out', purgeDay.get(x));
   }
 
   // The rest of an ordinary day's changes, each once, so every row flag and
@@ -513,6 +547,8 @@ async function main() {
     'Good progress. Start Virechana preparation; ghee in the morning for 3 days.',
     'Sleep improved. Keep Shirodhara every second day; walk after dinner.',
   ];
+  // Only a Virechana course is told to prepare for it (#359).
+  const planFor = (pid: string) => (purging.has(pid) ? plans[2] : randomOf(plans.filter((_, i) => i !== 2)));
   for (const stay of await prisma.patientStay.findMany({ where: { end_date: { gte: start } } })) {
     let consulted = false;
     for (let d = new Date(stay.start_date); d <= stay.end_date && d <= end; d = new Date(d.getTime() + 7 * DAY_MS)) {
@@ -530,14 +566,14 @@ async function main() {
         await prisma.appointment.create({ data: {
           patient_id: stay.patient_id, therapy_id: consultation.id, staff_id: doctor.id, room_id: room.id,
           scheduled_date: new Date(dateKey), start_time: time, duration_minutes: 20, session_number: 1, total_sessions: 1,
-          status: past ? 'completed' : 'pending', assignment_type: 'auto', notes: past ? randomOf(plans) : null,
+          status: past ? 'completed' : 'pending', assignment_type: 'auto', notes: past ? planFor(stay.patient_id) : null,
         } });
         takenBy.set(`${dateKey}|${time}`, new Set([...taken, doctor.id, room.id]));
         consulted ||= past;
         break;
       }
     }
-    if (consulted) await prisma.patient.update({ where: { id: stay.patient_id }, data: { doctor_plan: randomOf(plans) } });
+    if (consulted) await prisma.patient.update({ where: { id: stay.patient_id }, data: { doctor_plan: planFor(stay.patient_id) } });
   }
 
 
