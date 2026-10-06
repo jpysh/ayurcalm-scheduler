@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import {
-  Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, Picker, QuickDates, Row, Seg, Text, Timeline,
+  Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, Picker, QuickDates, Row, Seg, Text, TextRow, Timeline,
   dayText, noteText, rupees, toastUndo, Btn } from "@/components/kit";
 
 const DAY_MS = 86400000;
@@ -44,14 +44,17 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
   const [chosen, setChosen] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<Plan | null>(null);
+  // Today's meals live here, not on the card (#353): the kitchen's question is asked from the Diet line.
+  const [meals, setMeals] = useState<{ meal: string; text: string }[]>([]);
   const load = () => Promise.all([
     fetchJsonWithTimeout<Line | { error: string }>(`${API_BASE}/patients/${patient!.id}/diet?date=${today}`),
     fetchJsonWithTimeout<Plan[]>(`${API_BASE}/diet-templates`),
   ]).then(([l, p]) => { const ok = l && "entries" in l ? l : null; setLine(ok); setPlans(Array.isArray(p) ? p : []); if (ok) setFrom((f) => (f < ok.stay.start ? ok.stay.start : f > ok.stay.end ? ok.stay.end : f)); });
   useEffect(() => {
     if (!patient) return;
-    setLine(null); setChosen(""); setFrom(today); setEditing(null);
+    setLine(null); setChosen(""); setFrom(today); setEditing(null); setMeals([]);
     load();
+    fetchJsonWithTimeout<{ meals?: { meal: string; text: string }[] }>(`${API_BASE}/patients/${patient.id}/day?date=${today}`).then((d) => setMeals(d.meals || [])).catch(() => setMeals([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patient?.id, today]);
   const plan = plans.find((p) => p.id === chosen);
@@ -77,6 +80,7 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
           // Tapping a step sets its date, so a plan is replaced from where it began.
           onClick: () => setFrom(e.from),
         }))} />
+        {meals.length ? <ListGroup title="Meals today">{meals.map((m) => <TextRow key={m.meal} label={m.meal}>{m.text}</TextRow>)}</ListGroup> : null}
         <div className="mt-4 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">Change diet from</div>
         <QuickDates label="Starts" value={from} today={today} min={line.stay.start} max={line.stay.end} onChange={setFrom} />
         {plan && patient ? <Consequence>{`${first(patient.name)} eats ${plan.name} from ${dayText(from)} to ${dayText(line.stay.end)}. What ran before ends the day before.`}</Consequence> : null}
