@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { BottomSheet, Btn, Callout, ChangeLine, Consequence, EntryRow, Area, Empty, Group, LineDate, LineSelect, ListGroup, Loading, Picker, Row, SearchField, SheetFoot, Seg, Tag, TwoFoot, WhoPicker, dayText, say } from "@/components/kit";
 import { API_BASE } from "@/lib/apiBase";
 import { StaySheet, type StayTarget } from "@/components/CardSheets";
+import { VITALS } from "@/components/SetupSheets";
 import type { ApiStay } from "@/pages/tabs/shared";
 
 export type CardAppt = {
@@ -25,6 +26,8 @@ export type CardAppt = {
   total_sessions?: number;
   status?: string;
   notes?: string | null;
+  /** What the therapist, doctor or patient recorded from their private link (#219). */
+  record?: { vitals?: Record<string, string>; checklist?: Record<string, boolean>; room_ready?: boolean; feedback?: "up" | "down"; feedback_note?: string } | null;
 };
 type Named = { id: string | number; name: string };
 /** `now` is the treatment as it stands, listed first and ticked (#201). */
@@ -166,6 +169,15 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients
   let body: ReactNode;
   if (page === "card") {
     const latest = history?.[0];
+    // Records only (#219): read here, never flagged and never printed.
+    const rec = appt.record || {};
+    const ticked = Object.values(rec.checklist || {}).filter(Boolean).length;
+    const recorded = [
+      ...Object.entries(rec.vitals || {}).filter(([, v]) => v).map(([k, v]) => `${VITALS.find(([x]) => x === k)?.[1] || k} ${v}`),
+      ticked ? `${ticked} check${ticked === 1 ? "" : "s"}` : "",
+      rec.room_ready ? "Room ready" : "",
+    ].filter(Boolean).join(" · ");
+    const said = rec.feedback ? [rec.feedback === "up" ? "Good" : "Not good", rec.feedback_note].filter(Boolean).join(" · ") : "";
     foot = noShow ? <Btn kind="primary" disabled={busy} onClick={() => apply({ status: "pending" }, `${first} came after all`)}>{first} came after all</Btn>
       : onShowDay ? <Btn kind="secondary" onClick={onShowDay}>Show this day</Btn> : undefined;
     body = (
@@ -185,6 +197,8 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients
           <ChangeLine label="With" value={team.map((id) => nameIn(staff, id)).join(" and ") || "No therapist"} onClick={locked || busy ? undefined : () => open("staff")} />
           <ChangeLine label="Room" value={nameIn(roomsList, appt.room_id) || "No room"} onClick={locked || busy ? undefined : () => open("room")} />
           <ChangeLine label="Note" faint={!appt.notes} value={appt.notes || "Add a note"} onClick={locked || busy ? undefined : () => setPage("note")} />
+          {recorded ? <ChangeLine label="Recorded" value={recorded} /> : null}
+          {said ? <ChangeLine label="Patient said" value={said} /> : null}
           {locked || noShow ? null : <ChangeLine label="Something wrong?" value="Didn't come, late, cancel" onClick={() => setPage("wrong")} />}
           <ChangeLine label="History" value={latest ? latest.text : "See all"} onClick={() => setPage("history")} />
         </div>
