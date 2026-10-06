@@ -174,3 +174,12 @@ export const offOnDay = (rows: OffRow[], type: 'staff' | 'room', id: string, day
       const whole = !h.start_time || !h.end_time;
       return { s: whole ? 0 : toMinutes(h.start_time!), e: whole ? 24 * 60 : toMinutes(h.end_time!), label: h.description || 'time off', whole };
     });
+
+/** The bookings a weekly pattern would leave outside a person's hours (#380), so the Hours page can say so before saving. */
+export const outsideHours = <A extends { scheduled_date: Date; start_time: string; duration_minutes: number }>(weekly: unknown, appts: A[]): A[] =>
+  appts.filter((a) => {
+    const h = hoursOn(weekly, a.scheduled_date);
+    if (h === undefined) return false;
+    const s = toMinutes(a.start_time);
+    return !h || s < h.s || s + a.duration_minutes > h.e;
+  });

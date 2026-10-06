@@ -12,7 +12,7 @@ import { findConflict, HAPPENING, loadDay, nearestFreeTime, oncePerCourse, softW
 import { replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
 import { dietTimeline, startDietFrom, extendDiet } from './patientDiet.js';
 import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
-import { centreClock, eventClashes, type EventRow } from './availability.js';
+import { centreClock, eventClashes, outsideHours, type EventRow } from './availability.js';
 import { loadDietsForDay } from './dietResolution.js';
 import { bookingOptions, bookingSuggestions, bookingWho, cardChoices, nextConsultations, notStaying, planNextWeek, therapyFacts, whyNoConsultation, whyNoTime } from './cardChoices.js';
 import { historyOf } from './history.js';
@@ -268,6 +268,21 @@ app.put('/staff/:id', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'staff update failed' });
     }
   }
+});
+
+// What new weekly hours would leave outside them (#380), asked before the save; the guard refuses those slots after it.
+app.post('/staff/:id/hours-check', async (req: Request, res: Response) => {
+  const { weekly_schedule } = z.object({ weekly_schedule: z.record(z.string(), z.any()) }).parse(req.body);
+  const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  const clock = centreClock(settings?.timezone || 'Asia/Kolkata');
+  const id = req.params.id;
+  const ahead = await prisma.appointment.findMany({
+    where: { OR: [{ staff_id: id }, { co_staff_ids: { has: id } }], status: { in: ['pending', 'confirmed'] }, scheduled_date: { gte: new Date(`${clock.date}T00:00:00.000Z`) } },
+    orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }],
+    include: { Patient: { select: { name: true } }, Therapy: { select: { name: true } } },
+  });
+  res.json({ outside: outsideHours(weekly_schedule, ahead.filter((a) => a.scheduled_date.toISOString().slice(0, 10) > clock.date || a.start_time >= clock.time))
+    .map((a) => ({ date: a.scheduled_date.toISOString().slice(0, 10), start_time: a.start_time, patient_name: a.Patient?.name ?? '', therapy_name: a.Therapy?.name ?? '' })) });
 });
 
 app.delete('/staff/:id', async (req: Request, res: Response) => {

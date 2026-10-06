@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { findConflict, staffDay, type DayContext } from '../appointmentGuard.js';
+import { outsideHours } from '../availability.js';
 
 // A fixed day far from the seed, as every dated test here does.
 const day = new Date('2030-03-13T00:00:00.000Z');
@@ -60,3 +61,12 @@ console.log('offHours: ok');
   assert.equal(findConflict(at('20:00'), withHours({})), null, 'never set: no limit');
 }
 console.log('offHours weekly: ok');
+
+// Changing hours (#380): what would fall outside is named before the save.
+{
+  const booked = [at('08:00'), at('14:30'), { ...at('10:00'), scheduled_date: new Date('2030-03-14T00:00:00.000Z') }];
+  const early = { wednesday: { start: '07:00', end: '15:00' }, thursday: null };
+  assert.deepEqual(outsideHours(early, booked).map((a) => a.start_time), ['14:30', '10:00'], 'runs past 15:00, and a day off');
+  assert.deepEqual(outsideHours({}, booked), [], 'never set: nothing outside');
+}
+console.log('offHours change: ok');
