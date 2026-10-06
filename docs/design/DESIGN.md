@@ -168,5 +168,6 @@ A screen is done when every line is a yes. The audit for a group quotes the line
 16. Anchors (Menu first, Search second, + last) sit where they sit everywhere else.
 17. The maintainer has seen a before/after and walked it on their phone.
 
+- **Fix all** (6 Oct, #358): when two or more of the day's problems each have one answer, the inbox's Day section starts with a green "Fix all N as shown" over the list, which is the preview. One call, one batch, one Undo. A problem that asks the admin to choose is never in it.
 - **Show the day by** (5 Oct): a "By time ▾" chip on the day's count line, beside "170 treatments · 22 rooms", opens a sheet with Time, Therapist, Room, Patient. It is a lens on the list, so it sits on the list, not in the Menu. Search is named "Search" (it reaches patients, therapists, treatments and other days), never "Search treatments".
 - **Leave is the team's** (5 Oct): the list holds staff, room, therapy and patient leave, which changes daily. The centre's closed days (public holidays, a closed day) are one row at the top, "Centre closed days · Next: Dussehra, 20 Oct", opening their own sheet; they are set about once a year.
