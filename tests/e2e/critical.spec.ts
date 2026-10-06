@@ -97,13 +97,13 @@ test('@smoke admin signs in with Enter and every tab shows its content', async (
   await openTab(page, 'Settings');
   await activePanel(page).getByRole('button', { name: /^Log\b/ }).click();
   await expect(activePanel(page)).toContainText(/Today|Yesterday/, { timeout: 15000 });
-    // A seeded install has residents in house, and one opens on a card with
-  // today's meals (#63); an empty list means the API is not answering.
+  // A seeded install has residents in house, and one opens on a card that
+  // leads with the week (#353); an empty list means the API is not answering.
   await openTab(page, 'Patients');
   const resident = activePanel(page).getByRole('button', { name: /Day \d+ of \d+ · leaves/ });
   await expect(resident.nth(5)).toBeVisible();
   await resident.first().click();
-  await expect(page.getByRole('dialog')).toContainText('Meals today', { timeout: 15000 });
+  await expect(page.getByRole('dialog')).toContainText('Doctor', { timeout: 15000 });
 });
 
 test('@smoke day sheet PDF prints for today', async ({ page, request }) => {

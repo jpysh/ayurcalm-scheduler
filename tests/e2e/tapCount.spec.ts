@@ -27,7 +27,7 @@ const JOBS: [string, number][] = [
   ['Room out of use', 3],
   // Who, then Book: one tap more than the old suggestion, bought by a choice of who, therapist, room and time (story 5, accepted).
   ['Book one treatment', 4], // #330: no therapy is chosen for the admin, so +, who, a therapy, Book
-  ["A patient's meals today", 2],
+  ["A patient's meals today", 3], // #353: meals live in the Diet sheet so the card leads with the week (decided 6 Oct)
   ["Print today's sheets", 2], // Print moved into the Menu (5 Oct): the bar keeps room for the date
   // From the Patients screen. Story 4 says 2; the gender is one tap because nothing is chosen for them (#283).
   ['Add an arriving patient', 3], // 6 Oct (#313): +, gender, Add
@@ -219,7 +219,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       }
     });
 
-    // From the day: a treatment's row, then the resident's name opens their card with today's meals.
+    // From the day: a treatment's row, the patient's name, then Diet, which holds today's meals (#353).
     await job(page, rows, "A patient's meals today", async (tap) => {
       await showDay(page, today);
       // A row a thumb can reach: not under the sticky day header, the pill or the bar. The day opens at now, so which row that is moves through the day.
@@ -228,7 +228,8 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       const onScreen = await treatments.evaluateAll((els) => Math.max(0, els.findIndex((el) => { const r = el.getBoundingClientRect(); if (r.top < 0 || r.bottom > innerHeight - 130) return false; const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!hit && el.contains(hit); })));
       await tap(treatments.nth(onScreen));
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Patient/ }));
-      await expect(page.getByRole('dialog')).toContainText('Meals today');
+      await tap(page.getByRole('dialog').last().getByRole('button', { name: /^Diet/ }));
+      await expect(page.getByRole('dialog').last()).toContainText('Meals today');
     });
 
     await job(page, rows, "Print today's sheets", async (tap) => {
