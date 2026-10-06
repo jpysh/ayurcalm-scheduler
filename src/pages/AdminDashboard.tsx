@@ -682,6 +682,7 @@ const AdminDashboard = () => {
         undoReplan={undoReplanBatch}
         items={attention.items}
         openRules={() => setRules({ section: null })}
+        addStaff={(a) => staffAdder.current?.(a)}
         onItem={(i: AttentionItem) => {
           setShowAttention(false);
           if (i.action === 'diet') patientsScreen.openMeals({ id: i.patient_id!, name: i.who });

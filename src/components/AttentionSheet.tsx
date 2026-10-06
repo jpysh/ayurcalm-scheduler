@@ -39,6 +39,8 @@ export type DayProblem = {
   fix: Fix | null;
   choices: Fix[];
   no_fix_reason: string | null;
+  /** The fix for the cause when it is the team (#368): add a therapist, or let fewer give it. */
+  actions?: { kind: "add_staff" | "allow_fewer"; label: string; therapy_id?: string; gender?: string; count?: number }[];
 };
 
 export type ReplanBatch = {
@@ -54,8 +56,10 @@ type Done = { text: string; undo: (() => Promise<boolean>) | null };
 const listed = (names: string[]) => names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 const first = (name: string) => name.split(" ")[0];
 
-export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, replans, dismissed, dismiss, undoReplan, onChanged, seeIt, afterConsultation, items, onItem, openRules }: {
+export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, replans, dismissed, dismiss, undoReplan, onChanged, seeIt, afterConsultation, items, onItem, openRules, addStaff }: {
   open: boolean;
+  /** A dead end's fix (#368): the add-a-therapist sheet, with the therapy ticked. */
+  addStaff: (a: { gender?: string; therapy_id?: string }) => void;
   onOpenChange: (o: boolean) => void;
   apiBase: string;
   /** The day on screen and today, YYYY-MM-DD on the centre's clock. */
@@ -164,7 +168,20 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
         {see}
       </>);
     }
-    return item(p.id, p.what, [at, p.no_fix_reason].filter(Boolean).join(". "), see);
+    // A dead end names its cause and carries the fix for it, as the booking sheet's do (#343).
+    const fixCause = (p.actions || []).map((a, i) => (
+      <button key={a.kind} type="button" data-main={i === 0 || undefined} className={`${tb(i === 0)} text-right`} disabled={busy !== null} onClick={async () => {
+        if (a.kind === "add_staff") { onOpenChange(false); addStaff(a); return; }
+        setBusy(a.kind);
+        try {
+          const r = await fetch(`${apiBase}/therapies/${a.therapy_id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ staff_required: a.count }) });
+          if (!r.ok) { setError("That could not be saved."); return; }
+          setDone({ text: `${a.label.replace(/^Let (.+) give (.+)$/, "$2 now needs $1")}.`, undo: null });
+          await onChanged();
+        } finally { setBusy(null); }
+      }}>{a.label}</button>
+    ));
+    return item(p.id, p.what, [at, p.no_fix_reason].filter(Boolean).join(". "), <>{fixCause}{see}</>, fixCause.length > 0);
   };
 
   // The sheet opens on whatever day is on screen, so it names that day (#193).

@@ -21,7 +21,7 @@
  */
 import { PrismaClient, Prisma } from '@prisma/client';
 import { centreClock, offOnDay, stayOn, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow } from './availability.js';
-import { HAPPENING, findConflict, loadDay, type Conflict } from './appointmentGuard.js';
+import { HAPPENING, findConflict, loadDay, type Action, type Conflict } from './appointmentGuard.js';
 
 /** Which of the tier 4 choices a move is. */
 export type Choice = 'this_time_only' | 'next_free_day' | 'cancel';
@@ -65,6 +65,8 @@ export type Unplaced = {
   reason: string;
   /** Tier 4 with nothing selected: what the admin can still pick. */
   choices?: Move[];
+  /** The fix for the cause, when the cause is the team (#368). */
+  actions?: Action[];
 };
 
 export type ReplanResult = {
@@ -460,15 +462,32 @@ export async function planDay(
         start_time: appt.start_time,
       },
     });
+    // Too few hands is the cause more often than a full diary: name who is
+    // trained and who is in, and offer the fix for that (#368).
+    const trained = staff.filter((s) => qualified(s, false));
+    const inThen = trained.filter((s) => s.id !== staffId && !offOnDay(timeOff, 'staff', s.id, date).some((b) => overlaps(b.s, b.e, start, start + duration)));
+    const listed = (xs: typeof staff) => xs.map((s) => s.name).join(' and ');
+    const gendered = enforceGender && therapy?.requires_gender_match ? " of the patient's gender" : '';
+    const hands = needed === 1 ? `a therapist${gendered}` : `${["", "one", "two", "three"][needed] ?? needed} therapists${gendered}`;
+    const short = trained.length < needed
+      ? `${names.therapy_name} needs ${hands}, and ${trained.length ? `only ${listed(trained)} ${trained.length === 1 ? 'is' : 'are'} trained in it` : 'nobody here is trained in it'}.`
+      : inThen.length < needed
+        ? `${names.therapy_name} needs ${hands}, and ${inThen.length ? `only ${listed(inThen)} ${inThen.length === 1 ? 'is' : 'are'} in that day` : 'nobody trained in it is in that day'}.`
+        : null;
+    const actions: Action[] = short ? [
+      { kind: 'add_staff', label: `Add a therapist for ${names.therapy_name}`, therapy_id: appt.therapy_id, ...(gendered && patient ? { gender: patient.gender } : {}) },
+      ...(needed > 1 && inThen.length >= 1 ? [{ kind: 'allow_fewer' as const, label: `Let ${inThen.length === 1 ? 'one therapist' : `${inThen.length} therapists`} give ${names.therapy_name}`, therapy_id: appt.therapy_id, count: inThen.length }] : []),
+    ] : [];
     unplaced.push({
       appointment_id: appt.id,
       patient_name: names.patient_name,
       therapy_name: names.therapy_name,
       start_time: appt.start_time,
       choices,
-      reason: candidates.length === 0
+      actions,
+      reason: short ?? (candidates.length === 0
         ? `No other therapist is trained in ${names.therapy_name}${enforceGender && therapy?.requires_gender_match ? ` and matches the patient's gender` : ''}. It can be cancelled.`
-        : `Every therapist trained in ${names.therapy_name} is booked for the next 30 days. It can be cancelled.`,
+        : `Every therapist trained in ${names.therapy_name} is booked for the next 30 days. It can be cancelled.`),
     });
   }
 

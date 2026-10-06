@@ -192,13 +192,15 @@ export function staffDay(ctx: DayContext) {
  * with no way forward is a dead end.
  */
 export type Action = {
-  kind: 'book_at' | 'set_date' | 'other_therapy' | 'add_staff' | 'allow_any_gender' | 'change_stay' | 'book_anyway';
+  kind: 'book_at' | 'set_date' | 'other_therapy' | 'add_staff' | 'allow_any_gender' | 'allow_fewer' | 'change_stay' | 'book_anyway';
   label: string;
   date?: string;
   start_time?: string;
   gender?: string;
   therapy_id?: string;
   patient_id?: string;
+  /** allow_fewer: the therapists the therapy will need from now on. */
+  count?: number;
 };
 
 export type Soft = { reason: 'DAY_FULL' | 'SAME_THERAPY' | 'ONCE_PER_COURSE'; message: string; actions: Action[] };
