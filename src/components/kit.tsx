@@ -20,7 +20,7 @@ export const wide = "min-h-11 w-full rounded-full font-semibold";
 export const say = (s: string) => s.replace(/_/g, " ");
 
 /** The line under a sheet's title that says what the sheet is for. */
-export const SheetNote = ({ children }: { children: ReactNode }) => <p className={`-mt-2 ${noteText}`}>{children}</p>;
+export const SheetNote = ({ children }: { children: ReactNode }) => <p className={noteText}>{children}</p>;
 
 /** A label over one control. */
 export const Field = ({ label, note, children }: { label: string; note?: ReactNode; children: ReactNode }) => (

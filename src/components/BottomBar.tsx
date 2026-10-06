@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/apiBase";
 import { Menu, Plus } from "lucide-react";
-import { BottomSearch, BottomSheet, DateRow, Group, ListGroup, Row, Seg, Btn, Tile } from "@/components/kit";
+import { BottomSearch, BottomSheet, DateRow, dayText, Group, ListGroup, Row, Seg, Btn, Tile } from "@/components/kit";
 
 /**
  * The phone frame from docs/design/phone.html (#66): one bar at the bottom, in
@@ -46,8 +46,6 @@ type Props = {
   attention?: { fix: number; done: number; note: number; open: () => void } | null;
 };
 
-const label = (iso: string) =>
-  new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 const shift = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
 
 export function BottomBar({ activeTab, go, day, today, now, setDay, print, printing, plus, search, attention }: Props) {
@@ -77,7 +75,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
         patients: `${residents.length} in house`,
         rooms: `${rooms.length} rooms${roomsOut ? ` · ${roomsOut} out` : ""}`,
         team: out.length === 0 ? "Everyone in" : out.length === 1 ? `${out[0]} not in` : `${out.length} not in`,
-        schedule: label(day),
+        schedule: dayText(day),
       });
     }).catch(() => setHints({}));
   }, [sheet, today, day]);
@@ -113,7 +111,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
           <ListGroup>
             {inbox && !inbox.need ? <Row key="inbox" title={`${inbox.info} to know`} trailing="›" onClick={close(attention!.open)} /> : null}
             <Row key="search" title={search.label} facts={search.hint} trailing="›" onClick={close(search.start)} />
-            {onDay ? <Row key="day" title="Change day" facts={`${label(day)} · ${when}`} trailing="›" onClick={() => setSheet("day")} /> : null}
+            {onDay ? <Row key="day" title="Change day" facts={`${dayText(day)} · ${when}`} trailing="›" onClick={() => setSheet("day")} /> : null}
             {onDay ? <Row key="print" title="Print the day's sheets" facts={printing ? "Making the PDF…" : undefined} trailing="›" onClick={() => { setSheet(null); if (!printing) print(); }} /> : null}
           </ListGroup>
         </div>
@@ -128,7 +126,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
         </div>
       </BottomSheet> : null}
 
-      <BottomSheet open={sheet === "day"} onOpenChange={(o) => setSheet(o ? "day" : null)} title={label(day)}>
+      <BottomSheet open={sheet === "day"} onOpenChange={(o) => setSheet(o ? "day" : null)} title={dayText(day)}>
         <div className="grid grid-cols-[1.25fr_1fr_1.25fr] gap-2 [&>button]:whitespace-nowrap [&>button]:px-2">
           <Btn kind="secondary" inline onClick={() => pick(shift(day, -1))}>Day before</Btn>
           <Btn kind="primary" inline onClick={() => pick(today)}>Today</Btn>
@@ -189,7 +187,7 @@ export function WeekStrip({ day, today, setDay }: { day: string; today: string; 
     const ro = new ResizeObserver(put); ro.observe(el);
     return () => { ro.disconnect(); document.documentElement.style.removeProperty("--strip-h"); };
   }, []);
-  const dayName = new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  const dayName = dayText(day);
   return (
     <div ref={bar} className="sticky top-0 z-[4] -mx-1 border-b bg-background px-1 pt-2">
       <div className="flex min-h-6 items-center justify-between px-1 text-sm">
@@ -204,7 +202,7 @@ export function WeekStrip({ day, today, setDay }: { day: string; today: string; 
             {Array.from({ length: 7 }, (_, i) => shift(w, i)).map((d) => {
               const on = d === day, now = d === today;
               return (
-                <button key={d} type="button" aria-label={label(d)} aria-pressed={on} onClick={() => setDay(d)} className="flex min-h-14 w-[14.28%] flex-col items-center justify-center gap-0.5">
+                <button key={d} type="button" aria-label={dayText(d)} aria-pressed={on} onClick={() => setDay(d)} className="flex min-h-14 w-[14.28%] flex-col items-center justify-center gap-0.5">
                   <span className={`text-xs font-semibold ${dow(d) % 6 === 0 ? "text-muted-foreground" : ""}`}>{"SMTWTFS"[dow(d)]}</span>
                   <span className={`grid h-10 w-10 place-items-center rounded-xl text-xl ${on ? "bg-primary font-bold text-primary-foreground" : now ? "border-2 border-primary font-bold text-primary" : ""}`}>{Number(d.slice(8))}</span>
                 </button>

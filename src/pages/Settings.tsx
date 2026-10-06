@@ -16,7 +16,7 @@ import { ChangePasswordCard, UsersSection } from "@/components/UsersSection";
 import PageHead from "@/components/PageHead";
 import type { Attention } from "@/lib/attention";
 import {
-  Area, BottomSheet, ChecklistBar, Days, Dropdown, Group, ListGroup, Loading, PickPhoto, Row, Seg, SectionHead, SheetFoot, Switch, Text, TimeList, WEEK, noteText, timesBetween, Btn } from "@/components/kit";
+  Area, BottomSheet, ChecklistBar, Days, Dropdown, Group, ListGroup, Loading, PickPhoto, Row, Seg, SectionHead, SheetFoot, Switch, Text, TimeList, WEEK, noteText, timesBetween, Btn, dayText } from "@/components/kit";
 
 const DAY_TIMES = timesBetween("00:00", "23:30", 30);
 const SLOT_OPTIONS = [15, 20, 30, 60];
@@ -160,7 +160,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
       {isAdmin ? (
         <ListGroup title="Every day">
           <Row title="What needs you" facts={rulesFact} trailing="›" onClick={showRules} />
-          <Row title="Printed sheets" facts={lastPrint ? `Last printed for ${new Date(`${lastPrint}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).replace(",", "")}` : "Nothing printed yet"} trailing="›" onClick={() => setSheet("printed")} />
+          <Row title="Printed sheets" facts={lastPrint ? `Last printed for ${dayText(lastPrint)}` : "Nothing printed yet"} trailing="›" onClick={() => setSheet("printed")} />
           <Row title="People with access" facts={people === null ? "Who can sign in" : `${people} ${people === 1 ? "person" : "people"} can sign in`} trailing="›" onClick={() => show("people")} />
         </ListGroup>
       ) : null}

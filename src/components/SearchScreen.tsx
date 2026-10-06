@@ -7,7 +7,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { API_BASE } from "@/lib/apiBase";
 import type { CardAppt } from "@/components/TreatmentCard";
-import { Empty, ListGroup, Loading, Row, SectionHead, Seg, chip, say } from "@/components/kit";
+import { Empty, ListGroup, Loading, Row, SectionHead, dayText, Seg, chip, say } from "@/components/kit";
 
 export type Hit = CardAppt & { date: string; patient_name: string; therapy_name: string; room_name: string | null; staff_names: string[] };
 type Scope = "upcoming" | "past" | "all";
@@ -19,7 +19,7 @@ const RECENT_KEY = "recentSearches";
 const shift = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
 const toM = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-const fmt = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+const fmt = (iso: string) => dayText(iso);
 
 const readRecent = (): string[] => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch { return []; } };
 const remember = (q: string) => {

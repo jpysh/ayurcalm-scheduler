@@ -660,7 +660,7 @@ const AdminDashboard = () => {
           : { query: scheduleScreen.query, setQuery: scheduleScreen.setQuery, on: scheduleScreen.searching, setOn: scheduleScreen.setSearching, placeholder: 'Name, therapy or room', label: 'Search', hint: 'Patients, therapists, treatments, any day', start: () => { go('schedule'); scheduleScreen.setSearching(true); } }}
         // A patient with nothing booked is a rest day, not a note (#144).
         attention={{
-          fix: dayCheck.problems.filter((p) => p.problem_class === 'blocking').length + attention.items.filter((i) => i.kind === 'action').length,
+          fix: dayCheck.problems.filter((p) => p.problem_class === 'blocking').length + new Set(attention.items.filter((i) => i.kind === 'action').map((i) => i.patient_id ?? i.id)).size,
           // What the app already fixed for the admin: a therapist's day moved.
           done: visibleReplans.length,
           note: dayCheck.problems.filter((p) => p.problem_class === 'worth_knowing' && p.kind !== 'IDLE_RESIDENT' && !dismissed.includes(p.id)).length,

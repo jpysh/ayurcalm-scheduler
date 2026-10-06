@@ -183,10 +183,21 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
             const review = d.next_consultation?.date;
             const days = d.week.slice(1);
             // Empty days after the review are one row: planning them is the review's job.
-            const later = days.filter((w) => review && w.date > review && !w.treatments.length && w.date !== d.stay?.end_date);
+            const isLater = (w: typeof days[number]) => !!review && w.date > review && !w.treatments.length && w.date !== d.stay?.end_date;
+            // Each run of them folds where it falls, so the days still read in order once some are booked (#370).
+            const rows: (typeof days | typeof days[number])[] = [];
+            for (const w of days) {
+              const last = rows[rows.length - 1];
+              if (!isLater(w)) rows.push(w);
+              else if (Array.isArray(last)) last.push(w);
+              else rows.push([w]);
+            }
             return (<>
               <ListGroup title="Next days">
-                {days.filter((w) => !later.includes(w)).map((w) => {
+                {rows.map((w) => Array.isArray(w) ? (
+                  <Row key={w[0].date} title={w.length === 1 ? dayText(w[0].date) : `${dayText(w[0].date)} to ${dayText(w[w.length - 1].date)}`}
+                    facts="Not planned yet: after the review" onClick={() => book({ id: d.id, name: d.name, date: w[0].date })} />
+                ) : (() => {
                   const leaving = w.date === d.stay?.end_date;
                   const empty = !w.treatments.length;
                   return (
@@ -195,9 +206,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
                       flag={empty && !leaving ? 'Nothing booked' : undefined}
                       trailing={w.date === review ? 'Review' : undefined} />
                   );
-                })}
-                {later.length ? <Row title={later.length === 1 ? dayText(later[0].date) : `${dayText(later[0].date)} to ${dayText(later[later.length - 1].date)}`}
-                  facts="Not planned yet: after the review" onClick={() => book({ id: d.id, name: d.name, date: later[0].date })} /> : null}
+                })())}
               </ListGroup>
               {/* Story 14 (#354): after the review, next week is this week again; one sheet, Book all. */}
               {weekFrom ? <Btn kind="primary" className="mt-3" onClick={() => setWeek(true)}>Plan next week</Btn> : null}

@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import PageHead from "@/components/PageHead";
-import { Empty, EntryRow, ErrorLine, ListGroup, Loading } from "@/components/kit";
+import { Empty, EntryRow, dayText, ErrorLine, ListGroup, Loading } from "@/components/kit";
 
 type Entry = { id: string; at: string; who: "you" | "the app"; text: string; undo: string | null; undone: boolean };
 
@@ -26,7 +26,7 @@ export function LogScreen({ timezone, refresh }: { timezone: string; refresh: ()
   const today = ymd(new Date());
   const yesterday = ymd(new Date(Date.now() - 86400000));
   const heading = (day: string) => day === today ? "Today" : day === yesterday ? "Yesterday"
-    : new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+    : dayText(day);
 
   const days: [string, Entry[]][] = [];
   for (const e of entries || []) {
