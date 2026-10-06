@@ -168,7 +168,7 @@ async function main() {
   // reassignment are what the seeded day exists to show, and leave drawn only
   // from weekdays left every Saturday and Sunday without it.
   const onLeaveToday = staff[staff.length - 1];
-  await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: onLeaveToday.id, date: new Date(centreYmd(startRange)), description: 'Personal Leave' } });
+  await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: onLeaveToday.id, date: new Date(centreYmd(startRange)), description: 'Personal leave' } });
   for (const s of staff) {
     let count = 0;
     const used: Set<string> = new Set(s.id === onLeaveToday.id ? [centreYmd(startRange)] : []);
@@ -180,7 +180,7 @@ async function main() {
       used.add(key);
       // Midnight of the day, as the scheduler matches it; the time of day the seed
       // happened to run made this leave invisible to booking.
-      await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: s.id, date: new Date(key), description: 'Personal Leave' } });
+      await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: s.id, date: new Date(key), description: 'Personal leave' } });
       count++;
     }
   }
