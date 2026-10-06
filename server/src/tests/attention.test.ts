@@ -76,6 +76,11 @@ async function main() {
     assert.deepEqual(mine('leaves_tomorrow'), []);
     assert.equal(rule(o, 'no_diet').on, true);
 
+    // A demo reset puts changed rules back too (#389).
+    await call('PUT', '/attention/rules', { leaves_tomorrow: { on: true } });
+    await call('POST', '/settings/reset-demo-data');
+    assert.equal(rule(await read(), 'leaves_tomorrow').on, false, 'reset-demo-data restores the default rules');
+
     // The setup card remembers what was opened, once each.
     await call('PUT', '/settings/setup-reviewed', { item: 'hours' });
     const r2 = await call('PUT', '/settings/setup-reviewed', { item: 'hours' });
