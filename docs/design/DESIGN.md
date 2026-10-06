@@ -147,6 +147,7 @@ Every list, sheet and button has all of these designed, not left to default.
 - **Plan next week** (#354, 6 Oct): planned from the coming review (today's, if the doctor saw them today); it repeats the seven days up to it on the same weekdays, at the same time and therapist where free, else the nearest free time. The leaving day is left empty. A line with a day that has no free time starts unticked and says so; Book all is one transaction and one Undo.
 - **A treatment under way is still the admin's** (#367, 6 Oct): while it runs, a therapist or room that is not there is flagged, worded for now ("Aarav is waiting: Kumar Sharma is not in"), with the same fixes; once it ends it is history and never raised.
 - **Once a stay** (#365, 6 Oct): a therapy can be marked "Once a stay" (on in the library for Vamana and Virechana). Plan next week never repeats it, and booking a second one in the same stay is asked about with Book anyway, never refused.
+- **Too few hands is named** (#368, 6 Oct): when a treatment cannot be placed because too few trained therapists are in, the inbox says so ("Njavarakizhi needs two therapists, and only Raj Das is in that day") and offers **Add a therapist for …** and, for a therapy needing more than one, **Let one therapist give …** (a change to the therapy, kept in Therapies). Never "booked for 30 days" when the diary is empty.
 - **Language:** "patient" (never "resident"), British spelling, sentence case, times in 24-hour, dates "Wed 30 Sept". No jargon, no raw ids, no snake_case.
 
 ## 9. Per-screen checklist

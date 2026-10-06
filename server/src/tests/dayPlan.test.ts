@@ -201,6 +201,26 @@ async function main() {
     }, ctx);
     assert.equal(clash?.reason, 'ROOM_BUSY', 'an edit into an occupied room must be refused');
 
+    // --- too few hands is named as such, with its fix (#368) ---
+    // A four-hand therapy given by Plan Away and Plan One, and Plan Away off for
+    // weeks: the diary is empty, so "booked for 30 days" would send the admin
+    // to the wrong fix.
+    const pair = await prisma.therapy.create({ data: { name: 'Plan Pair', required_amenities: ['table'], duration_minutes: 60, staff_required: 2, requires_gender_match: false } });
+    made.push({ table: 'therapy', id: pair.id });
+    await prisma.staff.update({ where: { id: away.id }, data: { specializations: [therapy.id, pair.id] } });
+    await prisma.staff.update({ where: { id: coverOne.id }, data: { specializations: [therapy.id, pair.id] } });
+    const long = await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: away.id, start_date: day, end_date: new Date(day.getTime() + 40 * 86400000), description: 'Plan long leave', weekdays: [] } });
+    made.push({ table: 'timeOff', id: long.id });
+    const four = await prisma.appointment.create({ data: {
+      patient_id: patients[0].id, therapy_id: pair.id, staff_id: coverOne.id, co_staff_ids: [away.id], room_id: rooms[1].id,
+      scheduled_date: day, start_time: '15:00', duration_minutes: 60, session_number: 1, total_sessions: 1, status: 'pending', assignment_type: 'manual',
+    } });
+    made.push({ table: 'appointment', id: four.id });
+    const short = (await checkDay(day, prisma, { now: { date: '2030-01-15', time: '17:00' } })).problems.find((p) => p.appointment_id === four.id);
+    assert.ok(short, 'the four-hand treatment with one therapist away should be raised');
+    assert.equal(short.no_fix_reason, 'Plan Pair needs two therapists, and only Plan One is in that day.', `named the wrong cause: "${short.no_fix_reason}"`);
+    assert.deepEqual(short.actions?.map((a) => [a.kind, a.count ?? null]), [['add_staff', null], ['allow_fewer', 1]], 'the fixes should be adding a therapist or letting one give it');
+
     console.log('dayPlan: ok');
   } finally {
     for (const m of [...made].reverse()) {

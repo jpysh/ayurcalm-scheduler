@@ -27,7 +27,7 @@
  *                   booked is often a rest day by design.
  */
 import { PrismaClient } from '@prisma/client';
-import { DEFAULT_MAX_PER_DAY, findConflict, loadDay, type Candidate, type DayContext } from './appointmentGuard.js';
+import { DEFAULT_MAX_PER_DAY, findConflict, loadDay, type Action, type Candidate, type DayContext } from './appointmentGuard.js';
 import { planDay, type Move, type Pin } from './replan.js';
 import { centreClock, startedBefore, toMinutes, type Clock } from './availability.js';
 
@@ -74,6 +74,8 @@ export type DayProblem = {
   choices: Fix[];
   /** Why there is no fix, when there is none. */
   no_fix_reason: string | null;
+  /** The fix for the cause, when the cause is the team (#368). */
+  actions?: Action[];
 };
 
 export type ProblemGroup = {
@@ -388,6 +390,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
         byAppointment.set(m.appointment_id, fixFromMove(m, m.to.date === ymd(day)));
       }
       const unplacedBy = new Map(result.unplaced.map((u) => [u.appointment_id, u.reason]));
+      const actionsBy = new Map(result.unplaced.map((u) => [u.appointment_id, u.actions ?? []]));
       const choicesBy = new Map(result.unplaced.map((u) => [u.appointment_id, (u.choices || []).map((c) => fixFromMove(c, c.to.date === ymd(day)))]));
       for (const p of toPlan) {
         if (!p.appointment_id) continue;
@@ -402,6 +405,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
         p.fix = noop ? null : fix;
         p.choices = p.fix?.choices || choicesBy.get(p.appointment_id) || [];
         p.no_fix_reason = p.fix ? null : unplacedBy.get(p.appointment_id) || 'Nothing free in the next 30 days. It can be cancelled.';
+        if (!p.fix && actionsBy.get(p.appointment_id)?.length) p.actions = actionsBy.get(p.appointment_id);
         p.blocked_by_preferred_staff = false;
         if (p.fix) plan.push(p.fix);
       }
