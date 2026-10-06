@@ -6,7 +6,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { eventHitsDay, type EventRow } from './availability.js';
-import { HAPPENING, findConflict, loadDay, softWarnings, type Action, type Candidate, type Soft } from './appointmentGuard.js';
+import { HAPPENING, findConflict, loadDay, oncePerCourse, softWarnings, type Action, type Candidate, type Soft } from './appointmentGuard.js';
 
 export type Kind = 'time' | 'staff' | 'room' | 'therapy';
 /** `now` marks the treatment as it stands, listed first so the admin sees what they change from (#201). */
@@ -245,7 +245,8 @@ export async function bookingOptions(dayISO: string, nowMinutes: number | null, 
     const a = assign(ctx, day, t, therapy, patient.id);
     if (a) times.push(a);
   }
-  const warnings = softWarnings({ patient_id: patient.id, therapy_id: therapy.id }, ctx);
+  const once = await oncePerCourse({ patient_id: patient.id, therapy_id: therapy.id, scheduled_date: day }, prisma);
+  const warnings = [...softWarnings({ patient_id: patient.id, therapy_id: therapy.id }, ctx), ...(once ? [once] : [])];
   if (!times.length) return { times, staff: [], rooms: [], ...(await noTimeWhy(ctx, day, nowMinutes, therapy, patient, stay, prisma)), warnings };
   const chosen = times.find((x) => x.start_time === at) || times[0];
   const base: Candidate = { scheduled_date: day, start_time: chosen.start_time, duration_minutes: chosen.duration_minutes, staff_id: chosen.staff_id, co_staff_ids: chosen.co_staff_ids, room_id: chosen.room_id, patient_id: patient.id, therapy_id: therapy.id };
@@ -480,7 +481,8 @@ export async function planNextWeek(patientId: string, reviewISO: string, prisma:
   // A line per therapy, as last given; its days are this week's weekdays a week on.
   const byTherapy = new Map<string, { last: (typeof past)[number]; dates: Set<string> }>();
   for (const a of past) {
-    if (a.Therapy?.is_consultation) continue;
+    // A consultation is the review line below; a once-a-course therapy is not repeated (#365).
+    if (a.Therapy?.is_consultation || a.Therapy?.once_per_course) continue;
     const e = byTherapy.get(a.therapy_id) || { last: a, dates: new Set<string>() };
     e.last = a; e.dates.add(shift(isoOf(a.scheduled_date), 7));
     byTherapy.set(a.therapy_id, e);

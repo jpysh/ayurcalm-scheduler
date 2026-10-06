@@ -201,7 +201,7 @@ export type Action = {
   patient_id?: string;
 };
 
-export type Soft = { reason: 'DAY_FULL' | 'SAME_THERAPY'; message: string; actions: Action[] };
+export type Soft = { reason: 'DAY_FULL' | 'SAME_THERAPY' | 'ONCE_PER_COURSE'; message: string; actions: Action[] };
 
 export const DEFAULT_MAX_PER_DAY = 4;
 
@@ -224,4 +224,25 @@ export function softWarnings(c: { id?: string; patient_id: string; therapy_id?: 
     out.push({ reason: 'SAME_THERAPY', message: `${first} already has ${name} at ${twin.start_time}.`, actions: [anyway] });
   }
   return out;
+}
+
+/**
+ * A therapy given once a course (Vamana, Virechana) already in this stay (#365):
+ * asked, never refused, as the other soft rules are. A day visitor has no stay
+ * and is never asked.
+ */
+export async function oncePerCourse(c: { id?: string; patient_id: string; therapy_id?: string; scheduled_date: Date }, prisma: PrismaClient): Promise<Soft | null> {
+  if (!c.therapy_id) return null;
+  const therapy = await prisma.therapy.findUnique({ where: { id: c.therapy_id } });
+  if (!therapy?.once_per_course) return null;
+  const stay = await prisma.patientStay.findFirst({ where: { patient_id: c.patient_id, start_date: { lte: c.scheduled_date }, end_date: { gte: c.scheduled_date } } });
+  if (!stay) return null;
+  const had = await prisma.appointment.findFirst({
+    where: { patient_id: c.patient_id, therapy_id: c.therapy_id, id: c.id ? { not: c.id } : undefined, scheduled_date: { gte: stay.start_date, lte: stay.end_date }, ...HAPPENING },
+    include: { Patient: true }, orderBy: { scheduled_date: 'asc' },
+  });
+  if (!had) return null;
+  const first = (had.Patient?.name || 'They').split(' ')[0];
+  const day = had.scheduled_date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  return { reason: 'ONCE_PER_COURSE', message: `${therapy.name} is given once a stay, and ${first}'s is on ${day}.`, actions: [{ kind: 'book_anyway', label: 'Book anyway' }] };
 }

@@ -8,7 +8,7 @@ import { renderDischarge } from './pdf/dischargePdf.js';
 import { dischargeOf, saveDischarge } from './discharge.js';
 import { staffWeek } from './staffWeek.js';
 import { newLinkToken } from './links.js';
-import { findConflict, HAPPENING, loadDay, nearestFreeTime, softWarnings, staffDay, type Action } from './appointmentGuard.js';
+import { findConflict, HAPPENING, loadDay, nearestFreeTime, oncePerCourse, softWarnings, staffDay, type Action } from './appointmentGuard.js';
 import { replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
 import { dietTimeline, startDietFrom, extendDiet } from './patientDiet.js';
 import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
@@ -344,6 +344,7 @@ app.post('/therapies', async (req: Request, res: Response) => {
     staff_required: z.number().int().min(1).max(6).default(1),
     description: z.string().optional(),
     is_consultation: z.boolean().default(false),
+    once_per_course: z.boolean().default(false),
     products: z.array(z.string().max(100)).max(20).default([]),
     checklist: z.array(z.object({ text: z.string().trim().min(1).max(100), required: z.boolean() })).max(20).default([]),
     vitals: z.array(z.string().trim().min(1).max(30)).max(10).default(["bp"]),
@@ -374,6 +375,7 @@ app.post('/therapies/import', requireAdmin, async (req: Request, res: Response) 
     vitals: z.array(z.string().trim().min(1).max(30)).max(10).default(["bp"]),
     requires_gender_match: z.boolean().default(false),
     is_consultation: z.boolean().default(false),
+    once_per_course: z.boolean().default(false),
   })).min(1).max(100) }).parse(req.body);
   const have = new Set((await prisma.therapy.findMany({ select: { name: true } })).map((t) => t.name.toLowerCase()));
   const fresh = items.filter((t) => !have.has(t.name.toLowerCase()));
@@ -391,6 +393,7 @@ app.put('/therapies/:id', async (req: Request, res: Response) => {
     staff_required: z.number().int().min(1).max(6).optional(),
     description: z.string().optional(),
     is_consultation: z.boolean().optional(),
+    once_per_course: z.boolean().optional(),
     products: z.array(z.string().max(100)).max(20).optional(),
     checklist: z.array(z.object({ text: z.string().trim().min(1).max(100), required: z.boolean() })).max(20).optional(),
     vitals: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
@@ -1636,7 +1639,8 @@ app.post('/appointments/one', async (req: Request, res: Response) => {
     res.status(409).json({ ...conflict, actions });
     return;
   }
-  const soft = softWarnings(candidate, ctx);
+  const once = await oncePerCourse(candidate, prisma);
+  const soft = [...softWarnings(candidate, ctx), ...(once ? [once] : [])];
   if (soft.length && !b.confirm) {
     res.status(409).json({ soft: true, reason: soft[0].reason, message: soft.map((w) => w.message).join(' '), warnings: soft, actions: [{ kind: 'book_anyway', label: 'Book anyway' }] });
     return;

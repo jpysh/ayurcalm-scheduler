@@ -38,9 +38,9 @@ async function main() {
 
     const amen = ['nextweek_table'];
     const therapy = (name: string, extra = {}) => call('POST', '/therapies', { name: `${TAG} ${name}`, duration_minutes: 60, required_amenities: amen, ...extra });
-    const [abhy, shiro, kati, nowhere] = [await therapy('Abhyanga'), await therapy('Shirodhara'), await therapy('Kati Basti'), await therapy('Nowhere', { required_amenities: ['nextweek_no_room_has_this'] })];
+    const [abhy, shiro, kati, nowhere, vire] = [await therapy('Abhyanga'), await therapy('Shirodhara'), await therapy('Kati Basti'), await therapy('Nowhere', { required_amenities: ['nextweek_no_room_has_this'] }), await therapy('Virechana', { once_per_course: true })];
     const consult = await call('POST', '/therapies', { name: `${TAG} Consultation`, duration_minutes: 30, is_consultation: true });
-    const asha = await call('POST', '/staff', { name: `${TAG} Asha`, gender: 'female', specializations: [abhy.id, shiro.id, kati.id, nowhere.id], weekly_schedule: allWeek });
+    const asha = await call('POST', '/staff', { name: `${TAG} Asha`, gender: 'female', specializations: [abhy.id, shiro.id, kati.id, nowhere.id, vire.id], weekly_schedule: allWeek });
     const doc = await call('POST', '/staff', { name: `${TAG} Dr Rao`, gender: 'female', role: 'doctor', specializations: [], weekly_schedule: allWeek });
     const room = await call('POST', '/rooms', { name: `${TAG} Room`, amenities: amen, weekly_schedule: allWeek });
     const croom = await call('POST', '/rooms', { name: `${TAG} Consult room`, amenities: [], weekly_schedule: allWeek });
@@ -53,10 +53,12 @@ async function main() {
     await book(shiro.id, day(-4), '11:00', asha.id, room.id);
     await book(shiro.id, day(-2), '11:00', asha.id, room.id);
     await book(consult.id, REVIEW, '10:00', doc.id, croom.id, 30);
+    // Virechana, given once a course (#365), this week: never proposed again.
+    await book(vire.id, day(-3), '14:00', asha.id, room.id);
 
     const plan = await call('GET', `/patients/${p.id}/next-week?date=${REVIEW}`);
     const line = (id: string) => plan.lines.find((l: { from_therapy_id: string }) => l.from_therapy_id === id);
-    assert.equal(plan.lines.length, 2, 'two lines: Abhyanga and Shirodhara');
+    assert.equal(plan.lines.length, 2, 'two lines: Abhyanga and Shirodhara, and not Virechana');
     assert.deepEqual(line(abhy.id).sessions.map((s: { date: string }) => s.date), [1, 2, 3, 4, 5, 6, 7].map(day), 'Abhyanga daily, a week on');
     assert.ok(line(abhy.id).sessions.every((s: { start_time: string }) => s.start_time === '09:00'), 'Abhyanga keeps its time');
     assert.deepEqual(line(shiro.id).sessions.map((s: { date: string }) => s.date), [day(3), day(5)], 'Shirodhara on the same weekdays');
@@ -82,7 +84,18 @@ async function main() {
     for (const id of ok.ids) assert.equal((await raw('DELETE', `/appointments/${id}`)).status, 204);
     assert.equal(await mine(), 0);
 
-    console.log('Plan next week: this week repeats a week on at its times, a swap changes one line, and Book all books every line and the review or nothing.');
+    // Booking a second Virechana in the stay is asked about, and books on Book anyway.
+    const second = { patient_id: p.id, therapy_id: vire.id, date: day(2), start_time: '14:00', staff_id: asha.id, room_id: room.id };
+    const asked = await raw('POST', '/appointments/one', second);
+    assert.equal(asked.status, 409, 'a second Virechana in the stay should be asked about');
+    const why = await asked.json();
+    assert.equal(why.reason, 'ONCE_PER_COURSE'); assert.match(why.message, /Virechana is given once a stay, and .*'s is on Sun 5 May\./);
+    const opts = await call('GET', `/appointments/options?date=${day(2)}&patient_id=${p.id}&therapy_id=${vire.id}`);
+    assert.ok(opts.warnings.some((w: { reason: string }) => w.reason === 'ONCE_PER_COURSE'), 'the booking sheet should say so before Book');
+    const anyway = await call('POST', '/appointments/one', { ...second, confirm: true });
+    assert.equal((await raw('DELETE', `/appointments/${anyway.id}`)).status, 204);
+
+    console.log('Plan next week: this week repeats a week on at its times, a swap changes one line, and Book all books every line and the review or nothing; a once-a-course therapy is left out and a second one is asked about.');
   } finally {
     await tidy(prisma).catch(() => {});
     await prisma.$disconnect();

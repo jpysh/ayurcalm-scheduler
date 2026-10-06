@@ -58,7 +58,7 @@ run discharge          "A discharge summary is written from the doctor's link an
 run doctors            "A doctor and their consultations print on the doctor rota, not the therapist rota"
 run daySheet           "The day sheet lists every resident, treatment time and therapist, in its groups, with no empty boxes"
 run unstaffedSheets   "A treatment booked with a therapist who is off shows, marked, on both the patient sheet and the therapist rota"
-run nextWeek          "Plan next week repeats this week a week on, a swap changes one line, and Book all books every line and the review or nothing"
+run nextWeek          "Plan next week repeats this week a week on, a swap changes one line, and Book all books every line and the review or nothing; a once-a-course therapy is left out, and a second one is asked about"
 run residentStay     "A resident added in the app, with a stay and a diet plan, is on the day sheet; leaving early cancels what is left, and Undo restores it"
 run patientStories   "Meals by date, what a discharge summary lacks, package and accommodation, a shortened stay cancelled with its reason and undone, a leave planned later"
 run newPatient       "A new patient is saved with their details and a consultation booked through the guard, the booking sheet lists free therapists and rooms first, and patient search finds by name"

@@ -6,7 +6,7 @@ import { Empty, ListGroup, Loading, Text, noteText, Btn } from "@/components/kit
 
 type Item = {
   name: string; description: string; minutes: number; staff: number;
-  amenities: string[]; products: string[]; gender: boolean; consultation?: boolean; added: boolean;
+  amenities: string[]; products: string[]; gender: boolean; consultation?: boolean; once?: boolean; added: boolean;
   /** The library's own name: the row's identity while the admin renames it. */
   key: string;
 };
@@ -44,7 +44,7 @@ export function TherapyLibrarySheet({ open, onOpenChange, onImported }: {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items: chosen.map((x) => ({
           name: x.name.trim(), description: x.description, duration_minutes: x.minutes, staff_required: x.staff,
-          required_amenities: x.amenities, products: x.products, requires_gender_match: x.gender, is_consultation: Boolean(x.consultation),
+          required_amenities: x.amenities, products: x.products, requires_gender_match: x.gender, is_consultation: Boolean(x.consultation), once_per_course: Boolean(x.once),
         })) }),
       });
       if (!res.ok) { toast.error("Those therapies could not be added"); return; }
