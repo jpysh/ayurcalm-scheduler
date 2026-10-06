@@ -43,6 +43,7 @@ type Call = Awaited<ReturnType<typeof api>>;
 
 /** Removes what an earlier run left, so a run that failed halfway cannot break the next. */
 async function tidy(call: Call) {
+  await call('put', '/attention/rules', {});
   for (const p of await call('get', '/patients')) if (p.name.startsWith(TAG)) await call('delete', `/patients/${p.id}`);
   for (const s of await call('get', '/staff')) if (s.name.startsWith(TAG)) await call('delete', `/staff/${s.id}`);
   for (const r of await call('get', '/rooms')) if (r.name.startsWith(TAG)) await call('delete', `/rooms/${r.id}`);
@@ -162,18 +163,22 @@ test('time off saved elsewhere shows in the pill when the app is back in view (#
   const call = await api(request);
   await tidy(call);
   const { therapist } = await build(call);
+  // Today's patient items count on any screen day and change with the clock; only the day's own are wanted here.
+  await call('put', '/attention/rules', { leaves_today: { on: false }, arrival_open: { on: false }, no_diet: { on: false }, vitals: { on: false } });
 
   await signIn(page);
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: /^Change day/ }).click();
   await page.getByRole('dialog').locator('input[type=date]').fill(DAY);
   await expect(page.getByRole('button', { name: /13 Mar/, pressed: true })).toBeVisible({ timeout: 15000 });
-  await expect(page.locator('nav[data-kit=bar] span[aria-hidden]')).toHaveCount(0);
+  // Red only: a seeded therapist's weekly day off is a grey badge on any Wednesday.
+  const needs = page.locator('nav[data-kit=bar] span[aria-hidden].bg-destructive');
+  await expect(needs).toHaveCount(0);
 
   // Another phone marks her off; this one only hears of it when it is looked at again.
   await call('post', '/timeoff', { entity_type: 'staff', entity_id: therapist.id, start_date: DAY, end_date: DAY });
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(page.locator('nav[data-kit=bar] span[aria-hidden]')).toBeVisible({ timeout: 15000 });
+  await expect(needs).toBeVisible({ timeout: 15000 });
 
   // The sheet is about the day on screen, not today (#193).
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
