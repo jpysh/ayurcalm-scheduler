@@ -147,6 +147,7 @@ model Therapy {
   /// Given once in a stay, like Vamana or Virechana (#365): Plan next week leaves
   /// it out, and booking a second one in the same stay is asked about.
   once_per_course       Boolean  @default(false)
+  before_purification   Boolean  @default(false)
   /// What the therapist ticks before or during it (#219): [{ text, required }].
   checklist             Json     @default("[]")
   /// The readings taken at it; blood pressure unless the centre chose otherwise.

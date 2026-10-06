@@ -480,9 +480,13 @@ export async function planNextWeek(patientId: string, reviewISO: string, prisma:
   const nameOfStaff = (id: string, co: string[]) => [id, ...co].map((x) => staffAll.find((s) => s.id === x)?.name).filter(Boolean).join(' and ');
   // A line per therapy, as last given; its days are this week's weekdays a week on.
   const byTherapy = new Map<string, { last: (typeof past)[number]; dates: Set<string> }>();
+  // Snehapana prepares for the stay's purification (#375): never proposed on or after its day.
+  const purge = await prisma.appointment.findFirst({ where: { patient_id: patientId, ...HAPPENING, Therapy: { once_per_course: true }, ...(stay ? { scheduled_date: { gte: stay.start_date, lte: stay.end_date } } : {}) }, orderBy: { scheduled_date: 'asc' } });
+  const purgeISO = purge ? isoOf(purge.scheduled_date) : null;
   for (const a of past) {
     // A consultation is the review line below; a once-a-course therapy is not repeated (#365).
     if (a.Therapy?.is_consultation || a.Therapy?.once_per_course) continue;
+    if (a.Therapy?.before_purification && purgeISO && shift(isoOf(a.scheduled_date), 7) >= purgeISO) continue;
     const e = byTherapy.get(a.therapy_id) || { last: a, dates: new Set<string>() };
     e.last = a; e.dates.add(shift(isoOf(a.scheduled_date), 7));
     byTherapy.set(a.therapy_id, e);
