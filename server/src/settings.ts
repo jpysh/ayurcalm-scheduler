@@ -1,6 +1,7 @@
 import express, { Router, type Request, type Response, type NextFunction } from 'express';
 import { exportCentre, importCentre, ImportRefused } from './transfer.js';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { prisma } from './server.js';
 import { wipeDemo, KEEPABLE, type Keep } from './demoData.js';
 import { letterheadSchema } from './discharge.js';
@@ -156,6 +157,8 @@ export async function resetDemo() {
   const settings = await prisma.settings.findUnique({ where: { id: SINGLETON_ID } });
   if (!settings?.demo_data) return false;
   await clearDemoData();
+  // A rule one demo visitor changed would change what the next one is shown (#389).
+  await prisma.settings.update({ where: { id: SINGLETON_ID }, data: { attention_rules: Prisma.DbNull } });
   // The seed is the same script a new install runs; it only fills an empty database.
   const seed = fileURLToPath(new URL('../src/seed.ts', import.meta.url));
   await promisify(execFile)('npx', ['tsx', seed], { cwd: dirname(dirname(seed)), timeout: 10 * 60 * 1000 });
