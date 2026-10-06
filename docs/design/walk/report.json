@@ -25,9 +25,7 @@
  },
  {
   "id": "05-day-by-therapist",
-  "overflowX": 0,
-  "small": 0,
-  "clipped": []
+  "error": "TimeoutError: locator.click: Timeout 4000ms exceeded."
  },
  {
   "id": "06-patients",

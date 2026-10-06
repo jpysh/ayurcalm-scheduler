@@ -36,10 +36,10 @@ const shot = async (name, act) => {
 const first = (re) => p.getByRole('button', { name: re }).first();
 
 await shot('day', async () => {});
-await shot('pill-sheet', () => tap(btn(/to know|to fix|need you/)));
+await shot('pill-sheet', () => menuTo(/to know|to fix|need you/));
 await shot('treatment-card', () => tap(p.getByRole('button', { name: /^\d\d:\d\d/ }).nth(2)));
 await shot('menu', () => tap(btn(/^Menu$/)));
-await shot('day-by-therapist', () => menuTo(/^Therapist$/));
+await shot('day-by-therapist', async () => { await tap(btn(/^By time/)); await tap(dlg().getByRole('button', { name: /^Therapist/ })); });
 await shot('patients', () => menuTo(/^Patients/));
 await shot('needs-attention', async () => { await menuTo(/^Patients/); await tap(btn(/^Needs attention/)); });
 const card = async () => { await menuTo(/^Patients/); await tap(p.getByRole('button', { name: /^[A-Z][a-z]+ [A-Z][a-z]+\s*Day \d/ }).first()); };
@@ -54,14 +54,14 @@ await shot('patient-links', async () => { await card(); await tap(dlg().getByRol
 await shot('new-patient', async () => { await menuTo(/^Patients/); await tap(btn(/^Add|New patient|^\+/)); });
 await shot('team', () => menuTo(/^Team/));
 await shot('leave', () => menuTo(/^Leave/));
-await shot('leave-new', async () => { await menuTo(/^Leave/); await tap(btn(/^Add|^New|^\+/)); await dlg().locator('select').first().selectOption({ label: 'Priya Das' }); await p.waitForTimeout(1500); });
+await shot('leave-new', async () => { await menuTo(/^Leave/); await tap(btn(/^Add|^New|^\+/)); await p.waitForTimeout(1500); });
 await shot('diet-plans', () => menuTo(/^Diet/));
 await shot('settings', () => menuTo(/^Settings/));
 for (const [k, re] of [['centre', /^Centre and letterhead/], ['hours', /^Opening hours/], ['catalogues', /^Packages and accommodation/], ['people', /^People with access/], ['printed', /^Printed sheets/], ['rules', /^What needs you/], ['backups', /^Backups/], ['log', /^Log/], ['account', /^Your account/], ['help', /^Help and plan/]])
   await shot('settings-' + k, async () => { await menuTo(/^Settings/); await tap(btn(re)); });
-await shot('search', async () => { await tap(btn(/^Search/)); await p.keyboard.type('Ananya'); await p.waitForTimeout(700); });
+await shot('search', async () => { await menuTo(/^Search/); await p.keyboard.type('Ananya'); await p.waitForTimeout(700); });
 await shot('book', () => tap(btn(/^Book|^Add/)));
-await shot('print', () => tap(btn(/^Print/)));
+await shot('print', () => menuTo(/^Print/));
 await shot('not-found', async () => { await p.goto(APP + '/nope'); });
 await b.close();
 writeFileSync(`${OUT}/report.json`, JSON.stringify(report, null, 1));
