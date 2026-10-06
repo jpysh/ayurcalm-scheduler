@@ -142,7 +142,10 @@ const main = async () => {
       const tz = process.env.ADMIN_TZ || 'Asia/Kolkata';
       const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
       const distinct = new Set((byDay.get(today) || []).map((a) => a.patient_id));
-      assert.ok(distinct.size >= 30, `only ${distinct.size} patients booked today`);
+      // The lite demo seed models a small centre (#376): 10, not the full seed's 30.
+      const lite = process.env.DEMO_MODE === 'true' || process.env.SEED_SIZE === 'lite';
+      const least = lite ? 10 : 30;
+      assert.ok(distinct.size >= least, `only ${distinct.size} patients booked today (want ${least}${lite ? ', lite seed' : ''})`);
     }],
 
     ['today has a therapist off with treatments still on their name', () => {
