@@ -190,8 +190,10 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
   const raw: Raw[] = [];
 
   for (const a of appointments) {
-    // Started or over: it happened as it happened, and there is nothing to fix.
-    if (toMinutes(a.start_time) < cutoff) continue;
+    // Over: it happened as it happened. Under way: only a missing therapist or
+    // room still matters, since someone is waiting on the couch now (#367).
+    const underWay = toMinutes(a.start_time) < cutoff;
+    if (underWay && toMinutes(a.start_time) + a.duration_minutes <= cutoff) continue;
     const common = {
       who: `${nameOfPatient(a.patient_id)} — ${nameOfTherapy(a.therapy_id)}`,
       start_time: a.start_time,
@@ -205,7 +207,9 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
     };
 
     // Blocking: exactly what the booking path refuses, from the same function.
-    const conflict = findConflict(candidateOf(a), ctx);
+    const found = findConflict(candidateOf(a), ctx);
+    const conflict = underWay && found?.reason !== 'STAFF_OFF' && found?.reason !== 'ROOM_OFF' ? null : found;
+    if (underWay && !conflict) continue;
     if (conflict) {
       // One heading per cause: an absent therapist is one thing that happened,
       // not four. A room clash names the room, so the pair sits together. The
@@ -216,7 +220,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
         id: `${conflict.reason}:${a.id}`,
         kind: conflict.reason,
         problem_class: 'blocking',
-        what: conflict.message,
+        what: underWay ? `${nameOfPatient(a.patient_id).split(' ')[0]} is waiting: ${conflict.message}` : conflict.message,
         group_key: `${conflict.reason}:${conflict.reason === 'ROOM_BUSY' || conflict.reason === 'ROOM_OFF' ? a.room_id : culprit}`,
         group_label: conflict.message,
         staff_id: culprit,
