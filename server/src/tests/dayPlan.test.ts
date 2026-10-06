@@ -170,15 +170,24 @@ async function main() {
     }
 
     // --- what already happened stays as it happened (#149) ---
-    // At 10:30 the 09:00 is over and the 10:00 is under way: only the 11:00 is
-    // still to fix, and it is not moved to a time already gone.
+    // At 10:30 the 09:00 is over and stays as it was. The 10:00 is under way with
+    // nobody there: Plan P2 is waiting, so it is raised and given someone now (#367).
+    // The 11:00 is not moved to a time already gone.
     const midMorning = await checkDay(day, prisma, { now: { date: '2030-01-16', time: '10:30' } });
     const flagged = midMorning.problems.map((p) => p.appointment_id);
     assert.ok(!flagged.includes(first.id), 'a treatment already over was raised as a problem');
-    assert.ok(!flagged.includes(second.id), 'a treatment in progress was raised as a problem');
+    const waiting = midMorning.problems.find((p) => p.appointment_id === second.id);
+    assert.ok(waiting, 'a treatment under way with its therapist not in should be raised');
+    assert.match(waiting.what, /^Plan is waiting: Plan Away is not in/, `worded for now, got "${waiting.what}"`);
+    assert.equal(waiting.fix?.start_time, '10:00', 'the patient waiting should get someone at the same time');
+    assert.notEqual(waiting.fix?.staff_id, away.id, 'the fix should not be the therapist who is not in');
     assert.ok(flagged.includes(third.id), 'the treatment still to come should be raised');
-    assert.deepEqual(midMorning.plan.map((f) => f.appointment_id), [third.id], 'only the treatment still to come should be planned');
-    assert.ok(toMinutes(midMorning.plan[0].start_time) >= toMinutes('10:30'), 'the plan moved a treatment into the past');
+    assert.deepEqual(midMorning.plan.map((f) => f.appointment_id).sort(), [second.id, third.id].sort(), 'the treatment under way and the one to come should be planned');
+    const later = midMorning.plan.find((f) => f.appointment_id === third.id)!;
+    assert.ok(toMinutes(later.start_time) >= toMinutes('10:30'), 'the plan moved a treatment into the past');
+    // At 11:10 the 10:00 is over: it happened as it happened, and is not raised.
+    const afterIt = await checkDay(day, prisma, { now: { date: '2030-01-16', time: '11:10' } });
+    assert.ok(!afterIt.problems.some((p) => p.appointment_id === second.id), 'a treatment that has ended was raised');
     // The next day, nothing on this one has started: it is planned whole.
     const dayBefore = await checkDay(day, prisma, { now: { date: '2030-01-15', time: '17:00' } });
     assert.ok(dayBefore.plan.length >= 3, 'a future day should be planned whole');

@@ -146,8 +146,10 @@ export async function planDay(
   const staffOff = staffId ? offOnDay(timeOff, 'staff', staffId, date) : [];
   const inWindow = (a: { start_time: string; duration_minutes: number }) =>
     staffOff.length === 0 || staffOff.some((b) => overlaps(b.s, b.e, toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes));
+  // Asked for by name, a treatment under way is rehoused too: the day check only
+  // asks for one when its therapist or room is not there (#367).
   const mine = dayAppointments
-    .filter((a) => toMinutes(a.start_time) >= cutoff)
+    .filter((a) => toMinutes(a.start_time) >= cutoff || (wanted?.has(a.id) && toMinutes(a.start_time) + a.duration_minutes > cutoff))
     .filter((a) => (wanted ? wanted.has(a.id) : Boolean(staffId) && teamOf(a).includes(staffId as string) && inWindow(a)))
     .sort((a, b) => toMinutes(a.start_time) - toMinutes(b.start_time));
   const mineIds = new Set(mine.map((a) => a.id));
