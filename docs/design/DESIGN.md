@@ -146,6 +146,7 @@ Every list, sheet and button has all of these designed, not left to default.
 - **The card leads with the week** (#350, 6 Oct): Next days and the doctor's last note come before the change lines; empty days before the review are flagged, after it they wait for the review as one row. Planning next week is one sheet that repeats this week, each line swappable, booked all or nothing (#353, #354).
 - **Plan next week** (#354, 6 Oct): planned from the coming review (today's, if the doctor saw them today); it repeats the seven days up to it on the same weekdays, at the same time and therapist where free, else the nearest free time. The leaving day is left empty. A line with a day that has no free time starts unticked and says so; Book all is one transaction and one Undo.
 - **A treatment under way is still the admin's** (#367, 6 Oct): while it runs, a therapist or room that is not there is flagged, worded for now ("Aarav is waiting: Kumar Sharma is not in"), with the same fixes; once it ends it is history and never raised.
+- **Once a stay** (#365, 6 Oct): a therapy can be marked "Once a stay" (on in the library for Vamana and Virechana). Plan next week never repeats it, and booking a second one in the same stay is asked about with Book anyway, never refused.
 - **Language:** "patient" (never "resident"), British spelling, sentence case, times in 24-hour, dates "Wed 30 Sept". No jargon, no raw ids, no snake_case.
 
 ## 9. Per-screen checklist

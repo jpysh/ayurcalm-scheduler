@@ -144,6 +144,9 @@ model Therapy {
   /// A doctor's consultation rather than a treatment: given by a doctor, printed
   /// on the doctor rota, and followed by a prompt to review diet and therapies.
   is_consultation       Boolean  @default(false)
+  /// Given once in a stay, like Vamana or Virechana (#365): Plan next week leaves
+  /// it out, and booking a second one in the same stay is asked about.
+  once_per_course       Boolean  @default(false)
   /// What the therapist ticks before or during it (#219): [{ text, required }].
   checklist             Json     @default("[]")
   /// The readings taken at it; blood pressure unless the centre chose otherwise.
