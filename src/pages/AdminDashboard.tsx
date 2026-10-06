@@ -88,7 +88,7 @@ const useServerHealth = (base: string) => {
 };
 
 type ApiTherapy = { id: string; name: string; required_amenities: string[]; duration_minutes: number; requires_gender_match: boolean; staff_required?: number; once_per_course?: boolean; checklist?: { text: string; required: boolean }[]; vitals?: string[] };
-type ApiStaff = { id: string; name: string; gender: "male" | "female" | "other"; specializations: string[]; phone?: string };
+type ApiStaff = { id: string; name: string; gender: "male" | "female" | "other"; specializations: string[]; phone?: string; weekly_schedule?: UiStaff["hours"] };
 type ApiRoom = { id: string; name: string; amenities: string[]; is_active: boolean };
 type ApiTimeOffSimple = { id?: string; entity_type: 'center'|'staff'|'room'|'therapy'|'patient'; entity_id?: string | null };
 type ApiPatient = { id: string; name: string; gender: "male" | "female" | "other"; phone?: string; email?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; date_of_birth?: string | null; medical_notes?: string | null; Stays?: { start_date: string; end_date: string }[] };
@@ -168,7 +168,7 @@ const AdminDashboard = () => {
         const t: ApiTherapy[] = await fetchJsonWithTimeout(`${API_BASE}/therapies`);
         setTherapies(t.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match, staffRequired: x.staff_required ?? 1, once: !!x.once_per_course, checklist: x.checklist || [], vitals: x.vitals || ["bp"] })));
         const s: (ApiStaff & { is_active?: boolean; status?: string; role?: 'therapist' | 'doctor' })[] = await fetchJsonWithTimeout(`${API_BASE}/staff`);
-        setStaff(s.map((x) => ({ id: x.id, name: x.name, role: x.role, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", specializations: x.specializations.map((id) => t.find((k) => k.id === id)?.name).filter((n): n is string => !!n), phone: x.phone ?? "", schedule: "", status: (typeof x.is_active === 'boolean' ? (x.is_active ? 'Active' : 'Inactive') : (x.status === 'Active' ? 'Active' : 'Inactive')) })));
+        setStaff(s.map((x) => ({ id: x.id, name: x.name, role: x.role, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", specializations: x.specializations.map((id) => t.find((k) => k.id === id)?.name).filter((n): n is string => !!n), phone: x.phone ?? "", schedule: "", hours: x.weekly_schedule, status: (typeof x.is_active === 'boolean' ? (x.is_active ? 'Active' : 'Inactive') : (x.status === 'Active' ? 'Active' : 'Inactive')) })));
         const r: ApiRoom[] = await fetchJsonWithTimeout(`${API_BASE}/rooms`);
         setRoomsList(r.map((x) => ({ id: x.id, name: x.name, amenities: x.amenities, schedule: "", status: x.is_active ? "Active" : "Maintenance" })));
         const p: ApiPatient[] = await fetchJsonWithTimeout(`${API_BASE}/patients`);
@@ -340,7 +340,7 @@ const AdminDashboard = () => {
         const t2: ApiTherapy[] = await fetchJsonWithTimeout(`${API_BASE}/therapies`);
         setTherapies(t2.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match, staffRequired: x.staff_required ?? 1, once: !!x.once_per_course, checklist: x.checklist || [], vitals: x.vitals || ["bp"] })));
         const s2: (ApiStaff & { is_active?: boolean; status?: string })[] = await fetchJsonWithTimeout(`${API_BASE}/staff`);
-        setStaff(s2.map((x) => ({ id: x.id, name: x.name, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", specializations: x.specializations.map((tid) => t2.find((k) => k.id === tid)?.name).filter((n): n is string => !!n), phone: x.phone ?? "", schedule: "", status: (typeof x.is_active === 'boolean' ? (x.is_active ? 'Active' : 'Inactive') : (x.status === 'Active' ? 'Active' : 'Inactive')) })));
+        setStaff(s2.map((x) => ({ id: x.id, name: x.name, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", specializations: x.specializations.map((tid) => t2.find((k) => k.id === tid)?.name).filter((n): n is string => !!n), phone: x.phone ?? "", schedule: "", hours: x.weekly_schedule, status: (typeof x.is_active === 'boolean' ? (x.is_active ? 'Active' : 'Inactive') : (x.status === 'Active' ? 'Active' : 'Inactive')) })));
       } else if (kind === 'patient') {
         await fetch(`${API_BASE}/patients/${id}`, { method: 'DELETE', headers: { ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) } });
         setPatients(prev => prev.filter(p => p.id !== id));
@@ -480,7 +480,7 @@ const AdminDashboard = () => {
 
   // Each screen keeps its own state and dialogs in its own file (#147).
   const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), movedFrom, problems: dayCheck.problems, showDay: (iso: string) => { setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id), staffCount: staff.length, addTherapist: (a: { gender?: string; therapy_id?: string }) => staffAdder.current?.(a), addPatient: (name: string, arriving: string, done: (p: { id: string; name: string }) => void) => patientAdder.current?.(name, arriving, done) });
-  const staffScreen = useStaffScreen({ staff, setStaff, therapies, requestDelete });
+  const staffScreen = useStaffScreen({ staff, setStaff, therapies, requestDelete, centre: { opening: centreHours.opening_time, closing: centreHours.closing_time } });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, requestDelete });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q: listQuery });
   const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, timeSlots, planDay: (iso) => { go('schedule'); setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); setShowAttention(true); } });

@@ -108,6 +108,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
   const reqStart = input.preferred_time_range.start;
   const reqEnd = input.preferred_time_range.end;
   const defaultDay = { start: '09:00', end: '18:00' } as const;
+  const staffDay = (sched: unknown, wd: Weekday) => (sched && Object.keys(sched as object).length ? getDay(sched, wd) : defaultDay);
 
   const appointments: Appointment[] = [];
   const suggestions: { scheduled_date: Date; start_time: string; room_id: string; staff_id: string; co_staff_ids: string[] }[] = [];
@@ -193,7 +194,9 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
 
     // filter staff: allow if there is sufficient overlap between staff schedule and preferred window
     const staffOk = staffFiltered.filter((s) => {
-      const sDay = getDay(s.weekly_schedule, weekday) || defaultDay;
+      // A pattern set by hand keeps its days off (#351); only a person never given hours gets the default.
+      const sDay = staffDay(s.weekly_schedule, weekday);
+      if (!sDay) return false;
       const sM = toMinutes(sDay.start);
       const eM = toMinutes(sDay.end);
       const wS = toMinutes(reqStart);
@@ -331,7 +334,8 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
         });
         if (roomConflict) continue;
         const staffFree = (s: Staff) => {
-          const sDay = getDay(s.weekly_schedule, weekday) || defaultDay;
+          const sDay = staffDay(s.weekly_schedule, weekday);
+          if (!sDay) return false;
           const sS = toMinutes(sDay.start);
           const sE = toMinutes(sDay.end);
           if (!(slotStart >= sS && slotEnd <= sE)) return false;

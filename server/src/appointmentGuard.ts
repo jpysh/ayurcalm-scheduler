@@ -7,7 +7,7 @@
  * that check, on the server, where it cannot be skipped.
  */
 import { PrismaClient, type Prisma } from '@prisma/client';
-import { offOnDay, overlaps, staffEventBusy, teamOf, toMinutes, type EventRow } from './availability.js';
+import { hoursOn, offOnDay, overlaps, staffEventBusy, teamOf, toMinutes, type EventRow } from './availability.js';
 
 export type Conflict = { reason: string; message: string; details?: Record<string, unknown> };
 
@@ -74,6 +74,12 @@ export function findConflict(c: Candidate, ctx: DayContext): Conflict | null {
     if (off) {
       const when = off.whole ? 'on this day' : `from ${minutesToTime(off.s)} to ${minutesToTime(off.e)}`;
       return { reason: 'STAFF_OFF', message: `${name} is not in ${when} (${off.label}).`, details: { staff_id: staffId } };
+    }
+
+    const hours = hoursOn(ctx.staff.find((s) => s.id === staffId)?.weekly_schedule, ctx.day);
+    if (hours === null || (hours && (start < hours.s || end > hours.e))) {
+      const when = hours ? `works ${minutesToTime(hours.s)} to ${minutesToTime(hours.e)}` : `does not work on ${ctx.day.toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' })}s`;
+      return { reason: 'STAFF_OFF', message: `${name} ${when}.`, details: { staff_id: staffId } };
     }
 
     const inEvent = staffEventBusy(ctx.events, staffId, ctx.day).find((b) => overlaps(b.s, b.e, start, end));
@@ -175,8 +181,10 @@ export function nearestFreeTime(c: Candidate, ctx: DayContext): string | null {
 export function staffDay(ctx: DayContext) {
   return ctx.staff.filter((s) => s.is_active).map((s) => {
     const offs = offOnDay(ctx.timeOff, 'staff', s.id, ctx.day);
-    const off = offs.find((b) => b.whole);
+    const hours = hoursOn(s.weekly_schedule, ctx.day);
+    const off = hours === null ? { label: 'Day off' } : offs.find((b) => b.whole);
     const busy = [
+      ...(hours ? [{ s: 0, e: hours.s, label: 'not working' }, { s: hours.e, e: 24 * 60, label: 'not working' }].filter((b) => b.e > b.s) : []),
       ...offs.filter((b) => !b.whole).map(({ s: from, e, label }) => ({ s: from, e, label })),
       ...staffEventBusy(ctx.events, s.id, ctx.day),
       ...ctx.appointments.filter((a) => teamOf(a).includes(s.id))

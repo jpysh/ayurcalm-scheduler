@@ -26,6 +26,17 @@ export type EventRow = {
 
 export type Busy = { s: number; e: number; label: string };
 
+/**
+ * A person's hours on a day from their weekly pattern (#351): minutes in, null on a day off,
+ * undefined when the pattern was never set (then only the centre's hours apply).
+ */
+export const hoursOn = (weekly: unknown, day: Date): { s: number; e: number } | null | undefined => {
+  const w = weekly as Record<string, { start?: unknown; end?: unknown } | null> | null;
+  if (!w || !Object.keys(w).length) return undefined;
+  const d = w[WEEKDAYS[day.getUTCDay()]];
+  return typeof d?.start === 'string' && typeof d?.end === 'string' ? { s: toMinutes(d.start), e: toMinutes(d.end) } : null;
+};
+
 export const toMinutes = (t: string) => {
   const [h, m] = String(t).split(':').map(Number);
   return h * 60 + m;
