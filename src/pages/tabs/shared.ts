@@ -1,6 +1,6 @@
 /** What more than one screen of the dashboard reads: the shapes it holds and the helpers they share. */
 
-export type UiStaff = { id: string | number; name: string; role?: "therapist" | "doctor"; gender: "Male" | "Female" | "Other"; specializations: string[]; phone: string; schedule: string; status: "Active" | "Inactive" };
+export type UiStaff = { id: string | number; name: string; role?: "therapist" | "doctor"; gender: "Male" | "Female" | "Other"; specializations: string[]; phone: string; schedule: string; /** The weekly pattern, as stored; {} when never set. */ hours?: Record<string, { start: string; end: string } | null>; status: "Active" | "Inactive" };
 export type UiRoom = { id: string | number; name: string; amenities: string[]; schedule: string; status: "Active" | "Maintenance" };
 export type UiTherapy = { id: string | number; name: string; duration: number; amenities: string[]; genderMatch: boolean; staffRequired?: number; once?: boolean; checklist?: { text: string; required: boolean }[]; vitals?: string[] };
 export type UiTimeOff = { id: string; date?: string; startDate?: string; endDate?: string; startTime?: string; endTime?: string; recurrence?: 'weekly'; weekdays?: ('sunday'|'monday'|'tuesday'|'wednesday'|'thursday'|'friday'|'saturday')[]; type: "Center" | "Staff" | "Room" | "Therapy" | "Patient"; entity: string; description: string };

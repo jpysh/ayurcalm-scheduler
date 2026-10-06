@@ -6,7 +6,7 @@ import { Empty, ListGroup, Loading, Text, noteText, Btn } from "@/components/kit
 
 type Item = {
   name: string; description: string; minutes: number; staff: number;
-  amenities: string[]; products: string[]; gender: boolean; consultation?: boolean; once?: boolean; added: boolean;
+  amenities: string[]; products: string[]; gender: boolean; consultation?: boolean; once?: boolean; before?: boolean; added: boolean;
   /** The library's own name: the row's identity while the admin renames it. */
   key: string;
 };

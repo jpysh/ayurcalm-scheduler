@@ -5,7 +5,7 @@
  * refuse. The browser only shows these.
  */
 import type { PrismaClient } from '@prisma/client';
-import { eventHitsDay, type EventRow } from './availability.js';
+import { eventHitsDay, hoursOn, type EventRow } from './availability.js';
 import { HAPPENING, findConflict, loadDay, oncePerCourse, softWarnings, type Action, type Candidate, type Soft } from './appointmentGuard.js';
 
 export type Kind = 'time' | 'staff' | 'room' | 'therapy';
@@ -15,11 +15,11 @@ export type Choice = { label: string; hint?: string; best?: boolean; now?: boole
 const toM = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
-const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 /** Inside a therapist's or room's weekly hours, read as the scheduler reads them (09:00–18:00 when unset). */
 const works = (weekly: unknown, day: Date, start: number, minutes: number) => {
-  const d = (weekly as Record<string, { start?: unknown; end?: unknown }> | null)?.[WEEKDAYS[day.getUTCDay()]];
-  const [s, e] = typeof d?.start === 'string' && typeof d?.end === 'string' ? [toM(d.start), toM(d.end)] : [9 * 60, 18 * 60];
+  const h = hoursOn(weekly, day);
+  if (h === null) return false;
+  const { s, e } = h ?? { s: 9 * 60, e: 18 * 60 };
   return start >= s && start + minutes <= e;
 };
 

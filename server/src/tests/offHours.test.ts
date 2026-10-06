@@ -46,3 +46,17 @@ assert.equal(findConflict(at('16:00'), ctx([off({ entity_id: 's1', description: 
 }
 
 console.log('offHours: ok');
+
+// Weekly hours (#351): outside them, or on a day off, is refused as leave is; a pattern never set limits nothing.
+{
+  const withHours = (weekly_schedule: unknown) => ({ ...ctx([]), staff: [{ id: 's1', name: 'Asha', is_active: true, gender: 'female', specializations: [], weekly_schedule }] }) as unknown as DayContext;
+  const early = withHours({ wednesday: { start: '07:00', end: '15:00' } });
+  assert.equal(findConflict(at('07:00'), early), null, 'in their hours');
+  assert.equal(findConflict(at('14:30'), early)?.message, 'Asha works 07:00 to 15:00.');
+  assert.deepEqual(staffDay(early)[0].busy.map((b) => [b.s, b.e]), [[0, 420], [900, 1440]]);
+  const wedOff = withHours({ monday: { start: '09:00', end: '18:00' }, wednesday: null });
+  assert.equal(findConflict(at('10:00'), wedOff)?.message, 'Asha does not work on Wednesdays.');
+  assert.equal(staffDay(wedOff)[0].off, 'Day off');
+  assert.equal(findConflict(at('20:00'), withHours({})), null, 'never set: no limit');
+}
+console.log('offHours weekly: ok');

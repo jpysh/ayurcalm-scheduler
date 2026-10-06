@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Chips, Dropdown, Group, More, Seg, SheetFoot, Switch, Text, noteText, say, field, Btn } from "@/components/kit";
+import { ChangeLine, LineSelect, WEEK, Chips, Dropdown, Group, More, Seg, SheetFoot, Switch, Text, noteText, say, field, Btn } from "@/components/kit";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
@@ -50,16 +50,34 @@ export function RoomSheet({ room, open, onClose, amenityOptions, onSaved, remove
 // ---- Therapists and doctors ----
 export const personSub = (s: UiStaff) => [s.role === "doctor" ? "Doctor" : "Therapist", s.status !== "Active" ? "not working here now" : `${s.specializations.length} ${s.specializations.length === 1 ? "therapy" : "therapies"}`].join(" · ");
 
-export function PersonSheet({ person, open, onClose, therapies, onSaved, remove, preset }: {
+/** One range a weekday (#351): "07:00-15:00", or "" for a day off. */
+type Week = Record<string, string>;
+const short = (d: string) => d[0].toUpperCase() + d.slice(1, 3);
+const shown = (r: string) => (r ? r.replace("-", "–") : "Day off");
+/** "07:00–15:00 · Wed off": the usual range, then the days that differ. */
+const weekText = (w: Week) => {
+  const usual = Object.entries(WEEK.reduce((n, d) => ({ ...n, [w[d]]: (n[w[d]] || 0) + 1 }), {} as Record<string, number>)).sort((a, b) => b[1] - a[1])[0][0];
+  const odd = WEEK.filter((d) => w[d] !== usual).map((d) => (w[d] ? `${short(d)} ${shown(w[d])}` : `${short(d)} off`));
+  return [usual ? shown(usual) : "Days off", ...odd].join(" · ") + (odd.length ? "" : usual ? " every day" : "");
+};
+
+export function PersonSheet({ person, open, onClose, therapies, onSaved, remove, preset, centre }: {
   person: UiStaff | null; open: boolean; onClose: () => void; therapies: UiTherapy[]; onSaved: (s: UiStaff) => void; remove: (s: UiStaff) => void;
+  /** The centre's hours: a full day, and what a person never given hours works. */
+  centre: { opening: string; closing: string };
   /** A new person started from a refusal (#330): the gender and therapy the booking is short of. */
   preset?: { gender?: "Female" | "Male"; gives?: string[] };
 }) {
   const [name, setName] = useState(""); const [role, setRole] = useState<"therapist" | "doctor">("therapist");
   const [gender, setGender] = useState<"Female" | "Male">("Female"); const [gives, setGives] = useState<string[]>([]);
   const [phone, setPhone] = useState(""); const [busy, setBusy] = useState(false);
+  const full = `${centre.opening}-${centre.closing}`;
+  const [week, setWeek] = useState<Week>({}); const [hoursPage, setHoursPage] = useState(false); const [touched, setTouched] = useState(false);
   useEffect(() => {
     if (!open) return;
+    const h = person?.hours && Object.keys(person.hours).length ? person.hours : null;
+    setWeek(Object.fromEntries(WEEK.map((d) => [d, h ? (h[d] ? `${h[d]!.start}-${h[d]!.end}` : "") : full])));
+    setHoursPage(false); setTouched(false);
     setName(person?.name ?? ""); setRole(person?.role ?? "therapist"); setGender(person ? (person.gender === "Male" ? "Male" : "Female") : preset?.gender ?? "Female");
     setGives(person?.specializations ?? preset?.gives ?? []); setPhone(person?.phone ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -68,26 +86,39 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
     setBusy(true);
     try {
       const ids = gives.map((n) => therapies.find((t) => t.name === n)?.id).filter(Boolean);
-      const body = { name: name.trim(), role, gender: gender.toLowerCase(), specializations: ids, phone: phone.trim(), ...(person ? {} : { weekly_schedule: {} }) };
+      const hours = Object.fromEntries(WEEK.map((d) => [d, week[d] ? { start: week[d].slice(0, 5), end: week[d].slice(6) } : null]));
+      const body = { name: name.trim(), role, gender: gender.toLowerCase(), specializations: ids, phone: phone.trim(), ...(touched ? { weekly_schedule: hours } : person ? {} : { weekly_schedule: {} }) };
       const x = await send(person ? `/staff/${person.id}` : "/staff", person ? "PUT" : "POST", body);
       onSaved({ id: x.id, name: x.name, role: x.role ?? role, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other",
         specializations: (x.specializations || []).map((id: string) => therapies.find((t) => String(t.id) === String(id))?.name).filter(Boolean),
-        phone: x.phone || "", schedule: "", status: x.is_active === false ? "Inactive" : "Active" });
+        phone: x.phone || "", schedule: "", hours: x.weekly_schedule, status: x.is_active === false ? "Inactive" : "Active" });
       toast(person ? `${x.name} saved` : `${x.name} added`); onClose();
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
   return (
-    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={person ? person.name : "Add therapist or doctor"} note={person ? "Change anything, then save." : "Name, role and gender are needed. The rest can wait."}
-      foot={<SheetFoot busy={busy} ok={!!name.trim()} save={save} label={person ? "Save" : `Add ${name.trim() || "them"}`} remove={person ? () => { onClose(); remove(person); } : undefined} removeLabel="Delete this person" />}>
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={hoursPage ? `${name.trim() || "Their"} hours` : person ? person.name : "Add therapist or doctor"}
+      note={hoursPage ? "The same every week. A one-off change is leave for part of the day." : person ? "Change anything, then save." : "Name, role and gender are needed. The rest can wait."}
+      onBack={hoursPage ? () => setHoursPage(false) : undefined}
+      foot={<SheetFoot busy={busy} ok={!!name.trim()} save={save} label={hoursPage && person ? "Save the hours" : person ? "Save" : `Add ${name.trim() || "them"}`} remove={person && !hoursPage ? () => { onClose(); remove(person); } : undefined} removeLabel="Delete this person" />}>
+      {hoursPage ? <div>
+        {WEEK.map((d) => {
+          const opts = [...new Set([full, "07:00-15:00", "13:00-20:00", week[d], ""])].filter((r) => r !== undefined);
+          const names: Record<string, string> = { [full]: "Full day", "07:00-15:00": "Early", "13:00-20:00": "Afternoon", "": "Day off" };
+          return <ChangeLine key={d} label={d[0].toUpperCase() + d.slice(1)} value={shown(week[d])}
+            select={<LineSelect label={`${d} hours`} value={week[d]} onChange={(v) => { setWeek({ ...week, [d]: v }); setTouched(true); }} free={opts.map((r) => ({ id: r, name: r ? `${names[r] ? `${names[r]} · ` : ""}${shown(r)}` : "Day off" }))} />} />;
+        })}
+      </div> : <>
       <Text label="Name" id="person-name" value={name} onChange={(e) => setName(e.target.value)} />
       <Group label="Role"><Seg<"therapist" | "doctor"> options={[["therapist", "Therapist"], ["doctor", "Doctor"]]} value={role} onChange={setRole} /></Group>
       <Group label="Gender" note="Used when a therapy needs a therapist of the patient's gender."><Seg<"Female" | "Male"> options={[["Female", "Female"], ["Male", "Male"]]} value={gender} onChange={setGender} /></Group>
+      <div className="mt-3"><ChangeLine label="Hours" value={weekText(week)} onClick={() => setHoursPage(true)} /></div>
       {role === "therapist" ? (
         <Group label="Therapies they give (optional)">
           {therapies.length ? <Chips options={therapies.map((t) => t.name)} value={gives} onChange={setGives} /> : <p className={noteText}>Add therapies first, then tick the ones they give.</p>}
         </Group>
       ) : null}
       <Text label="Phone (optional)" id="person-phone" type="tel" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      </>}
     </BottomSheet>
   );
 }
