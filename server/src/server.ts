@@ -14,7 +14,7 @@ import { dietTimeline, startDietFrom, extendDiet } from './patientDiet.js';
 import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
 import { centreClock, eventClashes, type EventRow } from './availability.js';
 import { loadDietsForDay } from './dietResolution.js';
-import { bookingOptions, bookingSuggestions, bookingWho, cardChoices, nextConsultations, notStaying, therapyFacts, whyNoConsultation, whyNoTime } from './cardChoices.js';
+import { bookingOptions, bookingSuggestions, bookingWho, cardChoices, nextConsultations, notStaying, planNextWeek, therapyFacts, whyNoConsultation, whyNoTime } from './cardChoices.js';
 import { historyOf } from './history.js';
 import { searchTreatments } from './search.js';
 import { residentDay } from './residentDay.js';
@@ -1572,6 +1572,36 @@ app.get('/appointments/options', async (req: Request, res: Response) => {
 app.get('/appointments/therapies', async (req: Request, res: Response) => {
   const q = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), patient_id: z.string().uuid() }).parse(req.query);
   res.json({ therapies: await therapyFacts(q.date, q.patient_id, prisma) });
+});
+
+// Story 14 (#354): next week, proposed from this week. Book all books every line or none, so the week is never half planned.
+app.get('/patients/:id/next-week', async (req: Request, res: Response) => {
+  const q = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
+  const plan = await planNextWeek(String(req.params.id), q.date, prisma);
+  if (!plan) { res.status(404).json({ error: 'Patient not found' }); return; }
+  res.json(plan);
+});
+app.post('/patients/:id/next-week', async (req: Request, res: Response) => {
+  const b = z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    lines: z.array(z.object({ from_therapy_id: z.string().uuid(), therapy_id: z.string().uuid() })).max(12),
+    review: z.boolean().default(true),
+  }).parse(req.body);
+  const id = String(req.params.id);
+  const plan = await planNextWeek(id, b.date, prisma, { only: b.lines.map((l) => l.from_therapy_id), swaps: Object.fromEntries(b.lines.map((l) => [l.from_therapy_id, l.therapy_id])), review: b.review });
+  if (!plan) { res.status(404).json({ error: 'Patient not found' }); return; }
+  const missing = plan.lines.flatMap((l) => l.missing.map((m) => `${l.therapy_name} on ${m.date}`));
+  if (b.review && plan.review_missing) missing.push('the next review');
+  if (missing.length) { res.status(409).json({ message: `Nothing was booked: no free time for ${missing.join(', ')}. Untick or swap it and try again.`, plan }); return; }
+  const rows = [
+    ...plan.lines.flatMap((l) => l.sessions.map((s, i) => ({ ...s, therapy_id: l.therapy_id, session_number: i + 1, total_sessions: l.sessions.length }))),
+    ...(plan.review ? [{ ...plan.review, session_number: 1, total_sessions: 1 }] : []),
+  ];
+  // ponytail: planned then written without a lock; a booking made in between is caught by nothing. Add a row lock if two admins ever book at once.
+  const made = await prisma.$transaction(rows.map(({ date, staff_name: _n, ...r }: typeof rows[number] & { staff_name?: string }) => prisma.appointment.create({
+    data: { patient_id: id, therapy_id: r.therapy_id, scheduled_date: new Date(`${date}T00:00:00.000Z`), start_time: r.start_time, duration_minutes: r.duration_minutes, staff_id: r.staff_id, co_staff_ids: r.co_staff_ids, room_id: r.room_id, session_number: r.session_number, total_sessions: r.total_sessions, status: 'confirmed', assignment_type: 'auto' },
+  })));
+  res.status(201).json({ ids: made.map((a) => a.id), count: made.length });
 });
 
 // The consultation a new patient is pre-booked into (#285 story 4): the next free doctor and room.
