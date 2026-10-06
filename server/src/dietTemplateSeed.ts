@@ -48,9 +48,6 @@ export const starterDietTemplates = [
     rest_lunch: 'Rice, dal, two seasonal vegetables, curd, salad',
     rest_dinner: 'Chapati with a light vegetable curry',
     rest_snacks: 'Seasonal fruit; roasted chana',
-    medication: 'As prescribed. Midday is the main meal; nothing cold or fizzy',
-    pre_therapy_notes: 'Nothing heavy within two hours of treatment',
-    post_therapy_notes: 'Rest; warm water for the first hour; eat once hunger returns',
   },
   {
     name: 'Internal oleation (snehapana)',
@@ -64,9 +61,6 @@ export const starterDietTemplates = [
     rest_lunch: 'Soft khichdi with a little ghee; cooked bottle gourd',
     rest_dinner: 'Rice gruel or light vegetable soup',
     rest_snacks: 'Warm water only',
-    medication: 'Ghee dose set each morning; last meal ten hours before',
-    pre_therapy_notes: 'Confirm the dose with the physician; the previous evening meal light and early',
-    post_therapy_notes: 'Warm water only while the taste of ghee remains; report nausea or heaviness the same day',
   },
   {
     name: 'After purification (samsarjana krama)',
@@ -80,9 +74,6 @@ export const starterDietTemplates = [
     rest_lunch: 'Mung soup without fat (akrita yusha), then with ghee and mild spices (krita yusha)',
     rest_dinner: 'Soft rice with mung soup',
     rest_snacks: 'Warm water; buttermilk at later steps if advised',
-    medication: 'As prescribed. Appetite, stool and energy reported daily',
-    pre_therapy_notes: 'Confirm the current step with the physician before the first meal',
-    post_therapy_notes: 'Do not advance a step without instruction; step back if there is heaviness or no appetite',
   },
   {
     name: 'Before purification (deepana–pachana)',
@@ -96,9 +87,6 @@ export const starterDietTemplates = [
     rest_lunch: 'Soft rice with mung soup and digestive spices; cooked bitter gourd or drumstick',
     rest_dinner: 'Thin gruel or clear soup, early',
     rest_snacks: 'Warm water; buttermilk with roasted cumin at midday if advised',
-    medication: 'Digestive preparations before meals as prescribed. Nothing cold, no curd, no fried food',
-    pre_therapy_notes: 'Eat only when hungry, never by the clock; skip a meal rather than eat without appetite',
-    post_therapy_notes: 'Report appetite, stool and coating on the tongue daily — these decide when oleation starts',
   },
   {
     name: 'Weight and metabolism (sthaulya)',
@@ -112,11 +100,40 @@ export const starterDietTemplates = [
     rest_lunch: 'Barley or millet roti; horse gram or mung soup; two cooked vegetables; salad',
     rest_dinner: 'Vegetable soup or steamed greens, early',
     rest_snacks: 'Buttermilk; warm water',
-    medication: 'As prescribed. No day sleep; walk after meals',
-    pre_therapy_notes: 'Udvartana and similar dry treatments are given on an empty stomach — nothing for two hours before',
-    post_therapy_notes: 'Warm water, not cold; do not lie down straight after the treatment',
   },
 ];
+
+/**
+ * What a patient on each plan is usually told (#355): medication and how to eat around
+ * treatment are the patient's own, so the demo seed gives them to some patients from here.
+ */
+export const usualNotes: Record<string, { medication: string; before_treatment: string; after_treatment: string }> = {
+  'General sattvic plan': {
+    medication: 'As prescribed. Midday is the main meal; nothing cold or fizzy',
+    before_treatment: 'Nothing heavy within two hours of treatment',
+    after_treatment: 'Rest; warm water for the first hour; eat once hunger returns',
+  },
+  'Internal oleation (snehapana)': {
+    medication: 'Ghee dose set each morning; last meal ten hours before',
+    before_treatment: 'Confirm the dose with the physician; the previous evening meal light and early',
+    after_treatment: 'Warm water only while the taste of ghee remains; report nausea or heaviness the same day',
+  },
+  'After purification (samsarjana krama)': {
+    medication: 'As prescribed. Appetite, stool and energy reported daily',
+    before_treatment: 'Confirm the current step with the physician before the first meal',
+    after_treatment: 'Do not advance a step without instruction; step back if there is heaviness or no appetite',
+  },
+  'Before purification (deepana–pachana)': {
+    medication: 'Digestive preparations before meals as prescribed. Nothing cold, no curd, no fried food',
+    before_treatment: 'Eat only when hungry, never by the clock; skip a meal rather than eat without appetite',
+    after_treatment: 'Report appetite, stool and coating on the tongue daily — these decide when oleation starts',
+  },
+  'Weight and metabolism (sthaulya)': {
+    medication: 'As prescribed. No day sleep; walk after meals',
+    before_treatment: 'Udvartana and similar dry treatments are given on an empty stomach — nothing for two hours before',
+    after_treatment: 'Warm water, not cold; do not lie down straight after the treatment',
+  },
+};
 
 /**
  * Upserted by name, so re-seeding never overwrites a plan the centre has since

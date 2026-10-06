@@ -484,6 +484,9 @@ app.post('/patients', async (req: Request, res: Response) => {
     id_number: z.string().optional(),
     registration_number: z.string().optional(),
     medical_notes: z.string().optional(),
+    medication: z.string().max(2000).nullable().optional(),
+    before_treatment: z.string().max(2000).nullable().optional(),
+    after_treatment: z.string().max(2000).nullable().optional(),
     preferred_staff_id: z.string().uuid().nullable().optional(),
     requires_preferred_staff: z.boolean().optional(),
     /** False for a day patient. */
@@ -536,6 +539,9 @@ app.put('/patients/:id', async (req: Request, res: Response) => {
     id_number: z.string().optional(),
     registration_number: z.string().optional(),
     medical_notes: z.string().optional(),
+    medication: z.string().max(2000).nullable().optional(),
+    before_treatment: z.string().max(2000).nullable().optional(),
+    after_treatment: z.string().max(2000).nullable().optional(),
     preferred_staff_id: z.string().uuid().nullable().optional(),
     requires_preferred_staff: z.boolean().optional(),
     doctor_plan: z.string().max(4000).nullable().optional(),
@@ -682,7 +688,9 @@ app.get('/patients/:id/diet', async (req: Request, res: Response) => {
   const { date } = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
   const out = await dietTimeline(String(req.params.id), date, prisma);
   if (!out) { res.status(404).json({ error: 'No stay to plan meals for' }); return; }
-  res.json(out);
+  // The patient's own lines beside the plan (#355), edited in the same sheet.
+  const own = await prisma.patient.findUnique({ where: { id: String(req.params.id) }, select: { medication: true, before_treatment: true, after_treatment: true } });
+  res.json({ ...out, own });
 });
 app.post('/patients/:id/diet', async (req: Request, res: Response) => {
   const body = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), template_id: z.string().uuid() }).parse(req.body);

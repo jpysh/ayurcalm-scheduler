@@ -17,10 +17,9 @@ const plan = {
   rest_lunch: 'Rice and dal',
   rest_dinner: 'Chapati and curry',
   rest_snacks: 'Fruit',
-  medication: 'Trikatu after meals',
-  pre_therapy_notes: 'Nothing heavy beforehand',
-  post_therapy_notes: 'Warm water afterwards',
 };
+// Medication and the treatment notes are the patient's own (#355).
+const patient = { medication: 'Trikatu after meals', before_treatment: 'Nothing heavy beforehand', after_treatment: 'Warm water afterwards' };
 
 const allColumns = new Set<MealKey>(['breakfast', 'lunch', 'dinner']);
 const base = { overrides: null, dayMeals: {}, mealsWithColumn: allColumns };
@@ -66,8 +65,8 @@ const cases: [string, () => void][] = [
     assert.ok(out.notes.includes('Snacks: Buttermilk'), out.notes);
   }],
 
-  ['therapy notes are kept out of the row and printed once under the table', () => {
-    const treated = resolveDiet({ ...base, template: plan, hasTherapyToday: true });
+  ['the patient\'s own treatment notes print on a treatment day', () => {
+    const treated = resolveDiet({ ...base, template: plan, hasTherapyToday: true, patient });
     assert.ok(!treated.notes.includes('Nothing heavy beforehand'), treated.notes);
     assert.ok(treated.therapyNotes.includes('Nothing heavy beforehand'), treated.therapyNotes);
     assert.ok(treated.therapyNotes.includes('Warm water afterwards'), treated.therapyNotes);
@@ -75,7 +74,7 @@ const cases: [string, () => void][] = [
   }],
 
   ['a rest day has nothing to say about treatment', () => {
-    const resting = resolveDiet({ ...base, template: plan, hasTherapyToday: false });
+    const resting = resolveDiet({ ...base, template: plan, hasTherapyToday: false, patient });
     assert.equal(resting.therapyNotes, '');
     // medication is per patient and not tied to treatment, so it stays in the row
     assert.ok(resting.notes.includes('Trikatu after meals'), resting.notes);
@@ -90,12 +89,18 @@ const cases: [string, () => void][] = [
     const out = resolveDiet({
       ...base,
       template: null,
-      overrides: { rest_breakfast: 'Papaya only', medication: 'None' },
+      overrides: { rest_breakfast: 'Papaya only' },
       hasTherapyToday: false,
       segmentLabel: 'Fasting day',
     });
     assert.equal(out.meals.breakfast, 'Papaya only');
-    assert.ok(out.notes.startsWith('Fasting day: '), out.notes);
+    assert.equal(out.planName, 'Fasting day');
+  }],
+
+  ['a plan never brings medication or treatment notes of its own', () => {
+    const out = resolveDiet({ ...base, template: { ...plan, medication: 'Old plan text', pre_therapy_notes: 'Old' }, hasTherapyToday: true });
+    assert.ok(!out.notes.includes('Old plan text'), out.notes);
+    assert.equal(out.therapyNotes, '');
   }],
 
   ['a patient with nothing set gets nothing invented', () => {

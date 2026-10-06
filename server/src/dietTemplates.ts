@@ -24,9 +24,6 @@ const publicFields = {
   rest_lunch: true,
   rest_dinner: true,
   rest_snacks: true,
-  medication: true,
-  pre_therapy_notes: true,
-  post_therapy_notes: true,
   is_active: true,
   updated_at: true,
 } as const;
@@ -40,9 +37,6 @@ const mealFields = z.object({
   rest_lunch: z.string().max(2000).default(''),
   rest_dinner: z.string().max(2000).default(''),
   rest_snacks: z.string().max(2000).default(''),
-  medication: z.string().max(2000).optional(),
-  pre_therapy_notes: z.string().max(2000).optional(),
-  post_therapy_notes: z.string().max(2000).optional(),
   description: z.string().max(2000).optional(),
   is_active: z.boolean().optional(),
 });

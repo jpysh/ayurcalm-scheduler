@@ -31,9 +31,11 @@ type Who = { id: string; name: string };
 
 /* ------------------------------ Story 7: meals by date ------------------------------ */
 
-export type Plan = { id: string; name: string; description?: string | null; is_active: boolean; patients: number; medication?: string | null } & Record<string, unknown>;
+export type Plan = { id: string; name: string; description?: string | null; is_active: boolean; patients: number } & Record<string, unknown>;
 type DietLine = { id: string; from: string; to: string; template_id: string | null; name: string; patients: number; changed_for_patient: boolean };
-type Line = { stay: { id: string; start: string; end: string }; entries: DietLine[] };
+type Own = { medication: string | null; before_treatment: string | null; after_treatment: string | null };
+type Line = { stay: { id: string; start: string; end: string }; entries: DietLine[]; own?: Own | null };
+const OWN: [keyof Own, string][] = [["medication", "Medication"], ["before_treatment", "Before treatment"], ["after_treatment", "After treatment"]];
 
 const MEALS: [string, string][] = [["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"], ["snacks", "Snacks"]];
 
@@ -44,6 +46,8 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
   const [chosen, setChosen] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<Plan | null>(null);
+  // Medication and the treatment notes are the patient's own (#355, decided 6 Oct): a second page of this sheet.
+  const [own, setOwn] = useState<Record<keyof Own, string> | null>(null);
   // Today's meals live here, not on the card (#353): the kitchen's question is asked from the Diet line.
   const [meals, setMeals] = useState<{ meal: string; text: string }[]>([]);
   const load = () => Promise.all([
@@ -52,7 +56,7 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
   ]).then(([l, p]) => { const ok = l && "entries" in l ? l : null; setLine(ok); setPlans(Array.isArray(p) ? p : []); if (ok) setFrom((f) => (f < ok.stay.start ? ok.stay.start : f > ok.stay.end ? ok.stay.end : f)); });
   useEffect(() => {
     if (!patient) return;
-    setLine(null); setChosen(""); setFrom(today); setEditing(null); setMeals([]);
+    setLine(null); setChosen(""); setFrom(today); setEditing(null); setMeals([]); setOwn(null);
     load();
     fetchJsonWithTimeout<{ meals?: { meal: string; text: string }[] }>(`${API_BASE}/patients/${patient.id}/day?date=${today}`).then((d) => setMeals(d.meals || [])).catch(() => setMeals([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -69,26 +73,47 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
     onClose();
   };
   const running = line?.entries.find((e) => e.template_id === chosen);
+  const saveOwn = async () => {
+    if (!patient || !own) return;
+    setBusy(true);
+    const res = await fetch(`${API_BASE}/patients/${patient.id}`, { method: "PUT", headers: json, body: JSON.stringify(Object.fromEntries(OWN.map(([k]) => [k, own[k].trim() || null]))) });
+    setBusy(false);
+    if (!res.ok) { toast.error("That was not saved. Try again."); return; }
+    toast.success(`Saved for ${first(patient.name)}`);
+    setOwn(null); load(); onChanged();
+  };
+  const ownText = line?.own ? OWN.map(([k]) => line.own![k]).filter(Boolean).join(" · ") : "";
+  if (own && patient) return (
+    <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} onBack={() => setOwn(null)} title={`${first(patient.name)}'s medication and notes`}
+      note="Printed in their own row of the day sheet. The two notes print only on a day they have treatment."
+      foot={<Foot label={`Save for ${first(patient.name)}`} busy={busy} save={saveOwn} />}>
+      <div className="grid gap-4">{OWN.map(([k, t]) => <Area key={k} label={`${t} (optional)`} rows={2} maxLength={2000} value={own[k]} onChange={(e) => setOwn({ ...own, [k]: e.target.value })} />)}</div>
+    </BottomSheet>
+  );
   return (
     <BottomSheet open={!!patient} onOpenChange={(o) => { if (!o) onClose(); }} title={patient ? `Diet for ${first(patient.name)}` : "Diet"}
       note={line ? `Runs to the leaving date, ${dayText(line.stay.end)}. Each change starts where the last ended.` : undefined}
       foot={line ? <Foot label={plan ? `Start this plan on ${dayText(from)}` : "Choose a plan"} ok={!!plan} busy={busy} save={start} /> : undefined}>
       {line === null ? <Loading rows={3} /> : (<>
-        <Timeline items={line.entries.map((e) => ({
-          key: e.id || "gap", from: dayText(e.from), title: e.name,
-          note: e.id ? [e.changed_for_patient ? "Changed for this patient" : "", e.patients > 1 ? `Used by ${e.patients} patients` : ""].filter(Boolean).join(" · ") : "Choose a plan below",
-          // Tapping a step sets its date, so a plan is replaced from where it began.
-          onClick: () => setFrom(e.from),
-        }))} />
-        {meals.length ? <ListGroup title="Meals today">{meals.map((m) => <TextRow key={m.meal} label={m.meal}>{m.text}</TextRow>)}</ListGroup> : null}
-        <div className="mt-4 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">Change diet from</div>
-        <QuickDates label="Starts" value={from} today={today} min={line.stay.start} max={line.stay.end} onChange={setFrom} />
-        {plan && patient ? <Consequence>{`${first(patient.name)} eats ${plan.name} from ${dayText(from)} to ${dayText(line.stay.end)}. What ran before ends the day before.`}</Consequence> : null}
-        <div className="mt-3">
+        <Timeline items={line.entries.map((e) => {
+          const p = plans.find((x) => x.id === e.template_id);
+          return {
+            key: e.id || "gap", from: dayText(e.from), title: e.name,
+            note: e.id ? [e.changed_for_patient ? "Changed for this patient" : "", e.patients > 1 ? `Used by ${e.patients} patients` : "", p ? "Edit ›" : ""].filter(Boolean).join(" · ") : "Choose a plan below",
+            // The plan already running is edited where it shows (#355).
+            onClick: p ? () => setEditing(p) : undefined,
+          };
+        })} />
+        <div className="mt-4 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">Change to</div>
+        <div className="mt-2">
           <Picker value={chosen} onChange={setChosen}
             options={plans.filter((p) => p.is_active || p.id === chosen).map((p) => ({ id: p.id, name: p.name, note: p.description ? String(p.description) : undefined, fact: p.patients ? plural(p.patients, "patient") : undefined }))} />
         </div>
+        <QuickDates label="Starts" value={from} today={today} min={line.stay.start} max={line.stay.end} onChange={setFrom} />
+        {plan && patient ? <Consequence>{`${first(patient.name)} eats ${plan.name} from ${dayText(from)} to ${dayText(line.stay.end)}. What ran before ends the day before.`}</Consequence> : null}
         {plan ? <ChangeLine label="Edit this plan" value={running ? `${plural(plan.patients, "patient")} on it` : plan.name} onClick={() => setEditing(plan)} /> : null}
+        <div className="mt-3"><ChangeLine label="Medication and notes" value={ownText || "None yet"} faint={!ownText} onClick={() => setOwn(Object.fromEntries(OWN.map(([k]) => [k, line.own?.[k] ?? ""])) as Record<keyof Own, string>)} /></div>
+        {meals.length ? <ListGroup title="Meals today">{meals.map((m) => <TextRow key={m.meal} label={m.meal}>{m.text}</TextRow>)}</ListGroup> : null}
         <Btn kind="quiet" inline className="-ml-2 mt-2" onClick={() => patient && onDayMeals(patient)}>Change one day's meals</Btn>
       </>)}
       {editing && patient ? <PlanEditor plan={editing} patient={patient} segmentId={line?.entries.find((e) => e.template_id === editing.id && e.id)?.id || ""} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); onChanged(); }} /> : null}
@@ -115,7 +140,7 @@ export function PlanEditor({ plan, patient, segmentId = "", onClose, onSaved }: 
       const segs = segmentId && patient ? await fetchJsonWithTimeout<{ id: string; overrides: Record<string, string> | null }[]>(`${API_BASE}/dietplans/segments?patient_id=${patient.id}`) : [];
       const o = (Array.isArray(segs) ? segs.find((s) => s.id === segmentId)?.overrides : null) || {};
       setOver(o);
-      const all = [...PLAN_FIELDS, "medication", ...(patient ? [] : ["name", "description", "pre_therapy_notes", "post_therapy_notes"])];
+      const all = [...PLAN_FIELDS, ...(patient ? [] : ["name", "description"])];
       setText(Object.fromEntries(all.map((k) => [k, String(o[k] ?? plan[k] ?? "")])));
     })();
   }, [plan, patient?.id, segmentId]);
@@ -157,12 +182,6 @@ export function PlanEditor({ plan, patient, segmentId = "", onClose, onSaved }: 
             <div className="grid gap-4">{MEALS.map(([m, t]) => <Area key={m} label={`${t} (optional)`} rows={2} maxLength={2000} value={text[`${kind}_${m}`]} onChange={(e) => setText({ ...text, [`${kind}_${m}`]: e.target.value })} />)}</div>
           </Group>
         ))}
-        <Text label="Medication (optional)" maxLength={2000} value={text.medication} onChange={(e) => setText({ ...text, medication: e.target.value })} />
-        {!patient ? (<>
-          <Text label="Before treatment (optional)" maxLength={2000} value={text.pre_therapy_notes} onChange={(e) => setText({ ...text, pre_therapy_notes: e.target.value })} />
-          <Text label="After treatment (optional)" maxLength={2000} value={text.post_therapy_notes} onChange={(e) => setText({ ...text, post_therapy_notes: e.target.value })} />
-          <p className={`mt-3 ${noteText}`}>Medication prints in the patient's own row. The two treatment notes print once, under "Around treatment".</p>
-        </>) : null}
       </>)}
     </BottomSheet>
   );

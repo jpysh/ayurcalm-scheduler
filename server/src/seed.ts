@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { therapyLibrary } from './therapyLibrary.js';
 import 'dotenv/config';
-import { ensureStarterDietTemplates } from './dietTemplateSeed.js';
+import { ensureStarterDietTemplates, usualNotes } from './dietTemplateSeed.js';
 import { ensureStarterCatalogues } from './catalogueSeed.js';
 import { PrismaClient } from '@prisma/client';
 import { hoursOn, staffEventBusy } from './availability.js';
@@ -504,6 +504,9 @@ async function main() {
         const end = to > end_date ? end_date : to;
         if (from <= end) await prisma.dietPlanSegment.create({ data: { patient_id, start_date: from, end_date: end, template_id } });
       }
+      // Their own medication and notes (#355): everyone on a purification is told how to eat around it, one in three others has medication.
+      const told = purge ? { medication: 'Set each morning by the physician through the purification', before_treatment: "Confirm today's dose or diet step with the physician", after_treatment: 'Report nausea, heaviness or no appetite the same day' } : stayCount % 3 === 0 ? { medication: usualNotes[usual[stayCount % usual.length].name]?.medication } : null;
+      if (told) await prisma.patient.update({ where: { id: patient_id }, data: told });
     }
     if (planned && start_date <= today && today <= end_date) residents.push({ id: patient_id });
   };
