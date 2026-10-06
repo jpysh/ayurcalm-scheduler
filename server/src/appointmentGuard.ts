@@ -7,7 +7,7 @@
  * that check, on the server, where it cannot be skipped.
  */
 import { PrismaClient, type Prisma } from '@prisma/client';
-import { hoursOn, offOnDay, overlaps, staffEventBusy, teamOf, toMinutes, type EventRow } from './availability.js';
+import { centreClosed, hoursOn, offOnDay, overlaps, staffEventBusy, teamOf, toMinutes, type EventRow } from './availability.js';
 
 export type Conflict = { reason: string; message: string; details?: Record<string, unknown> };
 
@@ -58,6 +58,9 @@ export function findConflict(c: Candidate, ctx: DayContext): Conflict | null {
   const others = ctx.appointments.filter((a) => a.id !== c.id);
   const hits = (a: { start_time: string; duration_minutes: number }) =>
     overlaps(toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes, start, end);
+
+  const closed = centreClosed(ctx.settings, ctx.timeOff, c.scheduled_date);
+  if (closed) return { reason: 'CENTER_HOLIDAY', message: `The centre is ${closed}.` };
 
   // Everyone on the treatment is checked, lead or not: a co-therapist is in the
   // room, and cannot be anywhere else.

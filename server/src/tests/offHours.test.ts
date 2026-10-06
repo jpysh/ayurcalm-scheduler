@@ -70,3 +70,14 @@ console.log('offHours weekly: ok');
   assert.deepEqual(outsideHours({}, booked), [], 'never set: nothing outside');
 }
 console.log('offHours change: ok');
+
+// The centre shut (#393): a weekday unticked in Opening hours, or a centre closed day, refuses every booking.
+{
+  const open = (working_days: string[], timeOff: unknown[] = []) => ({ ...ctx(timeOff), settings: { working_days } }) as unknown as DayContext;
+  const all = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  assert.equal(findConflict(at('10:00'), open(all)), null, 'open every day');
+  assert.equal(findConflict(at('10:00'), open(all.filter((d) => d !== 'wednesday')))?.message, 'The centre is closed on Wednesdays.');
+  assert.equal(findConflict(at('10:00'), open(all, [off({ entity_type: 'center', description: 'Holi' })]))?.reason, 'CENTER_HOLIDAY');
+  assert.equal(findConflict(at('10:00'), open(all, [off({ entity_type: 'center', description: 'Holi' })]))?.message, 'The centre is closed for Holi.');
+  assert.equal(findConflict(at('10:00'), ctx([])), null, 'no settings yet: open');
+}

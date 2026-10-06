@@ -356,7 +356,7 @@ model Settings {
   opening_time             String   @default("09:00")
   closing_time             String   @default("18:00")
   slot_minutes             Int      @default(30)
-  working_days             String[] @default(["monday", "tuesday", "wednesday", "thursday", "friday"])
+  working_days             String[] @default(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"])
   /// Small logo as a data: URI, shown in the header and on the PDF.
   logo                     String?
   demo_data                Boolean  @default(false)

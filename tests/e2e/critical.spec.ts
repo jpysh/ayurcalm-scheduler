@@ -212,7 +212,7 @@ test("@smoke the day's problems are named on the first screen", async ({ page, r
   const TAG = 'Headline';
   const login = await (await request.post('/api/auth/login', { data: ADMIN })).json();
   const headers = { Authorization: `Bearer ${login.token}` };
-  const call = async (method: 'get' | 'post' | 'delete', path: string, data?: unknown) => {
+  const call = async (method: 'get' | 'post' | 'put' | 'delete', path: string, data?: unknown) => {
     const res = await (request as APIRequestContext)[method](`/api${path}`, { headers, data });
     expect(res.ok(), `${method} ${path}: ${res.status()}`).toBeTruthy();
     const text = await res.text();
@@ -228,6 +228,8 @@ test("@smoke the day's problems are named on the first screen", async ({ page, r
     for (const t of await call('get', '/therapies')) if (t.name.startsWith(TAG)) await call('delete', `/therapies/${t.id}`);
   };
   await tidy();
+  // Today's patient items count on the badge on any screen day and change with the clock; only the day's own are wanted.
+  await call('put', '/attention/rules', { leaves_today: { on: false }, arrival_open: { on: false }, no_diet: { on: false }, vitals: { on: false } });
   try {
     const allWeek = Object.fromEntries(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].map((d) => [d, { start: '09:00', end: '18:00' }]));
     const therapy = await call('post', '/therapies', { name: `${TAG} Abhyanga`, duration_minutes: 60 });
@@ -259,6 +261,7 @@ test("@smoke the day's problems are named on the first screen", async ({ page, r
     await pill.click();
     await expect(page.getByRole('dialog')).toContainText(`${TAG} Rekha`, { timeout: 20000 });
   } finally {
+    await call('put', '/attention/rules', {});
     await tidy();
   }
 });

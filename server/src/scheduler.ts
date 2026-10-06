@@ -1,6 +1,6 @@
 import { PrismaClient, Appointment, Staff, TherapyRoom } from '@prisma/client';
 import { z } from 'zod';
-import { staffEventBusy, eventBlocking, teamOf, mayTreatOn, type EventRow } from './availability.js';
+import { staffEventBusy, eventBlocking, teamOf, mayTreatOn, centreClosed, type EventRow } from './availability.js';
 import { HAPPENING } from './appointmentGuard.js';
 
 const inputSchema = z.object({
@@ -78,6 +78,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     const startDate = new Date(input.start_date);
     const endDate = input.end_date ? new Date(input.end_date) : undefined;
     const nowDate = input.now ? new Date(input.now) : new Date();
+    const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
     const therapy = await withTimeout(prisma.therapy.findUnique({ where: { id: input.therapy_id } }), maxMs, 'THERAPY');
     if (!therapy) throw new Error('Therapy not found');
 
@@ -217,14 +218,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     const holidays = await prisma.timeOff.findMany({ where: { OR: [ { date: nd }, { AND: [ { start_date: { lte: nd } }, { end_date: { gte: nd } } ] }, { recurrence: 'weekly' } ] } });
     const weekdayName = Object.keys(weekdayIndex)[nd.getDay()] as Weekday;
     const isWeeklyMatch = (h: any) => h.recurrence === 'weekly' && Array.isArray(h.weekdays) && h.weekdays.includes(weekdayName);
-    const centerHoliday = holidays.some((h) => {
-      if (h.entity_type !== 'center') return false;
-      const dateHit = h.date && h.date.toDateString() === nd.toDateString();
-      const rangeHit = h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd;
-      const weeklyHit = isWeeklyMatch(h);
-      return dateHit || rangeHit || weeklyHit;
-    });
-    if (centerHoliday) {
+    if (centreClosed(settings, holidays, nd)) {
       conflicts.reason = 'CENTER_HOLIDAY';
       conflicts.details = { ...(conflicts.details || {}), center_holiday: true };
       currentDate.setDate(nd.getDate() + 1);
