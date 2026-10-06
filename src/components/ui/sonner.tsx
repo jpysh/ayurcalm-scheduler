@@ -12,6 +12,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
       offset="84px"
       // Sonner ignores offset at phone width and sits 16px from the edge, over the bar.
       mobileOffset={{ bottom: "84px", left: "16px", right: "16px" }}
+      // An open sheet sets pointer-events: none on the page, so Undo under a card could be seen but not tapped (#354).
+      style={{ pointerEvents: "auto" }}
       toastOptions={{
         classNames: {
           toast:

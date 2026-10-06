@@ -9,7 +9,7 @@ import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
 import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText, rupees, Btn } from "@/components/kit";
-import { AccommodationSheet, DietSheet, DischargeSheet, PackageSheet, StaySheet, type CardStay, type StayTarget } from "@/components/CardSheets";
+import { AccommodationSheet, DietSheet, DischargeSheet, NextWeekSheet, PackageSheet, StaySheet, type CardStay, type StayTarget } from "@/components/CardSheets";
 import { marked } from "@/components/SearchScreen";
 import type { AttentionItem } from "@/lib/attention";
 
@@ -164,6 +164,9 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, today]);
   const [checklist, setChecklist] = useState(false);
+  const [week, setWeek] = useState(false);
+  // The week after the review: today's if the doctor saw them today, else the coming one; next week repeats the week up to it.
+  const weekFrom = d ? (d.last_consultation?.date.slice(0, 10) === today ? today : (d.next_consultation || d.last_consultation)?.date.slice(0, 10)) : undefined;
   const startIntake = (x: ResidentDay) => ({ vitals: x.stay!.vitals || '', concerns: x.stay!.concerns || '', tests: x.stay!.tests || '' });
   const visit = (v: Visit, withTime: boolean) => `${dayText(v.date)}${withTime ? ` ${v.start_time}` : ''}${v.doctor ? ` · ${v.doctor}` : ''}`;
   const nights = d?.stay ? Math.round((Date.parse(d.stay.end_date) - Date.parse(d.stay.start_date)) / DAY_MS) : 0;
@@ -181,7 +184,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
             const days = d.week.slice(1);
             // Empty days after the review are one row: planning them is the review's job.
             const later = days.filter((w) => review && w.date > review && !w.treatments.length && w.date !== d.stay?.end_date);
-            return (
+            return (<>
               <ListGroup title="Next days">
                 {days.filter((w) => !later.includes(w)).map((w) => {
                   const leaving = w.date === d.stay?.end_date;
@@ -196,7 +199,9 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
                 {later.length ? <Row title={later.length === 1 ? dayText(later[0].date) : `${dayText(later[0].date)} to ${dayText(later[later.length - 1].date)}`}
                   facts="Not planned yet: after the review" onClick={() => book({ id: d.id, name: d.name, date: later[0].date })} /> : null}
               </ListGroup>
-            );
+              {/* Story 14 (#354): after the review, next week is this week again; one sheet, Book all. */}
+              {weekFrom ? <Btn kind="primary" className="mt-3" onClick={() => setWeek(true)}>Plan next week</Btn> : null}
+            </>);
           })() : null}
           <ListGroup title="Doctor">
             {d.last_consultation?.note ? <TextRow label={`Last seen · ${visit(d.last_consultation, false)}`}>{d.last_consultation.note}</TextRow>
@@ -244,6 +249,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
         foot={<Foot label="Save the plan" save={savePlan} />}>
         {plan !== null ? <Area label="Plan (optional)" rows={6} value={plan} onChange={(e) => setPlan(e.target.value)} /> : null}
       </BottomSheet>
+      {d && weekFrom ? <NextWeekSheet patient={week ? d : null} review={weekFrom} onClose={() => setWeek(false)} onBooked={load} /> : null}
       {checklist && d ? <DischargeSheet patient={d} stay={d.stay} onClose={() => setChecklist(false)} print={summary}
         openField={(where) => { setChecklist(false); if (where === 'details') details(d.id); else openDischarge(); }} write={() => { setChecklist(false); openDischarge(); }} /> : null}
       <BottomSheet open={!!discharge} onOpenChange={(o) => { if (!o) setDischarge(null); }} title={`Discharge summary · ${d?.name ?? ''}`}>

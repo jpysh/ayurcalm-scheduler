@@ -467,7 +467,8 @@ export async function planNextWeek(patientId: string, reviewISO: string, prisma:
   const patient = await prisma.patient.findUnique({ where: { id: patientId } });
   if (!patient) return null;
   const stay = await prisma.patientStay.findFirst({ where: { patient_id: patientId, start_date: { lte: review }, end_date: { gte: review } } });
-  const last = stay ? isoOf(stay.end_date) : reviewISO;
+  // The leaving day is left empty: patients go in the morning, and the card already marks it.
+  const last = stay ? shift(isoOf(stay.end_date), -1) : reviewISO;
   const to = shift(reviewISO, 7) < last ? shift(reviewISO, 7) : last;
   const past = await prisma.appointment.findMany({
     where: { patient_id: patientId, scheduled_date: { gte: new Date(`${shift(reviewISO, -6)}T00:00:00.000Z`), lte: review }, ...HAPPENING },

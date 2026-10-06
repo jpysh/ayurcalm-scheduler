@@ -33,6 +33,8 @@ const JOBS: [string, number][] = [
   ['Add an arriving patient', 3], // 6 Oct (#313): +, gender, Add
   // From the Patients screen: Search, then the person (typing is not counted).
   ['Find a patient', 3],
+  // Story 14 (#354): from the Patients screen, the card, Plan next week, Book all (was 10, a booking per day).
+  ["Plan a patient's next week", 3],
   // Stories 7 to 12 (#285), from the patient's card already open, as the design counts them.
   ["Change a patient's meals from a date", 3],
   ["Choose a patient's package", 3],
@@ -330,6 +332,28 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await page.keyboard.press('Escape');
       await expect(page.getByRole('dialog')).toHaveCount(0);
       await page.getByRole('button', { name: /^Cancel/ }).click();
+    });
+
+    await job(page, rows, "Plan a patient's next week", async (tap) => {
+      // A seeded patient in house whose last review leaves something to book next week.
+      type Day = { name: string; stay: unknown; next_consultation?: { date: string } };
+      let who: { id: string; name: string } | null = null;
+      for (const p of ((await call.get('/patients')) as { id: string; name: string }[]).slice(0, 40)) {
+        const d = (await call.get(`/patients/${p.id}/day?date=${today}`)) as Day;
+        if (!d.stay || !d.next_consultation) continue;
+        const plan = (await call.get(`/patients/${p.id}/next-week?date=${d.next_consultation.date.slice(0, 10)}`)) as { lines: { sessions: unknown[]; missing: unknown[] }[] };
+        if (plan.lines.some((l) => l.sessions.length) && plan.lines.every((l) => !l.missing.length)) { who = p; break; }
+      }
+      if (!who) return 'no seeded patient had a week to plan';
+      await page.goto('/admin/patients');
+      await tap(page.getByRole('button', { name: new RegExp(`^${who.name}`) }).first());
+      await tap(page.getByRole('dialog').last().getByRole('button', { name: 'Plan next week' }));
+      await tap(page.getByRole('dialog').last().getByRole('button', { name: /^Book all \d+/ }));
+      const note = page.locator('[data-sonner-toast]').filter({ hasText: /^Booked/ });
+      await expect(note).toBeVisible({ timeout: 15000 });
+      await note.getByRole('button', { name: 'Undo' }).click();
+      await page.keyboard.press('Escape');
+      return 'from the Patients screen; Undo takes the week back';
     });
 
     // Stories 7 to 12 (#285): one patient made for the walk, a card open, the job from there. Deleted afterwards.

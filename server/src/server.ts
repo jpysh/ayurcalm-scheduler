@@ -1590,7 +1590,8 @@ app.post('/patients/:id/next-week', async (req: Request, res: Response) => {
   const id = String(req.params.id);
   const plan = await planNextWeek(id, b.date, prisma, { only: b.lines.map((l) => l.from_therapy_id), swaps: Object.fromEntries(b.lines.map((l) => [l.from_therapy_id, l.therapy_id])), review: b.review });
   if (!plan) { res.status(404).json({ error: 'Patient not found' }); return; }
-  const missing = plan.lines.flatMap((l) => l.missing.map((m) => `${l.therapy_name} on ${m.date}`));
+  const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
+  const missing = plan.lines.flatMap((l) => l.missing.map((m) => `${l.therapy_name} on ${day(m.date)}`));
   if (b.review && plan.review_missing) missing.push('the next review');
   if (missing.length) { res.status(409).json({ message: `Nothing was booked: no free time for ${missing.join(', ')}. Untick or swap it and try again.`, plan }); return; }
   const rows = [
