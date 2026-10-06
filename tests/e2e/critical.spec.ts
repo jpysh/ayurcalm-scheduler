@@ -74,7 +74,7 @@ test('@smoke admin signs in with Enter and every tab shows its content', async (
   await signIn(page);
   await passSetupIfShown(page);
   for (const [tab, text] of [
-    ['Team', 'Therapists and doctors'],
+    ['Team', 'Therapists'],
     ['Rooms', ' rooms'],
     ['Therapies', 'Therapies'],
     ['Diet plans', 'Plans'],
@@ -496,16 +496,13 @@ test('a resident arriving today has the arrival steps still to do (#219)', async
   await expect(card.getByRole('button', { name: /Vitals and what they came about/ })).toBeVisible();
 });
 
-test('Team shows this week: booked hours against hours in, and each person\'s days (#219)', async ({ page }) => {
+test('Team is read by day: each person\'s hours and how booked, any day of the strip (#351)', async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
   await openTab(page, 'Team');
-  const line = activePanel(page).getByRole('button', { name: /^This week/ });
-  await expect(line).toContainText(/\d+h booked of \d+h/, { timeout: 15000 });
-  await line.click();
-  const sheet = page.getByRole('dialog');
-  await expect(sheet.getByText(/^Week of /)).toBeVisible();
-  await expect(sheet.getByText(/^\d+h\/\d+h$/).first()).toBeVisible();
+  await expect(activePanel(page).getByText(/^\d{2}:\d{2}–\d{2}:\d{2} · .+ booked/).first()).toBeVisible({ timeout: 15000 });
+  await activePanel(page).getByLabel('Week').getByRole('button').nth(3).click();
+  await expect(activePanel(page).getByText(/ in on /)).toBeVisible();
 });
 
 test('a therapist\'s private link opens their own day with no sign-in, and a tick is kept (#219)', async ({ browser, request }) => {

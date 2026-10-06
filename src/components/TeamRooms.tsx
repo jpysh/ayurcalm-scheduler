@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import PageHead from "@/components/PageHead";
-import { BottomSheet } from "@/components/BottomBar";
+import { BottomSheet, WeekStrip } from "@/components/BottomBar";
 import { shareLink } from "@/lib/shareLink";
 import { ChangeLine, DateRow, Empty, ListGroup, Row, SheetFoot, TimeList, dayText, timesBetween } from "@/components/kit";
 import { roomSub } from "@/components/SetupSheets";
@@ -42,7 +42,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   const [offToday, setOffToday] = useState<Record<string, string | null>>({});
   const [roomsOff, setRoomsOff] = useState<Set<string>>(new Set());
   const [week, setWeek] = useState<Week | null>(null);
-  const [showWeek, setShowWeek] = useState(false);
+  // The team is read a day at a time (#351), from the same week strip as the Day screen.
+  const [day, setDay] = useState(today);
   const [pick, setPick] = useState<Pick>(null);
   const [late, setLate] = useState<Late>(null);
   const [at, setAt] = useState("");
@@ -57,11 +58,12 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
       .catch(() => setRoomsOff(new Set()));
   }, [today]);
   useEffect(() => { load(); }, [load]);
-  // The week this day is in, from Monday: how full the team is, not what they do.
+  // The week the chosen day is in, from Sunday as the strip draws it; a day in the same week needs no fetch.
+  const sunday = new Date(Date.parse(`${day}T00:00:00Z`) - new Date(`${day}T00:00:00Z`).getUTCDay() * 86400000).toISOString().slice(0, 10);
   useEffect(() => {
-    const monday = new Date(Date.parse(`${today}T00:00:00Z`) - ((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10);
-    fetch(`${API_BASE}/staff-week?start=${monday}`).then((r) => (r.ok ? r.json() : null)).then(setWeek).catch(() => setWeek(null));
-  }, [today]);
+    fetch(`${API_BASE}/staff-week?start=${sunday}`).then((r) => (r.ok ? r.json() : null)).then(setWeek).catch(() => setWeek(null));
+  }, [sunday]);
+  const on = week && week.start === sunday ? week.days.indexOf(day) : -1;
 
   const ql = q.trim().toLowerCase();
   const staffActive = (s: UiStaff) => s.status === "Active";
@@ -70,6 +72,9 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   const match = (n: string) => !ql || n.toLowerCase().includes(ql);
   const isTeam = kind === "team";
   const team = isTeam ? staff.filter((s) => staffActive(s) && match(s.name)).sort(byName) : [];
+  const dayOf = (s: UiStaff) => (on < 0 ? undefined : week!.rows.find((r) => r.id === String(s.id))?.days[on]);
+  const doctors = team.filter((s) => s.role === "doctor"), therapists = team.filter((s) => s.role !== "doctor");
+  const inOn = team.filter((s) => { const d = dayOf(s); return d && (d.state === "in" || d.state === "part"); }).length;
   const notIn = staff.filter((s) => staffActive(s) && offToday[String(s.id)]);
   const roomRows = isTeam ? [] : rooms.filter((r) => roomActive(r) && match(r.name)).sort(byName);
   const idle = isTeam
@@ -105,19 +110,23 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   return (
     <div>
       {isTeam ? <>
-        <PageHead title="Team" note={`${staff.filter(staffActive).length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}`} gear={{ label: "What needs you: team rules", run: openRules }} />
-        {/* Always there, so the lists do not move under a tap when the week arrives. */}
-        <ListGroup><Row title="This week" facts={week ? weekLine(week) : undefined} trailing="›" onClick={week ? () => setShowWeek(true) : undefined} /></ListGroup>
+        <PageHead title="Team" note={day === today ? `${staff.filter(staffActive).length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}` : `${on < 0 ? "…" : inOn} in on ${dayText(day)}`} gear={{ label: "What needs you: team rules", run: openRules }} />
+        <WeekStrip day={day} today={today} setDay={setDay} />
       </> : <PageHead title="Rooms" note={`${rooms.filter(roomActive).length} rooms${roomsOut ? ` · ${roomsOut} out` : ""}`} />}
       {none ? <Empty text={isTeam ? "No one matches." : "No room matches."} /> : null}
-      {team.length ? (
-        <ListGroup title="Therapists and doctors" count={team.length}>
-          {team.map((s) => (
-            <Row key={s.id} title={s.name} facts={s.role === "doctor" ? "Doctor" : "Therapist"} flag={offToday[String(s.id)] ? "Not in today" : undefined} trailing="›"
-              onClick={() => setPick({ kind: "staff", id: String(s.id), name: s.name })} />
-          ))}
+      {([["Doctors", doctors], ["Therapists", therapists]] as const).map(([title, list]) => list.length ? (
+        <ListGroup key={title} title={title} count={list.length}>
+          {list.map((s) => {
+            const d = dayOf(s);
+            const away = d?.state === "away" || d?.state === "off";
+            return (
+              <Row key={s.id} title={away ? <s className="text-muted-foreground">{s.name}</s> : s.name} facts={dayLine(d)}
+                flag={day === today && offToday[String(s.id)] && !away ? "Not in today" : undefined} trailing="›"
+                onClick={() => (day === today ? setPick({ kind: "staff", id: String(s.id), name: s.name }) : openPerson(String(s.id)))} />
+            );
+          })}
         </ListGroup>
-      ) : null}
+      ) : null)}
       {roomRows.length ? (
         <ListGroup title="Rooms" count={roomRows.length}>
           {roomRows.map((r) => <Row key={r.id} title={r.name} facts={roomSub(r)} flag={roomsOff.has(String(r.id)) ? "Out of use today" : undefined} trailing="›" onClick={() => setPick({ kind: "room", id: String(r.id), name: r.name })} />)}
@@ -136,10 +145,6 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
           </div>
         </ListGroup>
       ) : null}
-
-      <BottomSheet open={showWeek} onOpenChange={setShowWeek} title="This week">
-        {week ? <WeekList week={week} /> : null}
-      </BottomSheet>
 
       <BottomSheet open={!!pick} onOpenChange={(o) => { if (!o) close(); }} title={pick?.name || ""}
         note={pick?.kind === "room" ? "What would you like to do with this room?" : late === null ? "What changes for them today?" : late === "away" ? "Which days are they away?" : late === "late" ? "When do they start?" : "When do they leave?"}
@@ -176,32 +181,11 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
 /** The day after a YYYY-MM-DD, as one. */
 const nextDay = (ymd: string) => new Date(Date.parse(ymd) + 86400000).toISOString().slice(0, 10);
 
-type Week = { start: string; days: string[]; rows: { id: string; name: string; role: string; week: ("in" | "part" | "away" | "off")[]; booked: number; capacity: number }[] };
-const hrs = (m: number) => `${Math.round(m / 60)}h`;
-const weekLine = (w: Week) => {
-  const booked = w.rows.reduce((n, r) => n + r.booked, 0), cap = w.rows.reduce((n, r) => n + r.capacity, 0);
-  const away = w.rows.filter((r) => r.week.includes("away")).length;
-  return `${hrs(booked)} booked of ${hrs(cap)}${cap ? ` (${Math.round((100 * booked) / cap)}%)` : ""}${away ? ` · ${away} away some days` : ""}`;
-};
-
-/** One line a person: their seven days and how full their week is. */
-function WeekList({ week }: { week: Week }) {
-  const letter = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "narrow", timeZone: "UTC" });
-  const look = { in: "bg-primary/15 text-foreground", part: "border border-primary/50", away: "bg-destructive/15 text-destructive line-through", off: "text-muted-foreground" };
-  return (
-    <div className="-mt-1 max-h-[70dvh] overflow-y-auto">
-      <p className="mb-2 text-sm text-muted-foreground">Week of {new Date(`${week.start}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}. Shaded: in. Outlined: part of the day. Struck through: away.</p>
-      <div className="overflow-hidden rounded-xl border">
-        {week.rows.map((r) => (
-          <div key={r.id} className="flex min-h-14 items-center gap-2 border-b border-border px-3 py-2 last:border-b-0">
-            <span className="min-w-0 flex-1 truncate text-base font-semibold">{r.name}</span>
-            <span className="flex gap-0.5" aria-label={r.week.map((s, i) => `${letter(week.days[i])} ${s}`).join(", ")}>
-              {r.week.map((s, i) => <span key={i} className={`grid h-6 w-5 place-items-center rounded-md text-xs font-semibold ${look[s]}`}>{letter(week.days[i])}</span>)}
-            </span>
-            <span className="w-16 text-right text-sm tabular-nums text-muted-foreground">{hrs(r.booked)}/{hrs(r.capacity)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+type Day = { state: "in" | "part" | "away" | "off"; start?: string; end?: string; why?: string; booked: number; capacity: number };
+type Week = { start: string; days: string[]; rows: { id: string; name: string; role: string; days: Day[] }[] };
+const hrs = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}`);
+/** "07:00–15:00 · 5h of 8h booked"; away with the reason; a day off says so. */
+const dayLine = (d?: Day) => !d ? undefined
+  : d.state === "off" ? "Day off"
+  : d.state === "away" ? `Away · ${d.why || "leave"}`
+  : `${d.start}–${d.end} · ${hrs(d.booked)} of ${hrs(d.capacity)} booked${d.state === "part" ? ` · ${(d.why || "part of the day").toLowerCase()}` : ""}`;
