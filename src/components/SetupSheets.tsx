@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChangeLine, LineSelect, WEEK, Chips, Dropdown, Group, More, Seg, SheetFoot, Switch, Text, noteText, say, field, Btn } from "@/components/kit";
+import { ChangeLine, Consequence, LineSelect, WEEK, Chips, dayText, Dropdown, Group, More, Seg, SheetFoot, Switch, Text, noteText, say, field, Btn } from "@/components/kit";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
@@ -82,11 +82,21 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
     setGives(person?.specializations ?? preset?.gives ?? []); setPhone(person?.phone ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, person]);
+  const hoursOf = (w: Week) => Object.fromEntries(WEEK.map((d) => [d, w[d] ? { start: w[d].slice(0, 5), end: w[d].slice(6) } : null]));
+  // The consequence line (#380): bookings ahead that the new hours would leave outside, asked of the server's own rule.
+  const [outside, setOutside] = useState<{ date: string; start_time: string; patient_name: string; therapy_name: string }[] | null>(null);
+  useEffect(() => {
+    if (!person || !touched) { setOutside(null); return; }
+    let stale = false;
+    send(`/staff/${person.id}/hours-check`, "POST", { weekly_schedule: hoursOf(week) }).then((r) => { if (!stale) setOutside(r.outside); }).catch(() => { if (!stale) setOutside(null); });
+    return () => { stale = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [person, touched, week]);
   const save = async () => {
     setBusy(true);
     try {
       const ids = gives.map((n) => therapies.find((t) => t.name === n)?.id).filter(Boolean);
-      const hours = Object.fromEntries(WEEK.map((d) => [d, week[d] ? { start: week[d].slice(0, 5), end: week[d].slice(6) } : null]));
+      const hours = hoursOf(week);
       const body = { name: name.trim(), role, gender: gender.toLowerCase(), specializations: ids, phone: phone.trim(), ...(touched ? { weekly_schedule: hours } : person ? {} : { weekly_schedule: {} }) };
       const x = await send(person ? `/staff/${person.id}` : "/staff", person ? "PUT" : "POST", body);
       onSaved({ id: x.id, name: x.name, role: x.role ?? role, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other",
@@ -107,6 +117,8 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
           return <ChangeLine key={d} label={d[0].toUpperCase() + d.slice(1)} value={shown(week[d])}
             select={<LineSelect label={`${d} hours`} value={week[d]} onChange={(v) => { setWeek({ ...week, [d]: v }); setTouched(true); }} free={opts.map((r) => ({ id: r, name: r ? `${names[r] ? `${names[r]} · ` : ""}${shown(r)}` : "Day off" }))} />} />;
         })}
+        {outside ? <Consequence>{outside.length === 0 ? "Nothing booked falls outside these hours."
+          : `${outside.length} booked treatment${outside.length === 1 ? " falls" : "s fall"} outside these hours: ${outside.slice(0, 3).map((a) => `${dayText(a.date)} ${a.start_time} ${a.patient_name}`).join(", ")}${outside.length > 3 ? ` and ${outside.length - 3} more` : ""}. What needs you will offer a new therapist or time.`}</Consequence> : null}
       </div> : <>
       <Text label="Name" id="person-name" value={name} onChange={(e) => setName(e.target.value)} />
       <Group label="Role"><Seg<"therapist" | "doctor"> options={[["therapist", "Therapist"], ["doctor", "Doctor"]]} value={role} onChange={setRole} /></Group>
