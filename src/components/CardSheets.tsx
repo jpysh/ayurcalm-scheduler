@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import {
-  Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, Picker, QuickDates, Row, Seg, Text, TextRow, Timeline,
+  Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, LineSelect, Picker, QuickDates, Row, Seg, SwitchRow, Text, TextRow, Timeline,
   dayText, noteText, rupees, toastUndo, Btn } from "@/components/kit";
 
 const DAY_MS = 86400000;
@@ -346,6 +346,77 @@ export function DischargeSheet({ patient, stay, onClose, openField, write, print
         </ListGroup>
       ) : <Empty text="Everything the summary asks for is filled in." />}
       <div className="mt-3 border-t border-border"><ChangeLine label="Summary" value="Write or edit it" onClick={write} /></div>
+    </BottomSheet>
+  );
+}
+
+/* ------------------------------ Story 14: plan next week (#354) ------------------------------ */
+
+type WeekLine = { from_therapy_id: string; therapy_id: string; therapy_name: string; start_time: string; staff_name: string; sessions: { date: string }[]; missing: { date: string; why: string }[] };
+type WeekPlan = { from: string; to: string; brief: string | null; lines: WeekLine[]; review: { date: string; start_time: string; staff_name: string } | null; review_missing?: string };
+
+/** This week, a week on: each line ticked and swappable, the next review ticked; Book all books everything or nothing (the server decides the times). */
+export function NextWeekSheet({ patient, review, onClose, onBooked }: { patient: Who | null; review: string; onClose: () => void; onBooked: () => void }) {
+  const [plan, setPlan] = useState<WeekPlan | null>(null);
+  const [therapies, setTherapies] = useState<{ id: string; name: string }[]>([]);
+  const [off, setOff] = useState<Record<string, boolean>>({});
+  const [swaps, setSwaps] = useState<Record<string, string>>({});
+  const [withReview, setWithReview] = useState(true);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!patient) return;
+    setPlan(null); setSwaps({}); setWithReview(true);
+    fetchJsonWithTimeout<WeekPlan>(`${API_BASE}/patients/${patient.id}/next-week?date=${review}`).then((p) => {
+      setPlan(p); setWithReview(!!p.review);
+      // A line with nothing left to book, or a day with no free time, starts unticked, so Book all works as it opens.
+      setOff(Object.fromEntries(p.lines.map((l) => [l.from_therapy_id, !l.sessions.length || l.missing.length > 0])));
+    }).catch(() => setPlan({ from: review, to: review, brief: null, lines: [], review: null }));
+    fetchJsonWithTimeout<{ id: string; name: string; is_consultation?: boolean; is_active?: boolean }[]>(`${API_BASE}/therapies`)
+      .then((t) => setTherapies(t.filter((x) => !x.is_consultation && x.is_active !== false).sort((a, b) => a.name.localeCompare(b.name)))).catch(() => setTherapies([]));
+  }, [patient?.id, review]);
+  const ticked = plan?.lines.filter((l) => !off[l.from_therapy_id]) || [];
+  const count = ticked.reduce((n, l) => n + l.sessions.length + l.missing.length, 0) + (withReview && plan?.review ? 1 : 0);
+  const bookAll = async () => {
+    if (!patient || !plan) return;
+    setBusy(true);
+    const res = await fetch(`${API_BASE}/patients/${patient.id}/next-week`, { method: "POST", headers: json, body: JSON.stringify({ date: review, review: withReview, lines: ticked.map((l) => ({ from_therapy_id: l.from_therapy_id, therapy_id: swaps[l.from_therapy_id] || l.therapy_id })) }) });
+    const body = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) { toast.error(body.message || "Nothing was booked. Try again."); return; }
+    toastUndo(`Booked ${plural(body.count, "treatment")} for ${first(patient.name)}, ${dayText(plan.from)} to ${dayText(plan.to)}`, async () => {
+      await Promise.all((body.ids as string[]).map((id) => fetch(`${API_BASE}/appointments/${id}`, { method: "DELETE" })));
+      onBooked();
+    });
+    onBooked();
+    onClose();
+  };
+  return (
+    <BottomSheet open={!!patient} onOpenChange={(o) => { if (!o) onClose(); }} title={patient ? `Next week · ${first(patient.name)}` : "Next week"}
+      note={plan ? `${dayText(plan.from)} to ${dayText(plan.to)}, as this week. Untick or swap a line; all of it is booked or none.` : undefined}
+      foot={plan ? <Foot label={count ? `Book all ${count}` : "Nothing ticked"} ok={count > 0} busy={busy} save={bookAll} /> : undefined}>
+      {plan === null ? <Loading rows={3} /> : (<>
+        {plan.brief ? <ListGroup title="Doctor's plan"><TextRow label="The brief for this week">{plan.brief}</TextRow></ListGroup> : null}
+        <ListGroup title="Therapies">
+          {plan.lines.length ? plan.lines.map((l) => {
+            const swapped = swaps[l.from_therapy_id];
+            const name = swapped ? therapies.find((t) => t.id === swapped)?.name || l.therapy_name : l.therapy_name;
+            const done = !l.sessions.length && !l.missing.length;
+            return (
+              <SwitchRow key={l.from_therapy_id} title={name} on={!off[l.from_therapy_id]} set={(v) => setOff({ ...off, [l.from_therapy_id]: !v })}
+                facts={done ? "Already booked next week" : swapped ? `Instead of ${l.therapy_name} · ${plural(l.sessions.length + l.missing.length, "day")}, times found on Book all` : `${l.start_time} · ${l.staff_name} · ${plural(l.sessions.length + l.missing.length, "day")}`}
+                flag={!swapped && l.missing.length ? `No free time on ${l.missing.map((m) => dayText(m.date)).join(", ")}. Swap it, or book its days from Next days` : undefined}>
+                {done ? null : <ChangeLine label="Swap" value={name} select={<LineSelect label={`Swap ${l.therapy_name}`} value={swapped || l.therapy_id} onChange={(v) => setSwaps({ ...swaps, [l.from_therapy_id]: v })} free={therapies} />} />}
+              </SwitchRow>
+            );
+          }) : <Empty text="Nothing was booked in the seven days up to the review, so there is no week to repeat. Book from Next days." />}
+        </ListGroup>
+        {plan.review || plan.review_missing ? (
+          <ListGroup title="Next review">
+            {plan.review ? <SwitchRow title={`${dayText(plan.review.date)} · ${plan.review.start_time}`} facts={plan.review.staff_name} on={withReview} set={setWithReview} />
+              : <Row title="A week on" flag={`${plan.review_missing}: book it from Next days`} />}
+          </ListGroup>
+        ) : null}
+      </>)}
     </BottomSheet>
   );
 }
