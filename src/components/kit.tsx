@@ -341,7 +341,7 @@ export function Picker<T extends string>({ options, value, onChange, onEdit }: {
       {options.map((o) => (
         <button key={o.id} type="button" aria-pressed={value === o.id} onClick={() => onChange(o.id)}
           className={`flex min-h-14 items-center gap-3 rounded-xl border-[1.5px] border-border px-3 py-2 text-left aria-pressed:border-primary aria-pressed:bg-secondary ${o.faint ? "opacity-60" : ""}`}>
-          <span className="min-w-0 flex-1"><b className="block text-base">{o.name}</b>{o.note ? <span className={`line-clamp-2 ${noteText}`}>{o.note}</span> : null}</span>
+          <span className="min-w-0 flex-1"><b className="block text-base">{o.name}</b>{o.note ? <span className={`line-clamp-1 ${noteText}`}>{o.note}</span> : null}</span>
           {o.fact ? <span className="flex-none text-sm text-muted-foreground">{o.fact}</span> : null}
           {value === o.id ? <span aria-hidden className="flex-none font-bold text-primary">✓</span> : null}
         </button>

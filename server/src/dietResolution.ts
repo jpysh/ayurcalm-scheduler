@@ -36,6 +36,8 @@ export type ResolveDietInput = {
   mealsWithColumn: Set<MealKey>;
   /** Names a bespoke plan that follows no template. */
   segmentLabel?: string | null;
+  /** The patient's own medication and how they eat around treatment (#355): never the plan's. */
+  patient?: { medication?: string | null; before_treatment?: string | null; after_treatment?: string | null };
 };
 
 export type ResolvedDiet = {
@@ -44,11 +46,7 @@ export type ResolvedDiet = {
   notes: string;
   /** The plan this came from, for the footnote. */
   planName: string;
-  /**
-   * How to eat around treatment. The same sentences for everyone on a plan, so
-   * they print once under the table instead of once per patient — which is the
-   * difference between a sheet of one page and a sheet of three.
-   */
+  /** How this patient eats around treatment, on a day they have one. */
   therapyNotes: string;
 };
 
@@ -75,12 +73,12 @@ export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
     // Keep a meal the day has no column for rather than dropping it.
     if (meals[meal] && !mealsWithColumn.has(meal)) noteParts.push(`${mealLabel[meal]}: ${meals[meal]}`);
   }
-  // Medication is per patient, so it stays in the row.
-  const medication = field('medication');
+  const own = (v?: string | null) => (v || '').trim();
+  const medication = own(input.patient?.medication);
   if (medication) noteParts.push(medication);
 
   const therapyNotes = hasTherapyToday
-    ? [field('pre_therapy_notes'), field('post_therapy_notes')].filter(Boolean).join('; ')
+    ? [own(input.patient?.before_treatment), own(input.patient?.after_treatment)].filter(Boolean).join('; ')
     : '';
 
   const label = (template?.name || input.segmentLabel || '').toString();
@@ -122,7 +120,7 @@ export async function loadDietsForDay(day: Date, prisma: PrismaClient) {
   }
   // Meals no longer take columns on the sheet, so every meal resolves as text.
   const mealsWithColumn = new Set<MealKey>();
-  const dietFor = (patient: { id: string }, hasTherapyToday: boolean) => {
+  const dietFor = (patient: { id: string; medication?: string | null; before_treatment?: string | null; after_treatment?: string | null }, hasTherapyToday: boolean) => {
     const seg = segmentByPatient.get(patient.id);
     return resolveDiet({
       template: seg?.Template ?? null,
@@ -131,6 +129,7 @@ export async function loadDietsForDay(day: Date, prisma: PrismaClient) {
       hasTherapyToday,
       mealsWithColumn,
       segmentLabel: seg?.template_label,
+      patient,
     });
   };
   /** True when a meal was written for this person for this date alone. */

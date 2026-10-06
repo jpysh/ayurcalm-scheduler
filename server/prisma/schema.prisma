@@ -13,6 +13,10 @@ datasource db {
 model Patient {
   id                String    @id @default(uuid())
   name              String
+  /// Printed in their own row of the day sheet; with the two notes, on treatment days (#355).
+  medication        String?
+  before_treatment  String?
+  after_treatment   String?
   gender            Gender
   phone             String?
   email             String?
@@ -426,10 +430,6 @@ model DietTemplate {
   rest_lunch     String @default("")
   rest_dinner    String @default("")
   rest_snacks    String @default("")
-
-  medication          String?
-  pre_therapy_notes   String?
-  post_therapy_notes  String?
 
   /// Retired plans stop being offered but stay readable by the patients on them.
   is_active  Boolean  @default(true)
