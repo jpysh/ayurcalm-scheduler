@@ -82,6 +82,8 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   useEffect(() => { if (open) { setDone(null); setError(null); } }, [open]);
 
   const act = problems.filter((p) => p.problem_class === "blocking");
+  // Only rows with one answer: a row asking the admin to choose is never chosen for them.
+  const fixable = act.filter((p) => p.fix && p.choices.length <= 1);
   // A resident with nothing booked is a rest day, not a note (#144).
   const notes = problems.filter((p) => p.problem_class === "worth_knowing" && p.kind !== "IDLE_RESIDENT" && !dismissed.includes(p.id));
   const patientAct = items.filter((i) => i.section === "Patients" && i.kind === "action");
@@ -100,14 +102,15 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
     return () => clearTimeout(t);
   }, [open, empty, undoable, onOpenChange]);
 
-  async function apply(p: DayProblem, f: Fix) {
-    setBusy(p.id);
+  // Every move in one call: the server checks them all before writing any, so it is one batch and one Undo (story 3).
+  async function apply(p: DayProblem | null, ...fixes: Fix[]) {
+    setBusy(p?.id ?? "all");
     setError(null);
     try {
       const res = await fetch(`${apiBase}/day-check/accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: day, moves: [{ appointment_id: f.appointment_id, staff_id: f.staff_id, co_staff_ids: f.co_staff_ids || [], room_id: f.room_id, start_time: f.start_time, date: f.date, cancel: f.cancel }] }),
+        body: JSON.stringify({ date: day, moves: fixes.map((f) => ({ appointment_id: f.appointment_id, staff_id: f.staff_id, co_staff_ids: f.co_staff_ids || [], room_id: f.room_id, start_time: f.start_time, date: f.date, cancel: f.cancel })) }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -117,8 +120,9 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
         return;
       }
       const batch = body.batch_id as string | null;
+      const f = fixes[0];
       setDone({
-        text: f.cancel ? `${p.patient_name}'s treatment at ${p.start_time} cancelled.` : `${p.patient_name}: ${f.label}.`,
+        text: !p ? `${fixes.length} treatments fixed as shown.` : f.cancel ? `${p.patient_name}'s treatment at ${p.start_time} cancelled.` : `${p.patient_name}: ${f.label}.`,
         undo: batch ? async () => (await fetch(`${apiBase}/replan/undo`, {
           method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batch_id: batch }),
         })).ok : null,
@@ -173,6 +177,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
         name: "Day", count: act.length,
         body: act.length + didForYou.length + notes.length === 0 ? null : (
           <div className="space-y-3">
+            {fixable.length > 1 ? <Btn kind="primary" disabled={busy !== null} onClick={() => apply(null, ...fixable.map((p) => p.fix!))}>{busy === "all" ? "Fixing…" : `Fix all ${fixable.length} as shown`}</Btn> : null}
             {act.length ? <ListGroup>{act.map(actionItem)}</ListGroup> : null}
             {didForYou.length + notes.length ? (
               <ListGroup title="Information · not counted">
