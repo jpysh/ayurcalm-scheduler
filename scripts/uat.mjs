@@ -95,7 +95,8 @@ await step('Book a treatment from the day: + → who → Abhyanga → Book', '/a
   await go(plusBtn('Book a treatment'));
   await dlg().getByLabel('Search patients').fill('Rekha');
   await go(dlg().getByRole('button', { name: /^Rekha Nair/ }).first());
-  // Abhyanga is what the sheet offers first.
+  // Nothing is chosen for the admin (#330): the therapy is a tap.
+  await go(dlg().getByRole('button', { name: /^Abhyanga/ }).first());
   const bookBtn = dlg().getByRole('button', { name: /^Book / }).first();
   const label = await bookBtn.innerText();
   await go(bookBtn);
@@ -109,7 +110,7 @@ await step('A course: Abhyanga, 3 sessions one a day', '/admin/schedule', async 
   await go(plusBtn('Book a treatment'));
   await dlg().getByLabel('Search patients').fill('Mohan');
   await go(dlg().getByRole('button', { name: /^Mohan Iyer/ }).first());
-  // Abhyanga is what the sheet offers first.
+  await go(dlg().getByRole('button', { name: /^Abhyanga/ }).first());
   await dlg().getByLabel('Sessions', { exact: true }).selectOption({ label: '3 sessions, one a day' });
   const bookBtn = dlg().getByRole('button', { name: /^Book \w+, 3 days from/ });
   const label = await bookBtn.innerText();
@@ -190,7 +191,7 @@ await step('Doctor consultation: Leela booked from + with Therapy set to Consult
   await go(plusBtn('Book a treatment'));
   await dlg().getByLabel('Search patients').fill('Leela');
   await go(dlg().getByRole('button', { name: /^Leela Menon/ }).first());
-  await dlg().getByLabel('Therapy').selectOption({ label: 'Consultation' }); await p.waitForTimeout(1500);
+  await go(dlg().getByRole('button', { name: /^Consultation/ }).first()); await p.waitForTimeout(1500);
   const bookBtn = dlg().getByRole('button', { name: /^Book / }).first();
   const label = await bookBtn.innerText();
   await go(bookBtn);
@@ -255,7 +256,7 @@ await step('Move to another install: Settings → Backups → Download everythin
 });
 const setTrial = async (days) => {
   const { execSync } = await import('node:child_process');
-  execSync(`docker exec ruta-walk-six-db-1 psql -q -U ayurcalm ayurcalm -c "UPDATE \\"Settings\\" SET trial_started_at = now() - interval '${days} days'"`);
+  execSync(`docker exec ruta-${process.env.UAT_SLUG || 'walk-six'}-db-1 psql -q -U ayurcalm ayurcalm -c "UPDATE \\"Settings\\" SET trial_started_at = now() - interval '${days} days'"`);
 };
 for (const days of [5, 26, 29, 31]) {
   await step(`Trial state ${days} days in: the banner and what + does`, '/admin/schedule', async () => {
