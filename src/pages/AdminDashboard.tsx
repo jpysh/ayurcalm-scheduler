@@ -494,7 +494,8 @@ const AdminDashboard = () => {
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const patientsScreen = usePatientsScreen({ needs: attention.items.filter((i) => i.section === 'Patients' && i.kind === 'action' && i.patient_id), patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ,
     openTreatment: (a) => { go('schedule'); scheduleScreen.openCard(a); },
-    book: (p) => { go('schedule'); scheduleScreen.openBook(p); },
+    // A day on the card books on that day (#350).
+    book: (p) => { go('schedule'); if (p?.date) { setCurrentDate(new Date(`${p.date}T00:00:00`)); refreshAppointmentsForDate(p.date, true); } scheduleScreen.openBook(p); },
     // The same words, over every treatment: the day's own search.
     openCatalogue: (which) => { setSettingsSheet(which); go('settings'); },
     openRules: () => setRules({ section: 'Patients' }),
