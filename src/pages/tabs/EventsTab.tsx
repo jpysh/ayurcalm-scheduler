@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
 import PageHead from "@/components/PageHead";
-import { DateRow, Days, Dropdown, Empty, ListGroup, Row, Seg, SheetFoot, Text, TimeList, timesBetween, Group } from "@/components/kit";
+import { DateRow, Days, dayText, Dropdown, Empty, ListGroup, Row, Seg, SheetFoot, Text, TimeList, timesBetween, Group } from "@/components/kit";
 import { API_TOKEN, type ApiProgramEvent, type UiStaff, type UiRoom } from "./shared";
 
 /**
@@ -25,7 +25,7 @@ const daysOf = (ev: ApiProgramEvent) => {
   const d = ev.weekdays || [];
   if (ev.recurrence !== "weekly" || d.length === 0) {
     const on = ev.date || ev.start_date;
-    return on ? new Date(on).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }) : "Once";
+    return on ? dayText(on) : "Once";
   }
   return d.length === 7 ? "Daily" : WEEK.filter((w) => d.includes(w)).map((w) => w[0].toUpperCase() + w.slice(1, 3)).join(", ");
 };

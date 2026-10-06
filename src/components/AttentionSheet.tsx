@@ -9,7 +9,7 @@
  * now. The sheet stays open and redraws as rows are dealt with.
  */
 import { useEffect, useState } from "react";
-import { InboxSheet, ItemRow, ListGroup, Row, Btn } from "@/components/kit";
+import { InboxSheet, dayText, ItemRow, ListGroup, Row, Btn } from "@/components/kit";
 import type { AttentionItem } from "@/lib/attention";
 
 export type Fix = {
@@ -91,6 +91,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   // A resident with nothing booked is a rest day, not a note (#144).
   const notes = problems.filter((p) => p.problem_class === "worth_knowing" && p.kind !== "IDLE_RESIDENT" && !dismissed.includes(p.id));
   const patientAct = items.filter((i) => i.section === "Patients" && i.kind === "action");
+  const patientRows = Object.values(patientAct.reduce<Record<string, AttentionItem[]>>((by, i) => { (by[i.patient_id ?? i.who] ??= []).push(i); return by; }, {}));
   const teamAct = items.filter((i) => i.section === "Team" && i.kind === "action");
   const didForYou = replans.filter((b) => !dismissed.includes(b.batch_id));
   // A therapist whose day was moved already has their line under the day.
@@ -185,7 +186,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   };
 
   // The sheet opens on whatever day is on screen, so it names that day (#193).
-  const dayName = day === today ? "Today" : new Date(day).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  const dayName = day === today ? "Today" : dayText(day);
   return (
     <InboxSheet open={open} onOpenChange={onOpenChange} title={dayName} empty="Nothing else needs you."
       foot={<Btn kind="quiet" onClick={() => { onOpenChange(false); openRules(); }}>What needs you · change the rules ›</Btn>}
@@ -223,8 +224,12 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
           </div>
         ),
       }, {
-        name: "Patients", count: patientAct.length,
-        body: patientAct.length ? <ListGroup>{patientAct.map((i) => <Row key={i.id} title={i.who} facts={i.what} trailing={{ card: "Open card ›", diet: "Choose diet ›", summary: "Summary ›" }[i.action ?? "card"]} onClick={() => onItem(i)} />)}</ListGroup> : null,
+        name: "Patients", count: patientRows.length,
+        body: patientRows.length ? <ListGroup>{patientRows.map((g) => {
+          // Two things for one patient are one row; their card reaches both.
+          const i = g.length > 1 ? { ...g[0], action: "card" as const } : g[0];
+          return <Row key={i.id} title={i.who} facts={g.map((x) => x.what).join(" · ")} trailing={{ card: "Open card ›", diet: "Choose diet ›", summary: "Summary ›" }[i.action ?? "card"]} onClick={() => onItem(i)} />;
+        })}</ListGroup> : null,
       }, {
         name: "Team", count: teamAct.length,
         body: teamAct.length + teamInfo.length ? <ListGroup>{[...teamAct, ...teamInfo].map((i) => <Row key={i.id} title={i.kind === "information" ? i.what : i.who} facts={i.kind === "information" ? "Information · not counted" : i.what} />)}</ListGroup> : null,
