@@ -130,9 +130,10 @@ async function main() {
 
   // Shifts as a centre staffs them (#351): early 07:00-15:00 (the morning yoga and prayer),
   // afternoon 13:00-20:00 (the evening ones), and a day 09:00-18:00; the third therapist has
-  // Wednesday off. The last is the day shift, as they are the one on leave today, with a whole day to move.
+  // Wednesday off. The last works the whole centre day, 09:00-20:00: they are the one on leave today,
+  // and their treatments run into the evening so a late visitor still sees the reassignment (#369).
   const week = (start: string, end: string, off: string[] = []) => Object.fromEntries(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].map((d) => [d, off.includes(d) ? null : { start, end }]));
-  const shiftOf = (idx: number, n: number) => idx === n - 1 || idx % 3 === 2 ? week('09:00', '18:00', idx === 2 ? ['wednesday'] : []) : idx % 3 === 0 ? week('07:00', '15:00') : week('13:00', '20:00');
+  const shiftOf = (idx: number, n: number) => idx === n - 1 ? week('09:00', '20:00') : idx % 3 === 2 ? week('09:00', '18:00', idx === 2 ? ['wednesday'] : []) : idx % 3 === 0 ? week('07:00', '15:00') : week('13:00', '20:00');
 
   // Every other room is fully equipped; with only the first four amenities
   // everywhere, dhara, kizhi and lepam therapies could never be booked.
@@ -148,7 +149,8 @@ async function main() {
       name: `${n} ${randomOf(surnames)}`,
       gender: isMale(n) ? 'male' : 'female',
       phone: `+91-8${Math.floor(100000000 + random()*899999999)}`,
-      specializations: therapies.filter((_, j) => j % (idx % 3 + 2) === 0).map(t => t.id),
+      // The last is the senior therapist, trained in everything, so their day off strands a full day (#369).
+      specializations: therapies.filter((_, j) => idx === SIZE.therapists - 1 || j % (idx % 3 + 2) === 0).map(t => t.id),
       weekly_schedule: shiftOf(idx, SIZE.therapists),
       is_active: true,
     },
@@ -403,7 +405,11 @@ async function main() {
     // cannot give two at once, even the ones they will not be here to give.
     const own = todays.filter((a) => a.staff_id === absent.id || a.co_staff_ids.includes(absent.id));
     const taken = own.map((a) => ({ s: mins(a.start_time), e: mins(a.start_time) + a.duration_minutes }));
-    const moved = todays.filter((a) => {
+    // Picked from both ends of the day inwards, so the problem is still there for
+    // someone opening the demo in the evening (#369): the latest one they could
+    // give is taken first.
+    const ends = todays.flatMap((_, i) => (i % 2 ? [todays[Math.floor(i / 2)]] : [todays[todays.length - 1 - Math.floor(i / 2)]]));
+    const moved = ends.filter((a) => {
       if (taken.length >= 4) return false;
       // Only single-handed treatments: the case here is one therapist's day.
       if (a.staff_id === absent.id || a.co_staff_ids.length > 0) return false;
