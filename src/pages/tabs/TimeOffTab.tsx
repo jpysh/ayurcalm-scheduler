@@ -10,9 +10,9 @@ import { HolidaysSheet } from "@/components/HolidaysSheet";
 const sortKey = (h: UiTimeOff) => h.startDate || h.date || '';
 
 /** Leave (#285 story 9): one row each, who and when; a tap opens the same sheet that adds one. */
-const TimeOffTab = ({ timeOffs, viewMode, setViewMode, visibleRows, totalRef, nameOf, isFullDay, weeklyLabel, openEdit, onHolidays }: {
+const TimeOffTab = ({ timeOffs, viewMode, setViewMode, visibleRows, totalRef, nameOf, kindOf, isFullDay, weeklyLabel, openEdit, onHolidays }: {
   timeOffs: UiTimeOff[]; viewMode: 'all' | 'upcoming' | 'past'; setViewMode: (v: 'all' | 'upcoming' | 'past') => void;
-  visibleRows: number; totalRef: { current: number }; nameOf: (h: UiTimeOff) => string;
+  visibleRows: number; totalRef: { current: number }; nameOf: (h: UiTimeOff) => string; kindOf: (h: UiTimeOff) => string;
   isFullDay: (h: UiTimeOff) => boolean; weeklyLabel: (w?: UiTimeOff['weekdays']) => string; openEdit: (h: UiTimeOff) => void; onHolidays: () => void;
 }) => {
   const today = new Date(new Date().toDateString());
@@ -36,7 +36,7 @@ const TimeOffTab = ({ timeOffs, viewMode, setViewMode, visibleRows, totalRef, na
       {rows.length === 0 ? <Empty text={viewMode === 'past' ? 'No past leave.' : 'No leave booked. Open the menu to add some.'} /> : (
         <ListGroup>
           {rows.slice(0, visibleRows).map((h) => (
-            <Row key={h.id} title={nameOf(h)} facts={[leaveWhen(h, isFullDay(h)), h.recurrence === 'weekly' ? weeklyLabel(h.weekdays) : '', h.description].filter(Boolean).join(' · ')} onClick={() => openEdit(h)} />
+            <Row key={h.id} title={nameOf(h)} facts={[kindOf(h), leaveWhen(h, isFullDay(h)), h.recurrence === 'weekly' ? weeklyLabel(h.weekdays) : '', h.description].filter(Boolean).join(' · ')} onClick={() => openEdit(h)} />
           ))}
         </ListGroup>
       )}
@@ -107,6 +107,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
   };
 
   const nameOf = (h: UiTimeOff) => h.type === 'Center' ? 'Whole centre' : (h.type === 'Staff' ? staffNameById[h.entity] : h.type === 'Room' ? roomNameById[h.entity] : h.type === 'Therapy' ? therapyNameById[h.entity] : patientNameById[h.entity]) ?? h.entity;
+  // Rows mix people, rooms, therapies and patients; a name alone does not say which (#360).
+  const kindOf = (h: UiTimeOff) => h.type === "Staff" ? (staff.find((s) => String(s.id) === h.entity)?.role === "doctor" ? "Doctor" : "Therapist") : h.type;
   const openEdit = (h: UiTimeOff) => {
     setEditing(h);
     setNewTimeOff({ date: (h.startDate || h.date || todayKey).slice(0, 10), endDate: (h.endDate || h.date || todayKey).slice(0, 10), type: h.type, entity: h.entity, fullDay: isFullDay(h), description: h.description || '', startTime: h.startTime || '', endTime: h.endTime || '', recurrence: h.recurrence, weekdays: h.weekdays });
@@ -140,7 +142,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
 
   const tab = (
     <TimeOffTab timeOffs={timeOffs} viewMode={holidayViewMode} setViewMode={setHolidayViewMode} visibleRows={visibleTimeOffRows} totalRef={timeoffTotalRef}
-      nameOf={nameOf} isFullDay={isFullDay} weeklyLabel={weeklyLabel} openEdit={openEdit} onHolidays={() => setShowHolidays(true)} />
+      nameOf={nameOf} kindOf={kindOf} isFullDay={isFullDay} weeklyLabel={weeklyLabel} openEdit={openEdit} onHolidays={() => setShowHolidays(true)} />
   );
 
   /** Records the leave; the day is planned now (the plan is shown to accept) or left waiting on the pill. */
