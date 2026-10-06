@@ -900,7 +900,7 @@ app.post('/patients/:id/link', requireAdmin, async (req: Request, res: Response)
   res.json({ token });
 });
 
-// Team → This week (#219): a week from start, booked hours against hours in.
+// Team, read by day (#351): a week from start, each person's hours and booking a day.
 app.get('/staff-week', async (req: Request, res: Response) => {
   const start = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.query.start);
   res.json(await staffWeek(start, prisma));
