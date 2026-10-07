@@ -96,11 +96,14 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
   const rowEl = (r: Row, top = r.who, line = `${r.therapy} · ${withText(r)}`) => {
     const p = past(r), n = now(r);
     const flag = flags[r.a.id];
-    const stripe = r.team.length > 1 ? `linear-gradient(${r.team[0].colour} 50%, ${r.team[1].colour} 50%)` : r.team[0]?.colour || "hsl(var(--faint))";
+    // A row to fix swaps the therapist's colour for red: an inset ring was cut by
+    // the stripe and doubled between two flagged rows (#430).
+    const stripe = flag?.blocking ? "hsl(var(--destructive))"
+      : r.team.length > 1 ? `linear-gradient(${r.team[0].colour} 50%, ${r.team[1].colour} 50%)` : r.team[0]?.colour || "hsl(var(--faint))";
     return (
       <button key={`${r.a.id}-${top}`} type="button" onClick={() => onOpen(r.a)} data-now={n || undefined} data-appt={r.a.id}
-        className={`flex w-full gap-2.5 items-stretch min-h-14 py-2 pr-3 border-b border-border last:border-b-0 bg-card text-left ${flag?.blocking ? "ring-2 ring-inset ring-destructive" : ""}`}>
-        <span className={`w-1 rounded-r flex-none ${p ? "opacity-35" : ""}`} style={{ background: stripe }} />
+        className={`flex w-full gap-2.5 items-stretch min-h-14 py-2 pr-3 border-b border-border last:border-b-0 text-left ${flag?.blocking ? "bg-destructive/10" : "bg-card"}`}>
+        <span className={`${flag?.blocking ? "w-1.5" : "w-1"} rounded-r flex-none ${p ? "opacity-35" : ""}`} style={{ background: stripe }} />
         <span className={`w-12 flex-none tabular-nums text-base leading-tight ${p ? "text-muted-foreground font-medium" : "font-semibold"}`}>
           {hm(r.st)}
           {/* The end, always: a countdown in its place read as the treatment's length. */}
@@ -173,7 +176,11 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
       return (
         <section key={g.label}>
           <div className={`${sticky} justify-between text-sm font-bold`}>
-            {g.label}
+            {/* The heading's dot is the key to the stripe on every row. */}
+            <span className="flex items-center gap-2 min-w-0">
+              {view === "therapist" ? <i className="h-3 w-3 flex-none rounded-full" style={{ background: colourOf(g.id!) }} aria-hidden /> : null}
+              <span className="truncate">{g.label}</span>
+            </span>
             <span className="flex items-baseline gap-2 font-medium text-muted-foreground whitespace-nowrap">
               {summary}
               {view === "therapist" && onNotIn && left.length ? (
