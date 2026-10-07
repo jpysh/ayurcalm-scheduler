@@ -6,7 +6,7 @@
  * A rule has a default here; the admin's changes are the only thing stored
  * (`Settings.attention_rules`), so a default can improve without touching a centre.
  */
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { centreClock } from './availability.js';
 import { checkDay, dayName } from './dayCheck.js';
@@ -38,6 +38,7 @@ export const RULES: Rule[] = [
   { id: 'arrival_open', section: 'Patients', kind: 'action', on: true, hours: 24, from: 'of arriving', name: 'Arrival steps still open' },
   { id: 'no_diet', section: 'Patients', kind: 'action', on: true, hours: 24, from: 'of arriving', name: 'No diet plan' },
   { id: 'form_c', section: 'Patients', kind: 'action', on: true, name: 'Form C for a foreign guest, due a day after arriving' },
+  { id: 'follow_up', section: 'Patients', kind: 'action', on: true, name: 'Follow-up due after discharge' },
   { id: 'leaves_tomorrow', section: 'Patients', kind: 'action', on: false, name: 'Leaves tomorrow and the discharge summary is not started' },
   { id: 'vitals', section: 'Team', kind: 'action', on: true, hours: 4, from: 'after the treatment starts', waiting: 'Starts when therapists record readings', name: 'Vitals not recorded' },
   { id: 'on_leave', section: 'Team', kind: 'information', on: true, name: 'Who is on leave today' },
@@ -104,6 +105,12 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
       add(rule('form_c'), s, `Form C ${due < today ? 'overdue since' : 'due by'} ${dayName(due).replace(',', '')}`, 'card');
     }
     if (hoursIn(s) >= (rule('no_diet').hours ?? 24) && !diets.dietFor(s.Patient, true).planName) add(rule('no_diet'), s, 'No diet plan', 'diet');
+  }
+  // The doctor's follow-up day (#487): due from that day, for a month, until marked done.
+  const left = await prisma.patientStay.findMany({ where: { follow_up_done: null, discharge: { not: Prisma.DbNull }, end_date: { lte: day, gte: new Date(day.getTime() - 400 * DAY_MS) } }, include: { Patient: { select: { id: true, name: true } } } });
+  for (const s of left) {
+    const due = (s.discharge as { follow_up_date?: string } | null)?.follow_up_date;
+    if (due && due <= today && due > ymd(new Date(day.getTime() - 30 * DAY_MS))) add(rule('follow_up'), s, `Follow-up due ${dayName(due).replace(',', '')}`, 'card');
   }
   for (const s of upcoming) if (!s.discharge) add(rule('leaves_tomorrow'), s, 'Leaves tomorrow, discharge summary not started', 'summary');
 
