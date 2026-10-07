@@ -88,7 +88,7 @@ const useServerHealth = (base: string) => {
   return { serverOk, isOnline };
 };
 
-type ApiTherapy = { id: string; name: string; required_amenities: string[]; duration_minutes: number; requires_gender_match: boolean; staff_required?: number; once_per_course?: boolean; checklist?: { text: string; required: boolean }[]; vitals?: string[] };
+type ApiTherapy = { id: string; name: string; required_amenities: string[]; duration_minutes: number; requires_gender_match: boolean; staff_required?: number; once_per_course?: boolean; is_consultation?: boolean; checklist?: { text: string; required: boolean }[]; vitals?: string[] };
 type ApiStaff = { id: string; name: string; gender: "male" | "female" | "other"; specializations: string[]; phone?: string; weekly_schedule?: UiStaff["hours"] };
 type ApiRoom = { id: string; name: string; amenities: string[]; is_active: boolean };
 type ApiTimeOffSimple = { id?: string; entity_type: 'center'|'staff'|'room'|'therapy'|'patient'; entity_id?: string | null };
@@ -173,7 +173,7 @@ const AdminDashboard = () => {
     const load = async () => {
       try {
         const t: ApiTherapy[] = await fetchJsonWithTimeout(`${API_BASE}/therapies`);
-        setTherapies(t.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match, staffRequired: x.staff_required ?? 1, once: !!x.once_per_course, checklist: x.checklist || [], vitals: x.vitals || ["bp"] })));
+        setTherapies(t.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match, staffRequired: x.staff_required ?? 1, once: !!x.once_per_course, consultation: !!x.is_consultation, checklist: x.checklist || [], vitals: x.vitals || ["bp"] })));
         const s: (ApiStaff & { is_active?: boolean; status?: string; role?: 'therapist' | 'doctor' })[] = await fetchJsonWithTimeout(`${API_BASE}/staff`);
         setStaff(s.map((x) => ({ id: x.id, name: x.name, role: x.role, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", specializations: x.specializations.map((id) => t.find((k) => k.id === id)?.name).filter((n): n is string => !!n), phone: x.phone ?? "", schedule: "", hours: x.weekly_schedule, status: (typeof x.is_active === 'boolean' ? (x.is_active ? 'Active' : 'Inactive') : (x.status === 'Active' ? 'Active' : 'Inactive')) })));
         const r: ApiRoom[] = await fetchJsonWithTimeout(`${API_BASE}/rooms`);
@@ -346,7 +346,7 @@ const AdminDashboard = () => {
           return next;
         });
         const t2: ApiTherapy[] = await fetchJsonWithTimeout(`${API_BASE}/therapies`);
-        setTherapies(t2.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match, staffRequired: x.staff_required ?? 1, once: !!x.once_per_course, checklist: x.checklist || [], vitals: x.vitals || ["bp"] })));
+        setTherapies(t2.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match, staffRequired: x.staff_required ?? 1, once: !!x.once_per_course, consultation: !!x.is_consultation, checklist: x.checklist || [], vitals: x.vitals || ["bp"] })));
         const s2: (ApiStaff & { is_active?: boolean; status?: string })[] = await fetchJsonWithTimeout(`${API_BASE}/staff`);
         setStaff(s2.map((x) => ({ id: x.id, name: x.name, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", specializations: x.specializations.map((tid) => t2.find((k) => k.id === tid)?.name).filter((n): n is string => !!n), phone: x.phone ?? "", schedule: "", hours: x.weekly_schedule, status: (typeof x.is_active === 'boolean' ? (x.is_active ? 'Active' : 'Inactive') : (x.status === 'Active' ? 'Active' : 'Inactive')) })));
       } else if (kind === 'patient') {
@@ -513,7 +513,7 @@ const AdminDashboard = () => {
   const residentOpener = useRef<((id: string) => void) | null>(null);
   // A booking short of a therapist opens the new-therapist form over the sheet, filled in with what it lacks (#330).
   const staffAdder = useRef<((a: { gender?: string; therapy_id?: string }) => void) | null>(null);
-  staffAdder.current = (a) => staffScreen.openAdd({ gender: a.gender === 'male' ? 'Male' : a.gender === 'female' ? 'Female' : undefined, gives: therapies.filter((t) => t.id === a.therapy_id).map((t) => t.name) });
+  staffAdder.current = (a) => staffScreen.openAdd({ gender: a.gender === 'male' ? 'Male' : a.gender === 'female' ? 'Female' : undefined, gives: therapies.filter((t) => t.id === a.therapy_id).map((t) => t.name), role: therapies.find((t) => t.id === a.therapy_id)?.consultation ? 'doctor' : undefined });
   const patientAdder = useRef<((name: string, arriving: string, done: (p: { id: string; name: string }) => void) => void) | null>(null);
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const patientsScreen = usePatientsScreen({ needs: attention.items.filter((i) => i.section === 'Patients' && i.kind === 'action' && i.patient_id), patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ,

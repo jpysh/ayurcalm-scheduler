@@ -155,6 +155,19 @@ async function main() {
     await call('PUT', `/therapies/${vamana.id}`, { requires_gender_match: false });
     assert.ok((await options(meera.id, vamana.id)).times.length > 0, 'allowing any gender did not open a time');
 
+    // A consultation with no doctor names a doctor, and its fix adds one (#460).
+    const doctors = (await prisma.staff.findMany({ where: { role: 'doctor', is_active: true }, select: { id: true } })).map((d) => d.id);
+    const consult = await prisma.therapy.findFirst({ where: { is_consultation: true } });
+    assert.ok(consult, 'the demo has no consultation therapy');
+    await prisma.staff.updateMany({ where: { id: { in: doctors } }, data: { is_active: false } });
+    try {
+      const noDoctor = await options(meera.id, consult.id);
+      assert.match(noDoctor.why, /needs a doctor/);
+      assert.equal(noDoctor.actions[0].label, 'Add a doctor');
+    } finally {
+      await prisma.staff.updateMany({ where: { id: { in: doctors } }, data: { is_active: true } });
+    }
+
     console.log('Booking from +: a repeated therapy or a fifth treatment is asked about and books on Book anyway; the day check notes it; each dead end (not staying, no free time, hours over, gender short) carries an action.');
   } finally {
     await tidy(prisma).catch(() => {});

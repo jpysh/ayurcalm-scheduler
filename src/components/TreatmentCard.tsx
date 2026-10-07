@@ -298,6 +298,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   const [otherDays, setOtherDays] = useState(false);
   const [opts, setOpts] = useState<Options | null>(null);
   const [time, setTime] = useState("");
+  const giver = facts?.find((t) => t.id === therapyId)?.is_consultation ? "Doctor" : "Therapist";
   const [staffId, setStaffId] = useState("");
   const [roomId, setRoomId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -492,8 +493,8 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
             {warnings.length ? <div className="mb-2 mt-2"><Callout tone="notice" title={warnings.map((w) => w.message).join(" ")}>Booking it is still possible.</Callout></div> : null}
             <ChangeLine label="Time" value={<>{time}{time === opts.times[0].start_time ? <span className="ml-2"><Tag tone="good">best</Tag></span> : null}</>}
               select={<LineSelect label="Time" value={time} onChange={(t) => load(t)} free={opts.times.map((t, i) => ({ id: t.start_time, name: t.start_time, tag: i === 0 ? "best" : undefined }))} />} />
-            <ChangeLine label="Therapist" value={nameOf(opts.staff, staffId) || slot?.staff_name || "None free"}
-              select={<LineSelect label="Therapist" value={staffId} onChange={setStaffId} free={free(opts.staff)} busy={busyOnes(opts.staff)} />} />
+            <ChangeLine label={giver} value={nameOf(opts.staff, staffId) || slot?.staff_name || "None free"}
+              select={<LineSelect label={giver} value={staffId} onChange={setStaffId} free={free(opts.staff)} busy={busyOnes(opts.staff)} />} />
             <ChangeLine label="Room" value={nameOf(opts.rooms, roomId) || slot?.room_name || "None free"}
               select={<LineSelect label="Room" value={roomId} onChange={setRoomId} free={free(opts.rooms)} busy={busyOnes(opts.rooms)} />} />
             <p className="mt-2 text-sm text-muted-foreground">Chosen for you: free at {time}. Change any line.</p>
