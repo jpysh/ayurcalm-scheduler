@@ -73,7 +73,7 @@ async function main() {
     // The therapy list carries facts, and the last therapy had is the repeat.
     await prisma.appointment.create({ data: { patient_id: meera.id, therapy_id: abhyanga.id, staff_id: asha.id, room_id: roomA.id, scheduled_date: new Date('2030-04-15T00:00:00.000Z'), start_time: '10:00', duration_minutes: 60, session_number: 1, total_sessions: 1, status: 'completed', assignment_type: 'manual' } });
     const facts = (await call('GET', `/appointments/therapies?date=${DAY}&patient_id=${meera.id}`)).therapies as { id: string; fact?: string; repeat: boolean; taken: boolean }[];
-    assert.equal(facts.find((t) => t.id === abhyanga.id)?.fact, 'had 15 Apr');
+    assert.equal(facts.find((t) => t.id === abhyanga.id)?.fact, 'had Mon 15 Apr');
     assert.ok(facts.find((t) => t.id === abhyanga.id)?.repeat, 'the last therapy had is not marked as the repeat');
     assert.equal(facts.filter((t) => t.repeat).length, 1);
 

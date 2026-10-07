@@ -341,7 +341,6 @@ export async function therapyFacts(dayISO: string, patientId: string, prisma: Pr
     prisma.therapy.findMany({ orderBy: { name: 'asc' } }),
     prisma.appointment.findMany({ where: { patient_id: patientId, status: { notIn: ['cancelled', 'no_show'] } }, orderBy: [{ scheduled_date: 'desc' }, { start_time: 'desc' }], select: { therapy_id: true, scheduled_date: true, start_time: true } }),
   ]);
-  const short = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   const repeat = mine.find((a) => a.scheduled_date < day && !therapies.find((t) => t.id === a.therapy_id)?.is_consultation)?.therapy_id;
   return therapies.map((t) => {
     const same = mine.find((a) => a.therapy_id === t.id && a.scheduled_date.getTime() === day.getTime());
@@ -349,7 +348,7 @@ export async function therapyFacts(dayISO: string, patientId: string, prisma: Pr
     return {
       id: t.id, name: t.name, duration_minutes: t.duration_minutes, is_consultation: t.is_consultation,
       taken: !!same, repeat: t.id === repeat,
-      fact: same ? `already at ${same.start_time}` : had ? `had ${short(had.scheduled_date)}` : undefined,
+      fact: same ? `already at ${same.start_time}` : had ? `had ${dayLabel(had.scheduled_date)}` : undefined,
     };
   });
 }
