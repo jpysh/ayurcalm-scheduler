@@ -191,3 +191,4 @@ A screen is done when every line is a yes. The audit for a group quotes the line
 16. Anchors (Menu first, Search second, + last) sit where they sit everywhere else.
 17. The maintainer has seen a before/after and walked it on their phone.
 18. The job's wow bar score (STORIES.md) is 13 or more of 16, with no zero on time, facts or the sheet.
+- **The stripe is the therapist; red is a row to fix** (7 Oct, #430; decided by Claude, to confirm): the stripe on a day row is its therapist's colour, keyed by a dot of the same colour beside each name in the By-therapist view. A row that must be fixed swaps it for a red stripe on a pale red fill, with the red flag line; no outline, so it is whole on every side and two in a row read as two.
