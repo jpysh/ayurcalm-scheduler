@@ -653,6 +653,7 @@ const AdminDashboard = () => {
           toast(<div className="w-full">
             <div>Patient sheet printed{open ? ` · ${open} still to fix` : ''}</div>
             <div className="mt-1 flex flex-wrap gap-x-4">
+              {open ? <button type="button" className={more} onClick={() => setShowAttention(true)}>Fix {open} first</button> : null}
               <button type="button" className={more} onClick={() => scheduleScreen.printSheet('therapist')}>Therapist sheet</button>
               <button type="button" className={more} onClick={() => scheduleScreen.printSheet('doctor')}>Doctor sheet</button>
               <button type="button" className={more} onClick={() => scheduleScreen.printSheet('kitchen')}>Kitchen sheet</button>

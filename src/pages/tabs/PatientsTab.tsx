@@ -385,7 +385,15 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     }
     const created = await res.json();
     setPatients((prev) => [...prev, toRow(created)]);
-    toast.success(`${created.name} added${visit ? `, consultation ${dayText(visit.date)} ${visit.start_time}` : ''}`);
+    // At the top, so it does not cover the card's Diet and Package rows; Undo takes the patient away again.
+    toast.success(`${created.name} added${visit ? `, consultation ${dayText(visit.date)} ${visit.start_time}` : ''}`, {
+      position: 'top-center',
+      action: { label: 'Undo', onClick: async () => {
+        const r = await fetch(`${API_BASE}/patients/${created.id}`, { method: 'DELETE' });
+        if (!r.ok) { toast.error('Could not undo. Open the patient to remove them.'); return; }
+        setPatients((prev) => prev.filter((x) => x.id !== created.id)); setCardId(null);
+      } },
+    });
     setShowAddPatient(false);
     setNewPatient(blankNew());
     if (inline) { inline({ id: created.id, name: created.name }); setInline(null); return; }

@@ -205,10 +205,10 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
           onPick={(v) => { const [type, ...id] = v.split(':'); setNewTimeOff({ ...newTimeOff, type: type as UiTimeOff['type'], entity: id.join(':') }); }}
           groups={[
             { title: 'Therapists and doctors', options: staff.map((x) => ({ id: `Staff:${x.id}`, name: x.name })) },
-            { title: 'Rooms', options: roomsList.map((r) => ({ id: `Room:${r.id}`, name: r.name })) },
             { title: 'The whole centre', options: [{ id: 'Center:All', name: 'Closed for a day' }] },
-            { title: 'Therapies', options: therapies.map((t) => ({ id: `Therapy:${String(t.id ?? t.name)}`, name: t.name })) },
-            { title: 'Patients', options: patients.map((x) => ({ id: `Patient:${x.id}`, name: x.name })) },
+            { title: 'Rooms', folded: true, options: roomsList.map((r) => ({ id: `Room:${r.id}`, name: r.name })) },
+            { title: 'Therapies', folded: true, options: therapies.map((t) => ({ id: `Therapy:${String(t.id ?? t.name)}`, name: t.name })) },
+            { title: 'Patients', folded: true, options: patients.map((x) => ({ id: `Patient:${x.id}`, name: x.name })) },
           ]} />
         {sheet === 'new' && newTimeOff.type !== 'Center' && !newTimeOff.entity ? <SheetNote>Choose who is away to save.</SheetNote> : null}
         <div className="grid grid-cols-2 gap-3">

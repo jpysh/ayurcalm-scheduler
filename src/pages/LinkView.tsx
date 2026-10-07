@@ -8,7 +8,7 @@ import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { useMadeWith, useReception } from "@/lib/centreName";
-import { Area, BottomSheet, Btn, Empty, FullPage, ItemRow, LinkBtn, ListGroup, Loading, QuietLink, Row, Seg, Text, Tick, dayText } from "@/components/kit";
+import { Area, BottomSheet, Btn, Empty, FullPage, ItemRow, LinkBtn, ListGroup, Loading, QuietLink, Row, Seg, Text, TextRow, Tick, dayText } from "@/components/kit";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 
 type Check = { text: string; required: boolean; done: boolean };
@@ -18,7 +18,7 @@ type Item = {
   vitals?: { field: string; value: string }[]; room_ready?: boolean; note?: string | null;
   feedback?: "up" | "down" | null; feedback_note?: string | null;
 };
-type Day = { who: { kind: "therapist" | "doctor" | "patient"; name: string }; centre: string; date: string; today: string; items: Item[] };
+type Day = { who: { kind: "therapist" | "doctor" | "patient"; name: string }; centre: string; date: string; today: string; off?: string | null; meals?: { meal: string; text: string }[]; items: Item[] };
 
 const VITAL: Record<string, string> = { bp: "BP", pulse: "Pulse", weight: "Weight (kg)", temp: "Temperature", spo2: "SpO₂", sugar: "Blood sugar" };
 const ISSUES: [string, string][] = [["room", "Room not usable"], ["co_therapist", "Co-therapist not here"], ["patient_absent", "Patient not here"], ["permission", "Need permission"], ["note", "A note for the admin"], ["sos", "SOS: need help now"]];
@@ -87,7 +87,7 @@ export default function LinkView() {
       </div>
 
       <div className="mt-3">
-        {day.items.length === 0 ? <ListGroup><Empty text="Nothing booked." /></ListGroup> : <ListGroup>{day.items.map((it) => {
+        {day.items.length === 0 ? <ListGroup><Empty text={day.off ? `Day off${/day off/i.test(day.off) ? "" : ` · ${day.off}`}.` : "Nothing booked."} /></ListGroup> : <ListGroup>{day.items.map((it) => {
           const end = hm(toMin(it.start_time) + it.duration_minutes);
           const over = day.date < day.today || (day.date === day.today && end <= nowHM());
           return (
@@ -106,7 +106,7 @@ export default function LinkView() {
                   {it.vitals?.length ? (
                     <div className="grid grid-cols-2 gap-x-2">
                       {it.vitals.map((v) => (
-                        <Text key={v.field} label={VITAL[v.field] || v.field} inputMode={v.field === "bp" ? "text" : "decimal"} placeholder={v.field === "bp" ? "120/80" : ""} defaultValue={v.value}
+                        <Text key={v.field} label={VITAL[v.field] || v.field} inputMode={v.field === "bp" ? "text" : "decimal"} defaultValue={v.value}
                           onBlur={(e) => e.target.value !== v.value && save(it, { vitals: { [v.field]: e.target.value } }, { vitals: it.vitals!.map((x) => (x.field === v.field ? { ...x, value: e.target.value } : x)) })} />
                       ))}
                     </div>
@@ -128,6 +128,7 @@ export default function LinkView() {
           );
         })}</ListGroup>}
       </div>
+      {day.meals?.length ? <ListGroup title="Meals">{day.meals.map((m) => <TextRow key={m.meal} label={m.meal}>{m.text}</TextRow>)}</ListGroup> : null}
 
       {isDoctor && leaving.length ? (
         <section className="mt-2" aria-label="Discharge summaries">
