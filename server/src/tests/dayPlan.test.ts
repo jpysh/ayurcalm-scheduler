@@ -188,6 +188,8 @@ async function main() {
     // At 11:10 the 10:00 is over: it happened as it happened, and is not raised.
     const afterIt = await checkDay(day, prisma, { now: { date: '2030-01-16', time: '11:10' } });
     assert.ok(!afterIt.problems.some((p) => p.appointment_id === second.id), 'a treatment that has ended was raised');
+    // Not raised, but the row still says so, as the printed sheet does (#394).
+    assert.match(afterIt.history[second.id] || '', /^Plan was not in$/, `a finished treatment should say its therapist was not in, got "${afterIt.history[second.id]}"`);
     // The next day, nothing on this one has started: it is planned whole.
     const dayBefore = await checkDay(day, prisma, { now: { date: '2030-01-15', time: '17:00' } });
     assert.ok(dayBefore.plan.length >= 3, 'a future day should be planned whole');

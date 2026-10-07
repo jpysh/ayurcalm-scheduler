@@ -410,11 +410,11 @@ const AdminDashboard = () => {
   // What is wrong with the day comes from the server, which is the same code
   // that refuses a booking. Two screens used to work this out in the browser and
   // both disagreed with it; #88 deleted them.
-  const [dayCheck, setDayCheck] = useState<{ problems: DayProblem[]; headline: string | null }>({ problems: [], headline: null });
+  const [dayCheck, setDayCheck] = useState<{ problems: DayProblem[]; headline: string | null; history?: Record<string, string> }>({ problems: [], headline: null });
   const loadDayCheck = useCallback(() => {
     fetch(`${API_BASE}/day-check?date=${exceptionDayKey}`)
       .then((r) => (r.ok ? r.json() : { problems: [], headline: null }))
-      .then((d) => setDayCheck({ problems: Array.isArray(d.problems) ? d.problems : [], headline: d.headline ?? null }))
+      .then((d) => setDayCheck({ problems: Array.isArray(d.problems) ? d.problems : [], headline: d.headline ?? null, history: d.history || {} }))
       .catch(() => setDayCheck({ problems: [], headline: null }));
   }, [exceptionDayKey]);
   useEffect(() => { loadDayCheck(); }, [loadDayCheck, appointmentsByDate]);
@@ -479,7 +479,7 @@ const AdminDashboard = () => {
   useEffect(() => { const t = setInterval(() => setMinute((m) => m + 1), 60000); return () => clearInterval(t); }, []);
 
   // Each screen keeps its own state and dialogs in its own file (#147).
-  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), movedFrom, problems: dayCheck.problems, showDay: (iso: string) => { setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id), staffCount: staff.length, addTherapist: (a: { gender?: string; therapy_id?: string }) => staffAdder.current?.(a), addPatient: (name: string, arriving: string, done: (p: { id: string; name: string }) => void) => patientAdder.current?.(name, arriving, done) });
+  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), movedFrom, problems: dayCheck.problems, history: dayCheck.history, showDay: (iso: string) => { setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id), staffCount: staff.length, addTherapist: (a: { gender?: string; therapy_id?: string }) => staffAdder.current?.(a), addPatient: (name: string, arriving: string, done: (p: { id: string; name: string }) => void) => patientAdder.current?.(name, arriving, done) });
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, requestDelete, centre: { opening: centreHours.opening_time, closing: centreHours.closing_time } });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, requestDelete });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q: listQuery });

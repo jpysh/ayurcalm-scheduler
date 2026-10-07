@@ -53,7 +53,7 @@ type Props = {
   /** The centre's rooms, for the day's heading. */
   roomCount?: number;
   /** The day check's problems on a treatment, shown on its row. */
-  flags?: Record<string, { text: string; blocking: boolean }>;
+  flags?: Record<string, { text: string; blocking: boolean; info?: boolean }>;
 };
 
 export default function DayList({ appointments, isToday, nowMinutes: NOW, view, setView, query, patients, roomsList, staff, therapyNameById, onOpen, onNotIn, headerAction, movedFrom = {}, roomCount, flags = {} }: Props) {
@@ -114,7 +114,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
             <span className="ml-auto pt-0.5 text-sm text-muted-foreground whitespace-nowrap inline-flex items-center gap-1"><DoorClosed className="h-3 w-3" aria-hidden />{r.room}</span>
           </span>
           <span className="block text-sm text-muted-foreground">{line}</span>
-          {flag ? <span className={`block text-sm ${flag.blocking ? "font-semibold text-destructive" : "text-notice"}`}>{flag.text}</span> : null}
+          {flag ? <span className={`block text-sm ${flag.blocking ? "font-semibold text-destructive" : flag.info ? "text-muted-foreground" : "text-notice"}`}>{flag.text}</span> : null}
           {movedFrom[r.a.id] ? (
             <span className="flex items-center gap-1 text-sm text-notice"><i className="h-2 w-2 rounded-full bg-warning" />Was {movedFrom[r.a.id].split(" ")[0]}'s</span>
           ) : null}

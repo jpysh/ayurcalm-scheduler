@@ -96,6 +96,8 @@ export type DayCheck = {
   plan: Fix[];
   /** The line the dashboard header shows, already written. */
   headline: string | null;
+  /** Finished treatments whose therapist or room was not there: id → "Ravi was not in". Information, never counted (#394). */
+  history: Record<string, string>;
 };
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
@@ -190,12 +192,19 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
 
   type Raw = DayProblem & { cost: number; group_label: string };
   const raw: Raw[] = [];
+  const history: Record<string, string> = {};
 
   for (const a of appointments) {
     // Over: it happened as it happened. Under way: only a missing therapist or
     // room still matters, since someone is waiting on the couch now (#367).
     const underWay = toMinutes(a.start_time) < cutoff;
-    if (underWay && toMinutes(a.start_time) + a.duration_minutes <= cutoff) continue;
+    if (underWay && toMinutes(a.start_time) + a.duration_minutes <= cutoff) {
+      // The printed sheet still says so, so the row must too (#394).
+      const was = findConflict(candidateOf(a), ctx);
+      if (was?.reason === 'STAFF_OFF') history[a.id] = `${nameOfStaff((was.details?.staff_id as string | undefined) ?? a.staff_id).split(' ')[0]} was not in`;
+      if (was?.reason === 'ROOM_OFF') history[a.id] = 'Room was out of use';
+      continue;
+    }
     const common = {
       who: `${nameOfPatient(a.patient_id)} — ${nameOfTherapy(a.therapy_id)}`,
       start_time: a.start_time,
@@ -439,7 +448,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
   }
 
   const problems: DayProblem[] = raw.map(({ cost: _cost, group_label: _label, ...p }) => p);
-  return { date: ymd(day), problems, groups, plan, headline: headlineFor(problems) };
+  return { date: ymd(day), problems, groups, plan, headline: headlineFor(problems), history };
 }
 
 /**
