@@ -44,28 +44,15 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #475: after closing, with only tomorrow to fix, the inbox stays open. Run with UAT_TZ set to a zone where it is evening.
+// #479: the Log says when a leave is, and what a settings change changed.
 await api('POST', '/settings/clear-demo-data');
-const st = await api('GET', '/settings');
-await api('PUT', '/settings', { ...Object.fromEntries(Object.entries(st).filter(([, v]) => v !== null)), timezone: process.env.UAT_TZ, opening_time: '09:00', closing_time: '18:00' });
-const th = await api('POST', '/therapies', { name: 'Abhyanga', duration_minutes: 60, required_amenities: ['massage_table'], requires_gender_match: false });
-const room = await api('POST', '/rooms', { name: 'Room 1', amenities: ['massage_table'] });
 const asha = await api('POST', '/staff', { name: 'Asha Menon', gender: 'female', role: 'therapist' });
-const pt = await api('POST', '/patients', { name: 'Priya Sharma', gender: 'female' });
-await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(0), end_date: plus(6) });
-await api('POST', '/appointments/one', { patient_id: pt.id, therapy_id: th.id, staff_id: asha.id, room_id: room.id, date: plus(1), start_time: '10:00' });
-await api('POST', '/timeoff', { entity_type: 'staff', entity_id: asha.id, start_date: plus(1), end_date: plus(1), description: 'UAT', plan: false });
-await step("Evening: the Menu counts tomorrow's treatment with no therapist", '/admin/schedule', async () => {
-  await p.waitForTimeout(1500);
-  await menu();
-  const m = await text(dlg());
-  return { ok: /1 need you/.test(m), note: m.split('\n').slice(0, 3).join(' · ') };
-});
-await step('The inbox opens on the Tomorrow section and stays open', '/admin/schedule', async () => {
-  await p.waitForTimeout(1500); await menu(); await go(dlg().getByRole('button', { name: /need you/ }));
-  await p.waitForTimeout(3000);
-  const t = await text(dlg()).catch(() => '');
-  return { ok: /to fix/.test(t), note: t.split('\n').filter((x) => /omorrow|to fix|Nothing/.test(x)).join(' · ') || 'the inbox closed' };
+await api('POST', '/timeoff', { entity_type: 'staff', entity_id: asha.id, start_date: plus(1), end_date: plus(2), description: 'UAT', plan: false });
+const st = await api('GET', '/settings');
+await api('PUT', '/settings', { ...Object.fromEntries(Object.entries(st).filter(([, v]) => v !== null)), max_treatments_per_day: 5 });
+await step('The Log names the leave days and the setting changed', '/admin/log', async () => {
+  const t = await text(p.locator('body'));
+  return { ok: /Leave for Asha Menon added, \w{3} \d+ \w{3} to/.test(t) && /Settings changed: max treatments per day/.test(t), note: t.split('\n').filter((x) => /Leave for|Settings/.test(x)).join(' · ') };
 });
 await b.close();
 
