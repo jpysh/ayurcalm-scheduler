@@ -443,10 +443,10 @@ export const LineDate = ({ label, value, onChange, min }: { label: string; value
 );
 
 /** The <select> laid over a ChangeLine: invisible, whole-row, so the tap lands on it. Free choices first; busy ones stay in the list, greyed. */
-export const LineSelect = ({ label, value, onChange, free, busy = [] }: { label: string; value: string; onChange: (v: string) => void; free: { id: string; name: string; tag?: string }[]; busy?: { id: string; name: string; why?: string }[] }) => (
+export const LineSelect = ({ label, value, onChange, free, busy = [], busyLabel = "Busy then" }: { label: string; value: string; onChange: (v: string) => void; free: { id: string; name: string; tag?: string }[]; busy?: { id: string; name: string; why?: string }[]; busyLabel?: string }) => (
   <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
     {free.map((o) => <option key={o.id} value={o.id}>{o.name}{o.tag ? ` · ${o.tag}` : ""}</option>)}
-    {busy.length ? <optgroup label="Busy then">{busy.map((o) => <option key={o.id} value={o.id} disabled>{o.name}{o.why ? ` · ${o.why}` : ""}</option>)}</optgroup> : null}
+    {busy.length ? <optgroup label={busyLabel}>{busy.map((o) => <option key={o.id} value={o.id} disabled>{o.name}{o.why ? ` · ${o.why}` : ""}</option>)}</optgroup> : null}
   </select>
 );
 

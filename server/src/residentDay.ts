@@ -63,6 +63,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
     stay.accommodation_id ? prisma.accommodationType.findUnique({ where: { id: stay.accommodation_id } }) : null,
     dischargeOf(stay.id, prisma),
   ]) : [null, null, null];
+  const room = stay?.guest_room_id ? await prisma.guestRoom.findUnique({ where: { id: stay.guest_room_id }, select: { id: true, name: true } }) : null;
   // A past guest (#437): when they left and on what package, so New stay starts from it.
   // One already coming is not a past guest.
   const coming = stay ? 1 : await prisma.patientStay.count({ where: { patient_id: patientId, start_date: { gt: day } } });
@@ -79,7 +80,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
       days: Math.round((stay.end_date.getTime() - stay.start_date.getTime()) / DAY_MS) + 1,
       vitals: stay.vitals, concerns: stay.concerns, tests: stay.tests, on_site: stay.on_site,
       package: pack && { id: pack.id, name: pack.name, days: pack.days, price: pack.price },
-      accommodation: house && { id: house.id, name: house.name, price_per_day: house.price_per_day, room_number: stay.room_number },
+      accommodation: house && { id: house.id, name: house.name, price_per_day: house.price_per_day, room },
       discharge: discharge?.ready ?? null,
     },
     treatments: appts.map(({ Therapy, Room, ...a }) => ({

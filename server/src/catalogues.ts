@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { prisma } from './server.js';
 import { requireAdmin } from './settings.js';
-import { expandRoomNames } from './guestRooms.js';
+import { expandRoomNames, guestRoomsFor } from './guestRooms.js';
 
 /**
  * The centre's packages and accommodation types (#285 stories 11 and 12): reference
@@ -79,6 +79,11 @@ guestRoomsRouter.get('/', async (_req: Request, res: Response) => {
   // Natural order, so T2 comes before T10.
   rows.sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true }));
   res.json(rows.map(({ _count, ...r }) => ({ ...r, patients: _count.Stays })));
+});
+// Who is in each room for some nights, and which are free for all of them: the pickers and "Is a room free?".
+guestRoomsRouter.get('/free', async (req: Request, res: Response) => {
+  const q = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), stay: z.string().uuid().optional() }).parse(req.query);
+  res.json(await guestRoomsFor(prisma, new Date(`${q.from}T00:00:00Z`), new Date(`${q.to}T00:00:00Z`), q.stay));
 });
 guestRoomsRouter.post('/', requireAdmin, async (req: Request, res: Response) => {
   const body = roomBody.parse(req.body);

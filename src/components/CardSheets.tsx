@@ -24,7 +24,7 @@ const json = { "Content-Type": "application/json" };
 export type CardStay = {
   id: string; start_date: string; end_date: string; day: number; days: number; on_site?: boolean;
   package: { id: string; name: string; days: number; price: number } | null;
-  accommodation: { id: string; name: string; price_per_day: number; room_number: string | null } | null;
+  accommodation: { id: string; name: string; price_per_day: number; room: { id: string; name: string } | null } | null;
   discharge: { total: number; done: number; missing: { key: string; label: string; where: "details" | "summary" }[] } | null;
 };
 type Who = { id: string; name: string };
@@ -247,39 +247,63 @@ export function PackageSheet({ patient, stay, onClose, onSaved, editList, matchS
   );
 }
 
+/** A guest room for some nights (#456), as `/guest-rooms/free` gives it. */
+export type GuestRoomNight = { id: string; name: string; beds: number; accommodation_id: string; type: string; free: boolean; full_on: { date: string; names: string[] } | null };
+/** Taken rooms say by whom and from when, so a clash is never picked by accident. */
+export const takenBy = (r: GuestRoomNight) => r.full_on ? `${r.full_on.names.join(" & ")} · ${dayText(r.full_on.date)}` : "";
+
 export function AccommodationSheet({ patient, stay, onClose, onSaved, editList }: { patient: Who | null; stay: CardStay | null; onClose: () => void; onSaved: () => void; editList: () => void }) {
   const [list, setList] = useState<House[] | null>(null);
+  const [rooms, setRooms] = useState<GuestRoomNight[]>([]);
   const [pick, setPick] = useState("");
   const [room, setRoom] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!patient || !stay) return;
-    setList(null); setPick(stay.accommodation?.id ?? ""); setRoom(stay.accommodation?.room_number ?? "");
-    fetchJsonWithTimeout<House[]>(`${API_BASE}/accommodations`).then((r) => setList(Array.isArray(r) ? r : []));
+    setList(null); setPick(stay.accommodation?.id ?? ""); setRoom(stay.accommodation?.room?.id ?? "");
+    Promise.all([
+      fetchJsonWithTimeout<House[]>(`${API_BASE}/accommodations`),
+      fetchJsonWithTimeout<GuestRoomNight[]>(`${API_BASE}/guest-rooms/free?from=${stay.start_date}&to=${stay.end_date}&stay=${stay.id}`),
+    ]).then(([h, r]) => { setRooms(Array.isArray(r) ? r : []); setList(Array.isArray(h) ? h : []); });
   }, [patient?.id, stay?.id, stay?.accommodation?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!patient || !stay) return null;
   const nights = between(stay.start_date, stay.end_date);
   const chosen = list?.find((h) => h.id === pick);
+  const ofType = rooms.filter((r) => r.accommodation_id === pick);
+  const freeOf = (id: string) => rooms.filter((r) => r.free && r.accommodation_id === id);
+  // Choosing a type chooses its first room free for every night; the admin can change it.
+  const choose = (id: string) => { setPick(id); setRoom(freeOf(id)[0]?.id ?? ""); };
+  const chosenRoom = rooms.find((r) => r.id === room);
+  const elsewhere = rooms.filter((r) => r.free && r.accommodation_id !== pick);
   const save = async () => {
     setBusy(true);
-    const before = { accommodation_id: stay.accommodation?.id ?? null, room_number: stay.accommodation?.room_number ?? null };
-    const res = await saveStay(patient.id, stay.id, chosen ? { accommodation_id: chosen.id, room_number: room.trim() || null } : { accommodation_id: null, room_number: null });
+    const before = { accommodation_id: stay.accommodation?.id ?? null, guest_room_id: stay.accommodation?.room?.id ?? null };
+    const res = await saveStay(patient.id, stay.id, chosen ? { accommodation_id: chosen.id, guest_room_id: room || null } : { accommodation_id: null, guest_room_id: null });
     setBusy(false);
-    if (!res.ok) { toast.error("The accommodation was not saved. Try again."); return; }
-    toastUndo(chosen ? `${first(patient.name)}: ${chosen.name}` : `${first(patient.name)}: no accommodation`, async () => { await saveStay(patient.id, stay.id, before); onSaved(); });
+    if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The accommodation was not saved. Try again."); return; }
+    toastUndo(chosen ? `${first(patient.name)}: ${chosen.name}${chosenRoom ? ` · ${chosenRoom.name}` : ""}` : `${first(patient.name)}: no accommodation`, async () => { await saveStay(patient.id, stay.id, before); onSaved(); });
     onSaved();
     onClose();
   };
   return (
     <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} title={`Accommodation for ${first(patient.name)}`} note={`${plural(nights, "night")}, ${dayText(stay.start_date)} to ${dayText(stay.end_date)}.`}
-      foot={<Foot label={chosen ? `Use ${chosen.name}` : pick === "none" ? "No accommodation" : "Choose a type"} ok={!!pick} busy={busy} save={save} />}>
+      foot={<Foot label={chosen ? `Use ${chosen.name}${chosenRoom ? ` · ${chosenRoom.name}` : ""}` : pick === "none" ? "No accommodation" : "Choose a type"} ok={!!pick} busy={busy} save={save} />}>
       {list === null ? <Loading rows={3} /> : (<>
         {chosen ? <Consequence>{`${plural(nights, "night")} × ${rupees(chosen.price_per_day)} = ${rupees(chosen.price_per_day * nights)}. For reference, not an invoice.`}</Consequence> : null}
+        {chosen && ofType.length ? (
+          <div className="mt-3 border-t border-border">
+            <ChangeLine label="Guest room" value={chosenRoom ? chosenRoom.name : "Not chosen"} faint={!chosenRoom}
+              select={<LineSelect label="Guest room" busyLabel="Taken" value={room} onChange={setRoom}
+                free={[...freeOf(pick).map((r) => ({ id: r.id, name: r.name, tag: r.beds > 1 ? plural(r.beds, "bed") : undefined })), { id: "", name: "Not chosen yet" }]}
+                busy={ofType.filter((r) => !r.free).map((r) => ({ id: r.id, name: r.name, why: takenBy(r) }))} />} />
+            {!freeOf(pick).length ? <p className={`mt-1 ${noteText}`}>{`No ${chosen.name} guest room is free for all ${plural(nights, "night")}.${elsewhere.length ? ` Free: ${elsewhere.slice(0, 4).map((r) => `${r.name} (${r.type})`).join(", ")}.` : ""}`}</p> : null}
+          </div>
+        ) : null}
         <div className="mt-3">
-        <Picker value={pick} onChange={setPick} onEdit={editList}
-          options={[{ id: "none", name: "No accommodation" }, ...list.filter((h) => h.is_active || h.id === stay.accommodation?.id).map((h) => ({ id: h.id, name: h.name, note: `${rupees(h.price_per_day)} a day${h.notes ? ` · ${h.notes}` : ""}`, fact: rupees(h.price_per_day * nights) }))]} />
+        <Picker value={pick} onChange={(id) => (id === "none" ? (setPick("none"), setRoom("")) : choose(id))} onEdit={editList}
+          options={[{ id: "none", name: "No accommodation" }, ...list.filter((h) => h.is_active || h.id === stay.accommodation?.id).map((h) => ({ id: h.id, name: h.name,
+            note: [`${rupees(h.price_per_day)} a day`, rooms.some((r) => r.accommodation_id === h.id) ? `${freeOf(h.id).length} free` : "", h.notes || ""].filter(Boolean).join(" · "), fact: rupees(h.price_per_day * nights) }))]} />
         </div>
-        {chosen ? <Text label="Room number (optional)" placeholder="e.g. N-4" autoComplete="off" maxLength={20} value={room} onChange={(e) => setRoom(e.target.value)} /> : null}
       </>)}
     </BottomSheet>
   );
@@ -297,12 +321,16 @@ export function StaySheet({ patient, target, today, cover, onClose, onSaved }: {
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (target) { setStart(cover && target.id && cover < target.start ? cover : target.start); setEnd(cover && target.id && cover > target.end ? cover : target.end); setCancels(0); } }, [target?.id, target?.start, target?.end, cover]); // eslint-disable-line react-hooks/exhaustive-deps
   // What a shorter stay would cancel, asked of the server before the tap.
+  // New dates re-check the guest room (#456): taken on a night, the save moves them to the room the server names.
+  const [room, setRoom] = useState<{ taken: string; move_to: { id: string; name: string; type: string } | null } | null>(null);
   useEffect(() => {
-    if (!patient || !target?.id || !end || end >= target.end) { setCancels(0); return; }
+    const moved = !!target && (start !== target.start || end !== target.end);
+    if (!patient || !target?.id || !end || !moved) { setCancels(0); setRoom(null); return; }
     let stale = false;
-    fetchJsonWithTimeout<{ cancels: unknown[] }>(`${API_BASE}/patients/${patient.id}/stays/${target.id}/preview?end_date=${end}`).then((r) => { if (!stale) setCancels(r?.cancels?.length ?? 0); });
+    fetchJsonWithTimeout<{ cancels: unknown[]; room: typeof room }>(`${API_BASE}/patients/${patient.id}/stays/${target.id}/preview?start_date=${start}&end_date=${end}`)
+      .then((r) => { if (!stale) { setCancels(end < target.end ? r?.cancels?.length ?? 0 : 0); setRoom(r?.room ?? null); } });
     return () => { stale = true; };
-  }, [patient?.id, target?.id, target?.end, end]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [patient?.id, target?.id, target?.start, target?.end, start, end]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!patient || !target) return null;
   const oldDays = between(target.start, target.end) + 1;
   const days = between(start, end) + 1;
@@ -313,17 +341,18 @@ export function StaySheet({ patient, target, today, cover, onClose, onSaved }: {
     delta > 0 ? `${plural(delta, "day")} longer. Meals carry on to ${dayText(end)}.` : "",
     changed && target.accommodation ? `Accommodation: ${plural(between(start, end), "night")}, ${rupees(between(start, end) * target.accommodation.price_per_day)}.` : "",
     changed && target.package && target.package.days !== days ? `Package: ${target.package.days} days; the stay is now ${days}.` : "",
+    room ? `${room.taken} ${room.move_to ? `Saving moves them to ${room.move_to.name}${room.move_to.type !== target.accommodation?.name ? ` (${room.move_to.type})` : ""} for the whole stay.` : "No guest room is free for every night, so saving leaves them without one."}` : "",
   ].filter(Boolean);
   const save = async () => {
     setBusy(true);
     const res = target.id
-      ? await saveStay(patient.id, target.id, { start_date: start, end_date: end, cancel_after: cancels > 0 })
+      ? await saveStay(patient.id, target.id, { start_date: start, end_date: end, cancel_after: cancels > 0, ...(room ? { guest_room_id: room.move_to?.id ?? null } : {}) })
       : await fetch(`${API_BASE}/patients/${patient.id}/stays`, { method: "POST", headers: json, body: JSON.stringify({ start_date: start, end_date: end, package_id: target.package?.id ?? null }) });
     setBusy(false);
-    if (!res.ok) { toast.error("The stay was not saved. Try again."); return; }
+    if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The stay was not saved. Try again."); return; }
     const out = await res.json().catch(() => ({}));
     const undo = target.id ? async () => {
-      await saveStay(patient.id, target.id!, { start_date: target.start, end_date: target.end });
+      await saveStay(patient.id, target.id!, { start_date: target.start, end_date: target.end, ...(room ? { guest_room_id: target.accommodation?.room?.id ?? null } : {}) });
       if (out.batch_id) await fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: json, body: JSON.stringify({ batch_id: out.batch_id }) });
       onSaved();
     } : null;

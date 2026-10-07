@@ -59,7 +59,7 @@ export async function searchPatients(q: string, today: Date, prisma: PrismaClien
     where: { name: { contains: q, mode: 'insensitive' } },
     select: {
       id: true, name: true,
-      Stays: { orderBy: { end_date: 'desc' }, take: 1, select: { start_date: true, end_date: true, room_number: true, Accommodation: { select: { name: true } } } },
+      Stays: { orderBy: { end_date: 'desc' }, take: 1, select: { start_date: true, end_date: true, GuestRoom: { select: { name: true } }, Accommodation: { select: { name: true } } } },
       DietPlanSegments: { where: { start_date: { lte: today }, end_date: { gte: today } }, take: 1, select: { template_label: true, Template: { select: { name: true } } } },
     },
     take: 20,
@@ -72,7 +72,7 @@ export async function searchPatients(q: string, today: Date, prisma: PrismaClien
     return {
       id: p.id, name: p.name, when,
       start: s ? s.start_date.toISOString().slice(0, 10) : null, end: s ? s.end_date.toISOString().slice(0, 10) : null,
-      room: s ? [s.Accommodation?.name, s.room_number].filter(Boolean).join(' ') || null : null,
+      room: s ? [s.Accommodation?.name, s.GuestRoom?.name].filter(Boolean).join(' ') || null : null,
       diet: when === 'in' ? d?.Template?.name || d?.template_label || null : null,
     };
   }).sort((a, b) => rank[a.when] - rank[b.when] || a.name.localeCompare(b.name));
