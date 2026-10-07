@@ -134,7 +134,7 @@ export async function generateDischargePdf(v: DischargeView, centre: { name: str
   meds('Medication during stay', d.meds_stay);
   meds(`Advised medicines at discharge${d.meds_home_for ? `, for ${d.meds_home_for}` : ''}`, d.meds_home);
   section('Special instructions', d.instructions);
-  section('Follow-up', d.follow_up, true);
+  section('Follow-up', [d.follow_up_date ? `On ${nice(d.follow_up_date)}.` : '', d.follow_up].filter(Boolean).join(' '), true);
   section('When to obtain urgent care', d.urgent_when);
   section('How to obtain urgent care', d.urgent_how);
 

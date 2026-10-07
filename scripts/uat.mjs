@@ -44,20 +44,23 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #480: small wording from the combined walk.
+// #487: a follow-up date on the discharge summary is raised in What needs you and sent from the card.
 await api('POST', '/settings/clear-demo-data');
-await step('Empty Therapies points at +', '/admin/therapies', async () => {
-  await p.keyboard.press('Escape'); await p.waitForTimeout(600);
-  const t = await text(p.locator('body'));
-  return { ok: /tap \+ to add one/.test(t) && !/open the menu/.test(t), note: t.split('\n').find((x) => /No therapies/.test(x)) };
+const pt = await api('POST', '/patients', { name: 'Priya Sharma', gender: 'female', phone: '9876543210' });
+const stay = await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(-10), end_date: plus(-3) });
+await api('PUT', `/patients/${pt.id}/stays/${stay.id}/discharge`, { follow_up_date: plus(0), follow_up: 'Call after a week.' });
+await step('What needs you lists the follow-up due today', '/admin/schedule', async () => {
+  await p.waitForTimeout(1500); await menu(); await go(dlg().getByRole('button', { name: /need you/ })); await p.waitForTimeout(1200);
+  const t = await text(dlg());
+  return { ok: /Follow-up due/.test(t), note: t.split('\n').filter((x) => /Priya|Follow-up/.test(x)).join(' · ') };
 });
-const acc = (await api('GET', '/accommodations')).find?.((a) => a.name === 'Trishul House') ?? await api('POST', '/accommodations', { name: 'Trishul House', price_per_day: 1600 });
-await api('POST', '/guest-rooms', { name: 'T1', accommodation_id: acc.id });
-const gr = (await api('GET', '/guest-rooms')).find?.((r) => r.name === 'T1') ?? (await api('GET', '/guest-rooms'))[0];
-await api('POST', '/patients', { name: 'Priya Sharma', gender: 'female', on_site: true, stay: { start_date: plus(0), end_date: plus(6) }, guest_room_id: gr?.id });
-await step('Guest rooms: an arriving guest says until when', '/admin/guestrooms', async () => {
-  const t = await text(p.locator('body'));
-  return { ok: /Priya arrives · until \w{3} \d+ \w{3}/.test(t), note: t.split('\n').find((x) => /arrives/.test(x)) };
+await step('The card opens Follow-up with WhatsApp and Mark done', '/admin/schedule', async () => {
+  await p.waitForTimeout(1500); await menu(); await go(dlg().getByRole('button', { name: /need you/ })); await p.waitForTimeout(1200);
+  await go(dlg().getByText(/Follow-up due/).first()); await p.waitForTimeout(1500);
+  await go(dlg().getByText('Follow-up', { exact: true }).first()); await p.waitForTimeout(800);
+  const t = await text(dlg());
+  const href = await dlg().getByRole('link', { name: /WhatsApp/ }).getAttribute('href').catch(() => '');
+  return { ok: /Send on WhatsApp to Priya/.test(t) && /Mark follow-up done/.test(t) && /wa\.me\/919876543210/.test(href), note: `${t.split('\n').slice(0, 3).join(' · ')} · ${href?.slice(0, 40)}` };
 });
 await b.close();
 

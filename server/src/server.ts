@@ -548,6 +548,14 @@ app.patch('/patients/:id/stays/:stayId/arrival', async (req: Request, res: Respo
   res.json(await prisma.patientStay.update({ where: { id: stay.id }, data: body }));
 });
 
+// The follow-up after discharge (#487): the admin marks it done, or takes that back.
+app.patch('/patients/:id/stays/:stayId/follow-up', async (req: Request, res: Response) => {
+  const { done } = z.object({ done: z.boolean() }).parse(req.body);
+  const stay = await prisma.patientStay.findFirst({ where: { id: String(req.params.stayId), patient_id: String(req.params.id) } });
+  if (!stay) { res.status(404).json({ error: 'Stay not found' }); return; }
+  res.json(await prisma.patientStay.update({ where: { id: stay.id }, data: { follow_up_done: done ? new Date() : null } }));
+});
+
 // Form C (#415): the admin marks it filed with the FRRO, or takes that back.
 app.patch('/patients/:id/stays/:stayId/form-c', async (req: Request, res: Response) => {
   const { filed } = z.object({ filed: z.boolean() }).parse(req.body);
