@@ -44,20 +44,18 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #461: the Log says what happened, in the app's words.
-await step('Share a link, renew one, add two therapies, book one: the Log reads them right', '/admin/schedule', async () => {
-  const pts = await api('GET', '/patients'); const pt = pts.find((x) => x.name === 'Aarohi Das') || pts[0];
-  await api('POST', `/patients/${pt.id}/link`);
-  await api('POST', `/patients/${pt.id}/link?renew=1`);
-  await api('POST', '/therapies/import', { items: [{ name: 'UAT Nasya', duration_minutes: 30 }, { name: 'UAT Kavala', duration_minutes: 20 }] });
-  const nasya = (await api('GET', '/therapies')).find((t) => t.name === 'Nadi Sweda');
-  const opts = await api('GET', `/appointments/options?date=${plus(1)}&patient_id=${pt.id}&therapy_id=${nasya.id}`);
-  const t0 = opts.times?.[0];
-  if (t0) await api('POST', '/appointments', { patient_id: pt.id, therapy_id: nasya.id, total_sessions: 1, start_date: plus(1), end_date: plus(11), preferred_days: [], preferred_time_range: { start: t0.start_time, end: '20:00' }, preferred_staff_id: t0.staff_id, preferred_room_id: t0.room_id });
-  await p.goto(APP + '/admin/log'); await p.waitForTimeout(2000);
-  const t = await text(p.locator('body'));
-  const lines = t.split('\n').filter((x) => /renewed|therapies added|booked for|private link/.test(x));
-  return { ok: lines.some((x) => /renewed, the old one stopped/.test(x)) && lines.some((x) => /2 therapies added: UAT Nasya, UAT Kavala/.test(x)) && !lines.some((x) => /\d{4}-\d\d-\d\d/.test(x)) && lines.some((x) => /booked for \w+ \d+ \w+ at/.test(x)), note: lines.slice(0, 4).join(' · ') };
+// #459: after closing on today, Print gives tomorrow and says so. Run after the centre's closing time.
+await step("Evening: the Menu's Print row names tomorrow", '/admin/schedule', async () => {
+  await menu();
+  const row = await text(dlg().getByRole('button', { name: /^Print/ }));
+  return { ok: /tomorrow/.test(row) && new RegExp(new Date(`${plus(1)}T00:00:00Z`).getUTCDate() + ' ').test(row), note: row.replace(/\n/g, ' · ') };
+});
+await step('Print downloads tomorrow\'s sheet and the toast names the day', '/admin/schedule', async () => {
+  await menu();
+  const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 15000 }), dlg().getByRole('button', { name: /^Print/ }).click()]);
+  await p.waitForTimeout(1200);
+  const toast = await p.locator('[data-sonner-toast]').first().innerText().catch(() => '');
+  return { ok: dl.suggestedFilename().includes(plus(1)) && /for \w+ \d+ \w+/.test(toast), note: `file ${dl.suggestedFilename()}; toast "${toast.split('\n')[0]}"` };
 });
 await b.close();
 

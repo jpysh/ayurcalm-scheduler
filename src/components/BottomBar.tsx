@@ -39,6 +39,8 @@ type Props = {
   now: string;
   setDay: (iso: string) => void;
   print: () => void;
+  /** The day Print gives: tomorrow once today is closed (#459). */
+  printDay: string;
   printing: boolean;
   /** What + adds on this screen ("Book a treatment", "New patient"); none on a screen with nothing to add. */
   plus: { adds: string; run: () => void } | null;
@@ -50,7 +52,7 @@ type Props = {
 
 const shift = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
 
-export function BottomBar({ activeTab, go, day, today, now, setDay, print, printing, plus, search, attention }: Props) {
+export function BottomBar({ activeTab, go, day, today, now, setDay, print, printDay, printing, plus, search, attention }: Props) {
   const [sheet, setSheet] = useState<"menu" | "day" | null>(null);
   // Leaving Search brings the bar back; the keyboard's place goes to the menu button (#311).
   const menuBtn = useRef<HTMLButtonElement>(null);
@@ -116,7 +118,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
             {inbox && !inbox.need ? <Row key="inbox" title={`${inbox.info} to know`} trailing="›" onClick={close(attention!.open)} /> : null}
             <Row key="search" title={search.label} facts={search.hint} trailing="›" onClick={close(search.start)} />
             {onDay ? <Row key="day" title="Change day" facts={`${dayText(day)} · ${when}`} trailing="›" onClick={() => setSheet("day")} /> : null}
-            {onDay ? <Row key="print" title="Print the day's sheets" facts={printing ? "Making the PDF…" : undefined} trailing="›" onClick={() => { setSheet(null); if (!printing) print(); }} /> : null}
+            {onDay ? <Row key="print" title={printDay === day ? "Print the day's sheets" : "Print tomorrow's sheets"} facts={printing ? "Making the PDF…" : printDay === day ? undefined : dayText(printDay)} trailing="›" onClick={() => { setSheet(null); if (!printing) print(); }} /> : null}
           </ListGroup>
         </div>
         <div className="mt-3 pb-3">

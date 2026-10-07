@@ -90,8 +90,8 @@ test('O1: Leave has Upcoming · Past · All, not a Filter popover', async ({ pag
 test('O2: the print note keeps its words on one line, the other sheets under them', async ({ page }) => {
   await signIn(page);
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: /^Print the day's sheets/ }).click();
-  const words = page.locator('[data-sonner-toast]').getByText(/^Patient sheet printed/);
+  await page.getByRole('dialog').getByRole('button', { name: /^Print (the day's|tomorrow's) sheets/ }).click();
+  const words = page.locator('[data-sonner-toast]').getByText(/^Patient sheet for .+ printed/);
   await expect(words).toBeVisible({ timeout: 20000 });
   expect((await words.boundingBox())!.width).toBeGreaterThan(180);
   await expect(page.locator('[data-sonner-toast]').getByRole('button', { name: 'Doctor sheet' })).toBeVisible();
