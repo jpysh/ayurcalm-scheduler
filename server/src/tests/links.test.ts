@@ -25,6 +25,9 @@ const therapist = await prisma.staff.create({ data: { name: `Asha ${tag}`, gende
 const other = await prisma.staff.create({ data: { name: `Meera ${tag}`, gender: 'female', phone: '98765 43210', specializations: [therapy.id], weekly_schedule: {} } });
 const doctor = await prisma.staff.create({ data: { name: `Dr ${tag}`, gender: 'female', role: 'doctor', specializations: [consult.id], weekly_schedule: {} } });
 const patient = await prisma.patient.create({ data: { name: `Rekha ${tag}`, gender: 'female' } });
+const guest = await prisma.patient.create({ data: { name: `Sita ${tag}`, gender: 'female' } });
+const extra: string[] = [];
+const stays: string[] = [];
 const book = (therapy_id: string, staff_id: string, start_time: string) => prisma.appointment.create({ data: {
   patient_id: patient.id, therapy_id, staff_id, scheduled_date: new Date(DAY), start_time,
   duration_minutes: 60, session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual',
@@ -80,12 +83,32 @@ try {
   const t2 = await issue('staff', therapist.id);
   assert.equal((await call(`/public/link/${t}?date=${DAY}`)).status, 404, 'a reissued link stops the old one');
   assert.equal((await call(`/public/link/${t2}?date=${DAY}`)).status, 200);
+  // The round (#423): a patient in house with no review in the last week is due;
+  // the plan written from the link is theirs. Built around the centre's today,
+  // whatever day that is, so it never depends on the clock.
+  const today = own.today as string;
+  const dayMs = 86400000;
+  const iso = (n: number) => new Date(Date.parse(`${today}T00:00:00Z`) + n * dayMs);
+  const stay = await prisma.patientStay.create({ data: { patient_id: guest.id, start_date: iso(-10), end_date: iso(10), duration_days: 21 } });
+  const seen = await prisma.appointment.create({ data: { patient_id: guest.id, therapy_id: consult.id, staff_id: doctor.id, scheduled_date: iso(-9), start_time: '09:00', duration_minutes: 20, session_number: 1, total_sessions: 1, status: 'completed', assignment_type: 'manual', notes: 'Start Abhyanga daily' } });
+  extra.push(seen.id); stays.push(stay.id);
+  const round = await (await call(`/public/link/${d}/round`)).json();
+  const row = round.find((r: { patient_id: string }) => r.patient_id === guest.id);
+  assert.ok(row, 'a patient with no review in the last week is on the round');
+  assert.equal(row.day, 11); assert.equal(row.booked, null); assert.equal(row.last.note, 'Start Abhyanga daily');
+  const put = (token: string, id: string) => fetch(`${API}/public/link/${token}/round/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: 'Shirodhara alternate days' }) });
+  assert.equal((await put(d, guest.id)).status, 200);
+  assert.equal((await prisma.patient.findUnique({ where: { id: guest.id } }))!.doctor_plan, 'Shirodhara alternate days', 'the plan is the patient\'s, as the card reads it');
+  assert.equal((await put(t2, guest.id)).status, 403, 'only a doctor writes the plan');
+  assert.equal((await put(d, patient.id)).status, 404, 'only for a patient in house');
+  assert.equal((await call(`/public/link/${t2}/round`)).status, 403, 'only a doctor sees the round');
   console.log('links: ok');
 } finally {
   await prisma.timeOff.deleteMany({ where: { entity_type: 'staff', entity_id: therapist.id } });
   await prisma.linkIssue.deleteMany({ where: { staff_id: { in: [therapist.id, doctor.id] } } });
-  await prisma.appointment.deleteMany({ where: { id: { in: [mineA.id, theirs.id, visit.id] } } });
-  await prisma.patient.delete({ where: { id: patient.id } });
+  await prisma.appointment.deleteMany({ where: { id: { in: [mineA.id, theirs.id, visit.id, ...extra] } } });
+  await prisma.patientStay.deleteMany({ where: { id: { in: stays } } });
+  await prisma.patient.deleteMany({ where: { id: { in: [patient.id, guest.id] } } });
   await prisma.staff.deleteMany({ where: { id: { in: [therapist.id, other.id, doctor.id] } } });
   await prisma.therapy.deleteMany({ where: { id: { in: [therapy.id, consult.id] } } });
   await prisma.$disconnect();
