@@ -40,7 +40,12 @@ async function main() {
     assert.equal(copy.headers.get('content-type'), 'application/pdf');
     assert.ok(Buffer.from(await copy.arrayBuffer()).subarray(0, 4).toString() === '%PDF');
     assert.equal((await fetch(`${API_BASE}/printed-sheets`)).status, 401, 'signed out, nothing');
-    console.log('printed sheets: kept, replaced, pruned');
+    // Records for a month (#488): a PDF for a real month, refused for a made-up one.
+    const records = await get(`/records-pdf?month=${new Date().toISOString().slice(0, 7)}`);
+    assert.equal(records.headers.get('content-type'), 'application/pdf');
+    assert.ok(Buffer.from(await records.arrayBuffer()).subarray(0, 4).toString() === '%PDF');
+    assert.ok(!(await get('/records-pdf?month=2030-13')).ok, 'month 13 was accepted');
+    console.log('printed sheets: kept, replaced, pruned; records for a month print');
   } finally {
     await tidy();
     await prisma.$disconnect();
