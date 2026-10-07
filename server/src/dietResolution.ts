@@ -48,6 +48,10 @@ export type ResolvedDiet = {
   planName: string;
   /** How this patient eats around treatment, on a day they have one. */
   therapyNotes: string;
+  /** The patient's medication alone, so the sheet can print it on their own line. */
+  medication: string;
+  /** Meals written for this patient (an override or for this date), not the plan's: the kitchen's exceptions. */
+  personal: MealKey[];
 };
 
 export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
@@ -63,9 +67,11 @@ export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
     (overrides[name] ?? (template?.[name] as string | null | undefined) ?? '').toString().trim();
 
   const meals: Partial<Record<MealKey, string>> = {};
+  const personal: MealKey[] = [];
   for (const meal of mealOrder) {
     const text = (input.dayMeals[meal] || field(`${side}_${meal}`)).trim();
     if (text) meals[meal] = text;
+    if (text && (input.dayMeals[meal] || overrides[`${side}_${meal}`])) personal.push(meal);
   }
 
   const noteParts: string[] = [];
@@ -88,6 +94,8 @@ export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
     notes: label && notes ? `${label}: ${notes}` : notes || (label && Object.keys(meals).length ? label : ''),
     planName: label,
     therapyNotes,
+    medication,
+    personal,
   };
 }
 
@@ -135,4 +143,39 @@ export async function loadDietsForDay(day: Date, prisma: PrismaClient) {
   /** True when a meal was written for this person for this date alone. */
   const hasDayMeals = (id: string) => Object.keys(dayMealsByPatient.get(id) || {}).length > 0;
   return { dietFor, hasDayMeals };
+}
+
+export type KitchenMeal = {
+  meal: MealKey;
+  /** One line per plan and what it serves at this meal, biggest first. */
+  counts: { plan: string; food: string; n: number }[];
+  /** Someone eating something of their own at this meal, by name. */
+  exceptions: { name: string; plan: string; food: string }[];
+  total: number;
+};
+
+/**
+ * What the kitchen cooks, meal by meal (#414): a count per plan, then whoever
+ * eats something of their own, by name. A plan serves different food on a
+ * treatment day and a rest day, so each side is its own count line.
+ */
+export function kitchenMeals(people: { name: string; diet: ResolvedDiet }[]): KitchenMeal[] {
+  return mealOrder.map((meal) => {
+    const counts = new Map<string, { plan: string; food: string; n: number }>();
+    const exceptions: KitchenMeal['exceptions'] = [];
+    for (const { name, diet } of people) {
+      const plan = diet.planName || 'No diet plan';
+      const food = diet.meals[meal] || '';
+      if (diet.personal.includes(meal)) { exceptions.push({ name, plan, food }); continue; }
+      const key = `${plan}\u0000${food}`;
+      const held = counts.get(key);
+      if (held) held.n++; else counts.set(key, { plan, food, n: 1 });
+    }
+    return {
+      meal,
+      counts: [...counts.values()].sort((a, b) => b.n - a.n || a.plan.localeCompare(b.plan)),
+      exceptions: exceptions.sort((a, b) => a.name.localeCompare(b.name)),
+      total: people.length,
+    };
+  });
 }

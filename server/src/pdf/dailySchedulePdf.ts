@@ -2,7 +2,7 @@ declare module 'pdfkit';
 import { teamOf, offOnDay, overlaps } from '../availability.js';
 import PDFDocument from 'pdfkit';
 import { madeWith } from '../product.js';
-import { loadDietsForDay, mealOrder, type MealKey } from '../dietResolution.js';
+import { loadDietsForDay, mealLabel, mealOrder } from '../dietResolution.js';
 import { PrismaClient } from '@prisma/client';
 
 const ADMIN_TZ = process.env.ADMIN_TZ || 'Asia/Kolkata';
@@ -160,11 +160,19 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     .join('  \u00b7  ');
 
   const dietByPatient = new Map(displayPatients.map((p) => [p.id, diets.dietFor(p, (apptsByPatient.get(p.id) || []).length > 0)] as const));
-  // Everyone reads only their own row, so how to eat around treatment sits
-  // there too, after the plan, snacks and medication.
-  const notesFor = (id: string) => {
+  // A plan's group is keyed on its food alone (#414): keyed on the whole note, one
+  // patient's medication split a plan into groups that read as duplicates.
+  const mealsFor = (id: string) => {
     const diet = dietByPatient.get(id);
-    return [diet?.notes, diet?.therapyNotes && `Treatment: ${diet.therapyNotes}`].filter(Boolean).join('. ');
+    const food = mealOrder.filter((m) => diet?.meals[m]).map((m) => `${mealLabel[m]}: ${diet!.meals[m]}`).join('; ');
+    const plan = diet?.planName || '';
+    return plan && food ? `${plan}: ${food}` : food || plan;
+  };
+  // What is the patient's own (medication, how to eat around treatment) is
+  // listed by name under the plan's food.
+  const ownFor = (id: string) => {
+    const diet = dietByPatient.get(id);
+    return [diet?.medication, diet?.therapyNotes && `Treatment: ${diet.therapyNotes}`].filter(Boolean).join('. ');
   };
 
 
@@ -207,7 +215,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     // Someone with no plan at all is grouped by whether the centre owes them
     // one: a resident in house should have a plan, a patient in for a treatment
     // and going home should not.
-    const key = notesFor(p.id) || (residentToday.has(p.id) ? '\u0000resident' : '\u0000outpatient');
+    const key = mealsFor(p.id) || (residentToday.has(p.id) ? '\u0000resident' : '\u0000outpatient');
     const held = groups.get(key);
     if (held) held.push(p.id); else groups.set(key, [p.id]);
   }
@@ -216,17 +224,24 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const NO_PLAN = '\uffff1';
   const OUTPATIENT = '\uffff2';
   type Group = { key: string; ids: string[]; plan: string; qualifier: string; title: string; body: string };
+  // The same note for several patients prints once, after all their names.
+  const ownLines = (ids: string[]) => {
+    const byNote = new Map<string, string[]>();
+    for (const id of ids.filter(ownFor)) byNote.set(ownFor(id), [...(byNote.get(ownFor(id)) || []), patientById[id] || id]);
+    return [...byNote].map(([note, names]) => `${names.join(', ')}: ${note}`).join('\n');
+  };
   const describe = ([key, ids]: [string, string[]]): Group => {
     const n = ids.length;
-    if (key === '\u0000resident') return { key, ids, plan: NO_PLAN, qualifier: '', body: '', title: `No diet plan \u2014 ${n} patient${n === 1 ? '' : 's'}` };
-    if (key === '\u0000outpatient') return { key, ids, plan: OUTPATIENT, qualifier: '', body: '', title: `Outpatients \u2014 not staying \u2014 ${n} ${n === 1 ? 'person' : 'people'}` };
+    if (key === '\u0000resident') return { key, ids, plan: NO_PLAN, qualifier: '', body: ownLines(ids), title: `No diet plan \u2014 ${n} patient${n === 1 ? '' : 's'}` };
+    if (key === '\u0000outpatient') return { key, ids, plan: OUTPATIENT, qualifier: '', body: ownLines(ids), title: `Outpatients \u2014 not staying \u2014 ${n} ${n === 1 ? 'person' : 'people'}` };
     const plan = dietByPatient.get(ids[0])?.planName || '';
     // Each meal with the window it is served in, from the centre's own meal events.
     const body = (plan && key.startsWith(`${plan}: `) ? key.slice(plan.length + 2) : key)
       .replace(/\b(Breakfast|Lunch|Dinner|Snacks): /g, (m, meal: string) => {
         const e = sharedEvents.find((x) => x.activity_name.toLowerCase() === meal.toLowerCase());
         return e ? `${meal} ${e.start_time}\u2013${e.end_time}: ` : m;
-      });
+      })
+      + (ownLines(ids) ? `\n${ownLines(ids)}` : '');
     const qualifier = ids.every((id) => hasOverrideToday(id)) ? 'changed for today'
       : ids.every((id) => !hasTherapyToday(id)) ? 'rest day'
       : '';

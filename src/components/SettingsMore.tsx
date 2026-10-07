@@ -88,7 +88,7 @@ export function BackupsSheet({ open, onOpenChange, backups }: { open: boolean; o
 }
 
 type Printed = { date: string; kind: string; printed_at: string };
-const KIND: Record<string, string> = { residents: "Patients", therapist: "Therapists", doctor: "Doctors" };
+const KIND: Record<string, string> = { residents: "Patients", therapist: "Therapists", doctor: "Doctors", kitchen: "Kitchen" };
 
 export function PrintedSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const [printed, setPrinted] = useState<Printed[] | null>(null);
