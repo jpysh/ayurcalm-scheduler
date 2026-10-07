@@ -100,7 +100,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   const didForYou = replans.filter((b) => !dismissed.includes(b.batch_id));
   // A therapist whose day was moved already has their line under the day.
   const teamInfo = items.filter((i) => i.kind === "information" && !didForYou.some((b) => b.staff_name === i.who));
-  const empty = act.length + notes.length + didForYou.length + patientAct.length + teamAct.length + teamInfo.length === 0;
+  const empty = act.length + notes.length + didForYou.length + patientAct.length + teamAct.length + teamInfo.length + (tomorrow?.count ?? 0) === 0;
 
   // Nothing left: say so, then get out of the way, as the design does. Not
   // while an Undo is showing: with the pill gone it could not be reached again.
