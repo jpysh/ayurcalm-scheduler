@@ -105,6 +105,7 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
         .map((a: { patient_id: string }) => nameIn(patients, a.patient_id)).filter(Boolean) as string[])]}
       therapists={staff.filter((s: { status?: string }) => s.status !== 'Inactive').map((s: { name: string }) => s.name.replace(/^Dr\.? /, 'Dr ').split(' ').slice(0, s.name.startsWith('Dr') ? 2 : 1).join(' '))}
       onOpen={(h) => { setFromSearch(true); setCard(h); }}
+      onOpenPatient={openResident}
     />
   ) : (
     <DayList

@@ -16,6 +16,7 @@ const TAG = 'Searchtest';
 async function tidy(prisma: PrismaClient) {
   const patients = (await prisma.patient.findMany({ where: { name: { startsWith: TAG } }, select: { id: true } })).map((p) => p.id);
   await prisma.appointment.deleteMany({ where: { patient_id: { in: patients } } });
+  await prisma.patientStay.deleteMany({ where: { patient_id: { in: patients } } });
   await prisma.patient.deleteMany({ where: { id: { in: patients } } });
   await prisma.staff.deleteMany({ where: { name: { startsWith: TAG } } });
   await prisma.therapyRoom.deleteMany({ where: { name: { startsWith: TAG } } });
@@ -57,6 +58,16 @@ async function main() {
     assert.deepEqual((await search(`${TAG} Kailash`)).map((h) => h.id), [earlier.id, later.id], 'a room\'s name should find its treatments');
     assert.deepEqual((await search(`${TAG} Mina`)).map((h) => h.id), [earlier.id], 'an assisting therapist should find what they assist on');
     assert.equal((await search('zorawar', '2030-06-01', '2030-07-31')).length, 1, 'the window should bound the days searched');
+
+    // A past guest is a patient row, so their card can be reached to book them again (#412).
+    await prisma.patientStay.create({ data: { patient_id: rekha.id, start_date: new Date('2030-04-01T00:00:00.000Z'), end_date: new Date('2030-04-10T00:00:00.000Z'), duration_days: 10, room_number: 'N-4' } });
+    const guest = await prisma.patient.create({ data: { name: `${TAG} Ravi Zorawar`, gender: 'male' } });
+    await prisma.patientStay.create({ data: { patient_id: guest.id, start_date: new Date('2030-05-10T00:00:00.000Z'), end_date: new Date('2030-05-20T00:00:00.000Z'), duration_days: 11, room_number: 'S-2' } });
+    const res = await fetch(`${API_BASE}/appointments/search?q=zorawar&from=2030-05-01&to=2030-05-31`, { headers: { Authorization: `Bearer ${token}` } });
+    const people = (await res.json()).patients as { id: string; when: string; room: string | null; end: string | null }[];
+    assert.deepEqual(people.map((p) => [p.id, p.when]), [[guest.id, 'in'], [rekha.id, 'past']], 'patients come first in house, then past guests');
+    assert.equal(people[0].room, 'S-2');
+    assert.equal(people[1].end, '2030-04-10');
 
     console.log('Search: a name finds every day in the window, in order; rooms and assisting therapists count; cancelled and out-of-window do not.');
   } finally {
