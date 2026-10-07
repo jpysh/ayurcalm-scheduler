@@ -83,7 +83,9 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   const [done, setDone] = useState<Done | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (open) { setDone(null); setError(null); } }, [open]);
+  // A cause opened to choose row by row (#418).
+  const [opened, setOpened] = useState<string[]>([]);
+  useEffect(() => { if (open) { setDone(null); setError(null); setOpened([]); } }, [open]);
 
   const act = problems.filter((p) => p.problem_class === "blocking");
   // Only rows with one answer: a row asking the admin to choose is never chosen for them.
@@ -185,6 +187,20 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
     return item(p.id, p.what, [at, p.no_fix_reason].filter(Boolean).join(". "), <>{fixCause}{see}</>, fixCause.length > 0);
   };
 
+  // One cause is one row (#418): a therapist not in is "Ravi Gupta is not in · 4 treatments", not four rows saying it again.
+  const causes = Object.values(act.reduce<Record<string, DayProblem[]>>((by, p) => { (by[p.what] ??= []).push(p); return by; }, {}));
+  const causeRow = (g: DayProblem[]) => {
+    const key = g[0].what;
+    if (g.length < 2 || opened.includes(key)) return g.map(actionItem);
+    const one = g.every((p) => p.fix && p.choices.length <= 1);
+    const n = `${g.length} treatments`;
+    return [item(key, `${key.replace(/ on this day/, "").replace(/\.$/, "")} · ${n}`,
+      g.map((p) => `${p.start_time} ${p.patient_name}${p.fix && one ? ` → ${p.fix.label}` : ""}`).join(" · "), <>
+        {one ? <button type="button" data-main className={tb(true)} disabled={busy !== null} onClick={() => apply(null, ...g.map((p) => p.fix!))}>{busy === "all" ? "Fixing…" : `Fix all ${g.length} as shown`}</button> : null}
+        <button type="button" className={tb(!one)} onClick={() => setOpened([...opened, key])}>{one ? "Choose each" : `Open the ${n}`}</button>
+      </>, true)];
+  };
+
   // The sheet opens on whatever day is on screen, so it names that day (#193).
   const dayName = day === today ? "Today" : dayText(day);
   return (
@@ -195,8 +211,8 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
         name: "Day", count: act.length,
         body: act.length + didForYou.length + notes.length === 0 ? null : (
           <div className="space-y-3">
-            {fixable.length > 1 ? <Btn kind="primary" disabled={busy !== null} onClick={() => apply(null, ...fixable.map((p) => p.fix!))}>{busy === "all" ? "Fixing…" : `Fix all ${fixable.length} as shown`}</Btn> : null}
-            {act.length ? <ListGroup>{act.map(actionItem)}</ListGroup> : null}
+            {fixable.length > 1 && causes.length > 1 ? <Btn kind="primary" disabled={busy !== null} onClick={() => apply(null, ...fixable.map((p) => p.fix!))}>{busy === "all" ? "Fixing…" : `Fix all ${fixable.length} as shown`}</Btn> : null}
+            {act.length ? <ListGroup>{causes.flatMap(causeRow)}</ListGroup> : null}
             {didForYou.length + notes.length ? (
               <ListGroup title="Information · not counted">
             {didForYou.map((b) => item(b.batch_id, `${b.staff_name} is not in ${day === today ? "today" : `on ${dayName}`}`,
