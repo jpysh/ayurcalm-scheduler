@@ -132,7 +132,7 @@ export function findConflict(c: Candidate, ctx: DayContext): Conflict | null {
   if (team.length > 0 && team.length < needed) {
     return {
       reason: 'STAFF_SHORT',
-      message: `${therapy!.name} needs ${needed} therapists and has ${team.length}.`,
+      message: `${therapy!.name} needs ${needed} therapists together${therapy!.requires_gender_match && patient && ctx.settings?.enforce_gender_match !== false ? ` (${patient.gender === 'female' ? 'women' : patient.gender === 'male' ? 'men' : `of ${patient.name.split(' ')[0]}'s gender`})` : ''}, and only ${ctx.staff.filter((x) => team.includes(x.id)).map((x) => x.name).join(' and ') || team.length} ${team.length === 1 ? 'is' : 'are'} on it. Choose another therapist as well.`,
       details: { needed, has: team.length },
     };
   }

@@ -45,6 +45,9 @@ try {
   assert.equal(day.who.kind, 'therapist');
   assert.deepEqual(day.items.map((i: { id: string }) => i.id), [mineA.id], 'a therapist sees their own treatments only');
   assert.deepEqual(day.items[0].checklist, [{ text: 'Oil warmed', required: true, done: false }]);
+  // A day off says so rather than "Nothing booked" (#424).
+  await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: therapist.id, date: new Date('2030-03-14'), description: 'Family wedding' } });
+  assert.equal((await (await call(`/public/link/${t}?date=2030-03-14`)).json()).off, 'Family wedding', 'the link does not say the day is off');
 
   assert.equal((await call(`/public/link/${t}/appointments/${mineA.id}`, { checklist: { 'Oil warmed': true, 'Invented': true }, vitals: { bp: '130/85', weight: '70' }, room_ready: true })).status, 200);
   const rec = (await prisma.appointment.findUnique({ where: { id: mineA.id } }))!.record as Record<string, any>;
@@ -79,6 +82,7 @@ try {
   assert.equal((await call(`/public/link/${t2}?date=${DAY}`)).status, 200);
   console.log('links: ok');
 } finally {
+  await prisma.timeOff.deleteMany({ where: { entity_type: 'staff', entity_id: therapist.id } });
   await prisma.linkIssue.deleteMany({ where: { staff_id: { in: [therapist.id, doctor.id] } } });
   await prisma.appointment.deleteMany({ where: { id: { in: [mineA.id, theirs.id, visit.id] } } });
   await prisma.patient.delete({ where: { id: patient.id } });

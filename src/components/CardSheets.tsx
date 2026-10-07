@@ -112,7 +112,7 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
         <QuickDates label="Starts" value={from} today={today} min={line.stay.start} max={line.stay.end} onChange={setFrom} />
         {plan && patient ? <Consequence>{`${first(patient.name)} eats ${plan.name} from ${dayText(from)} to ${dayText(line.stay.end)}. What ran before ends the day before.`}</Consequence> : null}
         {plan ? <ChangeLine label="Edit this plan" value={running ? `${plural(plan.patients, "patient")} on it` : plan.name} onClick={() => setEditing(plan)} /> : null}
-        <div className="mt-3"><ChangeLine label="Medication and notes" value={ownText || "None yet"} faint={!ownText} onClick={() => setOwn(Object.fromEntries(OWN.map(([k]) => [k, line.own?.[k] ?? ""])) as Record<keyof Own, string>)} /></div>
+        <div className="mt-3"><TextRow label="Medication and notes" faint={!ownText} onClick={() => setOwn(Object.fromEntries(OWN.map(([k]) => [k, line.own?.[k] ?? ""])) as Record<keyof Own, string>)}>{ownText || "None yet"}</TextRow></div>
         {meals.length ? <ListGroup title="Meals today">{meals.map((m) => <TextRow key={m.meal} label={m.meal}>{m.text}</TextRow>)}</ListGroup> : null}
         <Btn kind="quiet" inline className="-ml-2 mt-2" onClick={() => patient && onDayMeals(patient)}>Change one day's meals</Btn>
       </>)}

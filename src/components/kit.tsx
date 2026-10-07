@@ -85,8 +85,9 @@ export const Dropdown = ({ label, note, children, ...rest }: { label: string; no
  * A long list (more than ~15) is a sheet with a search field, never a phone's wheel of 150 names.
  * The field looks like a Dropdown; groups keep their headings and typing filters across them.
  */
-export function PickField({ label, value, placeholder, groups, onPick }: { label: string; value: string; placeholder: string; groups: { title: string; options: { id: string; name: string }[] }[]; onPick: (id: string) => void }) {
+export function PickField({ label, value, placeholder, groups, onPick }: { label: string; value: string; placeholder: string; groups: { title: string; options: { id: string; name: string }[]; /** One row until tapped, so the usual answer is at the top; typing searches it anyway. */ folded?: boolean }[]; onPick: (id: string) => void }) {
   const [open, setOpen] = useState(false);
+  const [unfolded, setUnfolded] = useState<string[]>([]);
   const [q, setQ] = useState("");
   const all = groups.flatMap((g) => g.options);
   const chosen = all.find((o) => o.id === value);
@@ -102,7 +103,9 @@ export function PickField({ label, value, placeholder, groups, onPick }: { label
       <BottomSheet open={open} onOpenChange={setOpen} title={label} foot={<SearchField value={q} onChange={setQ} placeholder="Type a name" />}>
         {shown.length ? shown.map((g) => (
           <ListGroup key={g.title} title={g.title} count={g.options.length}>
-            {g.options.map((o) => <Row key={o.id} title={o.name} trailing={o.id === value ? "✓" : undefined} onClick={() => { onPick(o.id); setOpen(false); }} />)}
+            {g.folded && !needle && !unfolded.includes(g.title) && !g.options.some((o) => o.id === value)
+              ? <Row title={`Show ${g.title.toLowerCase()}`} trailing="›" onClick={() => setUnfolded([...unfolded, g.title])} />
+              : g.options.map((o) => <Row key={o.id} title={o.name} trailing={o.id === value ? "✓" : undefined} onClick={() => { onPick(o.id); setOpen(false); }} />)}
           </ListGroup>
         )) : <Empty text="No one by that name." />}
       </BottomSheet>

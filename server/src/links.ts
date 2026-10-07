@@ -10,6 +10,8 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { centreClock, teamOf } from './availability.js';
+import { loadDay, staffDay } from './appointmentGuard.js';
+import { loadDietsForDay, mealLabel, mealOrder } from './dietResolution.js';
 import { dischargeOf, saveDischarge } from './discharge.js';
 import { renderDischarge } from './pdf/dischargePdf.js';
 
@@ -50,10 +52,21 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
   });
   const staffIds = [...new Set(appts.flatMap((a) => teamOf(a)))];
   const names = new Map((await prisma.staff.findMany({ where: { id: { in: staffIds } }, select: { id: true, name: true } })).map((s) => [s.id, s.name]));
+  const day = new Date(`${date}T00:00:00.000Z`);
+  // A free day says why (#424): a therapist's day off, and a patient's meals even with no treatment.
+  const off = who.kind === 'patient' ? null : staffDay(await loadDay(day, prisma)).find((d) => d.staff_id === who.id)?.off || null;
+  let meals: { meal: string; text: string }[] = [];
+  if (who.kind === 'patient') {
+    const patient = await prisma.patient.findUnique({ where: { id: who.id }, include: { Stays: { where: { start_date: { lte: day }, end_date: { gte: day } } } } });
+    if (patient?.Stays.length) {
+      const diet = (await loadDietsForDay(day, prisma)).dietFor(patient, appts.length > 0);
+      meals = mealOrder.filter((m) => diet.meals[m]).map((m) => ({ meal: mealLabel[m], text: diet.meals[m]! }));
+    }
+  }
   res.json({
     who: { kind: who.kind, name: who.name },
     centre: settings?.centre_name || 'Wellness Centre',
-    date, today,
+    date, today, off, meals,
     items: appts.map((a) => {
       const record = (a.record || {}) as Record;
       const base = {

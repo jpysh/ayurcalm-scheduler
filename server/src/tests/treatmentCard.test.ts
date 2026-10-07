@@ -124,7 +124,9 @@ async function main() {
     assert.match(together[0].staff_name, / and /, 'the time does not name both therapists');
     const two = { patient_id: rekha.id, therapy_id: pair.id, date: DAY, start_time: together[0].start_time, staff_id: together[0].staff_id, room_id: together[0].room_id };
     const alone = await fetch(`${API_BASE}/appointments/one`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(two) });
-    assert.equal((await alone.json()).reason, 'STAFF_SHORT', 'a two-therapist therapy booked with one therapist was not refused');
+    const refused = await alone.json();
+    assert.equal(refused.reason, 'STAFF_SHORT', 'a two-therapist therapy booked with one therapist was not refused');
+    assert.match(refused.message, /needs 2 therapists together, and only .+ is on it/, `the refusal does not say who is on it: ${refused.message}`);
     const booked = await call('POST', '/appointments/one', { ...two, co_staff_ids: together[0].co_staff_ids });
     assert.deepEqual(booked.co_staff_ids, together[0].co_staff_ids, 'the second therapist was not saved on the booking');
 
