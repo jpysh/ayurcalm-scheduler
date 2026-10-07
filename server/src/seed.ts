@@ -529,11 +529,13 @@ async function main() {
     .filter((a) => !(a.staff_id && offToday.has(a.staff_id)) && a.patient_id !== loyal?.patient_id);
   const [noShow, cancelled, noted, moved] = [spare[0], spare[Math.floor(spare.length / 3)], spare[Math.floor(spare.length / 2)], spare[spare.length - 1]];
   // Made this morning from 08:00, ten minutes apart, never after the reset itself (#396).
+  // A no-show is only known once the treatment has started (#402).
   let changes = 0;
   const change = async (a: (typeof spare)[number] | undefined, data: Record<string, unknown>) => {
     if (!a) return;
     const after = await prisma.appointment.update({ where: { id: a.id }, data });
-    const timestamp = new Date(Math.min(Date.now(), today.getTime() + (150 + 10 * changes++) * 60000));
+    const ist = data.status === 'no_show' ? mins(a.start_time) + 15 : 8 * 60 + 10 * changes++;
+    const timestamp = new Date(Math.min(Date.now(), today.getTime() + (ist - 330) * 60000));
     await prisma.auditLog.create({ data: { admin_id: adminId, action: 'update', entity_type: 'appointment', entity_id: a.id, old_value: a as any, new_value: after as any, timestamp } });
   };
   await change(noShow, { status: 'no_show' });
