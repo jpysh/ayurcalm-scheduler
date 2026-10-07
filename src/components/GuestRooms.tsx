@@ -93,7 +93,7 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings }: {
               const out = leaving(r);
               // What a room needs this morning first: who arrives, who leaves (the room to make up), then who is in.
               const facts = [
-                ...arriving(r).map((g) => `${first(g.name)} arrives`),
+                ...arriving(r).map((g) => `${first(g.name)} arrives · until ${dayText(g.end_date)}`),
                 ...inIt.filter((g) => g.start_date !== day).map((g) => `${g.name} · until ${dayText(g.end_date)}`),
                 ...out.map((g) => `${first(g.name)} leaves${day === today ? " today" : ""}`),
               ].join(" · ");
