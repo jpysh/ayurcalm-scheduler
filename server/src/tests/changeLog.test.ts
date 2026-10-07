@@ -44,9 +44,11 @@ async function main() {
     const call = async (method: string, path: string, body?: unknown) => {
       const res = await fetch(`${API_BASE}${path}`, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: body ? JSON.stringify(body) : undefined });
       assert.ok(res.ok, `${method} ${path}: ${res.status} ${await res.clone().text()}`);
-      return res.json();
+      const text = await res.text();
+      return text ? JSON.parse(text) : null;
     };
-    const log = async () => (await call('GET', '/log')).entries as { id: string; text: string; undo: string | null; undone: boolean }[];
+    // The middleware writes its row once the response has gone, so give it a moment.
+    const log = async () => (await new Promise((r) => setTimeout(r, 200)), await call('GET', '/log')).entries as { id: string; text: string; undo: string | null; undone: boolean }[];
 
     const therapy = await prisma.therapy.create({ data: { name: `${TAG} Abhyanga`, duration_minutes: 60 } });
     const asha = await prisma.staff.create({ data: { name: `${TAG} Asha`, gender: 'female', specializations: [therapy.id], weekly_schedule: allWeek } });
@@ -78,6 +80,14 @@ async function main() {
     assert.equal((await log())[0].text, `Room ${TAG} Room C added`);
     await call('POST', '/timeoff', { entity_type: 'staff', entity_id: asha.id, date: DAY, description: 'Sick', plan: false });
     assert.equal((await log())[0].text, `Leave for ${asha.name} added`);
+
+    // A removal names what went, read before it was gone (#435).
+    const leave = await prisma.timeOff.findFirstOrThrow({ where: { entity_id: asha.id } });
+    await call('DELETE', `/timeoff/${leave.id}`);
+    assert.equal((await log())[0].text, `Leave for ${asha.name} removed`);
+    const roomC = await prisma.therapyRoom.findFirstOrThrow({ where: { name: `${TAG} Room C` } });
+    await call('DELETE', `/rooms/${roomC.id}`);
+    assert.equal((await log())[0].text, `Room ${TAG} Room C removed`);
 
     console.log("Log: an edit is the newest line in words, so is a room or leave added, the day check's fix can be undone from it, and then says (undone).");
   } finally {
