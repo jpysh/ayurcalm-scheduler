@@ -44,29 +44,27 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #463: small wording on a new centre — counts with their noun, empty lists that say what to do.
+// #474: a therapist added with no therapies ticked is offered as cover when another is on leave.
 await api('POST', '/settings/clear-demo-data');
-await step('Empty Rooms and Team say "yet" and point at +', '/admin/rooms', async () => {
-  const r = await text(p.locator('body'));
-  await p.goto(APP + '/admin/team'); await p.waitForTimeout(1500);
-  const t = await text(p.locator('body'));
-  return { ok: /No rooms yet\. Tap \+/.test(r) && /No one in the team yet\. Tap \+/.test(t), note: [r, t].map((x) => x.split('\n').find((l) => /yet|matches/.test(l))).join(' · ') };
-});
-await step('One room reads "1 room"', '/admin/rooms', async () => {
-  await api('POST', '/rooms', { name: 'Room 1', amenities: ['massage_table'] });
-  await p.reload(); await p.waitForTimeout(1500);
-  const t = await text(p.locator('body'));
-  return { ok: /\b1 room\b/.test(t) && !/1 rooms/.test(t), note: t.split('\n').find((l) => /room/.test(l) && /\d/.test(l)) };
-});
-await step('A therapist with nothing booked is not called "lightly booked"', '/admin/team', async () => {
-  await api('POST', '/staff', { name: 'Asha Menon', gender: 'female', role: 'therapist' });
-  await p.reload(); await p.waitForTimeout(1500);
-  const t = await text(p.locator('body'));
-  return { ok: /0 min of/.test(t) && !/lightly booked/.test(t), note: t.split('\n').find((l) => /booked/.test(l)) };
-});
-await step('Empty Leave says Tap + to add some', '/admin/timeoff', async () => {
-  const t = await text(p.locator('body'));
-  return { ok: /Tap \+ to add some/.test(t), note: t.split('\n').find((l) => /leave booked/i.test(l)) };
+const th = await api('POST', '/therapies', { name: 'Abhyanga', duration_minutes: 60, required_amenities: ['massage_table'], requires_gender_match: false });
+await api('POST', '/rooms', { name: 'Room 1', amenities: ['massage_table'] });
+const asha = await api('POST', '/staff', { name: 'Asha Menon', gender: 'female', role: 'therapist' });
+await api('POST', '/staff', { name: 'Meera Pillai', gender: 'female', role: 'therapist' });
+const pt = await api('POST', '/patients', { name: 'Priya Sharma', gender: 'female' });
+const d2 = plus(2);
+const rooms = await api('GET', '/rooms');
+await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(0), end_date: plus(6) });
+const ap = await api('POST', '/appointments/one', { patient_id: pt.id, therapy_id: th.id, staff_id: asha.id, room_id: rooms[0].id, date: d2, start_time: '10:00' });
+console.log('booked', JSON.stringify(ap).slice(0, 160));
+await api('POST', '/timeoff', { entity_type: 'staff', entity_id: asha.id, start_date: d2, end_date: d2, description: 'UAT', plan: false });
+await step("Asha's leave day: the inbox offers Meera, who has no therapies ticked", '/admin/schedule', async () => {
+  const dc = await api('GET', `/day-check?date=${d2}`);
+  const pr = (dc.problems || []).find((x) => x.appointment_id === (ap.id || ap.appointment?.id));
+  const offers = [pr?.fix, ...(pr?.choices || [])].filter(Boolean).map((c) => c.label).join(' | ');
+  const dd = new Date(`${d2}T00:00:00Z`);
+  await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${dd.getUTCDate()} ${dd.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) }));
+  await p.waitForTimeout(1500); await menu(); await go(dlg().getByRole('button', { name: /need you/ })); await p.waitForTimeout(800);
+  return { ok: /Meera/.test(offers) && !/nobody here is trained/.test(pr?.no_fix_reason || ''), note: `${pr?.what || 'no problem'} · offers: ${offers || pr?.no_fix_reason}` };
 });
 await b.close();
 
