@@ -44,27 +44,21 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #474: a therapist added with no therapies ticked is offered as cover when another is on leave.
+// #476: with one of two men on leave, booking a two-therapist therapy for a man says who is in.
 await api('POST', '/settings/clear-demo-data');
-const th = await api('POST', '/therapies', { name: 'Abhyanga', duration_minutes: 60, required_amenities: ['massage_table'], requires_gender_match: false });
+const th = await api('POST', '/therapies', { name: 'Abhyanga', duration_minutes: 60, required_amenities: ['massage_table'], requires_gender_match: true, staff_required: 2 });
 await api('POST', '/rooms', { name: 'Room 1', amenities: ['massage_table'] });
-const asha = await api('POST', '/staff', { name: 'Asha Menon', gender: 'female', role: 'therapist' });
-await api('POST', '/staff', { name: 'Meera Pillai', gender: 'female', role: 'therapist' });
-const pt = await api('POST', '/patients', { name: 'Priya Sharma', gender: 'female' });
-const d2 = plus(2);
-const rooms = await api('GET', '/rooms');
+const ravi = await api('POST', '/staff', { name: 'Ravi Kumar', gender: 'male', role: 'therapist' });
+await api('POST', '/staff', { name: 'Suresh Das', gender: 'male', role: 'therapist' });
+const pt = await api('POST', '/patients', { name: 'Arjun Rao', gender: 'male' });
 await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(0), end_date: plus(6) });
-const ap = await api('POST', '/appointments/one', { patient_id: pt.id, therapy_id: th.id, staff_id: asha.id, room_id: rooms[0].id, date: d2, start_time: '10:00' });
-console.log('booked', JSON.stringify(ap).slice(0, 160));
-await api('POST', '/timeoff', { entity_type: 'staff', entity_id: asha.id, start_date: d2, end_date: d2, description: 'UAT', plan: false });
-await step("Asha's leave day: the inbox offers Meera, who has no therapies ticked", '/admin/schedule', async () => {
-  const dc = await api('GET', `/day-check?date=${d2}`);
-  const pr = (dc.problems || []).find((x) => x.appointment_id === (ap.id || ap.appointment?.id));
-  const offers = [pr?.fix, ...(pr?.choices || [])].filter(Boolean).map((c) => c.label).join(' | ');
-  const dd = new Date(`${d2}T00:00:00Z`);
-  await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${dd.getUTCDate()} ${dd.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) }));
-  await p.waitForTimeout(1500); await menu(); await go(dlg().getByRole('button', { name: /need you/ })); await p.waitForTimeout(800);
-  return { ok: /Meera/.test(offers) && !/nobody here is trained/.test(pr?.no_fix_reason || ''), note: `${pr?.what || 'no problem'} · offers: ${offers || pr?.no_fix_reason}` };
+await api('POST', '/timeoff', { entity_type: 'staff', entity_id: ravi.id, start_date: plus(0), end_date: plus(0), description: 'UAT', plan: false });
+await step('Booking Abhyanga for Arjun on Ravi\'s leave day says only Suresh is in', '/admin/schedule', async () => {
+  await go(plusBtn('Book a treatment')); await go(dlg().getByText('Arjun Rao').first());
+  await go(dlg().getByText('Abhyanga', { exact: true }).first());
+  await p.waitForTimeout(1500);
+  const t = await text(dlg());
+  return { ok: /only Suresh Das is in that day/.test(t) && /Book /.test(t), note: t.split('\n').filter((x) => /needs|free time|Book/.test(x)).join(' · ') };
 });
 await b.close();
 
