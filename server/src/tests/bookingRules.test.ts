@@ -145,6 +145,17 @@ async function main() {
       await prisma.timeOff.delete({ where: { id: shut.id } });
     }
 
+    // Dead end 3b: the only one who gives it is on leave that day (#476). Say so, not "no free time".
+    const leave = await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: sole.id, date: new Date('2030-04-19T00:00:00.000Z'), description: 'Leave' } });
+    try {
+      const out = await options(meera.id, solo.id, '2030-04-19');
+      assert.equal(out.times.length, 0);
+      assert.match(out.why, /needs a therapist, and nobody who gives it is in that day/);
+      assert.equal(out.actions[0].kind, 'book_at', 'the next free day is no longer offered');
+    } finally {
+      await prisma.timeOff.delete({ where: { id: leave.id } });
+    }
+
     // Dead end 4: not enough therapists of the patient's gender. Add one, or allow any.
     const gender = await options(meera.id, vamana.id);
     assert.equal(gender.times.length, 0);
