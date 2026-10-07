@@ -44,21 +44,20 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #476: with one of two men on leave, booking a two-therapist therapy for a man says who is in.
+// #478: booking a two-therapist therapy names both therapists.
 await api('POST', '/settings/clear-demo-data');
-const th = await api('POST', '/therapies', { name: 'Abhyanga', duration_minutes: 60, required_amenities: ['massage_table'], requires_gender_match: true, staff_required: 2 });
+await api('POST', '/therapies', { name: 'Abhyanga', duration_minutes: 60, required_amenities: ['massage_table'], requires_gender_match: true, staff_required: 2 });
 await api('POST', '/rooms', { name: 'Room 1', amenities: ['massage_table'] });
-const ravi = await api('POST', '/staff', { name: 'Ravi Kumar', gender: 'male', role: 'therapist' });
-await api('POST', '/staff', { name: 'Suresh Das', gender: 'male', role: 'therapist' });
-const pt = await api('POST', '/patients', { name: 'Arjun Rao', gender: 'male' });
+await api('POST', '/staff', { name: 'Asha Menon', gender: 'female', role: 'therapist' });
+await api('POST', '/staff', { name: 'Meera Pillai', gender: 'female', role: 'therapist' });
+const pt = await api('POST', '/patients', { name: 'Priya Sharma', gender: 'female' });
 await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(0), end_date: plus(6) });
-await api('POST', '/timeoff', { entity_type: 'staff', entity_id: ravi.id, start_date: plus(0), end_date: plus(0), description: 'UAT', plan: false });
-await step('Booking Abhyanga for Arjun on Ravi\'s leave day says only Suresh is in', '/admin/schedule', async () => {
-  await go(plusBtn('Book a treatment')); await go(dlg().getByText('Arjun Rao').first());
-  await go(dlg().getByText('Abhyanga', { exact: true }).first());
-  await p.waitForTimeout(1500);
+await step('Booking Abhyanga names both therapists', '/admin/schedule', async () => {
+  await go(plusBtn('Book a treatment')); await go(dlg().getByText('Priya Sharma').first());
+  await go(dlg().getByText('Abhyanga', { exact: true }).first()); await p.waitForTimeout(1500);
   const t = await text(dlg());
-  return { ok: /only Suresh Das is in that day/.test(t) && /Book /.test(t), note: t.split('\n').filter((x) => /needs|free time|Book/.test(x)).join(' · ') };
+  const line = t.split('\n').findIndex((x) => /^Therapists?$/.test(x));
+  return { ok: /Therapists\n.*&/.test(t), note: t.split('\n').slice(line, line + 2).join(' · ') };
 });
 await b.close();
 
