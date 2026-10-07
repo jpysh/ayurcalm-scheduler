@@ -169,6 +169,9 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
   const weekFrom = d ? (d.last_consultation?.date.slice(0, 10) === today ? today : (d.next_consultation || d.last_consultation)?.date.slice(0, 10)) : undefined;
   const startIntake = (x: ResidentDay) => ({ vitals: x.stay!.vitals || '', concerns: x.stay!.concerns || '', tests: x.stay!.tests || '' });
   const visit = (v: Visit, withTime: boolean) => `${dayText(v.date)}${withTime ? ` ${v.start_time}` : ''}${v.doctor ? ` · ${v.doctor}` : ''}`;
+  // On the last day the discharge comes first and nothing more is booked (#406).
+  const leavingToday = !!d?.stay && d.stay.day === d.stay.days;
+  const bar = d?.stay?.discharge ? <div className="mt-3"><ChecklistBar label="Discharge summary" done={d.stay.discharge.done} total={d.stay.discharge.total} onClick={() => setChecklist(true)} /></div> : null;
   const nights = d?.stay ? Math.round((Date.parse(d.stay.end_date) - Date.parse(d.stay.start_date)) / DAY_MS) : 0;
   return (
     <BottomSheet open={!!id} onOpenChange={(o) => { if (!o) onClose(); }} title={d?.name || 'Patient'}>
@@ -177,6 +180,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
           <div className="text-sm text-muted-foreground">
             {d.stay ? `Staying ${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)} · day ${d.stay.day} of ${d.stay.days}` : 'Not staying today'}
           </div>
+          {leavingToday ? bar : null}
           {/* Story 14 (#353): the week and the doctor come first; the change lines follow, then the arrival notes. */}
           {/* Story 14 (#350): the week the doctor planned. A day with nothing booked before the next review needs booking; after it, planning waits for the review. */}
           {d.week.length > 1 ? (() => {
@@ -215,7 +219,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
           <ListGroup title="Doctor">
             {d.last_consultation?.note ? <TextRow label={`Last seen · ${visit(d.last_consultation, false)}`}>{d.last_consultation.note}</TextRow>
               : <ChangeLine label="Last seen" value={d.last_consultation ? visit(d.last_consultation, false) : 'Not seen yet'} faint={!d.last_consultation} />}
-            <ChangeLine label="Next" value={d.next_consultation ? visit(d.next_consultation, true) : 'None booked · book one'} faint={!d.next_consultation} onClick={d.next_consultation ? undefined : () => book({ id: d.id, name: d.name, consult: true })} />
+            <ChangeLine label="Next" value={d.next_consultation ? visit(d.next_consultation, true) : leavingToday ? 'None · leaving today' : 'None booked · book one'} faint={!d.next_consultation} onClick={d.next_consultation || leavingToday ? undefined : () => book({ id: d.id, name: d.name, consult: true })} />
             <TextRow label="Plan" faint={!d.doctor_plan} onClick={() => setPlan(d.doctor_plan || '')}>{d.doctor_plan || 'No plan written yet'}</TextRow>
           </ListGroup>
           {/* Story 4: everything a patient may have is a row with an arrow, filled when it is decided; nothing is forced. */}
@@ -227,7 +231,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
             <ChangeLine label="Details" value={detailsHint(d.id)} faint onClick={() => details(d.id)} />
           </div>
           {/* Story 8: what the summary still lacks. It informs and never blocks; printing is always there. */}
-          {d.stay?.discharge ? <div className="mt-3"><ChecklistBar label="Discharge summary" done={d.stay.discharge.done} total={d.stay.discharge.total} onClick={() => setChecklist(true)} /></div> : null}
+          {leavingToday ? null : bar}
           <ListGroup title="Treatments today">
             {d.treatments.length ? d.treatments.map((t) => (
               <Row key={t.id} onClick={() => openTreatment(t)} title={<>{t.start_time} · {t.status === 'no_show' ? <s>{t.therapy_name}</s> : t.therapy_name}</>}
