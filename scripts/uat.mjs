@@ -44,14 +44,22 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #488: Settings, Printed sheets offers Records for a month, which opens a PDF of that month's stays.
-await step('Printed sheets starts with Records for a month', '/admin/settings', async () => {
-  await go(p.getByText('Printed sheets').first()); await p.waitForTimeout(800);
-  const t = await text(dlg());
-  const opts = await dlg().getByLabel('Records for a month').locator('option').allInnerTexts();
-  const pages = []; p.context().on('page', (pg) => pages.push(pg));
-  await dlg().getByLabel('Records for a month').selectOption({ index: 1 }); await p.waitForTimeout(3000);
-  return { ok: /Records for a month/.test(t) && opts.length === 13 && pages.length === 1, note: `${opts.slice(1, 3).join(', ')}… · ${pages.length} PDF tab opened` };
+// #489: a guest arriving next week fills their own details on their private link.
+await api('POST', '/settings/clear-demo-data');
+const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female' });
+await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(7), end_date: plus(20) });
+const link = await api('POST', `/patients/${pt.id}/link`);
+await step('The link asks for their details', `/l/${link.token}`, async () => {
+  const t = await text(p.locator('body'));
+  return { ok: /Your details/.test(t) && /0 of 7 filled in/.test(t), note: t.split('\n').filter((x) => /details|filled/.test(x)).join(' · ') };
+});
+await step('They fill them and the card has them', `/l/${link.token}`, async () => {
+  await go(p.getByText('Your details').first());
+  for (const [l, v] of [['Your phone', '+49 151 2345678'], ['Date of birth', '1980-02-01'], ['Nationality', 'Germany'], ['Passport or ID', 'C01X00T47'], ['Home address', 'Hauptstr. 1, Berlin'], ['Someone to call', 'Jonas Weber'], ['Their phone', '+49 151 7654321']]) await dlg().getByLabel(new RegExp(l)).fill(v);
+  await go(dlg().getByRole('button', { name: 'Save my details' })); await p.waitForTimeout(1200);
+  const t = await text(p.locator('body'));
+  const saved = (await api('GET', '/patients')).find?.((x) => x.id === pt.id) ?? {};
+  return { ok: /All filled in/.test(t) && saved.country === 'Germany', note: `${t.split('\n').find((x) => /filled/.test(x))} · saved country ${saved.country}` };
 });
 await b.close();
 

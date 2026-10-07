@@ -63,8 +63,11 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
       meals = mealOrder.filter((m) => diet.meals[m]).map((m) => ({ meal: mealLabel[m], text: diet.meals[m]! }));
     }
   }
+  // A patient fills their own details before arriving (#489): what the card's More details holds.
+  const details = who.kind === 'patient' ? await prisma.patient.findUnique({ where: { id: who.id }, select: DETAILS }) : null;
   res.json({
     who: { kind: who.kind, name: who.name },
+    ...(details ? { details: { ...details, date_of_birth: details.date_of_birth?.toISOString().slice(0, 10) ?? null } } : {}),
     centre: settings?.centre_name || 'Wellness Centre',
     date, today, off, meals,
     items: appts.map((a) => {
@@ -120,6 +123,21 @@ linkRouter.post('/:token/appointments/:id', async (req: Request, res: Response) 
   }
   const updated = await prisma.appointment.update({ where: { id: a.id }, data: { record: record as Prisma.InputJsonValue, ...(notes !== undefined ? { notes } : {}) } });
   res.json({ id: updated.id, record: updated.record, note: updated.notes });
+});
+
+const DETAILS = { phone: true, email: true, date_of_birth: true, address: true, country: true, id_number: true, emergency_contact: true, emergency_phone: true } as const;
+const field = z.string().trim().max(200);
+linkRouter.put('/:token/details', async (req: Request, res: Response) => {
+  const who = await personOf(String(req.params.token));
+  if (!who) return gone(res);
+  if (who.kind !== 'patient') { res.status(403).json({ error: 'Only a patient fills their own details.' }); return; }
+  const b = z.object({
+    phone: field, email: field, address: z.string().trim().max(500), country: field, id_number: field, emergency_contact: field, emergency_phone: field,
+    date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')),
+  }).partial().strict().parse(req.body);
+  const { date_of_birth, ...rest } = b;
+  const saved = await prisma.patient.update({ where: { id: who.id }, select: DETAILS, data: { ...rest, ...(date_of_birth !== undefined ? { date_of_birth: date_of_birth ? new Date(`${date_of_birth}T00:00:00.000Z`) : null } : {}) } });
+  res.json(saved);
 });
 
 export const ISSUE_KINDS = ['room', 'co_therapist', 'patient_absent', 'sos', 'permission', 'note'] as const;

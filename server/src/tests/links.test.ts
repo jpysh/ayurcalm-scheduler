@@ -72,6 +72,14 @@ try {
   assert.equal((await call(`/public/link/${p}/appointments/${mineA.id}`, { feedback: 'down', feedback_note: 'Too hot' })).status, 200);
   assert.ok((await call(`/public/link/${p}/appointments/${mineA.id}`, { room_ready: true })).status >= 400, 'a resident cannot record for staff');
   assert.equal((await call(`/public/link/${p}/issues`, { kind: 'sos' })).status, 403);
+  // Their own details before arriving (#489): read and saved on their link; never from a staff link, never an unknown field.
+  assert.equal(own.details.country, null);
+  const putDetails = (tok: string, body: unknown) => fetch(`${API}/public/link/${tok}/details`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await putDetails(p, { country: 'Germany', id_number: 'C01X00T47', date_of_birth: '1980-02-01' })).status, 200);
+  const saved = await prisma.patient.findUniqueOrThrow({ where: { id: patient.id } });
+  assert.deepEqual([saved.country, saved.id_number, saved.date_of_birth?.toISOString().slice(0, 10)], ['Germany', 'C01X00T47', '1980-02-01']);
+  assert.equal((await putDetails(t, { country: 'X' })).status, 403, 'a therapist link cannot write a patient');
+  assert.ok((await putDetails(p, { name: 'Someone else' })).status >= 400, 'a link cannot change the name');
 
   // The admin reads both on the day, as notes: the room issue and the 👎.
   const check = await (await call(`/day-check?date=${DAY}`, undefined, admin)).json();

@@ -18,7 +18,10 @@ type Item = {
   vitals?: { field: string; value: string }[]; room_ready?: boolean; note?: string | null;
   feedback?: "up" | "down" | null; feedback_note?: string | null;
 };
-type Day = { who: { kind: "therapist" | "doctor" | "patient"; name: string }; centre: string; date: string; today: string; off?: string | null; meals?: { meal: string; text: string }[]; items: Item[] };
+type Details = { phone: string | null; email: string | null; date_of_birth: string | null; address: string | null; country: string | null; id_number: string | null; emergency_contact: string | null; emergency_phone: string | null };
+// What a patient fills before arriving (#489), the card's More details in their words.
+const ASK: [keyof Details, string, string?][] = [["phone", "Your phone", "tel"], ["email", "Email (optional)", "email"], ["date_of_birth", "Date of birth (yyyy-mm-dd)"], ["country", "Nationality"], ["id_number", "Passport or ID number"], ["address", "Home address"], ["emergency_contact", "Someone to call in an emergency"], ["emergency_phone", "Their phone", "tel"]];
+type Day = { details?: Details; who: { kind: "therapist" | "doctor" | "patient"; name: string }; centre: string; date: string; today: string; off?: string | null; meals?: { meal: string; text: string }[]; items: Item[] };
 
 const VITAL: Record<string, string> = { bp: "BP", pulse: "Pulse", weight: "Weight (kg)", temp: "Temperature", spo2: "SpO₂", sugar: "Blood sugar" };
 const ISSUES: [string, string][] = [["room", "Room not usable"], ["co_therapist", "Co-therapist not here"], ["patient_absent", "Patient not here"], ["permission", "Need permission"], ["note", "A note for the admin"], ["sos", "SOS: need help now"]];
@@ -81,6 +84,15 @@ export default function LinkView() {
     setDay((d) => d && { ...d, items: d.items.map((x) => (x.id === item.id ? { ...x, ...patch } : x)) });
     const res = await fetch(`${API_BASE}/public/link/${token}/appointments/${item.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
     if (!res?.ok) { toast.error("Not saved. Check the connection and try again."); load(); }
+  };
+  const [mine, setMine] = useState<Details | null>(null);
+  const saveDetails = async () => {
+    setBusy(true);
+    const body = Object.fromEntries(ASK.map(([k]) => [k, mine![k] ?? ""]));
+    const res = await fetch(`${API_BASE}/public/link/${token}/details`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) { toast.error("Not saved. Check what you typed and try again."); return; }
+    toast.success("Thank you. The centre has your details."); setMine(null); load();
   };
   const sendIssue = async (kind: string) => {
     const res = await fetch(`${API_BASE}/public/link/${token}/issues`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, note: issueNote || undefined, appointment_id: raise?.appointment_id }) }).catch(() => null);
@@ -156,6 +168,13 @@ export default function LinkView() {
           );
         })}</ListGroup>}
       </div>
+      {day.details ? (() => {
+        const filled = ASK.filter(([k]) => k !== "email" && day.details![k]).length, need = ASK.length - 1;
+        return <ListGroup><Row title="Your details" facts={filled === need ? "All filled in. Thank you." : `${filled} of ${need} filled in. Please add them before you arrive.`} trailing="›" onClick={() => setMine({ ...day.details! })} /></ListGroup>;
+      })() : null}
+      <BottomSheet open={!!mine} onOpenChange={(o) => { if (!o) setMine(null); }} title="Your details" note="The centre needs these for your stay. Only the centre sees them." foot={<Foot label="Save my details" busy={busy} save={saveDetails} />}>
+        {mine ? ASK.map(([k, label, type]) => <Text key={k} label={label} type={type} value={mine[k] ?? ""} onChange={(e) => setMine({ ...mine, [k]: e.target.value })} />) : null}
+      </BottomSheet>
       {day.meals?.length ? <ListGroup title="Meals">{day.meals.map((m) => <TextRow key={m.meal} label={m.meal}>{m.text}</TextRow>)}</ListGroup> : null}
 
       {isDoctor && leaving.length ? (
