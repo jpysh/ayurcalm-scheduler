@@ -98,6 +98,7 @@ const App = () => {
               <Route path="/:username/log" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/:username/events" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/:username/patients" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+              <Route path="/:username/guestrooms" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/:username/settings" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/admin/dashboard/*" element={<Navigate to="/admin/schedule" replace />} />
               <Route path="*" element={<NotFound />} />

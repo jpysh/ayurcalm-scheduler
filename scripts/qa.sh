@@ -60,6 +60,7 @@ run daySheet           "The day sheet lists every resident, treatment time and t
 run unstaffedSheets   "A treatment booked with a therapist who is off shows, marked, on both the patient sheet and the therapist rota"
 run guestRooms        "Guest rooms: a range adds them all, a taken name is refused, a used room is retired, and no room holds more than its beds"
 run guestRoomStay     "A guest room is refused on any night it is full, naming the free ones; it frees on the leaving day, takes a couple in two beds, is re-checked when dates change, and prints beside the name"
+run guestRoomRange    "Is a room free: a guest room is free over a range only with a bed on every night, the leaving night counts as free"
 run nextWeek          "Plan next week repeats this week a week on, a swap changes one line, and Book all books every line and the review or nothing; a once-a-course therapy is left out, and a second one is asked about"
 run residentStay     "A resident added in the app, with a stay and a diet plan, is on the day sheet; leaving early cancels what is left, and Undo restores it"
 run patientStories   "Meals by date, what a discharge summary lacks, package and accommodation, a shortened stay cancelled with its reason and undone, a leave planned later"

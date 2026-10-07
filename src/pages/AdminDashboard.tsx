@@ -4,6 +4,7 @@ import { useTrial } from "@/lib/centreName";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useLocation, useNavigate } from "react-router-dom";
 import { BottomBar, WeekStrip, SCREENS } from "@/components/BottomBar";
+import { GuestRooms } from "@/components/GuestRooms";
 import { TeamRooms } from "@/components/TeamRooms";
 import { LogScreen } from "@/components/LogScreen";
 import { AttentionSheet, type DayProblem, type ReplanBatch } from "@/components/AttentionSheet";
@@ -585,6 +586,11 @@ const AdminDashboard = () => {
           {eventsScreen.dialogs}
 
     {dietScreen.dialogs}
+
+          <TabsContent value="guestrooms" data-testid="tabpanel-guestrooms">
+            {activeTab === 'guestrooms' ? <GuestRooms today={ymdInTZ(new Date())} openPatient={(id) => patientsScreen.openResident(id)}
+              newPatient={(p) => patientsScreen.openAdd(p)} openSettings={() => { setSettingsSheet('accommodation'); go('settings'); }} /> : null}
+          </TabsContent>
 
           <TabsContent value="log" data-testid="tabpanel-log">
             <LogScreen timezone={ADMIN_TZ} refresh={() => refreshAppointmentsForDate(dayKeyMemo, true)} />
