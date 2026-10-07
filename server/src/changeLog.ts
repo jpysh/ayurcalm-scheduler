@@ -113,7 +113,7 @@ async function removing(prisma: PrismaClient, kind: string, id: string): Promise
   if (kind === 'program-events') return prisma.programEvent.findUnique(where).then((e) => e && { name: e.activity_name });
   if (kind === 'timeoff' || kind === 'holidays') {
     const t = await prisma.timeOff.findUnique(where);
-    return t && { entity_id: t.entity_id, name: t.entity_id ? undefined : t.description || t.date?.toISOString().slice(0, 10) };
+    return t && { entity_id: t.entity_id, name: t.entity_id ? undefined : t.description || t.date?.toISOString().slice(0, 10), start_date: (t.start_date ?? t.date)?.toISOString(), end_date: t.end_date?.toISOString() };
   }
   return null;
 }
@@ -125,7 +125,8 @@ export const logWrites = (prisma: PrismaClient) => async (req: Request, res: Res
   // Sharing a link hands out the one there is; only a renewal changes anything (#461).
   if (/\/link$/.test(path) && req.query.renew !== '1') return next();
   const [, kind = '', id] = path.split('/');
-  const was = req.method === 'DELETE' && id ? await removing(prisma, kind, id).catch(() => null) : null;
+  const was = req.method === 'DELETE' && id ? await removing(prisma, kind, id).catch(() => null)
+    : req.method === 'PUT' && kind === 'settings' && !id ? await prisma.settings.findFirst().catch(() => null) : null;
   let sent: unknown;
   const json = res.json.bind(res);
   res.json = (b: unknown) => { sent = b; return json(b); };
@@ -179,9 +180,18 @@ function wrote(w: Wrote, lists: { patients: Named; staff: Named; rooms: Named; t
   if (kind === 'timeoff' || kind === 'holidays') {
     const of = named(b.entity_id);
     const what = of ? ` for ${of}` : typeof b.name === 'string' ? ` ${b.name}` : '';
-    return `${cap(KIND[kind])}${what} ${verb}`;
+    // Leave without its dates said nothing about when (#479).
+    const from = b.start_date ?? b.date; const to = b.end_date;
+    const when = typeof from === 'string' ? `, ${day(from)}${typeof to === 'string' && to.slice(0, 10) !== from.slice(0, 10) ? ` to ${day(to)}` : ''}` : '';
+    return `${cap(KIND[kind])}${what} ${verb}${when}`;
   }
-  if (kind === 'settings') return ({ import: 'A backup restored', 'clear-demo-data': 'Example data cleared', 'reset-demo-data': 'Example data reset', 'setup-reviewed': 'Setup marked as reviewed' } as Record<string, string>)[id] || 'Settings changed';
+  if (kind === 'settings' && id === 'setup-reviewed') return `Setup: ${typeof b.item === 'string' ? b.item.replace(/[-_]/g, ' ') : 'a part'} marked as reviewed`;
+  if (kind === 'settings' && !id && w.was) {
+    // Name what changed, not just 'Settings changed' (#479).
+    const changed = Object.keys(w.body || {}).filter((k) => k !== 'updated_at' && JSON.stringify((w.body as Record<string, unknown>)[k]) !== JSON.stringify((w.was as Record<string, unknown>)[k]));
+    if (changed.length) return `Settings changed: ${changed.slice(0, 3).map((k) => k.replace(/_/g, ' ')).join(', ')}${changed.length > 3 ? ` and ${changed.length - 3} more` : ''}`;
+  }
+  if (kind === 'settings') return ({ import: 'A backup restored', 'clear-demo-data': 'Example data cleared', 'reset-demo-data': 'Example data reset' } as Record<string, string>)[id] || 'Settings changed';
   if (kind === 'attention') return 'What needs you rules changed';
   if (kind === 'account') return 'Your password changed';
   if (kind === 'mcp-key') return 'The assistant key changed';
