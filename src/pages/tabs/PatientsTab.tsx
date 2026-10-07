@@ -186,6 +186,16 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
   // On the last day the discharge comes first and nothing more is booked (#406).
   const leavingToday = !!d?.stay && d.stay.day === d.stay.days;
   const bar = d?.stay?.discharge ? <div className="mt-3"><ChecklistBar label="Discharge summary" done={d.stay.discharge.done} total={d.stay.discharge.total} onClick={() => setChecklist(true)} /></div> : null;
+  // Story s18 (#422): what a new patient needs, on the arrival days, each step opening its own line.
+  const arriving = !!d?.stay && (d.stay.day <= 3 || !d.stay.vitals);
+  const steps = d?.stay && arriving ? ([
+    ['Consultation', !!(d.last_consultation || d.next_consultation), d.next_consultation ? visit(d.next_consultation, true) : d.last_consultation ? `Seen ${visit(d.last_consultation, false)}` : undefined, () => book({ id: d.id, name: d.name, consult: true })],
+    ['Diet', !!d.plan_name, d.plan_name || undefined, () => changeMeals(d)],
+    ['Package', !!d.stay.package, d.stay.package ? `${d.stay.package.days} days` : undefined, () => changePackage(d)],
+    ...(d.stay.on_site !== false ? [['Room', !!d.stay.accommodation, d.stay.accommodation?.name, () => changeHouse(d)]] : []),
+    ...(d.form_c ? [['Form C', !!d.form_c.filed, d.form_c.filed ? `Filed ${dayText(d.form_c.filed)}` : undefined, () => setFormC(true)]] : []),
+  ] as [string, boolean, string | undefined, () => void][]) : null;
+  const [arrival, setArrival] = useState(false);
   const nights = d?.stay ? Math.round((Date.parse(d.stay.end_date) - Date.parse(d.stay.start_date)) / DAY_MS) : 0;
   return (
     <>
@@ -196,6 +206,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
             {d.stay ? `Staying ${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)} · day ${d.stay.day} of ${d.stay.days}` : d.last_stay ? `Stayed until ${stayDay(d.last_stay.end_date)}` : 'Not staying today'}
           </div>
           {leavingToday ? bar : null}
+          {steps && !leavingToday ? <div className="mt-3"><ChecklistBar label="Arrival" done={steps.filter((x) => x[1]).length} total={steps.length} onClick={() => setArrival(true)} /></div> : null}
           {/* Story 14 (#353): the week and the doctor come first; the change lines follow, then the arrival notes. */}
           {/* Story 14 (#350): the week the doctor planned. A day with nothing booked before the next review needs booking; after it, planning waits for the review. */}
           {d.week.length > 1 ? (() => {
@@ -286,6 +297,11 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
           {d?.form_c?.fields.map(([label, value]) => value
             ? <Row key={label} title={label} facts={/^\d{4}-\d{2}-\d{2}$/.test(value) ? dayText(value) : value} trailing="Copy" onClick={() => copy(label, value.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3/$2/$1'))} />
             : <Row key={label} title={label} flag="Not recorded" onClick={() => { setFormC(false); details(d.id); }} />)}
+        </ListGroup>
+      </BottomSheet>
+      <BottomSheet open={arrival && !!steps} onOpenChange={setArrival} title={`Arrival · ${d?.name.split(' ')[0] ?? ''}`} note="What a new patient needs. Nothing here blocks a booking.">
+        <ListGroup>
+          {steps?.map(([label, done, fact, open]) => <Row key={label} title={label} facts={done ? fact ?? 'Done' : undefined} flag={done ? undefined : 'Not done yet'} trailing={done ? '✓' : undefined} onClick={() => { setArrival(false); open(); }} />)}
         </ListGroup>
       </BottomSheet>
       {d && weekFrom ? <NextWeekSheet patient={week ? d : null} review={weekFrom} onClose={() => setWeek(false)} onBooked={load} /> : null}
