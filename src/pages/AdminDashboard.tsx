@@ -23,7 +23,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout, API_TOKEN, type ApiAppointment, type ApiProgramEvent, type Patient, type UiRoom, type UiStaff, type UiTherapy, type UiTimeOff } from "./tabs/shared";
 import PageHead, { BackContext } from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
-import { Consequence, ListGroup, Row, SheetFoot } from "@/components/kit";
+import { Consequence, dayText, ListGroup, Row, SheetFoot } from "@/components/kit";
 
 /** Builds the schedule's time rows from the centre's opening hours. */
 const buildTimeSlots = (openingTime: string, closingTime: string, slotMinutes: number) => {
@@ -664,21 +664,25 @@ const AdminDashboard = () => {
         now={new Date().toLocaleTimeString("en-GB", { timeZone: ADMIN_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}
         setDay={(iso) => { const [y, m, d] = iso.split('-').map(Number); setCurrentDate(new Date(y, m - 1, d)); }}
         printing={!!scheduleScreen.pdfLoading}
+        // After closing on today the evening job is tomorrow's sheet (#459), so Print gives that day and says so.
+        printDay={evening ? tomorrowKey : dayKeyMemo}
         print={async () => {
-          if (!(await scheduleScreen.printSheet('patient'))) return;
+          const iso = evening ? tomorrowKey : dayKeyMemo;
+          if (!(await scheduleScreen.printSheet('patient', iso))) return;
           // Still prints with problems open: the admin may be printing on purpose.
           // It just says so (#134). The rota is a second tap, a fresh gesture, so
           // the phone does not block its tab as a popup.
-          const open = dayCheck.problems.filter((p) => p.problem_class === 'blocking').length;
+          const open = evening ? tomorrowFix : dayCheck.problems.filter((p) => p.problem_class === 'blocking').length;
+          const fixFirst = () => { if (evening) setCurrentDate(new Date(`${tomorrowKey}T00:00:00`)); setShowAttention(true); };
           // The two other sheets under the words, not beside them: two buttons in a row squeezed the text to a word a line (#273 O2).
           const more = "min-h-11 rounded-full px-1 text-base font-bold text-on-dark";
           toast(<div className="w-full">
-            <div>Patient sheet printed{open ? ` · ${open} still to fix` : ''}</div>
+            <div>Patient sheet for {dayText(iso)} printed{open ? ` · ${open} still to fix` : ''}</div>
             <div className="mt-1 flex flex-wrap gap-x-4">
-              {open ? <button type="button" className={more} onClick={() => setShowAttention(true)}>Fix {open} first</button> : null}
-              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('therapist')}>Therapist sheet</button>
-              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('doctor')}>Doctor sheet</button>
-              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('kitchen')}>Kitchen sheet</button>
+              {open ? <button type="button" className={more} onClick={fixFirst}>Fix {open} first</button> : null}
+              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('therapist', iso)}>Therapist sheet</button>
+              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('doctor', iso)}>Doctor sheet</button>
+              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('kitchen', iso)}>Kitchen sheet</button>
             </div>
           </div>, { duration: 10000 });
         }}

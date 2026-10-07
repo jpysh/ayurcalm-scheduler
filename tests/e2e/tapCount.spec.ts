@@ -238,7 +238,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await showDay(page, today);
       const download = page.waitForEvent('download');
       await tap(page.getByRole('button', { name: 'Menu', exact: true }));
-      await tap(page.getByRole('dialog').getByRole('button', { name: /^Print the day's sheets/ }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Print (the day's|tomorrow's) sheets/ }));
       expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
       return 'the therapist rota is a second tap, on the note that follows';
     });
