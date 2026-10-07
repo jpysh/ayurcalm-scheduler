@@ -549,10 +549,11 @@ async function main() {
   }
   // A room out of use for the afternoon, chosen among rooms with nothing booked
   // then, so it shows as closed without adding a problem Verify must solve.
-  const afternoon = (t: string) => t >= '14:00';
-  const bookedAfternoon = new Set(spare.filter((a) => afternoon(a.start_time)).map((a) => a.room_id));
+  // Still running at 14:00 counts: a 13:30 in the room made a fourth problem (#404).
+  const afternoon = (a: { start_time: string; duration_minutes: number }) => mins(a.start_time) + a.duration_minutes > 14 * 60;
+  const bookedAfternoon = new Set(spare.filter(afternoon).map((a) => a.room_id));
   // The dense seed books every room most afternoons; then a spare one, made after the booking, takes the repair, so the leave is always there.
-  const idleRoom = rooms.find((r) => !bookedAfternoon.has(r.id) && !todaysBookings.some((a) => a.room_id === r.id && afternoon(a.start_time)))
+  const idleRoom = rooms.find((r) => !bookedAfternoon.has(r.id) && !todaysBookings.some((a) => a.room_id === r.id && afternoon(a)))
     ?? await prisma.therapyRoom.create({ data: { name: 'Annexe', amenities: amenitiesSet, weekly_schedule: scheduleStd, is_active: true } });
   await prisma.timeOff.create({ data: { entity_type: 'room', entity_id: idleRoom.id, date: today, start_time: '14:00', end_time: '20:00', description: 'Plumbing repair' } });
 
