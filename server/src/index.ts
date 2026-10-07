@@ -17,6 +17,7 @@ import { usersRouter, accountRouter } from './users.js';
 import { dietTemplatesRouter } from './dietTemplates.js';
 import { packagesRouter, accommodationsRouter } from './catalogues.js';
 import { mcpRouter, mcpKeyRouter } from './mcp.js';
+import { logWrites } from './changeLog.js';
 import { ZodError } from 'zod';
 import path from 'path';
 import fs from 'fs';
@@ -129,6 +130,7 @@ expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
   if (p === '/health' || p.startsWith('/public/')) return next();
   return requireAuth(req, res, next);
 });
+expressApp.use('/api', logWrites(prisma));
 expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
   // The day check is a POST only to carry a body; it writes nothing, and
   // Verify calls it on every change, so it stays under the global limit (#152).
