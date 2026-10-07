@@ -11,8 +11,8 @@ const SHORT: Record<string, string> = {
   GENDER_MISMATCH: "Therapist must match", STAFF_SHORT: "Needs 2 therapists", PATIENT_BUSY: "Patient booked twice",
   ROOM_BUSY: "Room booked twice", AMENITIES_MISSING: "Room lacks what it needs", NO_THERAPIST: "Needs a therapist", EVENT_OVERLAP: "Runs through an event",
 };
-const flagsFor = (problems: { appointment_id: string | null; kind: string; problem_class: string }[]) =>
-  Object.fromEntries(problems.filter((p) => p.appointment_id && p.kind !== "CONSULTED").map((p) => [p.appointment_id!, { text: SHORT[p.kind] || "Needs a look", blocking: p.problem_class === "blocking" }]));
+const flagsFor = (problems: { appointment_id: string | null; kind: string; problem_class: string }[], history: Record<string, string> = {}) =>
+  Object.fromEntries([...Object.entries(history).map(([id, text]) => [id, { text, blocking: false, info: true }]), ...problems.filter((p) => p.appointment_id && p.kind !== "CONSULTED").map((p) => [p.appointment_id!, { text: SHORT[p.kind] || "Needs a look", blocking: p.problem_class === "blocking" }])]);
 
 /** Minutes past midnight now, on the centre's clock. */
 const nowInTZ = (timeZone: string) => {
@@ -25,7 +25,7 @@ const nowInTZ = (timeZone: string) => {
 };
 
 /** The Schedule screen, and the day sheets the bottom bar prints for the day it is on. */
-export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime, refreshDay, movedFrom, problems, showDay, openResident, staffCount, addTherapist, addPatient }: Record<string, any>) {
+export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime, refreshDay, movedFrom, problems, history, showDay, openResident, staffCount, addTherapist, addPatient }: Record<string, any>) {
   const [view, setView] = useState<DayView>("time");
   const [query, setQuery] = useState("");
   // Search is its own screen over every day (#165); the day list does not filter.
@@ -122,7 +122,7 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
       onNotIn={notIn}
       movedFrom={movedFrom}
       roomCount={roomsList.filter((r: { is_active?: boolean }) => r.is_active !== false).length}
-      flags={flagsFor(problems || [])}
+      flags={flagsFor(problems || [], history)}
     />
   );
 
