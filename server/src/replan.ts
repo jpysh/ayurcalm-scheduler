@@ -20,7 +20,7 @@
  * them, so it is put to the admin: only their Accept applies it.
  */
 import { PrismaClient, Prisma } from '@prisma/client';
-import { centreClock, offOnDay, stayOn, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow } from './availability.js';
+import { centreClock, offOnDay, staffAwayOnDay, stayOn, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow } from './availability.js';
 import { HAPPENING, findConflict, loadDay, type Action, type Conflict } from './appointmentGuard.js';
 
 /** Which of the tier 4 choices a move is. */
@@ -177,7 +177,7 @@ export async function planDay(
   }
   for (const s of staff) {
     for (const b of staffEventBusy(events, s.id, date)) addBusy(staffBusy, s.id, b.s, b.e);
-    for (const b of offOnDay(timeOff, 'staff', s.id, date)) addBusy(staffBusy, s.id, b.s, b.e);
+    for (const b of staffAwayOnDay(timeOff, s, date)) addBusy(staffBusy, s.id, b.s, b.e);
   }
   for (const r of rooms) for (const b of offOnDay(timeOff, 'room', r.id, date)) addBusy(roomBusy, r.id, b.s, b.e);
   const roomName = (id: string | null) => rooms.find((r) => r.id === id)?.name || '';
@@ -355,7 +355,7 @@ export async function planDay(
             otherDay.some((a) => a.id !== appt.id && teamOf(a).includes(sid) && hits(a, t, e)) ||
             taken.some((x) => x.team.includes(sid) && overlaps(x.s, x.e, t, e)) ||
             staffEventBusy(events, sid, other).some((b) => overlaps(b.s, b.e, t, e)) ||
-            offOnDay(timeOff, 'staff', sid, other).some((b) => overlaps(b.s, b.e, t, e));
+            staffAwayOnDay(timeOff, staff.find((x) => x.id === sid) ?? { id: sid }, other).some((b) => overlaps(b.s, b.e, t, e));
           const team = teamFor((sid) => !busyThen(sid), false);
           if (!team) continue;
           const room = rooms.find(
@@ -465,7 +465,7 @@ export async function planDay(
     // Too few hands is the cause more often than a full diary: name who is
     // trained and who is in, and offer the fix for that (#368).
     const trained = staff.filter((s) => qualified(s, false));
-    const inThen = trained.filter((s) => s.id !== staffId && !offOnDay(timeOff, 'staff', s.id, date).some((b) => overlaps(b.s, b.e, start, start + duration)));
+    const inThen = trained.filter((s) => s.id !== staffId && !staffAwayOnDay(timeOff, s, date).some((b) => overlaps(b.s, b.e, start, start + duration)));
     const listed = (xs: typeof staff) => xs.map((s) => s.name).join(' and ');
     const gendered = enforceGender && therapy?.requires_gender_match ? " of the patient's gender" : '';
     const hands = needed === 1 ? `a therapist${gendered}` : `${["", "one", "two", "three"][needed] ?? needed} therapists${gendered}`;

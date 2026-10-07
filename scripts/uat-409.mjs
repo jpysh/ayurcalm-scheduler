@@ -1,0 +1,27 @@
+// node scripts/uat-409.mjs — #409: Fix all on a day with a weekly day off, at 375x812.
+import { chromium } from '@playwright/test';
+import { writeFileSync } from 'node:fs';
+const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';
+const OUT = 'docs/design/uat/2026-10-07-weekly-hours';
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+const p = await ctx.newPage();
+const lines = [];
+const shot = async (id, title, ok, note) => { await p.screenshot({ path: `${OUT}/${id}.png` }); lines.push(`| ${id} | ${title} | ${ok ? 'pass' : 'FAIL'} | ${note} | ![${id}](${id}.png) |`); console.log(id, ok, note); };
+await p.goto(APP + '/'); await p.waitForTimeout(2000);
+await p.getByRole('button', { name: 'Menu', exact: true }).click(); await p.waitForTimeout(700);
+await p.getByRole('dialog').last().getByRole('button', { name: /need you/ }).click(); await p.waitForTimeout(1200);
+const fix = p.getByRole('button', { name: /Fix all/ });
+await shot('01', 'Inbox offers Fix all', await fix.count() > 0, (await fix.first().innerText().catch(() => 'no Fix all')).replace(/\n/g, ' '));
+await fix.first().click(); await p.waitForTimeout(2500);
+const body = await p.locator('body').innerText();
+const refused = /does not work on/.test(body);
+await shot('02', 'Fix all is accepted, not refused', !refused && /Undo/.test(body), refused ? 'refused: ' + body.match(/.*does not work on.*/)?.[0] : 'Undo shown, no refusal');
+const dc = await (await fetch(`${APP}/api/day-check?date=${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })}`, { headers: { Authorization: `Bearer ${token}` } })).json();
+const left = dc.problems.filter((x) => x.problem_class === 'blocking').length;
+await p.goto(APP + '/'); await p.waitForTimeout(2000);
+await shot('03', 'The day after: nothing left to fix', left === 0, `${left} blocking problems left`);
+writeFileSync(`${OUT}/README.md`, `# #409 UAT, 7 Oct (full seed, Wed, a therapist's weekly day off)\n\nBefore: Task B shots s2-03 (Fix all refused, 'Anjali Verma does not work on Wednesdays.') and s2-05 (still 5), in the Task B artifact.\n\n| # | Step | Result | Read | Shot |\n|---|---|---|---|---|\n${lines.join('\n')}\n`);
+await b.close();
