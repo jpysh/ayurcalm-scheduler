@@ -20,6 +20,8 @@ After launch (a real centre using it): server tests stay blocking; the smoke set
 PR; the full browser set runs nightly and before each release and blocks a release, not a PR; every bug
 found by a user leaves one regression test; production watches (health ping, daily check, a monthly
 restore drill from the backup, alerts to the maintainer) matter more than more browser tests.
+- **Release check:** Actions, "Release check", Run workflow. It runs the full browser set on main and goes
+  red on any failure; release only from a green run (#319).
 
 **What to run before a pull request** (agreed 2026-09-27, while there are no
 users). CI from a fresh database is the gate; don't repeat it locally.
