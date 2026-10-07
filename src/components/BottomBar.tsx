@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/apiBase";
 import { Menu, Plus } from "lucide-react";
-import { BottomSearch, BottomSheet, DateRow, dayText, Group, ListGroup, Row, Seg, Btn, Tile } from "@/components/kit";
+import { BottomSearch, BottomSheet, DateRow, dayText, Group, ListGroup, plural, Row, Seg, Btn, Tile } from "@/components/kit";
 
 /**
  * The phone frame from docs/design/phone.html (#66): one bar at the bottom, in
@@ -78,7 +78,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
       const out = days.filter((d) => d.off).map((d) => staff.find((s) => s.id === d.staff_id)?.name.split(" ")[0]).filter(Boolean);
       setHints({
         patients: `${residents.length} in house`,
-        rooms: `${rooms.length} rooms${roomsOut ? ` · ${roomsOut} out` : ""}`,
+        rooms: `${plural(rooms.length, "room")}${roomsOut ? ` · ${roomsOut} out` : ""}`,
         team: out.length === 0 ? "Everyone in" : out.length === 1 ? `${out[0]} not in` : `${out.length} not in`,
         schedule: dayText(day),
         ...(guestRooms.length ? { guestrooms: `${guestRooms.filter((r) => r.free).length} free tonight` } : {}),

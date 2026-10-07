@@ -12,7 +12,7 @@ import { API_BASE } from "@/lib/apiBase";
 import PageHead from "@/components/PageHead";
 import { BottomSheet, WeekStrip } from "@/components/BottomBar";
 import { useShareLink } from "@/components/ShareLink";
-import { Callout, ChangeLine, DateRow, Empty, ListGroup, Row, SheetFoot, TimeList, dayText, timesBetween } from "@/components/kit";
+import { Callout, ChangeLine, DateRow, Empty, ListGroup, Row, SheetFoot, TimeList, dayText, plural, timesBetween } from "@/components/kit";
 import { roomSub } from "@/components/SetupSheets";
 import type { UiRoom, UiStaff } from "@/pages/tabs/shared";
 
@@ -113,11 +113,11 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
       {isTeam ? <>
         <PageHead title="Team" note={day === today ? `${staff.filter(staffActive).length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}` : `${on < 0 ? "…" : inOn} in on ${dayText(day)}`} gear={{ label: "What needs you: team rules", run: openRules }} />
         <WeekStrip day={day} today={today} setDay={setDay} />
-      </> : <PageHead title="Rooms" note={`${rooms.filter(roomActive).length} rooms${roomsOut ? ` · ${roomsOut} out` : ""}`} />}
+      </> : <PageHead title="Rooms" note={`${plural(rooms.filter(roomActive).length, "room")}${roomsOut ? ` · ${roomsOut} out` : ""}`} />}
       {isTeam && on >= 0 && week!.gaps[on].length && !ql ? (
         <div className="mt-3"><Callout tone="notice" title="Too few therapists in">{week!.gaps[on].map((g) => `${g.start}–${g.end} · ${g.in ? `only ${g.in} in` : "no one in"}`).join("; ")}</Callout></div>
       ) : null}
-      {none ? <Empty text={isTeam ? "No one matches." : "No room matches."} /> : null}
+      {none ? <Empty text={ql ? (isTeam ? "No one matches." : "No room matches.") : isTeam ? "No one in the team yet. Tap + to add someone." : "No rooms yet. Tap + to add one."} /> : null}
       {([["Doctors", doctors], ["Therapists", therapists]] as const).map(([title, list]) => list.length ? (
         <ListGroup key={title} title={title} count={list.length}>
           {list.map((s) => {
@@ -190,7 +190,8 @@ type Day = { state: "in" | "part" | "away" | "off"; start?: string; end?: string
 type Week = { start: string; days: string[]; rows: { id: string; name: string; role: string; days: Day[] }[]; gaps: { start: string; end: string; in: number }[][] };
 const hrs = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}`);
 /** Over 90% leaves no room for a swap, under 25% is someone free to take one (#351); words, not a flag, as neither needs doing now. */
-const load = (d: Day) => !d.capacity ? "" : d.booked / d.capacity > 0.9 ? " · nearly full" : d.booked / d.capacity < 0.25 ? " · lightly booked" : "";
+// Nothing booked already reads "0 min of 9h booked"; "lightly booked" on top of it was noise (#463).
+const load = (d: Day) => !d.capacity || !d.booked ? "" : d.booked / d.capacity > 0.9 ? " · nearly full" : d.booked / d.capacity < 0.25 ? " · lightly booked" : "";
 /** "07:00–15:00 · 5h of 8h booked"; away with the reason; a day off says so. */
 const dayLine = (d?: Day) => !d ? undefined
   : d.state === "off" ? "Day off"

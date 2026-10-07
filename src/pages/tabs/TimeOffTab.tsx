@@ -33,7 +33,7 @@ const TimeOffTab = ({ timeOffs, viewMode, setViewMode, visibleRows, totalRef, na
       <PageHead title="Leave" note={`${rows.length} ${viewMode === 'all' ? '' : viewMode}`.trim()} />
       <div className="mb-3"><ListGroup><Row title="Centre closed days" facts={nextClosed ? `Next: ${nextClosed.description || 'Closed'}, ${leaveWhen(nextClosed, true)}` : 'None coming up'} trailing="›" onClick={onHolidays} /></ListGroup></div>
       <Seg<'upcoming' | 'past' | 'all'> value={viewMode} onChange={setViewMode} options={[['upcoming', 'Upcoming'], ['past', 'Past'], ['all', 'All']]} />
-      {rows.length === 0 ? <Empty text={viewMode === 'past' ? 'No past leave.' : 'No leave booked. Open the menu to add some.'} /> : (
+      {rows.length === 0 ? <Empty text={viewMode === 'past' ? 'No past leave.' : 'No leave booked. Tap + to add some.'} /> : (
         <ListGroup>
           {rows.slice(0, visibleRows).map((h) => (
             <Row key={h.id} title={nameOf(h)} facts={[kindOf(h), leaveWhen(h, isFullDay(h)), h.recurrence === 'weekly' ? weeklyLabel(h.weekdays) : '', h.description].filter(Boolean).join(' · ')} onClick={() => openEdit(h)} />
