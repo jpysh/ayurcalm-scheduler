@@ -443,6 +443,22 @@ const AdminDashboard = () => {
 
   const dayKeyMemo = useMemo(() => ymdInTZ(currentDate), [currentDate]);
 
+  // After closing, the admin is checking tomorrow (#458): its things to fix count
+  // too, so a treatment with no therapist does not wait for the morning to be seen.
+  const nowHM = new Date().toLocaleTimeString("en-GB", { timeZone: ADMIN_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const realToday = ymdInTZ(new Date());
+  const [ty, tm, td] = realToday.split('-').map(Number);
+  const tomorrowKey = new Date(Date.UTC(ty, tm - 1, td + 1)).toISOString().slice(0, 10);
+  const evening = dayKeyMemo === realToday && nowHM >= centreHours.closing_time;
+  const [tomorrowFix, setTomorrowFix] = useState(0);
+  useEffect(() => {
+    if (!evening) { setTomorrowFix(0); return; }
+    fetch(`${API_BASE}/day-check?date=${tomorrowKey}`)
+      .then((r) => (r.ok ? r.json() : { problems: [] }))
+      .then((d) => setTomorrowFix((Array.isArray(d.problems) ? d.problems : []).filter((p: DayProblem) => p.problem_class === 'blocking').length))
+      .catch(() => setTomorrowFix(0));
+  }, [evening, tomorrowKey, dayCheck]);
+
   const location = useLocation();
   const navigate = useNavigate();
   useServerHealth(API_BASE);
@@ -675,7 +691,7 @@ const AdminDashboard = () => {
           : { query: scheduleScreen.query, setQuery: scheduleScreen.setQuery, on: scheduleScreen.searching, setOn: scheduleScreen.setSearching, placeholder: 'Name, therapy or room', label: 'Search', hint: 'Patients, therapists, treatments, any day', start: () => { go('schedule'); scheduleScreen.setSearching(true); } }}
         // A patient with nothing booked is a rest day, not a note (#144).
         attention={{
-          fix: dayCheck.problems.filter((p) => p.problem_class === 'blocking').length + new Set(attention.items.filter((i) => i.kind === 'action').map((i) => i.patient_id ?? i.id)).size,
+          fix: dayCheck.problems.filter((p) => p.problem_class === 'blocking').length + tomorrowFix + new Set(attention.items.filter((i) => i.kind === 'action').map((i) => i.patient_id ?? i.id)).size,
           // What the app already fixed for the admin: a therapist's day moved.
           done: visibleReplans.length,
           note: dayCheck.problems.filter((p) => p.problem_class === 'worth_knowing' && p.kind !== 'IDLE_RESIDENT' && !dismissed.includes(p.id)).length,
@@ -691,6 +707,7 @@ const AdminDashboard = () => {
         day={exceptionDayKey}
         today={ymdInTZ(new Date())}
         problems={dayCheck.problems}
+        tomorrow={tomorrowFix ? { day: tomorrowKey, count: tomorrowFix, open: () => { const [y, m, d] = tomorrowKey.split('-').map(Number); setCurrentDate(new Date(y, m - 1, d)); } } : null}
         replans={visibleReplans}
         dismissed={dismissed}
         dismiss={dismiss}

@@ -56,7 +56,7 @@ type Done = { text: string; undo: (() => Promise<boolean>) | null };
 const listed = (names: string[]) => names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 const first = (name: string) => name.split(" ")[0];
 
-export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, replans, dismissed, dismiss, undoReplan, onChanged, seeIt, afterConsultation, items, onItem, openRules, addStaff }: {
+export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, tomorrow, replans, dismissed, dismiss, undoReplan, onChanged, seeIt, afterConsultation, items, onItem, openRules, addStaff }: {
   open: boolean;
   /** A dead end's fix (#368): the add-a-therapist sheet, with the therapy ticked. */
   addStaff: (a: { gender?: string; therapy_id?: string }) => void;
@@ -66,6 +66,8 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   day: string;
   today: string;
   problems: DayProblem[];
+  /** After closing on today (#458): tomorrow's things to fix, opened on that day. */
+  tomorrow?: { day: string; count: number; open: () => void } | null;
   replans: ReplanBatch[];
   /** Notes and replans the admin has dismissed today. */
   dismissed: string[];
@@ -239,6 +241,9 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
             ) : null}
           </div>
         ),
+      }, {
+        name: "Tomorrow", count: tomorrow?.count ?? 0,
+        body: tomorrow ? <ListGroup><Row key="tomorrow" title={`${dayText(tomorrow.day)} · ${tomorrow.count} to fix`} facts="Open the day to fix it before it starts" trailing="Open ›" onClick={tomorrow.open} /></ListGroup> : null,
       }, {
         name: "Patients", count: patientRows.length,
         body: patientRows.length ? <ListGroup>{patientRows.map((g) => {
