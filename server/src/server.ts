@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { autoSchedule } from './scheduler.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import { generateTherapistRotaPdf } from './pdf/therapistRotaPdf.js';
+import { generateKitchenSheetPdf } from './pdf/kitchenSheetPdf.js';
 import { renderDischarge } from './pdf/dischargePdf.js';
 import { dischargeOf, saveDischarge } from './discharge.js';
 import { staffWeek } from './staffWeek.js';
@@ -1222,22 +1223,23 @@ app.get('/daily-schedule-pdf', async (req: Request, res: Response) => {
   const date = req.query.date as string | undefined;
   const staffId = typeof req.query.staff_id === 'string' && req.query.staff_id ? req.query.staff_id : undefined;
   const doctors = req.query.view === 'doctor';
+  const kitchen = req.query.view === 'kitchen';
   const rota = staffId != null || req.query.view === 'therapist' || doctors;
   if (!date) { res.status(400).json({ error: 'Missing date' }); return; }
   try {
-    const pdf = rota
-      ? await generateTherapistRotaPdf(date, prisma, staffId, doctors ? 'doctor' : 'therapist')
+    const pdf = kitchen ? await generateKitchenSheetPdf(date, prisma)
+      : rota ? await generateTherapistRotaPdf(date, prisma, staffId, doctors ? 'doctor' : 'therapist')
       : await generateDailySchedulePdf(date, prisma);
+    const kind = kitchen ? 'kitchen' : doctors ? 'doctor' : rota ? 'therapist' : 'residents';
     // The centre's own sheets are kept as printed, replacing that day's earlier copy.
     if (!staffId && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      const kind = doctors ? 'doctor' : rota ? 'therapist' : 'residents';
       const data = { pdf: Buffer.from(pdf), printed_at: new Date() };
       await prisma.printedSheet.upsert({ where: { date_kind: { date, kind } }, update: data, create: { date, kind, ...data } });
       const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
       await prisma.printedSheet.deleteMany({ where: { date: { lt: cutoff } } });
     }
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="ayurcalm-${doctors ? 'doctor-rota' : rota ? 'therapist-rota' : 'daily-schedule'}-${date}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="ayurcalm-${kitchen ? 'kitchen-sheet' : doctors ? 'doctor-rota' : rota ? 'therapist-rota' : 'daily-schedule'}-${date}.pdf"`);
     res.send(pdf);
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Failed to generate PDF';

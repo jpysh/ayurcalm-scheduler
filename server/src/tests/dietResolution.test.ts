@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { resolveDiet, type MealKey } from '../dietResolution.js';
+import { kitchenMeals, resolveDiet, type MealKey } from '../dietResolution.js';
 
 /**
  * The day sheet tells a patient what they may eat. A wrong precedence here does
@@ -114,6 +114,21 @@ const cases: [string, () => void][] = [
     const out = resolveDiet({ ...base, template: sparse, hasTherapyToday: true });
     assert.equal(out.meals.breakfast, undefined);
     assert.equal(out.meals.lunch, 'Warm water');
+  }],
+
+  // #414: the cook reads counts per plan and side, and only a meal written for
+  // one patient is named; their medication never splits the count.
+  ['the kitchen counts a plan per side and names only what is personal', () => {
+    const treated = resolveDiet({ ...base, template: plan, hasTherapyToday: true, patient });
+    const resting = resolveDiet({ ...base, template: plan, hasTherapyToday: false });
+    const own = resolveDiet({ ...base, template: plan, dayMeals: { lunch: 'Clear broth' }, hasTherapyToday: true });
+    const [, lunch] = kitchenMeals([
+      { name: 'Asha', diet: treated }, { name: 'Ravi', diet: { ...treated, medication: '' } },
+      { name: 'Meera', diet: resting }, { name: 'Dev', diet: own },
+    ]);
+    assert.equal(lunch.total, 4);
+    assert.deepEqual(lunch.counts.map((c) => [c.n, c.food]), [[2, 'Khichdi'], [1, 'Rice and dal']]);
+    assert.deepEqual(lunch.exceptions, [{ name: 'Dev', plan: 'Standard sattvic plan', food: 'Clear broth' }]);
   }],
 ];
 

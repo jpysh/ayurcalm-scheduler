@@ -645,9 +645,10 @@ const AdminDashboard = () => {
           const more = "min-h-11 rounded-full px-1 text-base font-bold text-on-dark";
           toast(<div className="w-full">
             <div>Patient sheet printed{open ? ` · ${open} still to fix` : ''}</div>
-            <div className="mt-1 flex gap-4">
+            <div className="mt-1 flex flex-wrap gap-x-4">
               <button type="button" className={more} onClick={() => scheduleScreen.printSheet('therapist')}>Therapist sheet</button>
               <button type="button" className={more} onClick={() => scheduleScreen.printSheet('doctor')}>Doctor sheet</button>
+              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('kitchen')}>Kitchen sheet</button>
             </div>
           </div>, { duration: 10000 });
         }}

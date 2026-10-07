@@ -35,10 +35,10 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
   const [card, setCard] = useState<CardAppt | null>(null);
   const [booking, setBooking] = useState(false);
   const [bookFor, setBookFor] = useState<{ id: string; name: string; consult?: boolean } | null>(null);
-  const [pdfLoading, setPdfLoading] = useState<'patient' | 'therapist' | 'doctor' | null>(null);
+  const [pdfLoading, setPdfLoading] = useState<'patient' | 'therapist' | 'doctor' | 'kitchen' | null>(null);
   // Two sheets off the same day: the patient one for the notice board, the
   // therapist rota for the treatment team.
-  const printSheet = async (kind: 'patient' | 'therapist' | 'doctor' = 'patient') => {
+  const printSheet = async (kind: 'patient' | 'therapist' | 'doctor' | 'kitchen' = 'patient') => {
     setPdfLoading(kind);
     // Opened before the await, because a phone browser blocks a window opened
     // after one: by then the tap is over and it is a popup. The tab sits blank
@@ -52,7 +52,7 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
       if (tab) tab.location.href = url;
       const a = document.createElement('a');
       a.href = url;
-      a.download = `ayurcalm-${kind === 'patient' ? 'daily-schedule' : `${kind}-rota`}-${iso}.pdf`;
+      a.download = `ayurcalm-${kind === 'patient' ? 'daily-schedule' : kind === 'kitchen' ? 'kitchen-sheet' : `${kind}-rota`}-${iso}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
