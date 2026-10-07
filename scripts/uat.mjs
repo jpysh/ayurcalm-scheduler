@@ -44,20 +44,14 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #480: small wording from the combined walk.
-await api('POST', '/settings/clear-demo-data');
-await step('Empty Therapies points at +', '/admin/therapies', async () => {
-  await p.keyboard.press('Escape'); await p.waitForTimeout(600);
-  const t = await text(p.locator('body'));
-  return { ok: /tap \+ to add one/.test(t) && !/open the menu/.test(t), note: t.split('\n').find((x) => /No therapies/.test(x)) };
-});
-const acc = (await api('GET', '/accommodations')).find?.((a) => a.name === 'Trishul House') ?? await api('POST', '/accommodations', { name: 'Trishul House', price_per_day: 1600 });
-await api('POST', '/guest-rooms', { name: 'T1', accommodation_id: acc.id });
-const gr = (await api('GET', '/guest-rooms')).find?.((r) => r.name === 'T1') ?? (await api('GET', '/guest-rooms'))[0];
-await api('POST', '/patients', { name: 'Priya Sharma', gender: 'female', on_site: true, stay: { start_date: plus(0), end_date: plus(6) }, guest_room_id: gr?.id });
-await step('Guest rooms: an arriving guest says until when', '/admin/guestrooms', async () => {
-  const t = await text(p.locator('body'));
-  return { ok: /Priya arrives · until \w{3} \d+ \w{3}/.test(t), note: t.split('\n').find((x) => /arrives/.test(x)) };
+// #488: Settings, Printed sheets offers Records for a month, which opens a PDF of that month's stays.
+await step('Printed sheets starts with Records for a month', '/admin/settings', async () => {
+  await go(p.getByText('Printed sheets').first()); await p.waitForTimeout(800);
+  const t = await text(dlg());
+  const opts = await dlg().getByLabel('Records for a month').locator('option').allInnerTexts();
+  const pages = []; p.context().on('page', (pg) => pages.push(pg));
+  await dlg().getByLabel('Records for a month').selectOption({ index: 1 }); await p.waitForTimeout(3000);
+  return { ok: /Records for a month/.test(t) && opts.length === 13 && pages.length === 1, note: `${opts.slice(1, 3).join(', ')}… · ${pages.length} PDF tab opened` };
 });
 await b.close();
 
