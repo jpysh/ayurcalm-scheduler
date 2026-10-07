@@ -44,28 +44,20 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #475: after closing, with only tomorrow to fix, the inbox stays open. Run with UAT_TZ set to a zone where it is evening.
+// #480: small wording from the combined walk.
 await api('POST', '/settings/clear-demo-data');
-const st = await api('GET', '/settings');
-await api('PUT', '/settings', { ...Object.fromEntries(Object.entries(st).filter(([, v]) => v !== null)), timezone: process.env.UAT_TZ, opening_time: '09:00', closing_time: '18:00' });
-const th = await api('POST', '/therapies', { name: 'Abhyanga', duration_minutes: 60, required_amenities: ['massage_table'], requires_gender_match: false });
-const room = await api('POST', '/rooms', { name: 'Room 1', amenities: ['massage_table'] });
-const asha = await api('POST', '/staff', { name: 'Asha Menon', gender: 'female', role: 'therapist' });
-const pt = await api('POST', '/patients', { name: 'Priya Sharma', gender: 'female' });
-await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(0), end_date: plus(6) });
-await api('POST', '/appointments/one', { patient_id: pt.id, therapy_id: th.id, staff_id: asha.id, room_id: room.id, date: plus(1), start_time: '10:00' });
-await api('POST', '/timeoff', { entity_type: 'staff', entity_id: asha.id, start_date: plus(1), end_date: plus(1), description: 'UAT', plan: false });
-await step("Evening: the Menu counts tomorrow's treatment with no therapist", '/admin/schedule', async () => {
-  await p.waitForTimeout(1500);
-  await menu();
-  const m = await text(dlg());
-  return { ok: /1 need you/.test(m), note: m.split('\n').slice(0, 3).join(' · ') };
+await step('Empty Therapies points at +', '/admin/therapies', async () => {
+  await p.keyboard.press('Escape'); await p.waitForTimeout(600);
+  const t = await text(p.locator('body'));
+  return { ok: /tap \+ to add one/.test(t) && !/open the menu/.test(t), note: t.split('\n').find((x) => /No therapies/.test(x)) };
 });
-await step('The inbox opens on the Tomorrow section and stays open', '/admin/schedule', async () => {
-  await p.waitForTimeout(1500); await menu(); await go(dlg().getByRole('button', { name: /need you/ }));
-  await p.waitForTimeout(3000);
-  const t = await text(dlg()).catch(() => '');
-  return { ok: /to fix/.test(t), note: t.split('\n').filter((x) => /omorrow|to fix|Nothing/.test(x)).join(' · ') || 'the inbox closed' };
+const acc = (await api('GET', '/accommodations')).find?.((a) => a.name === 'Trishul House') ?? await api('POST', '/accommodations', { name: 'Trishul House', price_per_day: 1600 });
+await api('POST', '/guest-rooms', { name: 'T1', accommodation_id: acc.id });
+const gr = (await api('GET', '/guest-rooms')).find?.((r) => r.name === 'T1') ?? (await api('GET', '/guest-rooms'))[0];
+await api('POST', '/patients', { name: 'Priya Sharma', gender: 'female', on_site: true, stay: { start_date: plus(0), end_date: plus(6) }, guest_room_id: gr?.id });
+await step('Guest rooms: an arriving guest says until when', '/admin/guestrooms', async () => {
+  const t = await text(p.locator('body'));
+  return { ok: /Priya arrives · until \w{3} \d+ \w{3}/.test(t), note: t.split('\n').find((x) => /arrives/.test(x)) };
 });
 await b.close();
 
