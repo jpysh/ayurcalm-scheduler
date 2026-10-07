@@ -441,7 +441,8 @@ const AdminDashboard = () => {
   }, [loadDayCheck, loadReplans]);
   const fixReady = dayCheck.problems.filter((p) => p.problem_class === 'blocking' && p.fix).length;
 
-  const dayKeyMemo = useMemo(() => ymdInTZ(currentDate), [currentDate]);
+  // The centre's timezone arrives after the first draw (#477): the day is read again then.
+  const dayKeyMemo = useMemo(() => ymdInTZ(currentDate), [currentDate, ADMIN_TZ]);
 
   // After closing, the admin is checking tomorrow (#458): its things to fix count
   // too, so a treatment with no therapist does not wait for the morning to be seen.

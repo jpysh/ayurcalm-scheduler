@@ -11,7 +11,7 @@ mkdirSync(OUT, { recursive: true });
 const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: process.env.UAT_EMAIL || 'admin@example.com', password: process.env.UAT_PASSWORD || 'demo1234' }) })).json();
 const api = async (m, path, body) => { const r = await fetch(`${APP}/api${path}`, { method: m, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }); return r.json().catch(() => ({})); };
 const b = await chromium.launch();
-const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, ...(process.env.UAT_TZ ? { timezoneId: process.env.UAT_TZ } : {}) });
 await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
 const p = await ctx.newPage();
 const dlg = () => p.getByRole('dialog').last();
@@ -37,34 +37,35 @@ const menu = () => go(p.getByRole('button', { name: 'Menu', exact: true }));
 
 const plusBtn = (name) => p.getByRole('button', { name, exact: true });
 const rowBtn = (name) => p.getByRole('button', { name });
-const ymd = (d) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+const ymd = (d) => d.toLocaleDateString('en-CA', { timeZone: process.env.UAT_TZ || 'Asia/Kolkata' });
 const day0 = new Date();
 const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 // Today's hours are over by the afternoon, so the walk books tomorrow: its chip on the week strip.
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #474: a therapist added with no therapies ticked is offered as cover when another is on leave.
+// #475: after closing, with only tomorrow to fix, the inbox stays open. Run with UAT_TZ set to a zone where it is evening.
 await api('POST', '/settings/clear-demo-data');
+const st = await api('GET', '/settings');
+await api('PUT', '/settings', { ...Object.fromEntries(Object.entries(st).filter(([, v]) => v !== null)), timezone: process.env.UAT_TZ, opening_time: '09:00', closing_time: '18:00' });
 const th = await api('POST', '/therapies', { name: 'Abhyanga', duration_minutes: 60, required_amenities: ['massage_table'], requires_gender_match: false });
-await api('POST', '/rooms', { name: 'Room 1', amenities: ['massage_table'] });
+const room = await api('POST', '/rooms', { name: 'Room 1', amenities: ['massage_table'] });
 const asha = await api('POST', '/staff', { name: 'Asha Menon', gender: 'female', role: 'therapist' });
-await api('POST', '/staff', { name: 'Meera Pillai', gender: 'female', role: 'therapist' });
 const pt = await api('POST', '/patients', { name: 'Priya Sharma', gender: 'female' });
-const d2 = plus(2);
-const rooms = await api('GET', '/rooms');
 await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(0), end_date: plus(6) });
-const ap = await api('POST', '/appointments/one', { patient_id: pt.id, therapy_id: th.id, staff_id: asha.id, room_id: rooms[0].id, date: d2, start_time: '10:00' });
-console.log('booked', JSON.stringify(ap).slice(0, 160));
-await api('POST', '/timeoff', { entity_type: 'staff', entity_id: asha.id, start_date: d2, end_date: d2, description: 'UAT', plan: false });
-await step("Asha's leave day: the inbox offers Meera, who has no therapies ticked", '/admin/schedule', async () => {
-  const dc = await api('GET', `/day-check?date=${d2}`);
-  const pr = (dc.problems || []).find((x) => x.appointment_id === (ap.id || ap.appointment?.id));
-  const offers = [pr?.fix, ...(pr?.choices || [])].filter(Boolean).map((c) => c.label).join(' | ');
-  const dd = new Date(`${d2}T00:00:00Z`);
-  await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${dd.getUTCDate()} ${dd.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) }));
-  await p.waitForTimeout(1500); await menu(); await go(dlg().getByRole('button', { name: /need you/ })); await p.waitForTimeout(800);
-  return { ok: /Meera/.test(offers) && !/nobody here is trained/.test(pr?.no_fix_reason || ''), note: `${pr?.what || 'no problem'} · offers: ${offers || pr?.no_fix_reason}` };
+await api('POST', '/appointments/one', { patient_id: pt.id, therapy_id: th.id, staff_id: asha.id, room_id: room.id, date: plus(1), start_time: '10:00' });
+await api('POST', '/timeoff', { entity_type: 'staff', entity_id: asha.id, start_date: plus(1), end_date: plus(1), description: 'UAT', plan: false });
+await step("Evening: the Menu counts tomorrow's treatment with no therapist", '/admin/schedule', async () => {
+  await p.waitForTimeout(1500);
+  await menu();
+  const m = await text(dlg());
+  return { ok: /1 need you/.test(m), note: m.split('\n').slice(0, 3).join(' · ') };
+});
+await step('The inbox opens on the Tomorrow section and stays open', '/admin/schedule', async () => {
+  await p.waitForTimeout(1500); await menu(); await go(dlg().getByRole('button', { name: /need you/ }));
+  await p.waitForTimeout(3000);
+  const t = await text(dlg()).catch(() => '');
+  return { ok: /to fix/.test(t), note: t.split('\n').filter((x) => /omorrow|to fix|Nothing/.test(x)).join(' · ') || 'the inbox closed' };
 });
 await b.close();
 
