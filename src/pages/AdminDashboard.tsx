@@ -23,7 +23,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout, API_TOKEN, type ApiAppointment, type ApiProgramEvent, type Patient, type UiRoom, type UiStaff, type UiTherapy, type UiTimeOff } from "./tabs/shared";
 import PageHead, { BackContext } from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
-import { Consequence, ListGroup, Row, SheetFoot } from "@/components/kit";
+import { Consequence, dayText, ListGroup, Row, SheetFoot } from "@/components/kit";
 
 /** Builds the schedule's time rows from the centre's opening hours. */
 const buildTimeSlots = (openingTime: string, closingTime: string, slotMinutes: number) => {
@@ -88,7 +88,7 @@ const useServerHealth = (base: string) => {
   return { serverOk, isOnline };
 };
 
-type ApiTherapy = { id: string; name: string; required_amenities: string[]; duration_minutes: number; requires_gender_match: boolean; staff_required?: number; once_per_course?: boolean; checklist?: { text: string; required: boolean }[]; vitals?: string[] };
+type ApiTherapy = { id: string; name: string; required_amenities: string[]; duration_minutes: number; requires_gender_match: boolean; staff_required?: number; once_per_course?: boolean; is_consultation?: boolean; checklist?: { text: string; required: boolean }[]; vitals?: string[] };
 type ApiStaff = { id: string; name: string; gender: "male" | "female" | "other"; specializations: string[]; phone?: string; weekly_schedule?: UiStaff["hours"] };
 type ApiRoom = { id: string; name: string; amenities: string[]; is_active: boolean };
 type ApiTimeOffSimple = { id?: string; entity_type: 'center'|'staff'|'room'|'therapy'|'patient'; entity_id?: string | null };
@@ -173,7 +173,7 @@ const AdminDashboard = () => {
     const load = async () => {
       try {
         const t: ApiTherapy[] = await fetchJsonWithTimeout(`${API_BASE}/therapies`);
-        setTherapies(t.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match, staffRequired: x.staff_required ?? 1, once: !!x.once_per_course, checklist: x.checklist || [], vitals: x.vitals || ["bp"] })));
+        setTherapies(t.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match, staffRequired: x.staff_required ?? 1, once: !!x.once_per_course, consultation: !!x.is_consultation, checklist: x.checklist || [], vitals: x.vitals || ["bp"] })));
         const s: (ApiStaff & { is_active?: boolean; status?: string; role?: 'therapist' | 'doctor' })[] = await fetchJsonWithTimeout(`${API_BASE}/staff`);
         setStaff(s.map((x) => ({ id: x.id, name: x.name, role: x.role, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", specializations: x.specializations.map((id) => t.find((k) => k.id === id)?.name).filter((n): n is string => !!n), phone: x.phone ?? "", schedule: "", hours: x.weekly_schedule, status: (typeof x.is_active === 'boolean' ? (x.is_active ? 'Active' : 'Inactive') : (x.status === 'Active' ? 'Active' : 'Inactive')) })));
         const r: ApiRoom[] = await fetchJsonWithTimeout(`${API_BASE}/rooms`);
@@ -346,7 +346,7 @@ const AdminDashboard = () => {
           return next;
         });
         const t2: ApiTherapy[] = await fetchJsonWithTimeout(`${API_BASE}/therapies`);
-        setTherapies(t2.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match, staffRequired: x.staff_required ?? 1, once: !!x.once_per_course, checklist: x.checklist || [], vitals: x.vitals || ["bp"] })));
+        setTherapies(t2.map((x) => ({ id: x.id, name: x.name, duration: x.duration_minutes, amenities: x.required_amenities, genderMatch: x.requires_gender_match, staffRequired: x.staff_required ?? 1, once: !!x.once_per_course, consultation: !!x.is_consultation, checklist: x.checklist || [], vitals: x.vitals || ["bp"] })));
         const s2: (ApiStaff & { is_active?: boolean; status?: string })[] = await fetchJsonWithTimeout(`${API_BASE}/staff`);
         setStaff(s2.map((x) => ({ id: x.id, name: x.name, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", specializations: x.specializations.map((tid) => t2.find((k) => k.id === tid)?.name).filter((n): n is string => !!n), phone: x.phone ?? "", schedule: "", hours: x.weekly_schedule, status: (typeof x.is_active === 'boolean' ? (x.is_active ? 'Active' : 'Inactive') : (x.status === 'Active' ? 'Active' : 'Inactive')) })));
       } else if (kind === 'patient') {
@@ -513,7 +513,7 @@ const AdminDashboard = () => {
   const residentOpener = useRef<((id: string) => void) | null>(null);
   // A booking short of a therapist opens the new-therapist form over the sheet, filled in with what it lacks (#330).
   const staffAdder = useRef<((a: { gender?: string; therapy_id?: string }) => void) | null>(null);
-  staffAdder.current = (a) => staffScreen.openAdd({ gender: a.gender === 'male' ? 'Male' : a.gender === 'female' ? 'Female' : undefined, gives: therapies.filter((t) => t.id === a.therapy_id).map((t) => t.name) });
+  staffAdder.current = (a) => staffScreen.openAdd({ gender: a.gender === 'male' ? 'Male' : a.gender === 'female' ? 'Female' : undefined, gives: therapies.filter((t) => t.id === a.therapy_id).map((t) => t.name), role: therapies.find((t) => t.id === a.therapy_id)?.consultation ? 'doctor' : undefined });
   const patientAdder = useRef<((name: string, arriving: string, done: (p: { id: string; name: string }) => void) => void) | null>(null);
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const patientsScreen = usePatientsScreen({ needs: attention.items.filter((i) => i.section === 'Patients' && i.kind === 'action' && i.patient_id), patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ,
@@ -589,7 +589,7 @@ const AdminDashboard = () => {
                 <ListGroup title="Get started">
                   {([["therapies", "Add your therapies", therapies.length], ["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first patient", patients.length]] as const).map(([tab, label, n]) => (
                     <Row key={tab} title={label} facts={n ? `${n} added` : "Not yet"} trailing={n ? "✓" : "Add ›"}
-                      onClick={() => { if (tab === "rooms") { go("rooms"); roomsScreen.openAdd(); } else if (tab === "staff") { go("team"); staffScreen.openAdd(); } else { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); } }} />
+                      onClick={() => { if (tab === "rooms") { go("rooms"); roomsScreen.openAdd(); } else if (tab === "staff") { go("team"); staffScreen.openAdd(); } else if (tab === "patients") { go("patients"); patientsScreen.openAdd(); } else { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); } }} />
                   ))}
                 </ListGroup>
                 <p className="px-1 pt-2 text-sm text-muted-foreground">Then tap + to book the first treatment.</p>
@@ -664,21 +664,25 @@ const AdminDashboard = () => {
         now={new Date().toLocaleTimeString("en-GB", { timeZone: ADMIN_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}
         setDay={(iso) => { const [y, m, d] = iso.split('-').map(Number); setCurrentDate(new Date(y, m - 1, d)); }}
         printing={!!scheduleScreen.pdfLoading}
+        // After closing on today the evening job is tomorrow's sheet (#459), so Print gives that day and says so.
+        printDay={evening ? tomorrowKey : dayKeyMemo}
         print={async () => {
-          if (!(await scheduleScreen.printSheet('patient'))) return;
+          const iso = evening ? tomorrowKey : dayKeyMemo;
+          if (!(await scheduleScreen.printSheet('patient', iso))) return;
           // Still prints with problems open: the admin may be printing on purpose.
           // It just says so (#134). The rota is a second tap, a fresh gesture, so
           // the phone does not block its tab as a popup.
-          const open = dayCheck.problems.filter((p) => p.problem_class === 'blocking').length;
+          const open = evening ? tomorrowFix : dayCheck.problems.filter((p) => p.problem_class === 'blocking').length;
+          const fixFirst = () => { if (evening) setCurrentDate(new Date(`${tomorrowKey}T00:00:00`)); setShowAttention(true); };
           // The two other sheets under the words, not beside them: two buttons in a row squeezed the text to a word a line (#273 O2).
           const more = "min-h-11 rounded-full px-1 text-base font-bold text-on-dark";
           toast(<div className="w-full">
-            <div>Patient sheet printed{open ? ` · ${open} still to fix` : ''}</div>
+            <div>Patient sheet for {dayText(iso)} printed{open ? ` · ${open} still to fix` : ''}</div>
             <div className="mt-1 flex flex-wrap gap-x-4">
-              {open ? <button type="button" className={more} onClick={() => setShowAttention(true)}>Fix {open} first</button> : null}
-              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('therapist')}>Therapist sheet</button>
-              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('doctor')}>Doctor sheet</button>
-              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('kitchen')}>Kitchen sheet</button>
+              {open ? <button type="button" className={more} onClick={fixFirst}>Fix {open} first</button> : null}
+              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('therapist', iso)}>Therapist sheet</button>
+              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('doctor', iso)}>Doctor sheet</button>
+              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('kitchen', iso)}>Kitchen sheet</button>
             </div>
           </div>, { duration: 10000 });
         }}

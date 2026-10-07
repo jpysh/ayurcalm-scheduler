@@ -313,7 +313,7 @@ async function noTimeWhy(ctx: Ctx, day: Date, nowMinutes: number | null, therapy
         other,
       ] };
     }
-    return { why: team, actions: [{ kind: 'add_staff', label: 'Add a therapist', therapy_id: therapy.id }, other] };
+    return { why: team, actions: [{ kind: 'add_staff', label: therapy.is_consultation ? 'Add a doctor' : 'Add a therapist', therapy_id: therapy.id }, other] };
   }
   const next = await nextFreeSlot(day, stay.end_date, therapy, patient.id, prisma);
   // The hours are over when the day would have had a time but for the clock.
@@ -403,7 +403,8 @@ export async function whyNoTime(dayISO: string, pick: { patient_id: string; ther
   const able = ctx.staff.filter((s) => s.is_active && gives(s, therapy) && (!sameGender || s.gender === patient.gender)).length;
   const needed = therapy.staff_required ?? 1;
   if (able >= needed) return undefined;
-  const who = `${needed === 1 ? 'a therapist' : `${needed} therapists together`}${sameGender ? ` of ${patient.name.split(' ')[0]}'s gender` : ''}`;
+  // A consultation is given by a doctor (#460): naming a therapist sent the admin to add the wrong role.
+  const who = therapy.is_consultation ? 'a doctor' : `${needed === 1 ? 'a therapist' : `${needed} therapists together`}${sameGender ? ` of ${patient.name.split(' ')[0]}'s gender` : ''}`;
   return `${therapy.name} needs ${who}, and ${able === 0 ? 'nobody here gives it yet' : `only ${able} here ${able === 1 ? 'gives' : 'give'} it`}. Add one in Team.`;
 }
 

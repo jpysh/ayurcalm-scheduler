@@ -38,14 +38,13 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
   const [pdfLoading, setPdfLoading] = useState<'patient' | 'therapist' | 'doctor' | 'kitchen' | null>(null);
   // Two sheets off the same day: the patient one for the notice board, the
   // therapist rota for the treatment team.
-  const printSheet = async (kind: 'patient' | 'therapist' | 'doctor' | 'kitchen' = 'patient') => {
+  const printSheet = async (kind: 'patient' | 'therapist' | 'doctor' | 'kitchen' = 'patient', iso = dayKeyMemo) => {
     setPdfLoading(kind);
     // Opened before the await, because a phone browser blocks a window opened
     // after one: by then the tap is over and it is a popup. The tab sits blank
     // while the sheet is built, then gets the same blob the download uses.
     const tab = window.open('', '_blank');
     try {
-      const iso = dayKeyMemo;
       const res = await fetch(`${API_BASE}/daily-schedule-pdf?date=${iso}${kind === 'patient' ? '' : `&view=${kind}`}`);
       if (!res.ok) throw new Error('failed');
       const url = URL.createObjectURL(await res.blob());

@@ -66,7 +66,7 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
   /** The centre's hours: a full day, and what a person never given hours works. */
   centre: { opening: string; closing: string };
   /** A new person started from a refusal (#330): the gender and therapy the booking is short of. */
-  preset?: { gender?: "Female" | "Male"; gives?: string[] };
+  preset?: { gender?: "Female" | "Male"; gives?: string[]; role?: "doctor" };
 }) {
   const [name, setName] = useState(""); const [role, setRole] = useState<"therapist" | "doctor">("therapist");
   const [gender, setGender] = useState<"Female" | "Male">("Female"); const [gives, setGives] = useState<string[]>([]);
@@ -78,7 +78,7 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
     const h = person?.hours && Object.keys(person.hours).length ? person.hours : null;
     setWeek(Object.fromEntries(WEEK.map((d) => [d, h ? (h[d] ? `${h[d]!.start}-${h[d]!.end}` : "") : full])));
     setHoursPage(false); setTouched(false);
-    setName(person?.name ?? ""); setRole(person?.role ?? "therapist"); setGender(person ? (person.gender === "Male" ? "Male" : "Female") : preset?.gender ?? "Female");
+    setName(person?.name ?? ""); setRole(person?.role ?? preset?.role ?? "therapist"); setGender(person ? (person.gender === "Male" ? "Male" : "Female") : preset?.gender ?? "Female");
     setGives(person?.specializations ?? preset?.gives ?? []); setPhone(person?.phone ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, person]);

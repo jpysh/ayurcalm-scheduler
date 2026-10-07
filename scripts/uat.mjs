@@ -44,28 +44,20 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #458: after closing, tomorrow's things to fix are in the count and the inbox. Run after the centre's closing time.
-const staff = await api('GET', '/staff');
-const appts = await api('GET', `/appointments?date=${plus(1)}`);
-const busy = (Array.isArray(appts) ? appts : appts.appointments || []).find((x) => x.staff_id && x.status !== 'cancelled');
-await step("Evening on today: the Menu counts tomorrow's treatment with no therapist", '/admin/schedule', async () => {
-  if (busy) await api('POST', '/timeoff', { entity_type: 'staff', entity_id: busy.staff_id, start_date: plus(1), end_date: plus(1), description: 'UAT', plan: false });
-  await p.reload(); await p.waitForTimeout(2500);
-  const badge = await p.getByRole('button', { name: 'Menu', exact: true }).innerText();
-  await menu();
-  const m = await text(dlg());
-  return { ok: /need you/.test(m), note: `badge "${badge.trim()}"; menu: ${m.split('\n').slice(0, 3).join(' · ')}` };
+// #462: a new centre's first patient row opens the form; an empty Patients list offers Add a patient.
+await api('POST', '/settings/clear-demo-data');
+await step('Get started: Add your first patient opens the New patient form', '/admin/schedule', async () => {
+  await p.reload(); await p.waitForTimeout(2000);
+  await go(p.getByText('Add your first patient'));
+  await p.waitForTimeout(800);
+  const t = await text(dlg()).catch(() => '');
+  return { ok: /New patient/.test(t), note: t.split('\n').slice(0, 2).join(' · ') || 'no sheet open' };
 });
-await step('The inbox has a Tomorrow section with the count and Open', '/admin/schedule', async () => {
-  await menu(); await go(dlg().getByRole('button', { name: /need you/ }));
-  const t = await text(dlg());
-  return { ok: /TOMORROW/i.test(t) && /to fix/.test(t), note: t.split('\n').filter((x) => /omorrow|to fix/.test(x)).join(' · ') };
-});
-await step("Open moves the day to tomorrow and the inbox shows its problems", '/admin/schedule', async () => {
-  await menu(); await go(dlg().getByRole('button', { name: /need you/ }));
-  await go(dlg().getByRole('button', { name: /to fix/ })); await p.waitForTimeout(1500);
-  const t = await text(dlg());
-  return { ok: !/^Today/.test(t) && /not in/i.test(t), note: t.split('\n').slice(0, 4).join(' · ') };
+await step('An empty Patients list says so and offers Add a patient', '/admin/patients', async () => {
+  const t = await text(p.locator('body'));
+  await go(p.getByRole('button', { name: 'Add a patient' }));
+  const d = await text(dlg()).catch(() => '');
+  return { ok: /No one is staying today/.test(t) && /New patient/.test(d), note: `${t.split('\n').find((x) => /No one/.test(x))} · then ${d.split('\n')[0]}` };
 });
 await b.close();
 

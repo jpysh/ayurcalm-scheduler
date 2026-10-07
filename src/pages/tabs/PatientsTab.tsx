@@ -44,7 +44,7 @@ const DAY_MS = 86400000;
  * Residents (#63, docs/design/phone.html): who is in house today, arriving,
  * staying and leaving, from their stays. Search finds anyone, in house or not.
  */
-function ResidentsList({ patients, today, onOpen, q, everything, openRules, needs, onNeed }: { patients: Patient[]; today: string; onOpen: (id: string) => void; q: string; everything: (q: string) => void; openRules: () => void; /** What the rules in Settings say needs doing for a patient (#288), and what tapping one opens. */ needs: AttentionItem[]; onNeed: (i: AttentionItem) => void }) {
+function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRules, needs, onNeed }: { patients: Patient[]; today: string; onOpen: (id: string) => void; onAdd: () => void; q: string; everything: (q: string) => void; openRules: () => void; /** What the rules in Settings say needs doing for a patient (#288), and what tapping one opens. */ needs: AttentionItem[]; onNeed: (i: AttentionItem) => void }) {
   const [onlyNeeds, setOnlyNeeds] = useState(false);
   const [inHouse, setInHouse] = useState<InHouse[] | null>(null);
   useEffect(() => {
@@ -103,7 +103,7 @@ function ResidentsList({ patients, today, onOpen, q, everything, openRules, need
         </div>
         {onlyNeeds ? (
           <ListGroup>{needy.length ? needy.map((i) => <Row key={i.id} title={i.who} flag={flagOf(i.patient_id!)} trailing="›" onClick={() => onNeed(i)} />) : <Empty text="Nothing needs attention. The rules are in the gear above." />}</ListGroup>
-        ) : people.length === 0 ? <Empty text="No one is staying today." /> : groups.filter(([, list]) => list.length).map(([title, list]) => (
+        ) : people.length === 0 ? <Empty text="No one is staying today." action={<Btn kind="primary" inline onClick={onAdd}>Add a patient</Btn>} /> : groups.filter(([, list]) => list.length).map(([title, list]) => (
           <ListGroup key={title} title={title} count={list.length}>{list.map(({ p, s }) => row(p.id, p.name, dayOf(s!)))}</ListGroup>
         ))}
       </>)}
@@ -480,7 +480,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const backToCard = (close: () => void) => () => { close(); if (back) { setCardId(back); setBack(null); } };
   const tab = (
     <>
-      <ResidentsList patients={patients} today={today} onOpen={setCardId} q={query} everything={searchEverything} openRules={openRules} needs={needs} onNeed={(i) => (i.action === 'diet' ? setDietFor({ id: i.patient_id!, name: i.who }) : setCardId(i.patient_id!))} />
+      <ResidentsList patients={patients} today={today} onOpen={setCardId} onAdd={() => setShowAddPatient(true)} q={query} everything={searchEverything} openRules={openRules} needs={needs} onNeed={(i) => (i.action === 'diet' ? setDietFor({ id: i.patient_id!, name: i.who }) : setCardId(i.patient_id!))} />
     </>
   );
 
