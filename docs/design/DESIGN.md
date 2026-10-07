@@ -2,7 +2,7 @@
 
 The admin app on a phone, 375 wide first. One operator, one hand, often standing. Every rule below is
 either a number to use or a question to answer; if a screen needs a rule this file lacks, add it here
-first (#285). Screens come from the ten stories in [STORIES.md](STORIES.md), walked back from the
+first (#285). Screens come from the approved top 50 stories in [STORIES.md](STORIES.md) (7 Oct), walked back from the
 outcome the admin wants, never from today's screens. Layout borrowed from awesome-design-md's format;
 values are ours. Sources read (rounds 1 and 2): Apple HIG (layout, iOS 26 tab bar and bottom search,
 sheets, 17pt body / 15pt secondary), Material 3 Expressive (shorter bar, FAB menu instead of stacked
@@ -10,6 +10,9 @@ FABs), Airbnb (one shadow, 4px base, soft radii, a host "Today" home), Baymard (
 optional, inline validation with a positive check, labels above, progressive disclosure), NN/G on iOS 26
 Liquid Glass (controls that appear and vanish, crowded targets and text over busy backgrounds all hurt),
 and Atlassian's DESIGN.md test (agents rebuild components instead of reusing: so §7 names the kit).
+Round 3 (Task A, 6 Oct): Airbnb's four principles (unified, universal, iconic, conversational), Nielsen's
+10 heuristics and response-time limits, calm technology, Hoober on thumb reach, and the touch
+keystroke-level model for time to done (STORIES.md, wow bar).
 
 ## 1. Principles
 
@@ -17,8 +20,8 @@ and Atlassian's DESIGN.md test (agents rebuild components instead of reusing: so
 2. **One main action per screen**, green, at the thumb. Everything else is quieter.
 3. **Say what will happen** before a tap, and what did happen after it. No spinners that redraw the sheet.
 4. **Flag only what needs doing.** A row with no flag is fine; a row with a flag is an instruction.
-5. **Tap counts never go up.** A job that gets longer must buy something the admin asked for.
-6. **The printed day sheet is the product.** A screen change improves it or leaves it alone.
+5. **Time to done never goes up.** Measured in seconds by the formula in STORIES.md (taps × 0.5 + characters × 0.3 + decisions × 1.35 + waiting); taps are reported beside it. A job that gets slower must buy something the admin asked for.
+6. **The printed day sheet is the product.** A screen change improves it or leaves it alone. The sheet is right when every treatment, therapist, room and meal is on paper, nothing is below 10 pt, each therapist's rota fits one A4, and the UAT reads it with `pdftotext`.
 7. **Start from the story.** A screen exists because a story in STORIES.md needs it. A screen no story needs is deleted.
 8. **Stable anchors.** Controls the admin has learned never move; only the extras between them come and go (NN/G: controls that appear and vanish break learning).
 
@@ -60,6 +63,8 @@ Nothing a decision needs is below 14px; 16px in any input (iOS zooms below it). 
 | Secondary | 14 / 20 / 400 | second lines, notes, labels (Apple's 15 secondary, less one point to fit two facts per line) |
 | Caption | 12 / 16 / 600, caps +0.05em | group headers, tags; never for a needed fact |
 
+Every screen works at 200% text size (Apple's Dynamic Type): rows grow, facts are never cut.
+
 Two weights per screen at most beyond 400: 600 for what you tap or scan, 700 for the title.
 
 In code the scale is `tailwind.config.ts`: `text-xs` caption · `text-sm` secondary · `text-base` body · `text-row` row title · `text-lg` heading · `text-xl` title. No `text-[13px]`; 13 and 15 are not on the scale. Any fact the admin needs is `text-sm` or larger; `text-xs` is only for caps captions and tags.
@@ -90,11 +95,13 @@ Every list, sheet and button has all of these designed, not left to default.
 | Saving | The button says "Saving…" and is inert; the sheet stays. Done: close and toast with Undo where it can. |
 | Selected | Primary border + sage fill + a check for icon-less options. |
 | Pressed | Sage fill. |
+| Offline | A failed save keeps what was entered, says so, and retries; the last printed sheet stays openable. Hill-station signal drops. |
+| Timing | Acknowledge a tap within 100 ms; show progress past 1 s; past 10 s keep the admin's place and let them leave (Nielsen). |
 | Focus | 2px primary outline, 2px offset (keyboards and switches); fields also a soft 3px halo. |
 
 ## 7. Components (all live in `src/components/kit.tsx`)
 
-- **Bottom bar** (5 Oct, amended 6 Oct #313): the hamburger stays at the same pixel bottom right on every screen (56 high, 10 from the edges, the one shadow, a count badge when something needs the admin (red) or is for their information (grey)). On a screen that adds something, the screen's one main action is a filled round **+** beside it, to its left (Day: Book a treatment; Patients: New patient; Team: Add a therapist or doctor; Rooms: Add a room; Leave: Add leave; Diet plans: New diet plan; Therapies and Events: Add). Settings, Help and Log have none. Every screen except the day has a slim header: **‹ Day** (or ‹ the screen the admin came from) at the left, the title, its count; the phone's back keeps working. The Menu is for going places and secondary actions, in this order: what needs you (only when something does, red), Search, Change day and Print (day only), the info-only inbox row, and "Go to" the screens as two-across tiles ("Back to the day" first tile away from it). Team and Rooms are separate tiles and screens, each + adding only its own kind; Therapies and Events open from Team's top rows (#328). It never repeats the main action. Search, when chosen, takes the bar's place with its field above the keyboard. Hidden while a sheet, form or the keyboard is open.
+- **Bottom bar** (5 Oct, amended 6 Oct #313): the hamburger stays at the same pixel bottom right on every screen (56 high, 10 from the edges, the one shadow, a count badge when something needs the admin (red) or is for their information (grey)). On a screen that adds something, the screen's one main action is a filled round **+** beside it, to its left (Day: Book a treatment; Patients: New patient; Team: Add a therapist or doctor; Rooms: Add a room; Leave: Add leave; Diet plans: New diet plan; Therapies and Events: Add). Settings, Help and Log have none. Every screen except the day has a slim header: **‹ Day** (or ‹ the screen the admin came from) at the left, the title, its count; the phone's back keeps working. ‹ Day is the hardest reach (top left, Hoober): the edge swipe and the Menu are the one-handed way back, and every job's steps sit in the lower half. The Menu is for going places and secondary actions, in this order: what needs you (only when something does, red), Search, Change day and Print (day only), the info-only inbox row, and "Go to" the screens as two-across tiles ("Back to the day" first tile away from it). Team and Rooms are separate tiles and screens, each + adding only its own kind; Therapies and Events open from Team's top rows (#328). It never repeats the main action. Search, when chosen, takes the bar's place with its field above the keyboard. Hidden while a sheet, form or the keyboard is open.
   - Anchors: the button is at the same pixel on every screen. A task that used + , Search or the pill costs one tap more than before, accepted.
   - **Week strip** (the day screen's top, replacing the ‹ › header): one week, Sunday first as Apple Calendar draws it, swipe for the next or last week, tap a day; today has a ring, the chosen day is filled, "Today" appears when away from it. Far dates: Menu, Change day.
 - **+ (adaptive).** 50px green circle, always a plus. It adds what the screen is about: day → treatment, Patients → patient, Leave → leave, Team → therapist / room / therapy (a small choice sheet). Editing is a tap on the thing itself. Its accessible name says what it adds ("New patient").
@@ -151,6 +158,15 @@ Every list, sheet and button has all of these designed, not left to default.
 - **Too few hands is named** (#368, 6 Oct): when a treatment cannot be placed because too few trained therapists are in, the inbox says so ("Njavarakizhi needs two therapists, and only Raj Das is in that day") and offers **Add a therapist for …** and, for a therapy needing more than one, **Let one therapist give …** (a change to the therapy, kept in Therapies). Never "booked for 30 days" when the diary is empty.
 - **Diet sheet order** (#355, 6 Oct): the running plan's timeline (its step opens the plan to edit), then **Change to**, the plans with one-line descriptions, then the start date (Today preselected), then the patient's own **Medication and notes**, then Meals today. A plan is its 8 meals; medication and how to eat around treatment belong to the patient (decided 6 Oct) and print in their own row, the notes only on a treatment day.
 - **What a link records is read on the treatment** (#219, 6 Oct): the card shows "Recorded" (vitals, checks ticked, room ready) and "Patient said" (Good or Not good, and their words), read only, never flagged or printed; a 👎 is still a note in the inbox. Not summed per therapist or therapy (decided by Claude, to confirm: wait until a centre asks).
+- **One row per patient in the inbox** (6 Oct, #370): two things for one patient read as one row, facts joined ("Arrival steps still open · No diet plan"), opening their card; the pill counts patients, not items. Every date on screen comes from `dayText` ("Tue 6 Oct", no comma).
+- **Fix all** (6 Oct, #358): when two or more of the day's problems each have one answer, the inbox's Day section starts with a green "Fix all N as shown" over the list, which is the preview. One call, one batch, one Undo. A problem that asks the admin to choose is never in it.
+- **Show the day by** (5 Oct): a "By time ▾" chip on the day's count line, beside "170 treatments · 22 rooms", opens a sheet with Time, Therapist, Room, Patient. It is a lens on the list, so it sits on the list, not in the Menu. Search is named "Search" (it reaches patients, therapists, treatments and other days), never "Search treatments".
+- **Leave is the team's** (5 Oct): the list holds staff, room, therapy and patient leave, which changes daily. The centre's closed days (public holidays, a closed day) are one row at the top, "Centre closed days · Next: Dussehra, 20 Oct", opening their own sheet; they are set about once a year. Each row's facts start with its kind (Therapist, Doctor, Room, Therapy, Patient), since a name alone does not say whether it is a room (#360).
+- **Open every day by default** (6 Oct, #393; decided by Claude, to confirm): a residential centre treats patients every day, so "Open on" starts with all seven days, as the setup wizard already does. A weekday the centre unticks is refused for booking like a centre closed day, with the next open day offered.
+- **What already happened says so, quietly** (7 Oct, #394): a finished treatment whose therapist or room was not there keeps a grey line on its row ("Ravi was not in"), as the printed sheet does. Information only: never on the pill, never in the inbox.
+- **The demo's seeded day stays clinically consistent** (7 Oct, #403; decided by Claude, to confirm): the seed never marks a purification (Virechana, Vamana, Snehapana) as missed or cancelled, gives the post-Virechana gruel only to a patient in samsarjana, and otherwise shows its one-meal change as "upset stomach".
+- **Type nothing the app knows.** Suggest from history, prefill from the stay, scan an ID. Characters typed per job are measured, and a known fact retyped is a defect.
+- **Voice and tone.** Calm and specific, never blames, no exclamation marks; a normal day is never described as a problem.
 - **Language:** "patient" (never "resident"), British spelling, sentence case, times in 24-hour, dates "Wed 30 Sept". No jargon, no raw ids, no snake_case.
 
 ## 9. Per-screen checklist
@@ -166,7 +182,7 @@ A screen is done when every line is a yes. The audit for a group quotes the line
 7. Built only from the kit: no one-off sizes, radii, shadows or colours.
 8. Rows say why they are in this order, and flag only what needs doing.
 9. Forms: four fields or fewer at first, real labels, right keyboard, errors under the field, sticky main button.
-10. Taps for each daily job equal or lower than before (`tapCount.spec.ts`).
+10. Time to done for each daily job equal or lower than before (seconds by the formula; taps from `tapCount.spec.ts` beside it).
 11. Works with 71 rows and with 0; long names truncate, never wrap the layout.
 12. Focus order and Escape work; reduced motion respected.
 13. The printed sheet is unchanged or better.
@@ -174,11 +190,4 @@ A screen is done when every line is a yes. The audit for a group quotes the line
 15. Anything that changes other things says so in a consequence line before the tap.
 16. Anchors (Menu first, Search second, + last) sit where they sit everywhere else.
 17. The maintainer has seen a before/after and walked it on their phone.
-
-- **One row per patient in the inbox** (6 Oct, #370): two things for one patient read as one row, facts joined ("Arrival steps still open · No diet plan"), opening their card; the pill counts patients, not items. Every date on screen comes from `dayText` ("Tue 6 Oct", no comma).
-- **Fix all** (6 Oct, #358): when two or more of the day's problems each have one answer, the inbox's Day section starts with a green "Fix all N as shown" over the list, which is the preview. One call, one batch, one Undo. A problem that asks the admin to choose is never in it.
-- **Show the day by** (5 Oct): a "By time ▾" chip on the day's count line, beside "170 treatments · 22 rooms", opens a sheet with Time, Therapist, Room, Patient. It is a lens on the list, so it sits on the list, not in the Menu. Search is named "Search" (it reaches patients, therapists, treatments and other days), never "Search treatments".
-- **Leave is the team's** (5 Oct): the list holds staff, room, therapy and patient leave, which changes daily. The centre's closed days (public holidays, a closed day) are one row at the top, "Centre closed days · Next: Dussehra, 20 Oct", opening their own sheet; they are set about once a year. Each row's facts start with its kind (Therapist, Doctor, Room, Therapy, Patient), since a name alone does not say whether it is a room (#360).
-- **Open every day by default** (6 Oct, #393; decided by Claude, to confirm): a residential centre treats patients every day, so "Open on" starts with all seven days, as the setup wizard already does. A weekday the centre unticks is refused for booking like a centre closed day, with the next open day offered.
-- **What already happened says so, quietly** (7 Oct, #394): a finished treatment whose therapist or room was not there keeps a grey line on its row ("Ravi was not in"), as the printed sheet does. Information only: never on the pill, never in the inbox.
-- **The demo's seeded day stays clinically consistent** (7 Oct, #403; decided by Claude, to confirm): the seed never marks a purification (Virechana, Vamana, Snehapana) as missed or cancelled, gives the post-Virechana gruel only to a patient in samsarjana, and otherwise shows its one-meal change as "upset stomach".
+18. The job's wow bar score (STORIES.md) is 13 or more of 16, with no zero on time, facts or the sheet.

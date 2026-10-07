@@ -67,11 +67,12 @@ a resident who may only be treated by one therapist. They are what the
 reassignment exists for, so a seed change that quietly fixes the day has broken
 the dataset.
 
-**The schedule grid is `components/DayGrid.tsx`, built for a phone.** Its hours
-come from `buildTimeSlots()` (the centre's settings), stretched to any booking
-outside them, so no treatment is ever off the grid. Never reintroduce a
-hardcoded hour range. "Who is free" reads `GET /staff-day`, which applies the
-guard's leave and event rules; the browser only compares times.
+**The day is `components/DayList.tsx`, built for a phone:** hour groups of the
+server's appointments, regrouped by therapist, room or patient; the list only
+sorts, so no treatment is ever hidden. Hours come from `buildTimeSlots()` (the
+centre's settings); never reintroduce a hardcoded hour range. "Who is free"
+reads `GET /staff-day`, which applies the guard's leave and event rules; the
+browser only compares times.
 
 **Lockfiles must be generated on Linux.** `npm install --package-lock-only` run
 inside `node:24-slim`. A lockfile written on macOS omits Linux-only optional
@@ -193,7 +194,7 @@ than the issue implies, stop and say so before expanding scope.
 open a desktop after setup.
 
 **Design system and stories (#285).** Before touching any screen read
-`docs/design/DESIGN.md` (rules, kit, 17-line checklist) and the story it serves in
+`docs/design/DESIGN.md` (rules, kit, 18-line checklist) and the story it serves in
 `docs/design/STORIES.md`. Start from the story's outcome, never from the current
 screen; build only from `src/components/kit.tsx`, and extend it rather than write
 a one-off. Until the closing session of #285 only `qa` and the tap-count check

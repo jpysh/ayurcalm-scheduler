@@ -1,4 +1,179 @@
-# The stories (#285)
+# The stories: the approved top 50 (7 Oct)
+
+Screens are derived from these, not the other way round. Ranked by how often × harm to the centre if it fails × admin time saved (Task A, https://claude.ai/artifact/6fkpmwnJwgGQM4C7au77Bd); walked at 375×812 in Task B (https://claude.ai/artifact/UP2pKqiC2pakVGNvvBaVyv); both approved by the maintainer 7 Oct. Dropped: s31 stay statement, s39 offline sheet (the offline rule lives in DESIGN.md §6); s28 consent left out, unanswered. Rows marked after launch are the therapist, doctor and patient. Nothing is gated. The word is **patient** everywhere.
+
+## The wow bar
+
+Score every job 0, 1 or 2 on each line: 16 points. A job ships at **13 or more with no zero on time, facts or the sheet** (lines 1, 3, 6).
+
+| # | Line | 2 | 1 | 0 |
+|---|---|---|---|---|
+| 1 | Time to done | Under the job's budget on a 375×812 phone (returning booking 30 s, new patient 60 s, print 10 s) | Within 1.5× | Over 1.5× |
+| 2 | Typing avoided | Nothing the app knows is typed | One field that could be filled | Retypes known facts |
+| 3 | Facts with no tap | Every fact the decision needs on the first view | One fact one tap away | Must open things to decide |
+| 4 | No dead ends | Every refusal or empty state carries the way forward, filled in | Named but not filled | Text only, or a greyed button |
+| 5 | Undo, or says what will happen | Undo for 5 s, or a consequence line before | One of the two, partly | Silent change |
+| 6 | The printed sheet is right | Every change correct on paper (`pdftotext`) | Right but cramped or late | Wrong or missing |
+| 7 | One-handed | All steps in the lower half | One top tap, with swipe-back | Needs two hands |
+| 8 | Calm tone | Plain words, no alarm on a normal day | One noisy flag or word | Red for normal, jargon, jumping layout |
+
+**Time to done** (touch keystroke-level model; confirm with a stopwatch): `seconds ≈ taps × 0.5 + typed characters × 0.3 + decisions × 1.35 + waiting`. Taps (`tapCount.spec.ts`), decisions per job (≤ 3), 44×44 targets and contrast are reported beside it, not scored.
+
+## The ranked list
+
+Have / Partial / Missing is Task A's; the verdict, time and wow score are Task B's walk (7 Oct, before the Audit track fixes).
+
+| Rank | Story | Have | Task B | Time | Wow |
+|---|---|---|---|---|---|
+| 1 | s1 Morning glance: is today OK, and what needs me? | Have | Friction | ≈5 s | 13/16 |
+| 2 | s2 Fix the day when a therapist or room drops out | Have | Fail | never done | 8/16 |
+| 3 | s3 Print or share the day sheet | Have | Pass | ≈3 s | 15/16 |
+| 4 | s4 Book or move a treatment | Have | Pass | ≈6 s | 16/16 |
+| 5 | s5 Review a patient's week and plan the next | Have | Friction | ≈4 s | 15/16 |
+| 6 | s6 Share the day with staff by private link and WhatsApp | Have | Friction | ≈4 s + paste | 13/16 |
+| 7 | s7 Add an arriving patient | Have | Pass | ≈7 s + name | 15/16 |
+| 8 | s8 Doctor's consultation on arrival and the daily round | Partial | Friction | — | 13/16 |
+| 9 | s9 Form C ready within 24 hours for a foreign guest | Missing | Missing | — | — |
+| 10 | s10 Record a therapist's leave | Have | Fail | ≈6 s, then stuck | 12/16 |
+| 11 | s11 See who is in and when, and fix a gap | Partial | Pass | ≈2 s | 15/16 |
+| 12 | s12 Panchakarma order is kept | Partial | Friction | ≈8 s | 15/16 |
+| 13 | s13 Two-therapist and same-gender pairs held everywhere | Have | Pass | ≈4 s | 15/16 |
+| 14 | s14 Kitchen gets the day's meals | Partial | Friction | — | 12/16 |
+| 15 | s15 Find a patient or a fact | Have | Friction | ≈3 s | 14/16 |
+| 16 | s16 Set or change meals, by date | Have | Pass | ≈4 s | 15/16 |
+| 17 | s17 Week ahead: arrivals, departures and empty days | Partial | Friction | — | 13/16 |
+| 18 | s18 Arrival steps checklist | Partial | Friction | — | 14/16 |
+| 19 | s19 Change a stay | Have | Pass | ≈4 s | 15/16 |
+| 20 | s21 Day visitors and outpatients | Have | Pass | ≈7 s | 16/16 |
+| 21 | s22 See and undo what changed | Have | Fail | — | 11/16 |
+| 22 | s23 Medicines on the sheet and to take home | Partial | Friction | — | 13/16 |
+| 23 | s24 Discharge a patient | Have | Pass | ≈3 s | 16/16 |
+| 24 | s20 Room numbers and occupancy | Missing | Missing | — | — |
+| 25 | s25 Passport or ID scan fills the patient | Missing | Missing | — | — |
+| 26 | s26 Choose or change accommodation | Partial | Pass | ≈2 s | 16/16 |
+| 27 | s27 Prakriti and structured vitals | Partial | Friction | — | 12/16 |
+| 28 | s29 Arrivals' details before they come | Missing | Missing | — | — |
+| 29 | s30 Choose or change a package | Have | Pass | ≈2 s | 16/16 |
+| 30 | s32 Follow-up after discharge | Partial | Friction | — | 14/16 |
+| 31 | s33 Classes and events (yoga, prayer) | Have | Pass | ≈2 s | 16/16 |
+| 32 | s34 Re-book a returning guest | Partial | Fail | — | 11/16 |
+| 33 | s35 Records for an inspection | Missing | Friction | — | 13/16 |
+| 34 | s36 Set up the centre the first time | Have | Pass | not walked | — |
+| 35 | s37 Therapy catalogue | Have | Pass | ≈2 s | 16/16 |
+| 36 | s38 Settings and attention rules | Have | Friction | ≈2 s | 15/16 |
+| 37 | s40 Patient feedback and stories | Missing | Missing | — | — |
+| 38 | s41 Therapist sees their day and marks done (after launch) | Partial | Friction | — | 14/16 |
+| 39 | s42 Therapist records vitals and checklist (after launch) | Have | Pass | ≈10 s | 16/16 |
+| 40 | s43 Therapist raises an issue (after launch) | Have | Pass | ≈3 s | 16/16 |
+| 41 | s44 Therapist asks for leave (after launch) | Missing | Missing | — | — |
+| 42 | s45 Doctor's round list and plan (after launch) | Partial | Friction | — | 13/16 |
+| 43 | s46 Doctor fills the discharge summary (after launch) | Have | Pass | — | 16/16 |
+| 44 | s47 Doctor prescribes from a medicine list (after launch) | Missing | Missing | — | — |
+| 45 | s48 Patient sees their day and meals (after launch) | Have | Friction | — | 13/16 |
+| 46 | s49 Patient fills their details before arrival (after launch) | Missing | Missing | — | — |
+| 47 | s50 Patient gives feedback (after launch) | Missing | Missing | — | — |
+
+## Each story
+
+Format: **Outcome** · **Trigger** · **First view** · **Wow** · **Fix** (the Audit track issue, or the smallest first step).
+
+**1. s1 Morning glance: is today OK, and what needs me?.** Outcome: I know in 3 seconds whether I must act. Trigger: Opening the app, every morning and between jobs. First view: The Menu's count, or none. Wow: A calm day, or one sentence per problem with its fix as the button. Fix: #418 inbox grouped by cause, opened from the loaded check.
+
+**2. s2 Fix the day when a therapist or room drops out.** Outcome: Everyone affected still has a treatment, and I can undo it. Trigger: A therapist calls in sick; a room floods. First view: Who, what breaks, and the whole plan as a preview. Wow: Two taps, about 6 s, the sheet right on paper. Fix: #409 planner reads weekly hours.
+
+**3. s3 Print or share the day sheet.** Outcome: The notice board shows the right day. Trigger: Evening for tomorrow; morning after changes. First view: Menu, Print. Wow: Under 10 s to a correct PDF. Fix: 'Fix N first' on the toast when problems remain (#424).
+
+**4. s4 Book or move a treatment.** Outcome: The patient has a treatment at a free time, and I stayed in control. Trigger: Doctor's round, a guest's request. First view: One sheet, search at the bottom, five suggestions. Wow: Returning patient in 4 taps, nothing typed. Fix: None.
+
+**5. s5 Review a patient's week and plan the next.** Outcome: After the review, next week is booked and no day is empty by accident. Trigger: Weekly review, per patient. First view: Next days and the doctor's note on the card. Wow: Card, Plan next week, Book all: 3 taps for 7 days. Fix: #420 a starting week on day 1.
+
+**6. s6 Share the day with staff by private link and WhatsApp.** Outcome: Each therapist knows their day without calling the office. Trigger: Morning and after any change. First view: Team row, Share link. Wow: One tap to send; the link always shows the current day. Fix: #413 Send on WhatsApp and Copy link.
+
+**7. s7 Add an arriving patient.** Outcome: The patient is in, with a consultation booked, nothing forced. Trigger: Arrival at the desk, or a booking by email. First view: + on Patients, four fields. Wow: Under 60 s with the name; consultation already on the sheet. Fix: #424 toast at the top with Undo.
+
+**8. s8 Doctor's consultation on arrival and the daily round.** Outcome: Every patient sees the doctor on day 1 and the round covers everyone. Trigger: Arrivals, and each morning's round. First view: The doctor's list for today. Wow: The round list prints itself. Fix: #423 Round on the doctor link.
+
+**9. s9 Form C ready within 24 hours for a foreign guest.** Outcome: Every foreign guest is reported on time. Trigger: A foreign patient arrives. First view: Inbox item with the deadline. Wow: Every field filled; copied into the FRRO site in under 2 minutes. Fix: #415 nationality, visa, a due-by rule.
+
+**10. s10 Record a therapist's leave.** Outcome: The leave is recorded and the day replanned if I want. Trigger: A leave request or a sick call. First view: Leave, +, who and dates, the consequence line. Wow: 4 taps; the replan opens filled in. Fix: #409; then people first in the picker (#424).
+
+**11. s11 See who is in and when, and fix a gap.** Outcome: For any day I know who is in and where cover is thin. Trigger: Planning the week; before granting leave. First view: Team with the week strip. Wow: The gap line names hours and offers the fix. Fix: None.
+
+**12. s12 Panchakarma order is kept.** Outcome: No therapy happens before the patient is prepared for it. Trigger: Booking or planning a purification patient. First view: A warning line in the booking sheet. Wow: The sheet says what the course needs and offers the order. Fix: #419 warn on before-purification after the purge.
+
+**13. s13 Two-therapist and same-gender pairs held everywhere.** Outcome: A Pizhichil always has two trained therapists of the right gender. Trigger: Any booking or replan. First view: Nothing; the rule holds. Wow: Never seen; never wrong. Fix: Say why in the line (#424).
+
+**14. s14 Kitchen gets the day's meals.** Outcome: The kitchen cooks the right thing for each patient. Trigger: Evening for tomorrow, after the round. First view: A kitchen page in the print menu. Wow: One A4: counts by plan per meal, then exceptions. Fix: #414 Kitchen sheet.
+
+**15. s15 Find a patient or a fact.** Outcome: I find who or what I need in seconds. Trigger: A phone call, a question at the desk. First view: Search from the Menu. Wow: Two taps and three letters; the fact on the row. Fix: #412 patients first in typed results.
+
+**16. s16 Set or change meals, by date.** Outcome: The kitchen cooks the right thing on each day. Trigger: After the doctor's visit. First view: Diet on the card. Wow: 3 taps; the sheet shows the change. Fix: Medication line wraps (#424).
+
+**17. s17 Week ahead: arrivals, departures and empty days.** Outcome: I know what this week brings before it comes. Trigger: Monday morning, an enquiry. First view: The week strip with counts. Wow: In and out as two numbers under each day. Fix: #421.
+
+**18. s18 Arrival steps checklist.** Outcome: Nothing a new patient needs is forgotten. Trigger: Each arrival. First view: Checklist bar on the card. Wow: '3 of 5 ready', each item opening its field. Fix: #422.
+
+**19. s19 Change a stay.** Outcome: The dates are right and what followed them is tidy. Trigger: Guest extends or leaves early. First view: Stay on the card. Wow: 3 taps with a consequence line. Fix: None; date picker walked by hand (#425).
+
+**20. s21 Day visitors and outpatients.** Outcome: A non-resident is booked like anyone else. Trigger: Walk-in or phone. First view: Add with Stays on site off. Wow: Same as an arrival, no room asked. Fix: None.
+
+**21. s22 See and undo what changed.** Outcome: I can see who changed what, and put it back. Trigger: Something looks wrong on the sheet. First view: Log from Team. Wow: The change in words and its Undo on one row. Fix: #411 log every write.
+
+**22. s23 Medicines on the sheet and to take home.** Outcome: Each patient gets the right medicine, on time. Trigger: Doctor changes a medicine. First view: Medication on the patient's page. Wow: Prints beside the patient's row. Fix: Wrap the line (#424); times after s47.
+
+**23. s24 Discharge a patient.** Outcome: The summary prints, complete or not. Trigger: Leaving day. First view: Discharge bar on the card. Wow: 2 taps; blank lines to write by hand. Fix: None.
+
+**24. s20 Room numbers and occupancy.** Outcome: I know who sleeps where and what is free. Trigger: Arrivals, enquiries, housekeeping. First view: Rooms by night. Wow: Free rooms in one glance. Fix: First step: a read-only 'Rooms tonight' list.
+
+**25. s25 Passport or ID scan fills the patient.** Outcome: No passport is ever typed. Trigger: A guest with a passport arrives. First view: Scan passport on the add sheet. Wow: Point, check five fields, Add: under 20 s. Fix: First step: a photo kept on the patient.
+
+**26. s26 Choose or change accommodation.** Outcome: Where the patient stays is recorded. Trigger: Arrival or a room move. First view: Accommodation on the card. Wow: Preselected from the package. Fix: None.
+
+**27. s27 Prakriti and structured vitals.** Outcome: The doctor's assessment and readings are in one place. Trigger: Consultation; each treatment. First view: Doctor section on the card. Wow: Pulse and BP as a small trend. Fix: No '120/80' placeholder (#424); prakriti chips later.
+
+**28. s29 Arrivals' details before they come.** Outcome: The guest fills their own details before arrival. Trigger: A booking is confirmed. First view: Send link from the new patient. Wow: Admin types nothing. Fix: First step: detail fields on the patient link before arrival.
+
+**29. s30 Choose or change a package.** Outcome: The package is recorded and changeable. Trigger: After consultation. First view: Package on the card. Wow: 2 taps. Fix: None.
+
+**30. s32 Follow-up after discharge.** Outcome: The guest hears from the centre when the doctor said. Trigger: Follow-up date passes. First view: Inbox item on the day. Wow: One tap to WhatsApp a prepared message. Fix: A 'Follow-up due' rule.
+
+**31. s33 Classes and events (yoga, prayer).** Outcome: Classes are on the sheet and block the teacher. Trigger: Weekly pattern. First view: Events from Team. Wow: Set once a week; prints. Fix: None.
+
+**32. s34 Re-book a returning guest.** Outcome: A returning guest starts where they left off. Trigger: A former guest books again. First view: Search, the old card, New stay. Wow: Previous plan offered as the start. Fix: #412, then 'New stay' on a past card.
+
+**33. s35 Records for an inspection.** Outcome: I can hand over records when asked. Trigger: Inspection or audit. First view: Settings, Export records. Wow: One readable file per month. Fix: A 'Records for a month' PDF.
+
+**34. s36 Set up the centre the first time.** Outcome: A new centre runs on day one. Trigger: Install. First view: Setup wizard. Wow: Under 10 minutes to a printable first day. Fix: None found.
+
+**35. s37 Therapy catalogue.** Outcome: Every therapy carries its rules. Trigger: New therapy offered. First view: Therapies from Team. Wow: Add from the library, rules prefilled. Fix: None.
+
+**36. s38 Settings and attention rules.** Outcome: The app fits the centre. Trigger: Setup or a policy change. First view: Settings rows that say their state. Wow: Each rule one switch. Fix: Open every day by default (merged as #398).
+
+**37. s40 Patient feedback and stories.** Outcome: I hear what guests thought. Trigger: Leaving day. First view: Patient link. Wow: One question, read in the inbox weekly. Fix: First step: one question on leaving day.
+
+**38. s41 Therapist sees their day and marks done (after launch).** Outcome: The therapist knows their day; the office knows it happened. Trigger: Each treatment. First view: Therapist link. Wow: One tap per treatment. Fix: Done per treatment; 'Day off' on a day off (#424).
+
+**39. s42 Therapist records vitals and checklist (after launch).** Outcome: Readings are recorded where they happen. Trigger: After a treatment. First view: Therapist link. Wow: Numbers on a keypad, 10 s. Fix: None.
+
+**40. s43 Therapist raises an issue (after launch).** Outcome: The office hears of a problem at once. Trigger: Something is wrong in the room. First view: Therapist link. Wow: One line lands in the inbox. Fix: Send one by hand (#425).
+
+**41. s44 Therapist asks for leave (after launch).** Outcome: Leave reaches the rota without a phone call. Trigger: Planning time off. First view: Therapist link. Wow: Request lands with Approve and plan. Fix: 'Ask for leave' on the link.
+
+**42. s45 Doctor's round list and plan (after launch).** Outcome: The doctor sees who to see and writes the plan once. Trigger: Morning round. First view: Doctor link. Wow: Plan turns into bookings with one tap. Fix: #423.
+
+**43. s46 Doctor fills the discharge summary (after launch).** Outcome: The summary is the doctor's own words. Trigger: Leaving day. First view: Doctor link. Wow: Fields prefilled from the stay. Fix: None.
+
+**44. s47 Doctor prescribes from a medicine list (after launch).** Outcome: Medicines are written once, the same way. Trigger: Consultation. First view: Doctor link. Wow: Pick from the list, dose chips. Fix: A medicine list in Settings.
+
+**45. s48 Patient sees their day and meals (after launch).** Outcome: The guest knows where to be. Trigger: Each morning. First view: Patient link. Wow: Today's times, room and meals. Fix: Show meals with no treatment.
+
+**46. s49 Patient fills their details before arrival (after launch).** Outcome: The guest arrives already registered. Trigger: Booking confirmed. First view: Patient link. Wow: Five questions and a photo. Fix: Covered by s29.
+
+**47. s50 Patient gives feedback (after launch).** Outcome: The centre learns what to keep. Trigger: Leaving day. First view: Patient link. Wow: One tap and an optional line. Fix: Covered by s40.
+
+# History: the 14 stories and the 1 Oct closing walk (#285)
+
+Kept as the baseline the top 50 was ranked against; S1–S14 are now parents of rows above.
 
 Screens are derived from these, not the other way round. Each story starts from the outcome the admin
 wants, walks back to the first thing they see, and only then names a screen. Ranked by harm to the
