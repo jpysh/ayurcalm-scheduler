@@ -5,7 +5,7 @@
  * refuse. The browser only shows these.
  */
 import type { PrismaClient } from '@prisma/client';
-import { centreClosed, eventHitsDay, gives, hoursOn, type EventRow } from './availability.js';
+import { centreClosed, eventHitsDay, gives, hoursOn, overlaps, staffAwayOnDay, type EventRow } from './availability.js';
 import { HAPPENING, findConflict, loadDay, oncePerCourse, softWarnings, type Action, type Candidate, type Soft } from './appointmentGuard.js';
 
 export type Kind = 'time' | 'staff' | 'room' | 'therapy';
@@ -293,6 +293,26 @@ async function nextFreeSlot(day: Date, stayEnd: Date, therapy: Ctx['therapies'][
   return null;
 }
 
+/**
+ * Too few of the people who give a therapy are in that day (#476): leave or
+ * hours, not a full diary. "No free time" would send the admin hunting for a time.
+ */
+function fewIn(ctx: Ctx, day: Date, therapy: Ctx['therapies'][number], patient: Ctx['patients'][number]): string | null {
+  const gendered = therapy.requires_gender_match && ctx.settings?.enforce_gender_match !== false;
+  const needed = therapy.staff_required ?? 1;
+  const open = toM(ctx.settings?.opening_time || '09:00');
+  const close = toM(ctx.settings?.closing_time || '18:00');
+  const inThen = ctx.staff.filter((s) => s.is_active && gives(s, therapy) && (!gendered || s.gender === patient.gender)).filter((s) => {
+    const away = staffAwayOnDay(ctx.timeOff, s, day);
+    for (let t = open; t + therapy.duration_minutes <= close; t += 15) if (!away.some((b) => overlaps(b.s, b.e, t, t + therapy.duration_minutes))) return true;
+    return false;
+  });
+  if (inThen.length >= needed) return null;
+  const first = patient.name.split(' ')[0];
+  const who = therapy.is_consultation ? 'a doctor' : `${needed === 1 ? 'a therapist' : `${needed} therapists`}${gendered ? ` of ${first}'s gender` : ''}`;
+  return `${therapy.name} needs ${who}, and ${inThen.length ? `only ${inThen.map((s) => s.name).join(' and ')} ${inThen.length === 1 ? 'is' : 'are'} in` : 'nobody who gives it is in'} that day.`;
+}
+
 /** Why a chosen therapy has no time that day, and what to do about it: never only text over a greyed button (#330). */
 async function noTimeWhy(ctx: Ctx, day: Date, nowMinutes: number | null, therapy: Ctx['therapies'][number], patient: Ctx['patients'][number], stay: { end_date: Date }, prisma: PrismaClient): Promise<{ why: string; actions: Action[] }> {
   const other: Action = { kind: 'other_therapy', label: 'Try another therapy' };
@@ -319,7 +339,7 @@ async function noTimeWhy(ctx: Ctx, day: Date, nowMinutes: number | null, therapy
     for (let t = Math.ceil(toM(ctx.settings?.opening_time || '09:00') / 15) * 15; !over && t + therapy.duration_minutes <= close; t += 15) over = !!assign(ctx, day, t, therapy, patient.id);
   }
   const closed = centreClosed(ctx.settings, ctx.timeOff, day);
-  const why = closed ? `The centre is ${closed}.` : over ? "Today's hours are over." : `No free time for ${patient.name.split(' ')[0]} that day.`;
+  const why = closed ? `The centre is ${closed}.` : over ? "Today's hours are over." : fewIn(ctx, day, therapy, patient) ?? `No free time for ${patient.name.split(' ')[0]} that day.`;
   if (!next) return { why: `${why} Nothing is free for the rest of their stay.`, actions: [other, { kind: 'change_stay', label: 'Change their stay', patient_id: patient.id }] };
   // 'Tomorrow' only when the sheet is on today (it sends the clock only then); on another day it is a date.
   const tomorrow = nowMinutes !== null && next.date.getTime() - day.getTime() === DAY_MS;
