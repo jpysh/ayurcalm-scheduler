@@ -89,6 +89,14 @@ async function main() {
     await call('DELETE', `/rooms/${roomC.id}`);
     assert.equal((await log())[0].text, `Room ${TAG} Room C removed`);
 
+    // Sharing a link is not a change; renewing it is, and a batch of therapies names them (#461).
+    await call('POST', `/patients/${rekha.id}/link`);
+    assert.equal((await log())[0].text, `Room ${TAG} Room C removed`, 'sharing the same link was logged as a change');
+    await call('POST', `/patients/${rekha.id}/link?renew=1`);
+    assert.equal((await log())[0].text, `${rekha.name}'s private link renewed, the old one stopped`);
+    await call('POST', '/therapies/import', { items: [{ name: `${TAG} Nasya`, duration_minutes: 30 }, { name: `${TAG} Kavala`, duration_minutes: 20 }] });
+    assert.equal((await log())[0].text, `2 therapies added: ${TAG} Nasya, ${TAG} Kavala`);
+
     console.log("Log: an edit is the newest line in words, so is a room or leave added, the day check's fix can be undone from it, and then says (undone).");
   } finally {
     await tidy(prisma).catch(() => {});
