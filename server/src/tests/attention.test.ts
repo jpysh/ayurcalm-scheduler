@@ -63,6 +63,14 @@ async function main() {
     await call('PATCH', `/patients/${clara.id}/stays/${claraStay.id}/form-c`, { filed: true });
     o = await read();
     assert.deepEqual(mine('form_c'), [], 'filed, it is no longer raised');
+    // Filed at 01:30 in India on the 21st is the 21st, not the UTC 20th (#448).
+    await prisma.patientStay.update({ where: { id: claraStay.id }, data: { form_c_filed: new Date('2030-08-20T20:00:00.000Z') } });
+    assert.equal((await call('GET', `/patients/${clara.id}/day?date=${DAY}`)).form_c.filed, '2030-08-21');
+    // A guest from France who left yesterday without it filed is still asked (#448).
+    const dora = await prisma.patient.create({ data: { name: `${TAG} Dora`, gender: 'female', country: 'France' } });
+    await prisma.patientStay.create({ data: { patient_id: dora.id, start_date: at('2030-08-15'), end_date: at('2030-08-19'), duration_days: 5 } });
+    o = await read();
+    assert.deepEqual(o.items.filter((i) => i.rule === 'form_c' && i.who.startsWith(TAG)).map((i) => [i.who, i.what]), [[`${TAG} Dora`, 'Form C overdue since Fri 16 Aug']]);
 
     // A later "when": Bela arrived the day before, 36 hours at midday; Aarav 60. 48 leaves only Aarav.
     await call('PUT', '/attention/rules', { arrival_open: { hours: 48 }, leaves_tomorrow: { on: true }, no_diet: { on: false }, day: { on: false } });

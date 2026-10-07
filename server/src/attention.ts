@@ -93,6 +93,9 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
   const found: Item[] = [];
   const add = (r: Rule, s: { Patient: { id: string; name: string } }, what: string, action: Item['action']) =>
     found.push({ id: `${r.id}:${s.Patient.id}`, rule: r.id, section: r.section as 'Patients', kind: r.kind, who: s.Patient.name, what, patient_id: s.Patient.id, action });
+  // Form C is owed even after the guest has gone, so a stay that ended in the last fortnight unfiled still asks.
+  const leftUnfiled = await prisma.patientStay.findMany({ where: { form_c_filed: null, end_date: { lt: day, gte: new Date(day.getTime() - 14 * DAY_MS) } }, include: { Patient: { select: { id: true, name: true, country: true } } } });
+  for (const s of leftUnfiled) if (isForeign(s.Patient.country)) add(rule('form_c'), s, `Form C overdue since ${dayName(formCDue(s.start_date)).replace(',', '')}`, 'card');
   for (const s of stays) {
     if (ymd(s.end_date) === today && !s.discharge) add(rule('leaves_today'), s, 'Leaves today, no discharge summary', 'summary');
     if (hoursIn(s) >= (rule('arrival_open').hours ?? 24) && !s.vitals && !s.concerns && !s.tests) add(rule('arrival_open'), s, 'Arrival steps still open', 'card');
