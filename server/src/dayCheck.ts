@@ -135,7 +135,7 @@ const candidateOf = (a: DayContext['appointments'][number]): Candidate => ({
 });
 
 /** "Sat 19 Sept" — a date the admin can read without decoding it. */
-const dayName = (iso: string) =>
+export const dayName = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 const fixFromMove = (m: Move, sameDay: boolean): Fix => ({

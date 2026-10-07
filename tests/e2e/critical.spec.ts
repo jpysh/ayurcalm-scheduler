@@ -229,7 +229,7 @@ test("@smoke the day's problems are named on the first screen", async ({ page, r
   };
   await tidy();
   // Today's patient items count on the badge on any screen day and change with the clock; only the day's own are wanted.
-  await call('put', '/attention/rules', { leaves_today: { on: false }, arrival_open: { on: false }, no_diet: { on: false }, vitals: { on: false } });
+  await call('put', '/attention/rules', { leaves_today: { on: false }, arrival_open: { on: false }, no_diet: { on: false }, form_c: { on: false }, vitals: { on: false } });
   try {
     const allWeek = Object.fromEntries(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].map((d) => [d, { start: '09:00', end: '18:00' }]));
     const therapy = await call('post', '/therapies', { name: `${TAG} Abhyanga`, duration_minutes: 60 });

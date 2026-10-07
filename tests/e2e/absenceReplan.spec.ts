@@ -164,7 +164,7 @@ test('time off saved elsewhere shows in the pill when the app is back in view (#
   await tidy(call);
   const { therapist } = await build(call);
   // Today's patient items count on any screen day and change with the clock; only the day's own are wanted here.
-  await call('put', '/attention/rules', { leaves_today: { on: false }, arrival_open: { on: false }, no_diet: { on: false }, vitals: { on: false } });
+  await call('put', '/attention/rules', { leaves_today: { on: false }, arrival_open: { on: false }, no_diet: { on: false }, form_c: { on: false }, vitals: { on: false } });
 
   await signIn(page);
   await page.getByRole('button', { name: 'Menu', exact: true }).click();

@@ -8,6 +8,7 @@ import type { PrismaClient } from '@prisma/client';
 import { loadDietsForDay, mealLabel, mealOrder } from './dietResolution.js';
 import { centreClock, startedBefore, toMinutes } from './availability.js';
 import { dischargeOf } from './discharge.js';
+import { formCDue, isForeign } from './attention.js';
 
 const DAY_MS = 86400000;
 
@@ -89,6 +90,16 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
       staff_names: [a.staff_id, ...a.co_staff_ids].filter((x): x is string => Boolean(x)).map((id) => names.get(id) || ''),
     })),
     week,
+    // What the FRRO site asks for, in its order, so each can be copied across (#415).
+    form_c: stay && isForeign(patient.country) ? {
+      due: formCDue(stay.start_date), filed: stay.form_c_filed?.toISOString() ?? null,
+      fields: [
+        ['Name', patient.name], ['Gender', patient.gender[0].toUpperCase() + patient.gender.slice(1)], ['Date of birth', patient.date_of_birth?.toISOString().slice(0, 10) ?? ''],
+        ['Nationality', patient.country ?? ''], ['Passport', patient.id_number ?? ''], ['Visa number', patient.visa_number ?? ''],
+        ['Visa valid until', patient.visa_valid_until ?? ''], ['Arrived', stay.start_date.toISOString().slice(0, 10)],
+        ['Leaving', stay.end_date.toISOString().slice(0, 10)], ['Address at home', patient.address ?? ''], ['Phone', patient.phone ?? ''],
+      ],
+    } : null,
     last_stay: before && { end_date: before.end_date.toISOString().slice(0, 10), package: beforePack && { id: beforePack.id, name: beforePack.name, days: beforePack.days, price: beforePack.price } },
     doctor_plan: patient.doctor_plan,
     last_consultation: visit(last),

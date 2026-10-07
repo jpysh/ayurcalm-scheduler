@@ -9,7 +9,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { centreClock } from './availability.js';
-import { checkDay } from './dayCheck.js';
+import { checkDay, dayName } from './dayCheck.js';
 import { loadDay, staffDay } from './appointmentGuard.js';
 import { loadDietsForDay } from './dietResolution.js';
 
@@ -37,6 +37,7 @@ export const RULES: Rule[] = [
   { id: 'leaves_today', section: 'Patients', kind: 'action', on: true, name: 'Leaves today and has no discharge summary' },
   { id: 'arrival_open', section: 'Patients', kind: 'action', on: true, hours: 24, from: 'of arriving', name: 'Arrival steps still open' },
   { id: 'no_diet', section: 'Patients', kind: 'action', on: true, hours: 24, from: 'of arriving', name: 'No diet plan' },
+  { id: 'form_c', section: 'Patients', kind: 'action', on: true, name: 'Form C for a foreign guest, due a day after arriving' },
   { id: 'leaves_tomorrow', section: 'Patients', kind: 'action', on: false, name: 'Leaves tomorrow and the discharge summary is not started' },
   { id: 'vitals', section: 'Team', kind: 'action', on: true, hours: 4, from: 'after the treatment starts', waiting: 'Starts when therapists record readings', name: 'Vitals not recorded' },
   { id: 'on_leave', section: 'Team', kind: 'information', on: true, name: 'Who is on leave today' },
@@ -65,6 +66,11 @@ export type Item = {
   action?: 'card' | 'diet' | 'summary';
 };
 
+/** A guest whose country is not India needs a Form C within 24 hours of arriving (#415). An empty country is not assumed foreign. */
+export const isForeign = (country: string | null | undefined) => !!country?.trim() && !/^(india|indian|bharat|in)$/i.test(country.trim());
+/** The day it is due: the day after arrival, since the stay has no arrival hour. */
+export const formCDue = (start: Date) => ymd(new Date(start.getTime() + DAY_MS));
+
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
 /** For one day (today unless asked): each rule with how many items it would raise, and the items of the rules that are on. */
@@ -79,7 +85,7 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
   const rules = rulesWith(settings?.attention_rules);
   const rule = (id: string) => rules.find((r) => r.id === id)!;
 
-  const stays = await prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: new Date(day.getTime()) } }, include: { Patient: { select: { id: true, name: true } } } });
+  const stays = await prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: new Date(day.getTime()) } }, include: { Patient: { select: { id: true, name: true, country: true } } } });
   const upcoming = await prisma.patientStay.findMany({ where: { end_date: new Date(`${tomorrow}T00:00:00.000Z`), start_date: { lte: day } }, include: { Patient: { select: { id: true, name: true } } } });
   const diets = await loadDietsForDay(day, prisma);
   const hoursIn = (s: { start_date: Date }) => Math.round((day.getTime() - s.start_date.getTime()) / DAY_MS) * 24 + hourNow;
@@ -90,6 +96,10 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
   for (const s of stays) {
     if (ymd(s.end_date) === today && !s.discharge) add(rule('leaves_today'), s, 'Leaves today, no discharge summary', 'summary');
     if (hoursIn(s) >= (rule('arrival_open').hours ?? 24) && !s.vitals && !s.concerns && !s.tests) add(rule('arrival_open'), s, 'Arrival steps still open', 'card');
+    if (isForeign(s.Patient.country) && !s.form_c_filed) {
+      const due = formCDue(s.start_date);
+      add(rule('form_c'), s, `Form C ${due < today ? 'overdue since' : 'due by'} ${dayName(due).replace(',', '')}`, 'card');
+    }
     if (hoursIn(s) >= (rule('no_diet').hours ?? 24) && !diets.dietFor(s.Patient, true).planName) add(rule('no_diet'), s, 'No diet plan', 'diet');
   }
   for (const s of upcoming) if (!s.discharge) add(rule('leaves_tomorrow'), s, 'Leaves tomorrow, discharge summary not started', 'summary');
