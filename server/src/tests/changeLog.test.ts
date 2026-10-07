@@ -12,6 +12,7 @@ import { requireDemoData } from './demoGuard.js';
 
 const API_BASE = process.env.API_BASE || `http://127.0.0.1:${process.env.PORT || 4100}/api`;
 const TAG = 'Logtest';
+const STARTED = new Date();
 const DAY = '2030-08-14';
 const allWeek = Object.fromEntries(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].map((d) => [d, { start: '09:00', end: '18:00' }]));
 
@@ -23,6 +24,9 @@ async function tidy(prisma: PrismaClient) {
   await prisma.appointment.deleteMany({ where: { id: { in: appts } } });
   await prisma.patientStay.deleteMany({ where: { patient_id: { in: patients } } });
   await prisma.patient.deleteMany({ where: { id: { in: patients } } });
+  const staff = (await prisma.staff.findMany({ where: { name: { startsWith: TAG } }, select: { id: true } })).map((x) => x.id);
+  await prisma.timeOff.deleteMany({ where: { entity_id: { in: staff } } });
+  await prisma.auditLog.deleteMany({ where: { action: 'write', timestamp: { gte: STARTED } } });
   await prisma.staff.deleteMany({ where: { name: { startsWith: TAG } } });
   await prisma.therapyRoom.deleteMany({ where: { name: { startsWith: TAG } } });
   await prisma.therapy.deleteMany({ where: { name: { startsWith: TAG } } });
@@ -69,7 +73,13 @@ async function main() {
     assert.ok(after.undone && after.text.endsWith('(undone)') && after.undo === null, `once undone: ${JSON.stringify(after)}`);
     assert.equal((await prisma.appointment.findUniqueOrThrow({ where: { id: appt.id } })).room_id, roomA.id);
 
-    console.log("Log: an edit is the newest line in words, the day check's fix can be undone from it, and then says (undone).");
+    // Every other write is a line too (#411): a room added, a leave recorded.
+    await call('POST', '/rooms', { name: `${TAG} Room C` });
+    assert.equal((await log())[0].text, `Room ${TAG} Room C added`);
+    await call('POST', '/timeoff', { entity_type: 'staff', entity_id: asha.id, date: DAY, description: 'Sick', plan: false });
+    assert.equal((await log())[0].text, `Leave for ${asha.name} added`);
+
+    console.log("Log: an edit is the newest line in words, so is a room or leave added, the day check's fix can be undone from it, and then says (undone).");
   } finally {
     await tidy(prisma).catch(() => {});
     await prisma.$disconnect();

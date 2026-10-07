@@ -4,6 +4,7 @@
  * use. Only the newest batch can be undone from here, with the Undo that exists.
  */
 import type { PrismaClient } from '@prisma/client';
+import type { NextFunction, Request, Response } from 'express';
 import { describer } from './history.js';
 
 export type LogEntry = { id: string; at: string; who: 'you' | 'the app'; text: string; undo: string | null; undone: boolean };
@@ -20,8 +21,10 @@ export async function changeLog(days: number, prisma: PrismaClient): Promise<Log
   const rows = await prisma.auditLog.findMany({
     where: {
       timestamp: { gte: new Date(Date.now() - days * 86400000) },
-      action: { in: ['update', 'delete', 'replan', 'dayfix', 'replan_undone'] },
-      entity_type: { in: ['appointment', 'patient', 'staff'] },
+      OR: [
+        { action: { in: ['update', 'delete', 'replan', 'dayfix', 'replan_undone'] }, entity_type: { in: ['appointment', 'patient', 'staff'] } },
+        { action: 'write' },
+      ],
     },
     orderBy: { timestamp: 'desc' },
     take: 500,
@@ -51,7 +54,9 @@ export async function changeLog(days: number, prisma: PrismaClient): Promise<Log
     const undone = r.action === 'replan_undone';
     const batch = r.action === 'replan' || r.action === 'dayfix' || undone;
     let text = '';
-    if (r.entity_type === 'patient') {
+    if (r.action === 'write') {
+      text = wrote((r.new_value || {}) as Wrote, { patients, staff, rooms, therapies }, whose);
+    } else if (r.entity_type === 'patient') {
       const p = (r.old_value || {}) as { name?: string };
       text = r.action === 'delete' ? `${p.name || 'A patient'} removed` : `${name(patients, r.entity_id) || p.name || 'A patient'}'s details changed`;
     } else if (r.action === 'delete') {
@@ -84,4 +89,70 @@ export async function changeLog(days: number, prisma: PrismaClient): Promise<Log
   const newest = shown[0];
   if (newest && (newest.action === 'replan' || newest.action === 'dayfix')) out[0].undo = newest.id;
   return out;
+}
+
+/**
+ * Every write the admin makes is a Log row (#411). Routes that already write a
+ * richer row with before and after (a treatment or patient edited or deleted,
+ * the replan and the day check's fix) keep theirs; this records the rest once
+ * the write has succeeded.
+ * ponytail: keeps what was sent, not what it replaced; add before-values per route when Undo needs them.
+ */
+const OWN_ROW = [/^(PUT|DELETE) \/(appointments|patients)\/[^/]+$/, /^POST \/(replan|replan\/undo|day-check|day-check\/accept|client-errors|staff\/[^/]+\/hours-check)$/];
+const SECRET = /password|token|secret|signature|logo/i;
+const scrub = (v: unknown) => (Buffer.isBuffer(v) || v == null ? null : JSON.parse(JSON.stringify(v, (k, x) => (SECRET.test(k) ? undefined : typeof x === 'string' && x.length > 500 ? `${x.slice(0, 500)}…` : x))));
+
+export const logWrites = (prisma: PrismaClient) => (req: Request, res: Response, next: NextFunction) => {
+  // Read now: a router mounted under /api rewrites req.path before the write finishes.
+  const path = req.path;
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) || OWN_ROW.some((x) => x.test(`${req.method} ${path}`))) return next();
+  let sent: unknown;
+  const json = res.json.bind(res);
+  res.json = (b: unknown) => { sent = b; return json(b); };
+  res.on('finish', () => {
+    if (res.statusCode >= 300) return;
+    const [, kind = '', id] = path.split('/');
+    const made = (sent as { id?: unknown } | null)?.id;
+    prisma.auditLog.create({ data: {
+      admin_id: req.user?.email || 'admin', action: 'write', entity_type: kind, entity_id: String(id || made || ''),
+      new_value: { method: req.method, path, body: scrub(req.body), made: typeof made === 'string' ? made : null },
+    } }).catch(() => { /* the write itself succeeded; a lost Log row must not fail it */ });
+  });
+  next();
+};
+
+type Wrote = { method?: string; path?: string; body?: Record<string, unknown> | null; made?: string | null };
+type Named = { id: string; name: string }[];
+const KIND: Record<string, string> = {
+  staff: 'team member', rooms: 'room', therapies: 'therapy', timeoff: 'leave', holidays: 'centre closed day', dietplans: 'diet plan',
+  'program-events': 'event', users: 'user account', packages: 'package', accommodations: 'accommodation', 'diet-templates': 'diet plan',
+  patients: 'patient', appointments: 'treatment',
+};
+const cap = (x: string) => (x ? x[0].toUpperCase() + x.slice(1) : 'Something');
+
+/** One sentence for a write the middleware recorded. */
+function wrote(w: Wrote, lists: { patients: Named; staff: Named; rooms: Named; therapies: Named }, whose: (id: string, fallback?: Snap | null) => string): string {
+  const b = w.body || {};
+  const [, kind = '', id = '', sub = ''] = (w.path || '').split('/');
+  const named = (x: unknown) => [lists.patients, lists.staff, lists.rooms, lists.therapies].map((l) => l.find((y) => y.id === x)?.name).find(Boolean) || '';
+  const verb = w.method === 'POST' ? 'added' : w.method === 'DELETE' ? 'removed' : 'changed';
+  if (kind === 'appointments') return `${whose(w.made || '', b)} booked${b.date ? ` for ${b.date}` : ''}${b.start_time ? ` at ${b.start_time}` : ''}`;
+  if (kind === 'patients' && sub) {
+    const who = named(id) || 'A patient';
+    const what: Record<string, string> = { stays: `${who}'s stay changed`, diet: `${who}'s diet changed`, link: `${who}'s private link renewed`, 'next-week': `Next week booked for ${who}` };
+    if ((w.path || '').endsWith('/arrival')) return `${who}'s arrival recorded`;
+    if ((w.path || '').endsWith('/discharge')) return `${who}'s discharge recorded`;
+    return what[sub] || `${who} changed`;
+  }
+  if (kind === 'staff' && sub === 'link') return `${named(id) || 'A team member'}'s private link renewed`;
+  if (kind === 'timeoff' || kind === 'holidays') {
+    const of = named(b.entity_id);
+    return `${cap(KIND[kind])}${of ? ` for ${of}` : ''} ${verb}`;
+  }
+  if (kind === 'settings') return ({ import: 'A backup restored', 'clear-demo-data': 'Example data cleared', 'reset-demo-data': 'Example data reset', 'setup-reviewed': 'Setup marked as reviewed' } as Record<string, string>)[id] || 'Settings changed';
+  if (kind === 'attention') return 'What needs you rules changed';
+  if (kind === 'account') return 'Your password changed';
+  if (kind === 'mcp-key') return 'The assistant key changed';
+  const name = typeof b.name === 'string' ? b.name : named(id);
+  return `${cap(KIND[kind] || kind.replace(/-/g, ' '))}${name ? ` ${name}` : ''} ${verb}`;
 }
