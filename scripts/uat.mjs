@@ -44,18 +44,35 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #459: after closing on today, Print gives tomorrow and says so. Run after the centre's closing time.
-await step("Evening: the Menu's Print row names tomorrow", '/admin/schedule', async () => {
-  await menu();
-  const row = await text(dlg().getByRole('button', { name: /^Print/ }));
-  return { ok: /tomorrow/.test(row) && new RegExp(new Date(`${plus(1)}T00:00:00Z`).getUTCDate() + ' ').test(row), note: row.replace(/\n/g, ' · ') };
+// #460: a consultation with no doctor names a doctor, and its fix adds one.
+const doctors = (await api('GET', '/staff')).filter((x) => x.role === 'doctor' && x.is_active !== false);
+const someone = (await api('GET', '/patients')).find((x) => x.name);
+const bookConsult = async () => {
+  await go(p.getByRole('button', { name: 'Book a treatment', exact: true }));
+  await go(dlg().getByRole('button', { name: /^Aarohi Das/ }).first());
+  await go(dlg().getByRole('button', { name: /Other therapies/ }));
+  await go(p.getByRole('dialog').last().getByText('Consultation', { exact: true }).first());
+  await p.waitForTimeout(1500);
+};
+await step('No doctor in: booking a consultation says it needs a doctor, with Add a doctor', '/admin/schedule', async () => {
+  for (const d of doctors) await api('PUT', `/staff/${d.id}`, { is_active: false });
+  await p.reload(); await p.waitForTimeout(2000);
+  await bookConsult();
+  const t = await text(dlg());
+  return { ok: /needs a doctor/.test(t) && /Add a doctor/.test(t), note: t.split('\n').filter((x) => /needs|Add a/.test(x)).join(' · ') };
 });
-await step('Print downloads tomorrow\'s sheet and the toast names the day', '/admin/schedule', async () => {
-  await menu();
-  const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 15000 }), dlg().getByRole('button', { name: /^Print/ }).click()]);
-  await p.waitForTimeout(1200);
-  const toast = await p.locator('[data-sonner-toast]').first().innerText().catch(() => '');
-  return { ok: dl.suggestedFilename().includes(plus(1)) && /for \w+ \d+ \w+/.test(toast), note: `file ${dl.suggestedFilename()}; toast "${toast.split('\n')[0]}"` };
+await step('Add a doctor opens the form with Doctor chosen', '/admin/schedule', async () => {
+  await bookConsult();
+  await go(dlg().getByRole('button', { name: 'Add a doctor' }));
+  const pressed = await dlg().getByRole('radio', { name: 'Doctor' }).getAttribute('aria-checked').catch(() => null) ?? await dlg().getByRole('button', { name: 'Doctor', exact: true }).getAttribute('aria-pressed').catch(() => null);
+  return { ok: pressed === 'true', note: `Doctor chosen: ${pressed}` };
+});
+await step('With a doctor in, the booking line reads Doctor', '/admin/schedule', async () => {
+  for (const d of doctors) await api('PUT', `/staff/${d.id}`, { is_active: true });
+  await p.reload(); await p.waitForTimeout(2000); await bookConsult();
+  await dlg().getByRole('button', { name: /Book tomorrow/ }).click({ timeout: 3000 }).catch(() => {}); await p.waitForTimeout(1500);
+  const t = await text(dlg());
+  return { ok: /\nDoctor\n/.test(t) && !/\nTherapist\n/.test(t), note: t.split('\n').filter((x) => /^(Doctor|Therapist|Room)$/.test(x)).join(' · ') };
 });
 await b.close();
 
