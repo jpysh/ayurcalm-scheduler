@@ -11,6 +11,7 @@ import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
 import { requireDemoData } from './demoGuard.js';
+import { bookingWho } from '../cardChoices.js';
 
 const API_BASE = process.env.API_BASE || `http://127.0.0.1:${process.env.PORT || 4100}/api`;
 const TAG = 'Cardtest';
@@ -56,6 +57,10 @@ async function main() {
     } });
     const mine = await book(rekha.id, asha.id, roomA.id);
     const theirs = await book(sita.id, bina.id, roomB.id);
+
+    // On her first day Rekha's only treatment is a week ahead: "next", with its weekday (#395).
+    const firstDay = (await bookingWho('2030-04-10', prisma)).all.find((r) => r.id === rekha.id);
+    assert.match(firstDay?.note || '', /· next: .*Abhyanga Wed 17 Apr$/, `a future booking was called last: "${firstDay?.note}"`);
 
     const choices = async (kind: string) => (await call('GET', `/appointments/${mine.id}/choices?kind=${kind}`)).choices as { label: string; now?: boolean; change: Record<string, unknown> }[];
     const staffNames = async () => (await choices('staff')).filter((c) => !c.now).map((c) => c.label);
