@@ -37,7 +37,7 @@ async function main() {
       assert.ok(res.ok, `${method} ${path}: ${res.status} ${await res.clone().text()}`);
       return res.json();
     };
-    type Out = { rules: { id: string; on: boolean; hours?: number; count: number }[]; items: { rule: string; who: string }[] };
+    type Out = { rules: { id: string; on: boolean; hours?: number; count: number }[]; items: { rule: string; who: string; what: string }[] };
     const read = (): Promise<Out> => call('GET', `/attention?date=${DAY}`);
     const rule = (o: Out, id: string) => o.rules.find((r) => r.id === id)!;
 
@@ -54,6 +54,15 @@ async function main() {
     assert.equal(rule(o, 'leaves_tomorrow').count >= 1, true, 'the count says what the rule would raise');
     assert.deepEqual(mine('leaves_tomorrow'), [], 'off by default, so it raises nothing');
     assert.equal(rule(o, 'vitals').count, 0, 'vitals wait for data');
+
+    // Form C (#415): a guest from Germany who arrives today is due tomorrow; one with no country is not asked; filed, it goes.
+    const clara = await prisma.patient.create({ data: { name: `${TAG} Clara`, gender: 'female', country: 'Germany' } });
+    const claraStay = await prisma.patientStay.create({ data: { patient_id: clara.id, start_date: at(DAY), end_date: at('2030-08-25'), duration_days: 6 } });
+    o = await read();
+    assert.deepEqual(o.items.filter((i) => i.rule === 'form_c' && i.who.startsWith(TAG)).map((i) => [i.who, i.what]), [[`${TAG} Clara`, 'Form C due by Wed 21 Aug']]);
+    await call('PATCH', `/patients/${clara.id}/stays/${claraStay.id}/form-c`, { filed: true });
+    o = await read();
+    assert.deepEqual(mine('form_c'), [], 'filed, it is no longer raised');
 
     // A later "when": Bela arrived the day before, 36 hours at midday; Aarav 60. 48 leaves only Aarav.
     await call('PUT', '/attention/rules', { arrival_open: { hours: 48 }, leaves_tomorrow: { on: true }, no_diet: { on: false }, day: { on: false } });

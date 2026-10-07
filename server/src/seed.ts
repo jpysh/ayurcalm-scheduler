@@ -647,6 +647,14 @@ async function main() {
     where: { end_date: { gte: new Date(today.getTime() - 7 * DAY_MS), lte: new Date(today.getTime() + 2 * DAY_MS) }, start_date: { lt: today } },
     include: { Patient: true },
   });
+  // One foreign guest who arrived today (#415): Form C is due tomorrow, so it is in What needs you.
+  const arrived = await prisma.patientStay.findFirst({ where: { start_date: new Date(todayKey) }, orderBy: { id: 'asc' } });
+  if (arrived) {
+    await prisma.patient.update({ where: { id: arrived.patient_id }, data: {
+      country: 'Germany', id_number: 'C4L7R2K91', visa_number: 'VE1234567', address: 'Lindenstrasse 12, 10969 Berlin',
+      visa_valid_until: new Date(new Date(todayKey).getTime() + 150 * 86400000).toISOString().slice(0, 10),
+    } });
+  }
   for (const [i, st] of leaving.entries()) {
     const appts = await prisma.appointment.findMany({ where: { patient_id: st.patient_id, scheduled_date: { gte: st.start_date, lte: st.end_date < today ? st.end_date : today } }, orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }] });
     const seen = new Set<string>();

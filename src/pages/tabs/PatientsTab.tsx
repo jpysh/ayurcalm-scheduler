@@ -26,6 +26,8 @@ type InHouse = { id: string; name: string; Stays: { id: string; start_date: stri
 type ResidentDay = {
   id: string; name: string;
   stay: (CardStay & { vitals: string | null; concerns: string | null; tests: string | null }) | null;
+  /** A foreign guest's Form C (#415): the day it is due, whether it is filed, and the FRRO site's fields in its order. */
+  form_c: { due: string; filed: string | null; fields: [string, string][] } | null;
   /** Their latest stay, when they are not staying today and it is over (#437). */
   last_stay: { end_date: string; package: CardStay['package'] } | null;
   treatments: (CardAppt & { therapy_name: string; consultation: boolean; room_name: string | null; staff_names: string[] })[];
@@ -168,6 +170,15 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
   }, [id, today]);
   const [checklist, setChecklist] = useState(false);
   const [week, setWeek] = useState(false);
+  const [formC, setFormC] = useState(false);
+  const copy = async (label: string, value: string) => {
+    try { await navigator.clipboard.writeText(value); toast.success(`${label} copied`); } catch { toast.error("Could not copy. Press and hold the text instead."); }
+  };
+  const fileFormC = async (filed: boolean) => {
+    const res = await fetch(`${API_BASE}/patients/${d!.id}/stays/${d!.stay!.id}/form-c`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filed }) });
+    if (!res.ok) { toast.error("That could not be saved."); return; }
+    setFormC(false); load();
+  };
   // The week after the review: today's if the doctor saw them today, else the coming one; next week repeats the week up to it.
   const weekFrom = d ? (d.last_consultation?.date.slice(0, 10) === today ? today : (d.next_consultation || d.last_consultation)?.date.slice(0, 10)) : undefined;
   const startIntake = (x: ResidentDay) => ({ vitals: x.stay!.vitals || '', concerns: x.stay!.concerns || '', tests: x.stay!.tests || '' });
@@ -231,6 +242,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
             <ChangeLine label="Diet" value={d.plan_name ? (d.diet_next ? `${d.plan_name}, then ${d.diet_next.name} from ${dayText(d.diet_next.from)}` : d.plan_name) : "Not decided yet"} faint={!d.plan_name} onClick={() => changeMeals(d)} />
             {d.stay ? <ChangeLine label="Package" value={d.stay.package ? `${d.stay.package.days} days · ${rupees(d.stay.package.price)}` : "Not decided yet"} faint={!d.stay.package} onClick={() => changePackage(d)} /> : null}
             {d.stay && d.stay.on_site !== false ? <ChangeLine label="Accommodation" value={d.stay.accommodation ? `${d.stay.accommodation.name} · ${nights} nights · ${rupees(nights * d.stay.accommodation.price_per_day)}` : "Not decided yet"} faint={!d.stay.accommodation} onClick={() => changeHouse(d)} /> : null}
+            {d.form_c ? <ChangeLine label="Form C" value={d.form_c.filed ? `Filed ${dayText(d.form_c.filed)}` : `Due by ${dayText(d.form_c.due)}`} onClick={() => setFormC(true)} /> : null}
             {d.stay ? <ChangeLine label="Stay" value={`${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)}`} onClick={() => changeStay(d)} /> : <ChangeLine label={d.last_stay ? 'New stay' : 'Stay'} value={d.last_stay?.package ? `From today · ${d.last_stay.package.name}` : 'Not staying · add a stay'} faint={!d.last_stay} onClick={() => changeStay(d)} />}
             <ChangeLine label="Details" value={detailsHint(d.id)} faint onClick={() => details(d.id)} />
           </div>
@@ -265,6 +277,16 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
       <BottomSheet open={plan !== null} onOpenChange={(o) => { if (!o) setPlan(null); }} title={`Doctor's plan · ${d?.name.split(' ')[0] ?? ''}`} note="Printed on their discharge summary."
         foot={<Foot label="Save the plan" save={savePlan} />}>
         {plan !== null ? <Area label="Plan (optional)" rows={6} value={plan} onChange={(e) => setPlan(e.target.value)} /> : null}
+      </BottomSheet>
+      {/* Form C (#415): tap a line to copy it into indianfrro.gov.in, then mark it filed. */}
+      <BottomSheet open={formC && !!d?.form_c} onOpenChange={setFormC} title={`Form C · ${d?.name ?? ''}`}
+        note={d?.form_c?.filed ? `Filed ${dayText(d.form_c.filed)}.` : `Due by ${d?.form_c ? dayText(d.form_c.due) : ''}, a day after arriving. Tap a line to copy it into indianfrro.gov.in.`}
+        foot={d?.form_c?.filed ? <Btn onClick={() => fileFormC(false)}>Not filed yet</Btn> : <Btn kind="primary" onClick={() => fileFormC(true)}>Mark Form C filed</Btn>}>
+        <ListGroup>
+          {d?.form_c?.fields.map(([label, value]) => value
+            ? <Row key={label} title={label} facts={/^\d{4}-\d{2}-\d{2}$/.test(value) ? dayText(value) : value} trailing="Copy" onClick={() => copy(label, value.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3/$2/$1'))} />
+            : <Row key={label} title={label} flag="Not recorded" onClick={() => { setFormC(false); details(d.id); }} />)}
+        </ListGroup>
       </BottomSheet>
       {d && weekFrom ? <NextWeekSheet patient={week ? d : null} review={weekFrom} onClose={() => setWeek(false)} onBooked={load} /> : null}
       {checklist && d ? <DischargeSheet patient={d} stay={d.stay} onClose={() => setChecklist(false)} print={summary}
@@ -395,7 +417,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     const d = infoDraft;
     const res = await fetch(`${API_BASE}/patients/${d.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify({
       name: d.name.trim() || undefined, phone: d.phone, email: d.email, emergency_contact: d.emergencyContact, emergency_phone: d.emergencyPhone,
-      address: d.address, country: d.country, id_number: d.idNumber, registration_number: d.registrationNumber, medical_notes: d.medicalNotes, date_of_birth: d.dob || undefined,
+      address: d.address, country: d.country, id_number: d.idNumber, visa_number: d.visaNumber || null, visa_valid_until: d.visaValidUntil || null, registration_number: d.registrationNumber, medical_notes: d.medicalNotes, date_of_birth: d.dob || undefined,
     }) });
     if (!res.ok) { toast.error('That was not saved. Try again.'); return; }
     setPatients((prev) => prev.map((x) => (x.id === d.id ? { ...x, ...d, name: d.name.trim() || x.name } : x)));
@@ -502,6 +524,11 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           <Text label="Address (optional)" value={infoDraft.address || ''} onChange={(e) => setInfoDraft({ ...infoDraft, address: e.target.value })} />
           <Text label="Country (optional)" value={infoDraft.country || ''} onChange={(e) => setInfoDraft({ ...infoDraft, country: e.target.value })} />
           <Text label="Passport or ID (optional)" value={infoDraft.idNumber || ''} onChange={(e) => setInfoDraft({ ...infoDraft, idNumber: e.target.value })} />
+          {/* For Form C (#415): asked only of a guest from outside India. */}
+          {infoDraft.country?.trim() && !/^(india|indian|bharat|in)$/i.test(infoDraft.country.trim()) ? (<>
+            <Text label="Visa number (optional)" value={infoDraft.visaNumber || ''} onChange={(e) => setInfoDraft({ ...infoDraft, visaNumber: e.target.value })} />
+            <DateRow label="Visa valid until (optional)" value={infoDraft.visaValidUntil || ''} onChange={(v) => setInfoDraft({ ...infoDraft, visaValidUntil: v })} />
+          </>) : null}
           <Text label="Registration number (optional)" value={infoDraft.registrationNumber || ''} onChange={(e) => setInfoDraft({ ...infoDraft, registrationNumber: e.target.value })} />
           <DateRow label="Date of birth (optional)" value={infoDraft.dob || ''} onChange={(v) => setInfoDraft({ ...infoDraft, dob: v })} />
           <Text label="Email (optional)" type="email" inputMode="email" value={infoDraft.email || ''} onChange={(e) => setInfoDraft({ ...infoDraft, email: e.target.value })} />

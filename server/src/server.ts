@@ -418,6 +418,8 @@ app.post('/patients', async (req: Request, res: Response) => {
     address: z.string().optional(),
     country: z.string().optional(),
     id_number: z.string().optional(),
+    visa_number: z.string().max(100).nullable().optional(),
+    visa_valid_until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).nullable().optional(),
     registration_number: z.string().optional(),
     medical_notes: z.string().optional(),
     medication: z.string().max(2000).nullable().optional(),
@@ -435,7 +437,7 @@ app.post('/patients', async (req: Request, res: Response) => {
     template_id: z.string().uuid().optional(),
   });
   const body = schema.parse(req.body);
-  const data: any = { name: body.name, gender: body.gender, phone: body.phone, email: body.email, emergency_contact: body.emergency_contact, emergency_phone: body.emergency_phone, address: body.address, country: body.country, id_number: body.id_number, registration_number: body.registration_number, medical_notes: body.medical_notes, preferred_staff_id: body.preferred_staff_id, requires_preferred_staff: body.requires_preferred_staff };
+  const data: any = { name: body.name, gender: body.gender, phone: body.phone, email: body.email, emergency_contact: body.emergency_contact, emergency_phone: body.emergency_phone, address: body.address, country: body.country, id_number: body.id_number, visa_number: body.visa_number, visa_valid_until: body.visa_valid_until || null, registration_number: body.registration_number, medical_notes: body.medical_notes, preferred_staff_id: body.preferred_staff_id, requires_preferred_staff: body.requires_preferred_staff };
   if (body.date_of_birth) data.date_of_birth = new Date(body.date_of_birth);
   // The consultation goes through the same guard as any booking, before anything is saved.
   const visit = body.consultation && body.stay ? body.consultation : null;
@@ -473,6 +475,8 @@ app.put('/patients/:id', async (req: Request, res: Response) => {
     address: z.string().optional(),
     country: z.string().optional(),
     id_number: z.string().optional(),
+    visa_number: z.string().max(100).nullable().optional(),
+    visa_valid_until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).nullable().optional(),
     registration_number: z.string().optional(),
     medical_notes: z.string().optional(),
     medication: z.string().max(2000).nullable().optional(),
@@ -484,6 +488,7 @@ app.put('/patients/:id', async (req: Request, res: Response) => {
   });
   const body = schema.parse(req.body);
   const data: any = { ...body };
+  if (data.visa_valid_until === '') data.visa_valid_until = null;
   if (body.date_of_birth) data.date_of_birth = new Date(body.date_of_birth);
   const prev = await prisma.patient.findUnique({ where: { id } });
   const p = await prisma.patient.update({ where: { id }, data });
@@ -531,6 +536,14 @@ app.patch('/patients/:id/stays/:stayId/arrival', async (req: Request, res: Respo
   const stay = await prisma.patientStay.findFirst({ where: { id: String(req.params.stayId), patient_id: String(req.params.id) } });
   if (!stay) { res.status(404).json({ error: 'Stay not found' }); return; }
   res.json(await prisma.patientStay.update({ where: { id: stay.id }, data: body }));
+});
+
+// Form C (#415): the admin marks it filed with the FRRO, or takes that back.
+app.patch('/patients/:id/stays/:stayId/form-c', async (req: Request, res: Response) => {
+  const { filed } = z.object({ filed: z.boolean() }).parse(req.body);
+  const stay = await prisma.patientStay.findFirst({ where: { id: String(req.params.stayId), patient_id: String(req.params.id) } });
+  if (!stay) { res.status(404).json({ error: 'Stay not found' }); return; }
+  res.json(await prisma.patientStay.update({ where: { id: stay.id }, data: { form_c_filed: filed ? new Date() : null } }));
 });
 
 // Departure: the discharge summary (#194). The doctor writes it from their link

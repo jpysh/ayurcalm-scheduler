@@ -28,6 +28,9 @@ model Patient {
   country           String?
   /// Passport or other ID.
   id_number         String?
+  /// For Form C (#415), a foreign guest's visa: its number and last valid day (YYYY-MM-DD).
+  visa_number       String?
+  visa_valid_until  String?
   registration_number String?
   medical_notes     String?
   created_at        DateTime  @default(now())
@@ -63,6 +66,8 @@ model PatientStay {
   concerns      String?
   /// External tests the doctor asked for (blood work, scans).
   tests         String?
+  /// When the admin marked this stay's Form C as filed with the FRRO (#415).
+  form_c_filed  DateTime?
   /// The discharge summary (#194): written by the doctor from their link or by
   /// the admin on the card; `final` is the admin's last word and locks the link.
   /// Shape is `Discharge` in src/discharge.ts.

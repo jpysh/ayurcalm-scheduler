@@ -7,7 +7,7 @@ export type UiTherapy = { id: string | number; name: string; duration: number; a
 export type UiTimeOff = { id: string; date?: string; startDate?: string; endDate?: string; startTime?: string; endTime?: string; recurrence?: 'weekly'; weekdays?: ('sunday'|'monday'|'tuesday'|'wednesday'|'thursday'|'friday'|'saturday')[]; type: "Center" | "Staff" | "Room" | "Therapy" | "Patient"; entity: string; description: string };
 export type Patient = {
   id: string; name: string; phone: string; email: string; gender: string; dob: string;
-  emergencyContact: string; emergencyPhone: string; address: string; country: string; idNumber: string; registrationNumber: string; medicalNotes: string;
+  emergencyContact: string; emergencyPhone: string; address: string; country: string; idNumber: string; visaNumber?: string; visaValidUntil?: string; registrationNumber: string; medicalNotes: string;
   actualStart: string; actualEnd: string; preferredStaffId?: string | null;
   /** Every stay, newest first; actualStart/actualEnd are only the newest. */
   stays?: { start_date: string; end_date: string }[]; requiresPreferredStaff?: boolean;
