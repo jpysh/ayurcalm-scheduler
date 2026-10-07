@@ -307,9 +307,10 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
           })),
         ].sort((m, n) => m.t.localeCompare(n.t) || String(m.text).localeCompare(String(n.text)));
       });
-      // The guest room beside the name (#456), so whoever carries the sheet knows which door to knock on.
+      // The guest room under the name (#456), so whoever carries the sheet knows which door to knock on.
+      // Its own line: beside the name, a narrow column wrapped the room away from it ("Vikram Shah ·" / "T2").
       const room = staysToday.find((s) => s.patient_id === id && s.on_site && s.GuestRoom)?.GuestRoom?.name;
-      items.push({ kind: 'row', name: `${patientById[id] || id}${room ? ` \u00b7 ${room}` : ''}`, cells, group });
+      items.push({ kind: 'row', name: `${patientById[id] || id}${room ? `\n${room}` : ''}`, cells, group });
     }
   }
 

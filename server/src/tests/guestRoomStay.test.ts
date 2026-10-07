@@ -77,8 +77,8 @@ async function main() {
     const pdf = join(dir, 'day.pdf');
     writeFileSync(pdf, await generateDailySchedulePdf('2030-03-04', prisma));
     const text = execFileSync('pdftotext', ['-raw', pdf, '-']).toString().replace(/\s+/g, ' ');
-    assert.ok(text.includes(`${TAG} Asha · ${TAG}2`) || text.includes(`Asha · ${TAG}2`), 'the day sheet prints the guest room beside the name');
-    assert.ok(text.includes(`· ${TAG}D`), 'and the couple\'s room');
+    assert.ok(text.includes(`${TAG} Asha ${TAG}2`), 'the day sheet prints the guest room under the name');
+    assert.ok(text.includes(`${TAG} Chetan ${TAG}D`), 'and the couple\'s room');
     console.log('guest room stays: ok');
   } finally {
     await tidy(prisma).catch(() => {});
