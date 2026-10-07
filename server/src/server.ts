@@ -1280,6 +1280,9 @@ app.get('/appointments', async (req: Request, res: Response) => {
   const room_id = req.query.room_id as string | undefined;
   const where: Prisma.AppointmentWhereInput = {};
   if (date) where.scheduled_date = new Date(date);
+  // A week in one call, for the week strip (#416).
+  const range = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).safeParse(req.query);
+  if (!date && range.success) where.scheduled_date = { gte: new Date(`${range.data.from}T00:00:00.000Z`), lte: new Date(`${range.data.to}T00:00:00.000Z`) };
   // A therapist's appointments include the ones they assist on.
   if (staff_id) where.OR = [{ staff_id }, { co_staff_ids: { has: staff_id } }];
   if (patient_id) where.patient_id = patient_id;
