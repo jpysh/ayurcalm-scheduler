@@ -44,20 +44,22 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #480: small wording from the combined walk.
+// #489: a guest arriving next week fills their own details on their private link.
 await api('POST', '/settings/clear-demo-data');
-await step('Empty Therapies points at +', '/admin/therapies', async () => {
-  await p.keyboard.press('Escape'); await p.waitForTimeout(600);
+const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female' });
+await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(7), end_date: plus(20) });
+const link = await api('POST', `/patients/${pt.id}/link`);
+await step('The link asks for their details', `/l/${link.token}`, async () => {
   const t = await text(p.locator('body'));
-  return { ok: /tap \+ to add one/.test(t) && !/open the menu/.test(t), note: t.split('\n').find((x) => /No therapies/.test(x)) };
+  return { ok: /Your details/.test(t) && /0 of 7 filled in/.test(t), note: t.split('\n').filter((x) => /details|filled/.test(x)).join(' · ') };
 });
-const acc = (await api('GET', '/accommodations')).find?.((a) => a.name === 'Trishul House') ?? await api('POST', '/accommodations', { name: 'Trishul House', price_per_day: 1600 });
-await api('POST', '/guest-rooms', { name: 'T1', accommodation_id: acc.id });
-const gr = (await api('GET', '/guest-rooms')).find?.((r) => r.name === 'T1') ?? (await api('GET', '/guest-rooms'))[0];
-await api('POST', '/patients', { name: 'Priya Sharma', gender: 'female', on_site: true, stay: { start_date: plus(0), end_date: plus(6) }, guest_room_id: gr?.id });
-await step('Guest rooms: an arriving guest says until when', '/admin/guestrooms', async () => {
+await step('They fill them and the card has them', `/l/${link.token}`, async () => {
+  await go(p.getByText('Your details').first());
+  for (const [l, v] of [['Your phone', '+49 151 2345678'], ['Date of birth', '1980-02-01'], ['Nationality', 'Germany'], ['Passport or ID', 'C01X00T47'], ['Home address', 'Hauptstr. 1, Berlin'], ['Someone to call', 'Jonas Weber'], ['Their phone', '+49 151 7654321']]) await dlg().getByLabel(new RegExp(l)).fill(v);
+  await go(dlg().getByRole('button', { name: 'Save my details' })); await p.waitForTimeout(1200);
   const t = await text(p.locator('body'));
-  return { ok: /Priya arrives · until \w{3} \d+ \w{3}/.test(t), note: t.split('\n').find((x) => /arrives/.test(x)) };
+  const saved = (await api('GET', '/patients')).find?.((x) => x.id === pt.id) ?? {};
+  return { ok: /All filled in/.test(t) && saved.country === 'Germany', note: `${t.split('\n').find((x) => /filled/.test(x))} · saved country ${saved.country}` };
 });
 await b.close();
 
