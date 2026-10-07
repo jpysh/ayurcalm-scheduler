@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { toast } from "sonner";
-import { shareLink } from "@/lib/shareLink";
+import { useShareLink } from "@/components/ShareLink";
 import { BottomSheet } from "@/components/BottomBar";
 import { API_BASE } from "@/lib/apiBase";
 import type { CardAppt } from "@/components/TreatmentCard";
@@ -117,6 +117,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
   detailsHint: (id: string) => string;
 }) {
   const [d, setD] = useState<ResidentDay | null>(null);
+  const link = useShareLink();
   const [plan, setPlan] = useState<string | null>(null);
   const [intake, setIntake] = useState<{ vitals: string; concerns: string; tests: string } | null>(null);
   const saveIntake = async () => {
@@ -174,6 +175,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
   const bar = d?.stay?.discharge ? <div className="mt-3"><ChecklistBar label="Discharge summary" done={d.stay.discharge.done} total={d.stay.discharge.total} onClick={() => setChecklist(true)} /></div> : null;
   const nights = d?.stay ? Math.round((Date.parse(d.stay.end_date) - Date.parse(d.stay.start_date)) / DAY_MS) : 0;
   return (
+    <>
     <BottomSheet open={!!id} onOpenChange={(o) => { if (!o) onClose(); }} title={d?.name || 'Patient'}>
       {d ? (
         <div className="-mt-2 max-h-[70dvh] overflow-y-auto">
@@ -246,7 +248,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
             </ListGroup>
           ) : null}
           <div className="mt-3 border-t border-border">
-            <ChangeLine label="Private link" value="Share their day" onClick={() => shareLink('patients', d.id, d.name)} />
+            <ChangeLine label="Private link" value="Share their day" onClick={() => link.share('patients', d.id, d.name)} />
           </div>
         </div>
       ) : <div className="py-6 text-center text-muted-foreground"><Loading rows={4} /></div>}
@@ -269,6 +271,8 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
         {discharge ? <DischargeForm view={discharge} admin doctors={doctors} onSave={saveDischarge} onPdf={summary} /> : null}
       </BottomSheet>
     </BottomSheet>
+      {link.sheet}
+    </>
   );
 }
 
