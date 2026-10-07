@@ -214,7 +214,7 @@ export type Action = {
   count?: number;
 };
 
-export type Soft = { reason: 'DAY_FULL' | 'SAME_THERAPY' | 'ONCE_PER_COURSE'; message: string; actions: Action[] };
+export type Soft = { reason: 'DAY_FULL' | 'SAME_THERAPY' | 'ONCE_PER_COURSE' | 'AFTER_PURIFICATION'; message: string; actions: Action[] };
 
 export const DEFAULT_MAX_PER_DAY = 4;
 
@@ -247,15 +247,27 @@ export function softWarnings(c: { id?: string; patient_id: string; therapy_id?: 
 export async function oncePerCourse(c: { id?: string; patient_id: string; therapy_id?: string; scheduled_date: Date }, prisma: PrismaClient): Promise<Soft | null> {
   if (!c.therapy_id) return null;
   const therapy = await prisma.therapy.findUnique({ where: { id: c.therapy_id } });
-  if (!therapy?.once_per_course) return null;
+  if (!therapy?.once_per_course && !therapy?.before_purification) return null;
   const stay = await prisma.patientStay.findFirst({ where: { patient_id: c.patient_id, start_date: { lte: c.scheduled_date }, end_date: { gte: c.scheduled_date } } });
   if (!stay) return null;
+  const dayOf = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  // A preparation (Snehapana) booked on or after the stay's purification is out of
+  // clinical order (#419), the same rule Plan next week already follows (#375).
+  if (!therapy.once_per_course) {
+    const purge = await prisma.appointment.findFirst({
+      where: { patient_id: c.patient_id, id: c.id ? { not: c.id } : undefined, Therapy: { once_per_course: true }, scheduled_date: { gte: stay.start_date, lte: c.scheduled_date }, ...HAPPENING },
+      include: { Patient: true, Therapy: true }, orderBy: { scheduled_date: 'asc' },
+    });
+    if (!purge) return null;
+    const who = (purge.Patient?.name || 'They').split(' ')[0];
+    return { reason: 'AFTER_PURIFICATION', message: `${therapy.name} prepares for a purification, and ${who}'s ${purge.Therapy?.name} is on ${dayOf(purge.scheduled_date)}.`, actions: [{ kind: 'book_anyway', label: 'Book anyway' }] };
+  }
   const had = await prisma.appointment.findFirst({
     where: { patient_id: c.patient_id, therapy_id: c.therapy_id, id: c.id ? { not: c.id } : undefined, scheduled_date: { gte: stay.start_date, lte: stay.end_date }, ...HAPPENING },
     include: { Patient: true }, orderBy: { scheduled_date: 'asc' },
   });
   if (!had) return null;
   const first = (had.Patient?.name || 'They').split(' ')[0];
-  const day = had.scheduled_date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const day = dayOf(had.scheduled_date);
   return { reason: 'ONCE_PER_COURSE', message: `${therapy.name} is given once a stay, and ${first}'s is on ${day}.`, actions: [{ kind: 'book_anyway', label: 'Book anyway' }] };
 }
