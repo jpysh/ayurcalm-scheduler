@@ -1,4 +1,4 @@
-import { BottomSheet, Btn, Seg } from "@/components/kit";
+import { BottomSheet, Btn, plural, Seg } from "@/components/kit";
 /**
  * The day as one list (#62), built to docs/design/phone.html: hour groups with
  * sticky headers, finished treatments dimmed above, a line at now, and the
@@ -200,7 +200,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
   return (
     <div className="flex flex-col">
       <div className="flex items-center justify-between px-1 pb-1 text-sm text-muted-foreground">
-        <span className="flex items-center gap-2">{rows.length} {rows.length === 1 ? "treatment" : "treatments"}{roomCount ? ` · ${roomCount} rooms` : ""}{headerAction}</span>
+        <span className="flex items-center gap-2">{rows.length} {rows.length === 1 ? "treatment" : "treatments"}{roomCount ? ` · ${plural(roomCount, "room")}` : ""}{headerAction}</span>
         <button type="button" aria-label={`Show the day by, now ${VIEW_NAMES[view]}`} onClick={() => setPickView(true)} className="-my-1.5 min-h-11 rounded-full px-3 font-semibold text-primary active:bg-secondary">By {VIEW_NAMES[view].toLowerCase()} ▾</button>
       </div>
       <BottomSheet open={pickView} onOpenChange={setPickView} title="Show the day by" note="The same treatments, grouped another way.">

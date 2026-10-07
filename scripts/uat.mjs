@@ -44,20 +44,29 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #462: a new centre's first patient row opens the form; an empty Patients list offers Add a patient.
+// #463: small wording on a new centre — counts with their noun, empty lists that say what to do.
 await api('POST', '/settings/clear-demo-data');
-await step('Get started: Add your first patient opens the New patient form', '/admin/schedule', async () => {
-  await p.reload(); await p.waitForTimeout(2000);
-  await go(p.getByText('Add your first patient'));
-  await p.waitForTimeout(800);
-  const t = await text(dlg()).catch(() => '');
-  return { ok: /New patient/.test(t), note: t.split('\n').slice(0, 2).join(' · ') || 'no sheet open' };
-});
-await step('An empty Patients list says so and offers Add a patient', '/admin/patients', async () => {
+await step('Empty Rooms and Team say "yet" and point at +', '/admin/rooms', async () => {
+  const r = await text(p.locator('body'));
+  await p.goto(APP + '/admin/team'); await p.waitForTimeout(1500);
   const t = await text(p.locator('body'));
-  await go(p.getByRole('button', { name: 'Add a patient' }));
-  const d = await text(dlg()).catch(() => '');
-  return { ok: /No one is staying today/.test(t) && /New patient/.test(d), note: `${t.split('\n').find((x) => /No one/.test(x))} · then ${d.split('\n')[0]}` };
+  return { ok: /No rooms yet\. Tap \+/.test(r) && /No one in the team yet\. Tap \+/.test(t), note: [r, t].map((x) => x.split('\n').find((l) => /yet|matches/.test(l))).join(' · ') };
+});
+await step('One room reads "1 room"', '/admin/rooms', async () => {
+  await api('POST', '/rooms', { name: 'Room 1', amenities: ['massage_table'] });
+  await p.reload(); await p.waitForTimeout(1500);
+  const t = await text(p.locator('body'));
+  return { ok: /\b1 room\b/.test(t) && !/1 rooms/.test(t), note: t.split('\n').find((l) => /room/.test(l) && /\d/.test(l)) };
+});
+await step('A therapist with nothing booked is not called "lightly booked"', '/admin/team', async () => {
+  await api('POST', '/staff', { name: 'Asha Menon', gender: 'female', role: 'therapist' });
+  await p.reload(); await p.waitForTimeout(1500);
+  const t = await text(p.locator('body'));
+  return { ok: /0 min of/.test(t) && !/lightly booked/.test(t), note: t.split('\n').find((l) => /booked/.test(l)) };
+});
+await step('Empty Leave says Tap + to add some', '/admin/timeoff', async () => {
+  const t = await text(p.locator('body'));
+  return { ok: /Tap \+ to add some/.test(t), note: t.split('\n').find((l) => /leave booked/i.test(l)) };
 });
 await b.close();
 
