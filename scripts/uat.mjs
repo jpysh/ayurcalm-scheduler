@@ -44,15 +44,20 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #479: the Log says when a leave is, and what a settings change changed.
+// #480: small wording from the combined walk.
 await api('POST', '/settings/clear-demo-data');
-const asha = await api('POST', '/staff', { name: 'Asha Menon', gender: 'female', role: 'therapist' });
-await api('POST', '/timeoff', { entity_type: 'staff', entity_id: asha.id, start_date: plus(1), end_date: plus(2), description: 'UAT', plan: false });
-const st = await api('GET', '/settings');
-await api('PUT', '/settings', { ...Object.fromEntries(Object.entries(st).filter(([, v]) => v !== null)), max_treatments_per_day: 5 });
-await step('The Log names the leave days and the setting changed', '/admin/log', async () => {
+await step('Empty Therapies points at +', '/admin/therapies', async () => {
+  await p.keyboard.press('Escape'); await p.waitForTimeout(600);
   const t = await text(p.locator('body'));
-  return { ok: /Leave for Asha Menon added, \w{3} \d+ \w{3} to/.test(t) && /Settings changed: max treatments per day/.test(t), note: t.split('\n').filter((x) => /Leave for|Settings/.test(x)).join(' · ') };
+  return { ok: /tap \+ to add one/.test(t) && !/open the menu/.test(t), note: t.split('\n').find((x) => /No therapies/.test(x)) };
+});
+const acc = (await api('GET', '/accommodations')).find?.((a) => a.name === 'Trishul House') ?? await api('POST', '/accommodations', { name: 'Trishul House', price_per_day: 1600 });
+await api('POST', '/guest-rooms', { name: 'T1', accommodation_id: acc.id });
+const gr = (await api('GET', '/guest-rooms')).find?.((r) => r.name === 'T1') ?? (await api('GET', '/guest-rooms'))[0];
+await api('POST', '/patients', { name: 'Priya Sharma', gender: 'female', on_site: true, stay: { start_date: plus(0), end_date: plus(6) }, guest_room_id: gr?.id });
+await step('Guest rooms: an arriving guest says until when', '/admin/guestrooms', async () => {
+  const t = await text(p.locator('body'));
+  return { ok: /Priya arrives · until \w{3} \d+ \w{3}/.test(t), note: t.split('\n').find((x) => /arrives/.test(x)) };
 });
 await b.close();
 
