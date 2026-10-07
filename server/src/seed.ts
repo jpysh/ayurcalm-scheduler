@@ -479,6 +479,8 @@ async function main() {
   let stayCount = 0;
   const concernsSeed = ['Lower back pain, poor sleep', 'Stress and fatigue', 'Joint stiffness in the mornings', 'Digestion, acidity', 'Weight and energy', 'Recovery after illness'];
   const purging = new Set<string>();
+  const purgeOf = new Map<string, string>();
+  const shiftISO = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
   const addStay = async (patient_id: string, start_date: Date, end_date: Date, on_site: boolean, purge?: string) => {
     const days = Math.round((end_date.getTime() - start_date.getTime()) / DAY_MS) + 1;
     await prisma.patientStay.create({
@@ -494,7 +496,7 @@ async function main() {
     // those arriving today or later: a patient a day in with no plan is on the pill (#288), and a demo that opens on 16 of them is not the demo.
     // Someone not staying eats at home: no plan for a day visitor or an outpatient.
     const planned = on_site && (stayCount++ % 6 !== 5 || start_date < today) && templates.length > 0;
-    if (purge) purging.add(patient_id);
+    if (purge) { purging.add(patient_id); purgeOf.set(patient_id, purge); }
     if (planned) {
       // The oleation and after-purification diets belong to a Virechana course only (#359).
       const named = (n: string) => templates.find((t) => t.name.startsWith(n));
@@ -511,7 +513,9 @@ async function main() {
         if (from <= end) await prisma.dietPlanSegment.create({ data: { patient_id, start_date: from, end_date: end, template_id } });
       }
       // Their own medication and notes (#355): everyone on a purification is told how to eat around it, one in three others has medication.
-      const told = purge ? { medication: 'Set each morning by the physician through the purification', before_treatment: "Confirm today's dose or diet step with the physician", after_treatment: 'Report nausea, heaviness or no appetite the same day' } : stayCount % 3 === 0 ? { medication: usualNotes[usual[stayCount % usual.length].name]?.medication } : null;
+      // Only while the purification is ahead or under way: after its five days of samsarjana the note is stale (#403).
+      const purifying = purge && shiftISO(purge, 4) >= today.toISOString().slice(0, 10);
+      const told = purifying ? { medication: 'Set each morning by the physician through the purification', before_treatment: "Confirm today's dose or diet step with the physician", after_treatment: 'Report nausea, heaviness or no appetite the same day' } : stayCount % 3 === 0 ? { medication: usualNotes[usual[stayCount % usual.length].name]?.medication } : null;
       if (told) await prisma.patient.update({ where: { id: patient_id }, data: told });
     }
     if (planned && start_date <= today && today <= end_date) residents.push({ id: patient_id });
@@ -526,7 +530,9 @@ async function main() {
   // to one therapist depend on, so the day's planned problems stay as they are.
   const adminId = (await prisma.user.findUnique({ where: { email: DEFAULT_ADMIN_EMAIL }, select: { id: true } }))?.id ?? 'seed';
   const spare = (await prisma.appointment.findMany({ where: { scheduled_date: today, status: 'pending' }, orderBy: { start_time: 'asc' } }))
-    .filter((a) => !(a.staff_id && offToday.has(a.staff_id)) && a.patient_id !== loyal?.patient_id);
+    .filter((a) => !(a.staff_id && offToday.has(a.staff_id)) && a.patient_id !== loyal?.patient_id)
+    // A missed or cancelled purification would undo the diet printed around it (#403).
+    .filter((a) => !ONCE.includes(therapies.find((t) => t.id === a.therapy_id)?.name ?? ''));
   const [noShow, cancelled, noted, moved] = [spare[0], spare[Math.floor(spare.length / 3)], spare[Math.floor(spare.length / 2)], spare[spare.length - 1]];
   // Made this morning from 08:00, ten minutes apart, never after the reset itself (#396).
   // A no-show is only known once the treatment has started (#402).
@@ -677,7 +683,10 @@ async function main() {
 
   // One patient given something different for one meal today, so the override
   // that a template edit must not overwrite is visible in the demo.
-  const overridden = residents[0];
+  // The post-Virechana gruel goes to someone in their samsarjana days, never to a patient with no purification (#403).
+  const todayISO = today.toISOString().slice(0, 10);
+  const afterPurge = residents.find((r) => { const v = purgeOf.get(r.id); return v && v <= todayISO && todayISO <= shiftISO(v, 4); });
+  const overridden = afterPurge ?? residents[0];
   if (overridden) {
     await prisma.dietPlan.create({
       data: {
@@ -685,7 +694,7 @@ async function main() {
         date: today,
         meal_time: 'lunch',
         description: 'Rice gruel only',
-        instructions: 'post-Virechana',
+        instructions: afterPurge ? 'post-Virechana' : 'upset stomach',
         created_by: (await prisma.user.findUnique({ where: { email: DEFAULT_ADMIN_EMAIL }, select: { id: true } }))?.id ?? 'seed',
       },
     });
