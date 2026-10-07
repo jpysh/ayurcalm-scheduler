@@ -44,28 +44,20 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #458: after closing, tomorrow's things to fix are in the count and the inbox. Run after the centre's closing time.
-const staff = await api('GET', '/staff');
-const appts = await api('GET', `/appointments?date=${plus(1)}`);
-const busy = (Array.isArray(appts) ? appts : appts.appointments || []).find((x) => x.staff_id && x.status !== 'cancelled');
-await step("Evening on today: the Menu counts tomorrow's treatment with no therapist", '/admin/schedule', async () => {
-  if (busy) await api('POST', '/timeoff', { entity_type: 'staff', entity_id: busy.staff_id, start_date: plus(1), end_date: plus(1), description: 'UAT', plan: false });
-  await p.reload(); await p.waitForTimeout(2500);
-  const badge = await p.getByRole('button', { name: 'Menu', exact: true }).innerText();
-  await menu();
-  const m = await text(dlg());
-  return { ok: /need you/.test(m), note: `badge "${badge.trim()}"; menu: ${m.split('\n').slice(0, 3).join(' · ')}` };
-});
-await step('The inbox has a Tomorrow section with the count and Open', '/admin/schedule', async () => {
-  await menu(); await go(dlg().getByRole('button', { name: /need you/ }));
-  const t = await text(dlg());
-  return { ok: /TOMORROW/i.test(t) && /to fix/.test(t), note: t.split('\n').filter((x) => /omorrow|to fix/.test(x)).join(' · ') };
-});
-await step("Open moves the day to tomorrow and the inbox shows its problems", '/admin/schedule', async () => {
-  await menu(); await go(dlg().getByRole('button', { name: /need you/ }));
-  await go(dlg().getByRole('button', { name: /to fix/ })); await p.waitForTimeout(1500);
-  const t = await text(dlg());
-  return { ok: !/^Today/.test(t) && /not in/i.test(t), note: t.split('\n').slice(0, 4).join(' · ') };
+// #461: the Log says what happened, in the app's words.
+await step('Share a link, renew one, add two therapies, book one: the Log reads them right', '/admin/schedule', async () => {
+  const pts = await api('GET', '/patients'); const pt = pts.find((x) => x.name === 'Aarohi Das') || pts[0];
+  await api('POST', `/patients/${pt.id}/link`);
+  await api('POST', `/patients/${pt.id}/link?renew=1`);
+  await api('POST', '/therapies/import', { items: [{ name: 'UAT Nasya', duration_minutes: 30 }, { name: 'UAT Kavala', duration_minutes: 20 }] });
+  const nasya = (await api('GET', '/therapies')).find((t) => t.name === 'Nadi Sweda');
+  const opts = await api('GET', `/appointments/options?date=${plus(1)}&patient_id=${pt.id}&therapy_id=${nasya.id}`);
+  const t0 = opts.times?.[0];
+  if (t0) await api('POST', '/appointments', { patient_id: pt.id, therapy_id: nasya.id, total_sessions: 1, start_date: plus(1), end_date: plus(11), preferred_days: [], preferred_time_range: { start: t0.start_time, end: '20:00' }, preferred_staff_id: t0.staff_id, preferred_room_id: t0.room_id });
+  await p.goto(APP + '/admin/log'); await p.waitForTimeout(2000);
+  const t = await text(p.locator('body'));
+  const lines = t.split('\n').filter((x) => /renewed|therapies added|booked for|private link/.test(x));
+  return { ok: lines.some((x) => /renewed, the old one stopped/.test(x)) && lines.some((x) => /2 therapies added: UAT Nasya, UAT Kavala/.test(x)) && !lines.some((x) => /\d{4}-\d\d-\d\d/.test(x)) && lines.some((x) => /booked for \w+ \d+ \w+ at/.test(x)), note: lines.slice(0, 4).join(' · ') };
 });
 await b.close();
 

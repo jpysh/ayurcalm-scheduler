@@ -122,6 +122,8 @@ export const logWrites = (prisma: PrismaClient) => async (req: Request, res: Res
   // Read now: a router mounted under /api rewrites req.path before the write finishes.
   const path = req.path;
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) || OWN_ROW.some((x) => x.test(`${req.method} ${path}`))) return next();
+  // Sharing a link hands out the one there is; only a renewal changes anything (#461).
+  if (/\/link$/.test(path) && req.query.renew !== '1') return next();
   const [, kind = '', id] = path.split('/');
   const was = req.method === 'DELETE' && id ? await removing(prisma, kind, id).catch(() => null) : null;
   let sent: unknown;
@@ -147,21 +149,33 @@ const KIND: Record<string, string> = {
 };
 const cap = (x: string) => (x ? x[0].toUpperCase() + x.slice(1) : 'Something');
 
+/** "Thu 8 Oct", as every screen says it; the Log showed the raw 2026-10-08 (#461). */
+const day = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
+
 /** One sentence for a write the middleware recorded. */
 function wrote(w: Wrote, lists: { patients: Named; staff: Named; rooms: Named; therapies: Named }, whose: (id: string, fallback?: Snap | null) => string): string {
   const b = { ...w.was, ...w.body };
   const [, kind = '', id = '', sub = ''] = (w.path || '').split('/');
   const named = (x: unknown) => [lists.patients, lists.staff, lists.rooms, lists.therapies].map((l) => l.find((y) => y.id === x)?.name).find(Boolean) || '';
   const verb = w.method === 'POST' ? 'added' : w.method === 'DELETE' ? 'removed' : 'changed';
-  if (kind === 'appointments') return `${whose(w.made || '', b)} booked${b.date ? ` for ${b.date}` : ''}${b.start_time ? ` at ${b.start_time}` : ''}`;
+  if (kind === 'appointments') {
+    // The booking sheet sends start_date and a time range; the card's quick book sends date and start_time.
+    const on = b.date ?? b.start_date; const at = b.start_time ?? (b.preferred_time_range as { start?: string } | undefined)?.start;
+    return `${whose(w.made || '', b)} booked${typeof on === 'string' ? ` for ${day(on)}` : ''}${typeof at === 'string' ? ` at ${at}` : ''}`;
+  }
   if (kind === 'patients' && sub) {
     const who = named(id) || 'A patient';
-    const what: Record<string, string> = { stays: `${who}'s stay changed`, diet: `${who}'s diet changed`, link: `${who}'s private link renewed`, 'next-week': `Next week booked for ${who}` };
+    const what: Record<string, string> = { stays: `${who}'s stay changed`, diet: `${who}'s diet changed`, link: `${who}'s private link renewed, the old one stopped`, 'next-week': `Next week booked for ${who}` };
     if ((w.path || '').endsWith('/arrival')) return `${who}'s arrival recorded`;
     if ((w.path || '').endsWith('/discharge')) return `${who}'s discharge recorded`;
     return what[sub] || `${who} changed`;
   }
-  if (kind === 'staff' && sub === 'link') return `${named(id) || 'A team member'}'s private link renewed`;
+  if (kind === 'staff' && sub === 'link') return `${named(id) || 'A team member'}'s private link renewed, the old one stopped`;
+  if (kind === 'users' && sub === 'set-password') return 'A password was set';
+  if (kind === 'therapies' && id === 'import' && Array.isArray(b.items)) {
+    const names = (b.items as { name?: string }[]).map((x) => x.name).filter(Boolean);
+    return `${names.length} ${names.length === 1 ? 'therapy' : 'therapies'} added: ${names.join(', ')}`;
+  }
   if (kind === 'timeoff' || kind === 'holidays') {
     const of = named(b.entity_id);
     const what = of ? ` for ${of}` : typeof b.name === 'string' ? ` ${b.name}` : '';
