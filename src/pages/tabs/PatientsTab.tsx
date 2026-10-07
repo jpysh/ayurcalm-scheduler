@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { toast } from "sonner";
-import { useShareLink } from "@/components/ShareLink";
+import { useShareLink, waHref } from "@/components/ShareLink";
 import { BottomSheet } from "@/components/BottomBar";
 import { API_BASE } from "@/lib/apiBase";
 import type { CardAppt } from "@/components/TreatmentCard";
@@ -8,7 +8,7 @@ import DayDietDialog from "./DayDietDialog";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
-import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText, rupees, Btn } from "@/components/kit";
+import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText, rupees, Btn, LinkBtn } from "@/components/kit";
 import { AccommodationSheet, DietSheet, DischargeSheet, NextWeekSheet, PackageSheet, StaySheet, takenBy, type CardStay, type GuestRoomNight, type StayTarget } from "@/components/CardSheets";
 import { marked } from "@/components/SearchScreen";
 import type { AttentionItem } from "@/lib/attention";
@@ -30,6 +30,8 @@ type ResidentDay = {
   form_c: { due: string; filed: string | null; fields: [string, string][] } | null;
   /** Their latest stay, when they are not staying today and it is over (#437). */
   last_stay: { end_date: string; package: CardStay['package'] } | null;
+  /** The follow-up the last discharge summary asked for (#487). */
+  follow_up: { stay_id: string; due: string; done: string | null; phone: string | null; centre: string } | null;
   treatments: (CardAppt & { therapy_name: string; consultation: boolean; room_name: string | null; staff_names: string[] })[];
   plan_name: string; diet_next: { from: string; name: string } | null; meals: { meal: string; text: string }[];
   week: { date: string; treatments: { id: string; start_time: string; therapy_name: string; consultation: boolean; status: string }[] }[];
@@ -171,6 +173,12 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
   const [checklist, setChecklist] = useState(false);
   const [week, setWeek] = useState(false);
   const [formC, setFormC] = useState(false);
+  const [followUp, setFollowUp] = useState(false);
+  const markFollowUp = async (done: boolean) => {
+    const res = await fetch(`${API_BASE}/patients/${d!.id}/stays/${d!.follow_up!.stay_id}/follow-up`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ done }) });
+    if (!res.ok) { toast.error("That could not be saved."); return; }
+    setFollowUp(false); load();
+  };
   const copy = async (label: string, value: string) => {
     try { await navigator.clipboard.writeText(value); toast.success(`${label} copied`); } catch { toast.error("Could not copy. Press and hold the text instead."); }
   };
@@ -253,6 +261,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
             <ChangeLine label="Diet" value={d.plan_name ? (d.diet_next ? `${d.plan_name}, then ${d.diet_next.name} from ${dayText(d.diet_next.from)}` : d.plan_name) : "Not decided yet"} faint={!d.plan_name} onClick={() => changeMeals(d)} />
             {d.stay ? <ChangeLine label="Package" value={d.stay.package ? `${d.stay.package.days} days · ${rupees(d.stay.package.price)}` : "Not decided yet"} faint={!d.stay.package} onClick={() => changePackage(d)} /> : null}
             {d.stay && d.stay.on_site !== false ? <ChangeLine label="Accommodation" value={d.stay.accommodation ? `${d.stay.accommodation.name}${d.stay.accommodation.room ? ` · ${d.stay.accommodation.room.name}` : ""} · ${nights} nights · ${rupees(nights * d.stay.accommodation.price_per_day)}` : "Not decided yet"} faint={!d.stay.accommodation} onClick={() => changeHouse(d)} /> : null}
+            {d.follow_up ? <ChangeLine label="Follow-up" value={d.follow_up.done ? `Done ${dayText(d.follow_up.done)}` : `Due ${dayText(d.follow_up.due)}`} onClick={() => setFollowUp(true)} /> : null}
             {d.form_c ? <ChangeLine label="Form C" value={d.form_c.filed ? `Filed ${dayText(d.form_c.filed)}` : `Due by ${dayText(d.form_c.due)}`} onClick={() => setFormC(true)} /> : null}
             {d.stay ? <ChangeLine label="Stay" value={`${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)}`} onClick={() => changeStay(d)} /> : <ChangeLine label={d.last_stay ? 'New stay' : 'Stay'} value={d.last_stay?.package ? `From today · ${d.last_stay.package.name}` : 'Not staying · add a stay'} faint={!d.last_stay} onClick={() => changeStay(d)} />}
             <ChangeLine label="Details" value={detailsHint(d.id)} faint onClick={() => details(d.id)} />
@@ -288,6 +297,12 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
       <BottomSheet open={plan !== null} onOpenChange={(o) => { if (!o) setPlan(null); }} title={`Doctor's plan · ${d?.name.split(' ')[0] ?? ''}`} note="Printed on their discharge summary."
         foot={<Foot label="Save the plan" save={savePlan} />}>
         {plan !== null ? <Area label="Plan (optional)" rows={6} value={plan} onChange={(e) => setPlan(e.target.value)} /> : null}
+      </BottomSheet>
+      {/* The follow-up after discharge (#487): a prepared WhatsApp, then mark it done. */}
+      <BottomSheet open={followUp && !!d?.follow_up} onOpenChange={setFollowUp} title={`Follow-up · ${d?.name ?? ''}`}
+        note={d?.follow_up?.done ? `Done ${dayText(d.follow_up.done)}.` : `The doctor asked to hear from them on ${d?.follow_up ? dayText(d.follow_up.due) : ''}.`}
+        foot={d?.follow_up?.done ? <Btn onClick={() => markFollowUp(false)}>Not done yet</Btn> : <Btn kind="primary" onClick={() => markFollowUp(true)}>Mark follow-up done</Btn>}>
+        {d?.follow_up ? <LinkBtn href={waHref(d.follow_up.phone, `Namaste ${d.name.split(' ')[0]}, this is ${d.follow_up.centre || 'the centre'}. The doctor asked us to see how you are since your stay. How are you feeling?`)}>Send on WhatsApp to {d.name.split(' ')[0]}</LinkBtn> : null}
       </BottomSheet>
       {/* Form C (#415): tap a line to copy it into indianfrro.gov.in, then mark it filed. */}
       <BottomSheet open={formC && !!d?.form_c} onOpenChange={setFormC} title={`Form C · ${d?.name ?? ''}`}

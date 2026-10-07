@@ -169,6 +169,7 @@ function wrote(w: Wrote, lists: { patients: Named; staff: Named; rooms: Named; t
     const what: Record<string, string> = { stays: `${who}'s stay changed`, diet: `${who}'s diet changed`, link: `${who}'s private link renewed, the old one stopped`, 'next-week': `Next week booked for ${who}` };
     if ((w.path || '').endsWith('/arrival')) return `${who}'s arrival recorded`;
     if ((w.path || '').endsWith('/discharge')) return `${who}'s discharge recorded`;
+    if ((w.path || '').endsWith('/follow-up')) return `${who}'s follow-up marked ${b.done ? 'done' : 'not done'}`;
     return what[sub] || `${who} changed`;
   }
   if (kind === 'staff' && sub === 'link') return `${named(id) || 'A team member'}'s private link renewed, the old one stopped`;

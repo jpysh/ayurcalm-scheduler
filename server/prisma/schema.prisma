@@ -68,6 +68,8 @@ model PatientStay {
   tests         String?
   /// When the admin marked this stay's Form C as filed with the FRRO (#415).
   form_c_filed  DateTime?
+  /// When the admin marked the follow-up the discharge summary asked for as done (#487).
+  follow_up_done DateTime?
   /// The discharge summary (#194): written by the doctor from their link or by
   /// the admin on the card; `final` is the admin's last word and locks the link.
   /// Shape is `Discharge` in src/discharge.ts.
