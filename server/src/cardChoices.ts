@@ -31,7 +31,7 @@ const gives = (s: { role: string; specializations: string[] }, t: { id: string; 
 const MAX = 5;
 const DAY_MS = 86400000;
 /** "Tue 29 Sep", for an option on another day. */
-const dayLabel = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+const dayLabel = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
 
 export async function cardChoices(appointmentId: string, kind: Kind, nowMinutes: number | null, prisma: PrismaClient): Promise<Choice[] | null> {
   const a = await prisma.appointment.findUnique({ where: { id: appointmentId } });
@@ -368,7 +368,6 @@ export async function bookingWho(dayISO: string, prisma: PrismaClient) {
     orderBy: [{ scheduled_date: 'desc' }, { start_time: 'desc' }],
     select: { patient_id: true, therapy_id: true, scheduled_date: true, created_at: true, Therapy: { select: { name: true, is_consultation: true } } },
   });
-  const dateLabel = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   const rows = stays.map((s) => {
     const mine = appts.filter((a) => a.patient_id === s.patient_id);
     const last = mine.find((a) => !a.Therapy.is_consultation && a.scheduled_date <= day) ?? mine.find((a) => !a.Therapy.is_consultation);
@@ -377,7 +376,8 @@ export async function bookingWho(dayISO: string, prisma: PrismaClient) {
     const of = Math.round((s.end_date.getTime() - s.start_date.getTime()) / DAY_MS) + 1;
     return {
       id: s.patient_id, name: s.Patient.name,
-      note: `Day ${n} of ${of}${last ? ` · last: ${last.Therapy.name.replace(/_/g, ' ')} ${dateLabel(last.scheduled_date)}` : ''}`,
+      // On a first day the only one may still be ahead: it is "next", not "last" (#395).
+      note: `Day ${n} of ${of}${last ? ` · ${last.scheduled_date > day ? 'next' : 'last'}: ${last.Therapy.name.replace(/_/g, ' ')} ${dayLabel(last.scheduled_date)}` : ''}`,
       therapy_id: last?.therapy_id ?? null,
       last: last ? { name: last.Therapy.name, date: last.scheduled_date.toISOString().slice(0, 10) } : null,
       today: today.length,
