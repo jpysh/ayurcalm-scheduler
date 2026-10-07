@@ -375,7 +375,7 @@ type WeekLine = { from_therapy_id: string; therapy_id: string; therapy_name: str
 type WeekPlan = { from: string; to: string; brief: string | null; lines: WeekLine[]; review: { date: string; start_time: string; staff_name: string } | null; review_missing?: string };
 
 /** This week, a week on: each line ticked and swappable, the next review ticked; Book all books everything or nothing (the server decides the times). */
-export function NextWeekSheet({ patient, review, onClose, onBooked }: { patient: Who | null; review: string; onClose: () => void; onBooked: () => void }) {
+export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bookDay }: { patient: Who | null; review: string; onClose: () => void; onBooked: () => void; firstDay: string; bookDay: (date: string) => void }) {
   const [plan, setPlan] = useState<WeekPlan | null>(null);
   const [therapies, setTherapies] = useState<{ id: string; name: string }[]>([]);
   const [off, setOff] = useState<Record<string, boolean>>({});
@@ -411,8 +411,8 @@ export function NextWeekSheet({ patient, review, onClose, onBooked }: { patient:
   };
   return (
     <BottomSheet open={!!patient} onOpenChange={(o) => { if (!o) onClose(); }} title={patient ? `Next week · ${first(patient.name)}` : "Next week"}
-      note={plan ? `${dayText(plan.from)} to ${dayText(plan.to)}, as this week. Untick or swap a line; all of it is booked or none.` : undefined}
-      foot={plan ? <Foot label={count ? `Book all ${count}` : "Nothing ticked"} ok={count > 0} busy={busy} save={bookAll} /> : undefined}>
+      note={plan?.lines.length ? `${dayText(plan.from)} to ${dayText(plan.to)}, as this week. Untick or swap a line; all of it is booked or none.` : undefined}
+      foot={plan && (plan.lines.length || plan.review) ? <Foot label={count ? `Book all ${count}` : "Nothing ticked"} ok={count > 0} busy={busy} save={bookAll} /> : undefined}>
       {plan === null ? <Loading rows={3} /> : (<>
         {plan.brief ? <ListGroup title="Doctor's plan"><TextRow label="The brief for this week">{plan.brief}</TextRow></ListGroup> : null}
         <ListGroup title="Therapies">
@@ -427,7 +427,7 @@ export function NextWeekSheet({ patient, review, onClose, onBooked }: { patient:
                 {done ? null : <ChangeLine label="Swap" value={name} select={<LineSelect label={`Swap ${l.therapy_name}`} value={swapped || l.therapy_id} onChange={(v) => setSwaps({ ...swaps, [l.from_therapy_id]: v })} free={therapies} />} />}
               </SwitchRow>
             );
-          }) : <Empty text="Nothing was booked in the seven days up to the review, so there is no week to repeat. Book from Next days." />}
+          }) : <Empty text="Nothing given yet to repeat. Book their first days; after the review, this repeats them." action={<Btn kind="primary" onClick={() => bookDay(firstDay)}>Book {dayText(firstDay)}</Btn>} />}
         </ListGroup>
         {plan.review || plan.review_missing ? (
           <ListGroup title="Next review">

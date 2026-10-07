@@ -304,7 +304,9 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
           {steps?.map(([label, done, fact, open]) => <Row key={label} title={label} facts={done ? fact ?? 'Done' : undefined} flag={done ? undefined : 'Not done yet'} trailing={done ? '✓' : undefined} onClick={() => { setArrival(false); open(); }} />)}
         </ListGroup>
       </BottomSheet>
-      {d && weekFrom ? <NextWeekSheet patient={week ? d : null} review={weekFrom} onClose={() => setWeek(false)} onBooked={load} /> : null}
+      {d && weekFrom ? <NextWeekSheet patient={week ? d : null} review={weekFrom} onClose={() => setWeek(false)} onBooked={load}
+        firstDay={d.week.find((w) => !w.treatments.length && w.date !== d.stay?.end_date)?.date ?? today}
+        bookDay={(date) => { setWeek(false); book({ id: d.id, name: d.name, date }); }} /> : null}
       {checklist && d ? <DischargeSheet patient={d} stay={d.stay} onClose={() => setChecklist(false)} print={summary}
         openField={(where) => { setChecklist(false); if (where === 'details') details(d.id); else openDischarge(); }} write={() => { setChecklist(false); openDischarge(); }} /> : null}
       <BottomSheet open={!!discharge} onOpenChange={(o) => { if (!o) setDischarge(null); }} title={`Discharge summary · ${d?.name ?? ''}`}>
