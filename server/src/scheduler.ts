@@ -1,6 +1,6 @@
 import { PrismaClient, Appointment, Staff, TherapyRoom } from '@prisma/client';
 import { z } from 'zod';
-import { staffEventBusy, eventBlocking, teamOf, mayTreatOn, centreClosed, type EventRow } from './availability.js';
+import { gives, staffEventBusy, eventBlocking, teamOf, mayTreatOn, centreClosed, type EventRow } from './availability.js';
 import { HAPPENING } from './appointmentGuard.js';
 
 const inputSchema = z.object({
@@ -100,7 +100,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
 
   const candidateStaff = await withTimeout(prisma.staff.findMany({ where: { is_active: true } }), maxMs, 'STAFF');
   const staffFiltered = candidateStaff.filter((s) => {
-    const specOk = s.specializations.includes(input.therapy_id);
+    const specOk = gives(s, therapy);
     const genderOk = !therapy.requires_gender_match || s.gender === patient.gender;
     return specOk && genderOk;
   });

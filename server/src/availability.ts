@@ -205,3 +205,7 @@ export const outsideHours = <A extends { scheduled_date: Date; start_time: strin
     const s = toMinutes(a.start_time);
     return !h || s < h.s || s + a.duration_minutes > h.e;
   });
+
+/** Who can give a therapy: a consultation is the doctor's and a doctor gives nothing else (#320); anyone else is trained for it, or the centre has not said who is. */
+export const gives = (s: { role: string; specializations: string[] }, t: { id: string; is_consultation: boolean }) =>
+  s.role === 'doctor' ? t.is_consultation : !t.is_consultation && (!s.specializations.length || s.specializations.includes(t.id));

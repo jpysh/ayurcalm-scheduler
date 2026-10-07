@@ -5,7 +5,7 @@
  * refuse. The browser only shows these.
  */
 import type { PrismaClient } from '@prisma/client';
-import { centreClosed, eventHitsDay, hoursOn, type EventRow } from './availability.js';
+import { centreClosed, eventHitsDay, gives, hoursOn, type EventRow } from './availability.js';
 import { HAPPENING, findConflict, loadDay, oncePerCourse, softWarnings, type Action, type Candidate, type Soft } from './appointmentGuard.js';
 
 export type Kind = 'time' | 'staff' | 'room' | 'therapy';
@@ -22,10 +22,6 @@ const works = (weekly: unknown, day: Date, start: number, minutes: number) => {
   const { s, e } = h ?? { s: 9 * 60, e: 18 * 60 };
   return start >= s && start + minutes <= e;
 };
-
-/** Who can give a therapy: a consultation is the doctor's and a doctor gives nothing else (#320); anyone else is trained for it, or the centre has not said who is. */
-const gives = (s: { role: string; specializations: string[] }, t: { id: string; is_consultation: boolean }) =>
-  s.role === 'doctor' ? t.is_consultation : !t.is_consultation && (!s.specializations.length || s.specializations.includes(t.id));
 
 /** How many rows a list shows: enough to choose, few enough to read on a phone. */
 const MAX = 5;

@@ -159,6 +159,25 @@ async function main() {
     const pairBack = await prisma.appointment.findUnique({ where: { id: pair.id } });
     assert.deepEqual([pairBack?.staff_id, pairBack?.co_staff_ids], [coverOne.id, [absent.id]], 'undo did not put the pair back as it was');
 
+    // A therapist added with no therapies ticked gives every therapy, as booking
+    // already says (#474): the replan offers them as cover, never "nobody trained".
+    const fresh = await prisma.therapy.create({ data: { name: 'Sim Fresh Therapy', required_amenities: ['table'], duration_minutes: 60, requires_gender_match: false } });
+    made.push({ table: 'therapy', id: fresh.id });
+    const noList = await prisma.staff.create({ data: { name: 'Sim No List', gender: 'other', is_active: true, specializations: [], weekly_schedule: allDay } });
+    made.push({ table: 'staff', id: noList.id });
+    const day2 = new Date('2030-01-17T00:00:00.000Z');
+    const lone = await prisma.appointment.create({ data: {
+      patient_id: pOne.id, therapy_id: fresh.id, staff_id: absent.id, room_id: rooms[0].id,
+      scheduled_date: day2, start_time: '10:00', duration_minutes: 60, session_number: 1, total_sessions: 1,
+      status: 'confirmed', assignment_type: 'manual', notes: '',
+    } });
+    made.push({ table: 'appointment', id: lone.id });
+    const r2 = await replanStaffDay(absent.id, day2, prisma, { apply: false });
+    const swap = r2.moved.find((m) => m.appointment_id === lone.id) ?? r2.proposed.find((m) => m.appointment_id === lone.id);
+    assert.ok(swap, `a therapist with no therapies ticked was not offered: ${JSON.stringify(r2.unplaced.map((u) => u.reason))}`);
+    const giver = await prisma.staff.findUnique({ where: { id: swap!.to.staff_id ?? "" } });
+    assert.equal(giver?.specializations.length, 0, 'cover went to someone not trained in it');
+
     console.log('replan simulation passed');
   } finally {
     for (const m of [...made].reverse()) {
