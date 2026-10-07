@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import { PrismaClient } from '@prisma/client';
 import { madeWith } from '../product.js';
+import { centreClock } from '../availability.js';
 
 const DAY_MS = 86400000;
 const nice = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
@@ -21,9 +22,12 @@ export async function generateRecordsPdf(month: string, prisma: PrismaClient): P
   const done = new Promise<Buffer>((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
 
   const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  // A record is what happened: a booking later this month is not yet given.
+  const today = new Date(`${centreClock(settings?.timezone || 'Asia/Kolkata').date}T00:00:00.000Z`);
+  const until = to < today ? to : today;
   const [stays, appts] = await Promise.all([
     prisma.patientStay.findMany({ where: { start_date: { lte: to }, end_date: { gte: from } }, include: { Patient: true }, orderBy: [{ start_date: 'asc' }] }),
-    prisma.appointment.findMany({ where: { scheduled_date: { gte: from, lte: to } }, include: { Therapy: { select: { name: true, is_consultation: true } }, Staff: { select: { name: true } } } }),
+    prisma.appointment.findMany({ where: { scheduled_date: { gte: from, lte: until } }, include: { Therapy: { select: { name: true, is_consultation: true } }, Staff: { select: { name: true } } } }),
   ]);
 
   const x = margin;
