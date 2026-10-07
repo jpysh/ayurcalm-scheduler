@@ -142,7 +142,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
  * The day, as Apple Calendar draws it (5 Oct): one week across, swipe for the next or last, tap a day.
  * Today carries a ring, the chosen day is filled. Far-off dates are in the Menu's Change day.
  */
-export function WeekStrip({ day, today, setDay }: { day: string; today: string; setDay: (iso: string) => void }) {
+export function WeekStrip({ day, today, setDay, moves }: { day: string; today: string; setDay: (iso: string) => void; moves?: Map<string, { in: number; out: number }> }) {
   const dow = (iso: string) => new Date(`${iso}T00:00:00Z`).getUTCDay();
   const weekOf = (iso: string) => shift(iso, -dow(iso));
   const weeksBetween = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / (7 * 86400000));
@@ -200,11 +200,13 @@ export function WeekStrip({ day, today, setDay }: { day: string; today: string; 
         {weeks.map((w) => (
           <div key={w} className="flex w-full flex-none snap-start justify-between">
             {Array.from({ length: 7 }, (_, i) => shift(w, i)).map((d) => {
-              const on = d === day, now = d === today;
+              const on = d === day, now = d === today, m = moves?.get(d);
               return (
-                <button key={d} type="button" aria-label={dayText(d)} aria-pressed={on} onClick={() => setDay(d)} className="flex min-h-14 w-[14.28%] flex-col items-center justify-center gap-0.5">
+                <button key={d} type="button" aria-label={dayText(d)} title={m ? `${m.in} arriving, ${m.out} leaving` : undefined} aria-pressed={on} onClick={() => setDay(d)} className="flex min-h-14 w-[14.28%] flex-col items-center justify-center gap-0.5">
                   <span className={`text-xs font-semibold ${dow(d) % 6 === 0 ? "text-muted-foreground" : ""}`}>{"SMTWTFS"[dow(d)]}</span>
                   <span className={`grid h-10 w-10 place-items-center rounded-xl text-xl ${on ? "bg-primary font-bold text-primary-foreground" : now ? "border-2 border-primary font-bold text-primary" : ""}`}>{Number(d.slice(8))}</span>
+                  {/* Monday planning (#421): who comes and goes, read off the stays already loaded. A fixed line so the days stay level. */}
+                  {moves ? <span aria-hidden className="h-3.5 text-[11px] font-semibold leading-none tabular-nums">{m?.in ? <span className="text-primary">+{m.in}</span> : null}{m?.in && m?.out ? " " : null}{m?.out ? <span className="text-muted-foreground">−{m.out}</span> : null}</span> : null}
                 </button>
               );
             })}
