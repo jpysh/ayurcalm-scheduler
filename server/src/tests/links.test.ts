@@ -22,7 +22,7 @@ const shared = async (kind: 'staff' | 'patients', id: string) => (await (await c
 const therapy = await prisma.therapy.create({ data: { name: `Abhyanga ${tag}`, required_amenities: [], duration_minutes: 60, checklist: [{ text: 'Oil warmed', required: true }], vitals: ['bp', 'pulse'] } });
 const consult = await prisma.therapy.create({ data: { name: `Consultation ${tag}`, required_amenities: [], duration_minutes: 20, is_consultation: true } });
 const therapist = await prisma.staff.create({ data: { name: `Asha ${tag}`, gender: 'female', specializations: [therapy.id], weekly_schedule: {} } });
-const other = await prisma.staff.create({ data: { name: `Meera ${tag}`, gender: 'female', specializations: [therapy.id], weekly_schedule: {} } });
+const other = await prisma.staff.create({ data: { name: `Meera ${tag}`, gender: 'female', phone: '98765 43210', specializations: [therapy.id], weekly_schedule: {} } });
 const doctor = await prisma.staff.create({ data: { name: `Dr ${tag}`, gender: 'female', role: 'doctor', specializations: [consult.id], weekly_schedule: {} } });
 const patient = await prisma.patient.create({ data: { name: `Rekha ${tag}`, gender: 'female' } });
 const book = (therapy_id: string, staff_id: string, start_time: string) => prisma.appointment.create({ data: {
@@ -36,6 +36,9 @@ const visit = await book(consult.id, doctor.id, '09:00');
 try {
   assert.equal((await call('/public/link/not-a-real-token-at-all-xyz')).status, 404, 'an unknown link is refused, without a sign-in prompt');
   assert.equal((await call(`/staff/${therapist.id}/link`, {})).status, 401, 'issuing a link needs the admin');
+
+  // The phone comes back with the link, so the screen can offer Send on WhatsApp to them (#413).
+  assert.equal((await (await call(`/staff/${other.id}/link`, {}, admin)).json()).phone, '98765 43210');
 
   const t = await issue('staff', therapist.id);
   const day = await (await call(`/public/link/${t}?date=${DAY}`)).json();

@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import PageHead from "@/components/PageHead";
 import { BottomSheet, WeekStrip } from "@/components/BottomBar";
-import { shareLink } from "@/lib/shareLink";
+import { useShareLink } from "@/components/ShareLink";
 import { Callout, ChangeLine, DateRow, Empty, ListGroup, Row, SheetFoot, TimeList, dayText, timesBetween } from "@/components/kit";
 import { roomSub } from "@/components/SetupSheets";
 import type { UiRoom, UiStaff } from "@/pages/tabs/shared";
@@ -45,6 +45,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   // The team is read a day at a time (#351), from the same week strip as the Day screen.
   const [day, setDay] = useState(today);
   const [pick, setPick] = useState<Pick>(null);
+  const link = useShareLink();
   const [late, setLate] = useState<Late>(null);
   const [at, setAt] = useState("");
   const [until, setUntil] = useState("");
@@ -164,8 +165,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
             <Row title="In late" facts="Choose the time they start" trailing="›" onClick={() => { setLate("late"); setAt(nowHM > opening ? nowHM : opening); }} />
             <Row title="Leaving early" facts="Choose the time they leave" trailing="›" onClick={() => { setLate("early"); setAt(closing); }} />
             <Row title="Away another day" facts="Choose the days" trailing="›" onClick={() => { const t = nextDay(today); setLate("away"); setAt(t); setUntil(t); }} />
-            <Row title="Share their link" facts="Their day on their own phone" trailing="›" onClick={() => shareLink("staff", pick.id, pick.name)} />
-            <Row title="Make a new link" facts="The old one stops working" trailing="›" onClick={() => shareLink("staff", pick.id, pick.name, true)} />
+            <Row title="Share their link" facts="Their day on their own phone" trailing="›" onClick={() => { close(); link.share("staff", pick.id, pick.name); }} />
+            <Row title="Make a new link" facts="The old one stops working" trailing="›" onClick={() => { close(); link.share("staff", pick.id, pick.name, true); }} />
             <Row title="Details and therapies" facts="Name, role, gender, phone" trailing="›" onClick={() => { close(); openPerson(pick.id); }} />
           </ListGroup>
         ) : pick && late === "away" ? (
@@ -177,6 +178,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
           <TimeList label={late === "late" ? "In at" : "Leaving at"} times={times} value={at} onChange={setAt} />
         ) : null}
       </BottomSheet>
+      {link.sheet}
     </div>
   );
 }

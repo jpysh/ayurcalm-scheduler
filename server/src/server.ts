@@ -798,12 +798,13 @@ app.post('/day-check', async (req: Request, res: Response) => {
 app.post('/staff/:id/link', requireAdmin, async (req: Request, res: Response) => {
   const s = await prisma.staff.findUniqueOrThrow({ where: { id: String(req.params.id) } });
   const token = s.link_token && req.query.renew !== '1' ? s.link_token : (await prisma.staff.update({ where: { id: s.id }, data: { link_token: newLinkToken() } })).link_token;
-  res.json({ token });
+  // The phone lets the screen offer Send on WhatsApp to this person (#413).
+  res.json({ token, phone: s.phone });
 });
 app.post('/patients/:id/link', requireAdmin, async (req: Request, res: Response) => {
   const p = await prisma.patient.findUniqueOrThrow({ where: { id: String(req.params.id) } });
   const token = p.link_token && req.query.renew !== '1' ? p.link_token : (await prisma.patient.update({ where: { id: p.id }, data: { link_token: newLinkToken() } })).link_token;
-  res.json({ token });
+  res.json({ token, phone: p.phone });
 });
 
 // Team, read by day (#351): a week from start, each person's hours and booking a day.

@@ -1,0 +1,26 @@
+// node scripts/uat-413.mjs — #413: a staff or patient link is sent on WhatsApp or copied, at 375x812.
+import { chromium } from '@playwright/test';
+import { writeFileSync } from 'node:fs';
+const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';
+const OUT = 'docs/design/uat/2026-10-07-whatsapp-links';
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, permissions: ['clipboard-read', 'clipboard-write'] });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); delete navigator.share; }, token);
+const p = await ctx.newPage();
+const lines = [];
+const shot = async (id, title, ok, note) => { await p.screenshot({ path: `${OUT}/${id}.png` }); lines.push(`| ${id} | ${title} | ${ok ? 'pass' : 'FAIL'} | ${note} | ![${id}](${id}.png) |`); console.log(id, ok, note); };
+const menuTo = async (tile) => { await p.goto(APP + '/'); await p.waitForTimeout(2000); await p.getByRole('button', { name: 'Menu', exact: true }).click(); await p.waitForTimeout(700); await p.getByRole('dialog').last().getByRole('button', { name: new RegExp(`^${tile}`) }).first().click(); await p.waitForTimeout(1500); };
+const staff = await (await fetch(`${APP}/api/staff`, { headers: { Authorization: `Bearer ${token}` } })).json();
+const who = staff.find((s) => s.phone && s.role !== 'doctor');
+await menuTo('Team');
+await p.getByRole('button', { name: new RegExp(who.name) }).first().click(); await p.waitForTimeout(800);
+await p.getByRole('button', { name: /^Share their link/ }).click(); await p.waitForTimeout(1200);
+const wa = p.getByRole('link', { name: /Send on WhatsApp/ });
+const href = await wa.getAttribute('href').catch(() => '');
+await shot('01', `Share their link opens a sheet for ${who.name}`, /^https:\/\/wa\.me\/\d{11,}\?text=/.test(href || ''), `${await wa.innerText().catch(() => 'no button')} → ${(href || '').slice(0, 60)}…`);
+await p.getByRole('button', { name: 'Copy link' }).click(); await p.waitForTimeout(800);
+const clip = await p.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+await shot('02', 'Copy link copies the link and says so', /\/l\//.test(clip), `clipboard: ${clip.replace(/\/l\/.*/, '/l/…')}`);
+writeFileSync(`${OUT}/README.md`, `# #413 UAT, 7 Oct\n\nBefore (Task B, s6-04): with no share sheet the link appeared as a raw URL in a toast, to copy by hand.\n\n![before](00-before.png)\n\n| # | Step | Result | Read | Shot |\n|---|---|---|---|---|\n${lines.join('\n')}\n`);
+await b.close();
