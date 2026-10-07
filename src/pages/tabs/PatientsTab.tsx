@@ -26,6 +26,8 @@ type InHouse = { id: string; name: string; Stays: { id: string; start_date: stri
 type ResidentDay = {
   id: string; name: string;
   stay: (CardStay & { vitals: string | null; concerns: string | null; tests: string | null }) | null;
+  /** Their latest stay, when they are not staying today and it is over (#437). */
+  last_stay: { end_date: string; package: CardStay['package'] } | null;
   treatments: (CardAppt & { therapy_name: string; consultation: boolean; room_name: string | null; staff_names: string[] })[];
   plan_name: string; diet_next: { from: string; name: string } | null; meals: { meal: string; text: string }[];
   week: { date: string; treatments: { id: string; start_time: string; therapy_name: string; consultation: boolean; status: string }[] }[];
@@ -180,7 +182,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
       {d ? (
         <div className="-mt-2 max-h-[70dvh] overflow-y-auto">
           <div className="text-sm text-muted-foreground">
-            {d.stay ? `Staying ${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)} · day ${d.stay.day} of ${d.stay.days}` : 'Not staying today'}
+            {d.stay ? `Staying ${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)} · day ${d.stay.day} of ${d.stay.days}` : d.last_stay ? `Stayed until ${stayDay(d.last_stay.end_date)}` : 'Not staying today'}
           </div>
           {leavingToday ? bar : null}
           {/* Story 14 (#353): the week and the doctor come first; the change lines follow, then the arrival notes. */}
@@ -229,7 +231,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
             <ChangeLine label="Diet" value={d.plan_name ? (d.diet_next ? `${d.plan_name}, then ${d.diet_next.name} from ${dayText(d.diet_next.from)}` : d.plan_name) : "Not decided yet"} faint={!d.plan_name} onClick={() => changeMeals(d)} />
             {d.stay ? <ChangeLine label="Package" value={d.stay.package ? `${d.stay.package.days} days · ${rupees(d.stay.package.price)}` : "Not decided yet"} faint={!d.stay.package} onClick={() => changePackage(d)} /> : null}
             {d.stay && d.stay.on_site !== false ? <ChangeLine label="Accommodation" value={d.stay.accommodation ? `${d.stay.accommodation.name} · ${nights} nights · ${rupees(nights * d.stay.accommodation.price_per_day)}` : "Not decided yet"} faint={!d.stay.accommodation} onClick={() => changeHouse(d)} /> : null}
-            {d.stay ? <ChangeLine label="Stay" value={`${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)}`} onClick={() => changeStay(d)} /> : <ChangeLine label="Stay" value="Not staying · add a stay" faint onClick={() => changeStay(d)} />}
+            {d.stay ? <ChangeLine label="Stay" value={`${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)}`} onClick={() => changeStay(d)} /> : <ChangeLine label={d.last_stay ? 'New stay' : 'Stay'} value={d.last_stay?.package ? `From today · ${d.last_stay.package.name}` : 'Not staying · add a stay'} faint={!d.last_stay} onClick={() => changeStay(d)} />}
             <ChangeLine label="Details" value={detailsHint(d.id)} faint onClick={() => details(d.id)} />
           </div>
           {/* Story 8: what the summary still lacks. It informs and never blocks; printing is always there. */}
@@ -443,7 +445,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         changeStay={(d) => {
           setBack(d.id);
           setCardId(null);
-          setStayFor({ patient: d, target: d.stay ? { id: d.stay.id, start: d.stay.start_date, end: d.stay.end_date, package: d.stay.package, accommodation: d.stay.accommodation } : { id: null, start: today, end: addDays(today, 13), package: null, accommodation: null } });
+          setStayFor({ patient: d, target: d.stay ? { id: d.stay.id, start: d.stay.start_date, end: d.stay.end_date, package: d.stay.package, accommodation: d.stay.accommodation } : { id: null, start: today, end: addDays(today, (d.last_stay?.package?.days || 14) - 1), package: d.last_stay?.package ?? null, accommodation: null } });
         }}
         book={(p) => { setCardId(null); book(p); }}
         detailsHint={(id) => { const r = patients.find((x) => String(x.id) === id); return r?.phone || r?.emergencyContact ? [r.phone, r.emergencyContact].filter(Boolean).join(' · ') : 'Add phone, emergency contact…'; }}

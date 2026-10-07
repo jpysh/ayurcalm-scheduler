@@ -44,7 +44,8 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
   const next = visits.find((a) => !held(a)) ?? null;
   const appts = ahead.filter((a) => a.scheduled_date.getTime() === day.getTime());
   // The days the stay covers, each with what is booked, so an empty one shows (#350).
-  const lastDay = stay && stay.end_date < weekEnd ? stay.end_date : weekEnd;
+  // Not staying, there is nothing to book and no week to show (#437).
+  const lastDay = stay ? (stay.end_date < weekEnd ? stay.end_date : weekEnd) : new Date(day.getTime() - DAY_MS);
   const week = [];
   for (let t = day.getTime(); t <= lastDay.getTime(); t += DAY_MS) {
     const iso = new Date(t).toISOString().slice(0, 10);
@@ -61,6 +62,11 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
     stay.accommodation_id ? prisma.accommodationType.findUnique({ where: { id: stay.accommodation_id } }) : null,
     dischargeOf(stay.id, prisma),
   ]) : [null, null, null];
+  // A past guest (#437): when they left and on what package, so New stay starts from it.
+  // One already coming is not a past guest.
+  const coming = stay ? 1 : await prisma.patientStay.count({ where: { patient_id: patientId, start_date: { gt: day } } });
+  const before = coming ? null : await prisma.patientStay.findFirst({ where: { patient_id: patientId, end_date: { lt: day } }, orderBy: { end_date: 'desc' } });
+  const beforePack = before?.package_id ? await prisma.package.findUnique({ where: { id: before.package_id } }) : null;
   return {
     id: patient.id,
     name: patient.name,
@@ -83,6 +89,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
       staff_names: [a.staff_id, ...a.co_staff_ids].filter((x): x is string => Boolean(x)).map((id) => names.get(id) || ''),
     })),
     week,
+    last_stay: before && { end_date: before.end_date.toISOString().slice(0, 10), package: beforePack && { id: beforePack.id, name: beforePack.name, days: beforePack.days, price: beforePack.price } },
     doctor_plan: patient.doctor_plan,
     last_consultation: visit(last),
     next_consultation: visit(next),

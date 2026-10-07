@@ -318,7 +318,7 @@ export function StaySheet({ patient, target, today, cover, onClose, onSaved }: {
     setBusy(true);
     const res = target.id
       ? await saveStay(patient.id, target.id, { start_date: start, end_date: end, cancel_after: cancels > 0 })
-      : await fetch(`${API_BASE}/patients/${patient.id}/stays`, { method: "POST", headers: json, body: JSON.stringify({ start_date: start, end_date: end }) });
+      : await fetch(`${API_BASE}/patients/${patient.id}/stays`, { method: "POST", headers: json, body: JSON.stringify({ start_date: start, end_date: end, package_id: target.package?.id ?? null }) });
     setBusy(false);
     if (!res.ok) { toast.error("The stay was not saved. Try again."); return; }
     const out = await res.json().catch(() => ({}));

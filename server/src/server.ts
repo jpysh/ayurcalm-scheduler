@@ -561,7 +561,9 @@ app.get('/patients/:id/stays', async (req: Request, res: Response) => {
 
 app.post('/patients/:id/stays', async (req: Request, res: Response) => {
   const id = String(req.params.id);
-  const created = await prisma.patientStay.create({ data: { patient_id: id, ...stayData(staySchema.parse(req.body)) } });
+  // A returning guest's New stay starts on their last package (#437).
+  const { package_id } = z.object({ package_id: z.string().uuid().nullish() }).parse(req.body);
+  const created = await prisma.patientStay.create({ data: { patient_id: id, package_id: package_id ?? null, ...stayData(staySchema.parse(req.body)) } });
   res.status(201).json(created);
 });
 
