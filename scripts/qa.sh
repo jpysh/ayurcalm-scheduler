@@ -74,6 +74,8 @@ run onboarding         "After the setup wizard, the centre has its hours, timezo
 run mcp                "Claude reads the centre only with the current key: the day, residents, who is free and the day sheet, and reading changes nothing"
 run mcpPlan            "Claude's plan for a day is the one Verify shows, written only on a yes, undone exactly; stale and expired plans write nothing"
 run demo               "The public demo is put back to the seeded centre every six hours, on fixed hours a restart does not move"
+# Last: it locks the container's own address out of sign-in for 15 minutes.
+run signInLimit        "Ten wrong passwords and the address waits 15 minutes; every page carries a security policy"
 
 # Backups (#236): write one with the service's own script, restore the newest
 # file into a scratch database, and compare every table's row count with the live one.

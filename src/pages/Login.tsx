@@ -38,7 +38,7 @@ const Login = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(res.status === 429 ? "Too many tries. Wait a minute and try again." : (data?.error || "That email and password do not match."));
+        toast.error(res.status === 429 ? (data?.error || "Too many tries. Wait a few minutes and try again.") : (data?.error || "That email and password do not match."));
         return;
       }
       localStorage.setItem("authToken", data.token);
