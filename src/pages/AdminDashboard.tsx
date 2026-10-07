@@ -137,6 +137,12 @@ const AdminDashboard = () => {
   const therapyNameById = useMemo(() => Object.fromEntries(therapies.map((t: UiTherapy) => [String(t.id), t.name])), [therapies]);
   const staffNameById = useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
   const roomNameById = useMemo(() => Object.fromEntries(roomsList.map((r) => [r.id, r.name])), [roomsList]);
+  const moves = useMemo(() => {
+    const m = new Map<string, { in: number; out: number }>();
+    const at = (iso: string) => m.get(iso) ?? m.set(iso, { in: 0, out: 0 }).get(iso)!;
+    for (const p of patients) for (const s of p.stays ?? []) { at(s.start_date.slice(0, 10)).in++; at(s.end_date.slice(0, 10)).out++; }
+    return m;
+  }, [patients]);
   const patientNameById = useMemo(() => Object.fromEntries(patients.map((p) => [p.id, p.name])), [patients]);
   const amenityOptions = useMemo(() => {
     const s = new Set<string>();
@@ -572,7 +578,7 @@ const AdminDashboard = () => {
                 <p className="px-1 pt-2 text-sm text-muted-foreground">Then tap + to book the first treatment.</p>
               </div>
             ) : null}
-            {loaded && !scheduleScreen.searching ? <WeekStrip day={dayKeyMemo} today={ymdInTZ(new Date())} setDay={(iso) => { const [y, m, d] = iso.split('-').map(Number); setCurrentDate(new Date(y, m - 1, d)); }} /> : null}
+            {loaded && !scheduleScreen.searching ? <WeekStrip day={dayKeyMemo} today={ymdInTZ(new Date())} moves={moves} setDay={(iso) => { const [y, m, d] = iso.split('-').map(Number); setCurrentDate(new Date(y, m - 1, d)); }} /> : null}
             {loaded && scheduleScreen.tab}
           </TabsContent>
 
