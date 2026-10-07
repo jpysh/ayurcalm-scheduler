@@ -20,7 +20,7 @@ import * as z from 'zod';
 import { prisma } from './server.js';
 import { requireAdmin } from './settings.js';
 import { findConflict, loadDay, nearestFreeTime, staffDay } from './appointmentGuard.js';
-import { activeEventsOnDay, toMinutes, type EventRow } from './availability.js';
+import { activeEventsOnDay, gives, toMinutes, type EventRow } from './availability.js';
 import { checkDay, rowOptions } from './dayCheck.js';
 import { acceptPlan, planDay, undoReplan, type Pin } from './replan.js';
 import { loadDietsForDay } from './dietResolution.js';
@@ -258,7 +258,7 @@ async function therapistsFree(date: string, therapyId?: string, residentId?: str
   const therapyName = new Map(ctx.therapies.map((t) => [t.id, t.name]));
   return staffDay(ctx)
     .map((d) => ({ d, s: byId.get(d.staff_id)! }))
-    .filter(({ s }) => !therapy || s.specializations.includes(therapy.id))
+    .filter(({ s }) => !therapy || gives(s, therapy))
     .filter(({ s }) => !genderRule || s.gender === resident!.gender)
     .map(({ d, s }) => {
       const free: { from: string; to: string }[] = [];

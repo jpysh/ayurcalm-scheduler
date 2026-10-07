@@ -20,7 +20,7 @@
  * them, so it is put to the admin: only their Accept applies it.
  */
 import { PrismaClient, Prisma } from '@prisma/client';
-import { centreClock, offOnDay, staffAwayOnDay, stayOn, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow } from './availability.js';
+import { centreClock, gives, offOnDay, staffAwayOnDay, stayOn, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow } from './availability.js';
 import { HAPPENING, findConflict, loadDay, type Action, type Conflict } from './appointmentGuard.js';
 
 /** Which of the tier 4 choices a move is. */
@@ -269,7 +269,7 @@ export async function planDay(
     const qualified = (s: (typeof staff)[number], today = true) => {
       if (today && s.id === staffId) return false;
       if (opts.excludeStaffIds?.includes(s.id)) return false;
-      if (!s.specializations.includes(appt.therapy_id)) return false;
+      if (!therapy || !gives(s, therapy)) return false;
       if (enforceGender && therapy?.requires_gender_match && patient && s.gender !== patient.gender) return false;
       return true;
     };
