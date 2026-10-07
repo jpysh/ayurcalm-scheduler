@@ -15,7 +15,7 @@ import { linkRouter } from './links.js';
 import { trialGuard } from './trial.js';
 import { usersRouter, accountRouter } from './users.js';
 import { dietTemplatesRouter } from './dietTemplates.js';
-import { packagesRouter, accommodationsRouter } from './catalogues.js';
+import { packagesRouter, accommodationsRouter, guestRoomsRouter } from './catalogues.js';
 import { mcpRouter, mcpKeyRouter } from './mcp.js';
 import { logWrites } from './changeLog.js';
 import { ZodError } from 'zod';
@@ -170,6 +170,7 @@ expressApp.use('/api/account', accountRouter);
 expressApp.use('/api/diet-templates', dietTemplatesRouter);
 expressApp.use('/api/packages', packagesRouter);
 expressApp.use('/api/accommodations', accommodationsRouter);
+expressApp.use('/api/guest-rooms', guestRoomsRouter);
 expressApp.use('/api/mcp-key', mcpKeyRouter);
 expressApp.use('/api', app);
 

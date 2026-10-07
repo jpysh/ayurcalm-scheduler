@@ -107,6 +107,7 @@ const scrub = (v: unknown) => (Buffer.isBuffer(v) || v == null ? null : JSON.par
 async function removing(prisma: PrismaClient, kind: string, id: string): Promise<Record<string, unknown> | null> {
   const where = { where: { id } };
   if (kind === 'staff') return prisma.staff.findUnique({ ...where, select: { name: true } });
+  if (kind === 'guest-rooms') return prisma.guestRoom.findUnique({ ...where, select: { name: true } });
   if (kind === 'rooms') return prisma.therapyRoom.findUnique({ ...where, select: { name: true } });
   if (kind === 'therapies') return prisma.therapy.findUnique({ ...where, select: { name: true } });
   if (kind === 'program-events') return prisma.programEvent.findUnique(where).then((e) => e && { name: e.activity_name });
@@ -141,7 +142,7 @@ type Wrote = { method?: string; path?: string; body?: Record<string, unknown> | 
 type Named = { id: string; name: string }[];
 const KIND: Record<string, string> = {
   staff: 'team member', rooms: 'room', therapies: 'therapy', timeoff: 'leave', holidays: 'centre closed day', dietplans: 'diet plan',
-  'program-events': 'event', users: 'user account', packages: 'package', accommodations: 'accommodation', 'diet-templates': 'diet plan',
+  'program-events': 'event', users: 'user account', packages: 'package', accommodations: 'accommodation', 'guest-rooms': 'guest room', 'diet-templates': 'diet plan',
   patients: 'patient', appointments: 'treatment',
 };
 const cap = (x: string) => (x ? x[0].toUpperCase() + x.slice(1) : 'Something');
