@@ -67,6 +67,12 @@ async function main() {
       { meal: 'Breakfast', text: 'Rice kanji' }, { meal: 'Lunch', text: 'Rice gruel only' }, { meal: 'Dinner', text: 'Moong soup' },
     ], 'meals as the day sheet resolves them, today\'s written lunch first');
 
+    // After they leave (#437): no week of empty days to flag, and when they left.
+    const gone = await (await fetch(`${API_BASE}/patients/${rekha.id}/day?date=2030-06-25`, { headers: { Authorization: `Bearer ${token}` } })).json();
+    assert.equal(gone.stay, null);
+    assert.deepEqual(gone.week, [], 'a past guest has no next days to book');
+    assert.equal(gone.last_stay?.end_date, '2030-06-19');
+
     console.log("Resident day: which day of the stay, today's treatments without the cancelled one, and meals as the sheet prints them.");
   } finally {
     await tidy(prisma).catch(() => {});
