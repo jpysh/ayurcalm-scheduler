@@ -528,10 +528,13 @@ async function main() {
   const spare = (await prisma.appointment.findMany({ where: { scheduled_date: today, status: 'pending' }, orderBy: { start_time: 'asc' } }))
     .filter((a) => !(a.staff_id && offToday.has(a.staff_id)) && a.patient_id !== loyal?.patient_id);
   const [noShow, cancelled, noted, moved] = [spare[0], spare[Math.floor(spare.length / 3)], spare[Math.floor(spare.length / 2)], spare[spare.length - 1]];
+  // Made this morning from 08:00, ten minutes apart, never after the reset itself (#396).
+  let changes = 0;
   const change = async (a: (typeof spare)[number] | undefined, data: Record<string, unknown>) => {
     if (!a) return;
     const after = await prisma.appointment.update({ where: { id: a.id }, data });
-    await prisma.auditLog.create({ data: { admin_id: adminId, action: 'update', entity_type: 'appointment', entity_id: a.id, old_value: a as any, new_value: after as any } });
+    const timestamp = new Date(Math.min(Date.now(), today.getTime() + (150 + 10 * changes++) * 60000));
+    await prisma.auditLog.create({ data: { admin_id: adminId, action: 'update', entity_type: 'appointment', entity_id: a.id, old_value: a as any, new_value: after as any, timestamp } });
   };
   await change(noShow, { status: 'no_show' });
   if (cancelled !== noShow) await change(cancelled, { status: 'cancelled' });
@@ -560,7 +563,8 @@ async function main() {
   })));
   const doctors = await Promise.all([['Dr Lakshmi Menon', 'female'], ['Dr Vikram Rao', 'male'], ['Dr Farah Siddiqui', 'female']].slice(0, SIZE.doctors).map(([name, gender]) =>
     prisma.staff.create({ data: { name, gender: gender as 'male' | 'female', role: 'doctor', specializations: [consultation.id], weekly_schedule: week('08:00', '14:00'), is_active: true, phone: `+91-7${Math.floor(100000000 + random() * 899999999)}` } })));
-  const holidayKeys = new Set(centerHolidays.map((h) => h.date && h.date.toISOString().slice(0, 10)));
+  // Every closed day, not only the booking window's: a stay may open before it (#396).
+  const holidayKeys = new Set((await prisma.timeOff.findMany({ where: { entity_type: 'center' } })).map((h) => h.date && h.date.toISOString().slice(0, 10)));
   const consultSlots = Array.from({ length: 12 }, (_, i) => { const m = 9 * 60 + i * 20; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; });
   const takenBy = new Map<string, Set<string>>(); // "date|time" -> doctor and room ids already booked
   const plans = [
@@ -573,9 +577,12 @@ async function main() {
   const planFor = (pid: string) => (purging.has(pid) ? plans[2] : randomOf(plans.filter((_, i) => i !== 2)));
   for (const stay of await prisma.patientStay.findMany({ where: { end_date: { gte: start } } })) {
     let consulted = false;
-    for (let d = new Date(stay.start_date); d <= stay.end_date && d <= end; d = new Date(d.getTime() + 7 * DAY_MS)) {
+    for (let week = new Date(stay.start_date); week <= stay.end_date && week <= end; week = new Date(week.getTime() + 7 * DAY_MS)) {
+      // A closed day moves the consultation to the next open one.
+      let d = week;
+      while (holidayKeys.has(d.toISOString().slice(0, 10))) d = new Date(d.getTime() + DAY_MS);
       const dateKey = d.toISOString().slice(0, 10);
-      if (holidayKeys.has(dateKey)) continue;
+      if (d > stay.end_date) continue;
       const theirs = await prisma.appointment.findMany({ where: { patient_id: stay.patient_id, scheduled_date: d } });
       for (const time of consultSlots) {
         const s = mins(time);
@@ -680,6 +687,10 @@ async function main() {
       },
     });
   }
+
+  // Booked two days ahead at 10:00, not at the reset: History must not say a
+  // finished treatment was booked after it happened (#396).
+  await prisma.$executeRaw`UPDATE "Appointment" SET created_at = LEAST(now() AT TIME ZONE 'UTC', scheduled_date - interval '2 days' + interval '4 hours 30 minutes')`;
 
   // Flags this install as carrying demo data, so Settings can offer to clear it.
   // Seeded means configured: an install arriving with staff, rooms, therapies
