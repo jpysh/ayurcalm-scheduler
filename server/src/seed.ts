@@ -3,6 +3,7 @@ import { therapyLibrary } from './therapyLibrary.js';
 import 'dotenv/config';
 import { ensureStarterDietTemplates, usualNotes } from './dietTemplateSeed.js';
 import { ensureStarterCatalogues } from './catalogueSeed.js';
+import { expandRoomNames } from './guestRooms.js';
 import { PrismaClient } from '@prisma/client';
 import { hoursOn, staffEventBusy } from './availability.js';
 import bcrypt from 'bcrypt';
@@ -522,6 +523,24 @@ async function main() {
   };
   for (const [patientId, list] of staysOf) {
     for (const x of list) await addStay(patientId, x.s, x.e, x.kind !== 'day' && x.kind !== 'out', purgeDay.get(x));
+  }
+
+  // Guest rooms (#456), numbered by house, and everyone staying put in the first room of
+  // their house free for all their nights, two to a two-bed room: a couple shares one.
+  // A house that fills leaves the rest without a room, as a full centre would.
+  const roomPlan: Record<string, [string, number]> = { 'Trishul House': ['T1–T12', 1], 'Nanda House': ['N1–N10', 1], 'Special Apartments': ['A1–A4', 2], Huts: ['H1–H6', 1] };
+  for (const h of houses) {
+    const [names, beds] = roomPlan[h.name] ?? [];
+    if (names) await prisma.guestRoom.createMany({ data: expandRoomNames(names).map((name) => ({ name, accommodation_id: h.id, beds })), skipDuplicates: true });
+  }
+  const guestRooms = (await prisma.guestRoom.findMany()).sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true }));
+  const placed: { room: string; s: number; e: number }[] = [];
+  for (const st of await prisma.patientStay.findMany({ where: { on_site: true, accommodation_id: { not: null } }, orderBy: { start_date: 'asc' } })) {
+    const [s, e] = [st.start_date.getTime(), st.end_date.getTime()];
+    const room = guestRooms.find((r) => r.accommodation_id === st.accommodation_id && placed.filter((x) => x.room === r.id && x.s < e && s < x.e).length < r.beds);
+    if (!room) continue;
+    placed.push({ room: room.id, s, e });
+    await prisma.patientStay.update({ where: { id: st.id }, data: { guest_room_id: room.id } });
   }
 
   // The rest of an ordinary day's changes, each once, so every row flag and

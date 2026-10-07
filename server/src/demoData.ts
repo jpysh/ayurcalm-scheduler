@@ -30,6 +30,8 @@ export async function wipeDemo(tx: Prisma.TransactionClient, keep: Keep[] = []) 
   await tx.timeOff.deleteMany({ where: { entity_type: 'therapy' } });
   if (kept('events')) await tx.programEvent.updateMany({ data: { patient_ids: [] } });
   await tx.patientStay.deleteMany({});
+  // The demo's guest rooms are its own numbering, not the centre's (#456).
+  await tx.guestRoom.deleteMany({});
   const patients = await tx.patient.deleteMany({});
   // An event kept may name a room or a person that is going: it loses the name, not the event.
   if (kept('events') && !kept('rooms')) await tx.programEvent.updateMany({ data: { room_id: null } });

@@ -77,8 +77,11 @@ model PatientStay {
   accommodation_id String?
   /// Free text, "N-4": rooms are not modelled yet (#286).
   room_number      String?
+  /// The guest room they sleep in (#456): one for the whole stay; a move changes it.
+  guest_room_id    String?
 
   Patient       Patient            @relation(fields: [patient_id], references: [id])
+  GuestRoom     GuestRoom?         @relation(fields: [guest_room_id], references: [id], onDelete: SetNull)
   Package       Package?           @relation(fields: [package_id], references: [id], onDelete: SetNull)
   Accommodation AccommodationType? @relation(fields: [accommodation_id], references: [id], onDelete: SetNull)
 }
@@ -106,7 +109,22 @@ model AccommodationType {
   notes         String?
   is_active     Boolean @default(true)
 
-  Stays PatientStay[]
+  Stays      PatientStay[]
+  GuestRooms GuestRoom[]
+}
+
+/// A room a patient sleeps in (#456), "T3". Called a guest room on screen: "room" means a
+/// treatment room. A night is held from the stay's first day up to, not including, its last.
+model GuestRoom {
+  id               String  @id @default(uuid())
+  name             String  @unique
+  accommodation_id String
+  /// How many patients may share it; a couple is two patients in one room.
+  beds             Int     @default(1)
+  is_active        Boolean @default(true)
+
+  Accommodation AccommodationType @relation(fields: [accommodation_id], references: [id], onDelete: Cascade)
+  Stays         PatientStay[]
 }
 
 model Staff {

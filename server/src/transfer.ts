@@ -12,7 +12,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 
 // Parents before children, so every row's references exist when it arrives.
 const TABLES = [
-  'settings', 'user', 'dietTemplate', 'package', 'accommodationType', 'staff', 'therapyRoom', 'therapy', 'patient', 'patientStay',
+  'settings', 'user', 'dietTemplate', 'package', 'accommodationType', 'guestRoom', 'staff', 'therapyRoom', 'therapy', 'patient', 'patientStay',
   'appointment', 'timeOff', 'dietPlan', 'dietPlanSegment', 'programEvent', 'auditLog', 'linkIssue', 'printedSheet',
 ] as const;
 type Table = (typeof TABLES)[number];
