@@ -8,8 +8,8 @@ import DayDietDialog from "./DayDietDialog";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
-import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText, rupees, Btn } from "@/components/kit";
-import { AccommodationSheet, DietSheet, DischargeSheet, NextWeekSheet, PackageSheet, StaySheet, type CardStay, type StayTarget } from "@/components/CardSheets";
+import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText, rupees, Btn } from "@/components/kit";
+import { AccommodationSheet, DietSheet, DischargeSheet, NextWeekSheet, PackageSheet, StaySheet, takenBy, type CardStay, type GuestRoomNight, type StayTarget } from "@/components/CardSheets";
 import { marked } from "@/components/SearchScreen";
 import type { AttentionItem } from "@/lib/attention";
 
@@ -192,7 +192,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
     ['Consultation', !!(d.last_consultation || d.next_consultation), d.next_consultation ? visit(d.next_consultation, true) : d.last_consultation ? `Seen ${visit(d.last_consultation, false)}` : undefined, () => book({ id: d.id, name: d.name, consult: true })],
     ['Diet', !!d.plan_name, d.plan_name || undefined, () => changeMeals(d)],
     ['Package', !!d.stay.package, d.stay.package ? `${d.stay.package.days} days` : undefined, () => changePackage(d)],
-    ...(d.stay.on_site !== false ? [['Room', !!d.stay.accommodation, d.stay.accommodation?.name, () => changeHouse(d)]] : []),
+    ...(d.stay.on_site !== false ? [['Guest room', !!d.stay.accommodation, d.stay.accommodation?.room?.name ?? d.stay.accommodation?.name, () => changeHouse(d)]] : []),
     ...(d.form_c ? [['Form C', !!d.form_c.filed, d.form_c.filed ? `Filed ${dayText(d.form_c.filed)}` : undefined, () => setFormC(true)]] : []),
   ] as [string, boolean, string | undefined, () => void][]) : null;
   const [arrival, setArrival] = useState(false);
@@ -252,7 +252,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
           <div className="mt-3 border-t border-border">
             <ChangeLine label="Diet" value={d.plan_name ? (d.diet_next ? `${d.plan_name}, then ${d.diet_next.name} from ${dayText(d.diet_next.from)}` : d.plan_name) : "Not decided yet"} faint={!d.plan_name} onClick={() => changeMeals(d)} />
             {d.stay ? <ChangeLine label="Package" value={d.stay.package ? `${d.stay.package.days} days · ${rupees(d.stay.package.price)}` : "Not decided yet"} faint={!d.stay.package} onClick={() => changePackage(d)} /> : null}
-            {d.stay && d.stay.on_site !== false ? <ChangeLine label="Accommodation" value={d.stay.accommodation ? `${d.stay.accommodation.name} · ${nights} nights · ${rupees(nights * d.stay.accommodation.price_per_day)}` : "Not decided yet"} faint={!d.stay.accommodation} onClick={() => changeHouse(d)} /> : null}
+            {d.stay && d.stay.on_site !== false ? <ChangeLine label="Accommodation" value={d.stay.accommodation ? `${d.stay.accommodation.name}${d.stay.accommodation.room ? ` · ${d.stay.accommodation.room.name}` : ""} · ${nights} nights · ${rupees(nights * d.stay.accommodation.price_per_day)}` : "Not decided yet"} faint={!d.stay.accommodation} onClick={() => changeHouse(d)} /> : null}
             {d.form_c ? <ChangeLine label="Form C" value={d.form_c.filed ? `Filed ${dayText(d.form_c.filed)}` : `Due by ${dayText(d.form_c.due)}`} onClick={() => setFormC(true)} /> : null}
             {d.stay ? <ChangeLine label="Stay" value={`${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)}`} onClick={() => changeStay(d)} /> : <ChangeLine label={d.last_stay ? 'New stay' : 'Stay'} value={d.last_stay?.package ? `From today · ${d.last_stay.package.name}` : 'Not staying · add a stay'} faint={!d.last_stay} onClick={() => changeStay(d)} />}
             <ChangeLine label="Details" value={detailsHint(d.id)} faint onClick={() => details(d.id)} />
@@ -348,6 +348,17 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     setNewPatient((p) => ({ ...p, arriving: p.arriving || today, leaving: p.leaving || addDays(today, 13) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAddPatient]);
+  // Their guest room (#456): the first free for every night, cheapest type first, unless the admin chose one still free.
+  const [freeRooms, setFreeRooms] = useState<GuestRoomNight[]>([]);
+  const [guestRoom, setGuestRoom] = useState("");
+  useEffect(() => {
+    if (!showAddPatient || !newPatient.arriving || newPatient.leaving < newPatient.arriving) return;
+    fetchJsonWithTimeout<GuestRoomNight[]>(`${API_BASE}/guest-rooms/free?from=${newPatient.arriving}&to=${newPatient.leaving}`).then((r) => {
+      const list = Array.isArray(r) ? r : [];
+      setFreeRooms(list);
+      setGuestRoom((was) => (list.some((x) => x.id === was && x.free) ? was : list.find((x) => x.free)?.id ?? ""));
+    });
+  }, [showAddPatient, newPatient.arriving, newPatient.leaving]);
   // The consultation they are pre-booked into: the next free doctor time from the day they arrive (story 4).
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [consult, setConsult] = useState<number | 'later'>(0);
@@ -376,13 +387,13 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         name: n.name.trim(), gender: n.gender.toLowerCase(), on_site: n.onSite,
         phone: blank(n.phone), emergency_contact: blank(n.emergencyContact), emergency_phone: blank(n.emergencyPhone),
         address: blank(n.address), country: blank(n.country), id_number: blank(n.idNumber), registration_number: blank(n.registrationNumber),
-        stay: { start_date: n.arriving, end_date: n.leaving },
+        stay: { start_date: n.arriving, end_date: n.leaving }, guest_room_id: n.onSite && guestRoom ? guestRoom : undefined,
         consultation: visit ? { date: visit.date, start_time: visit.start_time, staff_id: visit.staff_id, room_id: visit.room_id } : undefined,
       }),
     });
     if (!res.ok) {
       const why = await res.json().catch(() => ({}));
-      toast.error(why.message ? `${why.message} Choose another consultation time.` : 'Could not save the patient');
+      toast.error(why.reason === 'ROOM_TAKEN' ? why.message : why.message ? `${why.message} Choose another consultation time.` : 'Could not save the patient');
       return;
     }
     const created = await res.json();
@@ -511,6 +522,17 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           <DateRow label="Leaving" value={newPatient.leaving} min={newPatient.arriving} onChange={(v) => setNewPatient({ ...newPatient, leaving: v })} />
         </div>
         <Switch label="Stays on site" note="Off for a day patient" on={newPatient.onSite} set={(onSite) => setNewPatient({ ...newPatient, onSite })} />
+        {newPatient.onSite && freeRooms.length ? (() => {
+          const r = freeRooms.find((x) => x.id === guestRoom);
+          return (
+            <div className="mt-1 border-t border-border">
+              <ChangeLine label="Guest room" value={r ? `${r.name} · ${r.type}` : freeRooms.some((x) => x.free) ? "Not yet" : "None free for these nights"} faint={!r}
+                select={<LineSelect label="Guest room" busyLabel="Taken" value={guestRoom} onChange={setGuestRoom}
+                  free={[...freeRooms.filter((x) => x.free).map((x) => ({ id: x.id, name: x.name, tag: x.type })), { id: "", name: "Not yet" }]}
+                  busy={freeRooms.filter((x) => !x.free).map((x) => ({ id: x.id, name: x.name, why: takenBy(x) }))} />} />
+            </div>
+          );
+        })() : null}
         {inline ? null : slots === null || slots.length === 0 ? (
           slots?.length === 0 ? <p className={`mt-3 ${noteText}`}>{why || 'No doctor is free before they leave, so no consultation is booked. Book one from their card.'}</p> : null
         ) : (

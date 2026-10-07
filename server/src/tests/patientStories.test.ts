@@ -63,10 +63,10 @@ async function main() {
     const pack = await call('POST', '/packages', { name: `${TAG} 14 days`, days: 14, price: 70750 });
     assert.equal((await raw('POST', '/packages', { name: `${TAG} 14 days`, days: 14, price: 1 })).status, 409, 'a second package with the same name is refused');
     const house = await call('POST', '/accommodations', { name: `${TAG} House`, price_per_day: 2500 });
-    await call('PUT', `/patients/${p.id}/stays/${stay.id}`, { package_id: pack.id, accommodation_id: house.id, room_number: 'N-4' });
+    await call('PUT', `/patients/${p.id}/stays/${stay.id}`, { package_id: pack.id, accommodation_id: house.id });
     day = await call('GET', `/patients/${p.id}/day?date=2030-03-02`);
     assert.equal(day.stay.package.price, 70750);
-    assert.equal(day.stay.accommodation.room_number, 'N-4');
+    assert.equal(day.stay.accommodation.name, `${TAG} House`);
     assert.equal((await call('DELETE', `/packages/${pack.id}`)).retired, true, 'a package a stay chose is retired, not deleted');
     assert.equal((await prisma.package.findUnique({ where: { id: pack.id } }))?.is_active, false);
 

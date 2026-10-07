@@ -67,7 +67,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     prisma.programEvent.findMany({ where: { OR: [{ date: day }, { AND: [{ start_date: { lte: day } }, { end_date: { gte: day } }] }] } }),
     prisma.programEvent.findMany({ where: { recurrence: 'weekly' } }),
     loadDietsForDay(day, prisma),
-    prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } } }),
+    prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } }, include: { GuestRoom: { select: { name: true } } } }),
     prisma.timeOff.findMany({ where: { entity_type: 'staff' } }),
   ]);
 
@@ -307,7 +307,9 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
           })),
         ].sort((m, n) => m.t.localeCompare(n.t) || String(m.text).localeCompare(String(n.text)));
       });
-      items.push({ kind: 'row', name: patientById[id] || id, cells, group });
+      // The guest room beside the name (#456), so whoever carries the sheet knows which door to knock on.
+      const room = staysToday.find((s) => s.patient_id === id && s.on_site && s.GuestRoom)?.GuestRoom?.name;
+      items.push({ kind: 'row', name: `${patientById[id] || id}${room ? ` \u00b7 ${room}` : ''}`, cells, group });
     }
   }
 

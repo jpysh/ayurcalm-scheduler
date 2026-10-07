@@ -75,8 +75,6 @@ model PatientStay {
   /// What the patient chose from the centre's catalogues (stories 11 and 12), changeable any time in the stay.
   package_id       String?
   accommodation_id String?
-  /// Free text, "N-4": rooms are not modelled yet (#286).
-  room_number      String?
   /// The guest room they sleep in (#456): one for the whole stay; a move changes it.
   guest_room_id    String?
 

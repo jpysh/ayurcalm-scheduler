@@ -24,6 +24,7 @@ import { therapyLibrary } from './therapyLibrary.js';
 import { requireAdmin } from './settings.js';
 import { attentionFor, changesSchema } from './attention.js';
 import { indiaHolidays } from './indiaHolidays.js';
+import { firstFreeRoom, guestRoomRefusal } from './guestRooms.js';
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:5433/ayurcalm_dev?schema=public';
@@ -436,6 +437,8 @@ app.post('/patients', async (req: Request, res: Response) => {
     stay: staySchema.optional(),
     /** The diet plan they follow for the whole stay. */
     template_id: z.string().uuid().optional(),
+    /** The guest room the sheet preselected or the admin chose (#456); its type is their accommodation. */
+    guest_room_id: z.string().uuid().nullable().optional(),
   });
   const body = schema.parse(req.body);
   const data: any = { name: body.name, gender: body.gender, phone: body.phone, email: body.email, emergency_contact: body.emergency_contact, emergency_phone: body.emergency_phone, address: body.address, country: body.country, id_number: body.id_number, visa_number: body.visa_number, visa_valid_until: body.visa_valid_until || null, registration_number: body.registration_number, medical_notes: body.medical_notes, preferred_staff_id: body.preferred_staff_id, requires_preferred_staff: body.requires_preferred_staff };
@@ -449,12 +452,18 @@ app.post('/patients', async (req: Request, res: Response) => {
     const conflict = findConflict({ scheduled_date: day, start_time: visit.start_time, duration_minutes: consult.duration_minutes, staff_id: visit.staff_id, co_staff_ids: [], room_id: visit.room_id, patient_id: '', therapy_id: consult.id }, await loadDay(day, prisma));
     if (conflict) { res.status(409).json(conflict); return; }
   }
+  const room = body.guest_room_id && body.stay && body.on_site ? await prisma.guestRoom.findUnique({ where: { id: body.guest_room_id } }) : null;
+  if (room && body.stay) {
+    const { start_date, end_date } = stayData(body.stay);
+    const refused = await guestRoomRefusal(prisma, room.id, start_date, end_date);
+    if (refused) { res.status(409).json(refused); return; }
+  }
   // One save: the resident, their stay, their diet plan and their consultation, or none of them.
   const p = await prisma.$transaction(async (tx) => {
     const created = await tx.patient.create({ data });
     if (body.stay) {
       const stay = stayData(body.stay);
-      await tx.patientStay.create({ data: { patient_id: created.id, ...stay, on_site: body.on_site } });
+      await tx.patientStay.create({ data: { patient_id: created.id, ...stay, on_site: body.on_site, ...(room ? { guest_room_id: room.id, accommodation_id: room.accommodation_id } : {}) } });
       if (visit && consult) await tx.appointment.create({ data: { patient_id: created.id, therapy_id: consult.id, staff_id: visit.staff_id, room_id: visit.room_id, scheduled_date: new Date(`${visit.date}T00:00:00.000Z`), start_time: visit.start_time, duration_minutes: consult.duration_minutes, co_staff_ids: [], session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
       if (body.template_id) await tx.dietPlanSegment.create({ data: { patient_id: created.id, start_date: stay.start_date, end_date: stay.end_date, template_id: body.template_id } });
     }
@@ -596,15 +605,24 @@ async function leftOverAfter(patientId: string, stay: { end_date: Date }, newEnd
 app.get('/patients/:id/stays/:stayId/preview', async (req: Request, res: Response) => {
   const stay = await stayOf(req);
   if (!stay) { res.status(404).json({ error: 'Stay not found' }); return; }
-  const { end_date } = z.object({ end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
-  const cancels = await leftOverAfter(stay.patient_id, stay, new Date(`${end_date}T00:00:00.000Z`));
-  res.json({ cancels: cancels.map((a) => ({ id: a.id, date: a.scheduled_date.toISOString().slice(0, 10), start_time: a.start_time, therapy_name: a.Therapy.name })) });
+  const q = z.object({ end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).parse(req.query);
+  const [from, to] = [q.start_date ? new Date(`${q.start_date}T00:00:00.000Z`) : stay.start_date, new Date(`${q.end_date}T00:00:00.000Z`)];
+  const cancels = await leftOverAfter(stay.patient_id, stay, to);
+  // New dates re-check the guest room (#456): taken on a night, it says so and names the room the save moves them to.
+  const refused = stay.guest_room_id && stay.on_site ? await guestRoomRefusal(prisma, stay.guest_room_id, from, to, stay.id) : null;
+  const room = refused && stay.guest_room_id ? await prisma.guestRoom.findUnique({ where: { id: stay.guest_room_id } }) : null;
+  const move_to = refused ? (await firstFreeRoom(prisma, from, to, room?.accommodation_id, stay.id)) ?? (await firstFreeRoom(prisma, from, to, null, stay.id)) : null;
+  res.json({
+    cancels: cancels.map((a) => ({ id: a.id, date: a.scheduled_date.toISOString().slice(0, 10), start_time: a.start_time, therapy_name: a.Therapy.name })),
+    room: refused ? { taken: refused.message.slice(0, refused.message.indexOf('.') + 1), move_to: move_to && { id: move_to.id, name: move_to.name, type: move_to.type } } : null,
+  });
 });
 
 const stayExtras = z.object({
   package_id: z.string().uuid().nullable().optional(),
   accommodation_id: z.string().uuid().nullable().optional(),
-  room_number: z.string().trim().max(20).nullable().optional(),
+  /** The guest room for the whole stay (#456); it sets the accommodation to the room's type. */
+  guest_room_id: z.string().uuid().nullable().optional(),
   /** Mark the treatments left after a shortened stay cancelled, "stay shortened", as one batch with one Undo. */
   cancel_after: z.boolean().optional(),
 });
@@ -621,8 +639,16 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
   if (!stay) { res.status(404).json({ error: 'Stay not found' }); return; }
   const extras = stayExtras.parse(req.body);
   const dates = req.body.start_date || req.body.end_date ? stayData(staySchema.parse(req.body)) : { start_date: stay.start_date, end_date: stay.end_date, duration_days: stay.duration_days };
+  // The room is checked on every night of the stay as it will be, whether the room or the dates changed.
+  const roomId = extras.guest_room_id !== undefined ? extras.guest_room_id : stay.guest_room_id;
+  const room = roomId ? await prisma.guestRoom.findUnique({ where: { id: roomId } }) : null;
+  if (roomId && stay.on_site) {
+    const refused = await guestRoomRefusal(prisma, roomId, dates.start_date, dates.end_date, stay.id);
+    if (refused) { res.status(409).json(refused); return; }
+  }
   const updated = await prisma.patientStay.update({ where: { id: stay.id }, data: {
-    ...dates, package_id: extras.package_id, accommodation_id: extras.accommodation_id, room_number: extras.room_number,
+    ...dates, package_id: extras.package_id, guest_room_id: extras.guest_room_id,
+    accommodation_id: extras.guest_room_id && room ? room.accommodation_id : extras.accommodation_id,
   } });
   await extendDiet(id, stay.end_date, dates.end_date, prisma);
   const left = await leftOverAfter(id, stay, dates.end_date);
