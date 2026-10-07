@@ -1,4 +1,5 @@
 /** What more than one screen of the dashboard reads: the shapes it holds and the helpers they share. */
+import { dayText } from "@/components/kit";
 
 export type UiStaff = { id: string | number; name: string; role?: "therapist" | "doctor"; gender: "Male" | "Female" | "Other"; specializations: string[]; phone: string; schedule: string; /** The weekly pattern, as stored; {} when never set. */ hours?: Record<string, { start: string; end: string } | null>; status: "Active" | "Inactive" };
 export type UiRoom = { id: string | number; name: string; amenities: string[]; schedule: string; status: "Active" | "Maintenance" };
@@ -18,12 +19,12 @@ export type ApiProgramEvent = { id: string; date?: string | null; start_date?: s
 export type ApiStay = { id: string; patient_id: string; start_date: string; end_date: string; duration_days: number };
 
 /**
- * When a leave line applies, as the admin would say it: "27 Sept, 14:00–20:00".
+ * When a leave line applies, as the admin would say it: "Sun 27 Sept, 14:00–20:00".
  * Dates are the stored calendar day and times the stored HH:MM, never passed
  * through a clock: UTC midnight in India read as 05:30 (#189).
  */
 export function leaveWhen(h: Pick<UiTimeOff, 'date' | 'startDate' | 'endDate' | 'startTime' | 'endTime'>, fullDay: boolean): string {
-  const day = (iso?: string) => iso ? new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '';
+  const day = (iso?: string) => iso ? dayText(iso) : '';
   const from = day(h.startDate || h.date), to = day(h.endDate || h.startDate || h.date);
   const hours = !fullDay && h.startTime && h.endTime ? `${h.startTime}–${h.endTime}` : '';
   if (from === to) return [from, hours].filter(Boolean).join(', ');

@@ -17,7 +17,7 @@ type Patient = { id: string | number; name: string; phone?: string; gender: stri
 
 /** "26 Sep": a stay is whole days, so no time. */
 const longDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-const stayDay = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '');
+const stayDay = (iso?: string) => (iso ? dayText(iso) : '');
 const blankNew = () => ({ name: '', gender: '' as '' | 'Female' | 'Male' | 'Other', arriving: '', leaving: '', onSite: true, phone: '', emergencyContact: '', emergencyPhone: '', address: '', country: '', idNumber: '', registrationNumber: '' });
 type Slot = { date: string; start_time: string; staff_id: string; staff_name: string; room_id: string; room_name: string };
 const clock = (timeZone: string) => new Date().toLocaleTimeString('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
