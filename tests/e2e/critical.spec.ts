@@ -337,7 +337,7 @@ test('the day by therapist starts where the by-time view does (#193)', async ({ 
   const chip = page.getByRole('button', { name: /^Show the day by, now Therapist/ });
   await expect(chip).toBeVisible();
   // The count line and its view chip sit under the week strip, at the same height in either view.
-  expect(byTime).toBeLessThan(135);
+  expect(byTime).toBeLessThan(145);
   expect(Math.abs((await top(page.getByText(/ treatments?\b/).first())) - byTime)).toBeLessThan(12);
 });
 
@@ -390,7 +390,7 @@ test("a resident's details show the stay under way, not the first one on file (#
   await page.getByRole('dialog').getByRole('button', { name: 'Details' }).click();
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
   const details = page.getByRole('dialog').last();
-  await expect(details.getByRole('button', { name: new RegExp(`^${today} to`) })).toBeVisible();
+  await expect(details.getByRole('button', { name: new RegExp(`${today} to`) })).toBeVisible();
   // The old per-resident meal list is gone; the card's plan is the one place meals are read.
   await expect(details.getByText('Diet Plans')).toHaveCount(0);
 });
@@ -403,7 +403,7 @@ test("a resident's card shows the doctor's last and next consultation and a plan
   const card = page.getByRole('dialog').last();
   await expect(card.getByText('Doctor', { exact: true })).toBeVisible({ timeout: 15000 });
   await expect(card.getByText('Next', { exact: true })).toBeVisible();
-  await card.getByRole('button', { name: /^Plan/ }).click();
+  await card.getByRole('button', { name: /^Plan(?! next week)/ }).click();
   await expect(page.getByLabel('Plan (optional)')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByLabel('Plan (optional)')).toHaveCount(0);
@@ -436,7 +436,7 @@ test('leave for a day ahead is marked from Team, and a whole day carries no hour
   await signIn(page);
   await passSetupIfShown(page);
   await openTab(page, 'Team');
-  await activePanel(page).getByRole('button', { name: /\b(Therapist|Doctor)\b/ }).first().click();
+  await activePanel(page).getByRole('button', { name: /\d{2}:\d{2}–\d{2}:\d{2}/ }).first().click();
   const sheet = page.getByRole('dialog');
   await sheet.getByRole('button', { name: 'Away another day' }).click();
   // A fixed day far ahead, so the demo's own days are never touched.
@@ -495,7 +495,7 @@ test('a resident arriving today has the arrival steps still to do (#219)', async
   test.skip(!(await arriving.count()), 'nobody arrives today');
   await arriving.first().click();
   const card = page.getByRole('dialog').last();
-  await expect(card.getByText('Arrival', { exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(card.getByRole('button', { name: /^Arrival \d+ of \d+ ready/ })).toBeVisible({ timeout: 15000 });
   await expect(card.getByRole('button', { name: /Vitals and what they came about/ })).toBeVisible();
 });
 

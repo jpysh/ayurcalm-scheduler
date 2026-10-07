@@ -33,7 +33,7 @@ test('a patient is added from four fields, gets a consultation, and lands on the
     // Their card, with everything else a row to fill in later.
     const card = page.getByRole('dialog').last();
     await expect(card.getByRole('button', { name: /^Diet/ })).toContainText('Not decided yet', { timeout: 15000 });
-    await expect(card.getByRole('button', { name: /^Therapies/ })).toBeVisible();
+    await expect(card.getByRole('button', { name: /^Package/ })).toBeVisible();
     const found = ((await (await request.get('/api/patients', { headers })).json()) as { id: string; name: string }[]).find((p) => p.name === 'E2E Meera Nair');
     expect(found).toBeTruthy();
     id = found!.id;
