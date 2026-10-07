@@ -510,7 +510,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         detailsHint={(id) => { const r = patients.find((x) => String(x.id) === id); return r?.phone || r?.emergencyContact ? [r.phone, r.emergencyContact].filter(Boolean).join(' · ') : 'Add phone, emergency contact…'; }}
         details={(id) => { const row = patients.find((x) => String(x.id) === id); setCardId(null); if (row) showPatientInfo(row); }} />
 
-      <BottomSheet open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) { setNewPatient(blankNew()); setInline(null); } }} title="New patient" note="Only name and gender are needed. Everything else can wait."
+      <BottomSheet open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) { setNewPatient(blankNew()); setInline(null); setGuestRoom(''); } }} title="New patient" note="Only name and gender are needed. Everything else can wait."
         foot={<Btn kind="primary" disabled={!newPatient.name.trim() || !newPatient.gender || newPatient.leaving < newPatient.arriving} onClick={saveNewPatient}>{newPatient.name.trim() ? `Add ${newPatient.name.trim()}` : 'Add patient'}</Btn>}>
         <Text label="Name" autoComplete="off" value={newPatient.name} valid={newPatient.name.trim().length > 1} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} />
         {/* Nothing chosen to start with (#283): a list that opened on Male made every resident one until corrected. */}
@@ -594,8 +594,10 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     </>
   );
 
-  return { tab, dialogs, openResident: setCardId, openMeals: setDietFor, openAdd: (from?: { name: string; arriving: string; done: (p: { id: string; name: string }) => void }) => {
-    if (from) { setNewPatient({ ...blankNew(), name: from.name, arriving: from.arriving, leaving: addDays(from.arriving, 13) }); setInline(() => from.done); }
+  return { tab, dialogs, openResident: setCardId, openMeals: setDietFor, openAdd: (from?: { name?: string; arriving: string; leaving?: string; room?: string; done?: (p: { id: string; name: string }) => void }) => {
+    if (from) { setNewPatient({ ...blankNew(), name: from.name ?? '', arriving: from.arriving, leaving: from.leaving ?? addDays(from.arriving, 13) }); if (from.done) setInline(() => from.done); }
+    // From Guest rooms (#456): the room tapped stays chosen while it is free for the dates.
+    if (from?.room) setGuestRoom(from.room);
     setShowAddPatient(true);
   }, query, setQuery, searching, setSearching };
 }

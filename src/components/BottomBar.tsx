@@ -11,6 +11,8 @@ import { BottomSearch, BottomSheet, DateRow, dayText, Group, ListGroup, Row, Seg
 
 export const SCREENS = [
   ["patients", "Patients", "Who is staying"],
+  // Only when the centre has guest rooms: its hint is filled in then (#456).
+  ["guestrooms", "Guest rooms", "Who sleeps where"],
   ["team", "Team", "Who is in today"],
   ["rooms", "Rooms", "Where treatments happen"],
   ["timeoff", "Leave", "Future time off"],
@@ -67,7 +69,8 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
       fetch(`${API_BASE}/settings`).then((r) => (r.ok ? r.json() : {})),
       fetch(`${API_BASE}/rooms`).then((r) => (r.ok ? r.json() : [])),
       fetch(`${API_BASE}/timeoff?from=${today}&to=${today}`).then((r) => (r.ok ? r.json() : [])),
-    ]).then(([residents, days, staff, settings, rooms, off]: [unknown[], { staff_id: string; off: string | null }[], { id: string; name: string }[], { support_whatsapp?: string | null }, { id: string }[], { entity_type: string; entity_id: string }[]]) => {
+      fetch(`${API_BASE}/guest-rooms/free?from=${today}&to=${shift(today, 1)}`).then((r) => (r.ok ? r.json() : [])),
+    ]).then(([residents, days, staff, settings, rooms, off, guestRooms]: [unknown[], { staff_id: string; off: string | null }[], { id: string; name: string }[], { support_whatsapp?: string | null }, { id: string }[], { entity_type: string; entity_id: string }[], { free: boolean }[]]) => {
       const roomsOut = new Set(off.filter((x) => x.entity_type === "room").map((x) => x.entity_id)).size;
       setHelpWa(settings.support_whatsapp || null);
       const out = days.filter((d) => d.off).map((d) => staff.find((s) => s.id === d.staff_id)?.name.split(" ")[0]).filter(Boolean);
@@ -76,6 +79,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
         rooms: `${rooms.length} rooms${roomsOut ? ` · ${roomsOut} out` : ""}`,
         team: out.length === 0 ? "Everyone in" : out.length === 1 ? `${out[0]} not in` : `${out.length} not in`,
         schedule: dayText(day),
+        ...(guestRooms.length ? { guestrooms: `${guestRooms.filter((r) => r.free).length} free tonight` } : {}),
       });
     }).catch(() => setHints({}));
   }, [sheet, today, day]);
@@ -118,7 +122,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
         <div className="mt-3 pb-3">
           <div className="mb-1 pt-2 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">Go to</div>
           <div className="grid grid-cols-2 gap-2">
-            {MENU.filter(([key]) => !(onDay && key === "schedule")).flatMap(([key, name]) => [
+            {MENU.filter(([key]) => !(onDay && key === "schedule") && (key !== "guestrooms" || hints.guestrooms)).flatMap(([key, name]) => [
               <Tile key={key} title={name} facts={hints[key]} onClick={() => { go(key); setSheet(null); }} />,
               key === "settings" && helpWa ? <Tile key="help" title="Help · WhatsApp" facts="Ask us anything" href={`https://wa.me/${helpWa}`} onClick={() => setSheet(null)} /> : null,
             ])}
