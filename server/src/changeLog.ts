@@ -96,32 +96,48 @@ export async function changeLog(days: number, prisma: PrismaClient): Promise<Log
  * richer row with before and after (a treatment or patient edited or deleted,
  * the replan and the day check's fix) keep theirs; this records the rest once
  * the write has succeeded.
+ * A delete keeps the row's name, read before it goes (#435), so the line says what went.
  * ponytail: keeps what was sent, not what it replaced; add before-values per route when Undo needs them.
  */
 const OWN_ROW = [/^(PUT|DELETE) \/(appointments|patients)\/[^/]+$/, /^POST \/(replan|replan\/undo|day-check|day-check\/accept|client-errors|staff\/[^/]+\/hours-check)$/];
 const SECRET = /password|token|secret|signature|logo/i;
 const scrub = (v: unknown) => (Buffer.isBuffer(v) || v == null ? null : JSON.parse(JSON.stringify(v, (k, x) => (SECRET.test(k) ? undefined : typeof x === 'string' && x.length > 500 ? `${x.slice(0, 500)}…` : x))));
 
-export const logWrites = (prisma: PrismaClient) => (req: Request, res: Response, next: NextFunction) => {
+/** What a delete is about to remove: its name, or for a leave whose it was. */
+async function removing(prisma: PrismaClient, kind: string, id: string): Promise<Record<string, unknown> | null> {
+  const where = { where: { id } };
+  if (kind === 'staff') return prisma.staff.findUnique({ ...where, select: { name: true } });
+  if (kind === 'rooms') return prisma.therapyRoom.findUnique({ ...where, select: { name: true } });
+  if (kind === 'therapies') return prisma.therapy.findUnique({ ...where, select: { name: true } });
+  if (kind === 'program-events') return prisma.programEvent.findUnique(where).then((e) => e && { name: e.activity_name });
+  if (kind === 'timeoff' || kind === 'holidays') {
+    const t = await prisma.timeOff.findUnique(where);
+    return t && { entity_id: t.entity_id, name: t.entity_id ? undefined : t.description || t.date?.toISOString().slice(0, 10) };
+  }
+  return null;
+}
+
+export const logWrites = (prisma: PrismaClient) => async (req: Request, res: Response, next: NextFunction) => {
   // Read now: a router mounted under /api rewrites req.path before the write finishes.
   const path = req.path;
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) || OWN_ROW.some((x) => x.test(`${req.method} ${path}`))) return next();
+  const [, kind = '', id] = path.split('/');
+  const was = req.method === 'DELETE' && id ? await removing(prisma, kind, id).catch(() => null) : null;
   let sent: unknown;
   const json = res.json.bind(res);
   res.json = (b: unknown) => { sent = b; return json(b); };
   res.on('finish', () => {
     if (res.statusCode >= 300) return;
-    const [, kind = '', id] = path.split('/');
     const made = (sent as { id?: unknown } | null)?.id;
     prisma.auditLog.create({ data: {
       admin_id: req.user?.email || 'admin', action: 'write', entity_type: kind, entity_id: String(id || made || ''),
-      new_value: { method: req.method, path, body: scrub(req.body), made: typeof made === 'string' ? made : null },
+      new_value: { method: req.method, path, body: scrub(req.body), made: typeof made === 'string' ? made : null, was: scrub(was) },
     } }).catch(() => { /* the write itself succeeded; a lost Log row must not fail it */ });
   });
   next();
 };
 
-type Wrote = { method?: string; path?: string; body?: Record<string, unknown> | null; made?: string | null };
+type Wrote = { method?: string; path?: string; body?: Record<string, unknown> | null; made?: string | null; was?: Record<string, unknown> | null };
 type Named = { id: string; name: string }[];
 const KIND: Record<string, string> = {
   staff: 'team member', rooms: 'room', therapies: 'therapy', timeoff: 'leave', holidays: 'centre closed day', dietplans: 'diet plan',
@@ -132,7 +148,7 @@ const cap = (x: string) => (x ? x[0].toUpperCase() + x.slice(1) : 'Something');
 
 /** One sentence for a write the middleware recorded. */
 function wrote(w: Wrote, lists: { patients: Named; staff: Named; rooms: Named; therapies: Named }, whose: (id: string, fallback?: Snap | null) => string): string {
-  const b = w.body || {};
+  const b = { ...w.was, ...w.body };
   const [, kind = '', id = '', sub = ''] = (w.path || '').split('/');
   const named = (x: unknown) => [lists.patients, lists.staff, lists.rooms, lists.therapies].map((l) => l.find((y) => y.id === x)?.name).find(Boolean) || '';
   const verb = w.method === 'POST' ? 'added' : w.method === 'DELETE' ? 'removed' : 'changed';
@@ -147,7 +163,8 @@ function wrote(w: Wrote, lists: { patients: Named; staff: Named; rooms: Named; t
   if (kind === 'staff' && sub === 'link') return `${named(id) || 'A team member'}'s private link renewed`;
   if (kind === 'timeoff' || kind === 'holidays') {
     const of = named(b.entity_id);
-    return `${cap(KIND[kind])}${of ? ` for ${of}` : ''} ${verb}`;
+    const what = of ? ` for ${of}` : typeof b.name === 'string' ? ` ${b.name}` : '';
+    return `${cap(KIND[kind])}${what} ${verb}`;
   }
   if (kind === 'settings') return ({ import: 'A backup restored', 'clear-demo-data': 'Example data cleared', 'reset-demo-data': 'Example data reset', 'setup-reviewed': 'Setup marked as reviewed' } as Record<string, string>)[id] || 'Settings changed';
   if (kind === 'attention') return 'What needs you rules changed';
