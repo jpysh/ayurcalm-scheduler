@@ -8,7 +8,7 @@ import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { useMadeWith, useReception } from "@/lib/centreName";
-import { Area, BottomSheet, Btn, Empty, FullPage, ItemRow, LinkBtn, ListGroup, Loading, QuietLink, Row, Seg, Text, TextRow, Tick, dayText } from "@/components/kit";
+import { Area, BottomSheet, Btn, Empty, Foot, FullPage, ItemRow, LinkBtn, ListGroup, Loading, QuietLink, Row, Seg, Text, TextRow, Tick, dayText } from "@/components/kit";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 
 type Check = { text: string; required: boolean; done: boolean };
@@ -40,6 +40,22 @@ export default function LinkView() {
   const [leaving, setLeaving] = useState<{ stay_id: string; name: string; to: string; saved: boolean; final: boolean }[]>([]);
   const [discharge, setDischarge] = useState<DischargeView | null>(null);
   const isDoctor = day?.who.kind === "doctor";
+  // The morning round (#423): who is due a review today, with the last note; the plan written here is what the admin books from.
+  type RoundRow = { patient_id: string; name: string; day: number; days: number; booked: { start_time: string; doctor: string | null } | null; last: { date: string; note: string } | null; plan: string | null };
+  const [round, setRound] = useState<RoundRow[]>([]);
+  const [seeing, setSeeing] = useState<RoundRow | null>(null);
+  const [plan, setPlan] = useState("");
+  const [busy, setBusy] = useState(false);
+  const loadRound = useCallback(() => { fetch(`${API_BASE}/public/link/${token}/round`).then((r) => r.json()).then(setRound).catch(() => setRound([])); }, [token]);
+  useEffect(() => { if (isDoctor) loadRound(); }, [isDoctor, loadRound]);
+  const savePlan = async () => {
+    setBusy(true);
+    const res = await fetch(`${API_BASE}/public/link/${token}/round/${seeing!.patient_id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan }) }).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) { toast.error("Not saved. Check the connection and try again."); return; }
+    toast.success("Plan saved. The centre books from it.");
+    setSeeing(null); loadRound();
+  };
   useEffect(() => {
     if (isDoctor) fetch(`${API_BASE}/public/link/${token}/discharges`).then((r) => r.json()).then((l: typeof leaving) => setLeaving([...l].sort((a, b) => Number(a.final) - Number(b.final) || a.to.localeCompare(b.to)))).catch(() => setLeaving([]));
   }, [isDoctor, token, discharge]);
@@ -85,6 +101,18 @@ export default function LinkView() {
         <div className="text-center"><div className="font-semibold">{label}</div>{day.date === day.today ? <div className="text-sm font-semibold text-primary">Today</div> : <Btn kind="quiet" inline className="min-h-0 py-1 text-sm" onClick={() => setDate(day.today)}>Back to today</Btn>}</div>
         <Btn inline aria-label="Day after" onClick={() => setDate(shift(day.date, 1))}>›</Btn>
       </div>
+
+      {isDoctor && day.date === day.today ? (
+        <section className="mt-3" aria-label="Round">
+          <ListGroup title="Round" count={round.length}>
+            {round.length ? round.map((r) => (
+              <Row key={r.patient_id} title={r.name} onClick={() => { setSeeing(r); setPlan(r.plan || ""); }}
+                facts={`Day ${r.day} of ${r.days} · ${r.booked ? `${r.booked.start_time}${r.booked.doctor && r.booked.doctor !== day.who.name ? ` with ${r.booked.doctor}` : ""}` : "review due, not booked"}`}
+                trailing={r.plan ? "Plan ›" : "›"} />
+            )) : <Empty text="No reviews due today." />}
+          </ListGroup>
+        </section>
+      ) : null}
 
       <div className="mt-3">
         {day.items.length === 0 ? <ListGroup><Empty text={day.off ? `Day off${/day off/i.test(day.off) ? "" : ` · ${day.off}`}.` : "Nothing booked."} /></ListGroup> : <ListGroup>{day.items.map((it) => {
@@ -137,6 +165,14 @@ export default function LinkView() {
           </ListGroup>
         </section>
       ) : null}
+
+      <BottomSheet open={!!seeing} onOpenChange={(o) => { if (!o) setSeeing(null); }} title={seeing ? `Review · ${seeing.name}` : "Review"}
+        note={seeing ? `Day ${seeing.day} of ${seeing.days}` : undefined} foot={<Foot label="Save the plan" busy={busy} save={savePlan} />}>
+        {seeing ? (<>
+          <ListGroup><TextRow label={seeing.last ? `Last note · ${dayText(seeing.last.date)}` : "Last note"} faint={!seeing.last}>{seeing.last?.note || "No note yet: a first review."}</TextRow></ListGroup>
+          <Area label="Plan for the coming week" note="The centre books the week from this." rows={5} value={plan} onChange={(e) => setPlan(e.target.value)} />
+        </>) : null}
+      </BottomSheet>
 
       <BottomSheet open={!!discharge} onOpenChange={(o) => { if (!o) setDischarge(null); }} title={`Discharge summary · ${discharge?.name ?? ""}`}>
         {discharge ? <DischargeForm view={discharge} admin={false} onSave={saveDischarge} onPdf={() => window.open(`${API_BASE}/public/link/${token}/discharges/${discharge.stay_id}/pdf`, "_blank")} /> : null}

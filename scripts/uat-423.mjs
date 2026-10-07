@@ -1,0 +1,31 @@
+// node scripts/uat-423.mjs — #423: the Round on the doctor's link, at 375x812, against the branch.
+// Before is not shot: issuing a link on main (:8201) would write to it. Main's doctor link has no Round.
+import { chromium } from '@playwright/test';
+import { mkdirSync, writeFileSync } from 'node:fs';
+const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';
+const OUT = 'docs/design/uat/2026-10-07-doctor-round';
+mkdirSync(OUT, { recursive: true });
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const api = async (m, path, body) => (await fetch(`${APP}/api${path}`, { method: m, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })).json();
+const doctor = (await api('GET', '/staff')).find((s) => s.role === 'doctor');
+const link = (await api('POST', `/staff/${doctor.id}/link`, {})).token;
+const b = await chromium.launch();
+const p = await (await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true })).newPage();
+const rows = [];
+const shot = async (id, step, ok, read) => { await p.screenshot({ path: `${OUT}/${id}.png` }); rows.push(`| ${id} | ${step} | ${ok ? 'pass' : 'FAIL'} | ${read} | ![${id}](${id}.png) |`); console.log(id, ok ? 'pass' : 'FAIL', read); };
+await p.goto(`${APP}/l/${link}`); await p.waitForTimeout(2500);
+const section = p.getByRole('region', { name: 'Round' });
+const text = (await section.innerText().catch(() => '')).split('\n');
+await shot('01', `${doctor.name}'s link opens with the Round: who is due a review today, and when`, text.length > 2, text.slice(0, 5).join(' · '));
+const name = text[2] || text[1];
+await section.getByRole('button').first().click(); await p.waitForTimeout(1200);
+const sheet = p.getByRole('dialog').last();
+const st = (await sheet.innerText()).split('\n');
+await shot('02', 'Tapping a patient shows the last note and a plan box', st.some((l) => /Last note/i.test(l)), st.slice(0, 6).join(' · '));
+const plan = 'Abhyanga daily; Shirodhara on alternate days; review in a week';
+await sheet.getByLabel('Plan for the coming week').fill(plan);
+await sheet.getByRole('button', { name: 'Save the plan' }).click(); await p.waitForTimeout(1500);
+const who = (await api('GET', '/patients')).find((x) => x.name === name);
+await shot('03', 'Save keeps the plan as the patient\'s, which the card and Plan next week show', who?.doctor_plan === plan, `${name}: ${who?.doctor_plan}`);
+writeFileSync(`${OUT}/README.md`, `# #423 UAT, 7 Oct (lite seed)\n\nBefore (main): the doctor's link lists only their booked consultations and the discharge summaries; nothing says who is due a review. Not shot, to keep :8201 read only.\n\n| # | Step | Result | Read | Shot |\n|---|---|---|---|---|\n${rows.join('\n')}\n`);
+await b.close();

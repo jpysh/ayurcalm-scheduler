@@ -175,3 +175,49 @@ linkRouter.get('/:token/discharges/:stayId/pdf', async (req: Request, res: Respo
   res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(out.filename)}"`);
   res.send(out.pdf);
 });
+
+// The doctor's round (#423): patients in house today whose review is due — a
+// consultation booked today, or none in the last seven days and none ahead —
+// each with the last note. The plan the doctor writes here is the patient's
+// plan the admin books from (Plan next week shows it as the doctor's plan).
+linkRouter.get('/:token/round', async (req: Request, res: Response) => {
+  if (!(await doctorOf(req, res))) return;
+  const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  const todayISO = centreClock(settings?.timezone || 'Asia/Kolkata').date;
+  const today = new Date(`${todayISO}T00:00:00.000Z`);
+  const stays = await prisma.patientStay.findMany({ where: { start_date: { lte: today }, end_date: { gt: today } }, include: { Patient: true } });
+  const consults = await prisma.appointment.findMany({
+    where: { patient_id: { in: stays.map((s) => s.patient_id) }, ...HAPPENING, Therapy: { is_consultation: true } },
+    orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }], include: { Staff: { select: { name: true } } },
+  });
+  const weekAgo = new Date(today.getTime() - 7 * DAY_MS);
+  const round = stays.flatMap((s) => {
+    const mineAll = consults.filter((c) => c.patient_id === s.patient_id);
+    const booked = mineAll.find((c) => c.scheduled_date.getTime() === today.getTime());
+    const before = mineAll.filter((c) => c.scheduled_date < today);
+    const last = before[before.length - 1];
+    const ahead = mineAll.some((c) => c.scheduled_date > today);
+    if (!booked && (ahead || (last && last.scheduled_date > weekAgo))) return [];
+    const noted = [...before].reverse().find((c) => c.notes?.trim());
+    return [{
+      patient_id: s.patient_id, name: s.Patient.name,
+      day: Math.round((today.getTime() - s.start_date.getTime()) / DAY_MS) + 1,
+      days: Math.round((s.end_date.getTime() - s.start_date.getTime()) / DAY_MS) + 1,
+      booked: booked ? { start_time: booked.start_time, doctor: booked.Staff?.name ?? null } : null,
+      last: noted ? { date: noted.scheduled_date.toISOString().slice(0, 10), note: noted.notes } : null,
+      plan: s.Patient.doctor_plan,
+    }];
+  });
+  res.json(round.sort((a, b) => (a.booked?.start_time ?? '99').localeCompare(b.booked?.start_time ?? '99') || a.name.localeCompare(b.name)));
+});
+linkRouter.put('/:token/round/:patientId', async (req: Request, res: Response) => {
+  if (!(await doctorOf(req, res))) return;
+  const { plan } = z.object({ plan: z.string().trim().max(4000) }).strict().parse(req.body);
+  const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  const today = new Date(`${centreClock(settings?.timezone || 'Asia/Kolkata').date}T00:00:00.000Z`);
+  // Only a patient in house: the link is not a way into every record.
+  const stay = await prisma.patientStay.findFirst({ where: { patient_id: String(req.params.patientId), start_date: { lte: today }, end_date: { gte: today } } });
+  if (!stay) { res.status(404).json({ error: 'Not in house today.' }); return; }
+  const p = await prisma.patient.update({ where: { id: stay.patient_id }, data: { doctor_plan: plan || null } });
+  res.json({ patient_id: p.id, plan: p.doctor_plan });
+});
