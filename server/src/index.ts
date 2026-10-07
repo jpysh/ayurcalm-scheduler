@@ -160,25 +160,25 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const staticDir = path.resolve(__dirname, '../../dist');
 if (fs.existsSync(staticDir)) {
-  // Hashed build files never change under a name (#416): compress each once, keep it, and let the phone cache it for a year.
-  // ponytail: in-memory per file, fine for one build's few assets; precompress at build if it grows.
-  const packed = new Map<string, { br: Buffer; gz: Buffer }>();
+  // Hashed build files never change under a name (#416): each is compressed once at start, and the phone caches it for a year.
+  // The route reads only this map, never the disk.
   const types: Record<string, string> = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json' };
+  const assetsDir = path.join(staticDir, 'assets');
+  const packed = new Map<string, { type: string; raw: Buffer; br: Buffer; gz: Buffer }>();
+  for (const name of fs.existsSync(assetsDir) ? fs.readdirSync(assetsDir) : []) {
+    const type = types[path.extname(name)];
+    if (!type) continue;
+    const raw = fs.readFileSync(path.join(assetsDir, name));
+    packed.set(`/assets/${name}`, { type, raw, br: zlib.brotliCompressSync(raw), gz: zlib.gzipSync(raw, { level: 9 }) });
+  }
   expressApp.get('/assets/{*path}', (req: Request, res: Response, next) => {
-    const file = path.join(staticDir, req.path);
-    const type = types[path.extname(file)];
-    if (!type || !file.startsWith(path.join(staticDir, 'assets')) || !fs.existsSync(file)) return next();
-    let p = packed.get(file);
-    if (!p) {
-      const raw = fs.readFileSync(file);
-      p = { br: zlib.brotliCompressSync(raw), gz: zlib.gzipSync(raw, { level: 9 }) };
-      packed.set(file, p);
-    }
+    const p = packed.get(req.path);
+    if (!p) return next();
     const accepts = String(req.headers['accept-encoding'] || '');
     const enc = /\bbr\b/.test(accepts) ? 'br' : /\bgzip\b/.test(accepts) ? 'gzip' : null;
-    res.set({ 'Content-Type': type, 'Cache-Control': 'public, max-age=31536000, immutable', Vary: 'Accept-Encoding' });
-    if (!enc) return res.sendFile(file);
-    res.set('Content-Encoding', enc).send(enc === 'br' ? p.br : p.gz);
+    res.set({ 'Content-Type': p.type, 'Cache-Control': 'public, max-age=31536000, immutable', Vary: 'Accept-Encoding' });
+    if (enc) res.set('Content-Encoding', enc);
+    res.send(enc === 'br' ? p.br : enc === 'gzip' ? p.gz : p.raw);
   });
   expressApp.use(express.static(staticDir));
   expressApp.get('/api/{*path}', (_req: Request, res: Response) => {
