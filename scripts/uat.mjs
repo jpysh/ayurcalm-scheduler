@@ -44,23 +44,14 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #487: a follow-up date on the discharge summary is raised in What needs you and sent from the card.
-await api('POST', '/settings/clear-demo-data');
-const pt = await api('POST', '/patients', { name: 'Priya Sharma', gender: 'female', phone: '9876543210' });
-const stay = await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(-10), end_date: plus(-3) });
-await api('PUT', `/patients/${pt.id}/stays/${stay.id}/discharge`, { follow_up_date: plus(0), follow_up: 'Call after a week.' });
-await step('What needs you lists the follow-up due today', '/admin/schedule', async () => {
-  await p.waitForTimeout(1500); await menu(); await go(dlg().getByRole('button', { name: /need you/ })); await p.waitForTimeout(1200);
+// #488: Settings, Printed sheets offers Records for a month, which opens a PDF of that month's stays.
+await step('Printed sheets starts with Records for a month', '/admin/settings', async () => {
+  await go(p.getByText('Printed sheets').first()); await p.waitForTimeout(800);
   const t = await text(dlg());
-  return { ok: /Follow-up due/.test(t), note: t.split('\n').filter((x) => /Priya|Follow-up/.test(x)).join(' · ') };
-});
-await step('The card opens Follow-up with WhatsApp and Mark done', '/admin/schedule', async () => {
-  await p.waitForTimeout(1500); await menu(); await go(dlg().getByRole('button', { name: /need you/ })); await p.waitForTimeout(1200);
-  await go(dlg().getByText(/Follow-up due/).first()); await p.waitForTimeout(1500);
-  await go(dlg().getByText('Follow-up', { exact: true }).first()); await p.waitForTimeout(800);
-  const t = await text(dlg());
-  const href = await dlg().getByRole('link', { name: /WhatsApp/ }).getAttribute('href').catch(() => '');
-  return { ok: /Send on WhatsApp to Priya/.test(t) && /Mark follow-up done/.test(t) && /wa\.me\/919876543210/.test(href), note: `${t.split('\n').slice(0, 3).join(' · ')} · ${href?.slice(0, 40)}` };
+  const opts = await dlg().getByLabel('Records for a month').locator('option').allInnerTexts();
+  const pages = []; p.context().on('page', (pg) => pages.push(pg));
+  await dlg().getByLabel('Records for a month').selectOption({ index: 1 }); await p.waitForTimeout(3000);
+  return { ok: /Records for a month/.test(t) && opts.length === 13 && pages.length === 1, note: `${opts.slice(1, 3).join(', ')}… · ${pages.length} PDF tab opened` };
 });
 await b.close();
 

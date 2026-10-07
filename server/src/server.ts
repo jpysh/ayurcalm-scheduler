@@ -5,6 +5,7 @@ import { autoSchedule } from './scheduler.js';
 import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import { generateTherapistRotaPdf } from './pdf/therapistRotaPdf.js';
 import { generateKitchenSheetPdf } from './pdf/kitchenSheetPdf.js';
+import { generateRecordsPdf } from './pdf/recordsPdf.js';
 import { renderDischarge } from './pdf/dischargePdf.js';
 import { dischargeOf, saveDischarge } from './discharge.js';
 import { staffWeek } from './staffWeek.js';
@@ -1292,6 +1293,15 @@ app.get('/daily-schedule-pdf', async (req: Request, res: Response) => {
     const message = e instanceof Error ? e.message : 'Failed to generate PDF';
     res.status(500).json({ error: message });
   }
+});
+
+// Records for a month (#488): one PDF an inspector can read.
+app.get('/records-pdf', async (req: Request, res: Response) => {
+  const { month } = z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }).parse(req.query);
+  const pdf = await generateRecordsPdf(month, prisma);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="records-${month}.pdf"`);
+  res.send(pdf);
 });
 
 // Printed sheets (#145): the copies kept above, newest day first.

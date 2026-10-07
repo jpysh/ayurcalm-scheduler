@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { PRODUCT, PLANS, SALES_WHATSAPP } from "../../server/src/product";
 import { API_BASE } from "@/lib/apiBase";
 import { confirmSheet } from "@/components/ConfirmSheet";
-import { BottomSheet, Empty, ListGroup, Row, SheetFoot, Switch, Tick, dayText, noteText, say, wide, Btn } from "@/components/kit";
+import { BottomSheet, ChangeLine, Empty, LineSelect, ListGroup, Row, SheetFoot, Switch, Tick, dayText, noteText, say, wide, Btn } from "@/components/kit";
 
 export type Backups = { count: number; latest: { name: string; size: number; at: string } | null };
 export type Trial = { ends_at: string | null; read_only: boolean; plan: string | null; paid_until: string | null };
@@ -101,8 +101,19 @@ export function PrintedSheet({ open, onOpenChange }: { open: boolean; onOpenChan
     if (tab) tab.location.href = url; else window.location.href = url;
   };
   const days = [...new Set((printed ?? []).map((p) => p.date))];
+  // Records for a month (#488): the last twelve, this month first.
+  const now = new Date();
+  const months = Array.from({ length: 12 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); return { id: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, name: d.toLocaleDateString("en-GB", { month: "long", year: "numeric" }) }; });
+  const records = async (month: string) => {
+    const tab = window.open("", "_blank");
+    const res = await fetch(`${API_BASE}/records-pdf?month=${month}`);
+    if (!res.ok) { tab?.close(); toast.error("The records could not be made"); return; }
+    const url = URL.createObjectURL(await res.blob());
+    if (tab) tab.location.href = url; else window.location.href = url;
+  };
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} title="Printed sheets" note="The last copy printed for each day, as it was on the notice board. Printing a day again replaces its copy; copies older than 90 days go.">
+      <div className="mb-3"><ChangeLine label="Records for a month" value="Choose a month" select={<LineSelect label="Records for a month" value="" onChange={(m) => { if (m) records(m); }} free={[{ id: "", name: "Choose a month" }, ...months]} />} /></div>
       {printed === null ? null : days.length === 0 ? <Empty text="Nothing printed yet. Print the day from the day screen." /> : (
         <ListGroup>
           {days.map((date) => (
