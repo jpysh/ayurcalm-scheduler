@@ -97,6 +97,10 @@ async function main() {
     assert.ok(opts.warnings.some((w: { reason: string }) => w.reason === 'ONCE_PER_COURSE'), 'the booking sheet should say so before Book');
     const anyway = await call('POST', '/appointments/one', { ...second, confirm: true });
     assert.equal((await raw('DELETE', `/appointments/${anyway.id}`)).status, 204);
+    // Snehapana after the stay's Virechana is out of clinical order: asked, never refused (#419).
+    const late = await raw('POST', '/appointments/one', { ...second, therapy_id: sneha.id });
+    assert.equal(late.status, 409, 'a Snehapana after the Virechana should be asked about');
+    assert.match((await late.json()).message, /Snehapana prepares for a purification, and .*'s .*Virechana is on Sun 5 May\./);
 
     console.log('Plan next week: this week repeats a week on at its times, a swap changes one line, and Book all books every line and the review or nothing; a once-a-course therapy and the Snehapana before it are left out, and a second one is asked about.');
   } finally {
