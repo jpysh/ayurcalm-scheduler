@@ -30,7 +30,9 @@ export const dischargeSchema = z.object({
   meds_stay: z.array(medSchema).max(30).default([]),
   meds_home: z.array(medSchema).max(30).default([]),
   meds_home_for: line,
-  instructions: para, follow_up: para, urgent_when: para, urgent_how: para,
+  instructions: para, follow_up: para,
+  /** The day the doctor wants to hear from them (#487); What needs you raises it then. */
+  follow_up_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).default(''), urgent_when: para, urgent_how: para,
   doctor_id: z.string().uuid().nullable().default(null),
   signed_at: line,
 });

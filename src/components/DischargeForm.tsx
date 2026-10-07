@@ -4,7 +4,7 @@
  * the rest. The admin can mark it final, which closes it to the doctor's link.
  */
 import { useState } from "react";
-import { Area, Dropdown, Text, noteText, Btn } from "@/components/kit";
+import { Area, ChangeLine, Dropdown, LineDate, Text, dayText, noteText, Btn } from "@/components/kit";
 
 export type Med = { name: string; dose: string; timing: string; from: string; days: string };
 export type DischargeDraft = { meds_stay: Med[]; meds_home: Med[]; no: string; final: boolean; [k: string]: unknown };
@@ -101,7 +101,12 @@ export default function DischargeForm({ view, admin, onSave, onPdf, doctors }: {
       {meds("meds_stay", "Medication during the stay")}
       {meds("meds_home", "Medicines to take home")}
       {one("meds_home_for", "Take-home medicines for", "1 month")}
-      <Section title="After they leave">{AFTER.map(([k, t]) => <Area key={k} label={`${t} (optional)`} rows={2} value={str(k)} disabled={locked} onChange={(e) => set(k, e.target.value)} />)}</Section>
+      <Section title="After they leave">
+        {AFTER.map(([k, t]) => <Area key={k} label={`${t} (optional)`} rows={2} value={str(k)} disabled={locked} onChange={(e) => set(k, e.target.value)} />)}
+        {/* The day What needs you raises the follow-up (#487). */}
+        <ChangeLine faint={!str("follow_up_date")} label="Follow-up on (optional)" value={str("follow_up_date") ? dayText(str("follow_up_date")) : "Not set"}
+          select={locked ? undefined : <LineDate label="Follow-up on" value={str("follow_up_date")} min={view.to} onChange={(v) => set("follow_up_date", v)} />} />
+      </Section>
       <Section title="Signed">
         {doctors?.length ? (
           <Dropdown label="Signed by" value={str("doctor_id")} disabled={locked} onChange={(e) => set("doctor_id", e.target.value || null)}>

@@ -1,0 +1,25 @@
+name: Release check
+
+# The full browser set, on demand, before a release (#319). Unlike the nightly
+# run it fails red: a release waits until every browser test passes.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: RATE_LIMIT_WRITES=1000 RATE_LIMIT_CALLS=10000 docker compose up -d --build --wait
+      # --wait returns when the container is healthy; the first seed can still be running.
+      - run: until curl -sf http://localhost:8080/api/health >/dev/null; do sleep 3; done
+      - run: npx playwright test --reporter=line
