@@ -44,15 +44,23 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #479: the Log says when a leave is, and what a settings change changed.
+// #487: a follow-up date on the discharge summary is raised in What needs you and sent from the card.
 await api('POST', '/settings/clear-demo-data');
-const asha = await api('POST', '/staff', { name: 'Asha Menon', gender: 'female', role: 'therapist' });
-await api('POST', '/timeoff', { entity_type: 'staff', entity_id: asha.id, start_date: plus(1), end_date: plus(2), description: 'UAT', plan: false });
-const st = await api('GET', '/settings');
-await api('PUT', '/settings', { ...Object.fromEntries(Object.entries(st).filter(([, v]) => v !== null)), max_treatments_per_day: 5 });
-await step('The Log names the leave days and the setting changed', '/admin/log', async () => {
-  const t = await text(p.locator('body'));
-  return { ok: /Leave for Asha Menon added, \w{3} \d+ \w{3} to/.test(t) && /Settings changed: max treatments per day/.test(t), note: t.split('\n').filter((x) => /Leave for|Settings/.test(x)).join(' · ') };
+const pt = await api('POST', '/patients', { name: 'Priya Sharma', gender: 'female', phone: '9876543210' });
+const stay = await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(-10), end_date: plus(-3) });
+await api('PUT', `/patients/${pt.id}/stays/${stay.id}/discharge`, { follow_up_date: plus(0), follow_up: 'Call after a week.' });
+await step('What needs you lists the follow-up due today', '/admin/schedule', async () => {
+  await p.waitForTimeout(1500); await menu(); await go(dlg().getByRole('button', { name: /need you/ })); await p.waitForTimeout(1200);
+  const t = await text(dlg());
+  return { ok: /Follow-up due/.test(t), note: t.split('\n').filter((x) => /Priya|Follow-up/.test(x)).join(' · ') };
+});
+await step('The card opens Follow-up with WhatsApp and Mark done', '/admin/schedule', async () => {
+  await p.waitForTimeout(1500); await menu(); await go(dlg().getByRole('button', { name: /need you/ })); await p.waitForTimeout(1200);
+  await go(dlg().getByText(/Follow-up due/).first()); await p.waitForTimeout(1500);
+  await go(dlg().getByText('Follow-up', { exact: true }).first()); await p.waitForTimeout(800);
+  const t = await text(dlg());
+  const href = await dlg().getByRole('link', { name: /WhatsApp/ }).getAttribute('href').catch(() => '');
+  return { ok: /Send on WhatsApp to Priya/.test(t) && /Mark follow-up done/.test(t) && /wa\.me\/919876543210/.test(href), note: `${t.split('\n').slice(0, 3).join(' · ')} · ${href?.slice(0, 40)}` };
 });
 await b.close();
 
