@@ -36,6 +36,8 @@ expressApp.use((req: Request, res: Response, next: NextFunction) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Permissions-Policy', 'interest-cohort=()');
+  // Only the app's own code runs (#417). Styles allow inline because React style props and toasts use them.
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
   // The demo must never be mistaken for a centre's own install in search results (#84).
   if (DEMO) res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   next();
@@ -122,6 +124,24 @@ expressApp.use('/mcp', globalLimiter, mcpRouter);
 // Login and health are the only unauthenticated API routes. Everything else
 // requires a valid session token, reads included — appointment and patient
 // data is not public.
+// Ten wrong passwords per address in 15 minutes, then a wait (#417). Only failures count, so the test suite's many sign-ins pass.
+const failedSignIns = new Map<string, { count: number; resetAt: number }>();
+expressApp.post('/api/auth/login', (req: Request, res: Response, next: NextFunction) => {
+  const ip = String((process.env.BEHIND_CLOUDFLARE === 'true' ? req.headers['cf-connecting-ip'] : '') || req.ip || '');
+  const now = Date.now();
+  const entry = failedSignIns.get(ip);
+  if (entry && entry.resetAt > now && entry.count >= 10) {
+    res.status(429).json({ error: 'Too many wrong passwords. Try again in 15 minutes.' });
+    return;
+  }
+  res.on('finish', () => {
+    if (res.statusCode !== 401) return;
+    const e = failedSignIns.get(ip);
+    if (!e || e.resetAt <= Date.now()) failedSignIns.set(ip, { count: 1, resetAt: Date.now() + 15 * 60 * 1000 });
+    else e.count += 1;
+  });
+  next();
+});
 expressApp.use('/api/auth', authRouter);
 // Private links (#219) carry their own key in the path, like the public settings.
 expressApp.use('/api/public/link', linkRouter);
