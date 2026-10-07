@@ -92,7 +92,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
     week,
     // What the FRRO site asks for, in its order, so each can be copied across (#415).
     form_c: stay && isForeign(patient.country) ? {
-      due: formCDue(stay.start_date), filed: stay.form_c_filed?.toISOString() ?? null,
+      due: formCDue(stay.start_date), filed: stay.form_c_filed ? centreClock(settings?.timezone || 'Asia/Kolkata', stay.form_c_filed).date : null,
       fields: [
         ['Name', patient.name], ['Gender', patient.gender[0].toUpperCase() + patient.gender.slice(1)], ['Date of birth', patient.date_of_birth?.toISOString().slice(0, 10) ?? ''],
         ['Nationality', patient.country ?? ''], ['Passport', patient.id_number ?? ''], ['Visa number', patient.visa_number ?? ''],
