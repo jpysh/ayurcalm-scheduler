@@ -79,12 +79,12 @@ async function main() {
     await call('POST', '/rooms', { name: `${TAG} Room C` });
     assert.equal((await log())[0].text, `Room ${TAG} Room C added`);
     await call('POST', '/timeoff', { entity_type: 'staff', entity_id: asha.id, date: DAY, description: 'Sick', plan: false });
-    assert.equal((await log())[0].text, `Leave for ${asha.name} added`);
+    assert.match((await log())[0].text, new RegExp(`^Leave for ${asha.name} added, \\w{3} \\d+ \\w{3}$`), 'a leave line does not say when (#479)');
 
     // A removal names what went, read before it was gone (#435).
     const leave = await prisma.timeOff.findFirstOrThrow({ where: { entity_id: asha.id } });
     await call('DELETE', `/timeoff/${leave.id}`);
-    assert.equal((await log())[0].text, `Leave for ${asha.name} removed`);
+    assert.match((await log())[0].text, new RegExp(`^Leave for ${asha.name} removed, \\w{3} \\d+ \\w{3}$`));
     const roomC = await prisma.therapyRoom.findFirstOrThrow({ where: { name: `${TAG} Room C` } });
     await call('DELETE', `/rooms/${roomC.id}`);
     assert.equal((await log())[0].text, `Room ${TAG} Room C removed`);
