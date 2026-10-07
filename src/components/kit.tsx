@@ -12,7 +12,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 // The boundary is dark enough to read as a box to type in; focus is a soft halo on the box itself.
 export const field = `h-11 w-full rounded-xl border border-[hsl(var(--input)/0.45)] bg-background px-3.5 text-base tabular-nums transition-shadow placeholder:text-muted-foreground focus:border-primary focus:shadow-[0_0_0_3px_hsl(var(--primary)/0.18)] focus-visible:outline-none disabled:opacity-60`;
 const chevron = <svg aria-hidden viewBox="0 0 16 16" className="pointer-events-none h-4 w-4 flex-none text-muted-foreground"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" /></svg>;
-export const lbl = "mt-3 mb-1 block text-sm font-semibold text-muted-foreground";
+const lbl = "mt-3 mb-1 block text-sm font-semibold text-muted-foreground";
 export const noteText = "text-sm text-muted-foreground";
 export const chip = "min-h-11 rounded-full border border-[hsl(var(--input)/0.45)] px-3.5 text-sm font-semibold aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground";
 export const wide = "min-h-11 w-full rounded-full font-semibold";
@@ -23,7 +23,7 @@ export const say = (s: string) => s.replace(/_/g, " ");
 export const SheetNote = ({ children }: { children: ReactNode }) => <p className={noteText}>{children}</p>;
 
 /** A label over one control. */
-export const Field = ({ label, note, children }: { label: string; note?: ReactNode; children: ReactNode }) => (
+const Field = ({ label, note, children }: { label: string; note?: ReactNode; children: ReactNode }) => (
   <label className="block min-w-0">
     <span className={lbl}>{label}</span>
     {note ? <span className={`-mt-1 mb-2 block font-normal ${noteText}`}>{note}</span> : null}

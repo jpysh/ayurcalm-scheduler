@@ -106,6 +106,12 @@ async function main() {
         await prisma.user.deleteMany({ where: { email } });
       }
     }],
+    ['there is no route that deletes every treatment at once (#410)', async () => {
+      const before = await prisma.appointment.count();
+      const res = await fetch(`${API_BASE}/appointments`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      const after = await prisma.appointment.count();
+      if (res.status !== 404 || after !== before) throw new Error(`answered ${res.status}; ${before - after} treatments deleted`);
+    }],
   ];
 
   let failed = 0;
