@@ -41,17 +41,22 @@ async function main() {
     const gendered = await prisma.therapy.create({ data: { name: 'Parity Gendered', required_amenities: ['table'], duration_minutes: 60, requires_gender_match: true } });
     const needsDroni = await prisma.therapy.create({ data: { name: 'Parity Droni', required_amenities: ['droni'], duration_minutes: 60, requires_gender_match: false } });
     const pair = await prisma.therapy.create({ data: { name: 'Parity Pair', required_amenities: ['table'], duration_minutes: 60, staff_required: 2 } });
-    [plain, gendered, needsDroni, pair].forEach((t) => made.push({ table: 'therapy', id: t.id }));
+    // Only Parity Away and Parity Wednesday give it, and 16 Jan 2030 is a Wednesday (#409).
+    const onlyTwo = await prisma.therapy.create({ data: { name: 'Parity Only Two', required_amenities: ['table'], duration_minutes: 60, requires_gender_match: false } });
+    [plain, gendered, needsDroni, pair, onlyTwo].forEach((t) => made.push({ table: 'therapy', id: t.id }));
 
     const roomA = await prisma.therapyRoom.create({ data: { name: 'Parity Room A', amenities: ['table', 'droni'], is_active: true, weekly_schedule: allDay } });
     const roomB = await prisma.therapyRoom.create({ data: { name: 'Parity Room B', amenities: ['table'], is_active: true, weekly_schedule: allDay } });
-    [roomA, roomB].forEach((r) => made.push({ table: 'therapyRoom', id: r.id }));
+    const roomC = await prisma.therapyRoom.create({ data: { name: 'Parity Room C', amenities: ['table'], is_active: true, weekly_schedule: allDay } });
+    [roomA, roomB, roomC].forEach((r) => made.push({ table: 'therapyRoom', id: r.id }));
 
-    const away = await prisma.staff.create({ data: { name: 'Parity Away', gender: 'female', is_active: true, specializations: [plain.id, gendered.id, needsDroni.id], weekly_schedule: allDay } });
+    const away = await prisma.staff.create({ data: { name: 'Parity Away', gender: 'female', is_active: true, specializations: [plain.id, gendered.id, needsDroni.id, onlyTwo.id], weekly_schedule: allDay } });
     const here = await prisma.staff.create({ data: { name: 'Parity Here', gender: 'female', is_active: true, specializations: [plain.id, gendered.id, needsDroni.id], weekly_schedule: allDay } });
     const man = await prisma.staff.create({ data: { name: 'Parity Man', gender: 'male', is_active: true, specializations: [gendered.id], weekly_schedule: allDay } });
     const helper = await prisma.staff.create({ data: { name: 'Parity Helper', gender: 'female', is_active: true, specializations: [plain.id, pair.id], weekly_schedule: allDay } });
-    [away, here, man, helper].forEach((s) => made.push({ table: 'staff', id: s.id }));
+    const { wednesday: _w, ...notWednesday } = allDay;
+    const wedOff = await prisma.staff.create({ data: { name: 'Parity Wednesday', gender: 'female', is_active: true, specializations: [onlyTwo.id], weekly_schedule: notWednesday } });
+    [away, here, man, helper, wedOff].forEach((s) => made.push({ table: 'staff', id: s.id }));
 
     const one = await prisma.patient.create({ data: { name: 'Parity One', gender: 'female' } });
     const two = await prisma.patient.create({ data: { name: 'Parity Two', gender: 'female' } });
@@ -87,6 +92,8 @@ async function main() {
     const helperElsewhere = await book(three.id, plain.id, helper.id, roomB.id, '13:00');
     // A pair treatment with one pair of hands.
     const shortHanded = await book(five.id, pair.id, here.id, roomA.id, '10:00');
+    // Stranded by the leave, and the only other person trained has the weekday off.
+    const onlyAwayCanGive = await book(four.id, onlyTwo.id, away.id, roomC.id, '11:00');
 
     const leave = await prisma.timeOff.create({
       data: { entity_type: 'staff', entity_id: away.id, date: day, description: 'Parity leave', weekdays: [] },
@@ -134,6 +141,10 @@ async function main() {
     assert.equal(blockingById.get(helperElsewhere.id)?.kind, 'STAFF_BUSY', 'a co-therapist was bookable elsewhere in the same slot');
     assert.equal(blockingById.get(pairTreatment.id)?.kind, 'STAFF_BUSY', 'the pair treatment does not see its co-therapist booked elsewhere');
     assert.equal(blockingById.get(shortHanded.id)?.kind, 'STAFF_SHORT', 'a pair treatment with one therapist was not refused');
+
+    // The planner reads weekly hours as the guard does: no fix hands it to someone on their day off (#409).
+    const strandedFix = check.problems.find((p) => p.appointment_id === onlyAwayCanGive.id)?.fix;
+    assert.ok(!strandedFix || (strandedFix.staff_id !== wedOff.id && !strandedFix.co_staff_ids?.includes(wedOff.id)), 'the planner offered a therapist on her weekly day off');
 
     // A fix that moves the room names the room it goes to (#187); it used to name only the therapist.
     let roomMoves = 0;

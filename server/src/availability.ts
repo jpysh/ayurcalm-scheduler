@@ -176,6 +176,16 @@ export const offOnDay = (rows: OffRow[], type: 'staff' | 'room', id: string, day
     });
 
 /**
+ * Every hour a person is not there on a day: leave, plus the hours outside their weekly
+ * pattern (#409). The guard refuses both, so the planner must avoid both.
+ */
+export const staffAwayOnDay = (rows: OffRow[], person: { id: string; weekly_schedule?: unknown }, day: Date): Busy[] => {
+  const h = hoursOn(person.weekly_schedule, day);
+  const outside = h === null ? [{ s: 0, e: 24 * 60, label: 'day off' }] : h ? [{ s: 0, e: h.s, label: 'not in yet' }, { s: h.e, e: 24 * 60, label: 'gone home' }] : [];
+  return [...offOnDay(rows, 'staff', person.id, day), ...outside];
+};
+
+/**
  * Why the centre is shut on a day, or null (#393): a weekday unticked in Opening
  * hours, or a centre closed day on the Leave screen. The guard, the scheduler and
  * the next-free-day search all ask this, so none offers what another refuses.
