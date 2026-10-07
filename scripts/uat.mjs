@@ -11,7 +11,7 @@ mkdirSync(OUT, { recursive: true });
 const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: process.env.UAT_EMAIL || 'admin@example.com', password: process.env.UAT_PASSWORD || 'demo1234' }) })).json();
 const api = async (m, path, body) => { const r = await fetch(`${APP}/api${path}`, { method: m, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }); return r.json().catch(() => ({})); };
 const b = await chromium.launch();
-const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, ...(process.env.UAT_TZ ? { timezoneId: process.env.UAT_TZ } : {}) });
 await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
 const p = await ctx.newPage();
 const dlg = () => p.getByRole('dialog').last();
@@ -37,7 +37,7 @@ const menu = () => go(p.getByRole('button', { name: 'Menu', exact: true }));
 
 const plusBtn = (name) => p.getByRole('button', { name, exact: true });
 const rowBtn = (name) => p.getByRole('button', { name });
-const ymd = (d) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+const ymd = (d) => d.toLocaleDateString('en-CA', { timeZone: process.env.UAT_TZ || 'Asia/Kolkata' });
 const day0 = new Date();
 const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 // Today's hours are over by the afternoon, so the walk books tomorrow: its chip on the week strip.
