@@ -188,9 +188,10 @@ const AdminDashboard = () => {
         d.setDate(monday.getDate() + i);
         return ymdInTZ(d);
       });
-      const appts: ApiAppointment[][] = await Promise.all(weekDates.map((d) => fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?date=${d}`)));
-      const map: Record<string, ApiAppointment[]> = {};
-      weekDates.forEach((d, i) => { map[d] = appts[i]; });
+      // One call for the week, not seven: each is a round trip on a hill-station signal (#416).
+      const week = await fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?from=${weekDates[0]}&to=${weekDates[6]}`);
+      const map: Record<string, ApiAppointment[]> = Object.fromEntries(weekDates.map((d) => [d, []]));
+      for (const a of week) map[String(a.scheduled_date).slice(0, 10)]?.push(a);
       setAppointmentsByDate(map);
       setLoaded(true);
       try {

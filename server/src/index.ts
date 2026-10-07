@@ -21,6 +21,7 @@ import { logWrites } from './changeLog.js';
 import { ZodError } from 'zod';
 import path from 'path';
 import fs from 'fs';
+import zlib from 'zlib';
 import { fileURLToPath } from 'url';
 
 const port = process.env.PORT ? Number(process.env.PORT) : 4000;
@@ -159,6 +160,26 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const staticDir = path.resolve(__dirname, '../../dist');
 if (fs.existsSync(staticDir)) {
+  // Hashed build files never change under a name (#416): each is compressed once at start, and the phone caches it for a year.
+  // The route reads only this map, never the disk.
+  const types: Record<string, string> = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json' };
+  const assetsDir = path.join(staticDir, 'assets');
+  const packed = new Map<string, { type: string; raw: Buffer; br: Buffer; gz: Buffer }>();
+  for (const name of fs.existsSync(assetsDir) ? fs.readdirSync(assetsDir) : []) {
+    const type = types[path.extname(name)];
+    if (!type) continue;
+    const raw = fs.readFileSync(path.join(assetsDir, name));
+    packed.set(`/assets/${name}`, { type, raw, br: zlib.brotliCompressSync(raw), gz: zlib.gzipSync(raw, { level: 9 }) });
+  }
+  expressApp.get('/assets/{*path}', (req: Request, res: Response, next) => {
+    const p = packed.get(req.path);
+    if (!p) return next();
+    const accepts = String(req.headers['accept-encoding'] || '');
+    const enc = /\bbr\b/.test(accepts) ? 'br' : /\bgzip\b/.test(accepts) ? 'gzip' : null;
+    res.set({ 'Content-Type': p.type, 'Cache-Control': 'public, max-age=31536000, immutable', Vary: 'Accept-Encoding' });
+    if (enc) res.set('Content-Encoding', enc);
+    res.send(enc === 'br' ? p.br : enc === 'gzip' ? p.gz : p.raw);
+  });
   expressApp.use(express.static(staticDir));
   expressApp.get('/api/{*path}', (_req: Request, res: Response) => {
     res.status(404).json({ error: 'Not Found' });
