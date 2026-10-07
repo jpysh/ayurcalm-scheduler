@@ -16,7 +16,7 @@ import { centreClock, eventClashes, outsideHours, type EventRow } from './availa
 import { loadDietsForDay } from './dietResolution.js';
 import { bookingOptions, bookingSuggestions, bookingWho, cardChoices, nextConsultations, notStaying, planNextWeek, therapyFacts, whyNoConsultation, whyNoTime } from './cardChoices.js';
 import { historyOf } from './history.js';
-import { searchTreatments } from './search.js';
+import { searchPatients, searchTreatments } from './search.js';
 import { residentDay } from './residentDay.js';
 import { changeLog } from './changeLog.js';
 import { therapyLibrary } from './therapyLibrary.js';
@@ -1361,7 +1361,12 @@ app.get('/appointments/search', async (req: Request, res: Response) => {
     from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   }).parse(req.query);
-  res.json({ hits: await searchTreatments(query.q, new Date(query.from), new Date(query.to), prisma) });
+  const from = new Date(query.from), to = new Date(query.to);
+  // The screen sends today ± the same number of days, so the middle is the centre's today.
+  const today = new Date((from.getTime() + to.getTime()) / 2);
+  today.setUTCHours(0, 0, 0, 0);
+  const [hits, patients] = await Promise.all([searchTreatments(query.q, from, to, prisma), searchPatients(query.q, today, prisma)]);
+  res.json({ hits, patients });
 });
 
 // The + button's suggestions: who to book next, when, with whom, where (#136).

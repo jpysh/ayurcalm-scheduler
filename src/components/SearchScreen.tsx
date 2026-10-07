@@ -11,6 +11,7 @@ import { Empty, ListGroup, Loading, Row, SectionHead, dayText, Seg, chip, say } 
 
 export type Hit = CardAppt & { date: string; patient_name: string; therapy_name: string; room_name: string | null; staff_names: string[] };
 type Scope = "upcoming" | "past" | "all";
+type PatientHit = { id: string; name: string; when: "in" | "arriving" | "past" | "none"; start: string | null; end: string | null; room: string | null; diet: string | null };
 
 const DAY_MS = 86400000;
 // ponytail: a fixed window either side of today; widen it, or page, if a centre searches further back.
@@ -41,7 +42,7 @@ export function marked(text: string, q: string): ReactNode {
   return out;
 }
 
-export function SearchScreen({ query, setQuery, today, nowMinutes, residents, therapists, onOpen }: {
+export function SearchScreen({ query, setQuery, today, nowMinutes, residents, therapists, onOpen, onOpenPatient }: {
   query: string;
   setQuery: (q: string) => void;
   /** YYYY-MM-DD and minutes past midnight, on the centre's clock. */
@@ -50,18 +51,21 @@ export function SearchScreen({ query, setQuery, today, nowMinutes, residents, th
   residents: string[];
   therapists: string[];
   onOpen: (hit: Hit) => void;
+  /** Opens the patient's card, past guests included (#412). */
+  onOpenPatient?: (id: string) => void;
 }) {
   const [scope, setScope] = useState<Scope>("upcoming");
   const [hits, setHits] = useState<Hit[] | null>(null);
+  const [people, setPeople] = useState<PatientHit[]>([]);
   const q = query.trim();
 
   useEffect(() => {
-    if (!q) { setHits(null); return; }
+    if (!q) { setHits(null); setPeople([]); return; }
     // Typed, not submitted: wait for a pause so each letter is not a request.
     const t = setTimeout(() => {
       fetch(`${API_BASE}/appointments/search?q=${encodeURIComponent(q)}&from=${shift(today, -WINDOW_DAYS)}&to=${shift(today, WINDOW_DAYS)}`)
         .then((r) => (r.ok ? r.json() : { hits: [] }))
-        .then((d) => setHits(Array.isArray(d.hits) ? d.hits : []))
+        .then((d) => { setHits(Array.isArray(d.hits) ? d.hits : []); setPeople(Array.isArray(d.patients) ? d.patients : []); })
         .catch(() => setHits([]));
     }, 250);
     return () => clearTimeout(t);
@@ -89,8 +93,18 @@ export function SearchScreen({ query, setQuery, today, nowMinutes, residents, th
   }
   const heading = (iso: string) => iso === today ? "Today" : iso === shift(today, 1) ? "Tomorrow" : iso === shift(today, -1) ? "Yesterday" : fmt(iso);
 
+  const stayLine = (p: PatientHit) => p.when === "in" ? ["In house", p.room, p.diet].filter(Boolean).join(" · ")
+    : p.when === "arriving" ? `Arrives ${fmt(p.start!)}` : p.when === "past" ? `Stayed until ${fmt(p.end!)}` : "No stay yet";
+
   return (
     <div>
+      {onOpenPatient && people.length ? (
+        <ListGroup title="Patients" count={Math.min(people.length, 5)}>
+          {people.slice(0, 5).map((p) => (
+            <Row key={p.id} onClick={() => { remember(q); onOpenPatient(p.id); }} title={marked(p.name, q)} facts={stayLine(p)} />
+          ))}
+        </ListGroup>
+      ) : null}
       <div className="pt-3"><Seg<Scope> options={[["upcoming", "Upcoming"], ["past", "Past"], ["all", "All"]]} value={scope} onChange={setScope} /></div>
       {hits === null ? <Loading rows={3} />
         : shown.length === 0 ? <Empty text={`No ${scope === "all" ? "" : `${scope} `}treatments match “${q}”.${all.length ? " Try All." : ""}`} />
