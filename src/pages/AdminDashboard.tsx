@@ -589,7 +589,7 @@ const AdminDashboard = () => {
                 <ListGroup title="Get started">
                   {([["therapies", "Add your therapies", therapies.length], ["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first patient", patients.length]] as const).map(([tab, label, n]) => (
                     <Row key={tab} title={label} facts={n ? `${n} added` : "Not yet"} trailing={n ? "✓" : "Add ›"}
-                      onClick={() => { if (tab === "rooms") { go("rooms"); roomsScreen.openAdd(); } else if (tab === "staff") { go("team"); staffScreen.openAdd(); } else { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); } }} />
+                      onClick={() => { if (tab === "rooms") { go("rooms"); roomsScreen.openAdd(); } else if (tab === "staff") { go("team"); staffScreen.openAdd(); } else if (tab === "patients") { go("patients"); patientsScreen.openAdd(); } else { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); } }} />
                   ))}
                 </ListGroup>
                 <p className="px-1 pt-2 text-sm text-muted-foreground">Then tap + to book the first treatment.</p>
