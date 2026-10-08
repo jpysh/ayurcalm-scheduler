@@ -44,18 +44,18 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #590: the confirmation sheet is announced as what it is, not as "Menu".
-await step('The confirmation sheet is named "Please confirm"', '/admin/settings', async () => {
-  await go(p.getByRole('button', { name: /^Backups/ }));
-  await dlg().locator('input[type=file]').setInputFiles({ name: 'centre.json.gz', mimeType: 'application/gzip', buffer: Buffer.from('not a real file') }); await p.waitForTimeout(1000);
-  const named = await p.getByRole('dialog', { name: 'Please confirm' }).count(), asMenu = await p.getByRole('dialog', { name: 'Menu' }).count();
-  const t = (await text(dlg())).replace(/\n+/g, ' | ');
-  await go(p.getByRole('dialog', { name: 'Please confirm' }).getByRole('button', { name: 'Cancel' }));
-  return { ok: named === 1 && asMenu === 0, note: `dialogs named "Please confirm": ${named}, named "Menu": ${asMenu} · ${t.slice(0, 90)}` };
+// #595: the therapy library offers the way to a therapy of the centre's own.
+await step('The library offers "Add one of your own" and it opens the Add therapy sheet', '/admin/team', async () => {
+  await go(p.getByText(/^Therapies/).first()); await go(p.getByText('Add from the library'));
+  const line = dlg().getByRole('button', { name: /Not on the list\? Add one of your own/ }); const there = await line.count();
+  await go(line); const t = (await text(dlg())).replace(/\n+/g, ' | ');
+  return { ok: there === 1 && /^Add therapy/.test(t), note: `line shown: ${there}, then: ${t.slice(0, 90)}` };
 });
-await step('The Menu sheet is still named "Menu"', '/admin/schedule', async () => {
-  await menu(); const named = await p.getByRole('dialog', { name: 'Menu' }).count();
-  return { ok: named === 1, note: `dialogs named "Menu": ${named}` };
+await step('A therapy of its own is added and listed', '/admin/team', async () => {
+  await go(p.getByText(/^Therapies/).first()); await go(p.getByText('Add from the library')); await go(dlg().getByRole('button', { name: /Not on the list/ }));
+  await dlg().getByLabel('Name').fill('Uat stone massage'); await go(dlg().getByRole('button', { name: 'Add the therapy' })); await p.waitForTimeout(800);
+  const t = (await text(p.locator('body'))).replace(/\n+/g, ' | ');
+  return { ok: /Uat stone massage/.test(t), note: (t.match(/Uat stone massage[^|]*/) || ['not listed'])[0] };
 });
 await b.close();
 
