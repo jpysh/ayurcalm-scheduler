@@ -44,18 +44,20 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #546: after closing, + opens on tomorrow. Runs only when the centre is closed for the day.
-const cfg546 = await api('GET', '/settings');
-const hm546 = new Intl.DateTimeFormat('en-GB', { timeZone: cfg546.timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
-const closed546 = hm546 >= cfg546.closing_time;
-const tmr546 = new Date(`${plus(1)}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
-const ep = await api('POST', '/patients', { name: `Evening Book ${Date.now() % 1000}`, gender: 'male', on_site: true, stay: { start_date: plus(0), end_date: plus(6) } });
-await step('After closing, Book opens on tomorrow', '/admin/schedule', async () => {
-  if (!closed546) return { ok: false, note: `skipped: the centre is open until ${cfg546.closing_time} (now ${hm546})` };
-  await go(plusBtn('Book a treatment')); await p.waitForTimeout(800);
-  await go(dlg().getByText(ep.name).first()); await p.waitForTimeout(900);
-  const t = await text(dlg());
-  return { ok: new RegExp(`Date\\n${tmr546}`).test(t) && !/hours are over/.test(t), note: `closing ${cfg546.closing_time}, now ${hm546}; ` + t.split('\n').filter((x) => /^Date$|Oct$|hours are over/.test(x)).slice(0, 3).join(' · ') };
+// #549: the details prompt on a guest's link: 'before you arrive' only before they arrive, none on the leaving day.
+const guestLink = async (name, from, to) => { const g = await api('POST', '/patients', { name: `${name} ${Date.now() % 1000}`, gender: 'female', on_site: true, stay: { start_date: plus(from), end_date: plus(to) } }); return (await api('POST', `/patients/${g.id}/link`)).token; };
+const tLeaving = await guestLink('Leaves Today', -4, 0), tHere = await guestLink('Already Here', -1, 5), tComing = await guestLink('Arrives Soon', 2, 8);
+await step('Leaving today: no details prompt, the question about the stay stays', `/l/${tLeaving}`, async () => {
+  const t = await text(p.locator('body'));
+  return { ok: !/Your details/.test(t) && /How was your stay/i.test(t), note: t.split('\n').filter((x) => /details|stay/i.test(x)).slice(0, 3).join(' · ') };
+});
+await step('Already here: it says add the rest, not before you arrive', `/l/${tHere}`, async () => {
+  const t = await text(p.locator('body'));
+  return { ok: /Please add the rest/.test(t) && !/before you arrive/.test(t), note: t.split('\n').filter((x) => /filled in/.test(x)).join(' · ') };
+});
+await step('Arriving later: it still says before you arrive', `/l/${tComing}`, async () => {
+  const t = await text(p.locator('body'));
+  return { ok: /before you arrive/.test(t), note: t.split('\n').filter((x) => /filled in|starts/.test(x)).join(' · ') };
 });
 await b.close();
 

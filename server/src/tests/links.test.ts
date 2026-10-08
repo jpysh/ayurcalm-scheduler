@@ -116,6 +116,12 @@ try {
   const stay = await prisma.patientStay.create({ data: { patient_id: guest.id, start_date: iso(-10), end_date: iso(10), duration_days: 21 } });
   const seen = await prisma.appointment.create({ data: { patient_id: guest.id, therapy_id: consult.id, staff_id: doctor.id, scheduled_date: iso(-9), start_time: '09:00', duration_minutes: 20, session_number: 1, total_sessions: 1, status: 'completed', assignment_type: 'manual', notes: 'Start Abhyanga daily' } });
   extra.push(seen.id); stays.push(stay.id);
+  // Their own details are asked while a stay is here or coming, not on the leaving day or after (#549).
+  const left = await prisma.patient.create({ data: { name: `Gone ${tag}`, gender: 'male' } }); leavers.push(left.id);
+  const leftStay = await prisma.patientStay.create({ data: { patient_id: left.id, start_date: iso(-5), end_date: iso(0), duration_days: 6 } }); stays.push(leftStay.id);
+  const leftTok = await issue('patients', left.id);
+  assert.equal((await (await call(`/public/link/${leftTok}`)).json()).details, undefined, 'nothing is asked on the leaving day');
+  assert.ok((await (await call(`/public/link/${p}`)).json()).details, 'still asked while a stay is ahead');
   const round = await (await call(`/public/link/${d}/round`)).json();
   const row = round.find((r: { patient_id: string }) => r.patient_id === guest.id);
   assert.ok(row, 'a patient with no review in the last week is on the round');
