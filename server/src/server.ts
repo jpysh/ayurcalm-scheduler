@@ -863,9 +863,9 @@ app.get('/patients/:id/passport-photo', requireAdmin, async (req: Request, res: 
   res.send(Buffer.from(photo.image));
 });
 app.put('/patients/:id/passport-photo', requireAdmin, async (req: Request, res: Response) => {
-  const sent: unknown = req.body;
-  if (!Buffer.isBuffer(sent) || sent.length < 4 || sent[0] !== 0xff || sent[1] !== 0xd8) { res.status(400).json({ error: 'Send the photo as a JPEG.' }); return; }
-  const image = sent;
+  // A JPEG starts ff d8; anything else, or a body the raw parser left alone, is refused.
+  if (!Buffer.isBuffer(req.body) || !req.body.subarray(0, 2).equals(Buffer.from([0xff, 0xd8]))) { res.status(400).json({ error: 'Send the photo as a JPEG.' }); return; }
+  const image = Buffer.from(req.body);
   await prisma.patient.findUniqueOrThrow({ where: { id: String(req.params.id) } });
   const kept = await prisma.patientPhoto.upsert({ where: { patient_id: String(req.params.id) }, create: { patient_id: String(req.params.id), image }, update: { image }, select: { updated_at: true } });
   res.json({ kept: kept.updated_at });
