@@ -331,6 +331,14 @@ async function noTimeWhy(ctx: Ctx, day: Date, nowMinutes: number | null, therapy
     }
     return { why: team, actions: [{ kind: 'add_staff', label: therapy.is_consultation ? 'Add a doctor' : 'Add a therapist', therapy_id: therapy.id }, other] };
   }
+  // No room has everything the therapy needs: the cause, and the fix filled in (#544). A consultation needs a BP monitor and an examination bed, which a therapy room rarely has.
+  const needs = therapy.required_amenities ?? [];
+  const live = ctx.rooms.filter((r) => r.is_active !== false);
+  if (needs.length && !live.some((r) => needs.every((a) => r.amenities.includes(a)))) {
+    const say = needs.map((a) => a.replace(/_/g, ' '));
+    const list = say.length > 1 ? `${say.slice(0, -1).join(', ')} and ${say[say.length - 1]}` : say[0];
+    return { why: `No room has ${list}, so ${therapy.name.replace(/_/g, ' ')} cannot be booked yet.`, actions: [{ kind: 'add_room', label: 'Add a room that has them', amenities: needs }, other] };
+  }
   const next = await nextFreeSlot(day, stay.end_date, therapy, patient.id, prisma);
   // The hours are over when the day would have had a time but for the clock.
   let over = false;
