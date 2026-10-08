@@ -44,20 +44,20 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #495: a guest arriving later has a card with their stay, not "Not staying".
+// #496: a guest added ahead is on the Patients list under "Arriving soon".
 await api('POST', '/settings/clear-demo-data');
-const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female', country: 'Germany' });
-await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(1), end_date: plus(8) });
-const openCard = async () => { await viaMenu('Search'); await p.keyboard.type('clara'); await p.waitForTimeout(1200); await go(p.getByText(/^Arrives/).first()); await p.waitForTimeout(1200); };
-await step('Their card says when they arrive, and the Arrival checklist is there', '/admin/schedule', async () => {
-  await openCard();
-  const t = await text(dlg());
-  return { ok: /Arrives .* · leaves/.test(t) && /Arrival/.test(t) && /Stay\n?.*to/.test(t) && !/Not staying/.test(t), note: t.split('\n').filter((x) => /Arrives|Arrival|ready|Stay|to /.test(x)).slice(0, 5).join(' · ') };
+for (const [name, from, to] of [['Clara Weber', 1, 8], ['Dev Mehta', 5, 12], ['Far Away', 30, 37]]) {
+  const x = await api('POST', '/patients', { name, gender: name.startsWith('Clara') ? 'female' : 'male' });
+  await api('POST', `/patients/${x.id}/stays`, { start_date: plus(from), end_date: plus(to) });
+}
+await step('Patients lists the guests arriving in the next two weeks', '/admin/patients', async () => {
+  const t = await text(p.locator('body'));
+  return { ok: /arriving soon/i.test(t) && /Clara Weber/.test(t) && /Dev Mehta/.test(t) && !/Far Away/.test(t) && !/No one is staying/.test(t), note: t.split('\n').filter((x) => /arriving soon|Arrives|in house|Weber|Mehta|Far/i.test(x)).join(' · ') };
 });
-await step('Stay opens the stay they have, not a new one', '/admin/schedule', async () => {
-  await openCard(); await go(dlg().getByRole('button', { name: /^Stay/ }));
+await step('Tapping one opens their card', '/admin/patients', async () => {
+  await go(p.getByRole('button', { name: /^Clara Weber/ }).first());
   const t = await text(dlg());
-  return { ok: /Stay for Clara/.test(t) && !/New stay/.test(t), note: t.split('\n').filter((x) => x.trim()).slice(0, 4).join(' · ') };
+  return { ok: /Arrives .* · leaves/.test(t), note: t.split('\n').slice(0, 3).join(' · ') };
 });
 await b.close();
 
