@@ -86,7 +86,6 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
     await refreshDay(dayKeyMemo);
     const moved = (body.replan || []).reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0);
     toast(`${name} ${entity_type === "staff" ? "not in" : "out of use"} ${from ? `from ${from}` : "all day"}${moved ? ` · ${moved} moved` : ""}`, {
-      duration: 8000,
       action: { label: "Undo", onClick: async () => { await fetch(`${API_BASE}/timeoff/${body.id}`, { method: "DELETE" }); await refreshDay(dayKeyMemo); } },
     });
   };
@@ -164,6 +163,7 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
   const bookSheet = (
     <BookSheet open={booking} onClose={() => setBooking(false)} day={bookDay} today={ymdInTZ(new Date())} isToday={isToday && !afterClosing} nowMinutes={now} patient={bookFor} rev={staffCount}
       onAction={(a: { kind: string; amenities?: string[] }) => (a.kind === "add_room" ? addRoom(a) : addTherapist(a))} onAddPatient={addPatient}
+      onShowDay={(d: string) => { if (d !== dayKeyMemo) showDay(d); }}
       refresh={() => refreshDay(bookDay)} />
   );
 

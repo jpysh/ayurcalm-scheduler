@@ -1,13 +1,23 @@
+import { useEffect } from "react";
 import { Toaster as Sonner, toast } from "sonner";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
+  // The next tap anywhere else clears the toast, so it never hides the row the admin reaches for next. Every change is in the history, so nothing is lost.
+  useEffect(() => {
+    const away = (e: PointerEvent) => { if (!(e.target as Element | null)?.closest?.("[data-sonner-toast]")) toast.dismiss(); };
+    document.addEventListener("pointerdown", away, true);
+    return () => document.removeEventListener("pointerdown", away, true);
+  }, []);
   return (
     <Sonner
       theme="light"
       className="toaster group"
       // Just above the bottom bar, full width on a phone, as the design puts it.
+      // Four seconds, and only the latest shows: Undo applies to the last change alone.
+      duration={4000}
+      visibleToasts={1}
       position="bottom-center"
       offset="84px"
       // Sonner ignores offset at phone width and sits 16px from the edge, over the bar.

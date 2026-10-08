@@ -98,7 +98,6 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
     load();
     const told = what === "Leave" ? `${name} away ${days.start === days.end ? dayText(days.start) : `${dayText(days.start)} to ${dayText(days.end)}`}` : `${name}: ${what.toLowerCase()}${days.start === today ? "" : ` · ${dayText(days.start)}`}`;
     toast(`${told}${moved ? ` · ${moved} moved` : ""}`, {
-      duration: 8000,
       action: { label: "Undo", onClick: async () => { await fetch(`${API_BASE}/timeoff/${body.id}`, { method: "DELETE" }); await refresh(); load(); } },
     });
   }
