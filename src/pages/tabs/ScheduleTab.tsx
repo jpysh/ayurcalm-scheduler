@@ -157,10 +157,14 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
     />
   );
 
+  // After closing, the evening's booking is for tomorrow (#546), as Print and the inbox already are (#458, #459).
+  const [ch, cm] = String(closingTime || "").split(":").map(Number);
+  const afterClosing = isToday && Number.isFinite(ch) && now >= ch * 60 + (cm || 0);
+  const bookDay = afterClosing ? new Date(Date.parse(`${dayKeyMemo}T00:00:00Z`) + 86400000).toISOString().slice(0, 10) : dayKeyMemo;
   const bookSheet = (
-    <BookSheet open={booking} onClose={() => setBooking(false)} day={dayKeyMemo} today={ymdInTZ(new Date())} isToday={isToday} nowMinutes={now} patient={bookFor} rev={staffCount}
+    <BookSheet open={booking} onClose={() => setBooking(false)} day={bookDay} today={ymdInTZ(new Date())} isToday={isToday && !afterClosing} nowMinutes={now} patient={bookFor} rev={staffCount}
       onAction={(a: { kind: string; amenities?: string[] }) => (a.kind === "add_room" ? addRoom(a) : addTherapist(a))} onAddPatient={addPatient}
-      refresh={() => refreshDay(dayKeyMemo)} />
+      refresh={() => refreshDay(bookDay)} />
   );
 
   return { tab: <>{tab}{cardSheet}{bookSheet}</>, openBook: (p?: { id: string; name: string; consult?: boolean }) => { setBookFor(p || null); setBooking(true); }, openCard: setCard, printSheet, pdfLoading, view, setView, query, setQuery, searching, setSearching };
