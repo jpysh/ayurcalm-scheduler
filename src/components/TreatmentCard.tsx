@@ -255,7 +255,7 @@ type Slot = {
 type Option = { id: string; name: string; free: boolean; why?: string };
 /** What the server offers beside a refusal or warning (#330); the sheet only carries each kind out. */
 export type BookAction = { kind: "book_at" | "set_date" | "other_therapy" | "add_staff" | "allow_any_gender" | "change_stay" | "book_anyway"; label: string; date?: string; start_time?: string; gender?: string; therapy_id?: string; patient_id?: string };
-type Options = { times: Slot[]; staff: Option[]; rooms: Option[]; why?: string; actions: BookAction[]; warnings: { reason: string; message: string }[] };
+type Options = { times: Slot[]; staff: Option[]; rooms: Option[]; why?: string; actions: BookAction[]; warnings: { reason: string; message: string; actions?: BookAction[] }[] };
 type Who = { id: string; name: string; note: string; therapy_id: string | null; last: { name: string; date: string } | null };
 type TherapyFact = { id: string; name: string; duration_minutes: number; is_consultation: boolean; taken: boolean; repeat: boolean; fact?: string };
 
@@ -491,7 +491,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
             <Callout tone="notice" title={opts.why || `No free time for ${first}.`}
               actions={opts.actions.map((a, i) => <Btn key={a.label} kind={i === 0 ? "primary" : "secondary"} inline onClick={() => carry(a)}>{a.label}</Btn>)} />
           ) : (<>
-            {warnings.length ? <div className="mb-2 mt-2"><Callout tone="notice" title={warnings.map((w) => w.message).join(" ")}>Booking it is still possible.</Callout></div> : null}
+            {warnings.length ? <div className="mb-2 mt-2"><Callout tone="notice" title={warnings.map((w) => w.message).join(" ")} actions={warnings.flatMap((w) => (w.actions || []).filter((a) => a.kind !== "book_anyway")).map((a) => <Btn key={a.label} kind="quiet" inline onClick={() => carry(a)}>{a.label}</Btn>)}>Booking it is still possible.</Callout></div> : null}
             <ChangeLine label="Time" value={<>{time}{time === opts.times[0].start_time ? <span className="ml-2"><Tag tone="good">best</Tag></span> : null}</>}
               select={<LineSelect label="Time" value={time} onChange={(t) => load(t)} free={opts.times.map((t, i) => ({ id: t.start_time, name: t.start_time, tag: i === 0 ? "best" : undefined }))} />} />
             {/* A therapy worked by two names both: the second is booked too (#478). */}

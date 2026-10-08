@@ -44,23 +44,33 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #524: the card's Medication line is offered in the discharge summary, one tap, never added by itself.
-const nm = `Medicine Line ${Date.now() % 1000}`;
-const mp = await api('POST', '/patients', { name: nm, gender: 'female' });
-await api('POST', `/patients/${mp.id}/stays`, { start_date: plus(-2), end_date: plus(3) });
-await api('PUT', `/patients/${mp.id}`, { medication: 'Ashwagandha tablet, 1 twice a day after food, 14 days' });
-await step('The discharge summary offers the card medication', '/admin/patients', async () => {
-  await go(p.getByText(nm).first()); await go(dlg().getByText('Discharge summary').first()); await go(dlg().getByText('Final diagnosis').first()); await p.waitForTimeout(1200);
-  await dlg().getByRole('button', { name: /Add from their card/ }).scrollIntoViewIfNeeded().catch(() => {}); await p.waitForTimeout(300);
+// #528: a therapy can be marked before a purification, and the booking warning offers the day before it.
+const thAll = await api('GET', '/therapies');
+const purge = thAll.find((x) => x.once_per_course), prep = thAll.find((x) => x.before_purification);
+const pg = await api('POST', '/patients', { name: `Order Test ${Date.now() % 1000}`, gender: 'male', on_site: true, stay: { start_date: plus(0), end_date: plus(12) } });
+const pgDay = plus(6);
+const pgR = await api('POST', '/appointments', { patient_id: pg.id, therapy_id: purge.id, total_sessions: 1, preferred_time_range: { start: '09:00', end: '18:00' }, start_date: pgDay, end_date: pgDay });
+await step('The therapy sheet has the Before a purification switch, on for the library one', '/admin/therapies', async () => {
+  const row = await text(p.locator('body'));
+  await go(p.getByRole('button', { name: new RegExp('^' + prep.name) }).first()); await p.waitForTimeout(700);
   const t = await text(dlg());
-  return { ok: /Add from their card: Ashwagandha tablet/.test(t) && /MEDICATION DURING THE STAY/i.test(t), note: t.split('\n').filter((x) => /Add from|MEDICATION|Add a medicine/i.test(x)).join(' · ') };
+  const on = String(await dlg().getByRole('switch', { name: /Before a purification/ }).isChecked().catch(() => null));
+  return { ok: /Before a purification/.test(t) && on === 'true' && new RegExp(prep.name + '[^\\n]*\\n[^\\n]*before a purification').test(row), note: `switch ${on}; ` + (row.split('\n').find((x) => /before a purification/.test(x)) || 'no list line') };
 });
-await step('One tap puts it in as the first medicine', '/admin/patients', async () => {
-  await go(p.getByText(nm).first()); await go(dlg().getByText('Discharge summary').first()); await go(dlg().getByText('Final diagnosis').first()); await p.waitForTimeout(1200);
-  await go(dlg().getByRole('button', { name: /^Add from their card/ }));
-  const v = await dlg().getByLabel('Medicine').first().inputValue();
-  const gone = !/Add from their card/.test(await text(dlg()));
-  return { ok: /^Ashwagandha tablet/.test(v) && gone, note: `Medicine: ${v}` };
+await step('The warning offers the day before the purification; tapping it moves the booking there', '/admin/schedule', async () => {
+  await go(plusBtn('Book a treatment')); await p.waitForTimeout(800);
+  await go(dlg().getByText(pg.name).first()); await p.waitForTimeout(900);
+  await go(dlg().getByText('Other therapies')); await p.locator('input[type=text]').last().fill(prep.name); await p.waitForTimeout(700);
+  await go(dlg().getByText(prep.name).first()); await p.waitForTimeout(900);
+  await dlg().locator('input[type=date]').first().fill(plus(8)); await p.waitForTimeout(1800);
+  const t = await text(dlg());
+  const eve = new Date(`${pgDay}T00:00:00Z`); eve.setUTCDate(eve.getUTCDate() - 1);
+  const want = eve.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
+  const offered = /prepares for a purification/.test(t) && t.includes(`Book ${want} instead`);
+  await p.screenshot({ path: `${OUT}/02-warning.png` });
+  await go(dlg().getByRole('button', { name: /instead$/ })); await p.waitForTimeout(1800);
+  const t2 = await text(dlg());
+  return { ok: offered && !/prepares for a purification/.test(t2), note: `${pgR.success} · ` + t.split('\n').filter((x) => /prepares|instead|still possible/.test(x)).join(' · ') + ' → after the tap: ' + t2.split('\n').filter((x) => /Date|Tue|Mon|Wed|Book/.test(x)).slice(0, 3).join(' · ') };
 });
 await b.close();
 
