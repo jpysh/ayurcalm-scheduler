@@ -10,20 +10,21 @@ import { HolidaysSheet } from "@/components/HolidaysSheet";
 const sortKey = (h: UiTimeOff) => h.startDate || h.date || '';
 
 /** Leave (#285 story 9): one row each, who and when; a tap opens the same sheet that adds one. */
-const TimeOffTab = ({ timeOffs, viewMode, setViewMode, visibleRows, totalRef, nameOf, kindOf, isFullDay, weeklyLabel, openEdit, onHolidays }: {
+const TimeOffTab = ({ today, timeOffs, viewMode, setViewMode, visibleRows, totalRef, nameOf, kindOf, isFullDay, weeklyLabel, openEdit, onHolidays }: {
+  /** The centre's today, YYYY-MM-DD: leave is whole calendar days, so it is compared as days, never against the phone's midnight (#601). */
+  today: string;
   timeOffs: UiTimeOff[]; viewMode: 'all' | 'upcoming' | 'past'; setViewMode: (v: 'all' | 'upcoming' | 'past') => void;
   visibleRows: number; totalRef: { current: number }; nameOf: (h: UiTimeOff) => string; kindOf: (h: UiTimeOff) => string;
   isFullDay: (h: UiTimeOff) => boolean; weeklyLabel: (w?: UiTimeOff['weekdays']) => string; openEdit: (h: UiTimeOff) => void; onHolidays: () => void;
 }) => {
-  const today = new Date(new Date().toDateString());
   // The centre's closed days are set once a year and live in their own sheet; this list is the team's, which changes daily.
   const closed = timeOffs.filter((h) => h.type === 'Center').sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
-  const nextClosed = closed.find((h) => new Date(sortKey(h)) >= today);
+  const nextClosed = closed.find((h) => sortKey(h).slice(0, 10) >= today);
   const rows = timeOffs.filter((h) => h.type !== 'Center').filter((h) => {
     if (viewMode === 'all') return true;
-    const start = sortKey(h) ? new Date(sortKey(h)) : undefined;
+    const start = sortKey(h).slice(0, 10) || undefined;
     const endRaw = h.endDate || h.date;
-    const end = endRaw ? new Date(endRaw) : undefined;
+    const end = endRaw ? endRaw.slice(0, 10) : undefined;
     if (viewMode === 'upcoming') return h.recurrence === 'weekly' ? !(end && end < today) : !!start && start >= today;
     return !!end && end < today;
   }).sort((a, b) => new Date(sortKey(a)).getTime() - new Date(sortKey(b)).getTime());
@@ -47,12 +48,12 @@ const TimeOffTab = ({ timeOffs, viewMode, setViewMode, visibleRows, totalRef, na
 export default TimeOffTab;
 
 /** The Time off screen: its filters, the Add dialog and the tab, held by the dashboard so they last as long as it does. */
-export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, startDay, timeSlots, planDay }: {
+export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, startDay, centreToday, timeSlots, planDay }: {
   timeOffs: UiTimeOff[]; setTimeOffs: React.Dispatch<React.SetStateAction<UiTimeOff[]>>;
   staff: UiStaff[]; roomsList: UiRoom[]; therapies: UiTherapy[]; patients: Patient[];
   staffNameById: Record<string, string>; roomNameById: Record<string, string>; therapyNameById: Record<string, string>; patientNameById: Record<string, string>;
   requestDelete: (kind: "timeoff", id: string, name?: string) => void;
-  loadReplans: () => void; refreshAppointmentsForDate: (iso: string, silent?: boolean) => Promise<void>; todayKey: string; startDay: string;
+  loadReplans: () => void; refreshAppointmentsForDate: (iso: string, silent?: boolean) => Promise<void>; todayKey: string; startDay: string; centreToday: string;
   /** The centre's slot times, "HH:MM": what part-day leave starts and ends on. */
   timeSlots: string[];
   /** Save and plan: shows the day of the leave with the plan for it, to accept. */
@@ -136,7 +137,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
   };
 
   const tab = (
-    <TimeOffTab timeOffs={timeOffs} viewMode={holidayViewMode} setViewMode={setHolidayViewMode} visibleRows={visibleTimeOffRows} totalRef={timeoffTotalRef}
+    <TimeOffTab today={centreToday} timeOffs={timeOffs} viewMode={holidayViewMode} setViewMode={setHolidayViewMode} visibleRows={visibleTimeOffRows} totalRef={timeoffTotalRef}
       nameOf={nameOf} kindOf={kindOf} isFullDay={isFullDay} weeklyLabel={weeklyLabel} openEdit={openEdit} onHolidays={() => setShowHolidays(true)} />
   );
 
