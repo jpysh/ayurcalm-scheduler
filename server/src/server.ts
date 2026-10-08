@@ -383,7 +383,9 @@ app.get('/patients', async (req: Request, res: Response) => {
     // Who is actually staying at the centre on that date. The diet tab wants
     // these and not the whole history of everyone who has ever visited.
     const day = new Date(residentOn);
-    where.Stays = { some: { start_date: { lte: day }, end_date: { gte: day } } };
+    // The Patients list also shows who arrives in the next days, so a guest added ahead is not lost (#496).
+    const soon = Math.min(Number(req.query.arriving_within) || 0, 60);
+    where.Stays = { some: { OR: [{ start_date: { lte: day }, end_date: { gte: day } }, ...(soon ? [{ start_date: { gt: day, lte: new Date(day.getTime() + soon * 86400000) } }] : [])] } };
   }
   // Stays come with each resident, newest first: the list, the card and booking
   // all ask when someone is here, and a stay is the only record of that.
