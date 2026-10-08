@@ -4,7 +4,7 @@
  * has looked at; everything works on the defaults from minute one, so nothing
  * here blocks.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { useTrial } from "@/lib/centreName";
@@ -84,11 +84,15 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
     fetch(`${API_BASE}/printed-sheets`).then((r) => (r.ok ? r.json() : [])).then((l: { date: string }[]) => setLastPrint(l[0]?.date ?? null)).catch(() => setLastPrint(null));
   }, [isAdmin]);
 
+  // Told to the server once per item: each PUT is a logged write, and opening a sheet again changes nothing (#550).
+  const told = useRef<string[]>([]);
   const reviewed = useCallback((item: string) => {
-    if (!isAdmin) return;
+    if (!isAdmin || told.current.includes(item)) return;
+    told.current.push(item);
     setSettings((s) => (s && !s.setup_reviewed.includes(item) ? { ...s, setup_reviewed: [...s.setup_reviewed, item] } : s));
-    fetch(`${API_BASE}/settings/setup-reviewed`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ item }) }).catch(() => { /* counted again next time */ });
+    fetch(`${API_BASE}/settings/setup-reviewed`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ item }) }).catch(() => { told.current = told.current.filter((x) => x !== item); /* counted again next time */ });
   }, [isAdmin]);
+  useEffect(() => { if (settings) told.current = [...new Set([...told.current, ...settings.setup_reviewed])]; }, [settings]);
   const show = (s: Sheet) => { setSheet(s); const item = REVIEWS[s]; if (item) reviewed(item); };
   const showRules = () => { reviewed("rules"); openRules(); };
 
