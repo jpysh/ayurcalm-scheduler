@@ -44,20 +44,21 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #525: search finds who sleeps in a guest room and a guest by country.
-const acc = (await api('GET', '/accommodations'))[0];
-const roomName = `Z${Date.now() % 90 + 10}`;
-await api('POST', '/guest-rooms', { name: roomName, accommodation_id: acc.id });
-const gr = (await api('GET', '/guest-rooms')).find((x) => x.name === roomName);
-const gp = await api('POST', '/patients', { name: `Room Finder ${Date.now() % 1000}`, gender: 'female', country: 'Germany', on_site: true, guest_room_id: gr.id, stay: { start_date: plus(-1), end_date: plus(4) } });
-const searchFor = async (q) => { await viaMenu('Search'); await p.waitForTimeout(600); await p.locator('input[type=text]').last().fill(q); await p.waitForTimeout(1500); return text(p.locator('body')); };
-await step('A guest room name finds who sleeps in it', '/admin/schedule', async () => {
-  const t = await searchFor(roomName);
-  return { ok: t.includes(gp.name) && /PATIENTS/i.test(t), note: t.split('\n').filter((x) => x.trim()).slice(1, 8).join(' · ') };
+// #526, #527: Settings says what the Menu says; a rule switched off says it is off.
+// A guest three days in with no diet and nothing recorded: two things for one patient, one row on the pill.
+const two = await api('POST', '/patients', { name: `Two Things ${Date.now() % 1000}`, gender: 'male', on_site: true, stay: { start_date: plus(-3), end_date: plus(5) } });
+const menuCount = async () => { await p.goto(APP + '/admin/schedule'); await p.waitForTimeout(2000); await menu(); const t = await text(dlg()); await p.keyboard.press('Escape'); await p.waitForTimeout(500); return Number((t.match(/(\d+) need you/) || [])[1] || 0); };
+await step('Settings reads the same count as the Menu', '/admin/settings', async () => {
+  const t = await text(p.locator('body')); const said = Number((t.match(/the pill shows (\d+) today/) || [])[1] || 0);
+  const m = await menuCount();
+  return { ok: said === m, note: `Settings says ${said}, the Menu says ${m}` };
 });
-await step('A country finds the guest', '/admin/schedule', async () => {
-  const t = await searchFor('germany');
-  return { ok: t.includes(gp.name), note: t.split('\n').filter((x) => x.trim()).slice(1, 8).join(' · ') };
+await step('A rule switched off says it is off', '/admin/settings', async () => {
+  await go(p.getByText('What needs you').first()); await p.waitForTimeout(900);
+  const row = dlg().getByRole('switch').nth(3); await row.click(); await p.waitForTimeout(900);
+  const t = await text(dlg()); const line = t.split('\n').find((x) => /^Off ·/.test(x)) || '';
+  await go(dlg().getByRole('button', { name: 'Reset to the defaults' }));
+  return { ok: !!line && !/Counts on the pill · would raise \d+ today\n[^\n]*\n[^\n]*Changed from on/.test(t), note: line || t.split('\n').slice(0, 14).join(' · ') };
 });
 await b.close();
 
