@@ -180,6 +180,7 @@ function wrote(w: Wrote, lists: { patients: Named; staff: Named; rooms: Named; t
       ];
       if (parts.length) return `${who}'s stay: ${parts.join(', ')}`;
     }
+    if (sub === 'passport-photo') return `${who}'s passport photo ${w.method === 'DELETE' ? 'removed' : 'kept'}`;
     if (sub === 'details') return `${who} filled in their own details: ${(Array.isArray(b.fields) ? b.fields as string[] : []).map((f) => f.replace(/_/g, ' ')).join(', ') || 'nothing new'}`;
     if ((w.path || '').endsWith('/arrival')) return `${who}'s arrival recorded`;
     if ((w.path || '').endsWith('/discharge')) return `${who}'s discharge recorded`;

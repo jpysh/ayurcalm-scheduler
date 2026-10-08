@@ -12,7 +12,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 
 // Parents before children, so every row's references exist when it arrives.
 const TABLES = [
-  'settings', 'user', 'dietTemplate', 'package', 'accommodationType', 'guestRoom', 'staff', 'therapyRoom', 'therapy', 'patient', 'patientStay',
+  'settings', 'user', 'dietTemplate', 'package', 'accommodationType', 'guestRoom', 'staff', 'therapyRoom', 'therapy', 'patient', 'patientPhoto', 'patientStay',
   'appointment', 'timeOff', 'dietPlan', 'dietPlanSegment', 'programEvent', 'auditLog', 'linkIssue', 'printedSheet',
 ] as const;
 type Table = (typeof TABLES)[number];
@@ -29,7 +29,8 @@ export async function exportCentre(prisma: PrismaClient) {
   for (const t of TABLES) {
     const rows = await table(prisma, t).findMany();
     // A PDF's bytes as base64: JSON would spell each byte out as a number.
-    tables[t] = t === 'printedSheet' ? rows.map((r) => ({ ...r, pdf: Buffer.from(r.pdf as Uint8Array).toString('base64') })) : rows;
+    tables[t] = t === 'printedSheet' ? rows.map((r) => ({ ...r, pdf: Buffer.from(r.pdf as Uint8Array).toString('base64') }))
+      : t === 'patientPhoto' ? rows.map((r) => ({ ...r, image: Buffer.from(r.image as Uint8Array).toString('base64') })) : rows;
   }
   return gzipSync(JSON.stringify({ app: 'ayurcalm', version: await version(prisma), exported_at: new Date().toISOString(), tables }));
 }
@@ -53,7 +54,7 @@ export async function importCentre(file: Buffer, prisma: PrismaClient) {
       const rows = (tables[t] || []).map((r) => {
         // An absent optional value is stored as none; Prisma refuses a bare null for a JSON column.
         const row = Object.fromEntries(Object.entries(r).filter(([, v]) => v !== null));
-        return t === 'printedSheet' ? { ...row, pdf: Buffer.from(String(row.pdf), 'base64') } : row;
+        return t === 'printedSheet' ? { ...row, pdf: Buffer.from(String(row.pdf), 'base64') } : t === 'patientPhoto' ? { ...row, image: Buffer.from(String(row.image), 'base64') } : row;
       });
       for (let i = 0; i < rows.length; i += 1000) await table(tx, t).createMany({ data: rows.slice(i, i + 1000) });
     }

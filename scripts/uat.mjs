@@ -44,19 +44,26 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #499: the Log names what changed on a stay, and what a guest filled in themselves.
+// #510: a photo of the passport is kept on the patient and shown beside Form C.
 await api('POST', '/settings/clear-demo-data');
-const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female' });
-const sy = await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(1), end_date: plus(8) });
-const pk = (await api('GET', '/packages'))[0];
-await api('PUT', `/patients/${pt.id}/stays/${sy.id}`, { package_id: pk.id });
-await api('PUT', `/patients/${pt.id}/stays/${sy.id}`, { start_date: plus(1), end_date: plus(7) });
-const link = await api('POST', `/patients/${pt.id}/link`);
-await fetch(`${APP}/api/public/link/${link.token}/details`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: '+49 151 2345678', country: 'Germany', id_number: 'C01X00T47' }) });
-await step('The Log says what changed on the stay, and what the guest filled in', '/admin/log', async () => {
-  await p.waitForTimeout(800);
-  const t = await text(p.locator('body'));
-  return { ok: /stay: dates/.test(t) && /stay: package set/.test(t) && /filled in their own details: phone, country, id number/.test(t) && !/Germany|C01X00T47/.test(t), note: t.split('\n').filter((x) => /stay|details|guest/.test(x)).join(' · ') };
+const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female', country: 'Germany', date_of_birth: '1984-03-12', id_number: 'C01X00T47' });
+await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(0), end_date: plus(7) });
+// A real image to upload: a plain card drawn in the browser, shrunk by the app like a camera photo.
+const png = await p.evaluate(async () => { const c = document.createElement('canvas'); c.width = 1600; c.height = 1100; const x = c.getContext('2d'); x.fillStyle = '#e8efe9'; x.fillRect(0, 0, 1600, 1100); x.fillStyle = '#244'; x.font = '90px sans-serif'; x.fillText('PASSPORT  C01X00T47', 120, 300); x.fillText('WEBER  CLARA', 120, 500); return c.toDataURL('image/png').split(',')[1]; });
+await step('The card offers a passport photo', '/admin/patients', async () => {
+  await go(p.getByRole('button', { name: /^Clara Weber/ }).first());
+  const t = await text(dlg());
+  return { ok: /Passport photo/.test(t) && /Take a photo/.test(t), note: t.split('\n').filter((x) => /Passport photo|Take a photo/.test(x)).join(' · ') };
+});
+await step('A photo is shrunk, kept, and shown on the Form C sheet', '/admin/patients', async () => {
+  await go(p.getByRole('button', { name: /^Clara Weber/ }).first());
+  await p.locator('input[type=file]').setInputFiles({ name: 'passport.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+  await p.waitForTimeout(2500);
+  const kept = await fetch(`${APP}/api/patients/${pt.id}/passport-photo`, { headers: { Authorization: `Bearer ${token}` } });
+  const size = (await kept.arrayBuffer()).byteLength;
+  await go(dlg().getByRole('button', { name: /^Form C/ })); await p.waitForTimeout(1200);
+  const shown = await dlg().locator('img[alt="Passport or ID"]').count();
+  return { ok: kept.ok && size > 1000 && size < 600000 && shown === 1, note: `kept ${kept.status}, ${size} bytes, ${shown} picture on the sheet` };
 });
 await b.close();
 
