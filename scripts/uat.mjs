@@ -44,17 +44,15 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #529: the guest's link decides "over" by the centre's clock, not the phone's. Run with UAT_TZ set to a zone many hours behind the centre (Pacific/Pago_Pago for Asia/Kolkata): the phone says 03:00 while the centre's afternoon treatments are over.
-const cfg = await api('GET', '/settings');
-const hhmm = (zone) => new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
-const mins = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)); const back = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-const phoneNow = mins(hhmm(process.env.UAT_TZ || cfg.timezone)); const centreNow = mins(hhmm(cfg.timezone));
-const ended = (await api('GET', `/appointments?date=${plus(0)}`)).find((x) => x.status !== 'cancelled' && x.status !== 'no_show' && mins(x.start_time) + x.duration_minutes <= centreNow - 5 && mins(x.start_time) + x.duration_minutes > phoneNow);
-const gl = ended ? await api('POST', `/patients/${ended.patient_id}/link`) : null;
-await step('The guest link asks "How was it?" once the centre says it is over', gl ? `/l/${gl.token}` : '/admin/schedule', async () => {
-  if (!ended) return { ok: false, note: 'skipped: no treatment ended between the phone clock and the centre clock' };
-  const t = await text(p.locator('body'));
-  return { ok: /How was it\?/.test(t), note: `centre ${back(centreNow)}, phone ${back(phoneNow)}, a treatment ended ${back(mins(ended.start_time) + ended.duration_minutes)}; ` + t.split('\n').filter((x) => /How was it|Today|\d\d:\d\d/.test(x)).slice(0, 4).join(' · ') };
+// #542: the discharge summary's footer has no bare separator before a number is given.
+const { execSync } = await import('node:child_process');
+const fp = await api('POST', '/patients', { name: `Footer Test ${Date.now() % 1000}`, gender: 'female', on_site: true, stay: { start_date: plus(-3), end_date: plus(0) } });
+const fstay = (await api('GET', `/patients/${fp.id}/stays`))[0];
+await step('The unsaved summary prints a clean footer', '/admin/patients', async () => {
+  const r = await fetch(`${APP}/api/patients/${fp.id}/stays/${fstay.id}/discharge-pdf`, { headers: { Authorization: `Bearer ${token}` } });
+  const txt = execSync('pdftotext -layout - -', { input: Buffer.from(await r.arrayBuffer()) }).toString();
+  const foot = txt.split('\n').find((x) => /page 1 of/.test(x)) || '';
+  return { ok: /page 1 of 1/.test(foot) && !/· ·/.test(foot), note: foot.trim() };
 });
 await b.close();
 

@@ -21,6 +21,9 @@ const image = (doc: any, uri: string | null | undefined, x: number, y: number, o
   try { doc.image(Buffer.from(uri.split(',')[1], 'base64'), x, y, opts); return true; } catch { return false; }
 };
 
+/** The footer's own line; a summary not yet saved has no number, and an empty one left a bare '· ·' (#542). */
+export const pageLine = (name: string, no: string, page: number, pages: number) => [name, no, `page ${page} of ${pages}`].filter(Boolean).join(' · ');
+
 export async function generateDischargePdf(v: DischargeView, centre: { name: string; address: string | null; logo: string | null; made?: string }, lh: Letterhead): Promise<Buffer> {
   const doc = new PDFDocument({ size: 'A4', margin: M, bufferPages: true });
   doc.registerFont('Local', DEVANAGARI);
@@ -158,7 +161,7 @@ export async function generateDischargePdf(v: DischargeView, centre: { name: str
     doc.switchToPage(i);
     doc.page.margins.bottom = 0; // or writing in the margin starts a new page
     doc.font('Helvetica').fontSize(7).fillColor('#666');
-    const foot = [lh.footer_line, `${v.name} · ${d.no} · page ${i + 1} of ${range.count}`, centre.made].filter(Boolean).join('    ');
+    const foot = [lh.footer_line, pageLine(v.name, d.no, i + 1, range.count), centre.made].filter(Boolean).join('    ');
     doc.text(foot, M, 841.89 - M - 8, { width: W, align: 'center', lineBreak: false });
   }
   doc.end();

@@ -10,6 +10,7 @@ import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
 import { newLinkToken } from '../links.js';
+import { pageLine } from '../pdf/dischargePdf.js';
 import { requireDemoData } from './demoGuard.js';
 
 const API_BASE = process.env.API_BASE || `http://127.0.0.1:${process.env.PORT || 4100}/api`;
@@ -47,6 +48,8 @@ async function main() {
       if (i % 7 === 0) await prisma.appointment.create({ data: { patient_id: p.id, therapy_id: consult.id, staff_id: doctor.id, room_id: room.id, scheduled_date: day, start_time: '09:00', duration_minutes: 20, session_number: 1, total_sessions: 1, status: 'completed', assignment_type: 'manual' } });
     }
 
+    assert.equal(pageLine('Leela Menon', '', 1, 1), 'Leela Menon · page 1 of 1', 'no number, no empty separator (#542)');
+    assert.equal(pageLine('Leela Menon', 'DS/2030/0001', 2, 2), 'Leela Menon · DS/2030/0001 · page 2 of 2');
     // The doctor's link writes first; the number is given then and kept.
     const long = 'Avoid fried food, cold drinks and late nights. Walk thirty minutes a day. '.repeat(6);
     const meds = Array.from({ length: 8 }, (_, i) => ({ name: `Tab. Medicine ${i + 1}`, dose: '1-X-1', timing: 'after food', days: '10' }));
