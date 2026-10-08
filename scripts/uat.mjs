@@ -44,19 +44,26 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #595: the therapy library offers the way to a therapy of the centre's own.
-await step('The library offers "Add one of your own" and it opens the Add therapy sheet', '/admin/team', async () => {
-  await go(p.getByText(/^Therapies/).first()); await go(p.getByText('Add from the library'));
-  const line = dlg().getByRole('button', { name: /Not on the list\? Add one of your own/ }); const there = await line.count();
-  await go(line); const t = (await text(dlg())).replace(/\n+/g, ' | ');
-  return { ok: there === 1 && /^Add therapy/.test(t), note: `line shown: ${there}, then: ${t.slice(0, 90)}` };
-});
-await step('A therapy of its own is added and listed', '/admin/team', async () => {
-  await go(p.getByText(/^Therapies/).first()); await go(p.getByText('Add from the library')); await go(dlg().getByRole('button', { name: /Not on the list/ }));
-  await dlg().getByLabel('Name').fill('Uat stone massage'); await go(dlg().getByRole('button', { name: 'Add the therapy' })); await p.waitForTimeout(800);
-  const t = (await text(p.locator('body'))).replace(/\n+/g, ' | ');
-  return { ok: /Uat stone massage/.test(t), note: (t.match(/Uat stone massage[^|]*/) || ['not listed'])[0] };
-});
+// #597: a full-day leave is saved on the chosen day whatever zone the admin's phone is in.
+const day5 = plus(5);
+for (const zone of ['America/New_York', 'Pacific/Auckland', 'Asia/Kolkata']) {
+  await step(`A full-day leave for ${day5} is saved on that day, phone in ${zone}`, '/admin/timeoff', async () => {
+    const c = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, timezoneId: zone });
+    await c.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+    const q = await c.newPage(); let sent = null, made = null;
+    q.on('response', async (r) => { if (/\/api\/timeoff$/.test(r.url()) && r.request().method() === 'POST') { sent = r.request().postDataJSON(); made = await r.json().catch(() => null); } });
+    await q.goto(APP + '/admin/timeoff'); await q.waitForTimeout(1500);
+    await q.getByRole('button', { name: /^(\+|Add)/ }).first().click(); await q.waitForTimeout(800);
+    const d = q.getByRole('dialog').last(); await d.getByText('Choose…').click(); await q.waitForTimeout(500);
+    await q.getByRole('dialog').last().getByRole('button', { name: /^Priya/ }).click(); await q.waitForTimeout(500);
+    await d.locator('input[type=date]').first().fill(day5); await d.locator('input[type=date]').nth(1).fill(day5); await q.waitForTimeout(800);
+    await d.getByRole('button', { name: 'Save, plan later' }).click(); await q.waitForTimeout(1500);
+    await q.screenshot({ path: `${OUT}/${zone.replace('/', '-')}.png` });
+    if (made?.id) await api('DELETE', `/timeoff/${made.id}`);
+    await c.close();
+    return { ok: !!sent && sent.start_date?.slice(0, 10) === day5 && sent.end_date?.slice(0, 10) === day5, note: `sent ${sent?.start_date} to ${sent?.end_date}, wanted ${day5}` };
+  });
+}
 await b.close();
 
 writeFileSync(`${OUT}/lines.json`, JSON.stringify(lines));

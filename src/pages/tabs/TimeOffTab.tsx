@@ -91,11 +91,6 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     return () => { stale = true; };
   }, [sheet, newTimeOff.type, newTimeOff.entity, newTimeOff.date, newTimeOff.endDate]);
 
-  const setTimeHM = (iso: string, hh: number, mm: number) => {
-    const d = new Date(iso);
-    d.setHours(hh, mm, 0, 0);
-    return d.toISOString();
-  };
   const isFullDay = (h: UiTimeOff) => {
     // No hours is the whole day, wherever the centre's day starts or ends.
     return !h.startTime || !h.endTime;
@@ -156,8 +151,9 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     const tempId = `temp-${Date.now()}`;
     const startTime = newTimeOff.startTime || timeSlots[0] || '09:00';
     const endTime = newTimeOff.endTime || timeSlots[timeSlots.length - 1] || '18:00';
-    const startIso = newTimeOff.fullDay ? setTimeHM(newTimeOff.date, 9, 0) : `${newTimeOff.date}T${startTime}`;
-    const endIso = newTimeOff.fullDay ? setTimeHM(newTimeOff.endDate, 18, 0) : `${newTimeOff.endDate}T${endTime}`;
+    // Whole days are calendar days, stored as midnight UTC like every other date, whatever zone the phone is in (#597).
+    const startIso = newTimeOff.fullDay ? `${newTimeOff.date}T00:00:00.000Z` : `${newTimeOff.date}T${startTime}`;
+    const endIso = newTimeOff.fullDay ? `${newTimeOff.endDate}T00:00:00.000Z` : `${newTimeOff.endDate}T${endTime}`;
     const optimistic: UiTimeOff = { id: tempId, startDate: startIso, endDate: endIso, recurrence: newTimeOff.recurrence, weekdays: newTimeOff.weekdays as UiTimeOff['weekdays'], type: newTimeOff.type, entity: newTimeOff.type === 'Center' ? 'All' : (newTimeOff.entity || ''), description: newTimeOff.description };
     setTimeOffs((prev) => [...prev, optimistic]);
     setSheet(null);
