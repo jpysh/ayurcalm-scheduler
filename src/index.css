@@ -93,6 +93,8 @@
 
   html {
     font-size: 16px;
+    /* The week strip corrects the scroll itself when it folds (BottomBar); the browser doing it too moved the page twice as far and looped the fold. */
+    overflow-anchor: none;
   }
 
   body {
