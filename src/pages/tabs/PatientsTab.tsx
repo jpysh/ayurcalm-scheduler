@@ -8,7 +8,7 @@ import DayDietDialog from "./DayDietDialog";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
-import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText, rupees, Btn, LinkBtn } from "@/components/kit";
+import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, rupees, Btn, LinkBtn } from "@/components/kit";
 import { AccommodationSheet, DietSheet, DischargeSheet, NextWeekSheet, PackageSheet, StaySheet, takenBy, type CardStay, type GuestRoomNight, type StayTarget } from "@/components/CardSheets";
 import { marked } from "@/components/SearchScreen";
 import type { AttentionItem } from "@/lib/attention";
@@ -313,7 +313,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
         foot={d?.form_c?.filed ? <Btn onClick={() => fileFormC(false)}>Not filed yet</Btn> : <Btn kind="primary" onClick={() => fileFormC(true)}>Mark Form C filed</Btn>}>
         <ListGroup>
           {d?.form_c?.fields.map(([label, value]) => value
-            ? <Row key={label} title={label} facts={/^\d{4}-\d{2}-\d{2}$/.test(value) ? dayText(value) : value} trailing="Copy" onClick={() => copy(label, value.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3/$2/$1'))} />
+            ? <Row key={label} title={label} facts={/^\d{4}-\d{2}-\d{2}$/.test(value) ? dayYear(value) : value} trailing="Copy" onClick={() => copy(label, value.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3/$2/$1'))} />
             : <Row key={label} title={label} flag="Not recorded" onClick={() => { setFormC(false); details(d.id); }} />)}
         </ListGroup>
       </BottomSheet>
