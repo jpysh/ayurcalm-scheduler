@@ -62,6 +62,8 @@ test('H2: booking is one sheet: who, then every line filled in and changeable, a
   await expect(sheet.getByRole('button', { name: 'Choose a therapy' })).toBeDisabled({ timeout: 15000 });
   await sheet.getByRole('button', { name: /^Other therapies/ }).click();
   await page.getByRole('dialog').last().getByRole('button').first().click();
+  // Late in the day the seeded team has no free time left today; the sheet says so and offers tomorrow (#497).
+  await sheet.getByRole('button', { name: /^Book tomorrow at/ }).click({ timeout: 4000 }).catch(() => {});
   for (const line of ['Date', 'Time', 'Therapist', 'Room']) await expect(sheet.getByLabel(line, { exact: true })).toBeAttached({ timeout: 15000 });
   await expect(sheet.getByRole('button', { name: /^Book \w+, / })).toBeEnabled();
 });
