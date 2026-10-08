@@ -304,12 +304,15 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
           </div>
           {/* Story 8: what the summary still lacks. It informs and never blocks; printing is always there. */}
           {leavingToday ? null : bar}
-          <ListGroup title="Treatments today">
-            {d.treatments.length ? d.treatments.map((t) => (
-              <Row key={t.id} onClick={() => openTreatment(t)} title={<>{t.start_time} · {t.status === 'no_show' ? <s>{t.therapy_name}</s> : t.therapy_name}</>}
-                facts={t.staff_names.length ? `with ${t.staff_names.join(' & ')}` : 'No therapist yet'} trailing={t.room_name || undefined} />
-            )) : <Empty text="Rest day: nothing booked today." />}
-          </ListGroup>
+          {/* Not here (yet, or any more) there is no day to rest: the group is only for a guest who is staying or has something booked (#514). */}
+          {d.stay || d.treatments.length ? (
+            <ListGroup title="Treatments today">
+              {d.treatments.length ? d.treatments.map((t) => (
+                <Row key={t.id} onClick={() => openTreatment(t)} title={<>{t.start_time} · {t.status === 'no_show' ? <s>{t.therapy_name}</s> : t.therapy_name}</>}
+                  facts={t.staff_names.length ? `with ${t.staff_names.join(' & ')}` : 'No therapist yet'} trailing={t.room_name || undefined} />
+              )) : <Empty text="Rest day: nothing booked today." />}
+            </ListGroup>
+          ) : null}
           {/* Arrival (#219): the first days, until the intake is written. Then the plan follows from the consultation. */}
           {d.stay && (d.stay.day <= 3 || !d.stay.vitals) ? (
             <ListGroup title="Arrival">

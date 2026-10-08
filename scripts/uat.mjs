@@ -44,26 +44,29 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #510: a photo of the passport is kept on the patient and shown beside Form C.
+// #514: a guest not here yet, and one who has gone, have no "Rest day" line on their card.
 await api('POST', '/settings/clear-demo-data');
-const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female', country: 'Germany', date_of_birth: '1984-03-12', id_number: 'C01X00T47' });
-await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(0), end_date: plus(7) });
-// A real image to upload: a plain card drawn in the browser, shrunk by the app like a camera photo.
-const png = await p.evaluate(async () => { const c = document.createElement('canvas'); c.width = 1600; c.height = 1100; const x = c.getContext('2d'); x.fillStyle = '#e8efe9'; x.fillRect(0, 0, 1600, 1100); x.fillStyle = '#244'; x.font = '90px sans-serif'; x.fillText('PASSPORT  C01X00T47', 120, 300); x.fillText('WEBER  CLARA', 120, 500); return c.toDataURL('image/png').split(',')[1]; });
-await step('The card offers a passport photo', '/admin/patients', async () => {
-  await go(p.getByRole('button', { name: /^Clara Weber/ }).first());
+const soon = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female' });
+await api('POST', `/patients/${soon.id}/stays`, { start_date: plus(1), end_date: plus(8) });
+const gone = await api('POST', '/patients', { name: 'Dev Mehta', gender: 'male' });
+await api('POST', `/patients/${gone.id}/stays`, { start_date: plus(-20), end_date: plus(-10) });
+const here = await api('POST', '/patients', { name: 'Asha Kumar', gender: 'female' });
+await api('POST', `/patients/${here.id}/stays`, { start_date: plus(-2), end_date: plus(5) });
+const viaSearch = async (q, row) => { await viaMenu('Search'); await p.keyboard.type(q); await p.waitForTimeout(1200); await go(p.getByText(row).first()); await p.waitForTimeout(1200); };
+await step('A guest arriving tomorrow: no "Rest day"', '/admin/schedule', async () => {
+  await viaSearch('clara', /^Arrives/);
   const t = await text(dlg());
-  return { ok: /Passport photo/.test(t) && /Take a photo/.test(t), note: t.split('\n').filter((x) => /Passport photo|Take a photo/.test(x)).join(' · ') };
+  return { ok: /Arrives/.test(t) && !/Rest day|Treatments today/i.test(t), note: t.split('\n').slice(0, 3).join(' · ') };
 });
-await step('A photo is shrunk, kept, and shown on the Form C sheet', '/admin/patients', async () => {
-  await go(p.getByRole('button', { name: /^Clara Weber/ }).first());
-  await p.locator('input[type=file]').setInputFiles({ name: 'passport.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
-  await p.waitForTimeout(2500);
-  const kept = await fetch(`${APP}/api/patients/${pt.id}/passport-photo`, { headers: { Authorization: `Bearer ${token}` } });
-  const size = (await kept.arrayBuffer()).byteLength;
-  await go(dlg().getByRole('button', { name: /^Form C/ })); await p.waitForTimeout(1200);
-  const shown = await dlg().locator('img[alt="Passport or ID"]').count();
-  return { ok: kept.ok && size > 1000 && size < 600000 && shown === 1, note: `kept ${kept.status}, ${size} bytes, ${shown} picture on the sheet` };
+await step('A guest who has left: no "Rest day"', '/admin/schedule', async () => {
+  await viaSearch('dev', /^Stayed until/);
+  const t = await text(dlg());
+  return { ok: /Stayed until/.test(t) && !/Rest day|Treatments today/i.test(t), note: t.split('\n').slice(0, 3).join(' · ') };
+});
+await step('A guest who is here keeps "Rest day" on a free day', '/admin/patients', async () => {
+  await go(p.getByRole('button', { name: /^Asha Kumar/ }).first());
+  const t = await text(dlg());
+  return { ok: /Rest day: nothing booked today/.test(t), note: t.split('\n').filter((x) => /Rest day|today/i.test(x)).join(' · ') };
 });
 await b.close();
 
