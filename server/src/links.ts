@@ -44,7 +44,10 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
   if (!who) return gone(res);
   const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
   const today = centreClock(settings?.timezone || 'Asia/Kolkata').date;
-  const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).catch(today).parse(req.query.date);
+  // A guest not here yet opens on their first day, and is told when it is, not shown an empty today (#498).
+  const next = who.kind === 'patient' ? await prisma.patientStay.findFirst({ where: { patient_id: who.id, end_date: { gte: new Date(`${today}T00:00:00.000Z`) } }, orderBy: { start_date: 'asc' } }) : null;
+  const arrives = next && next.start_date.toISOString().slice(0, 10) > today ? next.start_date.toISOString().slice(0, 10) : null;
+  const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).catch(arrives ?? today).parse(req.query.date);
   const appts = await prisma.appointment.findMany({
     where: { ...mine(who), ...HAPPENING, scheduled_date: new Date(`${date}T00:00:00.000Z`) },
     orderBy: { start_time: 'asc' },
@@ -69,7 +72,7 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
     who: { kind: who.kind, name: who.name },
     ...(details ? { details: { ...details, date_of_birth: details.date_of_birth?.toISOString().slice(0, 10) ?? null } } : {}),
     centre: settings?.centre_name || 'Wellness Centre',
-    date, today, off, meals,
+    date, today, arrives, off, meals,
     items: appts.map((a) => {
       const record = (a.record || {}) as Record;
       const base = {
