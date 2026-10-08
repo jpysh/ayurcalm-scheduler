@@ -153,25 +153,31 @@ test('P1: Add leave has Full day and Every week as switches, not Yes / None drop
   await expect(form.getByRole('combobox').filter({ hasText: /^(Yes|No|None|Weekly)$/ })).toHaveCount(0);
 });
 
-test('P2: the wizard picks the timezone from a list', async ({ page }) => {
-  // Setup unfinished for this page only: nothing is written to the centre.
-  await page.route('**/api/settings', async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
-    const res = await route.fetch();
-    await route.fulfill({ response: res, json: { ...(await res.json()), setup_complete: false } });
+// The wizard starts on the phone's own timezone when the list has it, else on India (#577).
+for (const [phone, starts] of [['Europe/Berlin', 'Europe/Berlin'], ['Pacific/Pago_Pago', 'Asia/Kolkata']] as const) {
+  test.describe(`P2: the wizard picks the timezone from a list, phone in ${phone}`, () => {
+    test.use({ timezoneId: phone });
+    test('starts on the phone, or India, and can be changed', async ({ page }) => {
+      // Setup unfinished for this page only: nothing is written to the centre.
+      await page.route('**/api/settings', async (route) => {
+        if (route.request().method() !== 'GET') return route.continue();
+        const res = await route.fetch();
+        await route.fulfill({ response: res, json: { ...(await res.json()), setup_complete: false } });
+      });
+      await page.goto('/login');
+      await page.getByLabel('Email').fill('admin@example.com');
+      await page.getByLabel('Password').fill('demo1234');
+      await page.getByLabel('Password').press('Enter');
+      await page.waitForURL(/\/setup/);
+      await page.getByLabel(/name/i).first().fill('E2E Centre');
+      await page.getByRole('button', { name: 'Continue' }).click();
+      const tz = page.getByLabel('Timezone');
+      await expect(tz).toHaveValue(starts);
+      await tz.selectOption('Europe/Prague');
+      await expect(tz).toHaveValue('Europe/Prague');
+    });
   });
-  await page.goto('/login');
-  await page.getByLabel('Email').fill('admin@example.com');
-  await page.getByLabel('Password').fill('demo1234');
-  await page.getByLabel('Password').press('Enter');
-  await page.waitForURL(/\/setup/);
-  await page.getByLabel(/name/i).first().fill('E2E Centre');
-  await page.getByRole('button', { name: 'Continue' }).click();
-  const tz = page.getByLabel('Timezone');
-  await expect(tz).toHaveValue('Asia/Kolkata');
-  await tz.selectOption('Europe/Prague');
-  await expect(tz).toHaveValue('Europe/Prague');
-});
+}
 
 test('#283: Add leave, New resident and Opening hours show no native date or time box and no AM/PM', async ({ page }) => {
   await signIn(page);
