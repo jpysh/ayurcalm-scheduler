@@ -44,16 +44,30 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #498: a guest not here yet opens their link on the first day of the stay, and is told when it is.
+// #509: on the leaving day the guest's link asks one question; the answer reaches the card and What needs you.
 await api('POST', '/settings/clear-demo-data');
-const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female' });
-await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(3), end_date: plus(10) });
-const link = await api('POST', `/patients/${pt.id}/link`);
-await step('The link says when the stay starts, on that day', `/l/${link.token}`, async () => {
+const mk = async (name) => { const x = await api('POST', '/patients', { name, gender: 'female' }); await api('POST', `/patients/${x.id}/stays`, { start_date: plus(-6), end_date: plus(0) }); return (await api('POST', `/patients/${x.id}/link`)).token; };
+const clara = await mk('Clara Weber'); const dev = await mk('Dev Mehta');
+await step('The guest is asked how the stay was', `/l/${clara}`, async () => {
   const t = await text(p.locator('body'));
-  const d = new Date(`${plus(3)}T00:00:00Z`);
-  const day = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
-  return { ok: t.includes(`Your stay starts ${day}`) && !/Today\n/.test(t), note: t.split('\n').filter((x) => /stay starts|Today|Back to today|Nothing booked/.test(x)).join(' · ') };
+  return { ok: /How was your stay/i.test(t) && /Very good/.test(t) && /Not good/.test(t), note: t.split('\n').filter((x) => /stay|good|Fine|Send/i.test(x)).join(' · ') };
+});
+await step('They answer, and are thanked', `/l/${clara}`, async () => {
+  await go(p.getByRole('button', { name: 'Fine' })); await p.getByLabel(/Anything you would like us to know/).fill('Lovely food, thank you.');
+  await go(p.getByRole('button', { name: 'Send' })); await p.waitForTimeout(1500);
+  const t = await text(p.locator('body'));
+  return { ok: /The centre has your answer/.test(t), note: t.split('\n').filter((x) => /Thank you|answer/.test(x)).join(' · ') };
+});
+await fetch(`${APP}/api/public/link/${dev}/feedback`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rating: 'poor', note: 'The room was cold.' }) });
+await step('Not good raises the pill; fine and good stay in grey', '/admin/schedule', async () => {
+  await viaMenu('need you'); await p.waitForTimeout(1000);
+  const t = await text(dlg());
+  return { ok: /Dev Mehta/.test(t) && /Stay was not good/.test(t) && /Clara Weber/.test(t) && /information, not counted/.test(t), note: t.split('\n').filter((x) => /Stay was|information|need/i.test(x)).join(' · ') };
+});
+await step('The card says what they said', '/admin/patients', async () => {
+  await go(p.getByRole('button', { name: /^Clara Weber/ }).first());
+  const c = await text(dlg());
+  return { ok: /Their stay/.test(c) && /Lovely food/.test(c), note: c.split('\n').filter((x) => /Their stay|Lovely|Fine/.test(x)).join(' · ') };
 });
 await b.close();
 

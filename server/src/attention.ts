@@ -41,8 +41,13 @@ export const RULES: Rule[] = [
   { id: 'follow_up', section: 'Patients', kind: 'action', on: true, name: 'Follow-up due after discharge' },
   { id: 'leaves_tomorrow', section: 'Patients', kind: 'action', on: false, name: 'Leaves tomorrow and the discharge summary is not started' },
   { id: 'vitals', section: 'Team', kind: 'action', on: true, hours: 4, from: 'after the treatment starts', waiting: 'Starts when therapists record readings', name: 'Vitals not recorded' },
+  { id: 'feedback', section: 'Patients', kind: 'information', on: true, name: 'A guest said their stay was good or fine' },
+  { id: 'feedback_poor', section: 'Patients', kind: 'action', on: true, name: 'A guest said their stay was not good' },
   { id: 'on_leave', section: 'Team', kind: 'information', on: true, name: 'Who is on leave today' },
 ];
+
+/** What a guest's answer is called on the admin's side (#509). */
+export const RATING: Record<string, string> = { good: 'Stay was good', fine: 'Stay was fine', poor: 'Stay was not good' };
 
 export type Changes = Record<string, { on?: boolean; hours?: number }>;
 
@@ -112,6 +117,9 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
     const due = (s.discharge as { follow_up_date?: string } | null)?.follow_up_date;
     if (due && due <= today && due > ymd(new Date(day.getTime() - 30 * DAY_MS))) add(rule('follow_up'), s, `Follow-up due ${dayName(due).replace(',', '')}`, 'card');
   }
+  // What a guest told the centre on their leaving day (#509), for a week: good and fine in grey, not good counted.
+  const told = await prisma.patientStay.findMany({ where: { feedback: { not: Prisma.DbNull }, end_date: { lte: day, gte: new Date(day.getTime() - 7 * DAY_MS) } }, include: { Patient: { select: { id: true, name: true } } } });
+  for (const s of told) { const f = s.feedback as { rating: string; note: string }; add(rule(f.rating === 'poor' ? 'feedback_poor' : 'feedback'), s, `${RATING[f.rating] ?? f.rating}${f.note ? `: “${f.note}”` : ''}`, 'card'); }
   for (const s of upcoming) if (!s.discharge) add(rule('leaves_tomorrow'), s, 'Leaves tomorrow, discharge summary not started', 'summary');
 
   const ctx = await loadDay(day, prisma);

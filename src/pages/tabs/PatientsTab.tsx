@@ -38,6 +38,8 @@ type ResidentDay = {
   plan_name: string; diet_next: { from: string; name: string } | null; meals: { meal: string; text: string }[];
   week: { date: string; treatments: { id: string; start_time: string; therapy_name: string; consultation: boolean; status: string }[] }[];
   doctor_plan: string | null;
+  /** How the guest said their stay was (#509). */
+  feedback: { rating: string; note: string } | null;
   last_consultation: Visit | null; next_consultation: Visit | null;
 };
 type Found = { id: string; name: string; plan: string; stay: { start: string; end: string } | null; last_end: string | null };
@@ -262,6 +264,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
             {d.last_consultation?.note ? <TextRow label={`Last seen · ${visit(d.last_consultation, false)}`}>{d.last_consultation.note}</TextRow>
               : <ChangeLine label="Last seen" value={d.last_consultation ? visit(d.last_consultation, false) : 'Not seen yet'} faint={!d.last_consultation} />}
             <ChangeLine label="Next" value={d.next_consultation ? visit(d.next_consultation, true) : leavingToday ? 'None · leaving today' : 'None booked · book one'} faint={!d.next_consultation} onClick={d.next_consultation || leavingToday ? undefined : () => book({ id: d.id, name: d.name, consult: true })} />
+            {d.feedback ? <TextRow label="Their stay">{`${({ good: "Very good", fine: "Fine", poor: "Not good" } as Record<string, string>)[d.feedback.rating] ?? d.feedback.rating}${d.feedback.note ? `: “${d.feedback.note}”` : ""}`}</TextRow> : null}
             <TextRow label="Plan" faint={!d.doctor_plan} onClick={() => setPlan(d.doctor_plan || '')}>{d.doctor_plan || 'No plan written yet'}</TextRow>
           </ListGroup>
           {/* Story 4: everything a patient may have is a row with an arrow, filled when it is decided; nothing is forced. */}

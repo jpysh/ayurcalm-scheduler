@@ -66,6 +66,8 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
       meals = mealOrder.filter((m) => diet.meals[m]).map((m) => ({ meal: mealLabel[m], text: diet.meals[m]! }));
     }
   }
+  // On the leaving day, and for a week after, the guest is asked how the stay was, once (#509).
+  const ended = who.kind === 'patient' ? await prisma.patientStay.findFirst({ where: { patient_id: who.id, start_date: { lte: new Date(`${today}T00:00:00.000Z`) }, end_date: { lte: new Date(`${today}T00:00:00.000Z`), gte: new Date(Date.parse(`${today}T00:00:00.000Z`) - 7 * 86400000) } }, orderBy: { end_date: 'desc' } }) : null;
   // A patient fills their own details before arriving (#489): what the card's More details holds.
   const details = who.kind === 'patient' ? await prisma.patient.findUnique({ where: { id: who.id }, select: DETAILS }) : null;
   res.json({
@@ -73,6 +75,7 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
     ...(details ? { details: { ...details, date_of_birth: details.date_of_birth?.toISOString().slice(0, 10) ?? null } } : {}),
     centre: settings?.centre_name || 'Wellness Centre',
     date, today, arrives, off, meals,
+    feedback: ended ? { given: (ended.feedback as { rating: string; note: string } | null) ?? null } : null,
     items: appts.map((a) => {
       const record = (a.record || {}) as Record;
       const base = {
@@ -141,6 +144,20 @@ linkRouter.put('/:token/details', async (req: Request, res: Response) => {
   const { date_of_birth, ...rest } = b;
   const saved = await prisma.patient.update({ where: { id: who.id }, select: DETAILS, data: { ...rest, ...(date_of_birth !== undefined ? { date_of_birth: date_of_birth ? new Date(`${date_of_birth}T00:00:00.000Z`) : null } : {}) } });
   res.json(saved);
+});
+
+// One question on the leaving day (#509): a face and an optional line, kept on the stay and read by the admin in What needs you.
+linkRouter.post('/:token/feedback', async (req: Request, res: Response) => {
+  const who = await personOf(String(req.params.token));
+  if (!who) return gone(res);
+  if (who.kind !== 'patient') { res.status(403).json({ error: 'Only a guest answers this.' }); return; }
+  const b = z.object({ rating: z.enum(['good', 'fine', 'poor']), note: z.string().trim().max(500).default('') }).strict().parse(req.body);
+  const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  const today = new Date(`${centreClock(settings?.timezone || 'Asia/Kolkata').date}T00:00:00.000Z`);
+  const stay = await prisma.patientStay.findFirst({ where: { patient_id: who.id, start_date: { lte: today }, end_date: { lte: today, gte: new Date(today.getTime() - 7 * 86400000) } }, orderBy: { end_date: 'desc' } });
+  if (!stay) { res.status(404).json({ error: 'There is no stay to answer about yet.' }); return; }
+  await prisma.patientStay.update({ where: { id: stay.id }, data: { feedback: { ...b, at: new Date().toISOString() } } });
+  res.json({ ok: true });
 });
 
 export const ISSUE_KINDS = ['room', 'co_therapist', 'patient_absent', 'sos', 'permission', 'note'] as const;
