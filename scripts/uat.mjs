@@ -44,30 +44,18 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #544: no room has what a therapy needs: the cause is named and a room is offered with those ticked.
-const eq = `Rare ${Date.now() % 1000}`; const eqKey = `rare_${Date.now() % 1000}_chair`;
-const rareTh = await api('POST', '/therapies', { name: eq, duration_minutes: 30, required_amenities: [eqKey] });
-await api('POST', '/staff', { name: `Rare Giver ${Date.now() % 1000}`, gender: 'female', specializations: [rareTh.id] });
-const np = await api('POST', '/patients', { name: `No Room ${Date.now() % 1000}`, gender: 'female', on_site: true, stay: { start_date: plus(0), end_date: plus(6) } });
-await step('A therapy no room can host says why, with a way forward', '/admin/schedule', async () => {
+// #546: after closing, + opens on tomorrow. Runs only when the centre is closed for the day.
+const cfg546 = await api('GET', '/settings');
+const hm546 = new Intl.DateTimeFormat('en-GB', { timeZone: cfg546.timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
+const closed546 = hm546 >= cfg546.closing_time;
+const tmr546 = new Date(`${plus(1)}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
+const ep = await api('POST', '/patients', { name: `Evening Book ${Date.now() % 1000}`, gender: 'male', on_site: true, stay: { start_date: plus(0), end_date: plus(6) } });
+await step('After closing, Book opens on tomorrow', '/admin/schedule', async () => {
+  if (!closed546) return { ok: false, note: `skipped: the centre is open until ${cfg546.closing_time} (now ${hm546})` };
   await go(plusBtn('Book a treatment')); await p.waitForTimeout(800);
-  await go(dlg().getByText(np.name).first()); await p.waitForTimeout(900);
-  await dlg().locator('input[type=date]').first().fill(plus(1)); await p.waitForTimeout(700);
-  await go(dlg().getByText('Other therapies')); await p.locator('input[type=text]').last().fill(eq); await p.waitForTimeout(700);
-  await go(dlg().getByText(eq).first()); await p.waitForTimeout(1500);
+  await go(dlg().getByText(ep.name).first()); await p.waitForTimeout(900);
   const t = await text(dlg());
-  return { ok: new RegExp(`No room has ${eqKey.replace(/_/g, ' ')}`).test(t) && /Add a room that has them/.test(t) && !/Nothing is free for the rest/.test(t), note: t.split('\n').filter((x) => /No room|Nothing is free|Add a room|Try another/.test(x)).join(' · ') };
-});
-await step('The offer opens the room sheet with it ticked', '/admin/schedule', async () => {
-  await go(plusBtn('Book a treatment')); await p.waitForTimeout(800);
-  await go(dlg().getByText(np.name).first()); await p.waitForTimeout(900);
-  await dlg().locator('input[type=date]').first().fill(plus(1)); await p.waitForTimeout(700);
-  await go(dlg().getByText('Other therapies')); await p.locator('input[type=text]').last().fill(eq); await p.waitForTimeout(700);
-  await go(dlg().getByText(eq).first()); await p.waitForTimeout(1500);
-  await go(dlg().getByRole('button', { name: /Add a room that has them/ })); await p.waitForTimeout(1200);
-  const t = await text(dlg());
-  const ticked = await dlg().getByRole('button', { name: new RegExp(eqKey.replace(/_/g, ' ')) }).first().getAttribute('aria-pressed').catch(() => null);
-  return { ok: /Add room/.test(t) && ticked === 'true', note: `${t.split('\n').slice(0, 3).join(' · ')}; ${eqKey.replace(/_/g, ' ')} ticked: ${ticked}` };
+  return { ok: new RegExp(`Date\\n${tmr546}`).test(t) && !/hours are over/.test(t), note: `closing ${cfg546.closing_time}, now ${hm546}; ` + t.split('\n').filter((x) => /^Date$|Oct$|hours are over/.test(x)).slice(0, 3).join(' · ') };
 });
 await b.close();
 
