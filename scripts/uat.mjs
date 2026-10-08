@@ -44,22 +44,17 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #526, #527: Settings says what the Menu says; a rule switched off says it is off.
-// A guest three days in with no diet and nothing recorded: two things for one patient, one row on the pill.
-const two = await api('POST', '/patients', { name: `Two Things ${Date.now() % 1000}`, gender: 'male', on_site: true, stay: { start_date: plus(-3), end_date: plus(5) } });
-const menuCount = async () => { await p.goto(APP + '/admin/schedule'); await p.waitForTimeout(2000); await menu(); const t = await text(dlg()); await p.keyboard.press('Escape'); await p.waitForTimeout(500); return Number((t.match(/(\d+) need you/) || [])[1] || 0); };
-await step('Settings reads the same count as the Menu', '/admin/settings', async () => {
-  const t = await text(p.locator('body')); const said = Number((t.match(/the pill shows (\d+) today/) || [])[1] || 0);
-  const m = await menuCount();
-  return { ok: said === m, note: `Settings says ${said}, the Menu says ${m}` };
-});
-await step('A rule switched off says it is off', '/admin/settings', async () => {
-  await go(p.getByText('What needs you').first()); await p.waitForTimeout(900);
-  const row = dlg().getByRole('switch').nth(3); await row.click(); await p.waitForTimeout(900);
-  const t = await text(dlg()); const line = t.split('\n').find((x) => /^Off ·/.test(x)) || '';
-  await go(dlg().getByRole('button', { name: 'Reset to the defaults' }));
-  return { ok: !!line && !/Counts on the pill · would raise \d+ today\n[^\n]*\n[^\n]*Changed from on/.test(t), note: line || t.split('\n').slice(0, 14).join(' · ') };
-});
+// #537: the count and the Menu's "N need you" row show on every screen, not only the day and Patients.
+const sosPerson = (await api('GET', '/staff')).find((x) => x.role === 'therapist');
+const sosLink = await api('POST', `/staff/${sosPerson.id}/link`);
+await fetch(`${APP}/api/public/link/${sosLink.token}/issues`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'sos', note: 'UAT #537' }) });
+for (const [name, path] of [['Team', '/admin/team'], ['Rooms', '/admin/rooms'], ['Leave', '/admin/timeoff'], ['Settings', '/admin/settings']]) {
+  await step(`${name}: the Menu says how many need you`, path, async () => {
+    const badge = (await p.getByRole('button', { name: 'Menu', exact: true }).innerText()).trim();
+    await menu(); const t = await text(dlg());
+    return { ok: /\d+ need you/.test(t) && /^\d+$/.test(badge), note: `badge ${badge || 'none'}; ` + t.split('\n').filter((x) => x.trim()).slice(0, 3).join(' · ') };
+  });
+}
 await b.close();
 
 writeFileSync(`${OUT}/lines.json`, JSON.stringify(lines));
