@@ -704,7 +704,7 @@ app.post('/patients/:id/diet', async (req: Request, res: Response) => {
 
 // TimeOff (with Holidays alias)
 const timeoffSchema = z.object({
-  entity_type: z.enum(['center','staff','room','therapy','patient']),
+  entity_type: z.enum(['center','staff','room','guest_room','therapy','patient']),
   entity_id: z.string().uuid().nullable().optional(),
   date: z.string().optional().nullable(),
   start_date: z.string().optional().nullable(),

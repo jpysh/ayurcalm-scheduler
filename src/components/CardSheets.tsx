@@ -248,9 +248,9 @@ export function PackageSheet({ patient, stay, onClose, onSaved, editList, matchS
 }
 
 /** A guest room for some nights (#456), as `/guest-rooms/free` gives it. */
-export type GuestRoomNight = { id: string; name: string; beds: number; accommodation_id: string; type: string; free: boolean; full_on: { date: string; names: string[] } | null };
+export type GuestRoomNight = { id: string; name: string; beds: number; accommodation_id: string; type: string; free: boolean; full_on: { date: string; names: string[] } | null; out: { date: string; until: string; reason: string | null } | null };
 /** Taken rooms say by whom and from when, so a clash is never picked by accident. */
-export const takenBy = (r: GuestRoomNight) => r.full_on ? `${r.full_on.names.join(" & ")} · ${dayText(r.full_on.date)}` : "";
+export const takenBy = (r: GuestRoomNight) => r.out ? `Out of use${r.out.reason ? `: ${r.out.reason}` : ""} · ${dayText(r.out.date)}` : r.full_on ? `${r.full_on.names.join(" & ")} · ${dayText(r.full_on.date)}` : "";
 
 export function AccommodationSheet({ patient, stay, onClose, onSaved, editList }: { patient: Who | null; stay: CardStay | null; onClose: () => void; onSaved: () => void; editList: () => void }) {
   const [list, setList] = useState<House[] | null>(null);

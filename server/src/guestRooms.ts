@@ -18,7 +18,19 @@ const DAY_MS = 86400000;
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const dayOf = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
 /** The morning after the last night: the leaving day, or the next day for a stay that starts and ends on one day. */
-const nightsEnd = (from: Date, to: Date) => (to > from ? to : new Date(from.getTime() + DAY_MS));
+export const nightsEnd = (from: Date, to: Date) => (to > from ? to : new Date(from.getTime() + DAY_MS));
+
+type OutRow = { entity_id: string | null; date: Date | null; start_date: Date | null; end_date: Date | null; description: string | null };
+/** The first of these nights (from, up to but not including end) a room is out of use, with why and until when; null when it is in use on all of them. Whole days, both ends included. */
+export function outNight(rows: OutRow[], roomId: string, from: Date, end: Date) {
+  const mine = rows.filter((r) => r.entity_id === roomId).map((r) => { const s = iso((r.start_date ?? r.date)!); return { s, e: r.end_date ? iso(r.end_date) : s, why: r.description?.trim() || null }; });
+  for (let d = from.getTime(); d < end.getTime(); d += DAY_MS) {
+    const day = iso(new Date(d));
+    const hit = mine.find((r) => r.s <= day && day <= r.e);
+    if (hit) return { date: day, until: hit.e, reason: hit.why };
+  }
+  return null;
+}
 
 /**
  * Every active guest room for the nights from `from` up to, not including, `to`: who is in
@@ -27,12 +39,13 @@ const nightsEnd = (from: Date, to: Date) => (to > from ? to : new Date(from.getT
  */
 export async function guestRoomsFor(db: Db, from: Date, to: Date, except?: string) {
   const end = nightsEnd(from, to);
-  const [rooms, stays] = await Promise.all([
+  const [rooms, stays, off] = await Promise.all([
     db.guestRoom.findMany({ where: { is_active: true }, include: { Accommodation: { select: { name: true, price_per_day: true } } } }),
     db.patientStay.findMany({
       where: { guest_room_id: { not: null }, on_site: true, start_date: { lt: end }, end_date: { gte: from }, ...(except ? { id: { not: except } } : {}) },
       include: { Patient: { select: { name: true } } },
     }),
+    db.timeOff.findMany({ where: { entity_type: 'guest_room' } }),
   ]);
   rooms.sort((a, b) => a.Accommodation.price_per_day - b.Accommodation.price_per_day || a.Accommodation.name.localeCompare(b.Accommodation.name) || a.name.localeCompare(b.name, 'en', { numeric: true }));
   return rooms.map((r) => {
@@ -40,9 +53,12 @@ export async function guestRoomsFor(db: Db, from: Date, to: Date, except?: strin
     const sleeping = (d: number) => guests.filter((s) => s.start_date.getTime() <= d && d < nightsEnd(s.start_date, s.end_date).getTime());
     let full: number | null = null;
     for (let d = from.getTime(); d < end.getTime() && full === null; d += DAY_MS) if (sleeping(d).length >= r.beds) full = d;
+    // Out of use (#563): the admin took the room out, say for no electricity, so no night of it can be given.
+    const out = outNight(off, r.id, from, end);
     return {
       id: r.id, name: r.name, beds: r.beds, accommodation_id: r.accommodation_id, type: r.Accommodation.name,
-      free: full === null,
+      free: full === null && !out,
+      out,
       /** The first night with no bed left, and who has them. */
       full_on: full === null ? null : { date: iso(new Date(full)), names: sleeping(full).map((s) => s.Patient.name) },
       guests: guests.map((s) => ({ stay_id: s.id, patient_id: s.patient_id, name: s.Patient.name, start_date: iso(s.start_date), end_date: iso(s.end_date) })),
@@ -67,6 +83,7 @@ export async function guestRoomRefusal(db: Db, roomId: string, from: Date, to: D
   const then = names.length ? ` Free for all those nights: ${names.join(', ')}.` : ' No guest room is free for all those nights.';
   if (!room) return { reason: 'ROOM_GONE', message: `That guest room is no longer in use.${then}`, free: free.map(({ id, name, type }) => ({ id, name, type })) };
   if (room.free) return null;
+  if (room.out) return { reason: 'ROOM_OUT', message: `${room.name} is out of use on ${dayOf(new Date(`${room.out.date}T00:00:00Z`))}${room.out.reason ? `: ${room.out.reason}` : ''}.${then}`, free: free.map(({ id, name, type }) => ({ id, name, type })) };
   const full = room.full_on!;
   return { reason: 'ROOM_TAKEN', message: `${room.name} is taken on ${dayOf(new Date(`${full.date}T00:00:00Z`))} by ${full.names.join(' and ')}.${then}`, free: free.map(({ id, name, type }) => ({ id, name, type })) };
 }
