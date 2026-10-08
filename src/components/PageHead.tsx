@@ -8,10 +8,10 @@ export const BackContext = createContext<{ label: string; run: () => void } | nu
 export default function PageHead({ title, note, gear }: { title: string; note?: ReactNode; gear?: { label: string; run: () => void } }) {
   const back = useContext(BackContext);
   return (
-    <div className="flex items-center justify-between gap-2 px-1 pb-2 pt-1.5">
+    <div className="flex flex-wrap items-center justify-between gap-x-2 px-1 pb-2 pt-1.5">
       <span className="flex min-w-0 items-center gap-1">
         {back ? <button type="button" aria-label={`Back to ${back.label}`} onClick={back.run} className="-ml-2 min-h-11 shrink-0 rounded-full px-2 text-base font-semibold text-primary active:bg-secondary">‹ {back.label}</button> : null}
-        <h1 className="m-0 truncate text-lg font-semibold">{title}</h1>
+        <h1 className="m-0 break-words text-lg font-semibold">{title}</h1>
       </span>
       <span className="flex items-center gap-1">
         {note ? <span className="text-sm text-muted-foreground">{note}</span> : null}

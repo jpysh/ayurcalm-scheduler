@@ -44,21 +44,13 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #553: a booking on another day than the one on screen moves the screen there, and the toast names the day.
-const bp = await api('POST', '/patients', { name: `Show Day ${Date.now() % 1000}`, gender: 'female', on_site: true, stay: { start_date: plus(0), end_date: plus(8) } });
-const when553 = new Date(`${plus(2)}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
-await step('Book on another day, Done: the screen shows that day', '/admin/schedule', async () => {
-  await go(plusBtn('Book a treatment')); await p.waitForTimeout(800);
-  await p.locator('input[type=text]').last().fill(bp.name); await p.waitForTimeout(900);
-  await go(dlg().getByText(bp.name).first()); await p.waitForTimeout(900);
-  await dlg().locator('input[type=date]').first().fill(plus(2)); await p.waitForTimeout(700);
-  await go(dlg().getByText('Other therapies')); await p.locator('input[type=text]').last().fill('Shirodhara'); await p.waitForTimeout(700);
-  await go(dlg().getByText('Shirodhara').first()); await p.waitForTimeout(1500);
-  await go(dlg().getByRole('button', { name: /^Book / })); await p.waitForTimeout(1500);
-  await go(dlg().getByRole('button', { name: 'Done' })); await p.waitForTimeout(1800);
-  const t = await text(p.locator('body')); const toast = await p.locator('[data-sonner-toast]').first().innerText().catch(() => '');
-  return { ok: t.includes(bp.name) && toast.includes(when553), note: `toast: ${toast.replace(/\n/g, ' · ')}; the list shows ${bp.name}: ${t.includes(bp.name)}` };
-});
+// #556: at 200% text nothing a decision needs is cut (rows, tiles, page titles).
+const big = async () => { await p.addStyleTag({ content: 'html{font-size:200% !important}' }); await p.waitForTimeout(700); };
+const cut = () => p.evaluate(() => [...new Set([...document.querySelectorAll('body *')].filter((e) => { const s = getComputedStyle(e); const clamped = s.webkitLineClamp && s.webkitLineClamp !== 'none'; return e.children.length === 0 && e.textContent.trim().length > 2 && ((clamped && e.scrollHeight > e.clientHeight + 1) || (s.textOverflow === 'ellipsis' && e.scrollWidth > e.clientWidth + 2)); }).map((e) => e.textContent.trim().slice(0, 40)))]);
+for (const [name, path] of [['Settings', '/admin/settings'], ['Patients', '/admin/patients'], ['Team', '/admin/team'], ['Guest rooms', '/admin/guestrooms']]) {
+  await step(`${name} at 200% text: nothing is cut`, path, async () => { await big(); const c = await cut(); return { ok: c.length === 0, note: c.length ? `cut: ${c.join(' | ')}` : 'nothing cut' }; });
+}
+await step('The Menu at 200% text: nothing is cut', '/admin/schedule', async () => { await big(); await menu(); await p.waitForTimeout(800); const c = await cut(); return { ok: c.length === 0, note: c.length ? `cut: ${c.join(' | ')}` : 'nothing cut' }; });
 await b.close();
 
 writeFileSync(`${OUT}/lines.json`, JSON.stringify(lines));
