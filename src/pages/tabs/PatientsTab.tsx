@@ -38,6 +38,8 @@ type ResidentDay = {
   plan_name: string; diet_next: { from: string; name: string } | null; meals: { meal: string; text: string }[];
   week: { date: string; treatments: { id: string; start_time: string; therapy_name: string; consultation: boolean; status: string }[] }[];
   doctor_plan: string | null;
+  /** What therapists recorded after treatments, newest first (#508). */
+  readings: { date: string; text: string }[];
   last_consultation: Visit | null; next_consultation: Visit | null;
 };
 type Found = { id: string; name: string; plan: string; stay: { start: string; end: string } | null; last_end: string | null };
@@ -262,6 +264,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
             {d.last_consultation?.note ? <TextRow label={`Last seen · ${visit(d.last_consultation, false)}`}>{d.last_consultation.note}</TextRow>
               : <ChangeLine label="Last seen" value={d.last_consultation ? visit(d.last_consultation, false) : 'Not seen yet'} faint={!d.last_consultation} />}
             <ChangeLine label="Next" value={d.next_consultation ? visit(d.next_consultation, true) : leavingToday ? 'None · leaving today' : 'None booked · book one'} faint={!d.next_consultation} onClick={d.next_consultation || leavingToday ? undefined : () => book({ id: d.id, name: d.name, consult: true })} />
+            {d.readings.length ? <TextRow label="Readings">{d.readings.map((r) => `${r.text} · ${dayText(r.date)}`).join("  ·  ")}</TextRow> : null}
             <TextRow label="Plan" faint={!d.doctor_plan} onClick={() => setPlan(d.doctor_plan || '')}>{d.doctor_plan || 'No plan written yet'}</TextRow>
           </ListGroup>
           {/* Story 4: everything a patient may have is a row with an arrow, filled when it is decided; nothing is forced. */}
@@ -297,7 +300,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
       <BottomSheet open={intake !== null} onOpenChange={(o) => { if (!o) setIntake(null); }} title={`Arrival · ${d?.name.split(' ')[0] ?? ''}`} note="Written once, from the first days. Nothing here is required."
         foot={<Foot label="Save arrival notes" save={saveIntake} />}>
         {intake ? (<>
-          <Text label="Vitals (optional)" placeholder="BP 130/85, pulse 72, weight 68 kg" value={intake.vitals} onChange={(e) => setIntake({ ...intake, vitals: e.target.value })} />
+          <Text label="Vitals (optional)" placeholder="What was measured: BP, pulse, weight" value={intake.vitals} onChange={(e) => setIntake({ ...intake, vitals: e.target.value })} />
           <Area label="What they came about (optional)" rows={3} value={intake.concerns} onChange={(e) => setIntake({ ...intake, concerns: e.target.value })} />
           <Text label="External tests (optional)" placeholder="Blood sugar, thyroid" value={intake.tests} onChange={(e) => setIntake({ ...intake, tests: e.target.value })} />
         </>) : null}
