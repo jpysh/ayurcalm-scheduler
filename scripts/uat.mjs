@@ -44,14 +44,27 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #494: the Form C sheet shows the date of birth with its year.
+// #500: small things from the walk: the follow-up counts once dated, one "(optional)", and the list follows a changed stay.
 await api('POST', '/settings/clear-demo-data');
-const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female', country: 'Germany', date_of_birth: '1984-03-12', id_number: 'C01X00T47' });
-await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(0), end_date: plus(7) });
-await step('Form C shows the whole date of birth', '/admin/patients', async () => {
-  await go(p.getByRole('button', { name: /^Clara Weber/ }).first()); await go(dlg().getByRole('button', { name: /^Form C/ }));
+const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female' });
+const sy = await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(0), end_date: plus(8) });
+await api('PUT', `/patients/${pt.id}/stays/${sy.id}/discharge`, { follow_up_date: plus(30) });
+await step('Discharge: a dated follow-up is not missing, and one (optional)', '/admin/patients', async () => {
+  await go(p.getByRole('button', { name: /^Clara Weber/ }).first()); await go(dlg().getByText(/^Discharge summary/));
   const t = await text(dlg());
-  return { ok: /12 Mar 1984/.test(t), note: t.split('\n').filter((x) => /birth|1984|Arrived/.test(x)).join(' · ') };
+  const missing = t.split('STILL MISSING')[1] || '';
+  await go(dlg().getByText('Write or edit it'));
+  const f = await text(dlg());
+  return { ok: !/Follow-up/.test(missing) && /Total payment\b/.test(f) && !/\(optional\) \(optional\)/.test(f), note: `missing: ${missing.split('\n').filter((x) => x.trim()).slice(0, 4).join(' / ')} · ${f.split('\n').filter((x) => /Total payment/.test(x)).join('')}` };
+});
+await step('The list behind the card follows a changed stay', '/admin/patients', async () => {
+  await go(p.getByRole('button', { name: /^Clara Weber/ }).first()); await go(dlg().getByRole('button', { name: /^Stay/ }));
+  await dlg().getByLabel('Leaving').fill(plus(3)); await p.waitForTimeout(1200);
+  await go(dlg().getByRole('button', { name: /^Leave on/ })); await p.waitForTimeout(1500);
+  await p.keyboard.press('Escape'); await p.waitForTimeout(800); await p.keyboard.press('Escape'); await p.waitForTimeout(800);
+  const t = await text(p.locator('body'));
+  const want = new Date(`${plus(3)}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  return { ok: t.split('\n').some((x) => /leaves/.test(x) && x.includes(want)), note: t.split('\n').filter((x) => /leaves|Day \d/.test(x)).join(' · ') };
 });
 await b.close();
 
