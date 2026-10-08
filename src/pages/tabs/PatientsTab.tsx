@@ -218,8 +218,8 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
     if (!res.ok) { toast.error("That could not be saved."); return; }
     setFormC(false); load();
   };
-  // The week after the review: today's if the doctor saw them today, else the coming one; next week repeats the week up to it.
-  const weekFrom = d ? (d.last_consultation?.date.slice(0, 10) === today ? today : (d.next_consultation || d.last_consultation)?.date.slice(0, 10)) : undefined;
+  // The week after the review: today's if the doctor saw them today, else the coming one, else (none booked yet, #523) today; next week repeats the week up to it and books the review.
+  const weekFrom = d ? (d.last_consultation?.date.slice(0, 10) === today ? today : (d.next_consultation || d.last_consultation)?.date.slice(0, 10) ?? today) : undefined;
   const startIntake = (x: ResidentDay) => ({ vitals: x.stay!.vitals || '', concerns: x.stay!.concerns || '', tests: x.stay!.tests || '' });
   const visit = (v: Visit, withTime: boolean) => `${dayText(v.date)}${withTime ? ` ${v.start_time}` : ''}${v.doctor ? ` · ${v.doctor}` : ''}`;
   // On the last day the discharge comes first and nothing more is booked (#406).
