@@ -279,13 +279,15 @@ const span = (from: string, to: string) => {
  * the button into Book anyway. `patient` skips the first step, for a booking
  * started from their card.
  */
-export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refresh, patient, rev, onAction, onAddPatient }: {
+export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refresh, patient, rev, onAction, onAddPatient, onShowDay }: {
   open: boolean; onClose: () => void; day: string; today: string; isToday: boolean; nowMinutes: number;
   refresh: () => Promise<void>; patient?: { id: string; name: string; consult?: boolean } | null;
   /** Changes when the team does, so the lists are asked again after a therapist is added. */
   rev?: number;
   /** Actions that leave the sheet's own screen (adding a therapist). */
   onAction?: (a: BookAction) => void;
+  /** After a booking: the day it landed on, so the screen can show it. */
+  onShowDay?: (iso: string) => void;
   /** A name nobody matches becomes a new patient, who comes back chosen (#330). */
   onAddPatient?: (name: string, arriving: string, done: (p: { id: string; name: string }) => void) => void;
 }) {
@@ -304,7 +306,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   const [roomId, setRoomId] = useState("");
   const [busy, setBusy] = useState(false);
   // After Book the sheet stays on this, so several treatments for one patient are a tap each (#330).
-  const [booked, setBooked] = useState<{ text: string; count?: number; ids: string[]; note: string } | null>(null);
+  const [booked, setBooked] = useState<{ text: string; count?: number; ids: string[]; note: string; date: string } | null>(null);
   const [round, setRound] = useState(0);
   // A centre with the whole library has forty therapies: past a dozen the list is the last one had, and a search.
   const [pickTherapy, setPickTherapy] = useState(false);
@@ -391,7 +393,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
       return;
     }
     await refresh();
-    setBooked({ text: `${therapyName} at ${time}.`, count: body.day_count, ids: [body.id], note: `Booked ${first}: ${therapyName} at ${time}` });
+    setBooked({ text: `${therapyName} at ${time}.`, count: body.day_count, ids: [body.id], note: `Booked ${first}: ${therapyName} at ${time}${date === today ? "" : `, ${dayText(date)}`}`, date });
   };
   /** A course: one a day from the date, at this time with this therapist and room. All of it or none of it. */
   const bookCourse = async () => {
@@ -408,7 +410,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
       return;
     }
     await refresh();
-    setBooked({ text: `${sessions} × ${therapyName} at ${time}.`, ids: made, note: `Booked ${first}: ${sessions} × ${therapyName} at ${time}` });
+    setBooked({ text: `${sessions} × ${therapyName} at ${time}.`, ids: made, note: `Booked ${first}: ${sessions} × ${therapyName} at ${time}${date === today ? "" : ` from ${dayText(date)}`}`, date });
   };
   /** The sheet stays on Booked, so the note with Undo comes when it closes: at the bottom it would cover the buttons. */
   const close = () => {
@@ -416,6 +418,8 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
       await Promise.all(booked.ids.map((id) => fetch(`${API_BASE}/appointments/${id}`, { method: "DELETE" })));
       await refresh();
     } } });
+    // A booking on another day than the one on screen: go there, so the admin sees what they did (#553).
+    if (booked) onShowDay?.(booked.date);
     onClose();
   };
   const undoBooked = async () => {

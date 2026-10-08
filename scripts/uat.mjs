@@ -44,13 +44,19 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #550: opening a Settings sheet again does not write another "marked as reviewed" line to the Log.
-const reviewLines = async () => ((await api('GET', '/log')).entries || []).filter((e) => /catalogues marked as reviewed/.test(e.text)).length;
-await step('Packages and accommodation, opened three times, logs one line at most', '/admin/settings', async () => {
-  const before = await reviewLines();
-  for (let i = 0; i < 3; i++) { await p.goto(`${APP}/admin/settings`); await p.waitForTimeout(1200); await go(p.getByText('Packages and accommodation').first()); await p.waitForTimeout(800); }
-  const after = await reviewLines();
-  return { ok: after - before <= 1, note: `Log lines ${before} → ${after}` };
+// #553: a booking on another day than the one on screen moves the screen there, and the toast names the day.
+const bp = await api('POST', '/patients', { name: `Show Day ${Date.now() % 1000}`, gender: 'female', on_site: true, stay: { start_date: plus(0), end_date: plus(8) } });
+const when553 = new Date(`${plus(2)}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
+await step('Book on another day, Done: the screen shows that day', '/admin/schedule', async () => {
+  await go(plusBtn('Book a treatment')); await p.waitForTimeout(800);
+  await go(dlg().getByText(bp.name).first()); await p.waitForTimeout(900);
+  await dlg().locator('input[type=date]').first().fill(plus(2)); await p.waitForTimeout(700);
+  await go(dlg().getByText('Other therapies')); await p.locator('input[type=text]').last().fill('Shirodhara'); await p.waitForTimeout(700);
+  await go(dlg().getByText('Shirodhara').first()); await p.waitForTimeout(1500);
+  await go(dlg().getByRole('button', { name: /^Book / })); await p.waitForTimeout(1500);
+  await go(dlg().getByRole('button', { name: 'Done' })); await p.waitForTimeout(1800);
+  const t = await text(p.locator('body')); const toast = await p.locator('[data-sonner-toast]').first().innerText().catch(() => '');
+  return { ok: t.includes(bp.name) && toast.includes(when553), note: `toast: ${toast.replace(/\n/g, ' · ')}; the list shows ${bp.name}: ${t.includes(bp.name)}` };
 });
 await b.close();
 
