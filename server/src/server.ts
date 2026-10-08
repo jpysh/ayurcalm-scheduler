@@ -863,8 +863,9 @@ app.get('/patients/:id/passport-photo', requireAdmin, async (req: Request, res: 
   res.send(Buffer.from(photo.image));
 });
 app.put('/patients/:id/passport-photo', requireAdmin, async (req: Request, res: Response) => {
-  const image = req.body as Buffer;
-  if (!Buffer.isBuffer(image) || image.length < 4 || image[0] !== 0xff || image[1] !== 0xd8) { res.status(400).json({ error: 'Send the photo as a JPEG.' }); return; }
+  const sent: unknown = req.body;
+  if (!Buffer.isBuffer(sent) || sent.length < 4 || sent[0] !== 0xff || sent[1] !== 0xd8) { res.status(400).json({ error: 'Send the photo as a JPEG.' }); return; }
+  const image = sent;
   await prisma.patient.findUniqueOrThrow({ where: { id: String(req.params.id) } });
   const kept = await prisma.patientPhoto.upsert({ where: { patient_id: String(req.params.id) }, create: { patient_id: String(req.params.id), image }, update: { image }, select: { updated_at: true } });
   res.json({ kept: kept.updated_at });
