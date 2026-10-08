@@ -92,7 +92,8 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
   // The one control the admin sees (5 Oct): everything else is a row in its sheet. The badge keeps what needs them in view.
   const need = attention?.fix ?? 0;
   const info = (attention?.done ?? 0) + (attention?.note ?? 0);
-  const inbox = (onDay || activeTab === "patients") && attention && (need || info) ? { need, info } : null;
+  // On every screen (#537): an SOS raised while the admin is in Settings must still show.
+  const inbox = attention && (need || info) ? { need, info } : null;
   const close = (run: () => void) => () => { setSheet(null); run(); };
 
   return (

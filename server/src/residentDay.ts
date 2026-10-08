@@ -12,6 +12,16 @@ import { formCDue, isForeign } from './attention.js';
 
 const DAY_MS = 86400000;
 
+/** What therapists recorded after a treatment, newest three, so the doctor reads them without opening each treatment (#508, #530). */
+export async function lastReadings(patientId: string, day: Date, prisma: PrismaClient) {
+  const recorded = await prisma.appointment.findMany({ where: { patient_id: patientId, scheduled_date: { lte: day }, status: { not: 'cancelled' }, NOT: { record: { equals: Prisma.DbNull } } }, orderBy: [{ scheduled_date: 'desc' }, { start_time: 'desc' }], select: { scheduled_date: true, record: true }, take: 30 });
+  return recorded.flatMap((a) => {
+    const v = ((a.record as { vitals?: Record<string, string> } | null)?.vitals) || {};
+    const text = Object.entries(v).filter(([, x]) => String(x).trim()).map(([k, x]) => `${k.length <= 3 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1)} ${String(x).trim()}`).join(', ');
+    return text ? [{ date: a.scheduled_date.toISOString().slice(0, 10), text }] : [];
+  }).slice(0, 3);
+}
+
 export async function residentDay(patientId: string, date: string, prisma: PrismaClient) {
   const day = new Date(`${date}T00:00:00.000Z`);
   const patient = await prisma.patient.findUnique({ where: { id: patientId } });
@@ -52,13 +62,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
     const iso = new Date(t).toISOString().slice(0, 10);
     week.push({ date: iso, treatments: ahead.filter((a) => a.scheduled_date.getTime() === t).map((a) => ({ id: a.id, start_time: a.start_time, therapy_name: a.Therapy.name, consultation: a.Therapy.is_consultation, status: a.status })) });
   }
-  // What therapists recorded after a treatment, newest three, so the doctor reads them without opening each treatment (#508).
-  const recorded = await prisma.appointment.findMany({ where: { patient_id: patientId, scheduled_date: { lte: day }, status: { not: 'cancelled' }, NOT: { record: { equals: Prisma.DbNull } } }, orderBy: [{ scheduled_date: 'desc' }, { start_time: 'desc' }], select: { scheduled_date: true, record: true }, take: 30 });
-  const readings = recorded.flatMap((a) => {
-    const v = ((a.record as { vitals?: Record<string, string> } | null)?.vitals) || {};
-    const text = Object.entries(v).filter(([, x]) => String(x).trim()).map(([k, x]) => `${k.length <= 3 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1)} ${String(x).trim()}`).join(', ');
-    return text ? [{ date: a.scheduled_date.toISOString().slice(0, 10), text }] : [];
-  }).slice(0, 3);
+  const readings = await lastReadings(patientId, day, prisma);
   const visit = (a: (typeof visits)[number] | null) => a && { id: a.id, date: a.scheduled_date.toISOString().slice(0, 10), start_time: a.start_time, doctor: a.Staff?.name ?? null, note: a.notes };
   const team = [...new Set(appts.flatMap((a) => [a.staff_id, ...a.co_staff_ids]).filter((x): x is string => Boolean(x)))];
   const names = new Map((await prisma.staff.findMany({ where: { id: { in: team } }, select: { id: true, name: true } })).map((s) => [s.id, s.name]));
