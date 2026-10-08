@@ -48,7 +48,7 @@ Have / Partial / Missing is Task A's; the verdict, time and wow score are Task B
 | 21 | s22 See and undo what changed | Have | Fail | — | 11/16 |
 | 22 | s23 Medicines on the sheet and to take home | Partial | Friction | — | 13/16 |
 | 23 | s24 Discharge a patient | Have | Pass | ≈3 s | 16/16 |
-| 24 | s20 Room numbers and occupancy | Missing | Missing | — | — |
+| 24 | s20 Room numbers and occupancy | Have (8 Oct, #456) | Missing | — | — |
 | 25 | s25 Passport or ID scan fills the patient | Missing | Missing | — | — |
 | 26 | s26 Choose or change accommodation | Partial | Pass | ≈2 s | 16/16 |
 | 27 | s27 Prakriti and structured vitals | Partial | Friction | — | 12/16 |
@@ -72,6 +72,8 @@ Have / Partial / Missing is Task A's; the verdict, time and wow score are Task B
 | 45 | s48 Patient sees their day and meals (after launch) | Have | Friction | — | 13/16 |
 | 46 | s49 Patient fills their details before arrival (after launch) | Missing | Missing | — | — |
 | 47 | s50 Patient gives feedback (after launch) | Missing | Missing | — | — |
+| 48 | s51 Add or change a guest room (8 Oct, #559) | Have | walked 8 Oct | ≈10 s for six rooms | scored in the PR |
+| 49 | s52 Print the guest rooms sheet (8 Oct, #559) | Have | walked 8 Oct | ≈3 s | scored in the PR |
 
 ### Third walk, 8 Oct (fresh trial centre, 375×812; a Sydney centre across its midnight)
 
@@ -86,7 +88,7 @@ Walked from a new trial centre built through the sign-up, the library and the Te
 | s23 Medicines | 13 → 14 | the card's medicine retyped in the discharge summary | #524 |
 | s37 Therapy catalogue | 15 → 16 | the before-a-purification rule was invisible | #528 |
 | s38 Attention rules | 14 → 15 | Settings count wrong; an off rule said it counts | #526, #527 |
-| s41 Therapist marks done | 12 → 14 | no Done tap | #522 |
+| s41 Therapist marks done | 12 → 14 | no Done tap | #559 |
 | s42 Vitals | 14 | BP needs the full keyboard for the slash; the rest is a keypad | none |
 | s43 Raise an issue, SOS | 13 → 16 | an SOS was grey, not counted, and invisible off the day | #521, #537 |
 | s45 Doctor's round | 12 → 14 | the review sheet showed no facts; no way to plan with no review booked | #530, #523 |
@@ -191,6 +193,10 @@ Format: **Outcome** · **Trigger** · **First view** · **Wow** · **Fix** (the 
 **46. s49 Patient fills their details before arrival (after launch).** Outcome: The guest arrives already registered. Trigger: Booking confirmed. First view: Patient link. Wow: Five questions and a photo. Fix: Covered by s29.
 
 **47. s50 Patient gives feedback (after launch).** Outcome: The centre learns what to keep. Trigger: Leaving day. First view: Patient link. Wow: One tap and an optional line. Fix: Covered by s40.
+
+**48. s51 Add or change a guest room (8 Oct, #559; decided by Claude, to confirm).** Outcome: The rooms patients sleep in are the centre's own, and a new or renamed room is right the same minute. Trigger: Setting up; a room added, renamed, given a second bed, or taken out. First view: The Guest rooms screen, whose + says "Add guest rooms". Wow: Names in one field ("T1–T6" adds six), the type and beds below it, the foot says "Add the guest rooms"; a room is changed from the screen's "Guest rooms · Names and beds" line, and a room with past stays is retired, never lost. A centre with no accommodation type is sent to add one, never stopped. Fix: Moving a room to another type waits until a centre asks.
+
+**49. s52 Print the guest rooms sheet (8 Oct, #559; decided by Claude, to confirm).** Outcome: Housekeeping has a page for the day, as the kitchen and the therapists do. Trigger: Each morning, or the evening before. First view: The print toast's fifth sheet, "Guest rooms sheet", shown only to a centre with guest rooms. Wow: One A4: counts (to make up, arriving, staying on, free), the rooms to make up first because someone arrives into them, then each type's rooms in walking order with a tick box where there is something to do. Fix: Housekeeping notes and cleaned or dirty status wait until a centre asks.
 
 # History: the 14 stories and the 1 Oct closing walk (#285)
 

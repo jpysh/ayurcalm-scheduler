@@ -116,6 +116,10 @@ const AdminDashboard = () => {
   }, []);
   const [activeTab, setActiveTab] = useState("schedule");
   const [showAttention, setShowAttention] = useState(false);
+  const [addingRooms, setAddingRooms] = useState(false);
+  // The guest rooms sheet is offered only to a centre that has guest rooms (#559); read again whenever the admin changes screen, since rooms are added from the Guest rooms screen.
+  const [hasGuestRooms, setHasGuestRooms] = useState(false);
+  useEffect(() => { fetch(`${API_BASE}/guest-rooms`).then((r) => (r.ok ? r.json() : [])).then((r) => setHasGuestRooms(Array.isArray(r) && r.some((x: { is_active: boolean }) => x.is_active))).catch(() => {}); }, [activeTab]);
   // What needs you (#288): the rules and the patient and team items they raise; the rules sheet opens from Settings, the pill and the gear on Patients and Team.
   const attention = useAttention();
   const [rules, setRules] = useState<{ section: "Day" | "Patients" | "Team" | null } | null>(null);
@@ -539,6 +543,7 @@ const AdminDashboard = () => {
     : activeTab === 'diet' ? guard('New diet plan', 'added', dietScreen.openAdd)
     : activeTab === 'team' ? guard('Add a therapist or doctor', 'added', () => staffScreen.openAdd())
     : activeTab === 'rooms' ? guard('Add a room', 'added', roomsScreen.openAdd)
+    : activeTab === 'guestrooms' ? guard('Add guest rooms', 'added', () => setAddingRooms(true))
     : activeTab === 'therapies' ? guard('Add therapy', 'added', therapiesScreen.openAdd)
     : activeTab === 'events' ? guard('Add event', 'added', eventsScreen.openAdd)
     : null;
@@ -609,7 +614,7 @@ const AdminDashboard = () => {
 
           <TabsContent value="guestrooms" data-testid="tabpanel-guestrooms">
             {activeTab === 'guestrooms' ? <GuestRooms today={ymdInTZ(new Date())} openPatient={(id) => patientsScreen.openResident(id)}
-              newPatient={(p) => patientsScreen.openAdd(p)} openSettings={() => { setSettingsSheet('accommodation'); go('settings'); }} /> : null}
+              newPatient={(p) => patientsScreen.openAdd(p)} openSettings={() => { setSettingsSheet('accommodation'); go('settings'); }} adding={addingRooms} setAdding={setAddingRooms} /> : null}
           </TabsContent>
 
           <TabsContent value="log" data-testid="tabpanel-log">
@@ -687,6 +692,7 @@ const AdminDashboard = () => {
               <button type="button" className={more} onClick={() => scheduleScreen.printSheet('therapist', iso)}>Therapist sheet</button>
               <button type="button" className={more} onClick={() => scheduleScreen.printSheet('doctor', iso)}>Doctor sheet</button>
               <button type="button" className={more} onClick={() => scheduleScreen.printSheet('kitchen', iso)}>Kitchen sheet</button>
+              {hasGuestRooms ? <button type="button" className={more} onClick={() => scheduleScreen.printSheet('rooms', iso)}>Guest rooms sheet</button> : null}
             </div>
           </div>, { duration: 10000 });
         }}

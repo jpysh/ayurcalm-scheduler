@@ -8,7 +8,8 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import { confirmSheet } from "@/components/ConfirmSheet";
-import { BottomSheet, Empty, Foot, Group, ListGroup, Loading, Row, SectionHead, Seg, Text, noteText, rupees, Btn } from "@/components/kit";
+import { BottomSheet, Empty, Foot, ListGroup, LinkRow, Loading, Row, SectionHead, Text, noteText, rupees, Btn } from "@/components/kit";
+import { ManageGuestRooms } from "@/components/GuestRoomManage";
 
 type Item = { id: string; name: string; notes: string | null; is_active: boolean; patients: number } & Record<string, unknown>;
 type Fields = { key: string; label: string; number?: boolean; optional?: boolean; hint?: string }[];
@@ -68,69 +69,22 @@ export const PackagesEditor = () => (
     facts={(i) => `${i.days} days`} trailing={(i) => rupees(Number(i.price))} />
 );
 
-export const AccommodationEditor = () => (
+export const AccommodationEditor = ({ openTypes = () => {} }: { openTypes?: () => void }) => (
   <CatalogueEditor path="accommodations" noun="accommodation type"
     fields={[{ key: "name", label: "Name" }, { key: "price_per_day", label: "Price a day in rupees", number: true, hint: "The total is this times the nights. No extra charges." }, { key: "notes", label: "Notes", optional: true }]}
     facts={(i) => [`${rupees(Number(i.price_per_day))} a day`, i.rooms ? `${i.rooms} guest room${i.rooms === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ")} trailing={() => ""}
-    extra={(i, changed) => <GuestRoomsOf type={i} changed={changed} />} />
+    extra={(i, changed) => <GuestRoomsOf type={i} changed={changed} openTypes={openTypes} />} />
 );
 
-type GuestRoom = { id: string; name: string; accommodation_id: string; beds: number; is_active: boolean; patients: number };
-const BEDS: [number, string][] = [[1, "1"], [2, "2"], [3, "3"], [4, "4"]];
-const bedsText = (n: number) => `${n} bed${n === 1 ? "" : "s"}`;
-
-/** A type's guest rooms (#456): the rooms patients sleep in. "T1–T6" adds six at once. */
-function GuestRoomsOf({ type, changed }: { type: Item; changed: () => void }) {
-  const [rooms, setRooms] = useState<GuestRoom[] | null>(null);
-  const [add, setAdd] = useState("");
-  const [beds, setBeds] = useState(1);
-  const [edit, setEdit] = useState<GuestRoom | null>(null);
-  const [busy, setBusy] = useState(false);
-  const load = () => fetchJsonWithTimeout<GuestRoom[]>(`${API_BASE}/guest-rooms`).then((r) => setRooms(Array.isArray(r) ? r.filter((g) => g.accommodation_id === type.id) : []));
-  useEffect(() => { load(); }, [type.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const send = async (method: string, path: string, body?: unknown) => {
-    setBusy(true);
-    const res = await fetch(`${API_BASE}/guest-rooms${path}`, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
-    setBusy(false);
-    const out = await res.json().catch(() => ({}));
-    if (!res.ok) { toast.error(out.error ? `${out.error}.` : "The guest room was not saved. Try again."); return null; }
-    load(); changed();
-    return out;
-  };
-  const addRooms = async () => {
-    const out = await send("POST", "", { name: add.trim(), accommodation_id: type.id, beds });
-    if (!out) return;
-    toast.success(out.added.length === 1 ? `${out.added[0]} added` : `${out.added.length} guest rooms added: ${out.added[0]} to ${out.added[out.added.length - 1]}`);
-    setAdd("");
-  };
-  const saveRoom = async () => {
-    if (!edit) return;
-    if (await send("PUT", `/${edit.id}`, { name: edit.name.trim(), beds: edit.beds, is_active: true })) { toast.success(`${edit.name.trim()} saved`); setEdit(null); }
-  };
-  const removeRoom = async () => {
-    if (!edit) return;
-    const out = await send("DELETE", `/${edit.id}`);
-    if (out) { toast.success(out.retired ? `${edit.name} retired: it is no longer offered, and its past stays keep it` : `${edit.name} removed`); setEdit(null); }
-  };
-  const live = rooms?.filter((r) => r.is_active) ?? [];
+/** A type's guest rooms (#456, #559): one line opening the same sheet the Guest rooms screen uses, kept to this type. */
+function GuestRoomsOf({ type, changed, openTypes }: { type: Item; changed: () => void; openTypes: () => void }) {
+  const [open, setOpen] = useState(false);
+  const n = Number(type.rooms ?? 0);
   return (
     <>
       <SectionHead>Guest rooms</SectionHead>
-      {rooms === null ? <Loading rows={2} /> : live.length ? (
-        <ListGroup>{live.map((r) => <Row key={r.id} title={r.name} facts={bedsText(r.beds)} trailing="›" onClick={() => setEdit({ ...r })} />)}</ListGroup>
-      ) : <p className={noteText}>No guest rooms yet. Without them, stays record the type only.</p>}
-      <div className="mt-3 grid gap-3">
-        <Text label="Add guest rooms" note="One name, or a range: T1–T6 adds six." placeholder="T1–T6" autoComplete="off" maxLength={80} value={add} onChange={(e) => setAdd(e.target.value)} />
-        <Group label="Beds in each"><Seg<number> options={BEDS} value={beds} onChange={setBeds} /></Group>
-        <Btn disabled={busy || !add.trim()} onClick={addRooms}>{busy ? "Saving…" : "Add guest rooms"}</Btn>
-      </div>
-      <BottomSheet open={!!edit} onOpenChange={(o) => { if (!o) setEdit(null); }} title={edit ? `Guest room ${edit.name}` : ""} note={`${String(type.name)}. Beds is how many patients may share it.`}
-        foot={<Foot label="Save changes" ok={!!edit?.name.trim()} busy={busy} save={saveRoom} remove={removeRoom} removeLabel={edit ? `Remove ${edit.name}` : "Remove"} />}>
-        {edit ? <div className="grid gap-3">
-          <Text label="Name" autoComplete="off" maxLength={20} value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
-          <Group label="Beds"><Seg<number> options={BEDS} value={edit.beds} onChange={(n) => setEdit({ ...edit, beds: n })} /></Group>
-        </div> : null}
-      </BottomSheet>
+      <ListGroup><LinkRow label="Guest rooms" value={n ? `${n} · names and beds` : "None yet · add some"} onClick={() => setOpen(true)} /></ListGroup>
+      <ManageGuestRooms open={open} onOpenChange={setOpen} typeId={type.id} onChanged={changed} openTypes={openTypes} />
     </>
   );
 }

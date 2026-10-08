@@ -9,7 +9,8 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import PageHead from "@/components/PageHead";
 import { WeekStrip } from "@/components/BottomBar";
-import { Btn, DateRow, Empty, ListGroup, Loading, Row, SectionHead, dayText, noteText } from "@/components/kit";
+import { Btn, DateRow, Empty, LinkRow, ListGroup, Loading, Row, SectionHead, dayText, noteText } from "@/components/kit";
+import { AddGuestRooms, ManageGuestRooms } from "@/components/GuestRoomManage";
 import type { GuestRoomNight } from "@/components/CardSheets";
 
 type Guest = { stay_id: string; patient_id: string; name: string; start_date: string; end_date: string };
@@ -27,22 +28,27 @@ const byType = (rooms: Room[]) => rooms.reduce<[string, Room[]][]>((out, r) => {
 }, []);
 const fetchRooms = (from: string, to: string) => fetchJsonWithTimeout<Room[]>(`${API_BASE}/guest-rooms/free?from=${from}&to=${to}`).then((r) => (Array.isArray(r) ? r : []));
 
-export function GuestRooms({ today, openPatient, newPatient, openSettings }: {
+export function GuestRooms({ today, openPatient, newPatient, openSettings, adding, setAdding }: {
   /** YYYY-MM-DD on the centre's clock. */
   today: string;
   openPatient: (id: string) => void;
   /** New patient, with these dates and this room already chosen. */
   newPatient: (p: { arriving: string; leaving: string; room: string }) => void;
-  /** Settings → Packages and accommodation, where guest rooms are set up. */
+  /** Settings → Packages and accommodation, for a centre with no accommodation type yet. */
   openSettings: () => void;
+  /** The + on the bar adds guest rooms (#559); the shell holds the state because the bar is the shell's. */
+  adding: boolean;
+  setAdding: (o: boolean) => void;
 }) {
+  const [managing, setManaging] = useState(false);
+  const [version, setVersion] = useState(0);
   const [day, setDay] = useState(today);
   const [night, setNight] = useState<Room[] | null>(null);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [range, setRange] = useState<Room[] | null>(null);
-  useEffect(() => { setNight(null); fetchRooms(day, addDays(day, 1)).then(setNight); }, [day]);
-  useEffect(() => { setRange(null); if (from && to > from) fetchRooms(from, to).then(setRange); }, [from, to]);
+  useEffect(() => { setNight(null); fetchRooms(day, addDays(day, 1)).then(setNight); }, [day, version]);
+  useEffect(() => { setRange(null); if (from && to > from) fetchRooms(from, to).then(setRange); }, [from, to, version]);
 
   const free = night?.filter((r) => r.free).length ?? 0;
   const asking = !!from && to > from;
@@ -51,10 +57,16 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings }: {
   const arriving = (r: Room) => sleeping(r).filter((g) => g.start_date === day);
   const tonight = day === today ? "tonight" : `on ${dayText(day)}`;
 
+  const sheets = <>
+    <AddGuestRooms open={adding} onOpenChange={setAdding} onChanged={() => setVersion((v) => v + 1)} openTypes={openSettings} />
+    <ManageGuestRooms open={managing} onOpenChange={setManaging} onChanged={() => setVersion((v) => v + 1)} openTypes={openSettings} />
+  </>;
+
   if (night && !night.length) return (
     <div>
       <PageHead title="Guest rooms" />
-      <Empty text="No guest rooms yet. Set them up under each accommodation type, and every stay can have one." action={<Btn kind="primary" inline onClick={openSettings}>Set up guest rooms</Btn>} />
+      <Empty text="No guest rooms yet. Add the rooms patients sleep in, and every stay can have one." action={<Btn kind="primary" inline onClick={() => setAdding(true)}>Add guest rooms</Btn>} />
+      {sheets}
     </div>
   );
 
@@ -82,7 +94,8 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings }: {
         <div className="mt-3"><WeekStrip day={day} today={today} setDay={setDay} /></div>
         {/* The morning's housekeeping in one line (#456 part 4): the rooms to make up, and the rooms someone comes into. */}
         {night ? (() => {
-          const out = night.filter((r) => leaving(r).length).map((r) => r.name);
+          // A shared room where one guest stays on is not empty, so it is not one to make up.
+          const out = night.filter((r) => leaving(r).length && !sleeping(r).some((g) => g.start_date !== day)).map((r) => r.name);
           const into = night.filter((r) => arriving(r).length).map((r) => r.name);
           return out.length || into.length ? <p className={`px-1 pt-2 ${noteText}`}>{[out.length ? `Leaving${day === today ? " today" : ""}: ${out.join(", ")} to make up` : "", into.length ? `Arriving: ${into.join(", ")}` : ""].filter(Boolean).join(" · ")}</p> : null;
         })() : null}
@@ -104,7 +117,9 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings }: {
             })}
           </ListGroup>
         ))}
+        <ListGroup title="The centre's lists"><LinkRow label="Guest rooms" value="Names and beds" onClick={() => setManaging(true)} /></ListGroup>
       </>)}
+      {sheets}
     </div>
   );
 }
