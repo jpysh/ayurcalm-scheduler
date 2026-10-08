@@ -58,6 +58,13 @@ try {
   assert.deepEqual(rec.checklist, { 'Oil warmed': true }, 'only the therapy\'s own checklist is kept');
   assert.deepEqual(rec.vitals, { bp: '130/85' }, 'only the therapy\'s own vitals are kept');
   assert.equal(rec.room_ready, true);
+  // Done (#522): the centre's clock when it was ticked, gone when unticked, never from a patient.
+  assert.equal((await call(`/public/link/${t}/appointments/${mineA.id}`, { done: true })).status, 200);
+  const doneAt = ((await prisma.appointment.findUnique({ where: { id: mineA.id } }))!.record as Record<string, any>).done;
+  assert.match(doneAt, /^\d\d:\d\d$/, 'done keeps the time');
+  assert.equal((await (await call(`/public/link/${t}?date=${DAY}`)).json()).items.find((i: { id: string }) => i.id === mineA.id).done, doneAt, 'and the link reads it back');
+  assert.equal((await call(`/public/link/${t}/appointments/${mineA.id}`, { done: false })).status, 200);
+  assert.equal(((await prisma.appointment.findUnique({ where: { id: mineA.id } }))!.record as Record<string, any>).done, undefined, 'unticking clears it');
   assert.equal((await call(`/public/link/${t}/appointments/${theirs.id}`, { room_ready: true })).status, 404, 'not someone else\'s treatment');
   assert.equal((await call(`/public/link/${t}/appointments/${mineA.id}`, { note: 'x' })).status, 403, 'only a doctor writes the note');
   assert.equal((await call(`/public/link/${t}/issues`, { kind: 'room', appointment_id: mineA.id, note: 'Steam not working' })).status, 201);

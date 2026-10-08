@@ -55,6 +55,13 @@ async function main() {
     const first = await r.json();
     assert.ok(first.draft.no, 'a number is given on the first save');
     assert.equal(first.table.length, 30, 'one row a day');
+    // The card's Medication line is offered as a first row (#524), trimmed to 120 characters, never added by itself.
+    assert.equal(first.card_medication, '', 'no line on the card, nothing offered');
+    await prisma.patient.update({ where: { id: p.id }, data: { medication: ' Ashwagandha tablet, 1 twice a day after food ' + 'x'.repeat(200) } });
+    const offered = await (await call('GET', `/patients/${p.id}/stays/${stay.id}/discharge`)).json();
+    assert.equal(offered.card_medication.length, 120, 'the card line is offered, trimmed');
+    assert.ok(offered.card_medication.startsWith('Ashwagandha tablet'), 'and trimmed of spaces');
+    assert.equal(offered.draft.meds_stay.length, 8, 'what the doctor wrote is untouched');
     assert.equal(first.table[3].bp, '123/80', 'BP comes from that day\'s record');
     assert.ok(first.table[0].items.some((x: { consultation: boolean }) => x.consultation), 'consultations are marked');
 
