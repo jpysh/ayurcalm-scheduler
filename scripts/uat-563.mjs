@@ -1,0 +1,63 @@
+// E2E_BASE_URL=http://localhost:8093 node scripts/uat-563.mjs — #563: a guest room is taken out of use from Leave. 375x812.
+import { chromium } from '@playwright/test';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';
+const OUT = 'docs/design/uat/2026-10-08-room-out-of-use';
+mkdirSync(OUT, { recursive: true });
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+const day = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }); // the centre's day, not UTC
+const plus = (n) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+const nights = await (await fetch(`${APP}/api/guest-rooms/free?from=${day}&to=${plus(1)}`, { headers: auth })).json();
+const freeRoom = nights.find((r) => r.free && r.name === 'T10') ?? nights.find((r) => r.free);
+const heldRoom = nights.find((r) => r.guests.some((g) => g.start_date < day && g.end_date > plus(1)));
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+const p = await ctx.newPage();
+const dlg = () => p.getByRole('dialog').last();
+const shot = (n) => p.screenshot({ path: `${OUT}/${n}.png` });
+const res = [];
+const check = (name, ok, extra = '') => { res.push([name, ok]); console.log(ok ? 'pass' : 'FAIL', name, extra); };
+await p.goto(`${APP}/admin/guestrooms`); await p.waitForTimeout(2500);
+await p.getByText('Names and beds').click(); await p.waitForTimeout(900);
+await dlg().getByText(freeRoom.name, { exact: true }).first().click(); await p.waitForTimeout(700);
+await shot('01-room-sheet');
+await dlg().getByText('Out of use for some days').click(); await p.waitForTimeout(1200);
+await dlg().getByLabel('Reason (optional)').fill('No electricity');
+await dlg().getByRole('button', { name: /^To/ }).first().waitFor({ timeout: 3000 }).catch(() => {});
+await shot('02-leave-sheet');
+const sheetText = await dlg().innerText();
+check('Leave sheet opens with the room chosen, no part-day switches', sheetText.includes(freeRoom.name) && !sheetText.includes('Full day') && !sheetText.includes('Every week'));
+check('says nobody is in it', /Nobody is in it then/.test(sheetText));
+await dlg().getByRole('button', { name: 'Mark the room out of use' }).click(); await p.waitForTimeout(1500);
+await p.waitForTimeout(2000); await shot("03-saved");
+const after = await (await fetch(`${APP}/api/guest-rooms/free?from=${day}&to=${plus(1)}`, { headers: auth })).json();
+const r2 = after.find((r) => r.id === freeRoom.id);
+check('server: room not free, out of use with reason', !r2.free && r2.out?.reason === 'No electricity', JSON.stringify([r2.name, r2.free, r2.out]));
+await p.goto(`${APP}/admin/guestrooms`); await p.waitForTimeout(2500);
+await shot('04-screen');
+check('Guest rooms screen says Out', (await p.getByText(/Out of use: No electricity/).count()) >= 1);
+// A guest already in a room: the inbox says so, and the app moves nobody.
+const t = await (await fetch(`${APP}/api/timeoff`, { method: 'POST', headers: auth, body: JSON.stringify({ entity_type: 'guest_room', entity_id: heldRoom.id, start_date: `${plus(1)}T00:00:00.000Z`, end_date: `${plus(2)}T00:00:00.000Z`, description: 'Leak', plan: false }) })).json();
+const att = await (await fetch(`${APP}/api/attention`, { headers: auth })).json();
+const item = att.items.find((i) => i.rule === 'room_out');
+check('inbox: guest needs another room', !!item && /out of use/.test(item.what), item?.what);
+// The server refuses a stay into an out room and names free ones.
+const stays = await (await fetch(`${APP}/api/guest-rooms/free?from=${plus(1)}&to=${plus(3)}`, { headers: auth })).json();
+check('out room is not offered for those nights', stays.find((r) => r.id === heldRoom.id).free === false);
+await p.goto(`${APP}/admin/timeoff`); await p.waitForTimeout(2000);
+await shot('05-leave-list');
+check('Leave list names it a Guest room', (await p.getByText(/Guest room/).count()) >= 1);
+// Tidy.
+for (const row of await (await fetch(`${APP}/api/timeoff`, { headers: auth })).json()) if (row.entity_type === 'guest_room') await fetch(`${APP}/api/timeoff/${row.id}`, { method: 'DELETE', headers: auth });
+const pdfOut = await (await fetch(`${APP}/api/timeoff`, { method: 'POST', headers: auth, body: JSON.stringify({ entity_type: 'guest_room', entity_id: freeRoom.id, start_date: `${day}T00:00:00.000Z`, end_date: `${day}T00:00:00.000Z`, description: 'No electricity', plan: false }) })).json();
+writeFileSync(`${OUT}/sheet.pdf`, Buffer.from(await (await fetch(`${APP}/api/daily-schedule-pdf?date=${day}&view=rooms`, { headers: auth })).arrayBuffer()));
+await fetch(`${APP}/api/timeoff/${pdfOut.id}`, { method: 'DELETE', headers: auth });
+const text = execSync(`pdftotext -layout ${OUT}/sheet.pdf -`).toString();
+execSync(`pdftoppm -r 70 -png -singlefile ${OUT}/sheet.pdf ${OUT}/06-sheet`);
+check('sheet prints Out of use', /Out of use: No electricity/.test(text) && /Out of use 1/.test(text));
+writeFileSync(`${OUT}/README.md`, `# #563 UAT, 8 Oct (demo seed)\n\n| Step | Result | Shot |\n|---|---|---|\n${res.map(([n, ok]) => `| ${n} | ${ok ? 'pass' : 'FAIL'} | |`).join('\n')}\n\n![](01-room-sheet.png) ![](02-leave-sheet.png) ![](03-saved.png) ![](04-screen.png) ![](05-leave-list.png) ![](06-sheet.png)\n`);
+await b.close();
+process.exit(res.every(([, ok]) => ok) ? 0 : 1);

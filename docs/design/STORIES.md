@@ -74,6 +74,7 @@ Have / Partial / Missing is Task A's; the verdict, time and wow score are Task B
 | 47 | s50 Patient gives feedback (after launch) | Missing | Missing | — | — |
 | 48 | s51 Add or change a guest room (8 Oct, #559) | Have | walked 8 Oct | ≈10 s for six rooms | scored in the PR |
 | 49 | s52 Print the guest rooms sheet (8 Oct, #559) | Have | walked 8 Oct | ≈3 s | scored in the PR |
+| 50 | s53 Take a guest room out of use for some days (8 Oct, #563) | Have | walked 8 Oct | ≈10 s | scored in the PR |
 
 ### Third walk, 8 Oct (fresh trial centre, 375×812; a Sydney centre across its midnight)
 
@@ -224,6 +225,8 @@ Format: **Outcome** · **Trigger** · **First view** · **Wow** · **Fix** (the 
 **48. s51 Add or change a guest room (8 Oct, #559; decided by Claude, to confirm).** Outcome: The rooms patients sleep in are the centre's own, and a new or renamed room is right the same minute. Trigger: Setting up; a room added, renamed, given a second bed, or taken out. First view: The Guest rooms screen, whose + says "Add guest rooms". Wow: Names in one field ("T1–T6" adds six), the type and beds below it, the foot says "Add the guest rooms"; a room is changed from the screen's "Guest rooms · Names and beds" line, and a room with past stays is retired, never lost. A centre with no accommodation type is sent to add one, never stopped. Fix: Moving a room to another type waits until a centre asks.
 
 **49. s52 Print the guest rooms sheet (8 Oct, #559; decided by Claude, to confirm).** Outcome: Housekeeping has a page for the day, as the kitchen and the therapists do. Trigger: Each morning, or the evening before. First view: The print toast's fifth sheet, "Guest rooms sheet", shown only to a centre with guest rooms. Wow: One A4: counts (to make up, arriving, staying on, free), the rooms to make up first because someone arrives into them, then each type's rooms in walking order with a tick box where there is something to do. Fix: Housekeeping notes and cleaned or dirty status wait until a centre asks.
+
+**50. s53 Take a guest room out of use for some days (8 Oct, #563; decided by Claude, to confirm).** Outcome: A room with no electricity is never given to a guest, and a guest already in it is not forgotten. Trigger: Something is wrong with a room. First view: Leave, whose "Who or what" list holds Guest rooms; a room's edit sheet has "Out of use for some days" opening the same sheet with the room chosen. Wow: From, To, reason; a line says who is in the room then; one foot, "Mark the room out of use", with Undo. Never offered after that: greyed with its reason in pickers, "Out" on the Guest rooms screen, "Out of use" on the sheet; a guest already in it is raised in What needs you with their card one tap away. Fix: Part days and weekly repeats are not offered for a guest room.
 
 # History: the 14 stories and the 1 Oct closing walk (#285)
 
