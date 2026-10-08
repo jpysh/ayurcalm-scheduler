@@ -22,9 +22,18 @@ async function main() {
     const counts = async () => ({
       patients: await prisma.patient.count(), appointments: await prisma.appointment.count(), stays: await prisma.patientStay.count(),
       discharges: await prisma.patientStay.count({ where: { discharge: { not: Prisma.DbNull } } }), users: await prisma.user.count(),
-      sheets: await prisma.printedSheet.count(), settings: JSON.stringify((await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.letterhead),
+      sheets: await prisma.printedSheet.count(), photos: await prisma.patientPhoto.count(), settings: JSON.stringify((await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.letterhead),
     });
     await fetch(`${API_BASE}/daily-schedule-pdf?date=2030-06-03`, { headers: auth }); // one printed sheet, with bytes, in the file
+    // A passport photo (#510): only a JPEG is taken, it reads back as sent, and it moves with the centre.
+    const someone = await prisma.patient.findFirstOrThrow();
+    const photoUrl = `${API_BASE}/patients/${someone.id}/passport-photo`;
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5]);
+    const putPhoto = (body: Buffer, type = 'image/jpeg') => fetch(photoUrl, { method: 'PUT', headers: { ...auth, 'Content-Type': type }, body: new Uint8Array(body) });
+    assert.equal((await putPhoto(Buffer.from('not an image'))).status, 400, 'something that is not a JPEG is refused');
+    assert.equal((await putPhoto(jpeg)).status, 200);
+    assert.equal(Buffer.from(await (await fetch(photoUrl, { headers: auth })).arrayBuffer()).equals(jpeg), true, 'the photo reads back as sent');
+    assert.equal((await fetch(photoUrl)).status, 401, 'signed out, no photo');
     const before = await counts();
     const file = Buffer.from(await (await fetch(`${API_BASE}/settings/export`, { headers: auth })).arrayBuffer());
     const parsed = JSON.parse(gunzipSync(file).toString());
@@ -40,6 +49,9 @@ async function main() {
     assert.deepEqual(await counts(), before, 'every table came back');
     const sheet = await prisma.printedSheet.findFirstOrThrow({ where: { date: '2030-06-03' } });
     assert.equal(Buffer.from(sheet.pdf).subarray(0, 4).toString(), '%PDF', 'a printed sheet came back as a PDF');
+    assert.equal(Buffer.from(await (await fetch(photoUrl, { headers: auth })).arrayBuffer()).equals(jpeg), true, 'the photo came back with the centre');
+    assert.equal((await fetch(photoUrl, { method: 'DELETE', headers: auth })).status, 200);
+    assert.equal((await fetch(photoUrl, { headers: auth })).status, 404, 'removed');
     assert.equal((await fetch(`${API_BASE}/settings/export`)).status, 401, 'signed out, nothing');
     console.log(`transfer: ${file.length} bytes, ${before.patients} residents, ${before.appointments} treatments round-tripped`);
   } finally {

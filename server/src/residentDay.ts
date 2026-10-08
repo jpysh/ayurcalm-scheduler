@@ -96,6 +96,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
   });
   return {
     follow_up,
+    passport_photo: (await prisma.patientPhoto.findUnique({ where: { patient_id: patientId }, select: { updated_at: true } }))?.updated_at.toISOString() ?? null,
     feedback: told ? { rating: told.rating, note: told.note } : null,
     readings,
     id: patient.id,
