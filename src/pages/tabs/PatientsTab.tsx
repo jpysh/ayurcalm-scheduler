@@ -26,6 +26,8 @@ type InHouse = { id: string; name: string; Stays: { id: string; start_date: stri
 type ResidentDay = {
   id: string; name: string;
   stay: (CardStay & { vitals: string | null; concerns: string | null; tests: string | null }) | null;
+  /** A stay that starts later: its card shows before they arrive (#495). */
+  coming: (CardStay & { vitals: string | null; concerns: string | null; tests: string | null }) | null;
   /** A foreign guest's Form C (#415): the day it is due, whether it is filed, and the FRRO site's fields in its order. */
   form_c: { due: string; filed: string | null; fields: [string, string][] } | null;
   /** Their latest stay, when they are not staying today and it is over (#437). */
@@ -183,7 +185,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
     try { await navigator.clipboard.writeText(value); toast.success(`${label} copied`); } catch { toast.error("Could not copy. Press and hold the text instead."); }
   };
   const fileFormC = async (filed: boolean) => {
-    const res = await fetch(`${API_BASE}/patients/${d!.id}/stays/${d!.stay!.id}/form-c`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filed }) });
+    const res = await fetch(`${API_BASE}/patients/${d!.id}/stays/${up!.id}/form-c`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filed }) });
     if (!res.ok) { toast.error("That could not be saved."); return; }
     setFormC(false); load();
   };
@@ -195,23 +197,24 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
   const leavingToday = !!d?.stay && d.stay.day === d.stay.days;
   const bar = d?.stay?.discharge ? <div className="mt-3"><ChecklistBar label="Discharge summary" done={d.stay.discharge.done} total={d.stay.discharge.total} onClick={() => setChecklist(true)} /></div> : null;
   // Story s18 (#422): what a new patient needs, on the arrival days, each step opening its own line.
-  const arriving = !!d?.stay && (d.stay.day <= 3 || !d.stay.vitals);
-  const steps = d?.stay && arriving ? ([
+  const up = d?.stay ?? d?.coming ?? null;
+  const arriving = !!up && (up.day <= 3 || !up.vitals);
+  const steps = d && up && arriving ? ([
     ['Consultation', !!(d.last_consultation || d.next_consultation), d.next_consultation ? visit(d.next_consultation, true) : d.last_consultation ? `Seen ${visit(d.last_consultation, false)}` : undefined, () => book({ id: d.id, name: d.name, consult: true })],
     ['Diet', !!d.plan_name, d.plan_name || undefined, () => changeMeals(d)],
-    ['Package', !!d.stay.package, d.stay.package ? `${d.stay.package.days} days` : undefined, () => changePackage(d)],
-    ...(d.stay.on_site !== false ? [['Guest room', !!d.stay.accommodation, d.stay.accommodation?.room?.name ?? d.stay.accommodation?.name, () => changeHouse(d)]] : []),
+    ['Package', !!up.package, up.package ? `${up.package.days} days` : undefined, () => changePackage(d)],
+    ...(up.on_site !== false ? [['Guest room', !!up.accommodation, up.accommodation?.room?.name ?? up.accommodation?.name, () => changeHouse(d)]] : []),
     ...(d.form_c ? [['Form C', !!d.form_c.filed, d.form_c.filed ? `Filed ${dayText(d.form_c.filed)}` : undefined, () => setFormC(true)]] : []),
   ] as [string, boolean, string | undefined, () => void][]) : null;
   const [arrival, setArrival] = useState(false);
-  const nights = d?.stay ? Math.round((Date.parse(d.stay.end_date) - Date.parse(d.stay.start_date)) / DAY_MS) : 0;
+  const nights = up ? Math.round((Date.parse(up.end_date) - Date.parse(up.start_date)) / DAY_MS) : 0;
   return (
     <>
     <BottomSheet open={!!id} onOpenChange={(o) => { if (!o) onClose(); }} title={d?.name || 'Patient'}>
       {d ? (
         <div className="-mt-2 max-h-[70dvh] overflow-y-auto">
           <div className="text-sm text-muted-foreground">
-            {d.stay ? `Staying ${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)} · day ${d.stay.day} of ${d.stay.days}` : d.last_stay ? `Stayed until ${stayDay(d.last_stay.end_date)}` : 'Not staying today'}
+            {d.stay ? `Staying ${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)} · day ${d.stay.day} of ${d.stay.days}` : d.coming ? `Arrives ${stayDay(d.coming.start_date)} · leaves ${stayDay(d.coming.end_date)}` : d.last_stay ? `Stayed until ${stayDay(d.last_stay.end_date)}` : 'Not staying today'}
           </div>
           {leavingToday ? bar : null}
           {steps && !leavingToday ? <div className="mt-3"><ChecklistBar label="Arrival" done={steps.filter((x) => x[1]).length} total={steps.length} onClick={() => setArrival(true)} /></div> : null}
@@ -259,11 +262,11 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
           {/* Story 4: everything a patient may have is a row with an arrow, filled when it is decided; nothing is forced. */}
           <div className="mt-3 border-t border-border">
             <ChangeLine label="Diet" value={d.plan_name ? (d.diet_next ? `${d.plan_name}, then ${d.diet_next.name} from ${dayText(d.diet_next.from)}` : d.plan_name) : "Not decided yet"} faint={!d.plan_name} onClick={() => changeMeals(d)} />
-            {d.stay ? <ChangeLine label="Package" value={d.stay.package ? `${d.stay.package.days} days · ${rupees(d.stay.package.price)}` : "Not decided yet"} faint={!d.stay.package} onClick={() => changePackage(d)} /> : null}
-            {d.stay && d.stay.on_site !== false ? <ChangeLine label="Accommodation" value={d.stay.accommodation ? `${d.stay.accommodation.name}${d.stay.accommodation.room ? ` · ${d.stay.accommodation.room.name}` : ""} · ${nights} nights · ${rupees(nights * d.stay.accommodation.price_per_day)}` : "Not decided yet"} faint={!d.stay.accommodation} onClick={() => changeHouse(d)} /> : null}
+            {up ? <ChangeLine label="Package" value={up.package ? `${up.package.days} days · ${rupees(up.package.price)}` : "Not decided yet"} faint={!up.package} onClick={() => changePackage(d)} /> : null}
+            {up && up.on_site !== false ? <ChangeLine label="Accommodation" value={up.accommodation ? `${up.accommodation.name}${up.accommodation.room ? ` · ${up.accommodation.room.name}` : ""} · ${nights} nights · ${rupees(nights * up.accommodation.price_per_day)}` : "Not decided yet"} faint={!up.accommodation} onClick={() => changeHouse(d)} /> : null}
             {d.follow_up ? <ChangeLine label="Follow-up" value={d.follow_up.done ? `Done ${dayText(d.follow_up.done)}` : `Due ${dayText(d.follow_up.due)}`} onClick={() => setFollowUp(true)} /> : null}
             {d.form_c ? <ChangeLine label="Form C" value={d.form_c.filed ? `Filed ${dayText(d.form_c.filed)}` : `Due by ${dayText(d.form_c.due)}`} onClick={() => setFormC(true)} /> : null}
-            {d.stay ? <ChangeLine label="Stay" value={`${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)}`} onClick={() => changeStay(d)} /> : <ChangeLine label={d.last_stay ? 'New stay' : 'Stay'} value={d.last_stay?.package ? `From today · ${d.last_stay.package.name}` : 'Not staying · add a stay'} faint={!d.last_stay} onClick={() => changeStay(d)} />}
+            {up ? <ChangeLine label="Stay" value={`${stayDay(up.start_date)} to ${stayDay(up.end_date)}`} onClick={() => changeStay(d)} /> : <ChangeLine label={d.last_stay ? 'New stay' : 'Stay'} value={d.last_stay?.package ? `From today · ${d.last_stay.package.name}` : 'Not staying · add a stay'} faint={!d.last_stay} onClick={() => changeStay(d)} />}
             <ChangeLine label="Details" value={detailsHint(d.id)} faint onClick={() => details(d.id)} />
           </div>
           {/* Story 8: what the summary still lacks. It informs and never blocks; printing is always there. */}
@@ -514,12 +517,12 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
       <ResidentCard id={cardId} today={today} onClose={() => setCardId(null)}
         openTreatment={(a) => { setCardId(null); openTreatment(a); }}
         changeMeals={(p) => { setBack(p.id); setCardId(null); setDietFor(p); }}
-        changePackage={(p) => { if (p.stay) { setBack(p.id); setCardId(null); setPackFor({ patient: p, stay: p.stay }); } }}
-        changeHouse={(p) => { if (p.stay) { setBack(p.id); setCardId(null); setHouseFor({ patient: p, stay: p.stay }); } }}
+        changePackage={(p) => { const st = p.stay ?? p.coming; if (st) { setBack(p.id); setCardId(null); setPackFor({ patient: p, stay: st }); } }}
+        changeHouse={(p) => { const st = p.stay ?? p.coming; if (st) { setBack(p.id); setCardId(null); setHouseFor({ patient: p, stay: st }); } }}
         changeStay={(d) => {
           setBack(d.id);
           setCardId(null);
-          setStayFor({ patient: d, target: d.stay ? { id: d.stay.id, start: d.stay.start_date, end: d.stay.end_date, package: d.stay.package, accommodation: d.stay.accommodation } : { id: null, start: today, end: addDays(today, (d.last_stay?.package?.days || 14) - 1), package: d.last_stay?.package ?? null, accommodation: null } });
+          setStayFor({ patient: d, target: (d.stay ?? d.coming) ? { id: (d.stay ?? d.coming)!.id, start: (d.stay ?? d.coming)!.start_date, end: (d.stay ?? d.coming)!.end_date, package: (d.stay ?? d.coming)!.package, accommodation: (d.stay ?? d.coming)!.accommodation } : { id: null, start: today, end: addDays(today, (d.last_stay?.package?.days || 14) - 1), package: d.last_stay?.package ?? null, accommodation: null } });
         }}
         book={(p) => { setCardId(null); book(p); }}
         detailsHint={(id) => { const r = patients.find((x) => String(x.id) === id); return r?.phone || r?.emergencyContact ? [r.phone, r.emergencyContact].filter(Boolean).join(' · ') : 'Add phone, emergency contact…'; }}
