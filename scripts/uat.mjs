@@ -44,15 +44,15 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #530: the doctor's review sheet shows readings, the week's treatments and the diet.
-const docPerson = (await api('GET', '/staff')).find((x) => x.role === 'doctor');
-const docLink = await api('POST', `/staff/${docPerson.id}/link`);
-const roundRows = await (await fetch(`${APP}/api/public/link/${docLink.token}/round`)).json();
-const due = roundRows.find((r) => r.facts?.treatments) || roundRows[0];
-await step('The review sheet shows this week: readings, treatments, diet', `/l/${docLink.token}`, async () => {
-  await go(p.getByText(due.name).first()); await p.waitForTimeout(900);
-  const t = await text(dlg());
-  return { ok: /THIS WEEK/i.test(t) && /Readings/.test(t) && /Treatments, last 7 days/.test(t) && /Diet/.test(t), note: t.split('\n').filter((x) => x.trim()).slice(0, 12).join(' · ') };
+// #542: the discharge summary's footer has no bare separator before a number is given.
+const { execSync } = await import('node:child_process');
+const fp = await api('POST', '/patients', { name: `Footer Test ${Date.now() % 1000}`, gender: 'female', on_site: true, stay: { start_date: plus(-3), end_date: plus(0) } });
+const fstay = (await api('GET', `/patients/${fp.id}/stays`))[0];
+await step('The unsaved summary prints a clean footer', '/admin/patients', async () => {
+  const r = await fetch(`${APP}/api/patients/${fp.id}/stays/${fstay.id}/discharge-pdf`, { headers: { Authorization: `Bearer ${token}` } });
+  const txt = execSync('pdftotext -layout - -', { input: Buffer.from(await r.arrayBuffer()) }).toString();
+  const foot = txt.split('\n').find((x) => /page 1 of/.test(x)) || '';
+  return { ok: /page 1 of 1/.test(foot) && !/· ·/.test(foot), note: foot.trim() };
 });
 await b.close();
 
