@@ -44,17 +44,16 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #537: the count and the Menu's "N need you" row show on every screen, not only the day and Patients.
-const sosPerson = (await api('GET', '/staff')).find((x) => x.role === 'therapist');
-const sosLink = await api('POST', `/staff/${sosPerson.id}/link`);
-await fetch(`${APP}/api/public/link/${sosLink.token}/issues`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'sos', note: 'UAT #537' }) });
-for (const [name, path] of [['Team', '/admin/team'], ['Rooms', '/admin/rooms'], ['Leave', '/admin/timeoff'], ['Settings', '/admin/settings']]) {
-  await step(`${name}: the Menu says how many need you`, path, async () => {
-    const badge = (await p.getByRole('button', { name: 'Menu', exact: true }).innerText()).trim();
-    await menu(); const t = await text(dlg());
-    return { ok: /\d+ need you/.test(t) && /^\d+$/.test(badge), note: `badge ${badge || 'none'}; ` + t.split('\n').filter((x) => x.trim()).slice(0, 3).join(' · ') };
-  });
-}
+// #530: the doctor's review sheet shows readings, the week's treatments and the diet.
+const docPerson = (await api('GET', '/staff')).find((x) => x.role === 'doctor');
+const docLink = await api('POST', `/staff/${docPerson.id}/link`);
+const roundRows = await (await fetch(`${APP}/api/public/link/${docLink.token}/round`)).json();
+const due = roundRows.find((r) => r.facts?.treatments) || roundRows[0];
+await step('The review sheet shows this week: readings, treatments, diet', `/l/${docLink.token}`, async () => {
+  await go(p.getByText(due.name).first()); await p.waitForTimeout(900);
+  const t = await text(dlg());
+  return { ok: /THIS WEEK/i.test(t) && /Readings/.test(t) && /Treatments, last 7 days/.test(t) && /Diet/.test(t), note: t.split('\n').filter((x) => x.trim()).slice(0, 12).join(' · ') };
+});
 await b.close();
 
 writeFileSync(`${OUT}/lines.json`, JSON.stringify(lines));
