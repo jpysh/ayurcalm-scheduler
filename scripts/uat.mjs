@@ -44,30 +44,29 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #509: on the leaving day the guest's link asks one question; the answer reaches the card and What needs you.
+// #514: a guest not here yet, and one who has gone, have no "Rest day" line on their card.
 await api('POST', '/settings/clear-demo-data');
-const mk = async (name) => { const x = await api('POST', '/patients', { name, gender: 'female' }); await api('POST', `/patients/${x.id}/stays`, { start_date: plus(-6), end_date: plus(0) }); return (await api('POST', `/patients/${x.id}/link`)).token; };
-const clara = await mk('Clara Weber'); const dev = await mk('Dev Mehta');
-await step('The guest is asked how the stay was', `/l/${clara}`, async () => {
-  const t = await text(p.locator('body'));
-  return { ok: /How was your stay/i.test(t) && /Very good/.test(t) && /Not good/.test(t), note: t.split('\n').filter((x) => /stay|good|Fine|Send/i.test(x)).join(' · ') };
-});
-await step('They answer, and are thanked', `/l/${clara}`, async () => {
-  await go(p.getByRole('button', { name: 'Fine' })); await p.getByLabel(/Anything you would like us to know/).fill('Lovely food, thank you.');
-  await go(p.getByRole('button', { name: 'Send' })); await p.waitForTimeout(1500);
-  const t = await text(p.locator('body'));
-  return { ok: /The centre has your answer/.test(t), note: t.split('\n').filter((x) => /Thank you|answer/.test(x)).join(' · ') };
-});
-await fetch(`${APP}/api/public/link/${dev}/feedback`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rating: 'poor', note: 'The room was cold.' }) });
-await step('Not good raises the pill; fine and good stay in grey', '/admin/schedule', async () => {
-  await viaMenu('need you'); await p.waitForTimeout(1000);
+const soon = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female' });
+await api('POST', `/patients/${soon.id}/stays`, { start_date: plus(1), end_date: plus(8) });
+const gone = await api('POST', '/patients', { name: 'Dev Mehta', gender: 'male' });
+await api('POST', `/patients/${gone.id}/stays`, { start_date: plus(-20), end_date: plus(-10) });
+const here = await api('POST', '/patients', { name: 'Asha Kumar', gender: 'female' });
+await api('POST', `/patients/${here.id}/stays`, { start_date: plus(-2), end_date: plus(5) });
+const viaSearch = async (q, row) => { await viaMenu('Search'); await p.keyboard.type(q); await p.waitForTimeout(1200); await go(p.getByText(row).first()); await p.waitForTimeout(1200); };
+await step('A guest arriving tomorrow: no "Rest day"', '/admin/schedule', async () => {
+  await viaSearch('clara', /^Arrives/);
   const t = await text(dlg());
-  return { ok: /Dev Mehta/.test(t) && /Stay was not good/.test(t) && /Clara Weber/.test(t) && /information, not counted/.test(t), note: t.split('\n').filter((x) => /Stay was|information|need/i.test(x)).join(' · ') };
+  return { ok: /Arrives/.test(t) && !/Rest day|Treatments today/i.test(t), note: t.split('\n').slice(0, 3).join(' · ') };
 });
-await step('The card says what they said', '/admin/patients', async () => {
-  await go(p.getByRole('button', { name: /^Clara Weber/ }).first());
-  const c = await text(dlg());
-  return { ok: /Their stay/.test(c) && /Lovely food/.test(c), note: c.split('\n').filter((x) => /Their stay|Lovely|Fine/.test(x)).join(' · ') };
+await step('A guest who has left: no "Rest day"', '/admin/schedule', async () => {
+  await viaSearch('dev', /^Stayed until/);
+  const t = await text(dlg());
+  return { ok: /Stayed until/.test(t) && !/Rest day|Treatments today/i.test(t), note: t.split('\n').slice(0, 3).join(' · ') };
+});
+await step('A guest who is here keeps "Rest day" on a free day', '/admin/patients', async () => {
+  await go(p.getByRole('button', { name: /^Asha Kumar/ }).first());
+  const t = await text(dlg());
+  return { ok: /Rest day: nothing booked today/.test(t), note: t.split('\n').filter((x) => /Rest day|today/i.test(x)).join(' · ') };
 });
 await b.close();
 
