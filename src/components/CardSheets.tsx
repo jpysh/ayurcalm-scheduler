@@ -314,11 +314,23 @@ export function AccommodationSheet({ patient, stay, onClose, onSaved, editList }
 export type StayTarget = { id: string | null; start: string; end: string; package: CardStay["package"]; accommodation: CardStay["accommodation"] };
 
 /** `cover` is a day the stay should reach (a booking asked for it): the dates open already stretched to it. */
-export function StaySheet({ patient, target, today, cover, onClose, onSaved }: { patient: Who | null; target: StayTarget | null; today: string; cover?: string; onClose: () => void; onSaved: () => void }) {
+export function StaySheet({ patient, target, today, now, cover, onClose, onSaved }: { patient: Who | null; target: StayTarget | null; today: string; now?: string; cover?: string; onClose: () => void; onSaved: () => void }) {
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [cancels, setCancels] = useState(0);
   const [busy, setBusy] = useState(false);
+  // A new stay starts, like a new patient, in the next free doctor time (#575); Later leaves it to the card.
+  const [slots, setSlots] = useState<{ date: string; start_time: string; staff_id: string; staff_name: string; room_id: string }[]>([]);
+  const [later, setLater] = useState(false);
+  useEffect(() => {
+    if (!patient || !target || target.id || !start) { setSlots([]); return; }
+    let stale = false;
+    setLater(false);
+    fetchJsonWithTimeout<{ slots?: typeof slots }>(`${API_BASE}/consultations/next?date=${start}${start === today && now ? `&now=${now}` : ""}`)
+      .then((r) => { if (!stale) setSlots((r?.slots ?? []).filter((x) => x.date <= end)); }).catch(() => { if (!stale) setSlots([]); });
+    return () => { stale = true; };
+  }, [patient?.id, target?.id, start, end]); // eslint-disable-line react-hooks/exhaustive-deps
+  const visit = !target?.id && !later ? slots[0] : undefined;
   useEffect(() => { if (target) { setStart(cover && target.id && cover < target.start ? cover : target.start); setEnd(cover && target.id && cover > target.end ? cover : target.end); setCancels(0); } }, [target?.id, target?.start, target?.end, cover]); // eslint-disable-line react-hooks/exhaustive-deps
   // What a shorter stay would cancel, asked of the server before the tap.
   // New dates re-check the guest room (#456): taken on a night, the save moves them to the room the server names.
@@ -347,7 +359,7 @@ export function StaySheet({ patient, target, today, cover, onClose, onSaved }: {
     setBusy(true);
     const res = target.id
       ? await saveStay(patient.id, target.id, { start_date: start, end_date: end, cancel_after: cancels > 0, ...(room ? { guest_room_id: room.move_to?.id ?? null } : {}) })
-      : await fetch(`${API_BASE}/patients/${patient.id}/stays`, { method: "POST", headers: json, body: JSON.stringify({ start_date: start, end_date: end, package_id: target.package?.id ?? null }) });
+      : await fetch(`${API_BASE}/patients/${patient.id}/stays`, { method: "POST", headers: json, body: JSON.stringify({ start_date: start, end_date: end, package_id: target.package?.id ?? null, ...(visit ? { consultation: { date: visit.date, start_time: visit.start_time, staff_id: visit.staff_id, room_id: visit.room_id } } : {}) }) });
     setBusy(false);
     if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The stay was not saved. Try again."); return; }
     const out = await res.json().catch(() => ({}));
@@ -356,7 +368,9 @@ export function StaySheet({ patient, target, today, cover, onClose, onSaved }: {
       if (out.batch_id) await fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: json, body: JSON.stringify({ batch_id: out.batch_id }) });
       onSaved();
     } : null;
-    const text = `${first(patient.name)}: ${dayText(start)} to ${dayText(end)}${out.cancelled ? `, ${plural(out.cancelled, "treatment")} cancelled` : ""}`;
+    const text = target.id
+      ? `${first(patient.name)}: ${dayText(start)} to ${dayText(end)}${out.cancelled ? `, ${plural(out.cancelled, "treatment")} cancelled` : ""}`
+      : `Stay added for ${first(patient.name)}: ${dayText(start)} to ${dayText(end)}${visit ? `, consultation ${dayText(visit.date)} ${visit.start_time}` : ""}`;
     if (undo) toastUndo(text, undo); else toast.success(text);
     onSaved();
     onClose();
@@ -371,6 +385,15 @@ export function StaySheet({ patient, target, today, cover, onClose, onSaved }: {
         <ChangeLine label="Leaving" value={dayText(end)} select={<LineDate label="Leaving" value={end} min={start} onChange={setEnd} />} />
       </div>
       {target.id && start <= today && end > today ? <Btn kind="quiet" inline className="-ml-2 mt-1" onClick={() => setEnd(today)}>Leaves today</Btn> : null}
+      {!target.id && slots.length ? (
+        <div className="mt-3 rounded-xl border p-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="min-w-0"><b className="block">First consultation</b>
+              <span className={`block ${noteText}`}>{later ? "Later, from their card" : `${dayText(slots[0].date)} · ${slots[0].start_time} · ${slots[0].staff_name}`}</span></span>
+            <Btn kind="quiet" inline onClick={() => setLater(!later)}>{later ? "Book" : "Later"}</Btn>
+          </div>
+        </div>
+      ) : null}
       {lines.length ? <Consequence>{lines.join(" ")}</Consequence> : null}
     </BottomSheet>
   );

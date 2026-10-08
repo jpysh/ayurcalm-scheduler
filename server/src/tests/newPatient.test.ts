@@ -74,6 +74,18 @@ async function main() {
     assert.equal(plain.Stays[0].on_site, true, 'on site is the default');
     assert.equal(await prisma.appointment.count({ where: { patient_id: plain.id } }), 0, 'no consultation unless asked for');
 
+    // #575: a returning guest's New stay can start in a consultation, through the same guard.
+    const back = await call('POST', '/patients', { name: `${TAG} Back`, gender: 'female', stay: { start_date: '2030-04-01', end_date: '2030-04-07' } });
+    const slotBack = (await call('GET', `/consultations/next?date=2030-05-20`)).slots[0];
+    const newStay = { start_date: '2030-05-20', end_date: '2030-05-26', consultation: { date: slotBack.date, start_time: slotBack.start_time, staff_id: slotBack.staff_id, room_id: slotBack.room_id } };
+    await call('POST', `/patients/${back.id}/stays`, newStay);
+    assert.equal(await prisma.appointment.count({ where: { patient_id: back.id } }), 1, 'a new stay with a consultation books it');
+    const clash = await raw('POST', `/patients/${plain.id}/stays`, { ...newStay, start_date: '2030-05-20', end_date: '2030-05-26' });
+    assert.equal(clash.status, 409, 'the taken doctor time is refused');
+    assert.equal(await prisma.patientStay.count({ where: { patient_id: plain.id, start_date: new Date('2030-05-20T00:00:00.000Z') } }), 0, 'a refused consultation saves no stay');
+    await call('POST', `/patients/${back.id}/stays`, { start_date: '2030-06-20', end_date: '2030-06-26' });
+    assert.equal(await prisma.appointment.count({ where: { patient_id: back.id } }), 1, 'no consultation unless asked for');
+
     // Story 5: free first, busy kept with why.
     const therapy = await call('POST', '/therapies', { name: `${TAG} Abhyanga`, duration_minutes: 60 });
     const [asha, bina] = [await call('POST', '/staff', { name: `${TAG} Asha`, gender: 'female', specializations: [therapy.id], weekly_schedule: allWeek }),
