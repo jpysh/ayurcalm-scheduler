@@ -44,14 +44,13 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #550: opening a Settings sheet again does not write another "marked as reviewed" line to the Log.
-const reviewLines = async () => ((await api('GET', '/log')).entries || []).filter((e) => /catalogues marked as reviewed/.test(e.text)).length;
-await step('Packages and accommodation, opened three times, logs one line at most', '/admin/settings', async () => {
-  const before = await reviewLines();
-  for (let i = 0; i < 3; i++) { await p.goto(`${APP}/admin/settings`); await p.waitForTimeout(1200); await go(p.getByText('Packages and accommodation').first()); await p.waitForTimeout(800); }
-  const after = await reviewLines();
-  return { ok: after - before <= 1, note: `Log lines ${before} → ${after}` };
-});
+// #556: at 200% text nothing a decision needs is cut (rows, tiles, page titles).
+const big = async () => { await p.addStyleTag({ content: 'html{font-size:200% !important}' }); await p.waitForTimeout(700); };
+const cut = () => p.evaluate(() => [...new Set([...document.querySelectorAll('body *')].filter((e) => { const s = getComputedStyle(e); const clamped = s.webkitLineClamp && s.webkitLineClamp !== 'none'; return e.children.length === 0 && e.textContent.trim().length > 2 && ((clamped && e.scrollHeight > e.clientHeight + 1) || (s.textOverflow === 'ellipsis' && e.scrollWidth > e.clientWidth + 2)); }).map((e) => e.textContent.trim().slice(0, 40)))]);
+for (const [name, path] of [['Settings', '/admin/settings'], ['Patients', '/admin/patients'], ['Team', '/admin/team'], ['Guest rooms', '/admin/guestrooms']]) {
+  await step(`${name} at 200% text: nothing is cut`, path, async () => { await big(); const c = await cut(); return { ok: c.length === 0, note: c.length ? `cut: ${c.join(' | ')}` : 'nothing cut' }; });
+}
+await step('The Menu at 200% text: nothing is cut', '/admin/schedule', async () => { await big(); await menu(); await p.waitForTimeout(800); const c = await cut(); return { ok: c.length === 0, note: c.length ? `cut: ${c.join(' | ')}` : 'nothing cut' }; });
 await b.close();
 
 writeFileSync(`${OUT}/lines.json`, JSON.stringify(lines));

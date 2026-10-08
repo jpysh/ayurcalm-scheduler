@@ -11,6 +11,8 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
 // The boundary is dark enough to read as a box to type in; focus is a soft halo on the box itself.
 export const field = `h-11 w-full rounded-xl border border-[hsl(var(--input)/0.45)] bg-background px-3.5 text-base tabular-nums transition-shadow placeholder:text-muted-foreground focus:border-primary focus:shadow-[0_0_0_3px_hsl(var(--primary)/0.18)] focus-visible:outline-none disabled:opacity-60`;
+/** A field that is a button or a date line: the same box, but it grows with large text rather than cutting its value. */
+const growing = field.replace("h-11", "min-h-11 py-2");
 const chevron = <svg aria-hidden viewBox="0 0 16 16" className="pointer-events-none h-4 w-4 flex-none text-muted-foreground"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 const lbl = "mt-3 mb-1 block text-sm font-semibold text-muted-foreground";
 export const noteText = "text-sm text-muted-foreground";
@@ -96,8 +98,8 @@ export function PickField({ label, value, placeholder, groups, onPick }: { label
   return (
     <>
       <Field label={label}>
-      <button type="button" aria-label={`${label}: ${chosen?.name ?? placeholder}`} onClick={() => { setQ(""); setOpen(true); }} className={`${field} flex items-center justify-between text-left ${chosen ? "" : "text-muted-foreground"}`}>
-        <span className="truncate">{chosen?.name ?? placeholder}</span>{chevron}
+      <button type="button" aria-label={`${label}: ${chosen?.name ?? placeholder}`} onClick={() => { setQ(""); setOpen(true); }} className={`${growing} flex items-center justify-between text-left ${chosen ? "" : "text-muted-foreground"}`}>
+        <span className="min-w-0 break-words">{chosen?.name ?? placeholder}</span>{chevron}
       </button>
       </Field>
       <BottomSheet open={open} onOpenChange={setOpen} title={label} foot={<SearchField value={q} onChange={setQ} placeholder="Type a name" />}>
@@ -129,8 +131,8 @@ export function DateRow({ label, value, onChange, min, max }: { label: string; v
   return (
     <div className="min-w-0">
       <span className={lbl} aria-hidden>{label}</span>
-      <div className={`${field} relative flex items-center justify-between gap-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_hsl(var(--primary)/0.18)]`}>
-        <span className="truncate">{value ? dayText(value) : "Choose"}</span>
+      <div className={`${growing} relative flex items-center justify-between gap-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_hsl(var(--primary)/0.18)]`}>
+        <span className="min-w-0 break-words">{value ? dayText(value) : "Choose"}</span>
         <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4 flex-none text-muted-foreground"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" /></svg>
         <input type="date" aria-label={label} className="absolute inset-0 h-full w-full cursor-pointer opacity-0 focus-visible:outline-none" value={value.slice(0, 10)} min={min} max={max}
           // A desktop opens its calendar only from the box's small icon.
@@ -272,7 +274,7 @@ export function BottomSearch({ value, onChange, onClose, placeholder, label }: {
 /** A screen to go to, two across: its name and, when there is one, a live fact ("65 in house"). */
 export const Tile = ({ title, facts, onClick, href }: { title: ReactNode; facts?: ReactNode; onClick?: () => void; href?: string }) => {
   const cls = "flex min-h-14 flex-col justify-center rounded-xl border bg-card px-3 py-2 text-left active:bg-secondary";
-  const body = <><span className="line-clamp-2 text-row font-semibold leading-snug">{title}</span>{facts ? <span className="line-clamp-1 text-sm text-muted-foreground">{facts}</span> : null}</>;
+  const body = <><span className="line-clamp-3 text-row font-semibold leading-snug">{title}</span>{facts ? <span className="text-sm text-muted-foreground">{facts}</span> : null}</>;
   return href ? <a className={cls} href={href} target="_blank" rel="noopener noreferrer" onClick={onClick}>{body}</a> : <button type="button" className={cls} onClick={onClick}>{body}</button>;
 };
 
@@ -281,8 +283,8 @@ export const Row = ({ title, facts, trailing, flag, onClick, href }: { title: Re
   const body = (
     <>
       <span className="min-w-0 flex-1">
-        <span className="line-clamp-2 text-row font-semibold">{title}</span>
-        {facts ? <span className="line-clamp-2 text-sm text-muted-foreground">{facts}</span> : null}
+        <span className="line-clamp-3 text-row font-semibold">{title}</span>
+        {facts ? <span className="block text-sm text-muted-foreground">{facts}</span> : null}
         {flag ? <span className="block text-sm font-semibold text-destructive">{flag}</span> : null}
       </span>
       {trailing ? <span className="flex-none text-sm text-muted-foreground">{trailing}</span> : null}
@@ -348,7 +350,7 @@ export function Picker<T extends string>({ options, value, onChange, onEdit }: {
       {options.map((o) => (
         <button key={o.id} type="button" aria-pressed={value === o.id} onClick={() => onChange(o.id)}
           className={`flex min-h-14 items-center gap-3 rounded-xl border-[1.5px] border-border px-3 py-2 text-left aria-pressed:border-primary aria-pressed:bg-secondary ${o.faint ? "opacity-60" : ""}`}>
-          <span className="min-w-0 flex-1"><b className="block text-base">{o.name}</b>{o.note ? <span className={`line-clamp-1 ${noteText}`}>{o.note}</span> : null}</span>
+          <span className="min-w-0 flex-1"><b className="block text-base">{o.name}</b>{o.note ? <span className={`block ${noteText}`}>{o.note}</span> : null}</span>
           {o.fact ? <span className="flex-none text-sm text-muted-foreground">{o.fact}</span> : null}
           {value === o.id ? <span aria-hidden className="flex-none font-bold text-primary">✓</span> : null}
         </button>
@@ -422,7 +424,7 @@ export const ChangeLine = ({ label, value, onClick, select, faint }: { label: st
   const inner = (
     <>
       <span className={noteText}>{label}</span>
-      <span className={`flex min-w-0 items-center gap-1 ${faint ? "text-muted-foreground" : "font-semibold"}`}><span className="line-clamp-2 text-right">{value}</span>{onClick || select ? <span aria-hidden className="text-muted-foreground">›</span> : null}</span>
+      <span className={`flex min-w-0 items-center gap-1 ${faint ? "text-muted-foreground" : "font-semibold"}`}><span className="line-clamp-3 text-right">{value}</span>{onClick || select ? <span aria-hidden className="text-muted-foreground">›</span> : null}</span>
       {select}
     </>
   );
