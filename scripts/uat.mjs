@@ -44,21 +44,17 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #526, #527: Settings says what the Menu says; a rule switched off says it is off.
-// A guest three days in with no diet and nothing recorded: two things for one patient, one row on the pill.
-const two = await api('POST', '/patients', { name: `Two Things ${Date.now() % 1000}`, gender: 'male', on_site: true, stay: { start_date: plus(-3), end_date: plus(5) } });
-const menuCount = async () => { await p.goto(APP + '/admin/schedule'); await p.waitForTimeout(2000); await menu(); const t = await text(dlg()); await p.keyboard.press('Escape'); await p.waitForTimeout(500); return Number((t.match(/(\d+) need you/) || [])[1] || 0); };
-await step('Settings reads the same count as the Menu', '/admin/settings', async () => {
-  const t = await text(p.locator('body')); const said = Number((t.match(/the pill shows (\d+) today/) || [])[1] || 0);
-  const m = await menuCount();
-  return { ok: said === m, note: `Settings says ${said}, the Menu says ${m}` };
-});
-await step('A rule switched off says it is off', '/admin/settings', async () => {
-  await go(p.getByText('What needs you').first()); await p.waitForTimeout(900);
-  const row = dlg().getByRole('switch').nth(3); await row.click(); await p.waitForTimeout(900);
-  const t = await text(dlg()); const line = t.split('\n').find((x) => /^Off ·/.test(x)) || '';
-  await go(dlg().getByRole('button', { name: 'Reset to the defaults' }));
-  return { ok: !!line && !/Counts on the pill · would raise \d+ today\n[^\n]*\n[^\n]*Changed from on/.test(t), note: line || t.split('\n').slice(0, 14).join(' · ') };
+// #529: the guest's link decides "over" by the centre's clock, not the phone's. Run with UAT_TZ set to a zone many hours behind the centre (Pacific/Pago_Pago for Asia/Kolkata): the phone says 03:00 while the centre's afternoon treatments are over.
+const cfg = await api('GET', '/settings');
+const hhmm = (zone) => new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
+const mins = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)); const back = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+const phoneNow = mins(hhmm(process.env.UAT_TZ || cfg.timezone)); const centreNow = mins(hhmm(cfg.timezone));
+const ended = (await api('GET', `/appointments?date=${plus(0)}`)).find((x) => x.status !== 'cancelled' && x.status !== 'no_show' && mins(x.start_time) + x.duration_minutes <= centreNow - 5 && mins(x.start_time) + x.duration_minutes > phoneNow);
+const gl = ended ? await api('POST', `/patients/${ended.patient_id}/link`) : null;
+await step('The guest link asks "How was it?" once the centre says it is over', gl ? `/l/${gl.token}` : '/admin/schedule', async () => {
+  if (!ended) return { ok: false, note: 'skipped: no treatment ended between the phone clock and the centre clock' };
+  const t = await text(p.locator('body'));
+  return { ok: /How was it\?/.test(t), note: `centre ${back(centreNow)}, phone ${back(phoneNow)}, a treatment ended ${back(mins(ended.start_time) + ended.duration_minutes)}; ` + t.split('\n').filter((x) => /How was it|Today|\d\d:\d\d/.test(x)).slice(0, 4).join(' · ') };
 });
 await b.close();
 
