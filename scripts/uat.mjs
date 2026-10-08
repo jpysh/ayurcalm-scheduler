@@ -44,30 +44,21 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #522: a therapist ticks Done on their link; the card says when, read only.
-const todays = await api('GET', `/appointments?date=${plus(0)}`);
-const lk0 = (await api('GET', '/staff')).filter((x) => x.role === 'therapist');
-let mine = null, therapist = null, lk = null;
-for (const th of lk0) {
-  const l = await api('POST', `/staff/${th.id}/link`);
-  const d = await (await fetch(`${APP}/api/public/link/${l.token}`)).json();
-  const first = d.items?.find((i) => i.start_time);
-  if (first) { mine = first; therapist = th; lk = l; break; }
-}
-await step('The therapist link has a Done tick above Room ready', `/l/${lk.token}`, async () => {
-  const t = await text(p.locator('body'));
-  const iDone = t.indexOf('Done'); const iReady = t.indexOf('Room ready');
-  return { ok: iDone >= 0 && iDone < iReady, note: t.split('\n').filter((x) => x.trim()).slice(3, 12).join(' · ') };
+// #526, #527: Settings says what the Menu says; a rule switched off says it is off.
+// A guest three days in with no diet and nothing recorded: two things for one patient, one row on the pill.
+const two = await api('POST', '/patients', { name: `Two Things ${Date.now() % 1000}`, gender: 'male', on_site: true, stay: { start_date: plus(-3), end_date: plus(5) } });
+const menuCount = async () => { await p.goto(APP + '/admin/schedule'); await p.waitForTimeout(2000); await menu(); const t = await text(dlg()); await p.keyboard.press('Escape'); await p.waitForTimeout(500); return Number((t.match(/(\d+) need you/) || [])[1] || 0); };
+await step('Settings reads the same count as the Menu', '/admin/settings', async () => {
+  const t = await text(p.locator('body')); const said = Number((t.match(/the pill shows (\d+) today/) || [])[1] || 0);
+  const m = await menuCount();
+  return { ok: said === m, note: `Settings says ${said}, the Menu says ${m}` };
 });
-await step('Ticking Done keeps the time', `/l/${lk.token}`, async () => {
-  await p.getByLabel('Done').first().check(); await p.waitForTimeout(1200);
-  const after = (await api('GET', `/appointments?date=${plus(0)}`)).find((x) => x.id === mine.id);
-  return { ok: /^\d\d:\d\d$/.test(after.record?.done || ''), note: `done ${after.record?.done} for ${mine.patient}` };
-});
-await step('The treatment card says Done, read only', '/admin/schedule', async () => {
-  await go(p.getByRole('button', { name: new RegExp(mine.patient) }).first()); await p.waitForTimeout(900);
-  const t = await text(dlg());
-  return { ok: /Done \d\d:\d\d/.test(t), note: t.split('\n').filter((x) => /Recorded|Done|Room/.test(x)).join(' · ') };
+await step('A rule switched off says it is off', '/admin/settings', async () => {
+  await go(p.getByText('What needs you').first()); await p.waitForTimeout(900);
+  const row = dlg().getByRole('switch').nth(3); await row.click(); await p.waitForTimeout(900);
+  const t = await text(dlg()); const line = t.split('\n').find((x) => /^Off ·/.test(x)) || '';
+  await go(dlg().getByRole('button', { name: 'Reset to the defaults' }));
+  return { ok: !!line && !/Counts on the pill · would raise \d+ today\n[^\n]*\n[^\n]*Changed from on/.test(t), note: line || t.split('\n').slice(0, 14).join(' · ') };
 });
 await b.close();
 

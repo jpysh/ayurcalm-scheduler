@@ -140,7 +140,8 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
   if (!settings) return <Loading rows={6} />;
 
   const rules = attention.rules;
-  const raised = rules.filter((r) => r.on && r.kind === "action" && r.id !== "day").reduce((n, r) => n + r.count, 0) + (rules.find((r) => r.id === "day")?.count ?? 0);
+  // What the Menu says: one row a patient (#370), so five patients with three things each are five, not fifteen (#526).
+  const raised = new Set(attention.items.filter((i) => i.kind === "action").map((i) => i.patient_id ?? i.id)).size + (rules.find((r) => r.id === "day")?.count ?? 0);
   const rulesFact = rules.length ? `${rules.filter((r) => r.on).length} of ${rules.length} on · ${raised ? `the pill shows ${raised} today` : "nothing on the pill today"}` : "What shows on the pill";
   const hoursFact = `${daysText(settings.working_days)} · ${settings.opening_time}–${settings.closing_time}`;
   const SETUP: { key: string; sheet: () => void; title: string; now: string }[] = [
