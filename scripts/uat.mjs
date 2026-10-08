@@ -44,22 +44,20 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #489: a guest arriving next week fills their own details on their private link.
+// #495: a guest arriving later has a card with their stay, not "Not staying".
 await api('POST', '/settings/clear-demo-data');
-const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female' });
-await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(7), end_date: plus(20) });
-const link = await api('POST', `/patients/${pt.id}/link`);
-await step('The link asks for their details', `/l/${link.token}`, async () => {
-  const t = await text(p.locator('body'));
-  return { ok: /Your details/.test(t) && /0 of 7 filled in/.test(t), note: t.split('\n').filter((x) => /details|filled/.test(x)).join(' · ') };
+const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female', country: 'Germany' });
+await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(1), end_date: plus(8) });
+const openCard = async () => { await viaMenu('Search'); await p.keyboard.type('clara'); await p.waitForTimeout(1200); await go(p.getByText(/^Arrives/).first()); await p.waitForTimeout(1200); };
+await step('Their card says when they arrive, and the Arrival checklist is there', '/admin/schedule', async () => {
+  await openCard();
+  const t = await text(dlg());
+  return { ok: /Arrives .* · leaves/.test(t) && /Arrival/.test(t) && /Stay\n?.*to/.test(t) && !/Not staying/.test(t), note: t.split('\n').filter((x) => /Arrives|Arrival|ready|Stay|to /.test(x)).slice(0, 5).join(' · ') };
 });
-await step('They fill them and the card has them', `/l/${link.token}`, async () => {
-  await go(p.getByText('Your details').first());
-  for (const [l, v] of [['Your phone', '+49 151 2345678'], ['Date of birth', '1980-02-01'], ['Nationality', 'Germany'], ['Passport or ID', 'C01X00T47'], ['Home address', 'Hauptstr. 1, Berlin'], ['Someone to call', 'Jonas Weber'], ['Their phone', '+49 151 7654321']]) await dlg().getByLabel(new RegExp(l)).fill(v);
-  await go(dlg().getByRole('button', { name: 'Save my details' })); await p.waitForTimeout(1200);
-  const t = await text(p.locator('body'));
-  const saved = (await api('GET', '/patients')).find?.((x) => x.id === pt.id) ?? {};
-  return { ok: /All filled in/.test(t) && saved.country === 'Germany', note: `${t.split('\n').find((x) => /filled/.test(x))} · saved country ${saved.country}` };
+await step('Stay opens the stay they have, not a new one', '/admin/schedule', async () => {
+  await openCard(); await go(dlg().getByRole('button', { name: /^Stay/ }));
+  const t = await text(dlg());
+  return { ok: /Stay for Clara/.test(t) && !/New stay/.test(t), note: t.split('\n').filter((x) => x.trim()).slice(0, 4).join(' · ') };
 });
 await b.close();
 

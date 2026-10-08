@@ -58,36 +58,40 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
   const diet = diets.dietFor(patient, appts.some((a) => a.status !== 'no_show'));
   // The plan that takes over later in the stay, so the Diet row can say "then X from 5 Oct".
   const nextSeg = stay ? await prisma.dietPlanSegment.findFirst({ where: { patient_id: patientId, start_date: { gt: day, lte: stay.end_date } }, orderBy: { start_date: 'asc' }, include: { Template: { select: { name: true } } } }) : null;
-  const [pack, house, discharge] = stay ? await Promise.all([
-    stay.package_id ? prisma.package.findUnique({ where: { id: stay.package_id } }) : null,
-    stay.accommodation_id ? prisma.accommodationType.findUnique({ where: { id: stay.accommodation_id } }) : null,
-    dischargeOf(stay.id, prisma),
+  // A guest whose stay starts later has the card of that stay: what it needs before they arrive (#495).
+  const comingStay = stay ? null : await prisma.patientStay.findFirst({ where: { patient_id: patientId, start_date: { gt: day } }, orderBy: { start_date: 'asc' } });
+  const up = stay ?? comingStay;
+  const [pack, house, discharge] = up ? await Promise.all([
+    up.package_id ? prisma.package.findUnique({ where: { id: up.package_id } }) : null,
+    up.accommodation_id ? prisma.accommodationType.findUnique({ where: { id: up.accommodation_id } }) : null,
+    dischargeOf(up.id, prisma),
   ]) : [null, null, null];
-  const room = stay?.guest_room_id ? await prisma.guestRoom.findUnique({ where: { id: stay.guest_room_id }, select: { id: true, name: true } }) : null;
+  const room = up?.guest_room_id ? await prisma.guestRoom.findUnique({ where: { id: up.guest_room_id }, select: { id: true, name: true } }) : null;
   // A past guest (#437): when they left and on what package, so New stay starts from it.
   // One already coming is not a past guest.
-  const coming = stay ? 1 : await prisma.patientStay.count({ where: { patient_id: patientId, start_date: { gt: day } } });
-  const before = coming ? null : await prisma.patientStay.findFirst({ where: { patient_id: patientId, end_date: { lt: day } }, orderBy: { end_date: 'desc' } });
+  const before = up ? null : await prisma.patientStay.findFirst({ where: { patient_id: patientId, end_date: { lt: day } }, orderBy: { end_date: 'desc' } });
   const beforePack = before?.package_id ? await prisma.package.findUnique({ where: { id: before.package_id } }) : null;
   // The follow-up the last discharge asked for (#487), on the card of a guest who has left.
   const ended = await prisma.patientStay.findFirst({ where: { patient_id: patientId, end_date: { lte: day } }, orderBy: { end_date: 'desc' } });
   const fuDate = (ended?.discharge as { follow_up_date?: string } | null)?.follow_up_date;
   const follow_up = ended && fuDate ? { stay_id: ended.id, due: fuDate, phone: patient.phone ?? null, centre: settings?.centre_name ?? '', done: ended.follow_up_done ? centreClock(settings?.timezone || 'Asia/Kolkata', ended.follow_up_done).date : null } : null;
+  const shape = (s: NonNullable<typeof up>) => ({
+    id: s.id,
+    start_date: s.start_date.toISOString().slice(0, 10),
+    end_date: s.end_date.toISOString().slice(0, 10),
+    day: Math.round((day.getTime() - s.start_date.getTime()) / DAY_MS) + 1,
+    days: Math.round((s.end_date.getTime() - s.start_date.getTime()) / DAY_MS) + 1,
+    vitals: s.vitals, concerns: s.concerns, tests: s.tests, on_site: s.on_site,
+    package: pack && { id: pack.id, name: pack.name, days: pack.days, price: pack.price },
+    accommodation: house && { id: house.id, name: house.name, price_per_day: house.price_per_day, room },
+    discharge: discharge?.ready ?? null,
+  });
   return {
     follow_up,
     id: patient.id,
     name: patient.name,
-    stay: stay && {
-      id: stay.id,
-      start_date: stay.start_date.toISOString().slice(0, 10),
-      end_date: stay.end_date.toISOString().slice(0, 10),
-      day: Math.round((day.getTime() - stay.start_date.getTime()) / DAY_MS) + 1,
-      days: Math.round((stay.end_date.getTime() - stay.start_date.getTime()) / DAY_MS) + 1,
-      vitals: stay.vitals, concerns: stay.concerns, tests: stay.tests, on_site: stay.on_site,
-      package: pack && { id: pack.id, name: pack.name, days: pack.days, price: pack.price },
-      accommodation: house && { id: house.id, name: house.name, price_per_day: house.price_per_day, room },
-      discharge: discharge?.ready ?? null,
-    },
+    stay: stay && shape(stay),
+    coming: comingStay && shape(comingStay),
     treatments: appts.map(({ Therapy, Room, ...a }) => ({
       ...a,
       therapy_name: Therapy.name,
@@ -97,13 +101,13 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
     })),
     week,
     // What the FRRO site asks for, in its order, so each can be copied across (#415).
-    form_c: stay && isForeign(patient.country) ? {
-      due: formCDue(stay.start_date), filed: stay.form_c_filed ? centreClock(settings?.timezone || 'Asia/Kolkata', stay.form_c_filed).date : null,
+    form_c: up && isForeign(patient.country) ? {
+      due: formCDue(up.start_date), filed: up.form_c_filed ? centreClock(settings?.timezone || 'Asia/Kolkata', up.form_c_filed).date : null,
       fields: [
         ['Name', patient.name], ['Gender', patient.gender[0].toUpperCase() + patient.gender.slice(1)], ['Date of birth', patient.date_of_birth?.toISOString().slice(0, 10) ?? ''],
         ['Nationality', patient.country ?? ''], ['Passport', patient.id_number ?? ''], ['Visa number', patient.visa_number ?? ''],
-        ['Visa valid until', patient.visa_valid_until ?? ''], ['Arrived', stay.start_date.toISOString().slice(0, 10)],
-        ['Leaving', stay.end_date.toISOString().slice(0, 10)], ['Address at home', patient.address ?? ''], ['Phone', patient.phone ?? ''],
+        ['Visa valid until', patient.visa_valid_until ?? ''], ['Arrived', up.start_date.toISOString().slice(0, 10)],
+        ['Leaving', up.end_date.toISOString().slice(0, 10)], ['Address at home', patient.address ?? ''], ['Phone', patient.phone ?? ''],
       ],
     } : null,
     last_stay: before && { end_date: before.end_date.toISOString().slice(0, 10), package: beforePack && { id: beforePack.id, name: beforePack.name, days: beforePack.days, price: beforePack.price } },

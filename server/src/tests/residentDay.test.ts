@@ -73,6 +73,12 @@ async function main() {
     assert.deepEqual(gone.week, [], 'a past guest has no next days to book');
     assert.equal(gone.last_stay?.end_date, '2030-06-19');
 
+    // Before they arrive (#495): the stay that is coming is on the card, so Stay edits it and the guest is not "not staying".
+    const early = await (await fetch(`${API_BASE}/patients/${rekha.id}/day?date=2030-06-08`, { headers: { Authorization: `Bearer ${token}` } })).json();
+    assert.equal(early.stay, null);
+    assert.deepEqual([early.coming?.start_date, early.coming?.end_date], ['2030-06-10', '2030-06-19']);
+    assert.equal(early.last_stay, null, 'a guest who is coming is not a past guest');
+
     console.log("Resident day: which day of the stay, today's treatments without the cancelled one, and meals as the sheet prints them.");
   } finally {
     await tidy(prisma).catch(() => {});
