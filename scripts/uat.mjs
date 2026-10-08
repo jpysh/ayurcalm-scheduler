@@ -44,33 +44,17 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #528: a therapy can be marked before a purification, and the booking warning offers the day before it.
-const thAll = await api('GET', '/therapies');
-const purge = thAll.find((x) => x.once_per_course), prep = thAll.find((x) => x.before_purification);
-const pg = await api('POST', '/patients', { name: `Order Test ${Date.now() % 1000}`, gender: 'male', on_site: true, stay: { start_date: plus(0), end_date: plus(12) } });
-const pgDay = plus(6);
-const pgR = await api('POST', '/appointments', { patient_id: pg.id, therapy_id: purge.id, total_sessions: 1, preferred_time_range: { start: '09:00', end: '18:00' }, start_date: pgDay, end_date: pgDay });
-await step('The therapy sheet has the Before a purification switch, on for the library one', '/admin/therapies', async () => {
-  const row = await text(p.locator('body'));
-  await go(p.getByRole('button', { name: new RegExp('^' + prep.name) }).first()); await p.waitForTimeout(700);
-  const t = await text(dlg());
-  const on = String(await dlg().getByRole('switch', { name: /Before a purification/ }).isChecked().catch(() => null));
-  return { ok: /Before a purification/.test(t) && on === 'true' && new RegExp(prep.name + '[^\\n]*\\n[^\\n]*before a purification').test(row), note: `switch ${on}; ` + (row.split('\n').find((x) => /before a purification/.test(x)) || 'no list line') };
-});
-await step('The warning offers the day before the purification; tapping it moves the booking there', '/admin/schedule', async () => {
-  await go(plusBtn('Book a treatment')); await p.waitForTimeout(800);
-  await go(dlg().getByText(pg.name).first()); await p.waitForTimeout(900);
-  await go(dlg().getByText('Other therapies')); await p.locator('input[type=text]').last().fill(prep.name); await p.waitForTimeout(700);
-  await go(dlg().getByText(prep.name).first()); await p.waitForTimeout(900);
-  await dlg().locator('input[type=date]').first().fill(plus(8)); await p.waitForTimeout(1800);
-  const t = await text(dlg());
-  const eve = new Date(`${pgDay}T00:00:00Z`); eve.setUTCDate(eve.getUTCDate() - 1);
-  const want = eve.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
-  const offered = /prepares for a purification/.test(t) && t.includes(`Book ${want} instead`);
-  await p.screenshot({ path: `${OUT}/02-warning.png` });
-  await go(dlg().getByRole('button', { name: /instead$/ })); await p.waitForTimeout(1800);
-  const t2 = await text(dlg());
-  return { ok: offered && !/prepares for a purification/.test(t2), note: `${pgR.success} · ` + t.split('\n').filter((x) => /prepares|instead|still possible/.test(x)).join(' · ') + ' → after the tap: ' + t2.split('\n').filter((x) => /Date|Tue|Mon|Wed|Book/.test(x)).slice(0, 3).join(' · ') };
+// #529: the guest's link decides "over" by the centre's clock, not the phone's. Run with UAT_TZ set to a zone many hours behind the centre (Pacific/Pago_Pago for Asia/Kolkata): the phone says 03:00 while the centre's afternoon treatments are over.
+const cfg = await api('GET', '/settings');
+const hhmm = (zone) => new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
+const mins = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)); const back = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+const phoneNow = mins(hhmm(process.env.UAT_TZ || cfg.timezone)); const centreNow = mins(hhmm(cfg.timezone));
+const ended = (await api('GET', `/appointments?date=${plus(0)}`)).find((x) => x.status !== 'cancelled' && x.status !== 'no_show' && mins(x.start_time) + x.duration_minutes <= centreNow - 5 && mins(x.start_time) + x.duration_minutes > phoneNow);
+const gl = ended ? await api('POST', `/patients/${ended.patient_id}/link`) : null;
+await step('The guest link asks "How was it?" once the centre says it is over', gl ? `/l/${gl.token}` : '/admin/schedule', async () => {
+  if (!ended) return { ok: false, note: 'skipped: no treatment ended between the phone clock and the centre clock' };
+  const t = await text(p.locator('body'));
+  return { ok: /How was it\?/.test(t), note: `centre ${back(centreNow)}, phone ${back(phoneNow)}, a treatment ended ${back(mins(ended.start_time) + ended.duration_minutes)}; ` + t.split('\n').filter((x) => /How was it|Today|\d\d:\d\d/.test(x)).slice(0, 4).join(' · ') };
 });
 await b.close();
 
