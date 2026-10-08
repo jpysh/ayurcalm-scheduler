@@ -120,6 +120,8 @@ Score is before the fixes → after them; a story under 13 got one issue. The mi
 | Backups, Load a centre, People with access | pass | a loaded centre did not sign the old session out; a switched-off person kept 12 hours | #574 |
 | Any screen under heavy use | pass | the server's 'too many requests' showed an empty centre | #578 |
 | Leave and one day's meals in the evening | pass | after closing both opened on today's finished day (the meals sheet used the phone's date) | #586 |
+| An admin's phone in another zone than the centre (a New York centre from New York, Prague, Auckland) | pass | a full-day leave was saved a day early west of UTC; a chosen day showed the day before on a phone east of the centre; today's leave sat under Past | #597, #599, #601 |
+| A massage studio's first day | pass | the library offered only Ayurvedic names and no door to a therapy of one's own; the day sheet still groups by 'No diet plan' (open question, not a defect) | #595 |
 
 ## Each story
 
