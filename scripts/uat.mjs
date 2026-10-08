@@ -44,19 +44,27 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #499: the Log names what changed on a stay, and what a guest filled in themselves.
+// #500: small things from the walk: the follow-up counts once dated, one "(optional)", and the list follows a changed stay.
 await api('POST', '/settings/clear-demo-data');
 const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female' });
-const sy = await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(1), end_date: plus(8) });
-const pk = (await api('GET', '/packages'))[0];
-await api('PUT', `/patients/${pt.id}/stays/${sy.id}`, { package_id: pk.id });
-await api('PUT', `/patients/${pt.id}/stays/${sy.id}`, { start_date: plus(1), end_date: plus(7) });
-const link = await api('POST', `/patients/${pt.id}/link`);
-await fetch(`${APP}/api/public/link/${link.token}/details`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: '+49 151 2345678', country: 'Germany', id_number: 'C01X00T47' }) });
-await step('The Log says what changed on the stay, and what the guest filled in', '/admin/log', async () => {
-  await p.waitForTimeout(800);
+const sy = await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(0), end_date: plus(8) });
+await api('PUT', `/patients/${pt.id}/stays/${sy.id}/discharge`, { follow_up_date: plus(30) });
+await step('Discharge: a dated follow-up is not missing, and one (optional)', '/admin/patients', async () => {
+  await go(p.getByRole('button', { name: /^Clara Weber/ }).first()); await go(dlg().getByText(/^Discharge summary/));
+  const t = await text(dlg());
+  const missing = t.split('STILL MISSING')[1] || '';
+  await go(dlg().getByText('Write or edit it'));
+  const f = await text(dlg());
+  return { ok: !/Follow-up/.test(missing) && /Total payment\b/.test(f) && !/\(optional\) \(optional\)/.test(f), note: `missing: ${missing.split('\n').filter((x) => x.trim()).slice(0, 4).join(' / ')} · ${f.split('\n').filter((x) => /Total payment/.test(x)).join('')}` };
+});
+await step('The list behind the card follows a changed stay', '/admin/patients', async () => {
+  await go(p.getByRole('button', { name: /^Clara Weber/ }).first()); await go(dlg().getByRole('button', { name: /^Stay/ }));
+  await dlg().getByLabel('Leaving').fill(plus(3)); await p.waitForTimeout(1200);
+  await go(dlg().getByRole('button', { name: /^Leave on/ })); await p.waitForTimeout(1500);
+  await p.keyboard.press('Escape'); await p.waitForTimeout(800); await p.keyboard.press('Escape'); await p.waitForTimeout(800);
   const t = await text(p.locator('body'));
-  return { ok: /stay: dates/.test(t) && /stay: package set/.test(t) && /filled in their own details: phone, country, id number/.test(t) && !/Germany|C01X00T47/.test(t), note: t.split('\n').filter((x) => /stay|details|guest/.test(x)).join(' · ') };
+  const want = new Date(`${plus(3)}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  return { ok: t.split('\n').some((x) => /leaves/.test(x) && x.includes(want)), note: t.split('\n').filter((x) => /leaves|Day \d/.test(x)).join(' · ') };
 });
 await b.close();
 

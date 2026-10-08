@@ -53,7 +53,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRule
   const [inHouse, setInHouse] = useState<InHouse[] | null>(null);
   useEffect(() => {
     fetchJsonWithTimeout<InHouse[]>(`${API_BASE}/patients?resident_on=${today}&arriving_within=14`).then((r) => setInHouse(Array.isArray(r) ? r : [])).catch(() => setInHouse([]));
-  }, [today, patients.length]);
+  }, [today, patients.length, patients.map((p) => `${p.actualStart}${p.actualEnd}`).join()]);
   const stayOf = (p: InHouse) => p.Stays.find((s) => s.start_date.slice(0, 10) <= today && s.end_date.slice(0, 10) >= today);
   const dayOf = (s: { start_date: string; end_date: string }) => {
     const n = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(s.start_date)) / DAY_MS) + 1;

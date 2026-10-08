@@ -17,7 +17,7 @@ const LINES: [string, string, string?][][] = [
   [["admitted_time", "Arrived at", "09:00"], ["discharged_time", "Leaves at", "11:00"], ["registration_no", "Registration no."]],
   [["address", "Address"], ["country", "Country"], ["passport", "Passport no."]],
   [["weight", "Weight"], ["bp", "BP"], ["bowel", "Bowel"], ["appetite", "Appetite"], ["sleep", "Sleep"], ["menstrual", "Menstrual cycle"], ["dosha", "Doshic dominance"], ["discharge_type", "Type of discharge"]],
-  [["payment_amount", "Total payment (optional)"], ["payment_mode", "Mode"], ["payment_date", "Date of payment"]],
+  [["payment_amount", "Total payment"], ["payment_mode", "Mode"], ["payment_date", "Date of payment"]],
 ];
 const PARAS: [string, string][] = [["condition", "Condition at discharge"], ["diagnosis", "Final diagnosis"], ["reason", "Reason for admission"], ["investigations", "Investigations"]];
 const AFTER: [string, string][] = [["instructions", "Special instructions"], ["follow_up", "Follow-up"], ["urgent_when", "When to obtain urgent care"], ["urgent_how", "How to obtain urgent care"]];
