@@ -378,11 +378,13 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
 }
 
 /** The Patients screen: the Add and Details dialogs and the tab, held by the dashboard so they last as long as it does. */
-export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, openTreatment, book, searchEverything, openCatalogue, openRules, needs }: {
+export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, startDay, openTreatment, book, searchEverything, openCatalogue, openRules, needs }: {
   /** The patient items the rules raise today: the "Needs attention" chip and the flags on rows. */
   needs: AttentionItem[];
   patients: PatientRow[]; setPatients: React.Dispatch<React.SetStateAction<PatientRow[]>>; staff: UiStaff[];
   therapyNameById: Record<string, string>; timezone: string;
+  /** The day a plan starts on: today, or tomorrow after closing (#586). */
+  startDay: string;
   /** A treatment on the resident card opens the treatment card, on its day. */
   openTreatment: (a: CardAppt) => void;
   /** A booking, for the patient on a card when there is one. */
@@ -546,7 +548,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const dialogs = (
     <>
       {/* With the dialogs, not the Residents tab: a card opened from the day changes meals too. */}
-      <DayDietDialog patient={dayMealsFor} onClose={() => setDayMealsFor(null)} />
+      <DayDietDialog patient={dayMealsFor} day={startDay} onClose={() => setDayMealsFor(null)} />
       <DietSheet patient={dietFor} today={today} onClose={backToCard(() => setDietFor(null))} onChanged={() => {}} onDayMeals={(p) => { setDietFor(null); setBack(null); setDayMealsFor(p); }} />
       <PackageSheet patient={packFor?.patient ?? null} stay={packFor?.stay ?? null} onClose={backToCard(() => setPackFor(null))} onSaved={() => {}}
         editList={() => { setPackFor(null); setBack(null); openCatalogue('packages'); }}
