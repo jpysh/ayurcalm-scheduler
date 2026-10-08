@@ -44,32 +44,30 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #523: a patient with no review booked can still plan next week from today.
-const nm = `Review Less ${Date.now() % 1000}`;
-const th = await api('GET', '/therapies'); const pt = await api('POST', '/patients', { name: nm, gender: 'male' });
-await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(-3), end_date: plus(9) });
-const early = new Date(Date.now() - 4 * 86400000).toISOString();
-// The first therapy that has a free time on both of the last two days: the seeded week is busy for some.
-let abh = null; const made = { success: false };
-for (const t of th.filter((x) => !x.is_consultation && (x.staff_required ?? 1) === 1)) {
-  const r = await Promise.all([-2, -1].map((d) => api('POST', '/appointments', { patient_id: pt.id, therapy_id: t.id, total_sessions: 1, preferred_time_range: { start: '09:00', end: '18:00' }, start_date: plus(d), end_date: plus(d), now: early })));
-  if (r.every((x) => x.success)) { abh = t; made.success = true; break; }
+// #522: a therapist ticks Done on their link; the card says when, read only.
+const todays = await api('GET', `/appointments?date=${plus(0)}`);
+const lk0 = (await api('GET', '/staff')).filter((x) => x.role === 'therapist');
+let mine = null, therapist = null, lk = null;
+for (const th of lk0) {
+  const l = await api('POST', `/staff/${th.id}/link`);
+  const d = await (await fetch(`${APP}/api/public/link/${l.token}`)).json();
+  const first = d.items?.find((i) => i.start_time);
+  if (first) { mine = first; therapist = th; lk = l; break; }
 }
-await step('A patient with no review booked has Plan next week', '/admin/patients', async () => {
-  await go(p.getByText(nm).first()); await p.waitForTimeout(900);
-  const t = await text(dlg());
-  return { ok: /Plan next week/.test(t) && /None booked/.test(t), note: `${made.success} · ` + t.split('\n').filter((x) => /Next|Plan|Review|None/.test(x)).slice(0, 5).join(' · ') };
+await step('The therapist link has a Done tick above Room ready', `/l/${lk.token}`, async () => {
+  const t = await text(p.locator('body'));
+  const iDone = t.indexOf('Done'); const iReady = t.indexOf('Room ready');
+  return { ok: iDone >= 0 && iDone < iReady, note: t.split('\n').filter((x) => x.trim()).slice(3, 12).join(' · ') };
 });
-await step('It repeats the week they had', '/admin/patients', async () => {
-  await go(p.getByText(nm).first()); await go(dlg().getByRole('button', { name: 'Plan next week' })); await p.waitForTimeout(1500);
-  const t = await text(dlg());
-  return { ok: t.includes(abh.name) && /2 days/.test(t) && /Book all/.test(t), note: t.split('\n').filter((x) => x.trim()).slice(0, 12).join(' · ') };
+await step('Ticking Done keeps the time', `/l/${lk.token}`, async () => {
+  await p.getByLabel('Done').first().check(); await p.waitForTimeout(1200);
+  const after = (await api('GET', `/appointments?date=${plus(0)}`)).find((x) => x.id === mine.id);
+  return { ok: /^\d\d:\d\d$/.test(after.record?.done || ''), note: `done ${after.record?.done} for ${mine.patient}` };
 });
-await step('Book all books them, with one Undo', '/admin/patients', async () => {
-  await go(p.getByText(nm).first()); await go(dlg().getByRole('button', { name: 'Plan next week' })); await p.waitForTimeout(1500);
-  await go(dlg().getByRole('button', { name: /^Book all/ })); await p.waitForTimeout(1500);
-  const toast = await p.locator('[data-sonner-toast]').first().innerText().catch(() => '');
-  return { ok: /Booked \d+ treatment/.test(toast) && /Undo/.test(toast), note: toast.replace(/\n/g, ' · ') };
+await step('The treatment card says Done, read only', '/admin/schedule', async () => {
+  await go(p.getByRole('button', { name: new RegExp(mine.patient) }).first()); await p.waitForTimeout(900);
+  const t = await text(dlg());
+  return { ok: /Done \d\d:\d\d/.test(t), note: t.split('\n').filter((x) => /Recorded|Done|Room/.test(x)).join(' · ') };
 });
 await b.close();
 

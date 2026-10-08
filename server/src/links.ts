@@ -19,7 +19,7 @@ const prisma = new PrismaClient();
 export const newLinkToken = () => randomBytes(18).toString('base64url');
 
 type Person = { kind: 'therapist' | 'doctor'; id: string; name: string } | { kind: 'patient'; id: string; name: string };
-type Record = { checklist?: { [item: string]: boolean }; vitals?: { [field: string]: string }; room_ready?: boolean; feedback?: 'up' | 'down'; feedback_note?: string; feedback_seen?: boolean };
+type Record = { checklist?: { [item: string]: boolean }; vitals?: { [field: string]: string }; room_ready?: boolean; /** The centre's clock when the therapist ticked Done (#522). */ done?: string; feedback?: 'up' | 'down'; feedback_note?: string; feedback_seen?: boolean };
 type ChecklistItem = { text: string; required: boolean };
 
 async function personOf(token: string): Promise<Person | null> {
@@ -92,6 +92,7 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
         checklist: ((a.Therapy.checklist || []) as ChecklistItem[]).map((c) => ({ ...c, done: !!record.checklist?.[c.text] })),
         vitals: a.Therapy.vitals.map((f) => ({ field: f, value: record.vitals?.[f] ?? '' })),
         room_ready: !!record.room_ready,
+        done: record.done ?? null,
         ...(who.kind === 'doctor' ? { note: a.notes } : {}),
       };
     }),
@@ -116,12 +117,17 @@ linkRouter.post('/:token/appointments/:id', async (req: Request, res: Response) 
       checklist: z.record(z.string(), z.boolean()).optional(),
       vitals: z.record(z.string(), z.string().trim().max(40)).optional(),
       room_ready: z.boolean().optional(),
+      done: z.boolean().optional(),
       note: text.optional(),
     }).strict().parse(req.body);
     // Only what this therapy asks for: the link is not a free-form store.
     if (body.checklist) record.checklist = { ...record.checklist, ...Object.fromEntries(Object.entries(body.checklist).filter(([k]) => items.includes(k))) };
     if (body.vitals) record.vitals = { ...record.vitals, ...Object.fromEntries(Object.entries(body.vitals).filter(([k]) => a.Therapy.vitals.includes(k))) };
     if (body.room_ready !== undefined) record.room_ready = body.room_ready;
+    if (body.done !== undefined) {
+      const zone = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
+      record.done = body.done ? record.done ?? centreClock(zone).time : undefined;
+    }
     if (body.note !== undefined) {
       if (who.kind !== 'doctor') { res.status(403).json({ error: 'Only the doctor writes the consultation note.' }); return; }
       notes = body.note || null;

@@ -27,7 +27,7 @@ export type CardAppt = {
   status?: string;
   notes?: string | null;
   /** What the therapist, doctor or patient recorded from their private link (#219). */
-  record?: { vitals?: Record<string, string>; checklist?: Record<string, boolean>; room_ready?: boolean; feedback?: "up" | "down"; feedback_note?: string } | null;
+  record?: { vitals?: Record<string, string>; checklist?: Record<string, boolean>; room_ready?: boolean; done?: string; feedback?: "up" | "down"; feedback_note?: string } | null;
 };
 type Named = { id: string | number; name: string };
 /** `now` is the treatment as it stands, listed first and ticked (#201). */
@@ -175,6 +175,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients
     const recorded = [
       ...Object.entries(rec.vitals || {}).filter(([, v]) => v).map(([k, v]) => `${VITALS.find(([x]) => x === k)?.[1] || k} ${v}`),
       ticked ? `${ticked} check${ticked === 1 ? "" : "s"}` : "",
+      rec.done ? `Done ${rec.done}` : "",
       rec.room_ready ? "Room ready" : "",
     ].filter(Boolean).join(" · ");
     const said = rec.feedback ? [rec.feedback === "up" ? "Good" : "Not good", rec.feedback_note].filter(Boolean).join(" · ") : "";
