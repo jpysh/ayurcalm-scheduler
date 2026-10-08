@@ -77,7 +77,7 @@ async function main() {
     await ensureStarterDietTemplates(prisma);
     await ensureStarterCatalogues(prisma);
     const support = process.env.DEFAULT_SUPPORT_WHATSAPP ?? '420777558262';
-    await prisma.settings.upsert({ where: { id: 'singleton' }, update: {}, create: { id: 'singleton', setup_complete: false, demo_data: false, support_whatsapp: support || null, patient_support_whatsapp: support || null } });
+    await prisma.settings.upsert({ where: { id: 'singleton' }, update: {}, create: { id: 'singleton', setup_complete: false, demo_data: false, support_whatsapp: support || null, patient_support_whatsapp: support || null, ...(process.env.CENTRE_NAME?.trim() ? { centre_name: process.env.CENTRE_NAME.trim().slice(0, 80) } : {}) } });
     console.log('Trial centre ready for its setup wizard');
     return;
   }

@@ -15,6 +15,7 @@ import { useTimeOffScreen } from "./tabs/TimeOffTab";
 import { useEventsScreen } from "./tabs/EventsTab";
 import { useDietScreen } from "./tabs/DietTab";
 import { usePatientsScreen } from "./tabs/PatientsTab";
+import { planningDay } from "@/lib/centreDay";
 import { useScheduleScreen } from "./tabs/ScheduleTab";
 import Settings from "./Settings";
 import { RulesSheet } from "@/components/RulesSheet";
@@ -381,6 +382,8 @@ const AdminDashboard = () => {
   };
 
   const todayKey = ymdInTZ(currentDate);
+  // Sheets that start a plan (a leave, one day's meals) open on tomorrow once today is over (#586).
+  const startDay = planningDay(ymdInTZ(new Date()), centreHours.closing_time, ADMIN_TZ);
 
   // What the replan did when a therapist was marked off, in the words the admin
   // would use. It is the only place those moves are reported, so it is dismissed
@@ -512,7 +515,7 @@ const AdminDashboard = () => {
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, requestDelete, centre: { opening: centreHours.opening_time, closing: centreHours.closing_time } });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, requestDelete });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q: listQuery });
-  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, timeSlots, planDay: (iso) => { go('schedule'); setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); setShowAttention(true); } });
+  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, startDay, timeSlots, planDay: (iso) => { go('schedule'); setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); setShowAttention(true); } });
   const eventsScreen = useEventsScreen({ events, setEvents, roomsList, staff, staffNameById, q: listQuery });
   // The treatment card opens the resident card, which the Residents screen holds.
   const residentOpener = useRef<((id: string) => void) | null>(null);
@@ -524,7 +527,7 @@ const AdminDashboard = () => {
   staffAdder.current = (a) => staffScreen.openAdd({ gender: a.gender === 'male' ? 'Male' : a.gender === 'female' ? 'Female' : undefined, gives: therapies.filter((t) => t.id === a.therapy_id).map((t) => t.name), role: therapies.find((t) => t.id === a.therapy_id)?.consultation ? 'doctor' : undefined });
   const patientAdder = useRef<((name: string, arriving: string, done: (p: { id: string; name: string }) => void) => void) | null>(null);
   const swipe = useRef<{ x: number; y: number } | null>(null);
-  const patientsScreen = usePatientsScreen({ needs: attention.items.filter((i) => i.section === 'Patients' && i.kind === 'action' && i.patient_id), patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ,
+  const patientsScreen = usePatientsScreen({ needs: attention.items.filter((i) => i.section === 'Patients' && i.kind === 'action' && i.patient_id), patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ, startDay,
     openTreatment: (a) => { go('schedule'); scheduleScreen.openCard(a); },
     // A day on the card books on that day (#350).
     book: (p) => { go('schedule'); if (p?.date) { setCurrentDate(new Date(`${p.date}T00:00:00`)); refreshAppointmentsForDate(p.date, true); } scheduleScreen.openBook(p); },

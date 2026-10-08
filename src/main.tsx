@@ -23,6 +23,8 @@ if (typeof window !== "undefined") {
       localStorage.removeItem("authUser");
       window.location.assign("/login");
     }
+    // The server counts calls per address; past the limit every screen would show an empty centre, with no word why (#578).
+    if (isApiCall && res.status === 429) toast.error("Too many requests at once. Wait a minute and it comes back.", { id: "too-many", duration: 10000 });
     // Time off changes what is wrong with the day, wherever it was saved (#188).
     if (isApiCall && res.ok && /\/api\/(timeoff|holidays)/.test(url) && (init.method || "GET").toUpperCase() !== "GET") {
       window.dispatchEvent(new Event("timeoff-changed"));

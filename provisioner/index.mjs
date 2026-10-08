@@ -10,7 +10,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHmac, randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync, renameSync, appendFileSync, existsSync } from 'node:fs';
-import { next, deletesAt, refuse, slugFor } from './lifecycle.mjs';
+import { next, deletesAt, refuse, slugFor, linkOpen } from './lifecycle.mjs';
 
 const run = promisify(execFile);
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -82,11 +82,11 @@ function provision(s) {
       s.state = 'building'; save();
       const slug = slugFor(s.centre, [...db.centres.map((c) => c.slug), 'shots', 'host']);
       const port = Math.max(Number(env.CENTRE_PORT_FROM || 8300) - 1, ...db.centres.map((c) => c.port)) + 1;
-      await centreSh({ ADMIN_EMAIL: s.email }, 'up', slug, String(port));
+      await centreSh({ ADMIN_EMAIL: s.email, CENTRE_NAME: s.centre }, 'up', slug, String(port));
       await up(port);
       await route(slug, svc(port));
       db.centres.push({ slug, port, email: s.email, centre: s.centre, ref: s.ref, created: Date.now() });
-      s.state = 'ready'; s.slug = slug; s.used = true; save();
+      s.state = 'ready'; s.ready_at = Date.now(); s.slug = slug; s.used = true; save();
       await telegram(`New trial centre: ${s.centre} (${slug}.${DOMAIN}) by ${s.email}${s.ref ? `, invited by ${s.ref}` : ''}`);
     } catch (e) {
       console.error('provision failed', e); s.state = 'failed'; save();
@@ -212,12 +212,11 @@ export const server = http.createServer(async (req, res) => {
       if (!s.state) provision(s);
       return send(res, 200, page(`<h1>Creating ${esc(s.centre)}…</h1><p id="m">This takes about two minutes. Keep this page open.</p><progress style="width:100%"></progress>
 <p id="o" hidden><a id="go" style="display:block;text-align:center;padding:.8rem;border-radius:.6rem;background:#3d6b50;color:#fff;font-weight:600;text-decoration:none">Open your centre</a></p>
-<script>(async function poll(){const r=await fetch('/status?k=${esc(s.key)}').then(r=>r.json()).catch(()=>({}));if(r.go){const h=document.querySelector('h1');h.textContent=h.textContent.replace(/^Creating (.*)…$/,'$1 is ready');document.getElementById('m').textContent='Open it here. It works once: you choose your password first.';document.querySelector('progress').remove();document.getElementById('go').href=r.go;document.getElementById('o').hidden=false;return}if(r.failed){document.getElementById('m').textContent='Something went wrong. We have been told; WhatsApp +420 777 558 262 if you want to hear back sooner.';return}setTimeout(poll,3000)})()</script>`));
+<script>(async function poll(){const r=await fetch('/status?k=${esc(s.key)}').then(r=>r.json()).catch(()=>({}));if(r.go){const h=document.querySelector('h1');h.textContent=h.textContent.replace(/^Creating (.*)…$/,'$1 is ready');document.getElementById('m').textContent='Open it here. It works once: you choose your password first.';document.querySelector('progress').remove();document.getElementById('go').href=r.go;document.getElementById('o').hidden=false;return}if(r.state==='ready'){const h=document.querySelector('h1');h.textContent=h.textContent.replace(/^Creating (.*)…$/,'$1 is ready');document.getElementById('m').textContent='Your centre is ready, but this sign-in link has run out. WhatsApp +420 777 558 262 and we will send a new one.';document.querySelector('progress').remove();return}if(r.failed){document.getElementById('m').textContent='Something went wrong. We have been told; WhatsApp +420 777 558 262 if you want to hear back sooner.';return}setTimeout(poll,3000)})()</script>`));
     }
     if (url.pathname === '/status' && s) {
-      // The sign-in is handed over once; after that the admin asks for a fresh link by email.
-      const go = s.state === 'ready' && !s.handed ? signinLink(s.slug, s.email) : null;
-      if (go) { s.handed = true; save(); }
+      // A fresh single-use sign-in on every ask while the centre is new (the life of a link, 30 minutes), so a reload still gets in (#588); after that, by WhatsApp.
+      const go = linkOpen(s, Date.now()) ? signinLink(s.slug, s.email) : null;
       res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ state: s.state, go, failed: s.state === 'failed' }));
     }
     send(res, 404, page('<h1>This link is not valid</h1><p><a href="/">Start again</a></p>'));
