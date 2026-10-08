@@ -10,7 +10,7 @@ export type Med = { name: string; dose: string; timing: string; from: string; da
 export type DischargeDraft = { meds_stay: Med[]; meds_home: Med[]; no: string; final: boolean; [k: string]: unknown };
 export type DischargeView = {
   stay_id: string; patient_id: string; name: string; from: string; to: string; days: number; saved: boolean;
-  draft: DischargeDraft; doctor: { name: string } | null;
+  draft: DischargeDraft; doctor: { name: string } | null; card_medication?: string;
 };
 
 const LINES: [string, string, string?][][] = [
@@ -76,6 +76,9 @@ export default function DischargeForm({ view, admin, onSave, onPdf, doctors }: {
         {locked ? null : (
           <div className="flex flex-wrap gap-2">
             <Btn kind="secondary" onClick={() => set(key, [...d[key], blank()])}>Add a medicine</Btn>
+            {key === "meds_stay" && !d.meds_stay.length && view.card_medication ? (
+              <Btn kind="quiet" onClick={() => set("meds_stay", [{ ...blank(), name: view.card_medication! }])}>Add from their card: {view.card_medication.length > 40 ? `${view.card_medication.slice(0, 40)}…` : view.card_medication}</Btn>
+            ) : null}
             {key === "meds_stay" && d.meds_stay.length ? (
               <Btn kind="quiet"
                 onClick={() => set("meds_home", [...d.meds_home, ...d.meds_stay.filter((m) => m.name.trim() && !d.meds_home.some((h) => h.name === m.name)).map((m) => ({ ...m, from: "", days: "" }))])}>Copy to take-home</Btn>

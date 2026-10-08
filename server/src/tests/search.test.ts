@@ -71,6 +71,12 @@ async function main() {
     assert.deepEqual(people.map((p) => [p.id, p.when]), [[guest.id, 'in'], [rekha.id, 'past']], 'patients come first in house, then past guests');
     assert.equal(people[0].room, `${house.name} ${TAG} S-2`, 'a guest in house shows their guest room');
     assert.equal(people[1].end, '2030-04-10');
+    // A guest room's name and a country find the guest too (#525).
+    await prisma.patient.update({ where: { id: guest.id }, data: { country: 'Germany' } });
+    const byRoom = (await (await fetch(`${API_BASE}/appointments/search?q=${encodeURIComponent(TAG + ' S-2')}&from=2030-05-01&to=2030-05-31`, { headers: { Authorization: `Bearer ${token}` } })).json()).patients as { id: string }[];
+    assert.deepEqual(byRoom.map((p) => p.id), [guest.id], 'a guest room finds who sleeps in it');
+    const byCountry = (await (await fetch(`${API_BASE}/appointments/search?q=germany&from=2030-05-01&to=2030-05-31`, { headers: { Authorization: `Bearer ${token}` } })).json()).patients as { id: string }[];
+    assert.ok(byCountry.some((p) => p.id === guest.id), 'a country finds the guest');
 
     console.log('Search: a name finds every day in the window, in order; rooms and assisting therapists count; cancelled and out-of-window do not.');
   } finally {
