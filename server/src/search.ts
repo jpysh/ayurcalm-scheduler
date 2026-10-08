@@ -55,8 +55,10 @@ export async function searchTreatments(q: string, from: Date, to: Date, prisma: 
 export type PatientHit = { id: string; name: string; when: 'in' | 'arriving' | 'past' | 'none'; start: string | null; end: string | null; room: string | null; diet: string | null };
 
 export async function searchPatients(q: string, today: Date, prisma: PrismaClient): Promise<PatientHit[]> {
+  const like = { contains: q, mode: 'insensitive' as const };
   const found = await prisma.patient.findMany({
-    where: { name: { contains: q, mode: 'insensitive' } },
+    // A desk question is as often 'who is in T2' or 'the German guest' as a name (#525).
+    where: { OR: [{ name: like }, { country: like }, { Stays: { some: { GuestRoom: { name: like } } } }] },
     select: {
       id: true, name: true,
       Stays: { orderBy: { end_date: 'desc' }, take: 1, select: { start_date: true, end_date: true, GuestRoom: { select: { name: true } }, Accommodation: { select: { name: true } } } },

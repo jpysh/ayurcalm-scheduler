@@ -44,32 +44,20 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #523: a patient with no review booked can still plan next week from today.
-const nm = `Review Less ${Date.now() % 1000}`;
-const th = await api('GET', '/therapies'); const pt = await api('POST', '/patients', { name: nm, gender: 'male' });
-await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(-3), end_date: plus(9) });
-const early = new Date(Date.now() - 4 * 86400000).toISOString();
-// The first therapy that has a free time on both of the last two days: the seeded week is busy for some.
-let abh = null; const made = { success: false };
-for (const t of th.filter((x) => !x.is_consultation && (x.staff_required ?? 1) === 1)) {
-  const r = await Promise.all([-2, -1].map((d) => api('POST', '/appointments', { patient_id: pt.id, therapy_id: t.id, total_sessions: 1, preferred_time_range: { start: '09:00', end: '18:00' }, start_date: plus(d), end_date: plus(d), now: early })));
-  if (r.every((x) => x.success)) { abh = t; made.success = true; break; }
-}
-await step('A patient with no review booked has Plan next week', '/admin/patients', async () => {
-  await go(p.getByText(nm).first()); await p.waitForTimeout(900);
-  const t = await text(dlg());
-  return { ok: /Plan next week/.test(t) && /None booked/.test(t), note: `${made.success} · ` + t.split('\n').filter((x) => /Next|Plan|Review|None/.test(x)).slice(0, 5).join(' · ') };
+// #525: search finds who sleeps in a guest room and a guest by country.
+const acc = (await api('GET', '/accommodations'))[0];
+const roomName = `Z${Date.now() % 90 + 10}`;
+await api('POST', '/guest-rooms', { name: roomName, accommodation_id: acc.id });
+const gr = (await api('GET', '/guest-rooms')).find((x) => x.name === roomName);
+const gp = await api('POST', '/patients', { name: `Room Finder ${Date.now() % 1000}`, gender: 'female', country: 'Germany', on_site: true, guest_room_id: gr.id, stay: { start_date: plus(-1), end_date: plus(4) } });
+const searchFor = async (q) => { await viaMenu('Search'); await p.waitForTimeout(600); await p.locator('input[type=text]').last().fill(q); await p.waitForTimeout(1500); return text(p.locator('body')); };
+await step('A guest room name finds who sleeps in it', '/admin/schedule', async () => {
+  const t = await searchFor(roomName);
+  return { ok: t.includes(gp.name) && /PATIENTS/i.test(t), note: t.split('\n').filter((x) => x.trim()).slice(1, 8).join(' · ') };
 });
-await step('It repeats the week they had', '/admin/patients', async () => {
-  await go(p.getByText(nm).first()); await go(dlg().getByRole('button', { name: 'Plan next week' })); await p.waitForTimeout(1500);
-  const t = await text(dlg());
-  return { ok: t.includes(abh.name) && /2 days/.test(t) && /Book all/.test(t), note: t.split('\n').filter((x) => x.trim()).slice(0, 12).join(' · ') };
-});
-await step('Book all books them, with one Undo', '/admin/patients', async () => {
-  await go(p.getByText(nm).first()); await go(dlg().getByRole('button', { name: 'Plan next week' })); await p.waitForTimeout(1500);
-  await go(dlg().getByRole('button', { name: /^Book all/ })); await p.waitForTimeout(1500);
-  const toast = await p.locator('[data-sonner-toast]').first().innerText().catch(() => '');
-  return { ok: /Booked \d+ treatment/.test(toast) && /Undo/.test(toast), note: toast.replace(/\n/g, ' · ') };
+await step('A country finds the guest', '/admin/schedule', async () => {
+  const t = await searchFor('germany');
+  return { ok: t.includes(gp.name), note: t.split('\n').filter((x) => x.trim()).slice(1, 8).join(' · ') };
 });
 await b.close();
 
