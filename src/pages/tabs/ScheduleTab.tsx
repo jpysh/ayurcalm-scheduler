@@ -68,6 +68,13 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
   };
 
   const isToday = dayKeyMemo === ymdInTZ(new Date());
+  // Who arrives and who leaves on this day: the strip's '+5' and '−6', with names (#583).
+  const firstName = (n: string) => n.replace(/^Dr\.? /, "").split(" ")[0];
+  const comings = {
+    in: patients.filter((p: { stays?: { start_date: string }[] }) => (p.stays ?? []).some((s) => s.start_date.slice(0, 10) === dayKeyMemo)).map((p: { name: string }) => firstName(p.name)),
+    out: patients.filter((p: { stays?: { end_date: string }[] }) => (p.stays ?? []).some((s) => s.end_date.slice(0, 10) === dayKeyMemo)).map((p: { name: string }) => firstName(p.name)),
+    past: dayKeyMemo < ymdInTZ(new Date()),
+  };
   const now = nowInTZ(ADMIN_TZ);
 
   const nameIn = (list: { id: string | number; name: string }[], id: unknown) => list.find((x) => String(x.id) === String(id))?.name;
@@ -122,6 +129,7 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
       movedFrom={movedFrom}
       roomCount={roomsList.filter((r: { is_active?: boolean }) => r.is_active !== false).length}
       flags={flagsFor(problems || [], history)}
+      comings={comings}
     />
   );
 

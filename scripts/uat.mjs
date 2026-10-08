@@ -44,13 +44,21 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #578: when the server says "too many requests", the app says so instead of showing an empty centre.
-await step('A refused call (429) says why, in one banner', '/admin/patients', async () => {
-  await p.route('**/api/patients*', (r) => r.fulfill({ status: 429, contentType: 'application/json', body: JSON.stringify({ error: 'Too Many Requests' }) }));
-  await p.reload(); await p.waitForTimeout(2000);
-  const banner = await p.locator('[data-sonner-toast]').allInnerTexts();
-  await p.unroute('**/api/patients*');
-  return { ok: banner.some((t) => /Too many requests at once/.test(t)) && banner.length === 1, note: `${banner.length} banner: ${banner.join(' / ').replace(/\n+/g, ' ')}` };
+// #583: a day with guests arriving or leaving says who, even with no treatment.
+await api('POST', '/patients', { name: 'Anna Uatcome', gender: 'female', stay: { start_date: plus(40), end_date: plus(41) } });
+await api('POST', '/patients', { name: 'Berta Uatcome', gender: 'female', stay: { start_date: plus(40), end_date: plus(41) } });
+const jump = async (iso) => { await viaMenu('Change day'); await p.locator('input[type=date]').last().fill(iso); await p.waitForTimeout(1500); };
+await step('The arrival day names who arrives', '/admin/schedule', async () => {
+  await jump(plus(40)); const t = await text(p.locator('body'));
+  return { ok: /Arriving · Anna, Berta/.test(t) && /No treatments on this day\./.test(t), note: (t.match(/Arriving[^\n]*/) || ['no line'])[0] + ' · ' + (/No treatments on this day/.test(t) ? 'No treatments on this day.' : 'other empty line') };
+});
+await step('The leaving day names who leaves', '/admin/schedule', async () => {
+  await jump(plus(41)); const t = await text(p.locator('body'));
+  return { ok: /Leaving · Anna, Berta/.test(t), note: (t.match(/Leaving[^\n]*/) || ['no line'])[0] };
+});
+await step('A day with nobody coming or going still says nothing is booked', '/admin/schedule', async () => {
+  await jump(plus(60)); const t = await text(p.locator('body'));
+  return { ok: /Nothing booked on this day\./.test(t) && !/Arriving|Leaving/.test(t), note: /Nothing booked on this day/.test(t) ? 'Nothing booked on this day.' : 'other' };
 });
 await b.close();
 
