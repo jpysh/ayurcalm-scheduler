@@ -44,19 +44,22 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #595: the therapy library offers the way to a therapy of the centre's own.
-await step('The library offers "Add one of your own" and it opens the Add therapy sheet', '/admin/team', async () => {
-  await go(p.getByText(/^Therapies/).first()); await go(p.getByText('Add from the library'));
-  const line = dlg().getByRole('button', { name: /Not on the list\? Add one of your own/ }); const there = await line.count();
-  await go(line); const t = (await text(dlg())).replace(/\n+/g, ' | ');
-  return { ok: there === 1 && /^Add therapy/.test(t), note: `line shown: ${there}, then: ${t.slice(0, 90)}` };
-});
-await step('A therapy of its own is added and listed', '/admin/team', async () => {
-  await go(p.getByText(/^Therapies/).first()); await go(p.getByText('Add from the library')); await go(dlg().getByRole('button', { name: /Not on the list/ }));
-  await dlg().getByLabel('Name').fill('Uat stone massage'); await go(dlg().getByRole('button', { name: 'Add the therapy' })); await p.waitForTimeout(800);
-  const t = (await text(p.locator('body'))).replace(/\n+/g, ' | ');
-  return { ok: /Uat stone massage/.test(t), note: (t.match(/Uat stone massage[^|]*/) || ['not listed'])[0] };
-});
+// #599: a chosen day is that day on every phone, wherever it is, whatever zone the centre keeps (the walk's stack was set to New York).
+const dayName = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
+for (const zone of ['Pacific/Auckland', 'Europe/Prague', 'America/New_York']) {
+  await step(`Change day to ${dayName(plus(2))} shows that day, phone in ${zone}`, '/admin/schedule', async () => {
+    const c = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, timezoneId: zone });
+    await c.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+    const q = await c.newPage(); await q.goto(APP + '/admin/schedule'); await q.waitForTimeout(1800);
+    await q.getByRole('button', { name: 'Menu', exact: true }).click(); await q.waitForTimeout(500);
+    await q.getByRole('dialog').last().getByRole('button', { name: /^Change day/ }).click(); await q.waitForTimeout(500);
+    await q.locator('input[type=date]').last().fill(plus(2)); await q.waitForTimeout(1500);
+    await q.evaluate(() => window.scrollTo(0, 0)); await q.waitForTimeout(300);
+    const shown = await q.locator('[aria-pressed=true]').first().getAttribute('aria-label');
+    await q.screenshot({ path: `${OUT}/${zone.replace('/', '-')}.png` }); await c.close();
+    return { ok: shown === dayName(plus(2)), note: `shows ${shown}, chose ${dayName(plus(2))}` };
+  });
+}
 await b.close();
 
 writeFileSync(`${OUT}/lines.json`, JSON.stringify(lines));
