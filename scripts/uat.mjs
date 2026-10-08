@@ -44,28 +44,32 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #575: a returning guest's New stay offers the first consultation, like a new patient.
-const back = await api('POST', '/patients', { name: 'Uatback Guest', gender: 'female', stay: { start_date: plus(-30), end_date: plus(-24) } });
-const findCard = async () => { await viaMenu('Search'); await p.getByRole('searchbox').or(p.getByRole('textbox')).last().fill('Uatback'); await p.waitForTimeout(1200); await p.getByText('Uatback Guest').first().click(); await p.waitForTimeout(1200); };
-await step('New stay for a past guest offers the first consultation', '/admin/schedule', async () => {
-  await findCard(); await go(dlg().getByRole('button', { name: /^New stay/ })); await p.waitForTimeout(800);
-  const t = await text(dlg());
-  return { ok: /First consultation/.test(t) && /Later/.test(t), note: t.replace(/\n+/g, ' | ').slice(0, 160) };
+// #574: a person switched off, or gone from the loaded centre, is signed out at once.
+const staff = { email: 'uat-gone@example.com', password: 'staffpass123' };
+await step('A switched-off person is refused on their next tap', '/admin/schedule', async () => {
+  const made = await api('POST', '/users', { ...staff, role: 'staff' });
+  const login = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(staff) })).json();
+  const me = async () => (await fetch(`${APP}/api/auth/me`, { headers: { Authorization: `Bearer ${login.token}` } })).status;
+  const before = await me();
+  await api('PUT', `/users/${made.id}`, { is_active: false });
+  const after = await me();
+  await api('DELETE', `/users/${made.id}`);
+  return { ok: before === 200 && after === 401, note: `their session answered ${before} while on, ${after} once switched off` };
 });
-await step('Add the stay: the toast names the consultation and the card has it booked', '/admin/schedule', async () => {
-  await findCard(); await go(dlg().getByRole('button', { name: /^New stay/ })); await go(dlg().getByRole('button', { name: 'Add the stay' }));
-  const toastText = await text(p.locator('[data-sonner-toast]').first());
-  await p.waitForTimeout(500);
-  const card = await text(dlg());
-  return { ok: /Stay added for Uatback/.test(toastText) && /consultation/i.test(toastText) && /Next[\s\S]*\d\d:\d\d/.test(card), note: `${toastText.replace(/\n+/g, ' ')} · ${(card.match(/Next\n[^\n]*/) || [''])[0].replace(/\n/g, ' ')}` };
-});
-await step('Later leaves the consultation to the card', '/admin/schedule', async () => {
-  const other = await api('POST', '/patients', { name: 'Uatback Second', gender: 'male', stay: { start_date: plus(-30), end_date: plus(-24) } });
-  await viaMenu('Search'); await p.getByRole('searchbox').or(p.getByRole('textbox')).last().fill('Uatback Second'); await p.waitForTimeout(1200); await p.getByText('Uatback Second').first().click(); await p.waitForTimeout(1200);
-  await go(dlg().getByRole('button', { name: /^New stay/ })); await go(dlg().getByRole('button', { name: 'Later', exact: true })); const sheet = await text(dlg());
-  await go(dlg().getByRole('button', { name: 'Add the stay' })); await p.waitForTimeout(500);
-  const card = await text(dlg());
-  return { ok: /Later, from their card/.test(sheet) && /None booked/.test(card), note: `sheet: ${sheet.replace(/\n+/g, ' ').slice(0, 100)} · card: ${(card.match(/Next\n[^\n]*/) || [''])[0].replace(/\n/g, ' ')}` };
+await step('The phone of a switched-off person lands on the sign-in page', '/admin/schedule', async () => {
+  const made = await api('POST', '/users', { ...staff, email: 'uat-gone2@example.com', role: 'staff' });
+  const login = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...staff, email: 'uat-gone2@example.com' }) })).json();
+  const c2 = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+  await c2.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Staff'); localStorage.setItem('authUser', 'uat-gone2@example.com'); }, login.token);
+  const q = await c2.newPage();
+  await q.goto(APP + '/admin/schedule'); await q.waitForTimeout(1500);
+  const on = q.url();
+  await api('PUT', `/users/${made.id}`, { is_active: false });
+  await q.reload(); await q.waitForTimeout(2000);
+  await q.screenshot({ path: `${OUT}/phone-after.png` });
+  const off = q.url();
+  await c2.close(); await api('DELETE', `/users/${made.id}`);
+  return { ok: /admin/.test(on) && /login/.test(off), note: `signed in at ${new URL(on).pathname}, after switch-off at ${new URL(off).pathname}` };
 });
 await b.close();
 
