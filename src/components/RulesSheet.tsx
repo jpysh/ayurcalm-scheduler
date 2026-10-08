@@ -68,7 +68,7 @@ export function RulesSheet({ open, onOpenChange, section, attention, reload }: {
             <ListGroup title={s}>
               {rules.filter((r) => r.section === s).map((r) => (
                 <SwitchRow key={r.id} title={r.name} on={r.on} locked={r.locked} set={(v) => change(r.id, { on: v })}
-                  facts={[r.kind === "information" ? "Information only, not counted" : "Counts on the pill", r.waiting ?? (r.kind === "information" ? (r.count ? `${r.count} today` : "nobody today") : r.count ? `would raise ${r.count} today` : "nothing today")].join(" · ")}
+                  facts={r.on ? [r.kind === "information" ? "Information only, not counted" : "Counts on the pill", r.waiting ?? (r.kind === "information" ? (r.count ? `${r.count} today` : "nobody today") : r.count ? `would raise ${r.count} today` : "nothing today")].join(" · ") : `Off · ${r.kind === "information" ? "not shown" : "not on the pill"}${r.count ? `, ${r.count} today` : ""}`}
                   flag={r.on !== r.default_on ? `Changed from ${r.default_on ? "on" : "off"}` : undefined}>
                   {r.hours !== undefined && r.on ? <When rule={r} set={(h) => change(r.id, { hours: h })} /> : null}
                 </SwitchRow>
