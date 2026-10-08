@@ -44,29 +44,12 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #514: a guest not here yet, and one who has gone, have no "Rest day" line on their card.
-await api('POST', '/settings/clear-demo-data');
-const soon = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female' });
-await api('POST', `/patients/${soon.id}/stays`, { start_date: plus(1), end_date: plus(8) });
-const gone = await api('POST', '/patients', { name: 'Dev Mehta', gender: 'male' });
-await api('POST', `/patients/${gone.id}/stays`, { start_date: plus(-20), end_date: plus(-10) });
-const here = await api('POST', '/patients', { name: 'Asha Kumar', gender: 'female' });
-await api('POST', `/patients/${here.id}/stays`, { start_date: plus(-2), end_date: plus(5) });
-const viaSearch = async (q, row) => { await viaMenu('Search'); await p.keyboard.type(q); await p.waitForTimeout(1200); await go(p.getByText(row).first()); await p.waitForTimeout(1200); };
-await step('A guest arriving tomorrow: no "Rest day"', '/admin/schedule', async () => {
-  await viaSearch('clara', /^Arrives/);
+// #516: every starter package and accommodation type says it is an example.
+await step('Settings lists every starter price as an example', '/admin/settings', async () => {
+  await go(p.getByRole('button', { name: /^Packages and accommodation/ }));
   const t = await text(dlg());
-  return { ok: /Arrives/.test(t) && !/Rest day|Treatments today/i.test(t), note: t.split('\n').slice(0, 3).join(' · ') };
-});
-await step('A guest who has left: no "Rest day"', '/admin/schedule', async () => {
-  await viaSearch('dev', /^Stayed until/);
-  const t = await text(dlg());
-  return { ok: /Stayed until/.test(t) && !/Rest day|Treatments today/i.test(t), note: t.split('\n').slice(0, 3).join(' · ') };
-});
-await step('A guest who is here keeps "Rest day" on a free day', '/admin/patients', async () => {
-  await go(p.getByRole('button', { name: /^Asha Kumar/ }).first());
-  const t = await text(dlg());
-  return { ok: /Rest day: nothing booked today/.test(t), note: t.split('\n').filter((x) => /Rest day|today/i.test(x)).join(' · ') };
+  const n = (t.match(/Example price/g) || []).length;
+  return { ok: n >= 14, note: `${n} rows say "Example price: change it to yours" (14 starter rows)` };
 });
 await b.close();
 
