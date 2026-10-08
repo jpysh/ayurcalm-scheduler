@@ -59,7 +59,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRule
   const [onlyNeeds, setOnlyNeeds] = useState(false);
   const [inHouse, setInHouse] = useState<InHouse[] | null>(null);
   useEffect(() => {
-    fetchJsonWithTimeout<InHouse[]>(`${API_BASE}/patients?resident_on=${today}&arriving_within=14`).then((r) => setInHouse(Array.isArray(r) ? r : [])).catch(() => setInHouse([]));
+    fetchJsonWithTimeout<InHouse[]>(`${API_BASE}/patients?resident_on=${today}&arriving_within=7`).then((r) => setInHouse(Array.isArray(r) ? r : [])).catch(() => setInHouse([]));
   }, [today, patients.length, patients.map((p) => `${p.actualStart}${p.actualEnd}`).join()]);
   const stayOf = (p: InHouse) => p.Stays.find((s) => s.start_date.slice(0, 10) <= today && s.end_date.slice(0, 10) >= today);
   const dayOf = (s: { start_date: string; end_date: string }) => {
@@ -68,7 +68,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRule
     return `Day ${n} of ${of} · leaves ${stayDay(s.end_date)}`;
   };
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
-  // Guests whose stay starts in the next two weeks, nearest first.
+  // Guests whose stay starts in the next week, nearest first.
   const soon = (inHouse || []).filter((p) => !stayOf(p)).map((p) => ({ p, s: p.Stays.filter((x) => x.start_date.slice(0, 10) > today).sort((x, y) => x.start_date.localeCompare(y.start_date))[0] })).filter((x) => x.s).sort((x, y) => x.s.start_date.localeCompare(y.s.start_date));
   const people = (inHouse || []).map((p) => ({ p, s: stayOf(p) })).filter((x) => x.s).sort((a, b) => byName(a.p, b.p));
   const groups: [string, typeof people][] = [

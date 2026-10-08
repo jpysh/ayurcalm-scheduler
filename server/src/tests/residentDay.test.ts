@@ -88,7 +88,7 @@ async function main() {
     // The Patients list asks for the next two weeks as well, so a guest added ahead is on it (#496).
     const names = async (q: string) => ((await (await fetch(`${API_BASE}/patients?resident_on=2030-06-08${q}`, { headers: { Authorization: `Bearer ${token}` } })).json()) as { name: string }[]).map((x) => x.name);
     assert.ok(!(await names('')).includes(rekha.name), 'in house only, by default');
-    assert.ok((await names('&arriving_within=14')).includes(rekha.name), 'arriving within 14 days');
+    assert.ok((await names('&arriving_within=7')).includes(rekha.name), 'arriving within 7 days');
     assert.ok(!(await names('&arriving_within=1')).includes(rekha.name), 'not arriving within a day');
 
     console.log("Resident day: which day of the stay, today's treatments without the cancelled one, and meals as the sheet prints them.");
