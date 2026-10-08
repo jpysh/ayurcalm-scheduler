@@ -8,7 +8,7 @@ import DayDietDialog from "./DayDietDialog";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
-import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, noteText, rupees, Btn, LinkBtn } from "@/components/kit";
+import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, rupees, Btn, LinkBtn } from "@/components/kit";
 import { AccommodationSheet, DietSheet, DischargeSheet, NextWeekSheet, PackageSheet, StaySheet, takenBy, type CardStay, type GuestRoomNight, type StayTarget } from "@/components/CardSheets";
 import { marked } from "@/components/SearchScreen";
 import type { AttentionItem } from "@/lib/attention";
@@ -52,7 +52,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRule
   const [onlyNeeds, setOnlyNeeds] = useState(false);
   const [inHouse, setInHouse] = useState<InHouse[] | null>(null);
   useEffect(() => {
-    fetchJsonWithTimeout<InHouse[]>(`${API_BASE}/patients?resident_on=${today}`).then((r) => setInHouse(Array.isArray(r) ? r : [])).catch(() => setInHouse([]));
+    fetchJsonWithTimeout<InHouse[]>(`${API_BASE}/patients?resident_on=${today}&arriving_within=14`).then((r) => setInHouse(Array.isArray(r) ? r : [])).catch(() => setInHouse([]));
   }, [today, patients.length]);
   const stayOf = (p: InHouse) => p.Stays.find((s) => s.start_date.slice(0, 10) <= today && s.end_date.slice(0, 10) >= today);
   const dayOf = (s: { start_date: string; end_date: string }) => {
@@ -61,6 +61,8 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRule
     return `Day ${n} of ${of} · leaves ${stayDay(s.end_date)}`;
   };
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
+  // Guests whose stay starts in the next two weeks, nearest first.
+  const soon = (inHouse || []).filter((p) => !stayOf(p)).map((p) => ({ p, s: p.Stays.filter((x) => x.start_date.slice(0, 10) > today).sort((x, y) => x.start_date.localeCompare(y.start_date))[0] })).filter((x) => x.s).sort((x, y) => x.s.start_date.localeCompare(y.s.start_date));
   const people = (inHouse || []).map((p) => ({ p, s: stayOf(p) })).filter((x) => x.s).sort((a, b) => byName(a.p, b.p));
   const groups: [string, typeof people][] = [
     ['Arriving today', people.filter((x) => x.s!.start_date.slice(0, 10) === today)],
@@ -107,9 +109,12 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRule
         </div>
         {onlyNeeds ? (
           <ListGroup>{needy.length ? needy.map((i) => <Row key={i.id} title={i.who} flag={flagOf(i.patient_id!)} trailing="›" onClick={() => onNeed(i)} />) : <Empty text="Nothing needs attention. The rules are in the gear above." />}</ListGroup>
-        ) : people.length === 0 ? <Empty text="No one is staying today." action={<Btn kind="primary" inline onClick={onAdd}>Add a patient</Btn>} /> : groups.filter(([, list]) => list.length).map(([title, list]) => (
-          <ListGroup key={title} title={title} count={list.length}>{list.map(({ p, s }) => row(p.id, p.name, dayOf(s!)))}</ListGroup>
-        ))}
+        ) : people.length === 0 && soon.length === 0 ? <Empty text="No one is staying today." action={<Btn kind="primary" inline onClick={onAdd}>Add a patient</Btn>} /> : (<>
+          {groups.filter(([, list]) => list.length).map(([title, list]) => (
+            <ListGroup key={title} title={title} count={list.length}>{list.map(({ p, s }) => row(p.id, p.name, dayOf(s!)))}</ListGroup>
+          ))}
+          {soon.length ? <ListGroup title="Arriving soon" count={soon.length}>{soon.map(({ p, s }) => row(p.id, p.name, `Arrives ${stayDay(s.start_date)} · leaves ${stayDay(s.end_date)}`))}</ListGroup> : null}
+        </>)}
       </>)}
     </div>
   );
@@ -313,7 +318,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
         foot={d?.form_c?.filed ? <Btn onClick={() => fileFormC(false)}>Not filed yet</Btn> : <Btn kind="primary" onClick={() => fileFormC(true)}>Mark Form C filed</Btn>}>
         <ListGroup>
           {d?.form_c?.fields.map(([label, value]) => value
-            ? <Row key={label} title={label} facts={/^\d{4}-\d{2}-\d{2}$/.test(value) ? dayText(value) : value} trailing="Copy" onClick={() => copy(label, value.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3/$2/$1'))} />
+            ? <Row key={label} title={label} facts={/^\d{4}-\d{2}-\d{2}$/.test(value) ? dayYear(value) : value} trailing="Copy" onClick={() => copy(label, value.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3/$2/$1'))} />
             : <Row key={label} title={label} flag="Not recorded" onClick={() => { setFormC(false); details(d.id); }} />)}
         </ListGroup>
       </BottomSheet>
