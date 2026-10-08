@@ -18,9 +18,12 @@ type Item = {
   vitals?: { field: string; value: string }[]; room_ready?: boolean; done?: string | null; note?: string | null;
   feedback?: "up" | "down" | null; feedback_note?: string | null;
 };
-type Details = { phone: string | null; email: string | null; date_of_birth: string | null; address: string | null; country: string | null; id_number: string | null; emergency_contact: string | null; emergency_phone: string | null };
+type Details = { phone: string | null; email: string | null; date_of_birth: string | null; address: string | null; country: string | null; id_number: string | null; emergency_contact: string | null; emergency_phone: string | null; visa_number: string | null; visa_valid_until: string | null };
 // What a patient fills before arriving (#489), the card's More details in their words.
-const ASK: [keyof Details, string, string?][] = [["phone", "Your phone", "tel"], ["email", "Email (optional)", "email"], ["date_of_birth", "Date of birth (yyyy-mm-dd)"], ["country", "Nationality"], ["id_number", "Passport or ID number"], ["address", "Home address"], ["emergency_contact", "Someone to call in an emergency"], ["emergency_phone", "Their phone", "tel"]];
+const ASK: [keyof Details, string, string?][] = [["phone", "Your phone", "tel"], ["email", "Email (optional)", "email"], ["date_of_birth", "Date of birth (yyyy-mm-dd)"], ["country", "Nationality"], ["id_number", "Passport or ID number"], ["address", "Home address"], ["emergency_contact", "Someone to call in an emergency"], ["emergency_phone", "Their phone", "tel"], ["visa_number", "Visa number"], ["visa_valid_until", "Visa valid until (yyyy-mm-dd)"]];
+// Only a foreign guest is asked for a visa (#576); the server's isForeign says the same.
+const foreign = (c: string | null | undefined) => !!c?.trim() && !/^(india|indian|bharat|in)$/i.test(c.trim());
+const asked = (d: Details) => ASK.filter(([k]) => !k.startsWith("visa") || foreign(d.country));
 type Day = { details?: Details; who: { kind: "therapist" | "doctor" | "patient"; name: string }; centre: string; date: string; today: string; now: string; arrives?: string | null; feedback?: { given: { rating: string; note: string } | null } | null; off?: string | null; meals?: { meal: string; text: string }[]; items: Item[] };
 
 const VITAL: Record<string, string> = { bp: "BP", pulse: "Pulse", weight: "Weight (kg)", temp: "Temperature", spo2: "SpO₂", sugar: "Blood sugar" };
@@ -100,7 +103,7 @@ export default function LinkView() {
   };
   const saveDetails = async () => {
     setBusy(true);
-    const body = Object.fromEntries(ASK.map(([k]) => [k, mine![k] ?? ""]));
+    const body = Object.fromEntries(asked(mine!).map(([k]) => [k, mine![k] ?? ""]));
     const res = await fetch(`${API_BASE}/public/link/${token}/details`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
     setBusy(false);
     if (!res?.ok) { toast.error("Not saved. Check what you typed and try again."); return; }
@@ -184,7 +187,7 @@ export default function LinkView() {
         })}</ListGroup>}
       </div>
       {day.details ? (() => {
-        const filled = ASK.filter(([k]) => k !== "email" && day.details![k]).length, need = ASK.length - 1;
+        const filled = asked(day.details).filter(([k]) => k !== "email" && day.details![k]).length, need = asked(day.details).length - 1;
         return <ListGroup><Row title="Your details" facts={filled === need ? "All filled in. Thank you." : `${filled} of ${need} filled in. ${day.arrives ? "Please add them before you arrive." : "Please add the rest."}`} trailing="›" onClick={() => setMine({ ...day.details! })} /></ListGroup>;
       })() : null}
       {day.feedback ? (
@@ -199,7 +202,7 @@ export default function LinkView() {
         </ListGroup>
       ) : null}
       <BottomSheet open={!!mine} onOpenChange={(o) => { if (!o) setMine(null); }} title="Your details" note="The centre needs these for your stay. Only the centre sees them." foot={<Foot label="Save my details" busy={busy} save={saveDetails} />}>
-        {mine ? ASK.map(([k, label, type]) => <Text key={k} label={label} type={type} value={mine[k] ?? ""} onChange={(e) => setMine({ ...mine, [k]: e.target.value })} />) : null}
+        {mine ? asked(mine).map(([k, label, type]) => <Text key={k} label={label} type={type} value={mine[k] ?? ""} onChange={(e) => setMine({ ...mine, [k]: e.target.value })} />) : null}
       </BottomSheet>
       {day.meals?.length ? <ListGroup title="Meals">{day.meals.map((m) => <TextRow key={m.meal} label={m.meal}>{m.text}</TextRow>)}</ListGroup> : null}
 

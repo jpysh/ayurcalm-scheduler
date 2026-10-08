@@ -143,18 +143,20 @@ linkRouter.post('/:token/appointments/:id', async (req: Request, res: Response) 
   res.json({ id: updated.id, record: updated.record, note: updated.notes });
 });
 
-const DETAILS = { phone: true, email: true, date_of_birth: true, address: true, country: true, id_number: true, emergency_contact: true, emergency_phone: true } as const;
+const DETAILS = { phone: true, email: true, date_of_birth: true, address: true, country: true, id_number: true, emergency_contact: true, emergency_phone: true, visa_number: true, visa_valid_until: true } as const;
 const field = z.string().trim().max(200);
 linkRouter.put('/:token/details', async (req: Request, res: Response) => {
   const who = await personOf(String(req.params.token));
   if (!who) return gone(res);
   if (who.kind !== 'patient') { res.status(403).json({ error: 'Only a patient fills their own details.' }); return; }
   const b = z.object({
-    phone: field, email: field, address: z.string().trim().max(500), country: field, id_number: field, emergency_contact: field, emergency_phone: field,
+    phone: field, email: field, address: z.string().trim().max(500), country: field, id_number: field, emergency_contact: field, emergency_phone: field, visa_number: field,
     date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')),
+    // A foreign guest's visa, for Form C (#576).
+    visa_valid_until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')),
   }).partial().strict().parse(req.body);
-  const { date_of_birth, ...rest } = b;
-  const saved = await prisma.patient.update({ where: { id: who.id }, select: DETAILS, data: { ...rest, ...(date_of_birth !== undefined ? { date_of_birth: date_of_birth ? new Date(`${date_of_birth}T00:00:00.000Z`) : null } : {}) } });
+  const { date_of_birth, visa_valid_until, ...rest } = b;
+  const saved = await prisma.patient.update({ where: { id: who.id }, select: DETAILS, data: { ...rest, ...(visa_valid_until !== undefined ? { visa_valid_until: visa_valid_until || null } : {}), ...(date_of_birth !== undefined ? { date_of_birth: date_of_birth ? new Date(`${date_of_birth}T00:00:00.000Z`) : null } : {}) } });
   // The Log says who changed what: a guest's own save is one of those (#499). Which fields, never their values.
   await prisma.auditLog.create({ data: { admin_id: 'guest', action: 'write', entity_type: 'patients', entity_id: who.id, new_value: { method: 'PUT', path: `/patients/${who.id}/details`, body: { fields: Object.keys(b) } } } }).catch(() => { /* the save itself succeeded */ });
   res.json(saved);
