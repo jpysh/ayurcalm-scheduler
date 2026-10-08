@@ -200,3 +200,34 @@ test('#283: Add leave, New resident and Opening hours show no native date or tim
   await expect(hours.getByLabel('Opens')).toHaveValue(/^\d\d:\d\d$/);
   await clean(hours);
 });
+
+test('#564: any hours for a day, several days at once, and a day off, without leaving the Hours page', async ({ page }) => {
+  await signIn(page);
+  await addToTeam(page, 'Therapist or doctor');
+  const sheet = page.getByRole('dialog');
+  await sheet.getByLabel('Name').fill('E2E Hours');
+  await sheet.getByRole('button', { name: /^Hours/ }).click();
+  await page.screenshot({ path: process.env.SHOTS ? `${process.env.SHOTS}/week.png` : undefined });
+  // One day, custom times: no preset is needed.
+  await sheet.getByRole('button', { name: /^Monday/ }).click();
+  await sheet.getByLabel('From').selectOption('10:30');
+  await sheet.getByLabel('To').selectOption('15:00');
+  await page.screenshot({ path: process.env.SHOTS ? `${process.env.SHOTS}/day.png` : undefined });
+  await sheet.getByRole('button', { name: 'Apply' }).click();
+  await expect(sheet.getByRole('button', { name: /^Monday/ })).toContainText('10:30–15:00');
+  // Several days: Mon–Sat, then a day off for Sunday.
+  await sheet.getByRole('button', { name: /^Set several days/ }).click();
+  await sheet.getByRole('button', { name: 'Mon–Sat' }).click();
+  await sheet.getByRole('button', { name: 'Morning' }).click();
+  await page.screenshot({ path: process.env.SHOTS ? `${process.env.SHOTS}/bulk.png` : undefined });
+  await sheet.getByRole('button', { name: 'Apply' }).click();
+  await sheet.getByRole('button', { name: /^Sunday/ }).click();
+  await sheet.getByRole('switch', { name: 'Not working' }).click();
+  await sheet.getByRole('button', { name: 'Apply' }).click();
+  await expect(sheet.getByRole('button', { name: /^Sunday/ })).toContainText('Day off');
+  // A finish at or before the start cannot be applied.
+  await sheet.getByRole('button', { name: /^Tuesday/ }).click();
+  await sheet.getByLabel('To').selectOption('08:00');
+  await expect(sheet.getByRole('alert')).toContainText('after start');
+  await expect(sheet.getByRole('button', { name: 'Apply' })).toBeDisabled();
+});

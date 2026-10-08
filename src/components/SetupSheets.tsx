@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChangeLine, Consequence, LineSelect, WEEK, Chips, dayText, Dropdown, Group, More, Seg, SheetFoot, Switch, Text, noteText, say, field, Btn, toastUndo } from "@/components/kit";
+import { ChangeLine, Consequence, Days, TimeList, WEEK, Chips, chip, dayText, timesBetween, Dropdown, Group, More, Seg, SheetFoot, Switch, Text, noteText, say, field, Btn, toastUndo } from "@/components/kit";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
@@ -68,6 +68,13 @@ const weekText = (w: Week) => {
   return [usual ? shown(usual) : "Days off", ...odd].join(" · ") + (odd.length ? "" : usual ? " every day" : "");
 };
 
+const minsOf = (t: string) => +t.slice(0, 2) * 60 + +t.slice(3, 5);
+const clock = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+const HALF_HOURS = timesBetween("00:00", "23:30", 30);
+const QUICK_DAYS: [string, string[]][] = [["Mon–Fri", WEEK.slice(0, 5)], ["Mon–Sat", WEEK.slice(0, 6)], ["Weekends", WEEK.slice(5)], ["Sunday", ["sunday"]]];
+/** The day editor's state (#564): which days, and the one range they get, or off. */
+type Edit = { days: string[]; bulk: boolean; from: string; to: string; off: boolean };
+
 export function PersonSheet({ person, open, onClose, therapies, onSaved, remove, preset, centre }: {
   person: UiStaff | null; open: boolean; onClose: () => void; therapies: UiTherapy[]; onSaved: (s: UiStaff) => void; remove: (s: UiStaff) => void;
   /** The centre's hours: a full day, and what a person never given hours works. */
@@ -80,11 +87,12 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
   const [phone, setPhone] = useState(""); const [busy, setBusy] = useState(false);
   const full = `${centre.opening}-${centre.closing}`;
   const [week, setWeek] = useState<Week>({}); const [hoursPage, setHoursPage] = useState(false); const [touched, setTouched] = useState(false);
+  const [edit, setEdit] = useState<Edit | null>(null);
   useEffect(() => {
     if (!open) return;
     const h = person?.hours && Object.keys(person.hours).length ? person.hours : null;
     setWeek(Object.fromEntries(WEEK.map((d) => [d, h ? (h[d] ? `${h[d]!.start}-${h[d]!.end}` : "") : full])));
-    setHoursPage(false); setTouched(false);
+    setHoursPage(false); setTouched(false); setEdit(null);
     setName(person?.name ?? ""); setRole(person?.role ?? preset?.role ?? "therapist"); setGender(person ? (person.gender === "Male" ? "Male" : "Female") : preset?.gender ?? "Female");
     setGives(person?.specializations ?? preset?.gives ?? []); setPhone(person?.phone ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,18 +124,38 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
       onClose();
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
+  // Shortcuts that fill the two fields, drawn from the centre's own hours (#564); the fields stay the source of truth.
+  const span = Math.round((minsOf(centre.closing) - minsOf(centre.opening)) * 0.55 / 30) * 30;
+  const quick: [string, string, string][] = [["Centre hours", centre.opening, centre.closing],
+    ["Morning", centre.opening, clock(minsOf(centre.opening) + span)], ["Afternoon", clock(minsOf(centre.closing) - span), centre.closing]]
+    .filter(([n, a, b], i) => i === 0 || a !== centre.opening || b !== centre.closing) as [string, string, string][];
+  const openDay = (d: string) => setEdit({ days: [d], bulk: false, off: !week[d], from: week[d] ? week[d].slice(0, 5) : centre.opening, to: week[d] ? week[d].slice(6) : centre.closing });
+  const editOk = !!edit && edit.days.length > 0 && (edit.off || edit.to > edit.from);
+  const apply = () => { if (!edit) return; setWeek(Object.fromEntries(WEEK.map((d) => [d, edit.days.includes(d) ? (edit.off ? "" : `${edit.from}-${edit.to}`) : week[d]]))); setTouched(true); setEdit(null); };
   return (
-    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={hoursPage ? `${name.trim() || "Their"} hours` : person ? person.name : "Add therapist or doctor"}
-      note={hoursPage ? "The same every week. A one-off change is leave for part of the day." : person ? "Change anything, then save." : "Name, role and gender are needed. The rest can wait."}
-      onBack={hoursPage ? () => setHoursPage(false) : undefined}
-      foot={<SheetFoot busy={busy} ok={!!name.trim()} save={save} label={hoursPage && person ? "Save the hours" : person ? "Save" : `Add ${name.trim() || "them"}`} remove={person && !hoursPage ? () => { onClose(); remove(person); } : undefined} removeLabel="Delete this person" />}>
-      {hoursPage ? <div>
-        {WEEK.map((d) => {
-          const opts = [...new Set([full, "07:00-15:00", "13:00-20:00", week[d], ""])].filter((r) => r !== undefined);
-          const names: Record<string, string> = { [full]: "Full day", "07:00-15:00": "Early", "13:00-20:00": "Afternoon", "": "Day off" };
-          return <ChangeLine key={d} label={d[0].toUpperCase() + d.slice(1)} value={shown(week[d])}
-            select={<LineSelect label={`${d} hours`} value={week[d]} onChange={(v) => { setWeek({ ...week, [d]: v }); setTouched(true); }} free={opts.map((r) => ({ id: r, name: r ? `${names[r] ? `${names[r]} · ` : ""}${shown(r)}` : "Day off" }))} />} />;
-        })}
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={edit ? (edit.bulk ? "Several days" : edit.days[0][0].toUpperCase() + edit.days[0].slice(1)) : hoursPage ? `${name.trim() || "Their"} hours` : person ? person.name : "Add therapist or doctor"}
+      note={edit ? (edit.bulk ? "Pick the days, then their hours." : "The same every week on this day.") : hoursPage ? "The same every week. A one-off change is leave for part of the day." : person ? "Change anything, then save." : "Name, role and gender are needed. The rest can wait."}
+      onBack={edit ? () => setEdit(null) : hoursPage ? () => setHoursPage(false) : undefined}
+      foot={<SheetFoot busy={busy} ok={edit ? editOk : !!name.trim()} save={edit ? apply : save} label={edit ? "Apply" : hoursPage && person ? "Save the hours" : person ? "Save" : `Add ${name.trim() || "them"}`} remove={person && !hoursPage ? () => { onClose(); remove(person); } : undefined} removeLabel="Delete this person" />}>
+      {edit ? <div>
+        {edit.bulk ? <>
+          <Group label="Days"><Days value={edit.days} onChange={(days) => setEdit({ ...edit, days })} /></Group>
+          <div className="mt-2 flex flex-wrap gap-1.5">{QUICK_DAYS.map(([n, ds]) => <button key={n} type="button" className={chip} aria-pressed={ds.length === edit.days.length && ds.every((d) => edit.days.includes(d))} onClick={() => setEdit({ ...edit, days: [...ds] })}>{n}</button>)}</div>
+        </> : null}
+        <Group label="Quick fill"><div className="flex flex-wrap gap-1.5">
+          {quick.map(([n, a, b]) => <button key={n} type="button" className={chip} aria-pressed={!edit.off && edit.from === a && edit.to === b} onClick={() => setEdit({ ...edit, off: false, from: a, to: b })}>{n}</button>)}
+          <button type="button" className={chip} aria-pressed={edit.off} onClick={() => setEdit({ ...edit, off: true })}>Day off</button>
+        </div></Group>
+        {edit.off ? null : <>
+          <TimeList label="From" times={HALF_HOURS} value={edit.from} onChange={(from) => setEdit({ ...edit, from })} />
+          <TimeList label="To" times={HALF_HOURS} value={edit.to} onChange={(to) => setEdit({ ...edit, to })} />
+          {edit.to <= edit.from ? <p role="alert" className={`mt-2 font-semibold text-destructive`}>Finish must be after start.</p>
+            : edit.from < centre.opening || edit.to > centre.closing ? <Consequence>Outside the centre's hours ({centre.opening}–{centre.closing}), so nobody can book them then.</Consequence> : null}
+        </>}
+        <Switch label="Not working" on={edit.off} set={(off) => setEdit({ ...edit, off })} />
+      </div> : hoursPage ? <div>
+        <ChangeLine label="Set several days at once" value="" onClick={() => setEdit({ days: [...WEEK.slice(0, 5)], bulk: true, off: false, from: centre.opening, to: centre.closing })} />
+        {WEEK.map((d) => <ChangeLine key={d} label={d[0].toUpperCase() + d.slice(1)} value={shown(week[d])} faint={!week[d]} onClick={() => openDay(d)} />)}
         {outside ? <Consequence>{outside.length === 0 ? "Nothing booked falls outside these hours."
           : `${outside.length} booked treatment${outside.length === 1 ? " falls" : "s fall"} outside these hours: ${outside.slice(0, 3).map((a) => `${dayText(a.date)} ${a.start_time} ${a.patient_name}`).join(", ")}${outside.length > 3 ? ` and ${outside.length - 3} more` : ""}. What needs you will offer a new therapist or time.`}</Consequence> : null}
       </div> : <>
