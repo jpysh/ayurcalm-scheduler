@@ -112,6 +112,8 @@ export async function dischargeOf(stayId: string, prisma: PrismaClient) {
     name: p.name, gender: p.gender, age, phone: p.phone, email: p.email,
     from: ymd(stay.start_date), to: ymd(stay.end_date), days,
     table, draft, doctor,
+    /** The card's Medication line (#524), offered once as a first row so it is not typed again. */
+    card_medication: (p.medication || '').trim().slice(0, 120),
   };
 }
 export type DischargeView = NonNullable<Awaited<ReturnType<typeof dischargeOf>>>;

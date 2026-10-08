@@ -44,30 +44,23 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #522: a therapist ticks Done on their link; the card says when, read only.
-const todays = await api('GET', `/appointments?date=${plus(0)}`);
-const lk0 = (await api('GET', '/staff')).filter((x) => x.role === 'therapist');
-let mine = null, therapist = null, lk = null;
-for (const th of lk0) {
-  const l = await api('POST', `/staff/${th.id}/link`);
-  const d = await (await fetch(`${APP}/api/public/link/${l.token}`)).json();
-  const first = d.items?.find((i) => i.start_time);
-  if (first) { mine = first; therapist = th; lk = l; break; }
-}
-await step('The therapist link has a Done tick above Room ready', `/l/${lk.token}`, async () => {
-  const t = await text(p.locator('body'));
-  const iDone = t.indexOf('Done'); const iReady = t.indexOf('Room ready');
-  return { ok: iDone >= 0 && iDone < iReady, note: t.split('\n').filter((x) => x.trim()).slice(3, 12).join(' · ') };
-});
-await step('Ticking Done keeps the time', `/l/${lk.token}`, async () => {
-  await p.getByLabel('Done').first().check(); await p.waitForTimeout(1200);
-  const after = (await api('GET', `/appointments?date=${plus(0)}`)).find((x) => x.id === mine.id);
-  return { ok: /^\d\d:\d\d$/.test(after.record?.done || ''), note: `done ${after.record?.done} for ${mine.patient}` };
-});
-await step('The treatment card says Done, read only', '/admin/schedule', async () => {
-  await go(p.getByRole('button', { name: new RegExp(mine.patient) }).first()); await p.waitForTimeout(900);
+// #524: the card's Medication line is offered in the discharge summary, one tap, never added by itself.
+const nm = `Medicine Line ${Date.now() % 1000}`;
+const mp = await api('POST', '/patients', { name: nm, gender: 'female' });
+await api('POST', `/patients/${mp.id}/stays`, { start_date: plus(-2), end_date: plus(3) });
+await api('PUT', `/patients/${mp.id}`, { medication: 'Ashwagandha tablet, 1 twice a day after food, 14 days' });
+await step('The discharge summary offers the card medication', '/admin/patients', async () => {
+  await go(p.getByText(nm).first()); await go(dlg().getByText('Discharge summary').first()); await go(dlg().getByText('Final diagnosis').first()); await p.waitForTimeout(1200);
+  await dlg().getByRole('button', { name: /Add from their card/ }).scrollIntoViewIfNeeded().catch(() => {}); await p.waitForTimeout(300);
   const t = await text(dlg());
-  return { ok: /Done \d\d:\d\d/.test(t), note: t.split('\n').filter((x) => /Recorded|Done|Room/.test(x)).join(' · ') };
+  return { ok: /Add from their card: Ashwagandha tablet/.test(t) && /MEDICATION DURING THE STAY/i.test(t), note: t.split('\n').filter((x) => /Add from|MEDICATION|Add a medicine/i.test(x)).join(' · ') };
+});
+await step('One tap puts it in as the first medicine', '/admin/patients', async () => {
+  await go(p.getByText(nm).first()); await go(dlg().getByText('Discharge summary').first()); await go(dlg().getByText('Final diagnosis').first()); await p.waitForTimeout(1200);
+  await go(dlg().getByRole('button', { name: /^Add from their card/ }));
+  const v = await dlg().getByLabel('Medicine').first().inputValue();
+  const gone = !/Add from their card/.test(await text(dlg()));
+  return { ok: /^Ashwagandha tablet/.test(v) && gone, note: `Medicine: ${v}` };
 });
 await b.close();
 
