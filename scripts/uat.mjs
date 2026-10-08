@@ -44,22 +44,26 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #583: a day with guests arriving or leaving says who, even with no treatment.
-await api('POST', '/patients', { name: 'Anna Uatcome', gender: 'female', stay: { start_date: plus(40), end_date: plus(41) } });
-await api('POST', '/patients', { name: 'Berta Uatcome', gender: 'female', stay: { start_date: plus(40), end_date: plus(41) } });
-const jump = async (iso) => { await viaMenu('Change day'); await p.locator('input[type=date]').last().fill(iso); await p.waitForTimeout(1500); };
-await step('The arrival day names who arrives', '/admin/schedule', async () => {
-  await jump(plus(40)); const t = await text(p.locator('body'));
-  return { ok: /Arriving · Anna, Berta/.test(t) && /No treatments on this day\./.test(t), note: (t.match(/Arriving[^\n]*/) || ['no line'])[0] + ' · ' + (/No treatments on this day/.test(t) ? 'No treatments on this day.' : 'other empty line') };
-});
-await step('The leaving day names who leaves', '/admin/schedule', async () => {
-  await jump(plus(41)); const t = await text(p.locator('body'));
-  return { ok: /Leaving · Anna, Berta/.test(t), note: (t.match(/Leaving[^\n]*/) || ['no line'])[0] };
-});
-await step('A day with nobody coming or going still says nothing is booked', '/admin/schedule', async () => {
-  await jump(plus(60)); const t = await text(p.locator('body'));
-  return { ok: /Nothing booked on this day\./.test(t) && !/Arriving|Leaving/.test(t), note: /Nothing booked on this day/.test(t) ? 'Nothing booked on this day.' : 'other' };
-});
+// #586: after closing, a new leave and one day's meals start on tomorrow; before closing, on today.
+const at = (hhmm) => p.clock.setFixedTime(new Date(`${plus(0)}T${hhmm}:00+05:30`));
+const dayOn = async (label) => (await text(dlg())).replace(/\n+/g, ' | ').match(new RegExp(`${label} \\| ([^|]*)`))?.[1].trim();
+const dayName = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
+await api('POST', '/patients', { name: 'Uatclose Guest', gender: 'female', stay: { start_date: plus(-1), end_date: plus(5) } });
+const mealsDay = async () => { await viaMenu('Search'); await p.getByRole('searchbox').or(p.getByRole('textbox')).last().fill('Uatclose'); await p.waitForTimeout(1200); await p.getByText('Uatclose Guest').first().click(); await p.waitForTimeout(1200);
+  await go(dlg().getByRole('button', { name: /^Diet/ })); await go(dlg().getByRole('button', { name: /Change one day/ })); return text(dlg()); };
+for (const [when, hhmm, iso] of [['after closing (21:30)', '21:30', plus(1)], ['before closing (10:00)', '10:00', plus(0)]]) {
+  await step(`A new leave starts on ${iso === plus(1) ? 'tomorrow' : 'today'}, ${when}`, '/admin/timeoff', async () => {
+    await at(hhmm); await p.reload(); await p.waitForTimeout(1500);
+    await p.getByRole('button', { name: /^(\+|Add)/ }).first().click(); await p.waitForTimeout(1000);
+    const t = (await text(dlg())).replace(/\n+/g, ' | '); const from = t.match(/From \| ([^|]*)/)?.[1].trim();
+    return { ok: from === dayName(iso), note: `From reads ${from}, expected ${dayName(iso)}` };
+  });
+  await step(`One day's meals open on ${iso === plus(1) ? 'tomorrow' : 'today'}, ${when}`, '/admin/schedule', async () => {
+    await at(hhmm); await p.reload(); await p.waitForTimeout(1500);
+    const t = (await mealsDay()).replace(/\n+/g, ' | '); const day = t.match(/Day \| ([^|]*)/)?.[1].trim();
+    return { ok: day === dayName(iso), note: `Day reads ${day}, expected ${dayName(iso)}` };
+  });
+}
 await b.close();
 
 writeFileSync(`${OUT}/lines.json`, JSON.stringify(lines));
