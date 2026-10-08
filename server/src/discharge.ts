@@ -160,7 +160,7 @@ function readiness(d: Discharge, p: { emergency_phone: string | null }, hasDocto
     ['emergency_phone', 'Emergency phone', 'details', !!p.emergency_phone],
     ['doctor', 'Doctor to sign', 'summary', hasDoctor],
     ['diagnosis', 'Final diagnosis', 'summary', !!d.diagnosis],
-    ['follow_up', 'Follow-up', 'summary', !!d.follow_up],
+    ['follow_up', 'Follow-up', 'summary', !!d.follow_up || !!d.follow_up_date],
   ];
   return { total: items.length, done: items.filter((i) => i[3]).length, missing: items.filter((i) => !i[3]).map(([key, label, where]): Missing => ({ key, label, where })) };
 }

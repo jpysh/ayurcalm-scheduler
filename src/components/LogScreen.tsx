@@ -9,7 +9,7 @@ import { API_BASE } from "@/lib/apiBase";
 import PageHead from "@/components/PageHead";
 import { Empty, EntryRow, dayText, ErrorLine, ListGroup, Loading } from "@/components/kit";
 
-type Entry = { id: string; at: string; who: "you" | "the app"; text: string; undo: string | null; undone: boolean };
+type Entry = { id: string; at: string; who: "you" | "the app" | "the guest"; text: string; undo: string | null; undone: boolean };
 
 export function LogScreen({ timezone, refresh }: { timezone: string; refresh: () => Promise<void> }) {
   const [entries, setEntries] = useState<Entry[] | null>(null);

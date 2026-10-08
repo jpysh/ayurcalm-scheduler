@@ -78,6 +78,9 @@ try {
   assert.equal((await putDetails(p, { country: 'Germany', id_number: 'C01X00T47', date_of_birth: '1980-02-01' })).status, 200);
   const saved = await prisma.patient.findUniqueOrThrow({ where: { id: patient.id } });
   assert.deepEqual([saved.country, saved.id_number, saved.date_of_birth?.toISOString().slice(0, 10)], ['Germany', 'C01X00T47', '1980-02-01']);
+  // The Log says a guest filled their details in, by whom and which fields, never the values (#499).
+  const entry = ((await (await call('/log', undefined, admin)).json()).entries as { text: string; who: string }[]).find((e) => /filled in their own details/.test(e.text));
+  assert.ok(entry && entry.who === 'the guest' && /country/.test(entry.text) && !/Germany|C01X00T47/.test(entry.text), `the Log: ${JSON.stringify(entry)}`);
   assert.equal((await putDetails(t, { country: 'X' })).status, 403, 'a therapist link cannot write a patient');
   assert.ok((await putDetails(p, { name: 'Someone else' })).status >= 400, 'a link cannot change the name');
 
@@ -110,12 +113,21 @@ try {
   assert.equal((await put(t2, guest.id)).status, 403, 'only a doctor writes the plan');
   assert.equal((await put(d, patient.id)).status, 404, 'only for a patient in house');
   assert.equal((await call(`/public/link/${t2}/round`)).status, 403, 'only a doctor sees the round');
+  // A guest not here yet opens on their first day and is told when it is (#498).
+  const later = await prisma.patientStay.create({ data: { patient_id: patient.id, start_date: iso(5), end_date: iso(9), duration_days: 5 } });
+  stays.push(later.id);
+  const first = iso(5).toISOString().slice(0, 10);
+  const opened = await (await call(`/public/link/${p}`)).json();
+  assert.deepEqual([opened.date, opened.arrives], [first, first], 'opens on the first day of the stay they are waiting for');
+  assert.equal((await (await call(`/public/link/${p}?date=${today}`)).json()).date, today, 'a day they ask for is still that day');
+  assert.equal((await (await call(`/public/link/${t2}`)).json()).arrives, null, 'staff are not told about stays');
   console.log('links: ok');
 } finally {
   await prisma.timeOff.deleteMany({ where: { entity_type: 'staff', entity_id: therapist.id } });
   await prisma.linkIssue.deleteMany({ where: { staff_id: { in: [therapist.id, doctor.id] } } });
   await prisma.appointment.deleteMany({ where: { id: { in: [mineA.id, theirs.id, visit.id, ...extra] } } });
   await prisma.patientStay.deleteMany({ where: { id: { in: stays } } });
+  await prisma.auditLog.deleteMany({ where: { admin_id: 'guest', entity_id: patient.id } });
   await prisma.patient.deleteMany({ where: { id: { in: [patient.id, guest.id] } } });
   await prisma.staff.deleteMany({ where: { id: { in: [therapist.id, other.id, doctor.id] } } });
   await prisma.therapy.deleteMany({ where: { id: { in: [therapy.id, consult.id] } } });
