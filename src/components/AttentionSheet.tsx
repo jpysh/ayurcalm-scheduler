@@ -29,6 +29,8 @@ export type DayProblem = {
   id: string;
   kind: string;
   problem_class: "blocking" | "worth_knowing";
+  /** A therapist's SOS (#521): counts on the pill and heads the Day section. */
+  urgent?: boolean;
   who: string;
   start_time: string | null;
   what: string;
@@ -93,7 +95,8 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   // Only rows with one answer: a row asking the admin to choose is never chosen for them.
   const fixable = act.filter((p) => p.fix && p.choices.length <= 1);
   // A resident with nothing booked is a rest day, not a note (#144).
-  const notes = problems.filter((p) => p.problem_class === "worth_knowing" && p.kind !== "IDLE_RESIDENT" && !dismissed.includes(p.id));
+  const urgent = problems.filter((p) => p.urgent && !dismissed.includes(p.id));
+  const notes = problems.filter((p) => p.problem_class === "worth_knowing" && p.kind !== "IDLE_RESIDENT" && !p.urgent && !dismissed.includes(p.id));
   const patientAct = items.filter((i) => i.section === "Patients" && i.kind === "action");
   const patientRows = Object.values(patientAct.reduce<Record<string, AttentionItem[]>>((by, i) => { (by[i.patient_id ?? i.who] ??= []).push(i); return by; }, {}));
   const teamAct = items.filter((i) => i.section === "Team" && i.kind === "action");
@@ -102,7 +105,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   const teamInfo = items.filter((i) => i.kind === "information" && i.section === "Team" && !didForYou.some((b) => b.staff_name === i.who));
   // What a guest said on leaving, when it was good or fine (#509): grey, under Patients.
   const patientInfo = items.filter((i) => i.kind === "information" && i.section === "Patients");
-  const empty = act.length + notes.length + didForYou.length + patientAct.length + patientInfo.length + teamAct.length + teamInfo.length + (tomorrow?.count ?? 0) === 0;
+  const empty = act.length + urgent.length + notes.length + didForYou.length + patientAct.length + patientInfo.length + teamAct.length + teamInfo.length + (tomorrow?.count ?? 0) === 0;
 
   // Nothing left: say so, then get out of the way, as the design does. Not
   // while an Undo is showing: with the pill gone it could not be reached again.
@@ -212,10 +215,14 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
       foot={<Btn kind="quiet" onClick={() => { onOpenChange(false); openRules(); }}>What needs you · change the rules ›</Btn>}
       // The one inbox for the whole app (story 1). Patients and Team come from the rules in Settings, What needs you; empty sections do not show.
       sections={[{
-        name: "Day", count: act.length,
-        body: act.length + didForYou.length + notes.length === 0 ? null : (
+        name: "Day", count: act.length + urgent.length,
+        body: act.length + urgent.length + didForYou.length + notes.length === 0 ? null : (
           <div className="space-y-3">
             {fixable.length > 1 && causes.length > 1 ? <Btn kind="primary" disabled={busy !== null} onClick={() => apply(null, ...fixable.map((p) => p.fix!))}>{busy === "all" ? "Fixing…" : `Fix all ${fixable.length} as shown`}</Btn> : null}
+            {urgent.length ? <ListGroup>{urgent.map((p) => item(p.id, [p.start_time, p.who].filter(Boolean).join(" · "), null, <>
+              <span className="mr-auto self-center text-base font-semibold text-destructive">{p.what}</span>
+              <button type="button" className={tb()} onClick={() => dismiss(p.id)}>Dismiss</button>
+            </>))}</ListGroup> : null}
             {act.length ? <ListGroup>{causes.flatMap(causeRow)}</ListGroup> : null}
             {didForYou.length + notes.length ? (
               <ListGroup title="Information · not counted">

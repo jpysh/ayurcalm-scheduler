@@ -68,6 +68,7 @@ try {
   assert.equal((await call(`/public/link/${t}/appointments/${theirs.id}`, { room_ready: true })).status, 404, 'not someone else\'s treatment');
   assert.equal((await call(`/public/link/${t}/appointments/${mineA.id}`, { note: 'x' })).status, 403, 'only a doctor writes the note');
   assert.equal((await call(`/public/link/${t}/issues`, { kind: 'room', appointment_id: mineA.id, note: 'Steam not working' })).status, 201);
+  assert.equal((await call(`/public/link/${t}/issues`, { kind: 'sos', appointment_id: mineA.id })).status, 201);
 
   const d = await issue('staff', doctor.id);
   assert.equal((await call(`/public/link/${d}/appointments/${visit.id}`, { note: 'Continue for a week' })).status, 200);
@@ -97,6 +98,9 @@ try {
   const kinds = check.problems.filter((p: { problem_class: string }) => p.problem_class === 'worth_knowing').map((p: { id: string; what: string }) => `${p.id.split(':')[0]} ${p.what}`);
   assert.ok(kinds.includes('ISSUE Room not usable: Steam not working'), `the issue is on the day: ${kinds}`);
   assert.ok(kinds.includes('FEEDBACK 👎 Too hot'), 'and the 👎 with its note');
+  // An SOS is a note that counts (#521): the pill and the Day section read `urgent`, a room issue does not.
+  const flagged = check.problems.filter((p: { urgent?: boolean }) => p.urgent).map((p: { what: string }) => p.what);
+  assert.deepEqual(flagged, ['SOS: needs help now'], 'only the SOS is urgent');
 
   assert.equal(await shared('staff', therapist.id), t, 'sharing again sends the same link');
   const t2 = await issue('staff', therapist.id);
