@@ -44,18 +44,17 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #529: the guest's link decides "over" by the centre's clock, not the phone's. Run with UAT_TZ set to a zone many hours behind the centre (Pacific/Pago_Pago for Asia/Kolkata): the phone says 03:00 while the centre's afternoon treatments are over.
-const cfg = await api('GET', '/settings');
-const hhmm = (zone) => new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
-const mins = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)); const back = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-const phoneNow = mins(hhmm(process.env.UAT_TZ || cfg.timezone)); const centreNow = mins(hhmm(cfg.timezone));
-const ended = (await api('GET', `/appointments?date=${plus(0)}`)).find((x) => x.status !== 'cancelled' && x.status !== 'no_show' && mins(x.start_time) + x.duration_minutes <= centreNow - 5 && mins(x.start_time) + x.duration_minutes > phoneNow);
-const gl = ended ? await api('POST', `/patients/${ended.patient_id}/link`) : null;
-await step('The guest link asks "How was it?" once the centre says it is over', gl ? `/l/${gl.token}` : '/admin/schedule', async () => {
-  if (!ended) return { ok: false, note: 'skipped: no treatment ended between the phone clock and the centre clock' };
-  const t = await text(p.locator('body'));
-  return { ok: /How was it\?/.test(t), note: `centre ${back(centreNow)}, phone ${back(phoneNow)}, a treatment ended ${back(mins(ended.start_time) + ended.duration_minutes)}; ` + t.split('\n').filter((x) => /How was it|Today|\d\d:\d\d/.test(x)).slice(0, 4).join(' · ') };
-});
+// #537: the count and the Menu's "N need you" row show on every screen, not only the day and Patients.
+const sosPerson = (await api('GET', '/staff')).find((x) => x.role === 'therapist');
+const sosLink = await api('POST', `/staff/${sosPerson.id}/link`);
+await fetch(`${APP}/api/public/link/${sosLink.token}/issues`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'sos', note: 'UAT #537' }) });
+for (const [name, path] of [['Team', '/admin/team'], ['Rooms', '/admin/rooms'], ['Leave', '/admin/timeoff'], ['Settings', '/admin/settings']]) {
+  await step(`${name}: the Menu says how many need you`, path, async () => {
+    const badge = (await p.getByRole('button', { name: 'Menu', exact: true }).innerText()).trim();
+    await menu(); const t = await text(dlg());
+    return { ok: /\d+ need you/.test(t) && /^\d+$/.test(badge), note: `badge ${badge || 'none'}; ` + t.split('\n').filter((x) => x.trim()).slice(0, 3).join(' · ') };
+  });
+}
 await b.close();
 
 writeFileSync(`${OUT}/lines.json`, JSON.stringify(lines));
