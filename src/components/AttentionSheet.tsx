@@ -99,8 +99,10 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   const teamAct = items.filter((i) => i.section === "Team" && i.kind === "action");
   const didForYou = replans.filter((b) => !dismissed.includes(b.batch_id));
   // A therapist whose day was moved already has their line under the day.
-  const teamInfo = items.filter((i) => i.kind === "information" && !didForYou.some((b) => b.staff_name === i.who));
-  const empty = act.length + notes.length + didForYou.length + patientAct.length + teamAct.length + teamInfo.length + (tomorrow?.count ?? 0) === 0;
+  const teamInfo = items.filter((i) => i.kind === "information" && i.section === "Team" && !didForYou.some((b) => b.staff_name === i.who));
+  // What a guest said on leaving, when it was good or fine (#509): grey, under Patients.
+  const patientInfo = items.filter((i) => i.kind === "information" && i.section === "Patients");
+  const empty = act.length + notes.length + didForYou.length + patientAct.length + patientInfo.length + teamAct.length + teamInfo.length + (tomorrow?.count ?? 0) === 0;
 
   // Nothing left: say so, then get out of the way, as the design does. Not
   // while an Undo is showing: with the pill gone it could not be reached again.
@@ -246,11 +248,11 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
         body: tomorrow ? <ListGroup><Row key="tomorrow" title={`${dayText(tomorrow.day)} · ${tomorrow.count} to fix`} facts="Open the day to fix it before it starts" trailing="Open ›" onClick={tomorrow.open} /></ListGroup> : null,
       }, {
         name: "Patients", count: patientRows.length,
-        body: patientRows.length ? <ListGroup>{patientRows.map((g) => {
+        body: patientRows.length + patientInfo.length ? <ListGroup>{patientRows.map((g) => {
           // Two things for one patient are one row; their card reaches both.
           const i = g.length > 1 ? { ...g[0], action: "card" as const } : g[0];
           return <Row key={i.id} title={i.who} facts={g.map((x) => x.what).join(" · ")} trailing={{ card: "Open card ›", diet: "Choose diet ›", summary: "Summary ›" }[i.action ?? "card"]} onClick={() => onItem(i)} />;
-        })}</ListGroup> : null,
+        })}{patientInfo.map((i) => <Row key={i.id} title={i.who} facts={`${i.what} · information, not counted`} trailing="Open card ›" onClick={() => onItem(i)} />)}</ListGroup> : null,
       }, {
         name: "Team", count: teamAct.length,
         body: teamAct.length + teamInfo.length ? <ListGroup>{[...teamAct, ...teamInfo].map((i) => <Row key={i.id} title={i.kind === "information" ? i.what : i.who} facts={i.kind === "information" ? "Information · not counted" : i.what} />)}</ListGroup> : null,

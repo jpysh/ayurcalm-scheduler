@@ -4,7 +4,7 @@
  * it comes from. Meals resolve through the same code as the day sheet, so the
  * card and the notice board cannot disagree.
  */
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { loadDietsForDay, mealLabel, mealOrder } from './dietResolution.js';
 import { centreClock, startedBefore, toMinutes } from './availability.js';
 import { dischargeOf } from './discharge.js';
@@ -52,6 +52,13 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
     const iso = new Date(t).toISOString().slice(0, 10);
     week.push({ date: iso, treatments: ahead.filter((a) => a.scheduled_date.getTime() === t).map((a) => ({ id: a.id, start_time: a.start_time, therapy_name: a.Therapy.name, consultation: a.Therapy.is_consultation, status: a.status })) });
   }
+  // What therapists recorded after a treatment, newest three, so the doctor reads them without opening each treatment (#508).
+  const recorded = await prisma.appointment.findMany({ where: { patient_id: patientId, scheduled_date: { lte: day }, status: { not: 'cancelled' }, NOT: { record: { equals: Prisma.DbNull } } }, orderBy: [{ scheduled_date: 'desc' }, { start_time: 'desc' }], select: { scheduled_date: true, record: true }, take: 30 });
+  const readings = recorded.flatMap((a) => {
+    const v = ((a.record as { vitals?: Record<string, string> } | null)?.vitals) || {};
+    const text = Object.entries(v).filter(([, x]) => String(x).trim()).map(([k, x]) => `${k.length <= 3 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1)} ${String(x).trim()}`).join(', ');
+    return text ? [{ date: a.scheduled_date.toISOString().slice(0, 10), text }] : [];
+  }).slice(0, 3);
   const visit = (a: (typeof visits)[number] | null) => a && { id: a.id, date: a.scheduled_date.toISOString().slice(0, 10), start_time: a.start_time, doctor: a.Staff?.name ?? null, note: a.notes };
   const team = [...new Set(appts.flatMap((a) => [a.staff_id, ...a.co_staff_ids]).filter((x): x is string => Boolean(x)))];
   const names = new Map((await prisma.staff.findMany({ where: { id: { in: team } }, select: { id: true, name: true } })).map((s) => [s.id, s.name]));
@@ -73,6 +80,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
   const beforePack = before?.package_id ? await prisma.package.findUnique({ where: { id: before.package_id } }) : null;
   // The follow-up the last discharge asked for (#487), on the card of a guest who has left.
   const ended = await prisma.patientStay.findFirst({ where: { patient_id: patientId, end_date: { lte: day } }, orderBy: { end_date: 'desc' } });
+  const told = (stay ?? ended)?.feedback as { rating: string; note: string } | null | undefined;
   const fuDate = (ended?.discharge as { follow_up_date?: string } | null)?.follow_up_date;
   const follow_up = ended && fuDate ? { stay_id: ended.id, due: fuDate, phone: patient.phone ?? null, centre: settings?.centre_name ?? '', done: ended.follow_up_done ? centreClock(settings?.timezone || 'Asia/Kolkata', ended.follow_up_done).date : null } : null;
   const shape = (s: NonNullable<typeof up>) => ({
@@ -89,6 +97,8 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
   return {
     follow_up,
     passport_photo: (await prisma.patientPhoto.findUnique({ where: { patient_id: patientId }, select: { updated_at: true } }))?.updated_at.toISOString() ?? null,
+    feedback: told ? { rating: told.rating, note: told.note } : null,
+    readings,
     id: patient.id,
     name: patient.name,
     stay: stay && shape(stay),

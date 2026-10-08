@@ -21,7 +21,7 @@ type Item = {
 type Details = { phone: string | null; email: string | null; date_of_birth: string | null; address: string | null; country: string | null; id_number: string | null; emergency_contact: string | null; emergency_phone: string | null };
 // What a patient fills before arriving (#489), the card's More details in their words.
 const ASK: [keyof Details, string, string?][] = [["phone", "Your phone", "tel"], ["email", "Email (optional)", "email"], ["date_of_birth", "Date of birth (yyyy-mm-dd)"], ["country", "Nationality"], ["id_number", "Passport or ID number"], ["address", "Home address"], ["emergency_contact", "Someone to call in an emergency"], ["emergency_phone", "Their phone", "tel"]];
-type Day = { details?: Details; who: { kind: "therapist" | "doctor" | "patient"; name: string }; centre: string; date: string; today: string; arrives?: string | null; off?: string | null; meals?: { meal: string; text: string }[]; items: Item[] };
+type Day = { details?: Details; who: { kind: "therapist" | "doctor" | "patient"; name: string }; centre: string; date: string; today: string; arrives?: string | null; feedback?: { given: { rating: string; note: string } | null } | null; off?: string | null; meals?: { meal: string; text: string }[]; items: Item[] };
 
 const VITAL: Record<string, string> = { bp: "BP", pulse: "Pulse", weight: "Weight (kg)", temp: "Temperature", spo2: "SpO₂", sugar: "Blood sugar" };
 const ISSUES: [string, string][] = [["room", "Room not usable"], ["co_therapist", "Co-therapist not here"], ["patient_absent", "Patient not here"], ["permission", "Need permission"], ["note", "A note for the admin"], ["sos", "SOS: need help now"]];
@@ -86,6 +86,16 @@ export default function LinkView() {
     if (!res?.ok) { toast.error("Not saved. Check the connection and try again."); load(); }
   };
   const [mine, setMine] = useState<Details | null>(null);
+  // One question on the leaving day (#509).
+  const [rating, setRating] = useState("");
+  const [rated, setRated] = useState("");
+  const sendRating = async () => {
+    setBusy(true);
+    const res = await fetch(`${API_BASE}/public/link/${token}/feedback`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rating, note: rated }) }).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) { toast.error("Not sent. Check the connection and try again."); return; }
+    toast.success("Thank you."); load();
+  };
   const saveDetails = async () => {
     setBusy(true);
     const body = Object.fromEntries(ASK.map(([k]) => [k, mine![k] ?? ""]));
@@ -174,6 +184,17 @@ export default function LinkView() {
         const filled = ASK.filter(([k]) => k !== "email" && day.details![k]).length, need = ASK.length - 1;
         return <ListGroup><Row title="Your details" facts={filled === need ? "All filled in. Thank you." : `${filled} of ${need} filled in. Please add them before you arrive.`} trailing="›" onClick={() => setMine({ ...day.details! })} /></ListGroup>;
       })() : null}
+      {day.feedback ? (
+        <ListGroup title="How was your stay?">
+          {day.feedback.given ? <TextRow label="Thank you">The centre has your answer.</TextRow> : (
+            <div className="p-3">
+              <Seg options={[["good", "Very good"], ["fine", "Fine"], ["poor", "Not good"]]} value={rating} onChange={(v) => setRating(String(v))} />
+              <Area label="Anything you would like us to know (optional)" rows={3} value={rated} onChange={(e) => setRated(e.target.value)} />
+              <Btn kind="primary" className="mt-3" disabled={!rating || busy} onClick={sendRating}>Send</Btn>
+            </div>
+          )}
+        </ListGroup>
+      ) : null}
       <BottomSheet open={!!mine} onOpenChange={(o) => { if (!o) setMine(null); }} title="Your details" note="The centre needs these for your stay. Only the centre sees them." foot={<Foot label="Save my details" busy={busy} save={saveDetails} />}>
         {mine ? ASK.map(([k, label, type]) => <Text key={k} label={label} type={type} value={mine[k] ?? ""} onChange={(e) => setMine({ ...mine, [k]: e.target.value })} />) : null}
       </BottomSheet>

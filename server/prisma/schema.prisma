@@ -79,6 +79,8 @@ model PatientStay {
   form_c_filed  DateTime?
   /// When the admin marked the follow-up the discharge summary asked for as done (#487).
   follow_up_done DateTime?
+  /// How the guest said the stay was, from their link on the leaving day (#509): { rating: good | fine | poor, note, at }.
+  feedback      Json?
   /// The discharge summary (#194): written by the doctor from their link or by
   /// the admin on the card; `final` is the admin's last word and locks the link.
   /// Shape is `Discharge` in src/discharge.ts.

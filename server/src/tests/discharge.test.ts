@@ -73,6 +73,11 @@ async function main() {
     const bare = await prisma.patientStay.create({ data: { patient_id: p.id, start_date: new Date('2030-05-01T00:00:00Z'), end_date: new Date('2030-05-03T00:00:00Z'), duration_days: 3 } });
     r = await call('PUT', `/public/link/${link}/discharges/${bare.id}`, { doctor_id: null, diagnosis: 'x' }, false);
     assert.equal((await r.json()).draft.doctor_id, doctor.id, 'the doctor who writes it signs it');
+    // A follow-up date alone counts as the follow-up being set (#500).
+    const missing = async () => ((await (await call('GET', `/patients/${p.id}/stays/${bare.id}/discharge`)).json()).ready.missing as { key: string }[]).map((m) => m.key);
+    assert.ok((await missing()).includes('follow_up'), 'nothing set: follow-up is missing');
+    await call('PUT', `/patients/${p.id}/stays/${bare.id}/discharge`, { follow_up_date: '2030-06-01' });
+    assert.ok(!(await missing()).includes('follow_up'), 'a follow-up date counts');
 
     // Signed out, nothing.
     assert.equal((await call('GET', `/patients/${p.id}/stays/${stay.id}/discharge`, undefined, false)).status, 401);
