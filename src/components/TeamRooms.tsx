@@ -96,7 +96,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
     const moved = (body.replan || []).reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0);
     await refresh();
     load();
-    const told = what === "Leave" ? `${name} away ${days.start === days.end ? dayText(days.start) : `${dayText(days.start)} to ${dayText(days.end)}`}` : `${name}: ${what.toLowerCase()}`;
+    const told = what === "Leave" ? `${name} away ${days.start === days.end ? dayText(days.start) : `${dayText(days.start)} to ${dayText(days.end)}`}` : `${name}: ${what.toLowerCase()}${days.start === today ? "" : ` · ${dayText(days.start)}`}`;
     toast(`${told}${moved ? ` · ${moved} moved` : ""}`, {
       duration: 8000,
       action: { label: "Undo", onClick: async () => { await fetch(`${API_BASE}/timeoff/${body.id}`, { method: "DELETE" }); await refresh(); load(); } },
@@ -126,7 +126,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
             return (
               <Row key={s.id} title={away ? <s className="text-muted-foreground">{s.name}</s> : s.name} facts={dayLine(d)}
                 flag={day === today && offToday[String(s.id)] && !away ? "Not in today" : undefined} trailing="›"
-                onClick={() => (day === today ? setPick({ kind: "staff", id: String(s.id), name: s.name }) : openPerson(String(s.id)))} />
+                onClick={() => (day < today ? openPerson(String(s.id)) : setPick({ kind: "staff", id: String(s.id), name: s.name }))} />
             );
           })}
         </ListGroup>
@@ -151,9 +151,9 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
       ) : null}
 
       <BottomSheet open={!!pick} onOpenChange={(o) => { if (!o) close(); }} title={pick?.name || ""}
-        note={pick?.kind === "room" ? "What would you like to do with this room?" : late === null ? "What changes for them today?" : late === "away" ? "Which days are they away?" : late === "late" ? "When do they start?" : "When do they leave?"}
+        note={pick?.kind === "room" ? "What would you like to do with this room?" : late === null ? (day === today ? "What changes for them today?" : `What changes for them on ${dayText(day)}?`) : late === "away" ? "Which days are they away?" : late === "late" ? "When do they start?" : "When do they leave?"}
         foot={pick && late === "away" ? <SheetFoot ok={!!at && !!until && until >= at} save={() => takeOut("staff", pick.id, pick.name, null, null, "Leave", { start: at, end: until })} label="Mark leave, move what they miss" />
-          : pick && late ? <SheetFoot ok={!!at} save={() => (late === "late" ? takeOut("staff", pick.id, pick.name, opening, at, `In late, at ${at}`) : takeOut("staff", pick.id, pick.name, at, closing, `Leaving early, at ${at}`))} label="Move what they miss" /> : undefined}>
+          : pick && late ? <SheetFoot ok={!!at} save={() => (late === "late" ? takeOut("staff", pick.id, pick.name, opening, at, `In late, at ${at}`, { start: day, end: day }) : takeOut("staff", pick.id, pick.name, at, closing, `Leaving early, at ${at}`, { start: day, end: day }))} label="Move what they miss" /> : undefined}>
         {pick?.kind === "room" ? (
           <ListGroup>
             <Row title="Out of use from now" facts="Moves what is booked in it" trailing="›" onClick={() => takeOut("room", pick.id, pick.name, from, null, "Out of use from now")} />
@@ -161,10 +161,10 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
           </ListGroup>
         ) : pick && late === null ? (
           <ListGroup>
-            <Row title="Not in from now" facts="Moves what they miss" trailing="›" onClick={() => takeOut("staff", pick.id, pick.name, from, null, "Not in from now")} />
-            <Row title="In late" facts="Choose the time they start" trailing="›" onClick={() => { setLate("late"); setAt(nowHM > opening ? nowHM : opening); }} />
+            <Row title={day === today ? "Not in from now" : "Not in that day"} facts="Moves what they miss" trailing="›" onClick={() => takeOut("staff", pick.id, pick.name, day === today ? from : null, null, day === today ? "Not in from now" : "Not in", { start: day, end: day })} />
+            <Row title="In late" facts="Choose the time they start" trailing="›" onClick={() => { setLate("late"); setAt(day === today && nowHM > opening ? nowHM : opening); }} />
             <Row title="Leaving early" facts="Choose the time they leave" trailing="›" onClick={() => { setLate("early"); setAt(closing); }} />
-            <Row title="Away another day" facts="Choose the days" trailing="›" onClick={() => { const t = nextDay(today); setLate("away"); setAt(t); setUntil(t); }} />
+            <Row title={day === today ? "Away another day" : "Away for days"} facts="Choose the days" trailing="›" onClick={() => { const t = day === today ? nextDay(today) : day; setLate("away"); setAt(t); setUntil(t); }} />
             <Row title="Share their link" facts="Their day on their own phone" trailing="›" onClick={() => { close(); link.share("staff", pick.id, pick.name); }} />
             <Row title="Make a new link" facts="The old one stops working" trailing="›" onClick={() => { close(); link.share("staff", pick.id, pick.name, true); }} />
             <Row title="Details and therapies" facts="Name, role, gender, phone" trailing="›" onClick={() => { close(); openPerson(pick.id); }} />

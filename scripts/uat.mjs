@@ -44,12 +44,24 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #516: every starter package and accommodation type says it is an example.
-await step('Settings lists every starter price as an example', '/admin/settings', async () => {
-  await go(p.getByRole('button', { name: /^Packages and accommodation/ }));
+// #518: on another day a person opens "what changes that day", and In late moves what they miss that day.
+const tmr = plus(1);
+const ap = (await api('GET', `/appointments?date=${tmr}`)).find((x) => x.staff_id && x.start_time >= '10:00');
+const person = (await api('GET', '/staff')).find((x) => x.id === ap.staff_id);
+await step('Another day: a person opens what changes that day', '/admin/team', async () => {
+  await tomorrow(); await p.waitForTimeout(800);
+  await go(p.getByRole('button', { name: new RegExp(`^${person.name}`) }).first());
   const t = await text(dlg());
-  const n = (t.match(/Example price/g) || []).length;
-  return { ok: n >= 14, note: `${n} rows say "Example price: change it to yours" (14 starter rows)` };
+  return { ok: /What changes for them on/.test(t) && /In late/.test(t) && /Not in that day/.test(t) && !/Delete this person/.test(t), note: t.split('\n').filter((x) => x.trim()).slice(0, 7).join(' · ') };
+});
+await step('In late moves what they miss that day', '/admin/team', async () => {
+  await tomorrow(); await p.waitForTimeout(800);
+  await go(p.getByRole('button', { name: new RegExp(`^${person.name}`) }).first()); await go(dlg().getByRole('button', { name: /^In late/ }));
+  await dlg().getByLabel('In at').selectOption('17:45'); await p.waitForTimeout(400);
+  await go(dlg().getByRole('button', { name: /^Move what they miss/ })); await p.waitForTimeout(2000);
+  const after = (await api('GET', `/appointments?date=${tmr}`)).find((x) => x.id === ap.id);
+  const toast = await p.locator('[data-sonner-toast]').first().innerText().catch(() => '');
+  return { ok: after && (after.staff_id !== ap.staff_id || after.start_time !== ap.start_time) && /in late/i.test(toast), note: `${toast.split('\n')[0]} · was ${ap.start_time} with ${person.name}, now ${after?.start_time} ${after?.staff_id === ap.staff_id ? 'same' : 'another'} therapist` };
 });
 await b.close();
 
