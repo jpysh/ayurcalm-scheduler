@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChangeLine, Consequence, LineSelect, WEEK, Chips, dayText, Dropdown, Group, More, Seg, SheetFoot, Switch, Text, noteText, say, field, Btn } from "@/components/kit";
+import { ChangeLine, Consequence, LineSelect, WEEK, Chips, dayText, Dropdown, Group, More, Seg, SheetFoot, Switch, Text, noteText, say, field, Btn, toastUndo } from "@/components/kit";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
@@ -18,6 +18,12 @@ async function send(path: string, method: string, body: unknown) {
   return out;
 }
 
+/** Saved, with a way back: Undo sends what the thing held before and puts the old row back on screen. */
+const savedWithUndo = <T,>(text: string, path: string, before: unknown, old: T, onSaved: (x: T) => void) =>
+  toastUndo(text, async () => {
+    try { await send(path, "PUT", before); onSaved(old); } catch (e) { toast.error((e as Error).message); }
+  });
+
 // ---- Rooms ----
 export const roomSub = (r: UiRoom) => r.status !== "Active" ? "Out of use" : r.amenities.length ? `Has ${r.amenities.map(say).join(", ")}` : "Nothing special";
 
@@ -33,7 +39,8 @@ export function RoomSheet({ room, preset = [], open, onClose, amenityOptions, on
       const body = { name: name.trim(), amenities: has, ...(room ? {} : { weekly_schedule: {} }) };
       const x = await send(room ? `/rooms/${room.id}` : "/rooms", room ? "PUT" : "POST", body);
       onSaved({ id: x.id, name: x.name, amenities: x.amenities || has, schedule: "", status: x.is_active === false ? "Maintenance" : "Active" });
-      toast(room ? `${x.name} saved` : `${x.name} added`); onClose();
+      if (room) savedWithUndo(`${x.name} saved`, `/rooms/${room.id}`, { name: room.name, amenities: room.amenities }, room, onSaved); else toast(`${x.name} added`);
+      onClose();
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
   return (
@@ -102,7 +109,11 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
       onSaved({ id: x.id, name: x.name, role: x.role ?? role, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other",
         specializations: (x.specializations || []).map((id: string) => therapies.find((t) => String(t.id) === String(id))?.name).filter(Boolean),
         phone: x.phone || "", schedule: "", hours: x.weekly_schedule, status: x.is_active === false ? "Inactive" : "Active" });
-      toast(person ? `${x.name} saved` : `${x.name} added`); onClose();
+      if (person) {
+        const before = { name: person.name, role: person.role, gender: person.gender.toLowerCase(), phone: person.phone, specializations: person.specializations.map((n) => therapies.find((t) => t.name === n)?.id).filter(Boolean), ...(touched ? { weekly_schedule: person.hours ?? {} } : {}) };
+        savedWithUndo(`${x.name} saved`, `/staff/${person.id}`, before, person, onSaved);
+      } else toast(`${x.name} added`);
+      onClose();
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
   return (
@@ -156,7 +167,11 @@ export function TherapySheet({ therapy, open, onClose, amenityOptions, onSaved, 
       const body = { name: name.trim(), duration_minutes: mins, required_amenities: needs, staff_required: staff, requires_gender_match: same, once_per_course: once, before_purification: before, checklist: checks.filter((c) => c.text.trim()), vitals };
       const x = await send(therapy ? `/therapies/${therapy.id}` : "/therapies", therapy ? "PUT" : "POST", body);
       onSaved({ id: x.id, name: x.name, duration: x.duration_minutes ?? mins, amenities: x.required_amenities || needs, genderMatch: !!x.requires_gender_match, staffRequired: x.staff_required ?? staff, once: !!x.once_per_course, before: !!x.before_purification, checklist: x.checklist || [], vitals: x.vitals || vitals });
-      toast(therapy ? `${x.name} saved` : `${x.name} added`); onClose();
+      if (therapy) {
+        const before = { name: therapy.name, duration_minutes: therapy.duration, required_amenities: therapy.amenities, staff_required: therapy.staffRequired, requires_gender_match: therapy.genderMatch, once_per_course: therapy.once, before_purification: therapy.before, checklist: therapy.checklist, vitals: therapy.vitals };
+        savedWithUndo(`${x.name} saved`, `/therapies/${therapy.id}`, before, therapy, onSaved);
+      } else toast(`${x.name} added`);
+      onClose();
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
   const vitalNames = VITALS.map(([, l]) => l);
