@@ -44,20 +44,17 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #496: a guest added ahead is on the Patients list under "Arriving soon".
-await api('POST', '/settings/clear-demo-data');
-for (const [name, from, to] of [['Clara Weber', 1, 8], ['Dev Mehta', 5, 12], ['Far Away', 30, 37]]) {
-  const x = await api('POST', '/patients', { name, gender: name.startsWith('Clara') ? 'female' : 'male' });
-  await api('POST', `/patients/${x.id}/stays`, { start_date: plus(from), end_date: plus(to) });
-}
-await step('Patients lists the guests arriving in the next two weeks', '/admin/patients', async () => {
-  const t = await text(p.locator('body'));
-  return { ok: /arriving soon/i.test(t) && /Clara Weber/.test(t) && /Dev Mehta/.test(t) && !/Far Away/.test(t) && !/No one is staying/.test(t), note: t.split('\n').filter((x) => /arriving soon|Arrives|in house|Weber|Mehta|Far/i.test(x)).join(' · ') };
-});
-await step('Tapping one opens their card', '/admin/patients', async () => {
-  await go(p.getByRole('button', { name: /^Clara Weber/ }).first());
+// #508: the card shows what therapists recorded; the demo centre is kept (not cleared).
+const today = ymd(new Date());
+const appts = await api('GET', `/appointments?date=${today}`);
+const mine = appts.find((x) => x.staff_id && x.patient_id);
+const who = await api('GET', `/patients/${mine.patient_id}/day?date=${today}`);
+const staffLink = await api('POST', `/staff/${mine.staff_id}/link`);
+for (const v of ['118/76', '124/82']) await fetch(`${APP}/api/public/link/${staffLink.token}/appointments/${mine.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vitals: { bp: v } }) });
+await step('The card shows the BP the therapist recorded', '/admin/patients', async () => {
+  await go(p.getByRole('button', { name: new RegExp(`^${who.name}`) }).first());
   const t = await text(dlg());
-  return { ok: /Arrives .* · leaves/.test(t), note: t.split('\n').slice(0, 3).join(' · ') };
+  return { ok: /Readings/.test(t) && /BP 124\/82/.test(t), note: t.split('\n').filter((x) => /Readings|BP/.test(x)).join(' · ') };
 });
 await b.close();
 
