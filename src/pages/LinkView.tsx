@@ -15,7 +15,7 @@ type Check = { text: string; required: boolean; done: boolean };
 type Item = {
   id: string; start_time: string; duration_minutes: number; status: string; therapy: string; description: string | null; room: string | null;
   with: string[]; patient?: string; products?: string[]; amenities?: string[]; checklist?: Check[];
-  vitals?: { field: string; value: string }[]; room_ready?: boolean; note?: string | null;
+  vitals?: { field: string; value: string }[]; room_ready?: boolean; done?: string | null; note?: string | null;
   feedback?: "up" | "down" | null; feedback_note?: string | null;
 };
 type Details = { phone: string | null; email: string | null; date_of_birth: string | null; address: string | null; country: string | null; id_number: string | null; emergency_contact: string | null; emergency_phone: string | null };
@@ -166,6 +166,7 @@ export default function LinkView() {
                   {day.who.kind === "doctor" ? (
                     <Area label="Consultation note (optional)" defaultValue={it.note || ""} onBlur={(e) => e.target.value !== (it.note || "") && save(it, { note: e.target.value }, { note: e.target.value })} />
                   ) : null}
+                  <Tick label="Done" on={!!it.done} set={(on) => save(it, { done: on }, { done: on ? "now" : null })} />
                   <Tick label="Room ready" on={!!it.room_ready} set={(on) => save(it, { room_ready: on }, { room_ready: on })} />
                   <Btn kind="secondary" onClick={() => setRaise({ appointment_id: it.id })}>Raise an issue</Btn>
                 </>
