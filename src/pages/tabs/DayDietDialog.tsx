@@ -19,8 +19,10 @@ const localToday = () => {
  * What the physician said for one patient on one day. Each filled meal beats the
  * patient's plan on the printed sheet; emptying it hands the meal back to the plan.
  */
-export default function DayDietDialog({ patient, onClose, onChangePlan }: { patient: { id: string; name: string } | null; onClose: () => void; onChangePlan?: () => void }) {
-  const [date, setDate] = useState(localToday);
+export default function DayDietDialog({ patient, day, onClose, onChangePlan }: { patient: { id: string; name: string } | null; day?: string; onClose: () => void; onChangePlan?: () => void }) {
+  const [date, setDate] = useState(day ?? localToday());
+  // The centre's day, not the phone's: today, or tomorrow after closing (#586).
+  useEffect(() => { if (patient && day) setDate(day); }, [patient?.id, day]); // eslint-disable-line react-hooks/exhaustive-deps
   const [saved, setSaved] = useState<Texts>(empty);
   const [texts, setTexts] = useState<Texts>(empty);
   const [busy, setBusy] = useState(false);
@@ -74,7 +76,7 @@ export default function DayDietDialog({ patient, onClose, onChangePlan }: { pati
   };
 
   return (
-    <BottomSheet open={!!patient} onOpenChange={(v: boolean) => { if (!v) { setDate(localToday()); onClose(); } }} title={`${patient?.name ?? ''}'s meals`}
+    <BottomSheet open={!!patient} onOpenChange={(v: boolean) => { if (!v) { setDate(day ?? localToday()); onClose(); } }} title={`${patient?.name ?? ''}'s meals`}
       note="Type in a meal to change it for this day only. Leave it empty to follow the plan."
       foot={<SheetFoot busy={busy} ok={!!date} save={save} label="Save the meals" />}>
       <DateRow label="Day" value={date} onChange={setDate} />
