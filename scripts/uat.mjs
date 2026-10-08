@@ -44,14 +44,20 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #494: the Form C sheet shows the date of birth with its year.
+// #496: a guest added ahead is on the Patients list under "Arriving soon".
 await api('POST', '/settings/clear-demo-data');
-const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female', country: 'Germany', date_of_birth: '1984-03-12', id_number: 'C01X00T47' });
-await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(0), end_date: plus(7) });
-await step('Form C shows the whole date of birth', '/admin/patients', async () => {
-  await go(p.getByRole('button', { name: /^Clara Weber/ }).first()); await go(dlg().getByRole('button', { name: /^Form C/ }));
+for (const [name, from, to] of [['Clara Weber', 1, 8], ['Dev Mehta', 5, 12], ['Far Away', 30, 37]]) {
+  const x = await api('POST', '/patients', { name, gender: name.startsWith('Clara') ? 'female' : 'male' });
+  await api('POST', `/patients/${x.id}/stays`, { start_date: plus(from), end_date: plus(to) });
+}
+await step('Patients lists the guests arriving in the next two weeks', '/admin/patients', async () => {
+  const t = await text(p.locator('body'));
+  return { ok: /arriving soon/i.test(t) && /Clara Weber/.test(t) && /Dev Mehta/.test(t) && !/Far Away/.test(t) && !/No one is staying/.test(t), note: t.split('\n').filter((x) => /arriving soon|Arrives|in house|Weber|Mehta|Far/i.test(x)).join(' · ') };
+});
+await step('Tapping one opens their card', '/admin/patients', async () => {
+  await go(p.getByRole('button', { name: /^Clara Weber/ }).first());
   const t = await text(dlg());
-  return { ok: /12 Mar 1984/.test(t), note: t.split('\n').filter((x) => /birth|1984|Arrived/.test(x)).join(' · ') };
+  return { ok: /Arrives .* · leaves/.test(t), note: t.split('\n').slice(0, 3).join(' · ') };
 });
 await b.close();
 
