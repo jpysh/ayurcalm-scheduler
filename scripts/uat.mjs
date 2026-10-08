@@ -44,28 +44,13 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #575: a returning guest's New stay offers the first consultation, like a new patient.
-const back = await api('POST', '/patients', { name: 'Uatback Guest', gender: 'female', stay: { start_date: plus(-30), end_date: plus(-24) } });
-const findCard = async () => { await viaMenu('Search'); await p.getByRole('searchbox').or(p.getByRole('textbox')).last().fill('Uatback'); await p.waitForTimeout(1200); await p.getByText('Uatback Guest').first().click(); await p.waitForTimeout(1200); };
-await step('New stay for a past guest offers the first consultation', '/admin/schedule', async () => {
-  await findCard(); await go(dlg().getByRole('button', { name: /^New stay/ })); await p.waitForTimeout(800);
-  const t = await text(dlg());
-  return { ok: /First consultation/.test(t) && /Later/.test(t), note: t.replace(/\n+/g, ' | ').slice(0, 160) };
-});
-await step('Add the stay: the toast names the consultation and the card has it booked', '/admin/schedule', async () => {
-  await findCard(); await go(dlg().getByRole('button', { name: /^New stay/ })); await go(dlg().getByRole('button', { name: 'Add the stay' }));
-  const toastText = await text(p.locator('[data-sonner-toast]').first());
-  await p.waitForTimeout(500);
-  const card = await text(dlg());
-  return { ok: /Stay added for Uatback/.test(toastText) && /consultation/i.test(toastText) && /Next[\s\S]*\d\d:\d\d/.test(card), note: `${toastText.replace(/\n+/g, ' ')} · ${(card.match(/Next\n[^\n]*/) || [''])[0].replace(/\n/g, ' ')}` };
-});
-await step('Later leaves the consultation to the card', '/admin/schedule', async () => {
-  const other = await api('POST', '/patients', { name: 'Uatback Second', gender: 'male', stay: { start_date: plus(-30), end_date: plus(-24) } });
-  await viaMenu('Search'); await p.getByRole('searchbox').or(p.getByRole('textbox')).last().fill('Uatback Second'); await p.waitForTimeout(1200); await p.getByText('Uatback Second').first().click(); await p.waitForTimeout(1200);
-  await go(dlg().getByRole('button', { name: /^New stay/ })); await go(dlg().getByRole('button', { name: 'Later', exact: true })); const sheet = await text(dlg());
-  await go(dlg().getByRole('button', { name: 'Add the stay' })); await p.waitForTimeout(500);
-  const card = await text(dlg());
-  return { ok: /Later, from their card/.test(sheet) && /None booked/.test(card), note: `sheet: ${sheet.replace(/\n+/g, ' ').slice(0, 100)} · card: ${(card.match(/Next\n[^\n]*/) || [''])[0].replace(/\n/g, ' ')}` };
+// #578: when the server says "too many requests", the app says so instead of showing an empty centre.
+await step('A refused call (429) says why, in one banner', '/admin/patients', async () => {
+  await p.route('**/api/patients*', (r) => r.fulfill({ status: 429, contentType: 'application/json', body: JSON.stringify({ error: 'Too Many Requests' }) }));
+  await p.reload(); await p.waitForTimeout(2000);
+  const banner = await p.locator('[data-sonner-toast]').allInnerTexts();
+  await p.unroute('**/api/patients*');
+  return { ok: banner.some((t) => /Too many requests at once/.test(t)) && banner.length === 1, note: `${banner.length} banner: ${banner.join(' / ').replace(/\n+/g, ' ')}` };
 });
 await b.close();
 
