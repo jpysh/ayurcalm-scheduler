@@ -44,13 +44,33 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #556: at 200% text nothing a decision needs is cut (rows, tiles, page titles).
-const big = async () => { await p.addStyleTag({ content: 'html{font-size:200% !important}' }); await p.waitForTimeout(700); };
-const cut = () => p.evaluate(() => [...new Set([...document.querySelectorAll('body *')].filter((e) => { const s = getComputedStyle(e); const clamped = s.webkitLineClamp && s.webkitLineClamp !== 'none'; return e.children.length === 0 && e.textContent.trim().length > 2 && ((clamped && e.scrollHeight > e.clientHeight + 1) || (s.textOverflow === 'ellipsis' && e.scrollWidth > e.clientWidth + 2)); }).map((e) => e.textContent.trim().slice(0, 40)))]);
-for (const [name, path] of [['Settings', '/admin/settings'], ['Patients', '/admin/patients'], ['Team', '/admin/team'], ['Guest rooms', '/admin/guestrooms']]) {
-  await step(`${name} at 200% text: nothing is cut`, path, async () => { await big(); const c = await cut(); return { ok: c.length === 0, note: c.length ? `cut: ${c.join(' | ')}` : 'nothing cut' }; });
-}
-await step('The Menu at 200% text: nothing is cut', '/admin/schedule', async () => { await big(); await menu(); await p.waitForTimeout(800); const c = await cut(); return { ok: c.length === 0, note: c.length ? `cut: ${c.join(' | ')}` : 'nothing cut' }; });
+// #574: a person switched off, or gone from the loaded centre, is signed out at once.
+const staff = { email: 'uat-gone@example.com', password: 'staffpass123' };
+await step('A switched-off person is refused on their next tap', '/admin/schedule', async () => {
+  const made = await api('POST', '/users', { ...staff, role: 'staff' });
+  const login = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(staff) })).json();
+  const me = async () => (await fetch(`${APP}/api/auth/me`, { headers: { Authorization: `Bearer ${login.token}` } })).status;
+  const before = await me();
+  await api('PUT', `/users/${made.id}`, { is_active: false });
+  const after = await me();
+  await api('DELETE', `/users/${made.id}`);
+  return { ok: before === 200 && after === 401, note: `their session answered ${before} while on, ${after} once switched off` };
+});
+await step('The phone of a switched-off person lands on the sign-in page', '/admin/schedule', async () => {
+  const made = await api('POST', '/users', { ...staff, email: 'uat-gone2@example.com', role: 'staff' });
+  const login = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...staff, email: 'uat-gone2@example.com' }) })).json();
+  const c2 = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+  await c2.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Staff'); localStorage.setItem('authUser', 'uat-gone2@example.com'); }, login.token);
+  const q = await c2.newPage();
+  await q.goto(APP + '/admin/schedule'); await q.waitForTimeout(1500);
+  const on = q.url();
+  await api('PUT', `/users/${made.id}`, { is_active: false });
+  await q.reload(); await q.waitForTimeout(2000);
+  await q.screenshot({ path: `${OUT}/phone-after.png` });
+  const off = q.url();
+  await c2.close(); await api('DELETE', `/users/${made.id}`);
+  return { ok: /admin/.test(on) && /login/.test(off), note: `signed in at ${new URL(on).pathname}, after switch-off at ${new URL(off).pathname}` };
+});
 await b.close();
 
 writeFileSync(`${OUT}/lines.json`, JSON.stringify(lines));

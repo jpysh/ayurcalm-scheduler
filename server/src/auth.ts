@@ -111,7 +111,9 @@ authRouter.get('/me', requireAuth, (req: Request, res: Response) => {
   res.json({ user: req.user });
 });
 
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
+// The token proves who signed in; the database says whether they still may. Without this look-up a
+// person switched off, made staff, or absent from a loaded centre kept their rights until the token ended (#574).
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const header = String(req.headers.authorization || '');
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
   if (!token) {
@@ -119,7 +121,10 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     return;
   }
   try {
-    req.user = jwt.verify(token, jwtSecret()) as AuthUser;
+    const claim = jwt.verify(token, jwtSecret()) as AuthUser;
+    const user = await prisma.user.findUnique({ where: { id: String(claim.id) } });
+    if (!user || !user.is_active) throw new Error('gone');
+    req.user = { id: user.id, email: user.email, role: user.role, name: user.name };
     next();
   } catch {
     res.status(401).json({ error: 'Session expired or invalid' });
