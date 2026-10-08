@@ -207,7 +207,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
         <Seg<DayView> options={[["time", "Time"], ["therapist", "Therapist"], ["room", "Room"], ["resident", "Patient"]]} value={view} onChange={(v) => { setView(v); setPickView(false); }} />
       </BottomSheet>
       {rows.length ? body : <div className="p-3 text-center text-sm text-muted-foreground">{q ? `Nothing matches "${query}" on this day.` : "Nothing booked on this day."}</div>}
-      {rows.length ? <div className="p-3 text-center text-sm text-muted-foreground">End of the day</div> : null}
+      {rows.length ? <div className="px-3 pt-3 text-center text-sm text-muted-foreground">End of the day</div> : null}
     </div>
   );
 }

@@ -569,7 +569,7 @@ const AdminDashboard = () => {
 
   return (
     <BackContext.Provider value={backTo}>
-    <div className="min-h-screen bg-background overflow-x-clip pb-28">
+    <div className="min-h-screen bg-background overflow-x-clip pb-[calc(var(--bar-h)+var(--bar-gap)+env(safe-area-inset-bottom)+1rem)]">
       {/* Main Content */}
       {/* The phone design widened on a desktop, never a second layout (#67): one centred column. */}
       {/* No top padding: each screen's own header carries the design's 12–14px (#193). */}
