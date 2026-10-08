@@ -22,7 +22,7 @@ export function ConfirmHost() {
   const answer = (yes: boolean) => { ask?.resolve(yes); setAsk(null); };
   const [first, ...rest] = (ask?.text || "").split("\n\n");
   return (
-    <BottomSheet open={!!ask} onOpenChange={(o) => { if (!o) answer(false); }} title="">
+    <BottomSheet open={!!ask} onOpenChange={(o) => { if (!o) answer(false); }} title="" label="Please confirm">
       <p className="text-base font-semibold">{first}</p>
       {rest.map((r) => <p key={r} className="mt-1 text-sm text-muted-foreground">{r}</p>)}
       <div className="mt-4 grid grid-cols-2 gap-2">

@@ -44,26 +44,19 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #586: after closing, a new leave and one day's meals start on tomorrow; before closing, on today.
-const at = (hhmm) => p.clock.setFixedTime(new Date(`${plus(0)}T${hhmm}:00+05:30`));
-const dayOn = async (label) => (await text(dlg())).replace(/\n+/g, ' | ').match(new RegExp(`${label} \\| ([^|]*)`))?.[1].trim();
-const dayName = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
-await api('POST', '/patients', { name: 'Uatclose Guest', gender: 'female', stay: { start_date: plus(-1), end_date: plus(5) } });
-const mealsDay = async () => { await viaMenu('Search'); await p.getByRole('searchbox').or(p.getByRole('textbox')).last().fill('Uatclose'); await p.waitForTimeout(1200); await p.getByText('Uatclose Guest').first().click(); await p.waitForTimeout(1200);
-  await go(dlg().getByRole('button', { name: /^Diet/ })); await go(dlg().getByRole('button', { name: /Change one day/ })); return text(dlg()); };
-for (const [when, hhmm, iso] of [['after closing (21:30)', '21:30', plus(1)], ['before closing (10:00)', '10:00', plus(0)]]) {
-  await step(`A new leave starts on ${iso === plus(1) ? 'tomorrow' : 'today'}, ${when}`, '/admin/timeoff', async () => {
-    await at(hhmm); await p.reload(); await p.waitForTimeout(1500);
-    await p.getByRole('button', { name: /^(\+|Add)/ }).first().click(); await p.waitForTimeout(1000);
-    const t = (await text(dlg())).replace(/\n+/g, ' | '); const from = t.match(/From \| ([^|]*)/)?.[1].trim();
-    return { ok: from === dayName(iso), note: `From reads ${from}, expected ${dayName(iso)}` };
-  });
-  await step(`One day's meals open on ${iso === plus(1) ? 'tomorrow' : 'today'}, ${when}`, '/admin/schedule', async () => {
-    await at(hhmm); await p.reload(); await p.waitForTimeout(1500);
-    const t = (await mealsDay()).replace(/\n+/g, ' | '); const day = t.match(/Day \| ([^|]*)/)?.[1].trim();
-    return { ok: day === dayName(iso), note: `Day reads ${day}, expected ${dayName(iso)}` };
-  });
-}
+// #590: the confirmation sheet is announced as what it is, not as "Menu".
+await step('The confirmation sheet is named "Please confirm"', '/admin/settings', async () => {
+  await go(p.getByRole('button', { name: /^Backups/ }));
+  await dlg().locator('input[type=file]').setInputFiles({ name: 'centre.json.gz', mimeType: 'application/gzip', buffer: Buffer.from('not a real file') }); await p.waitForTimeout(1000);
+  const named = await p.getByRole('dialog', { name: 'Please confirm' }).count(), asMenu = await p.getByRole('dialog', { name: 'Menu' }).count();
+  const t = (await text(dlg())).replace(/\n+/g, ' | ');
+  await go(p.getByRole('dialog', { name: 'Please confirm' }).getByRole('button', { name: 'Cancel' }));
+  return { ok: named === 1 && asMenu === 0, note: `dialogs named "Please confirm": ${named}, named "Menu": ${asMenu} · ${t.slice(0, 90)}` };
+});
+await step('The Menu sheet is still named "Menu"', '/admin/schedule', async () => {
+  await menu(); const named = await p.getByRole('dialog', { name: 'Menu' }).count();
+  return { ok: named === 1, note: `dialogs named "Menu": ${named}` };
+});
 await b.close();
 
 writeFileSync(`${OUT}/lines.json`, JSON.stringify(lines));

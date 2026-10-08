@@ -111,7 +111,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
         </nav>
       )}
 
-      {sheet === "menu" ? <BottomSheet open onOpenChange={(o) => setSheet(o ? "menu" : null)} title="">
+      {sheet === "menu" ? <BottomSheet open onOpenChange={(o) => setSheet(o ? "menu" : null)} title="" label="Menu">
         {/* What needs doing first, then the rest of what can be done here. The main action is the + beside the menu. */}
         {inbox?.need ? <div className="mb-3"><ListGroup><Row key="inbox" title={`${inbox.need} need you`} facts="Things to fix or decide" trailing="›" onClick={close(attention!.open)} /></ListGroup></div> : null}
         <div className="mt-2">
