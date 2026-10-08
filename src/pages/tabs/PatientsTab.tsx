@@ -554,7 +554,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
       <AccommodationSheet patient={houseFor?.patient ?? null} stay={houseFor?.stay ?? null} onClose={backToCard(() => setHouseFor(null))} onSaved={() => {}}
         editList={() => { setHouseFor(null); setBack(null); openCatalogue('accommodation'); }} />
       <StaySheet patient={stayFor?.patient ?? null} target={stayFor ? { ...stayFor.target, end: stayEnd ?? stayFor.target.end } : null} today={today}
-        onClose={backToCard(() => { setStayFor(null); setStayEnd(null); })} onSaved={() => { if (stayFor) void refreshStays(stayFor.patient.id); }} />
+        now={clock(timezone)} onClose={backToCard(() => { setStayFor(null); setStayEnd(null); })} onSaved={() => { if (stayFor) void refreshStays(stayFor.patient.id); }} />
       <ResidentCard id={cardId} today={today} onClose={() => setCardId(null)}
         openTreatment={(a) => { setCardId(null); openTreatment(a); }}
         changeMeals={(p) => { setBack(p.id); setCardId(null); setDietFor(p); }}

@@ -596,9 +596,22 @@ app.get('/patients/:id/stays', async (req: Request, res: Response) => {
 
 app.post('/patients/:id/stays', async (req: Request, res: Response) => {
   const id = String(req.params.id);
-  // A returning guest's New stay starts on their last package (#437).
-  const { package_id } = z.object({ package_id: z.string().uuid().nullish() }).parse(req.body);
-  const created = await prisma.patientStay.create({ data: { patient_id: id, package_id: package_id ?? null, ...stayData(staySchema.parse(req.body)) } });
+  // A returning guest's New stay starts on their last package (#437) and, like a new patient, in a first consultation (#575).
+  const { package_id, consultation } = z.object({ package_id: z.string().uuid().nullish(), consultation: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), start_time: z.string().regex(/^\d\d:\d\d$/), staff_id: z.string().uuid(), room_id: z.string().uuid() }).optional() }).parse(req.body);
+  const dates = staySchema.parse(req.body);
+  const stay = stayData(dates);
+  const consult = consultation ? await prisma.therapy.findFirst({ where: { is_consultation: true } }) : null;
+  if (consultation && consult) {
+    if (consultation.date < dates.start_date || consultation.date > dates.end_date) { res.status(409).json({ reason: 'NOT_STAYING', message: 'The consultation is outside the stay.' }); return; }
+    const day = new Date(`${consultation.date}T00:00:00.000Z`);
+    const conflict = findConflict({ scheduled_date: day, start_time: consultation.start_time, duration_minutes: consult.duration_minutes, staff_id: consultation.staff_id, co_staff_ids: [], room_id: consultation.room_id, patient_id: '', therapy_id: consult.id }, await loadDay(day, prisma));
+    if (conflict) { res.status(409).json(conflict); return; }
+  }
+  const created = await prisma.$transaction(async (tx) => {
+    const made = await tx.patientStay.create({ data: { patient_id: id, package_id: package_id ?? null, ...stay } });
+    if (consultation && consult) await tx.appointment.create({ data: { patient_id: id, therapy_id: consult.id, staff_id: consultation.staff_id, room_id: consultation.room_id, scheduled_date: new Date(`${consultation.date}T00:00:00.000Z`), start_time: consultation.start_time, duration_minutes: consult.duration_minutes, co_staff_ids: [], session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
+    return made;
+  });
   res.status(201).json(created);
 });
 
