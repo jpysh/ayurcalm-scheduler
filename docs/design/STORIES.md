@@ -96,6 +96,31 @@ Walked from a new trial centre built through the sign-up, the library and the Te
 | Other timezone | pass | Sydney at 23:57 to 00:01: the day, Print, the count and the links flip on the centre's clock; a guest's link read the phone's clock | #529 |
 | First day | n/a | a therapy no room could host read 'Nothing is free…'; + after closing opened on the finished day | #544, #546 |
 
+### Fourth walk, 8 Oct (a fresh Prague trial, 375×812, built from the sign-up through the wizard and the Get started lists)
+
+Score is before the fixes → after them; a story under 13 got one issue. The midnight line is in the PR that closes the walk.
+
+| Story | Wow | What the walk found | Issue |
+|---|---|---|---|
+| First day (sign-up, wizard, Get started) | 12 → 15 | the wizard asked for the name typed at sign-up and started the timezone on India; reloading the sign-up page after the centre was ready left a spinner and no way in | #577, #588 |
+| s8 Consultation on arrival, the round | 16 | a new patient is booked at once; a returning guest was not (see s34) | #575 |
+| s9 Form C from the guest's own details | 11 → 15 | the guest was told 'All filled in' with no visa asked; the card said only 'Due by' | #576 |
+| s14 Kitchen sheet | 15 | counts by plan per meal; one patient's own meal listed under 'Their own' | none |
+| s16 Meals by date | 14 | the change shows on the kitchen sheet; the day starts on today even after closing | none |
+| s17 Week ahead | 12 → 14 | '−6' under the 21st, and 'Nothing booked on this day' | #583 |
+| s18 Arrival checklist | 15 | each item opens its field; the package nearest the stay is ticked and one tap saves it | none |
+| s22 Log and undo | 13 | readable; no Undo on a Log row (Undo is on the toast after the edit, #562) | none |
+| s24 Discharge with medicines | 15 | the take-home medicine, the diagnosis and the signature print | none |
+| s29/s49 Guest fills their own details | 14 → 15 | three taps, nothing typed that the app knew | #576 |
+| s32 Follow-up on WhatsApp | 14 | 'Open card', the row, then Send: three taps from the inbox | none |
+| s33 Events | 16 | the yoga class prints on the sheet and the therapist's rota | none |
+| s34 Re-book a returning guest | 11 → 14 | New stay booked no consultation and its toast did not say 'added' | #575 |
+| s35 Records for a month | 14 | each stay, its discharge number and the treatments counted | none |
+| s40 Leaving-day question | 15 | 'Not good' with a line counts on the pill | none |
+| Backups, Load a centre, People with access | pass | a loaded centre did not sign the old session out; a switched-off person kept 12 hours | #574 |
+| Any screen under heavy use | pass | the server's 'too many requests' showed an empty centre | #578 |
+| Leave and one day's meals in the evening | pass | after closing both opened on today's finished day (the meals sheet used the phone's date) | #586 |
+
 ## Each story
 
 Format: **Outcome** · **Trigger** · **First view** · **Wow** · **Fix** (the Audit track issue, or the smallest first step).
