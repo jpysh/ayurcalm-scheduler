@@ -854,6 +854,26 @@ app.post('/staff/:id/link', requireAdmin, async (req: Request, res: Response) =>
   // The phone lets the screen offer Send on WhatsApp to this person (#413).
   res.json({ token, phone: s.phone });
 });
+// A photo of the passport or ID, read from while copying Form C (#510): one per patient, a JPEG shrunk on the phone.
+app.get('/patients/:id/passport-photo', requireAdmin, async (req: Request, res: Response) => {
+  const photo = await prisma.patientPhoto.findUnique({ where: { patient_id: String(req.params.id) } });
+  if (!photo) { res.status(404).json({ error: 'No photo kept.' }); return; }
+  res.setHeader('Content-Type', 'image/jpeg');
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.send(Buffer.from(photo.image));
+});
+app.put('/patients/:id/passport-photo', requireAdmin, async (req: Request, res: Response) => {
+  // A JPEG starts ff d8; anything else, or a body the raw parser left alone, is refused.
+  if (!Buffer.isBuffer(req.body) || !req.body.subarray(0, 2).equals(Buffer.from([0xff, 0xd8]))) { res.status(400).json({ error: 'Send the photo as a JPEG.' }); return; }
+  const image = Buffer.from(req.body);
+  await prisma.patient.findUniqueOrThrow({ where: { id: String(req.params.id) } });
+  const kept = await prisma.patientPhoto.upsert({ where: { patient_id: String(req.params.id) }, create: { patient_id: String(req.params.id), image }, update: { image }, select: { updated_at: true } });
+  res.json({ kept: kept.updated_at });
+});
+app.delete('/patients/:id/passport-photo', requireAdmin, async (req: Request, res: Response) => {
+  await prisma.patientPhoto.deleteMany({ where: { patient_id: String(req.params.id) } });
+  res.json({ ok: true });
+});
 app.post('/patients/:id/link', requireAdmin, async (req: Request, res: Response) => {
   const p = await prisma.patient.findUniqueOrThrow({ where: { id: String(req.params.id) } });
   const token = p.link_token && req.query.renew !== '1' ? p.link_token : (await prisma.patient.update({ where: { id: p.id }, data: { link_token: newLinkToken() } })).link_token;

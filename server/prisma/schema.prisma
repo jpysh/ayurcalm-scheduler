@@ -50,6 +50,15 @@ model Patient {
   DietPlanSegments DietPlanSegment[]
   Appointments     Appointment[]
   Stays            PatientStay[]
+  Photo            PatientPhoto?
+}
+
+/// A photo of the guest's passport or ID, kept apart from the patient so no list loads it (#510).
+model PatientPhoto {
+  patient_id String   @id
+  image      Bytes
+  updated_at DateTime @default(now()) @updatedAt
+  Patient    Patient  @relation(fields: [patient_id], references: [id], onDelete: Cascade)
 }
 
 model PatientStay {

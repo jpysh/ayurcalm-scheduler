@@ -8,6 +8,7 @@ import DayDietDialog from "./DayDietDialog";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
+import { PhotoImg, shrinkPhoto } from "@/components/PassportPhoto";
 import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, rupees, Btn, LinkBtn } from "@/components/kit";
 import { AccommodationSheet, DietSheet, DischargeSheet, NextWeekSheet, PackageSheet, StaySheet, takenBy, type CardStay, type GuestRoomNight, type StayTarget } from "@/components/CardSheets";
 import { marked } from "@/components/SearchScreen";
@@ -38,6 +39,8 @@ type ResidentDay = {
   plan_name: string; diet_next: { from: string; name: string } | null; meals: { meal: string; text: string }[];
   week: { date: string; treatments: { id: string; start_time: string; therapy_name: string; consultation: boolean; status: string }[] }[];
   doctor_plan: string | null;
+  /** When the passport photo was kept, or null (#510). */
+  passport_photo: string | null;
   /** How the guest said their stay was (#509). */
   feedback: { rating: string; note: string } | null;
   /** What therapists recorded after treatments, newest first (#508). */
@@ -184,6 +187,23 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
   const [checklist, setChecklist] = useState(false);
   const [week, setWeek] = useState(false);
   const [formC, setFormC] = useState(false);
+  // The passport photo (#510): the phone's camera, shrunk before it leaves.
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const photoInput = useRef<HTMLInputElement>(null);
+  const keepPhoto = async (file: File | undefined) => {
+    if (!file || !d) return;
+    try {
+      const image = await shrinkPhoto(file);
+      const res = await fetch(`${API_BASE}/patients/${d.id}/passport-photo`, { method: "PUT", headers: { "Content-Type": "image/jpeg" }, body: image });
+      if (!res.ok) throw new Error();
+      toast.success("Photo kept"); load();
+    } catch { toast.error("The photo could not be kept. Try again."); }
+  };
+  const dropPhoto = async () => {
+    if (!d) return;
+    await fetch(`${API_BASE}/patients/${d.id}/passport-photo`, { method: "DELETE" });
+    setPhotoOpen(false); load();
+  };
   const [followUp, setFollowUp] = useState(false);
   const markFollowUp = async (done: boolean) => {
     const res = await fetch(`${API_BASE}/patients/${d!.id}/stays/${d!.follow_up!.stay_id}/follow-up`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ done }) });
@@ -277,6 +297,8 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
             {up && up.on_site !== false ? <ChangeLine label="Accommodation" value={up.accommodation ? `${up.accommodation.name}${up.accommodation.room ? ` · ${up.accommodation.room.name}` : ""} · ${nights} nights · ${rupees(nights * up.accommodation.price_per_day)}` : "Not decided yet"} faint={!up.accommodation} onClick={() => changeHouse(d)} /> : null}
             {d.follow_up ? <ChangeLine label="Follow-up" value={d.follow_up.done ? `Done ${dayText(d.follow_up.done)}` : `Due ${dayText(d.follow_up.due)}`} onClick={() => setFollowUp(true)} /> : null}
             {d.form_c ? <ChangeLine label="Form C" value={d.form_c.filed ? `Filed ${dayText(d.form_c.filed)}` : `Due by ${dayText(d.form_c.due)}`} onClick={() => setFormC(true)} /> : null}
+            <ChangeLine label="Passport photo" value={d.passport_photo ? `Kept ${dayText(d.passport_photo)}` : "Take a photo"} faint={!d.passport_photo} onClick={() => (d.passport_photo ? setPhotoOpen(true) : photoInput.current?.click())} />
+            <input ref={photoInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { void keepPhoto(e.target.files?.[0]); e.target.value = ""; }} />
             {up ? <ChangeLine label="Stay" value={`${stayDay(up.start_date)} to ${stayDay(up.end_date)}`} onClick={() => changeStay(d)} /> : <ChangeLine label={d.last_stay ? 'New stay' : 'Stay'} value={d.last_stay?.package ? `From today · ${d.last_stay.package.name}` : 'Not staying · add a stay'} faint={!d.last_stay} onClick={() => changeStay(d)} />}
             <ChangeLine label="Details" value={detailsHint(d.id)} faint onClick={() => details(d.id)} />
           </div>
@@ -322,11 +344,16 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
       <BottomSheet open={formC && !!d?.form_c} onOpenChange={setFormC} title={`Form C · ${d?.name ?? ''}`}
         note={d?.form_c?.filed ? `Filed ${dayText(d.form_c.filed)}.` : `Due by ${d?.form_c ? dayText(d.form_c.due) : ''}, a day after arriving. Tap a line to copy it into indianfrro.gov.in.`}
         foot={d?.form_c?.filed ? <Btn onClick={() => fileFormC(false)}>Not filed yet</Btn> : <Btn kind="primary" onClick={() => fileFormC(true)}>Mark Form C filed</Btn>}>
+        {d?.passport_photo ? <PhotoImg id={d.id} kept={d.passport_photo} small onOpen={() => setPhotoOpen(true)} /> : null}
         <ListGroup>
           {d?.form_c?.fields.map(([label, value]) => value
             ? <Row key={label} title={label} facts={/^\d{4}-\d{2}-\d{2}$/.test(value) ? dayYear(value) : value} trailing="Copy" onClick={() => copy(label, value.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3/$2/$1'))} />
             : <Row key={label} title={label} flag="Not recorded" onClick={() => { setFormC(false); details(d.id); }} />)}
         </ListGroup>
+      </BottomSheet>
+      <BottomSheet open={photoOpen && !!d?.passport_photo} onOpenChange={setPhotoOpen} title={`Passport photo · ${d?.name.split(' ')[0] ?? ''}`} note="Kept with the patient. Only you see it."
+        foot={<div className="grid gap-2"><Btn kind="primary" onClick={() => photoInput.current?.click()}>Take another</Btn><Btn onClick={dropPhoto}>Remove it</Btn></div>}>
+        {d?.passport_photo ? <PhotoImg id={d.id} kept={d.passport_photo} /> : null}
       </BottomSheet>
       <BottomSheet open={arrival && !!steps} onOpenChange={setArrival} title={`Arrival · ${d?.name.split(' ')[0] ?? ''}`} note="What a new patient needs. Nothing here blocks a booking.">
         <ListGroup>

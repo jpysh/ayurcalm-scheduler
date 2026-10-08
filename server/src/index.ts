@@ -51,6 +51,8 @@ expressApp.use(cors({
 // rest of the API, which stays tight at 100kb.
 expressApp.use((req: Request, res: Response, next: NextFunction) => {
   // Logos and a doctor's signature travel as data: URIs.
+  // A passport photo arrives as the image itself, shrunk on the phone to about 200 kb.
+  if (req.method === 'PUT' && /^\/api\/patients\/[^/]+\/passport-photo$/.test(req.path)) return express.raw({ type: 'image/*', limit: '3mb' })(req, res, next);
   if (req.path.startsWith('/api/settings') || req.path.startsWith('/api/staff')) return express.json({ limit: '2mb' })(req, res, next);
   return express.json({ limit: '100kb' })(req, res, next);
 });
