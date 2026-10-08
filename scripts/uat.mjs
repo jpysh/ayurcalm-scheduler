@@ -44,23 +44,20 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #524: the card's Medication line is offered in the discharge summary, one tap, never added by itself.
-const nm = `Medicine Line ${Date.now() % 1000}`;
-const mp = await api('POST', '/patients', { name: nm, gender: 'female' });
-await api('POST', `/patients/${mp.id}/stays`, { start_date: plus(-2), end_date: plus(3) });
-await api('PUT', `/patients/${mp.id}`, { medication: 'Ashwagandha tablet, 1 twice a day after food, 14 days' });
-await step('The discharge summary offers the card medication', '/admin/patients', async () => {
-  await go(p.getByText(nm).first()); await go(dlg().getByText('Discharge summary').first()); await go(dlg().getByText('Final diagnosis').first()); await p.waitForTimeout(1200);
-  await dlg().getByRole('button', { name: /Add from their card/ }).scrollIntoViewIfNeeded().catch(() => {}); await p.waitForTimeout(300);
-  const t = await text(dlg());
-  return { ok: /Add from their card: Ashwagandha tablet/.test(t) && /MEDICATION DURING THE STAY/i.test(t), note: t.split('\n').filter((x) => /Add from|MEDICATION|Add a medicine/i.test(x)).join(' · ') };
+// #525: search finds who sleeps in a guest room and a guest by country.
+const acc = (await api('GET', '/accommodations'))[0];
+const roomName = `Z${Date.now() % 90 + 10}`;
+await api('POST', '/guest-rooms', { name: roomName, accommodation_id: acc.id });
+const gr = (await api('GET', '/guest-rooms')).find((x) => x.name === roomName);
+const gp = await api('POST', '/patients', { name: `Room Finder ${Date.now() % 1000}`, gender: 'female', country: 'Germany', on_site: true, guest_room_id: gr.id, stay: { start_date: plus(-1), end_date: plus(4) } });
+const searchFor = async (q) => { await viaMenu('Search'); await p.waitForTimeout(600); await p.locator('input[type=text]').last().fill(q); await p.waitForTimeout(1500); return text(p.locator('body')); };
+await step('A guest room name finds who sleeps in it', '/admin/schedule', async () => {
+  const t = await searchFor(roomName);
+  return { ok: t.includes(gp.name) && /PATIENTS/i.test(t), note: t.split('\n').filter((x) => x.trim()).slice(1, 8).join(' · ') };
 });
-await step('One tap puts it in as the first medicine', '/admin/patients', async () => {
-  await go(p.getByText(nm).first()); await go(dlg().getByText('Discharge summary').first()); await go(dlg().getByText('Final diagnosis').first()); await p.waitForTimeout(1200);
-  await go(dlg().getByRole('button', { name: /^Add from their card/ }));
-  const v = await dlg().getByLabel('Medicine').first().inputValue();
-  const gone = !/Add from their card/.test(await text(dlg()));
-  return { ok: /^Ashwagandha tablet/.test(v) && gone, note: `Medicine: ${v}` };
+await step('A country finds the guest', '/admin/schedule', async () => {
+  const t = await searchFor('germany');
+  return { ok: t.includes(gp.name), note: t.split('\n').filter((x) => x.trim()).slice(1, 8).join(' · ') };
 });
 await b.close();
 
