@@ -44,22 +44,24 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #599: a chosen day is that day on every phone, wherever it is, whatever zone the centre keeps (the walk's stack was set to New York).
-const dayName = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
-for (const zone of ['Pacific/Auckland', 'Europe/Prague', 'America/New_York']) {
-  await step(`Change day to ${dayName(plus(2))} shows that day, phone in ${zone}`, '/admin/schedule', async () => {
+// #601: Upcoming and Past on the Leave screen follow the centre's day, not the phone's midnight (run with UAT_TZ=America/New_York on a stack set to New York time).
+const staffRow = (await api('GET', '/staff'))[0];
+const mkLeave = async (iso, note) => api('POST', '/timeoff', { entity_type: 'staff', entity_id: staffRow.id, date: iso, start_date: `${iso}T00:00:00.000Z`, end_date: `${iso}T00:00:00.000Z`, description: note, plan: false });
+const today0 = plus(0), yday = plus(-1);
+const [todayLeave, ydayLeave] = [await mkLeave(today0, 'Uat today'), await mkLeave(yday, 'Uat yesterday')];
+for (const zone of ['America/New_York', 'Pacific/Auckland', 'Asia/Kolkata']) {
+  await step(`Today's leave is Upcoming and yesterday's is Past, phone in ${zone}`, '/admin/timeoff', async () => {
     const c = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, timezoneId: zone });
     await c.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
-    const q = await c.newPage(); await q.goto(APP + '/admin/schedule'); await q.waitForTimeout(1800);
-    await q.getByRole('button', { name: 'Menu', exact: true }).click(); await q.waitForTimeout(500);
-    await q.getByRole('dialog').last().getByRole('button', { name: /^Change day/ }).click(); await q.waitForTimeout(500);
-    await q.locator('input[type=date]').last().fill(plus(2)); await q.waitForTimeout(1500);
-    await q.evaluate(() => window.scrollTo(0, 0)); await q.waitForTimeout(300);
-    const shown = await q.locator('[aria-pressed=true]').first().getAttribute('aria-label');
+    const q = await c.newPage(); await q.goto(APP + '/admin/timeoff'); await q.waitForTimeout(1800);
+    const list = async () => (await q.locator('[data-testid=timeoff-table]').innerText());
+    const up = await list(); await q.getByText('Past', { exact: true }).click(); await q.waitForTimeout(600); const past = await list();
     await q.screenshot({ path: `${OUT}/${zone.replace('/', '-')}.png` }); await c.close();
-    return { ok: shown === dayName(plus(2)), note: `shows ${shown}, chose ${dayName(plus(2))}` };
+    const ok = /Uat today/.test(up) && !/Uat yesterday/.test(up) && /Uat yesterday/.test(past) && !/Uat today/.test(past);
+    return { ok, note: `Upcoming has today's: ${/Uat today/.test(up)}, yesterday's: ${/Uat yesterday/.test(up)}; Past has today's: ${/Uat today/.test(past)}, yesterday's: ${/Uat yesterday/.test(past)}` };
   });
 }
+for (const l of [todayLeave, ydayLeave]) if (l?.id) await api('DELETE', `/timeoff/${l.id}`);
 await b.close();
 
 writeFileSync(`${OUT}/lines.json`, JSON.stringify(lines));
