@@ -44,29 +44,24 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #514: a guest not here yet, and one who has gone, have no "Rest day" line on their card.
-await api('POST', '/settings/clear-demo-data');
-const soon = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female' });
-await api('POST', `/patients/${soon.id}/stays`, { start_date: plus(1), end_date: plus(8) });
-const gone = await api('POST', '/patients', { name: 'Dev Mehta', gender: 'male' });
-await api('POST', `/patients/${gone.id}/stays`, { start_date: plus(-20), end_date: plus(-10) });
-const here = await api('POST', '/patients', { name: 'Asha Kumar', gender: 'female' });
-await api('POST', `/patients/${here.id}/stays`, { start_date: plus(-2), end_date: plus(5) });
-const viaSearch = async (q, row) => { await viaMenu('Search'); await p.keyboard.type(q); await p.waitForTimeout(1200); await go(p.getByText(row).first()); await p.waitForTimeout(1200); };
-await step('A guest arriving tomorrow: no "Rest day"', '/admin/schedule', async () => {
-  await viaSearch('clara', /^Arrives/);
+// #518: on another day a person opens "what changes that day", and In late moves what they miss that day.
+const tmr = plus(1);
+const ap = (await api('GET', `/appointments?date=${tmr}`)).find((x) => x.staff_id && x.start_time >= '10:00');
+const person = (await api('GET', '/staff')).find((x) => x.id === ap.staff_id);
+await step('Another day: a person opens what changes that day', '/admin/team', async () => {
+  await tomorrow(); await p.waitForTimeout(800);
+  await go(p.getByRole('button', { name: new RegExp(`^${person.name}`) }).first());
   const t = await text(dlg());
-  return { ok: /Arrives/.test(t) && !/Rest day|Treatments today/i.test(t), note: t.split('\n').slice(0, 3).join(' · ') };
+  return { ok: /What changes for them on/.test(t) && /In late/.test(t) && /Not in that day/.test(t) && !/Delete this person/.test(t), note: t.split('\n').filter((x) => x.trim()).slice(0, 7).join(' · ') };
 });
-await step('A guest who has left: no "Rest day"', '/admin/schedule', async () => {
-  await viaSearch('dev', /^Stayed until/);
-  const t = await text(dlg());
-  return { ok: /Stayed until/.test(t) && !/Rest day|Treatments today/i.test(t), note: t.split('\n').slice(0, 3).join(' · ') };
-});
-await step('A guest who is here keeps "Rest day" on a free day', '/admin/patients', async () => {
-  await go(p.getByRole('button', { name: /^Asha Kumar/ }).first());
-  const t = await text(dlg());
-  return { ok: /Rest day: nothing booked today/.test(t), note: t.split('\n').filter((x) => /Rest day|today/i.test(x)).join(' · ') };
+await step('In late moves what they miss that day', '/admin/team', async () => {
+  await tomorrow(); await p.waitForTimeout(800);
+  await go(p.getByRole('button', { name: new RegExp(`^${person.name}`) }).first()); await go(dlg().getByRole('button', { name: /^In late/ }));
+  await dlg().getByLabel('In at').selectOption('17:45'); await p.waitForTimeout(400);
+  await go(dlg().getByRole('button', { name: /^Move what they miss/ })); await p.waitForTimeout(2000);
+  const after = (await api('GET', `/appointments?date=${tmr}`)).find((x) => x.id === ap.id);
+  const toast = await p.locator('[data-sonner-toast]').first().innerText().catch(() => '');
+  return { ok: after && (after.staff_id !== ap.staff_id || after.start_time !== ap.start_time) && /in late/i.test(toast), note: `${toast.split('\n')[0]} · was ${ap.start_time} with ${person.name}, now ${after?.start_time} ${after?.staff_id === ap.staff_id ? 'same' : 'another'} therapist` };
 });
 await b.close();
 
