@@ -106,6 +106,24 @@ async function main() {
         await prisma.user.deleteMany({ where: { email } });
       }
     }],
+    ['a person switched off, or gone from the centre, is signed out at once (#574)', async () => {
+      const email = 'validation-gone@example.com';
+      await prisma.user.deleteMany({ where: { email } });
+      const made = await post('/users', { email, role: 'staff', password: 'staffpass123' });
+      if (made.status !== 201) throw new Error(`creating staff returned ${made.status}: ${await made.text()}`);
+      try {
+        const login = await fetch(`${API_BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: 'staffpass123' }) });
+        const { token: t } = await login.json();
+        const me = () => fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${t}` } });
+        if ((await me()).status !== 200) throw new Error('a new sign-in should work');
+        await prisma.user.update({ where: { email }, data: { is_active: false } });
+        if ((await me()).status !== 401) throw new Error('a switched-off person kept their session');
+        await prisma.user.delete({ where: { email } });
+        if ((await me()).status !== 401) throw new Error('a person absent from the centre kept their session');
+      } finally {
+        await prisma.user.deleteMany({ where: { email } });
+      }
+    }],
     ['there is no route that deletes every treatment at once (#410)', async () => {
       const before = await prisma.appointment.count();
       const res = await fetch(`${API_BASE}/appointments`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
