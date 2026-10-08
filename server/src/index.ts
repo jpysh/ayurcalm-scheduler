@@ -6,6 +6,7 @@ import 'dotenv/config';
 // session with it because JWT_SECRET is regenerated on restart.
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { app } from './server.js';
 import { prisma } from './server.js';
 import { authRouter, requireAuth, warnIfDefaultAdminUnchanged, loadJwtSecret } from './auth.js';
@@ -109,17 +110,19 @@ function createRateLimiter(windowMs: number, max: number) {
 }
 
 // The test suite (qa, then the browser walk) reads more than an admin ever does; it raises this (scripts/qa.sh).
-const globalLimiter = createRateLimiter(15 * 60 * 1000, Number(process.env.RATE_LIMIT_CALLS) || 1200);
+// express-rate-limit, not the hand-made one below, so the scanner sees the limit that sits before every route (#574).
+const clientIp = (req: Request) => String((process.env.BEHIND_CLOUDFLARE === 'true' ? req.headers['cf-connecting-ip'] : '') || req.ip || req.socket.remoteAddress || '');
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, limit: Number(process.env.RATE_LIMIT_CALLS) || 1200, standardHeaders: false, legacyHeaders: false,
+  keyGenerator: clientIp, skip: (req) => req.path === '/health', validate: false,
+  handler: (_req, res) => { res.status(429).json({ error: 'Too Many Requests' }); },
+});
 // 40 writes per address in 5 minutes guards the admin's screens; the test
 // suite, which writes far more from one address, raises it (scripts/qa.sh).
 const writeLimiter = createRateLimiter(5 * 60 * 1000, Number(process.env.RATE_LIMIT_WRITES) || 40);
 const apptPostLimiter = createRateLimiter(60 * 1000, 10);
 
-expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
-  const p = req.path || '';
-  if (p === '/health') return next();
-  return globalLimiter(req, res, next);
-});
+expressApp.use('/api', globalLimiter);
 // The AI assistant's door (#119). It carries its own key rather than a login
 // session, so it sits outside /api and before the static site.
 expressApp.use('/mcp', globalLimiter, mcpRouter);
