@@ -56,6 +56,8 @@ export type DayProblem = {
   id: string;
   kind: string;
   problem_class: 'blocking' | 'worth_knowing';
+  /** A therapist's SOS (#521): a note, but it counts on the pill and cannot be missed. */
+  urgent?: boolean;
   /** Who and what: "Meena Nair — Abhyanga". The time is its own field. */
   who: string;
   start_time: string | null;
@@ -316,7 +318,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
     // Raised on the centre's day, for that day's treatment, or with none: the one the admin is looking at.
     if (i.appointment_id ? !a : centreClock(ctx.settings?.timezone || 'Asia/Kolkata', i.created_at).date !== key) continue;
     raw.push({
-      id: `ISSUE:${i.id}`, kind: 'ISSUE', problem_class: 'worth_knowing',
+      id: `ISSUE:${i.id}`, kind: 'ISSUE', problem_class: 'worth_knowing', urgent: i.kind === 'sos',
       who: a ? `${nameOfStaff(i.staff_id)} — ${nameOfPatient(a.patient_id)}` : nameOfStaff(i.staff_id), start_time: a?.start_time ?? null,
       what: [ISSUE[i.kind] || i.kind, i.note].filter(Boolean).join(': '),
       group_key: 'ISSUE', group_label: 'Raised by the team',

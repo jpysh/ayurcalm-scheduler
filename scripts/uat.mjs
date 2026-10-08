@@ -44,24 +44,18 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #518: on another day a person opens "what changes that day", and In late moves what they miss that day.
-const tmr = plus(1);
-const ap = (await api('GET', `/appointments?date=${tmr}`)).find((x) => x.staff_id && x.start_time >= '10:00');
-const person = (await api('GET', '/staff')).find((x) => x.id === ap.staff_id);
-await step('Another day: a person opens what changes that day', '/admin/team', async () => {
-  await tomorrow(); await p.waitForTimeout(800);
-  await go(p.getByRole('button', { name: new RegExp(`^${person.name}`) }).first());
-  const t = await text(dlg());
-  return { ok: /What changes for them on/.test(t) && /In late/.test(t) && /Not in that day/.test(t) && !/Delete this person/.test(t), note: t.split('\n').filter((x) => x.trim()).slice(0, 7).join(' · ') };
-});
-await step('In late moves what they miss that day', '/admin/team', async () => {
-  await tomorrow(); await p.waitForTimeout(800);
-  await go(p.getByRole('button', { name: new RegExp(`^${person.name}`) }).first()); await go(dlg().getByRole('button', { name: /^In late/ }));
-  await dlg().getByLabel('In at').selectOption('17:45'); await p.waitForTimeout(400);
-  await go(dlg().getByRole('button', { name: /^Move what they miss/ })); await p.waitForTimeout(2000);
-  const after = (await api('GET', `/appointments?date=${tmr}`)).find((x) => x.id === ap.id);
-  const toast = await p.locator('[data-sonner-toast]').first().innerText().catch(() => '');
-  return { ok: after && (after.staff_id !== ap.staff_id || after.start_time !== ap.start_time) && /in late/i.test(toast), note: `${toast.split('\n')[0]} · was ${ap.start_time} with ${person.name}, now ${after?.start_time} ${after?.staff_id === ap.staff_id ? 'same' : 'another'} therapist` };
+// #521: a therapist's SOS counts on the pill and heads the Day section, not 'Information · not counted'.
+const sos = (await api('GET', '/staff')).find((x) => x.role === 'therapist');
+const link = await api('POST', `/staff/${sos.id}/link`);
+const fixCount = async () => { await menu(); const t = await text(dlg()); await p.keyboard.press('Escape'); await p.waitForTimeout(500); return Number((t.match(/(\d+) need you/) || [])[1] || 0); };
+let before = 0;
+await step('The count before the SOS', '/admin/schedule', async () => { before = await fixCount(); return { ok: true, note: `${before} need you` }; });
+await fetch(`${APP}/api/public/link/${link.token}/issues`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'sos' }) });
+await step('An SOS raises the count by one', '/admin/schedule', async () => { const after = await fixCount(); return { ok: after === before + 1, note: `${before} → ${after} need you` }; });
+await step('The Today sheet shows it first, in red, outside Information', '/admin/schedule', async () => {
+  await viaMenu(/Things to fix|need you/); await p.waitForTimeout(900);
+  const t = await text(dlg()); const iSos = t.indexOf('SOS: needs help now'); const iInfo = t.indexOf('INFORMATION');
+  return { ok: iSos >= 0 && (iInfo < 0 || iSos < iInfo), note: t.split('\n').filter((x) => x.trim()).slice(0, 8).join(' · ') };
 });
 await b.close();
 
