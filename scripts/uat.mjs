@@ -44,24 +44,20 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #597: a full-day leave is saved on the chosen day whatever zone the admin's phone is in.
-const day5 = plus(5);
-for (const zone of ['America/New_York', 'Pacific/Auckland', 'Asia/Kolkata']) {
-  await step(`A full-day leave for ${day5} is saved on that day, phone in ${zone}`, '/admin/timeoff', async () => {
+// #599: a chosen day is that day on every phone, wherever it is, whatever zone the centre keeps (the walk's stack was set to New York).
+const dayName = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
+for (const zone of ['Pacific/Auckland', 'Europe/Prague', 'America/New_York']) {
+  await step(`Change day to ${dayName(plus(2))} shows that day, phone in ${zone}`, '/admin/schedule', async () => {
     const c = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, timezoneId: zone });
     await c.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
-    const q = await c.newPage(); let sent = null, made = null;
-    q.on('response', async (r) => { if (/\/api\/timeoff$/.test(r.url()) && r.request().method() === 'POST') { sent = r.request().postDataJSON(); made = await r.json().catch(() => null); } });
-    await q.goto(APP + '/admin/timeoff'); await q.waitForTimeout(1500);
-    await q.getByRole('button', { name: /^(\+|Add)/ }).first().click(); await q.waitForTimeout(800);
-    const d = q.getByRole('dialog').last(); await d.getByText('Choose…').click(); await q.waitForTimeout(500);
-    await q.getByRole('dialog').last().getByRole('button', { name: /^Priya/ }).click(); await q.waitForTimeout(500);
-    await d.locator('input[type=date]').first().fill(day5); await d.locator('input[type=date]').nth(1).fill(day5); await q.waitForTimeout(800);
-    await d.getByRole('button', { name: 'Save, plan later' }).click(); await q.waitForTimeout(1500);
-    await q.screenshot({ path: `${OUT}/${zone.replace('/', '-')}.png` });
-    if (made?.id) await api('DELETE', `/timeoff/${made.id}`);
-    await c.close();
-    return { ok: !!sent && sent.start_date?.slice(0, 10) === day5 && sent.end_date?.slice(0, 10) === day5, note: `sent ${sent?.start_date} to ${sent?.end_date}, wanted ${day5}` };
+    const q = await c.newPage(); await q.goto(APP + '/admin/schedule'); await q.waitForTimeout(1800);
+    await q.getByRole('button', { name: 'Menu', exact: true }).click(); await q.waitForTimeout(500);
+    await q.getByRole('dialog').last().getByRole('button', { name: /^Change day/ }).click(); await q.waitForTimeout(500);
+    await q.locator('input[type=date]').last().fill(plus(2)); await q.waitForTimeout(1500);
+    await q.evaluate(() => window.scrollTo(0, 0)); await q.waitForTimeout(300);
+    const shown = await q.locator('[aria-pressed=true]').first().getAttribute('aria-label');
+    await q.screenshot({ path: `${OUT}/${zone.replace('/', '-')}.png` }); await c.close();
+    return { ok: shown === dayName(plus(2)), note: `shows ${shown}, chose ${dayName(plus(2))}` };
   });
 }
 await b.close();
