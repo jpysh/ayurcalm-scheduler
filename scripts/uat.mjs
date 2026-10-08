@@ -49,6 +49,7 @@ const bp = await api('POST', '/patients', { name: `Show Day ${Date.now() % 1000}
 const when553 = new Date(`${plus(2)}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
 await step('Book on another day, Done: the screen shows that day', '/admin/schedule', async () => {
   await go(plusBtn('Book a treatment')); await p.waitForTimeout(800);
+  await p.locator('input[type=text]').last().fill(bp.name); await p.waitForTimeout(900);
   await go(dlg().getByText(bp.name).first()); await p.waitForTimeout(900);
   await dlg().locator('input[type=date]').first().fill(plus(2)); await p.waitForTimeout(700);
   await go(dlg().getByText('Other therapies')); await p.locator('input[type=text]').last().fill('Shirodhara'); await p.waitForTimeout(700);
