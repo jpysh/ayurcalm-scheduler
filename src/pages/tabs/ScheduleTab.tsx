@@ -86,7 +86,6 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
     await refreshDay(dayKeyMemo);
     const moved = (body.replan || []).reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0);
     toast(`${name} ${entity_type === "staff" ? "not in" : "out of use"} ${from ? `from ${from}` : "all day"}${moved ? ` · ${moved} moved` : ""}`, {
-      duration: 8000,
       action: { label: "Undo", onClick: async () => { await fetch(`${API_BASE}/timeoff/${body.id}`, { method: "DELETE" }); await refreshDay(dayKeyMemo); } },
     });
   };

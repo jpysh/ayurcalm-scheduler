@@ -109,7 +109,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients
       }
       onClose();
       await refresh();
-      toast(message, { duration: 8000, action: { label: "Undo", onClick: async () => {
+      toast(message, { action: { label: "Undo", onClick: async () => {
         await fetch(`${API_BASE}/appointments/${appt.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(before) });
         await refresh();
       } } });
@@ -411,7 +411,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   };
   /** The sheet stays on Booked, so the note with Undo comes when it closes: at the bottom it would cover the buttons. */
   const close = () => {
-    if (booked) toast(booked.note, { duration: 8000, action: { label: "Undo", onClick: async () => {
+    if (booked) toast(booked.note, { action: { label: "Undo", onClick: async () => {
       await Promise.all(booked.ids.map((id) => fetch(`${API_BASE}/appointments/${id}`, { method: "DELETE" })));
       await refresh();
     } } });
