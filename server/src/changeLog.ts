@@ -7,7 +7,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { NextFunction, Request, Response } from 'express';
 import { describer } from './history.js';
 
-export type LogEntry = { id: string; at: string; who: 'you' | 'the app'; text: string; undo: string | null; undone: boolean };
+export type LogEntry = { id: string; at: string; who: 'you' | 'the app' | 'the guest'; text: string; undo: string | null; undone: boolean };
 
 type Snap = Record<string, unknown>;
 type Batch = { writes?: { appointment_id: string; before: Snap; after: Snap }[] };
@@ -80,7 +80,7 @@ export async function changeLog(days: number, prisma: PrismaClient): Promise<Log
     }
     return {
       id: r.id, at: r.timestamp.toISOString(),
-      who: batch ? 'the app' : 'you',
+      who: batch ? 'the app' : r.admin_id === 'guest' ? 'the guest' : 'you',
       text: `${text}${undone ? ' (undone)' : ''}`,
       undo: null, undone,
     };
@@ -167,6 +167,20 @@ function wrote(w: Wrote, lists: { patients: Named; staff: Named; rooms: Named; t
   if (kind === 'patients' && sub) {
     const who = named(id) || 'A patient';
     const what: Record<string, string> = { stays: `${who}'s stay changed`, diet: `${who}'s diet changed`, link: `${who}'s private link renewed, the old one stopped`, 'next-week': `Next week booked for ${who}` };
+    const [, , , , , tail] = (w.path || '').split('/');
+    if (sub === 'stays' && tail === 'form-c') return `${who}'s Form C marked ${b.filed === false ? 'not filed' : 'filed'}`;
+    if (sub === 'stays' && !tail) {
+      // What the stay sheets sent says which line changed: dates, the package, or the room (#499).
+      const on = (x: unknown) => (typeof x === 'string' ? day(x) : '');
+      if (w.method === 'POST') return `${who}'s stay added, ${on(b.start_date)} to ${on(b.end_date)}`;
+      const parts = [
+        ...(b.start_date || b.end_date ? [`dates ${on(b.start_date)} to ${on(b.end_date)}`] : []),
+        ...('package_id' in b ? [b.package_id ? 'package set' : 'package cleared'] : []),
+        ...('accommodation_id' in b ? [b.accommodation_id ? 'room set' : 'room cleared'] : []),
+      ];
+      if (parts.length) return `${who}'s stay: ${parts.join(', ')}`;
+    }
+    if (sub === 'details') return `${who} filled in their own details: ${(Array.isArray(b.fields) ? b.fields as string[] : []).map((f) => f.replace(/_/g, ' ')).join(', ') || 'nothing new'}`;
     if ((w.path || '').endsWith('/arrival')) return `${who}'s arrival recorded`;
     if ((w.path || '').endsWith('/discharge')) return `${who}'s discharge recorded`;
     if ((w.path || '').endsWith('/follow-up')) return `${who}'s follow-up marked ${b.done ? 'done' : 'not done'}`;
