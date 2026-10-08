@@ -44,18 +44,23 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #521: a therapist's SOS counts on the pill and heads the Day section, not 'Information · not counted'.
-const sos = (await api('GET', '/staff')).find((x) => x.role === 'therapist');
-const link = await api('POST', `/staff/${sos.id}/link`);
-const fixCount = async () => { await menu(); const t = await text(dlg()); await p.keyboard.press('Escape'); await p.waitForTimeout(500); return Number((t.match(/(\d+) need you/) || [])[1] || 0); };
-let before = 0;
-await step('The count before the SOS', '/admin/schedule', async () => { before = await fixCount(); return { ok: true, note: `${before} need you` }; });
-await fetch(`${APP}/api/public/link/${link.token}/issues`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'sos' }) });
-await step('An SOS raises the count by one', '/admin/schedule', async () => { const after = await fixCount(); return { ok: after === before + 1, note: `${before} → ${after} need you` }; });
-await step('The Today sheet shows it first, in red, outside Information', '/admin/schedule', async () => {
-  await viaMenu(/Things to fix|need you/); await p.waitForTimeout(900);
-  const t = await text(dlg()); const iSos = t.indexOf('SOS: needs help now'); const iInfo = t.indexOf('INFORMATION');
-  return { ok: iSos >= 0 && (iInfo < 0 || iSos < iInfo), note: t.split('\n').filter((x) => x.trim()).slice(0, 8).join(' · ') };
+// #524: the card's Medication line is offered in the discharge summary, one tap, never added by itself.
+const nm = `Medicine Line ${Date.now() % 1000}`;
+const mp = await api('POST', '/patients', { name: nm, gender: 'female' });
+await api('POST', `/patients/${mp.id}/stays`, { start_date: plus(-2), end_date: plus(3) });
+await api('PUT', `/patients/${mp.id}`, { medication: 'Ashwagandha tablet, 1 twice a day after food, 14 days' });
+await step('The discharge summary offers the card medication', '/admin/patients', async () => {
+  await go(p.getByText(nm).first()); await go(dlg().getByText('Discharge summary').first()); await go(dlg().getByText('Final diagnosis').first()); await p.waitForTimeout(1200);
+  await dlg().getByRole('button', { name: /Add from their card/ }).scrollIntoViewIfNeeded().catch(() => {}); await p.waitForTimeout(300);
+  const t = await text(dlg());
+  return { ok: /Add from their card: Ashwagandha tablet/.test(t) && /MEDICATION DURING THE STAY/i.test(t), note: t.split('\n').filter((x) => /Add from|MEDICATION|Add a medicine/i.test(x)).join(' · ') };
+});
+await step('One tap puts it in as the first medicine', '/admin/patients', async () => {
+  await go(p.getByText(nm).first()); await go(dlg().getByText('Discharge summary').first()); await go(dlg().getByText('Final diagnosis').first()); await p.waitForTimeout(1200);
+  await go(dlg().getByRole('button', { name: /^Add from their card/ }));
+  const v = await dlg().getByLabel('Medicine').first().inputValue();
+  const gone = !/Add from their card/.test(await text(dlg()));
+  return { ok: /^Ashwagandha tablet/.test(v) && gone, note: `Medicine: ${v}` };
 });
 await b.close();
 
