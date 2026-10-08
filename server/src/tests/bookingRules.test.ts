@@ -135,6 +135,14 @@ async function main() {
     assert.match(late.why, /Today's hours are over/);
     assert.match(late.actions[0].label, /Book tomorrow at/);
 
+    // Dead end 3b (#544): no room has what the therapy needs (a consultation's BP monitor and bed). The cause is named and a room is offered with those ticked.
+    const chair = await call('POST', '/therapies', { name: `${TAG} Chair`, duration_minutes: 30, required_amenities: ['zero_gravity_chair', 'oxygen_tank'] });
+    await staff('Chairer', 'female', [chair.id]);
+    const noRoom = await options(meera.id, chair.id, DAY);
+    assert.equal(noRoom.times.length, 0);
+    assert.match(noRoom.why, /^No room has zero gravity chair and oxygen tank, so .* Chair cannot be booked yet\.$/);
+    assert.deepEqual((noRoom.actions as (Act & { amenities?: string[] })[]).map((x) => [x.kind, x.amenities]), [['add_room', ['zero_gravity_chair', 'oxygen_tank']], ['other_therapy', undefined]]);
+
     // With the centre closed tomorrow, the offer skips to the next open day (#344).
     const shut = await prisma.timeOff.create({ data: { entity_type: 'center', date: new Date('2030-04-18T00:00:00.000Z'), description: 'Holiday' } });
     try {

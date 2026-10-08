@@ -21,12 +21,12 @@ async function send(path: string, method: string, body: unknown) {
 // ---- Rooms ----
 export const roomSub = (r: UiRoom) => r.status !== "Active" ? "Out of use" : r.amenities.length ? `Has ${r.amenities.map(say).join(", ")}` : "Nothing special";
 
-export function RoomSheet({ room, open, onClose, amenityOptions, onSaved, remove }: {
-  room: UiRoom | null; open: boolean; onClose: () => void; amenityOptions: string[]; onSaved: (r: UiRoom) => void; remove: (r: UiRoom) => void;
+export function RoomSheet({ room, preset = [], open, onClose, amenityOptions, onSaved, remove }: {
+  room: UiRoom | null; /** What a new room starts ticked with, when a booking found no room that has it (#544). */ preset?: string[]; open: boolean; onClose: () => void; amenityOptions: string[]; onSaved: (r: UiRoom) => void; remove: (r: UiRoom) => void;
 }) {
   const [name, setName] = useState(""); const [has, setHas] = useState<string[]>([]); const [busy, setBusy] = useState(false);
   // A new room starts with nothing ticked: a consultation needs a BP monitor and an examination bed, which a therapy room does not have, so ticking everything would send doctors into it. "Something else…" adds equipment the list lacks.
-  useEffect(() => { if (open) { setName(room?.name ?? ""); setHas(room?.amenities ?? []); } }, [open, room]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open) { setName(room?.name ?? ""); setHas(room?.amenities ?? preset); } }, [open, room]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = async () => {
     setBusy(true);
     try {

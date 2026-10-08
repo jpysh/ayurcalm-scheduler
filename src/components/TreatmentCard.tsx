@@ -254,7 +254,7 @@ type Slot = {
 };
 type Option = { id: string; name: string; free: boolean; why?: string };
 /** What the server offers beside a refusal or warning (#330); the sheet only carries each kind out. */
-export type BookAction = { kind: "book_at" | "set_date" | "other_therapy" | "add_staff" | "allow_any_gender" | "change_stay" | "book_anyway"; label: string; date?: string; start_time?: string; gender?: string; therapy_id?: string; patient_id?: string };
+export type BookAction = { kind: "book_at" | "set_date" | "other_therapy" | "add_staff" | "add_room" | "allow_any_gender" | "change_stay" | "book_anyway"; label: string; amenities?: string[]; date?: string; start_time?: string; gender?: string; therapy_id?: string; patient_id?: string };
 type Options = { times: Slot[]; staff: Option[]; rooms: Option[]; why?: string; actions: BookAction[]; warnings: { reason: string; message: string; actions?: BookAction[] }[] };
 type Who = { id: string; name: string; note: string; therapy_id: string | null; last: { name: string; date: string } | null };
 type TherapyFact = { id: string; name: string; duration_minutes: number; is_consultation: boolean; taken: boolean; repeat: boolean; fact?: string };
@@ -375,7 +375,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
         setStay(near ? { id: near.id, start: near.start_date.slice(0, 10), end: near.end_date.slice(0, 10), package: null, accommodation: null } : { id: null, start: date, end: addDays(date, 13), package: null, accommodation: null });
       });
     }
-    else if (a.kind === "add_staff") onAction?.(a);
+    else if (a.kind === "add_staff" || a.kind === "add_room") onAction?.(a);
   };
 
   const bookOne = async () => {

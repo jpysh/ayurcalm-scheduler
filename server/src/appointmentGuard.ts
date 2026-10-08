@@ -203,11 +203,13 @@ export function staffDay(ctx: DayContext) {
  * with no way forward is a dead end.
  */
 export type Action = {
-  kind: 'book_at' | 'set_date' | 'other_therapy' | 'add_staff' | 'allow_any_gender' | 'allow_fewer' | 'change_stay' | 'book_anyway';
+  kind: 'book_at' | 'set_date' | 'other_therapy' | 'add_staff' | 'add_room' | 'allow_any_gender' | 'allow_fewer' | 'change_stay' | 'book_anyway';
   label: string;
   date?: string;
   start_time?: string;
   gender?: string;
+  /** add_room: what the new room is ticked with, the therapy's own needs (#544). */
+  amenities?: string[];
   therapy_id?: string;
   patient_id?: string;
   /** allow_fewer: the therapists the therapy will need from now on. */

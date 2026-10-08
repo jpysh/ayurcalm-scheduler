@@ -8,10 +8,11 @@ export function useRoomsScreen({ roomsList, setRoomsList, amenityOptions, reques
   requestDelete: (kind: "room", id: string, name?: string) => void;
 }) {
   const [open, setOpen] = useState<UiRoom | "new" | null>(null);
+  const [preset, setPreset] = useState<string[]>([]);
   const dialogs = (
-    <RoomSheet room={open === "new" ? null : open} open={!!open} onClose={() => setOpen(null)} amenityOptions={amenityOptions}
+    <RoomSheet room={open === "new" ? null : open} preset={preset} open={!!open} onClose={() => setOpen(null)} amenityOptions={amenityOptions}
       onSaved={(x) => setRoomsList((prev) => prev.some((r) => r.id === x.id) ? prev.map((r) => r.id === x.id ? x : r) : [...prev, x])}
       remove={(r) => requestDelete("room", String(r.id), r.name)} />
   );
-  return { dialogs, openAdd: () => setOpen("new"), openEdit: (id: string) => { const r = roomsList.find((x) => String(x.id) === id); if (r) setOpen(r); } };
+  return { dialogs, openAdd: (amenities?: string[]) => { setPreset(amenities ?? []); setOpen("new"); }, openEdit: (id: string) => { const r = roomsList.find((x) => String(x.id) === id); if (r) setOpen(r); } };
 }

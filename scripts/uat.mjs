@@ -44,15 +44,30 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #542: the discharge summary's footer has no bare separator before a number is given.
-const { execSync } = await import('node:child_process');
-const fp = await api('POST', '/patients', { name: `Footer Test ${Date.now() % 1000}`, gender: 'female', on_site: true, stay: { start_date: plus(-3), end_date: plus(0) } });
-const fstay = (await api('GET', `/patients/${fp.id}/stays`))[0];
-await step('The unsaved summary prints a clean footer', '/admin/patients', async () => {
-  const r = await fetch(`${APP}/api/patients/${fp.id}/stays/${fstay.id}/discharge-pdf`, { headers: { Authorization: `Bearer ${token}` } });
-  const txt = execSync('pdftotext -layout - -', { input: Buffer.from(await r.arrayBuffer()) }).toString();
-  const foot = txt.split('\n').find((x) => /page 1 of/.test(x)) || '';
-  return { ok: /page 1 of 1/.test(foot) && !/· ·/.test(foot), note: foot.trim() };
+// #544: no room has what a therapy needs: the cause is named and a room is offered with those ticked.
+const eq = `Rare ${Date.now() % 1000}`; const eqKey = `rare_${Date.now() % 1000}_chair`;
+const rareTh = await api('POST', '/therapies', { name: eq, duration_minutes: 30, required_amenities: [eqKey] });
+await api('POST', '/staff', { name: `Rare Giver ${Date.now() % 1000}`, gender: 'female', specializations: [rareTh.id] });
+const np = await api('POST', '/patients', { name: `No Room ${Date.now() % 1000}`, gender: 'female', on_site: true, stay: { start_date: plus(0), end_date: plus(6) } });
+await step('A therapy no room can host says why, with a way forward', '/admin/schedule', async () => {
+  await go(plusBtn('Book a treatment')); await p.waitForTimeout(800);
+  await go(dlg().getByText(np.name).first()); await p.waitForTimeout(900);
+  await dlg().locator('input[type=date]').first().fill(plus(1)); await p.waitForTimeout(700);
+  await go(dlg().getByText('Other therapies')); await p.locator('input[type=text]').last().fill(eq); await p.waitForTimeout(700);
+  await go(dlg().getByText(eq).first()); await p.waitForTimeout(1500);
+  const t = await text(dlg());
+  return { ok: new RegExp(`No room has ${eqKey.replace(/_/g, ' ')}`).test(t) && /Add a room that has them/.test(t) && !/Nothing is free for the rest/.test(t), note: t.split('\n').filter((x) => /No room|Nothing is free|Add a room|Try another/.test(x)).join(' · ') };
+});
+await step('The offer opens the room sheet with it ticked', '/admin/schedule', async () => {
+  await go(plusBtn('Book a treatment')); await p.waitForTimeout(800);
+  await go(dlg().getByText(np.name).first()); await p.waitForTimeout(900);
+  await dlg().locator('input[type=date]').first().fill(plus(1)); await p.waitForTimeout(700);
+  await go(dlg().getByText('Other therapies')); await p.locator('input[type=text]').last().fill(eq); await p.waitForTimeout(700);
+  await go(dlg().getByText(eq).first()); await p.waitForTimeout(1500);
+  await go(dlg().getByRole('button', { name: /Add a room that has them/ })); await p.waitForTimeout(1200);
+  const t = await text(dlg());
+  const ticked = await dlg().getByRole('button', { name: new RegExp(eqKey.replace(/_/g, ' ')) }).first().getAttribute('aria-pressed').catch(() => null);
+  return { ok: /Add room/.test(t) && ticked === 'true', note: `${t.split('\n').slice(0, 3).join(' · ')}; ${eqKey.replace(/_/g, ' ')} ticked: ${ticked}` };
 });
 await b.close();
 
