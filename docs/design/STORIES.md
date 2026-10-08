@@ -73,6 +73,27 @@ Have / Partial / Missing is Task A's; the verdict, time and wow score are Task B
 | 46 | s49 Patient fills their details before arrival (after launch) | Missing | Missing | — | — |
 | 47 | s50 Patient gives feedback (after launch) | Missing | Missing | — | — |
 
+### Third walk, 8 Oct (fresh trial centre, 375×812; a Sydney centre across its midnight)
+
+Walked from a new trial centre built through the sign-up, the library and the Team sheets, at 18:10 to 20:30 IST (after closing). Score is before the fixes → after them; a story under 13 got one issue.
+
+| Story | Wow | What the walk found | Issue |
+|---|---|---|---|
+| s6 Share by link and WhatsApp | 14 | Team, person, Share link, Send on WhatsApp: the phone and the line are filled in | none |
+| s12 Order of a purification | 14 → 15 | warning right; only offered Book anyway | #528 |
+| s15 Find | 13 → 14 | a guest room or a country found nobody | #525 |
+| s20 Rooms tonight | 15 | read at a glance | none |
+| s23 Medicines | 13 → 14 | the card's medicine retyped in the discharge summary | #524 |
+| s37 Therapy catalogue | 15 → 16 | the before-a-purification rule was invisible | #528 |
+| s38 Attention rules | 14 → 15 | Settings count wrong; an off rule said it counts | #526, #527 |
+| s41 Therapist marks done | 12 → 14 | no Done tap | #522 |
+| s42 Vitals | 14 | BP needs the full keyboard for the slash; the rest is a keypad | none |
+| s43 Raise an issue, SOS | 13 → 16 | an SOS was grey, not counted, and invisible off the day | #521, #537 |
+| s45 Doctor's round | 12 → 14 | the review sheet showed no facts; no way to plan with no review booked | #530, #523 |
+| s46 Discharge from the link | 14 → 15 | medicines retyped; a bare '· ·' in the footer | #524, #542 |
+| Other timezone | pass | Sydney at 23:57 to 00:01: the day, Print, the count and the links flip on the centre's clock; a guest's link read the phone's clock | #529 |
+| First day | n/a | a therapy no room could host read 'Nothing is free…'; + after closing opened on the finished day | #544, #546 |
+
 ## Each story
 
 Format: **Outcome** · **Trigger** · **First view** · **Wow** · **Fix** (the Audit track issue, or the smallest first step).
