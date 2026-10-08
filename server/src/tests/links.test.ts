@@ -77,6 +77,7 @@ try {
   const p = await issue('patients', patient.id);
   const own = await (await call(`/public/link/${p}?date=${DAY}`)).json();
   assert.equal(own.items.length, 3, 'a resident sees their whole day');
+  assert.match(own.now, /^\d\d:\d\d$/, 'the page is told the centre\'s time (#529)');
   assert.equal(own.items[0].checklist, undefined, 'and nothing the staff record');
   assert.equal((await call(`/public/link/${p}/appointments/${mineA.id}`, { feedback: 'down', feedback_note: 'Too hot' })).status, 200);
   assert.ok((await call(`/public/link/${p}/appointments/${mineA.id}`, { room_ready: true })).status >= 400, 'a resident cannot record for staff');

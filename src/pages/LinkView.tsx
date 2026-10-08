@@ -3,7 +3,7 @@
  * opened from a URL with no sign-in. Everything recorded here lands on the
  * treatment as a record for the patient's log; nothing here changes the plan.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
@@ -21,14 +21,13 @@ type Item = {
 type Details = { phone: string | null; email: string | null; date_of_birth: string | null; address: string | null; country: string | null; id_number: string | null; emergency_contact: string | null; emergency_phone: string | null };
 // What a patient fills before arriving (#489), the card's More details in their words.
 const ASK: [keyof Details, string, string?][] = [["phone", "Your phone", "tel"], ["email", "Email (optional)", "email"], ["date_of_birth", "Date of birth (yyyy-mm-dd)"], ["country", "Nationality"], ["id_number", "Passport or ID number"], ["address", "Home address"], ["emergency_contact", "Someone to call in an emergency"], ["emergency_phone", "Their phone", "tel"]];
-type Day = { details?: Details; who: { kind: "therapist" | "doctor" | "patient"; name: string }; centre: string; date: string; today: string; arrives?: string | null; feedback?: { given: { rating: string; note: string } | null } | null; off?: string | null; meals?: { meal: string; text: string }[]; items: Item[] };
+type Day = { details?: Details; who: { kind: "therapist" | "doctor" | "patient"; name: string }; centre: string; date: string; today: string; now: string; arrives?: string | null; feedback?: { given: { rating: string; note: string } | null } | null; off?: string | null; meals?: { meal: string; text: string }[]; items: Item[] };
 
 const VITAL: Record<string, string> = { bp: "BP", pulse: "Pulse", weight: "Weight (kg)", temp: "Temperature", spo2: "SpO₂", sugar: "Blood sugar" };
 const ISSUES: [string, string][] = [["room", "Room not usable"], ["co_therapist", "Co-therapist not here"], ["patient_absent", "Patient not here"], ["permission", "Need permission"], ["note", "A note for the admin"], ["sos", "SOS: need help now"]];
 const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const shift = (ymd: string, n: number) => new Date(Date.parse(`${ymd}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
-const nowHM = () => new Date().toTimeString().slice(0, 5);
 
 export default function LinkView() {
   const made = useMadeWith();
@@ -73,10 +72,13 @@ export default function LinkView() {
     return (await res.json()) as DischargeView;
   };
 
+  // The centre's time (#529), kept running from when the page was loaded; never the phone's own zone.
+  const loadedAt = useRef(Date.now());
   const load = useCallback(async () => {
     const res = await fetch(`${API_BASE}/public/link/${token}${date ? `?date=${date}` : ""}`).catch(() => null);
     if (!res || res.status === 404) { setGone(true); return; }
     setDay(await res.json());
+    loadedAt.current = Date.now();
   }, [token, date]);
   useEffect(() => { load(); }, [load]);
 
@@ -141,7 +143,7 @@ export default function LinkView() {
       <div className="mt-3">
         {day.items.length === 0 ? <ListGroup><Empty text={day.off ? `Day off${/day off/i.test(day.off) ? "" : ` · ${day.off}`}.` : "Nothing booked."} /></ListGroup> : <ListGroup>{day.items.map((it) => {
           const end = hm(toMin(it.start_time) + it.duration_minutes);
-          const over = day.date < day.today || (day.date === day.today && end <= nowHM());
+          const over = day.date < day.today || (day.date === day.today && end <= hm((toMin(day.now) + Math.floor((Date.now() - loadedAt.current) / 60000)) % 1440));
           return (
             <ItemRow key={it.id} form
               title={<span aria-label={`${it.start_time} ${it.therapy}`}>{it.start_time}–{end} · {it.therapy}</span>}
