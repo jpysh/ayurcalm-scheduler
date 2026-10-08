@@ -28,6 +28,7 @@ const patient = await prisma.patient.create({ data: { name: `Rekha ${tag}`, gend
 const guest = await prisma.patient.create({ data: { name: `Sita ${tag}`, gender: 'female' } });
 const extra: string[] = [];
 const stays: string[] = [];
+const leavers: string[] = [];
 const book = (therapy_id: string, staff_id: string, start_time: string) => prisma.appointment.create({ data: {
   patient_id: patient.id, therapy_id, staff_id, scheduled_date: new Date(DAY), start_time,
   duration_minutes: 60, session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual',
@@ -41,7 +42,7 @@ try {
   assert.equal((await call(`/staff/${therapist.id}/link`, {})).status, 401, 'issuing a link needs the admin');
 
   // The phone comes back with the link, so the screen can offer Send on WhatsApp to them (#413).
-  assert.equal((await (await call(`/staff/${other.id}/link`, {}, admin)).json()).phone, '98765 43210');
+  { const rr = await call(`/staff/${other.id}/link`, {}, admin); const jj = await rr.json(); assert.equal(jj.phone, "98765 43210", JSON.stringify([rr.status, jj])); }
 
   const t = await issue('staff', therapist.id);
   const day = await (await call(`/public/link/${t}?date=${DAY}`)).json();
@@ -121,6 +122,21 @@ try {
   assert.deepEqual([opened.date, opened.arrives], [first, first], 'opens on the first day of the stay they are waiting for');
   assert.equal((await (await call(`/public/link/${p}?date=${today}`)).json()).date, today, 'a day they ask for is still that day');
   assert.equal((await (await call(`/public/link/${t2}`)).json()).arrives, null, 'staff are not told about stays');
+  // One question on the leaving day (#509): asked once, kept on the stay, read by the admin as information.
+  const leaver = await prisma.patient.create({ data: { name: `${tag} Leaver`, gender: 'female' } });
+  leavers.push(leaver.id);
+  stays.push((await prisma.patientStay.create({ data: { patient_id: leaver.id, start_date: iso(-3), end_date: iso(0), duration_days: 4 } })).id);
+  const lt = await issue('patients', leaver.id);
+  assert.equal((await (await call(`/public/link/${lt}`)).json()).feedback.given, null, 'asked on the leaving day');
+  assert.equal((await (await call(`/public/link/${p}?date=${today}`)).json()).feedback, null, 'not asked of a guest who has not left');
+  const answer = (tok: string, body: unknown) => fetch(`${API}/public/link/${tok}/feedback`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await answer(lt, { rating: 'wonderful' })).status, 400, 'three answers only');
+  assert.equal((await answer(t2, { rating: 'good' })).status, 403, 'staff do not answer');
+  assert.equal((await answer(lt, { rating: 'fine', note: 'Lovely food' })).status, 200);
+  const given = (await (await call(`/public/link/${lt}`)).json()).feedback.given;
+  assert.deepEqual([given.rating, given.note], ['fine', 'Lovely food'], 'kept, and the link then says thank you');
+  const info = ((await (await call(`/attention?date=${today}`, undefined, admin)).json()).items as { who: string; rule: string; kind: string; what: string }[]).find((i) => i.who === leaver.name && i.rule === 'feedback');
+  assert.ok(info && info.kind === 'information' && /Stay was fine: “Lovely food”/.test(info.what), `What needs you says it: ${JSON.stringify(info)}`);
   console.log('links: ok');
 } finally {
   await prisma.timeOff.deleteMany({ where: { entity_type: 'staff', entity_id: therapist.id } });
@@ -128,7 +144,7 @@ try {
   await prisma.appointment.deleteMany({ where: { id: { in: [mineA.id, theirs.id, visit.id, ...extra] } } });
   await prisma.patientStay.deleteMany({ where: { id: { in: stays } } });
   await prisma.auditLog.deleteMany({ where: { admin_id: 'guest', entity_id: patient.id } });
-  await prisma.patient.deleteMany({ where: { id: { in: [patient.id, guest.id] } } });
+  await prisma.patient.deleteMany({ where: { id: { in: [patient.id, guest.id, ...leavers] } } });
   await prisma.staff.deleteMany({ where: { id: { in: [therapist.id, other.id, doctor.id] } } });
   await prisma.therapy.deleteMany({ where: { id: { in: [therapy.id, consult.id] } } });
   await prisma.$disconnect();

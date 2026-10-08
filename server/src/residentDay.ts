@@ -80,6 +80,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
   const beforePack = before?.package_id ? await prisma.package.findUnique({ where: { id: before.package_id } }) : null;
   // The follow-up the last discharge asked for (#487), on the card of a guest who has left.
   const ended = await prisma.patientStay.findFirst({ where: { patient_id: patientId, end_date: { lte: day } }, orderBy: { end_date: 'desc' } });
+  const told = (stay ?? ended)?.feedback as { rating: string; note: string } | null | undefined;
   const fuDate = (ended?.discharge as { follow_up_date?: string } | null)?.follow_up_date;
   const follow_up = ended && fuDate ? { stay_id: ended.id, due: fuDate, phone: patient.phone ?? null, centre: settings?.centre_name ?? '', done: ended.follow_up_done ? centreClock(settings?.timezone || 'Asia/Kolkata', ended.follow_up_done).date : null } : null;
   const shape = (s: NonNullable<typeof up>) => ({
@@ -95,6 +96,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
   });
   return {
     follow_up,
+    feedback: told ? { rating: told.rating, note: told.note } : null,
     readings,
     id: patient.id,
     name: patient.name,
