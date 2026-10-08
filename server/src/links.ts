@@ -71,7 +71,10 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
   // On the leaving day, and for a week after, the guest is asked how the stay was, once (#509).
   const ended = who.kind === 'patient' ? await prisma.patientStay.findFirst({ where: { patient_id: who.id, start_date: { lte: new Date(`${today}T00:00:00.000Z`) }, end_date: { lte: new Date(`${today}T00:00:00.000Z`), gte: new Date(Date.parse(`${today}T00:00:00.000Z`) - 7 * 86400000) } }, orderBy: { end_date: 'desc' } }) : null;
   // A patient fills their own details before arriving (#489): what the card's More details holds.
-  const details = who.kind === 'patient' ? await prisma.patient.findUnique({ where: { id: who.id }, select: DETAILS }) : null;
+  // Asked while they are here or coming, never on the leaving day or after (#549).
+  const stillHere = who.kind === 'patient' ? await prisma.patientStay.findFirst({ where: { patient_id: who.id, end_date: { gt: new Date(`${today}T00:00:00.000Z`) } }, select: { id: true } }) : null;
+  const anyStay = who.kind === 'patient' && !stillHere ? await prisma.patientStay.findFirst({ where: { patient_id: who.id }, select: { id: true } }) : null;
+  const details = who.kind === 'patient' && (stillHere || !anyStay) ? await prisma.patient.findUnique({ where: { id: who.id }, select: DETAILS }) : null;
   res.json({
     who: { kind: who.kind, name: who.name },
     ...(details ? { details: { ...details, date_of_birth: details.date_of_birth?.toISOString().slice(0, 10) ?? null } } : {}),

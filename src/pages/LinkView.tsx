@@ -185,7 +185,7 @@ export default function LinkView() {
       </div>
       {day.details ? (() => {
         const filled = ASK.filter(([k]) => k !== "email" && day.details![k]).length, need = ASK.length - 1;
-        return <ListGroup><Row title="Your details" facts={filled === need ? "All filled in. Thank you." : `${filled} of ${need} filled in. Please add them before you arrive.`} trailing="›" onClick={() => setMine({ ...day.details! })} /></ListGroup>;
+        return <ListGroup><Row title="Your details" facts={filled === need ? "All filled in. Thank you." : `${filled} of ${need} filled in. ${day.arrives ? "Please add them before you arrive." : "Please add the rest."}`} trailing="›" onClick={() => setMine({ ...day.details! })} /></ListGroup>;
       })() : null}
       {day.feedback ? (
         <ListGroup title="How was your stay?">
