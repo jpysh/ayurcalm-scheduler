@@ -113,6 +113,14 @@ try {
   assert.equal((await put(t2, guest.id)).status, 403, 'only a doctor writes the plan');
   assert.equal((await put(d, patient.id)).status, 404, 'only for a patient in house');
   assert.equal((await call(`/public/link/${t2}/round`)).status, 403, 'only a doctor sees the round');
+  // A guest not here yet opens on their first day and is told when it is (#498).
+  const later = await prisma.patientStay.create({ data: { patient_id: patient.id, start_date: iso(5), end_date: iso(9), duration_days: 5 } });
+  stays.push(later.id);
+  const first = iso(5).toISOString().slice(0, 10);
+  const opened = await (await call(`/public/link/${p}`)).json();
+  assert.deepEqual([opened.date, opened.arrives], [first, first], 'opens on the first day of the stay they are waiting for');
+  assert.equal((await (await call(`/public/link/${p}?date=${today}`)).json()).date, today, 'a day they ask for is still that day');
+  assert.equal((await (await call(`/public/link/${t2}`)).json()).arrives, null, 'staff are not told about stays');
   console.log('links: ok');
 } finally {
   await prisma.timeOff.deleteMany({ where: { entity_type: 'staff', entity_id: therapist.id } });

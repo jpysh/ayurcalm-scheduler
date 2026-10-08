@@ -21,7 +21,7 @@ type Item = {
 type Details = { phone: string | null; email: string | null; date_of_birth: string | null; address: string | null; country: string | null; id_number: string | null; emergency_contact: string | null; emergency_phone: string | null };
 // What a patient fills before arriving (#489), the card's More details in their words.
 const ASK: [keyof Details, string, string?][] = [["phone", "Your phone", "tel"], ["email", "Email (optional)", "email"], ["date_of_birth", "Date of birth (yyyy-mm-dd)"], ["country", "Nationality"], ["id_number", "Passport or ID number"], ["address", "Home address"], ["emergency_contact", "Someone to call in an emergency"], ["emergency_phone", "Their phone", "tel"]];
-type Day = { details?: Details; who: { kind: "therapist" | "doctor" | "patient"; name: string }; centre: string; date: string; today: string; off?: string | null; meals?: { meal: string; text: string }[]; items: Item[] };
+type Day = { details?: Details; who: { kind: "therapist" | "doctor" | "patient"; name: string }; centre: string; date: string; today: string; arrives?: string | null; off?: string | null; meals?: { meal: string; text: string }[]; items: Item[] };
 
 const VITAL: Record<string, string> = { bp: "BP", pulse: "Pulse", weight: "Weight (kg)", temp: "Temperature", spo2: "SpO₂", sugar: "Blood sugar" };
 const ISSUES: [string, string][] = [["room", "Room not usable"], ["co_therapist", "Co-therapist not here"], ["patient_absent", "Patient not here"], ["permission", "Need permission"], ["note", "A note for the admin"], ["sos", "SOS: need help now"]];
@@ -113,6 +113,8 @@ export default function LinkView() {
         <div className="text-center"><div className="font-semibold">{label}</div>{day.date === day.today ? <div className="text-sm font-semibold text-primary">Today</div> : <Btn kind="quiet" inline className="min-h-0 py-1 text-sm" onClick={() => setDate(day.today)}>Back to today</Btn>}</div>
         <Btn inline aria-label="Day after" onClick={() => setDate(shift(day.date, 1))}>›</Btn>
       </div>
+
+      {day.arrives ? <p className="mt-2 text-center text-sm text-muted-foreground">Your stay starts {new Date(`${day.arrives}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}.</p> : null}
 
       {isDoctor && day.date === day.today ? (
         <section className="mt-3" aria-label="Round">
