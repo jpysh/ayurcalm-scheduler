@@ -97,6 +97,13 @@ async function main() {
     await call('POST', '/therapies/import', { items: [{ name: `${TAG} Nasya`, duration_minutes: 30 }, { name: `${TAG} Kavala`, duration_minutes: 20 }] });
     assert.equal((await log())[0].text, `2 therapies added: ${TAG} Nasya, ${TAG} Kavala`);
 
+    // A stay's line says which part changed, not only that it did (#499).
+    const stayId = (await prisma.patientStay.findFirstOrThrow({ where: { patient_id: rekha.id } })).id;
+    await call('PUT', `/patients/${rekha.id}/stays/${stayId}`, { start_date: DAY, end_date: DAY });
+    assert.match((await log())[0].text, new RegExp(`^${rekha.name}'s stay: dates \\w{3} \\d+ \\w{3} to \\w{3} \\d+ \\w{3}$`));
+    await call('PATCH', `/patients/${rekha.id}/stays/${stayId}/form-c`, { filed: true });
+    assert.equal((await log())[0].text, `${rekha.name}'s Form C marked filed`);
+
     console.log("Log: an edit is the newest line in words, so is a room or leave added, the day check's fix can be undone from it, and then says (undone).");
   } finally {
     await tidy(prisma).catch(() => {});

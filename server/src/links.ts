@@ -143,6 +143,8 @@ linkRouter.put('/:token/details', async (req: Request, res: Response) => {
   }).partial().strict().parse(req.body);
   const { date_of_birth, ...rest } = b;
   const saved = await prisma.patient.update({ where: { id: who.id }, select: DETAILS, data: { ...rest, ...(date_of_birth !== undefined ? { date_of_birth: date_of_birth ? new Date(`${date_of_birth}T00:00:00.000Z`) : null } : {}) } });
+  // The Log says who changed what: a guest's own save is one of those (#499). Which fields, never their values.
+  await prisma.auditLog.create({ data: { admin_id: 'guest', action: 'write', entity_type: 'patients', entity_id: who.id, new_value: { method: 'PUT', path: `/patients/${who.id}/details`, body: { fields: Object.keys(b) } } } }).catch(() => { /* the save itself succeeded */ });
   res.json(saved);
 });
 

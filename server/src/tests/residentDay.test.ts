@@ -49,6 +49,12 @@ async function main() {
     const late = await book('15:00', 'pending');
     await book('11:00', 'cancelled');
     const missed = await book('09:00', 'no_show');
+    // What the therapists recorded after a treatment (#508): the card shows the last readings, newest first.
+    await prisma.appointment.update({ where: { id: late.id }, data: { record: { vitals: { bp: '124/82' } } } });
+    await prisma.appointment.create({ data: {
+      patient_id: rekha.id, therapy_id: therapy.id, scheduled_date: at('2030-06-11'), start_time: '10:00', duration_minutes: 60,
+      session_number: 1, total_sessions: 1, status: 'completed', assignment_type: 'manual', record: { vitals: { bp: '120/80' } },
+    } });
     const ahead = await prisma.appointment.create({ data: {
       patient_id: rekha.id, therapy_id: therapy.id, scheduled_date: at('2030-06-14'), start_time: '10:00', duration_minutes: 60,
       session_number: 1, total_sessions: 1, status: 'pending', assignment_type: 'manual',
@@ -62,6 +68,7 @@ async function main() {
     assert.deepEqual(d.week.map((w: { date: string; treatments: { id: string }[] }) => [w.date, w.treatments.map((t) => t.id)]), [
       ['2030-06-12', [missed.id, late.id]], ['2030-06-13', []], ['2030-06-14', [ahead.id]], ['2030-06-15', []], ['2030-06-16', []], ['2030-06-17', []], ['2030-06-18', []],
     ], 'the next seven days, an empty one shown as empty (#350)');
+    assert.deepEqual(d.readings, [{ date: '2030-06-12', text: 'BP 124/82' }, { date: '2030-06-11', text: 'BP 120/80' }], 'the last readings the therapists recorded, newest first');
     assert.equal(d.plan_name, plan.name);
     assert.deepEqual(d.meals, [
       { meal: 'Breakfast', text: 'Rice kanji' }, { meal: 'Lunch', text: 'Rice gruel only' }, { meal: 'Dinner', text: 'Moong soup' },
