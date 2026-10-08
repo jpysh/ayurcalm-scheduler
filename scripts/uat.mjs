@@ -44,32 +44,35 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #574: a person switched off, or gone from the loaded centre, is signed out at once.
-const staff = { email: 'uat-gone@example.com', password: 'staffpass123' };
-await step('A switched-off person is refused on their next tap', '/admin/schedule', async () => {
-  const made = await api('POST', '/users', { ...staff, role: 'staff' });
-  const login = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(staff) })).json();
-  const me = async () => (await fetch(`${APP}/api/auth/me`, { headers: { Authorization: `Bearer ${login.token}` } })).status;
-  const before = await me();
-  await api('PUT', `/users/${made.id}`, { is_active: false });
-  const after = await me();
-  await api('DELETE', `/users/${made.id}`);
-  return { ok: before === 200 && after === 401, note: `their session answered ${before} while on, ${after} once switched off` };
+// #576: a foreign guest's own details include the visa, so Form C is whole.
+const linkOf = async (id) => (await api('POST', `/patients/${id}/link`)).token;
+const mk = async (name, country, id_number) => api('POST', '/patients', { name, gender: 'female', country, id_number, stay: { start_date: plus(0), end_date: plus(10) } });
+const guestPage = async (token) => { const c = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true }); const g = await c.newPage(); await g.goto(`${APP}/l/${token}`); await g.waitForTimeout(1500); return { c, g }; };
+let foreignId = null;
+await step('A foreign guest is asked for the visa; an Indian guest is not', '/admin/schedule', async () => {
+  const f = await mk('Uatvisa Foreign', 'Germany', 'C01X00T47'); foreignId = f.id;
+  const n = await mk('Uatvisa Indian', 'India', 'P1234567');
+  const { c, g } = await guestPage(await linkOf(f.id)); await g.getByText('Your details').click(); await g.waitForTimeout(800);
+  const foreignAsks = await g.getByLabel('Visa number').count(); await g.screenshot({ path: `${OUT}/guest-foreign.png` }); await c.close();
+  const o = await guestPage(await linkOf(n.id)); await o.g.getByText('Your details').click(); await o.g.waitForTimeout(800);
+  const indianAsks = await o.g.getByLabel('Visa number').count(); await o.c.close();
+  return { ok: foreignAsks === 1 && indianAsks === 0, note: `visa asked of the German guest: ${foreignAsks}, of the Indian guest: ${indianAsks}` };
 });
-await step('The phone of a switched-off person lands on the sign-in page', '/admin/schedule', async () => {
-  const made = await api('POST', '/users', { ...staff, email: 'uat-gone2@example.com', role: 'staff' });
-  const login = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...staff, email: 'uat-gone2@example.com' }) })).json();
-  const c2 = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
-  await c2.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Staff'); localStorage.setItem('authUser', 'uat-gone2@example.com'); }, login.token);
-  const q = await c2.newPage();
-  await q.goto(APP + '/admin/schedule'); await q.waitForTimeout(1500);
-  const on = q.url();
-  await api('PUT', `/users/${made.id}`, { is_active: false });
-  await q.reload(); await q.waitForTimeout(2000);
-  await q.screenshot({ path: `${OUT}/phone-after.png` });
-  const off = q.url();
-  await c2.close(); await api('DELETE', `/users/${made.id}`);
-  return { ok: /admin/.test(on) && /login/.test(off), note: `signed in at ${new URL(on).pathname}, after switch-off at ${new URL(off).pathname}` };
+await step('The visa the guest types is on their Form C', '/admin/patients', async () => {
+  const { c, g } = await guestPage(await linkOf(foreignId)); await g.getByText('Your details').click(); await g.waitForTimeout(600);
+  const d = g.getByRole('dialog').last();
+  await d.getByLabel('Visa number').fill('V4455667'); await d.getByLabel('Visa valid until (yyyy-mm-dd)').fill(plus(200)); await d.getByRole('button', { name: 'Save my details' }).click(); await g.waitForTimeout(1200); await c.close();
+  await p.reload(); await p.waitForTimeout(1200); await p.getByRole('button', { name: /Uatvisa Foreign/ }).first().click(); await p.waitForTimeout(1200);
+  const row = (await text(dlg())).match(/Form C\n[^\n]*/)?.[0].replace(/\n/g, ' ');
+  await go(dlg().getByRole('button', { name: /^Form C/ }));
+  const sheet = await text(dlg());
+  return { ok: /Visa number\nV4455667/.test(sheet), note: `${row} · sheet: ${sheet.replace(/\n+/g, ' ').match(/Visa number[^|]*?Arrived/)?.[0] ?? sheet.slice(0, 160)}` };
+});
+await step('The card says how many Form C lines are missing', '/admin/patients', async () => {
+  const x = await mk('Uatvisa Missing', 'Italy', '');
+  await p.reload(); await p.waitForTimeout(1200); await p.getByRole('button', { name: /Uatvisa Missing/ }).first().click(); await p.waitForTimeout(1200);
+  const row = (await text(dlg())).match(/Form C\n[^\n]*/)?.[0].replace(/\n/g, ' ');
+  return { ok: /missing/.test(row || ''), note: row || 'no Form C row' };
 });
 await b.close();
 
