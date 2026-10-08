@@ -44,18 +44,13 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #546: after closing, + opens on tomorrow. Runs only when the centre is closed for the day.
-const cfg546 = await api('GET', '/settings');
-const hm546 = new Intl.DateTimeFormat('en-GB', { timeZone: cfg546.timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
-const closed546 = hm546 >= cfg546.closing_time;
-const tmr546 = new Date(`${plus(1)}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
-const ep = await api('POST', '/patients', { name: `Evening Book ${Date.now() % 1000}`, gender: 'male', on_site: true, stay: { start_date: plus(0), end_date: plus(6) } });
-await step('After closing, Book opens on tomorrow', '/admin/schedule', async () => {
-  if (!closed546) return { ok: false, note: `skipped: the centre is open until ${cfg546.closing_time} (now ${hm546})` };
-  await go(plusBtn('Book a treatment')); await p.waitForTimeout(800);
-  await go(dlg().getByText(ep.name).first()); await p.waitForTimeout(900);
-  const t = await text(dlg());
-  return { ok: new RegExp(`Date\\n${tmr546}`).test(t) && !/hours are over/.test(t), note: `closing ${cfg546.closing_time}, now ${hm546}; ` + t.split('\n').filter((x) => /^Date$|Oct$|hours are over/.test(x)).slice(0, 3).join(' · ') };
+// #550: opening a Settings sheet again does not write another "marked as reviewed" line to the Log.
+const reviewLines = async () => ((await api('GET', '/log')).entries || []).filter((e) => /catalogues marked as reviewed/.test(e.text)).length;
+await step('Packages and accommodation, opened three times, logs one line at most', '/admin/settings', async () => {
+  const before = await reviewLines();
+  for (let i = 0; i < 3; i++) { await p.goto(`${APP}/admin/settings`); await p.waitForTimeout(1200); await go(p.getByText('Packages and accommodation').first()); await p.waitForTimeout(800); }
+  const after = await reviewLines();
+  return { ok: after - before <= 1, note: `Log lines ${before} → ${after}` };
 });
 await b.close();
 
