@@ -60,6 +60,10 @@ async function main() {
     assert.equal((await call('GET', `/patients/${p.id}/stays/${stay.id}/discharge`)).draft.address, '12 Lake Road', 'the summary starts from the card');
 
     // Stories 11 and 12: the catalogues, and a retired one stays readable.
+    // The starter lists are the maintainer's own centre's: every one says it is an example (#516).
+    const starters = [...(await call('GET', '/packages')), ...(await call('GET', '/accommodations'))].filter((x: { name: string; notes: string | null }) => /^(Panchakarma \d+ days|Trishul House|Nanda House|Huts|Special Apartments)$/.test(x.name));
+    assert.ok(starters.length >= 14, `the starter lists are there: ${starters.length}`);
+    assert.deepEqual(starters.filter((x: { notes: string | null }) => !/Example price/.test(x.notes || '')).map((x: { name: string }) => x.name), [], 'every starter row says it is an example');
     const pack = await call('POST', '/packages', { name: `${TAG} 14 days`, days: 14, price: 70750 });
     assert.equal((await raw('POST', '/packages', { name: `${TAG} 14 days`, days: 14, price: 1 })).status, 409, 'a second package with the same name is refused');
     const house = await call('POST', '/accommodations', { name: `${TAG} House`, price_per_day: 2500 });
