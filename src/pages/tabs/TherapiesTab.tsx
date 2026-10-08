@@ -32,7 +32,7 @@ export function useTherapiesScreen({ therapies, setTherapies, amenityOptions, re
     </div>
   );
   const dialogs = (<>
-    <TherapyLibrarySheet open={showLibrary} onOpenChange={setShowLibrary} onImported={reload} />
+    <TherapyLibrarySheet open={showLibrary} onOpenChange={setShowLibrary} onImported={reload} onOwn={() => { setShowLibrary(false); setOpen("new"); }} />
     <TherapySheet therapy={open === "new" ? null : open} open={!!open} onClose={() => setOpen(null)} amenityOptions={amenityOptions}
       onSaved={(x) => setTherapies((prev) => prev.some((t) => t.id === x.id) ? prev.map((t) => t.id === x.id ? x : t) : [...prev, x])}
       remove={(t) => requestDelete("therapy", String(t.id), t.name)} />
