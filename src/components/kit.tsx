@@ -115,6 +115,8 @@ export function PickField({ label, value, placeholder, groups, onPick }: { label
 
 /** "Wed 30 Sept", the stored calendar day read as itself, never through a clock (#189). Linux adds a comma. */
 export const dayText = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).replace(",", "");
+/** A date to copy into a government form: the year is part of it ("12 Mar 1984"). */
+export const dayYear = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 /** "1 room", "2 rooms": a count with its noun (#463). */
 export const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
