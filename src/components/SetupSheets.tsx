@@ -137,25 +137,25 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
 
 // ---- Therapies ----
 export const VITALS: [string, string][] = [["bp", "BP"], ["pulse", "Pulse"], ["weight", "Weight"], ["temp", "Temperature"], ["spo2", "SpO₂"], ["sugar", "Blood sugar"]];
-export const therapySub = (t: UiTherapy) => [`${t.duration} min`, (t.staffRequired ?? 1) > 1 ? `${t.staffRequired} therapists` : "", t.amenities.length ? `needs ${t.amenities.map(say).join(", ")}` : "", t.genderMatch ? "same gender" : "", t.once ? "once a stay" : ""].filter(Boolean).join(" · ");
+export const therapySub = (t: UiTherapy) => [`${t.duration} min`, (t.staffRequired ?? 1) > 1 ? `${t.staffRequired} therapists` : "", t.amenities.length ? `needs ${t.amenities.map(say).join(", ")}` : "", t.genderMatch ? "same gender" : "", t.once ? "once a stay" : "", t.before ? "before a purification" : ""].filter(Boolean).join(" · ");
 
 export function TherapySheet({ therapy, open, onClose, amenityOptions, onSaved, remove }: {
   therapy: UiTherapy | null; open: boolean; onClose: () => void; amenityOptions: string[]; onSaved: (t: UiTherapy) => void; remove: (t: UiTherapy) => void;
 }) {
   const [name, setName] = useState(""); const [mins, setMins] = useState(60); const [needs, setNeeds] = useState<string[]>([]);
-  const [staff, setStaff] = useState(1); const [same, setSame] = useState(false); const [once, setOnce] = useState(false);
+  const [staff, setStaff] = useState(1); const [same, setSame] = useState(false); const [once, setOnce] = useState(false); const [before, setBefore] = useState(false);
   const [checks, setChecks] = useState<{ text: string; required: boolean }[]>([]); const [vitals, setVitals] = useState<string[]>(["bp"]); const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!open) return;
     setName(therapy?.name ?? ""); setMins(therapy?.duration ?? 60); setNeeds(therapy?.amenities ?? []); setStaff(therapy?.staffRequired ?? 1);
-    setSame(therapy?.genderMatch ?? false); setOnce(therapy?.once ?? false); setChecks(therapy?.checklist ?? []); setVitals(therapy?.vitals ?? ["bp"]);
+    setSame(therapy?.genderMatch ?? false); setOnce(therapy?.once ?? false); setBefore(therapy?.before ?? false); setChecks(therapy?.checklist ?? []); setVitals(therapy?.vitals ?? ["bp"]);
   }, [open, therapy]);
   const save = async () => {
     setBusy(true);
     try {
-      const body = { name: name.trim(), duration_minutes: mins, required_amenities: needs, staff_required: staff, requires_gender_match: same, once_per_course: once, checklist: checks.filter((c) => c.text.trim()), vitals };
+      const body = { name: name.trim(), duration_minutes: mins, required_amenities: needs, staff_required: staff, requires_gender_match: same, once_per_course: once, before_purification: before, checklist: checks.filter((c) => c.text.trim()), vitals };
       const x = await send(therapy ? `/therapies/${therapy.id}` : "/therapies", therapy ? "PUT" : "POST", body);
-      onSaved({ id: x.id, name: x.name, duration: x.duration_minutes ?? mins, amenities: x.required_amenities || needs, genderMatch: !!x.requires_gender_match, staffRequired: x.staff_required ?? staff, once: !!x.once_per_course, checklist: x.checklist || [], vitals: x.vitals || vitals });
+      onSaved({ id: x.id, name: x.name, duration: x.duration_minutes ?? mins, amenities: x.required_amenities || needs, genderMatch: !!x.requires_gender_match, staffRequired: x.staff_required ?? staff, once: !!x.once_per_course, before: !!x.before_purification, checklist: x.checklist || [], vitals: x.vitals || vitals });
       toast(therapy ? `${x.name} saved` : `${x.name} added`); onClose();
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
@@ -171,6 +171,7 @@ export function TherapySheet({ therapy, open, onClose, amenityOptions, onSaved, 
       <Group label="What the room needs (optional)"><Chips options={amenityOptions} value={needs} onChange={setNeeds} addLabel="Something else…" /></Group>
       <Switch label="Therapist of the patient's gender" on={same} set={setSame} />
       <Switch label="Once a stay, like Virechana" on={once} set={setOnce} />
+      <Switch label="Before a purification, like Snehapana" on={before} set={setBefore} />
       <More hint="readings, checks (optional)">
         <Group label="Readings the therapist takes">
           <Chips options={vitalNames} value={vitals.map((k) => VITALS.find(([v]) => v === k)?.[1] || k)} onChange={(v) => setVitals(v.map((l) => VITALS.find(([, x]) => x === l)?.[0] || l))} />

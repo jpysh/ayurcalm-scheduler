@@ -100,7 +100,11 @@ async function main() {
     // Snehapana after the stay's Virechana is out of clinical order: asked, never refused (#419).
     const late = await raw('POST', '/appointments/one', { ...second, therapy_id: sneha.id });
     assert.equal(late.status, 409, 'a Snehapana after the Virechana should be asked about');
-    assert.match((await late.json()).message, /Snehapana prepares for a purification, and .*'s .*Virechana is on Sun 5 May\./);
+    const lateBody = await late.json();
+    assert.match(lateBody.message, /Snehapana prepares for a purification, and .*'s .*Virechana is on Sun 5 May\./);
+    // The order the course needs is offered beside Book anyway (#528): the day before the purification.
+    assert.deepEqual(lateBody.warnings[0].actions.map((x: { kind: string; date?: string }) => [x.kind, x.date]), [['set_date', '2030-05-04'], ['book_anyway', undefined]]);
+    assert.match(lateBody.warnings[0].actions[0].label, /^Book Sat 4 May instead$/);
 
     console.log('Plan next week: this week repeats a week on at its times, a swap changes one line, and Book all books every line and the review or nothing; a once-a-course therapy and the Snehapana before it are left out, and a second one is asked about.');
   } finally {

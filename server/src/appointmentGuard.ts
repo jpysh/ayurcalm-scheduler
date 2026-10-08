@@ -7,7 +7,7 @@
  * that check, on the server, where it cannot be skipped.
  */
 import { PrismaClient, type Prisma } from '@prisma/client';
-import { centreClosed, hoursOn, offOnDay, overlaps, staffEventBusy, teamOf, toMinutes, type EventRow } from './availability.js';
+import { centreClock, centreClosed, hoursOn, offOnDay, overlaps, staffEventBusy, teamOf, toMinutes, type EventRow } from './availability.js';
 
 export type Conflict = { reason: string; message: string; details?: Record<string, unknown> };
 
@@ -260,7 +260,13 @@ export async function oncePerCourse(c: { id?: string; patient_id: string; therap
     });
     if (!purge) return null;
     const who = (purge.Patient?.name || 'They').split(' ')[0];
-    return { reason: 'AFTER_PURIFICATION', message: `${therapy.name} prepares for a purification, and ${who}'s ${purge.Therapy?.name} is on ${dayOf(purge.scheduled_date)}.`, actions: [{ kind: 'book_anyway', label: 'Book anyway' }] };
+    // The order the course needs: the day before the purification, if the stay and the calendar still have it (#528).
+    const eve = new Date(purge.scheduled_date.getTime() - 86400000);
+    const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+    const today = centreClock(settings?.timezone || 'Asia/Kolkata').date;
+    const eveISO = eve.toISOString().slice(0, 10);
+    const earlier: Action[] = eve >= stay.start_date && eveISO >= today ? [{ kind: 'set_date', label: `Book ${dayOf(eve)} instead`, date: eveISO }] : [];
+    return { reason: 'AFTER_PURIFICATION', message: `${therapy.name} prepares for a purification, and ${who}'s ${purge.Therapy?.name} is on ${dayOf(purge.scheduled_date)}.`, actions: [...earlier, { kind: 'book_anyway', label: 'Book anyway' }] };
   }
   const had = await prisma.appointment.findFirst({
     where: { patient_id: c.patient_id, therapy_id: c.therapy_id, id: c.id ? { not: c.id } : undefined, scheduled_date: { gte: stay.start_date, lte: stay.end_date }, ...HAPPENING },
