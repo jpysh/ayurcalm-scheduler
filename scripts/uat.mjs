@@ -44,21 +44,18 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #583: a day with guests arriving or leaving says who, even with no treatment.
-await api('POST', '/patients', { name: 'Anna Uatcome', gender: 'female', stay: { start_date: plus(40), end_date: plus(41) } });
-await api('POST', '/patients', { name: 'Berta Uatcome', gender: 'female', stay: { start_date: plus(40), end_date: plus(41) } });
-const jump = async (iso) => { await viaMenu('Change day'); await p.locator('input[type=date]').last().fill(iso); await p.waitForTimeout(1500); };
-await step('The arrival day names who arrives', '/admin/schedule', async () => {
-  await jump(plus(40)); const t = await text(p.locator('body'));
-  return { ok: /Arriving · Anna, Berta/.test(t) && /No treatments on this day\./.test(t), note: (t.match(/Arriving[^\n]*/) || ['no line'])[0] + ' · ' + (/No treatments on this day/.test(t) ? 'No treatments on this day.' : 'other empty line') };
+// #590: the confirmation sheet is announced as what it is, not as "Menu".
+await step('The confirmation sheet is named "Please confirm"', '/admin/settings', async () => {
+  await go(p.getByRole('button', { name: /^Backups/ }));
+  await dlg().locator('input[type=file]').setInputFiles({ name: 'centre.json.gz', mimeType: 'application/gzip', buffer: Buffer.from('not a real file') }); await p.waitForTimeout(1000);
+  const named = await p.getByRole('dialog', { name: 'Please confirm' }).count(), asMenu = await p.getByRole('dialog', { name: 'Menu' }).count();
+  const t = (await text(dlg())).replace(/\n+/g, ' | ');
+  await go(p.getByRole('dialog', { name: 'Please confirm' }).getByRole('button', { name: 'Cancel' }));
+  return { ok: named === 1 && asMenu === 0, note: `dialogs named "Please confirm": ${named}, named "Menu": ${asMenu} · ${t.slice(0, 90)}` };
 });
-await step('The leaving day names who leaves', '/admin/schedule', async () => {
-  await jump(plus(41)); const t = await text(p.locator('body'));
-  return { ok: /Leaving · Anna, Berta/.test(t), note: (t.match(/Leaving[^\n]*/) || ['no line'])[0] };
-});
-await step('A day with nobody coming or going still says nothing is booked', '/admin/schedule', async () => {
-  await jump(plus(60)); const t = await text(p.locator('body'));
-  return { ok: /Nothing booked on this day\./.test(t) && !/Arriving|Leaving/.test(t), note: /Nothing booked on this day/.test(t) ? 'Nothing booked on this day.' : 'other' };
+await step('The Menu sheet is still named "Menu"', '/admin/schedule', async () => {
+  await menu(); const named = await p.getByRole('dialog', { name: 'Menu' }).count();
+  return { ok: named === 1, note: `dialogs named "Menu": ${named}` };
 });
 await b.close();
 
