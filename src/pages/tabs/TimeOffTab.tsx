@@ -47,12 +47,12 @@ const TimeOffTab = ({ timeOffs, viewMode, setViewMode, visibleRows, totalRef, na
 export default TimeOffTab;
 
 /** The Time off screen: its filters, the Add dialog and the tab, held by the dashboard so they last as long as it does. */
-export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, timeSlots, planDay }: {
+export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, startDay, timeSlots, planDay }: {
   timeOffs: UiTimeOff[]; setTimeOffs: React.Dispatch<React.SetStateAction<UiTimeOff[]>>;
   staff: UiStaff[]; roomsList: UiRoom[]; therapies: UiTherapy[]; patients: Patient[];
   staffNameById: Record<string, string>; roomNameById: Record<string, string>; therapyNameById: Record<string, string>; patientNameById: Record<string, string>;
   requestDelete: (kind: "timeoff", id: string, name?: string) => void;
-  loadReplans: () => void; refreshAppointmentsForDate: (iso: string, silent?: boolean) => Promise<void>; todayKey: string;
+  loadReplans: () => void; refreshAppointmentsForDate: (iso: string, silent?: boolean) => Promise<void>; todayKey: string; startDay: string;
   /** The centre's slot times, "HH:MM": what part-day leave starts and ends on. */
   timeSlots: string[];
   /** Save and plan: shows the day of the leave with the plan for it, to accept. */
@@ -68,12 +68,12 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
   useEffect(() => { setVisibleTimeOffRows(20); }, [timeOffs, holidayViewMode]);
   // Most leave is a therapist's whole day, starting today (#137).
   const blank = () => ({
-    date: todayKey, endDate: todayKey, type: "Staff" as "Center" | "Staff" | "Room" | "Therapy" | "Patient", entity: "", fullDay: true, description: "", startTime: "", endTime: "",
+    date: startDay, endDate: startDay, type: "Staff" as "Center" | "Staff" | "Room" | "Therapy" | "Patient", entity: "", fullDay: true, description: "", startTime: "", endTime: "",
     recurrence: undefined as 'weekly' | undefined, weekdays: undefined as UiTimeOff['weekdays'],
   });
   const [newTimeOff, setNewTimeOff] = useState({
-    date: todayKey,
-    endDate: todayKey,
+    date: startDay,
+    endDate: startDay,
     type: "Staff" as "Center" | "Staff" | "Room" | "Therapy" | "Patient",
     entity: "",
     fullDay: true,
