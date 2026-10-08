@@ -1,0 +1,56 @@
+// node scripts/uat-559.mjs — #559: guest rooms are added and changed from their own screen, and print as a sheet. 375x812.
+// E2E_BASE_URL=http://localhost:8093 node scripts/uat-559.mjs
+import { chromium } from '@playwright/test';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';
+const OUT = 'docs/design/uat/2026-10-08-guest-rooms';
+mkdirSync(OUT, { recursive: true });
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const auth = { Authorization: `Bearer ${token}` };
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+const p = await ctx.newPage();
+const shot = (n) => p.screenshot({ path: `${OUT}/${n}.png` });
+const res = [];
+const check = (name, ok, extra = '') => { res.push([name, ok]); console.log(ok ? 'pass' : 'FAIL', name, extra); };
+await p.goto(`${APP}/admin/guestrooms`); await p.waitForTimeout(2500);
+await shot('01-screen');
+check('screen has the + and the Guest rooms line', (await p.getByRole('button', { name: 'Add guest rooms' }).count()) === 1 && (await p.getByText('Names and beds').count()) === 1);
+await p.getByRole('button', { name: 'Add guest rooms' }).click(); await p.waitForTimeout(800);
+await shot('02-add');
+const dlg = () => p.getByRole('dialog').last();
+await dlg().getByLabel('Names').fill('Z1–Z3');
+await dlg().getByRole('button', { name: '2', exact: true }).click();
+await shot('03-add-filled');
+await dlg().getByRole('button', { name: 'Add the guest rooms' }).click(); await p.waitForTimeout(1500);
+const rooms = await (await fetch(`${APP}/api/guest-rooms`, { headers: auth })).json();
+const z = rooms.filter((r) => /^Z\d$/.test(r.name));
+check('Z1–Z3 added, 2 beds each', z.length === 3 && z.every((r) => r.beds === 2), z.map((r) => r.name).join(','));
+await shot('04-after-add');
+await p.getByText('Names and beds').click(); await p.waitForTimeout(900);
+await shot('05-manage');
+await dlg().getByText('Z2', { exact: true }).click(); await p.waitForTimeout(700);
+await dlg().getByLabel('Name').fill('Z2b');
+await shot('06-edit');
+await dlg().getByRole('button', { name: 'Save changes' }).click(); await p.waitForTimeout(1200);
+const after = await (await fetch(`${APP}/api/guest-rooms`, { headers: auth })).json();
+check('Z2 renamed', after.some((r) => r.name === 'Z2b') && !after.some((r) => r.name === 'Z2'));
+await p.goto(`${APP}/admin/settings`); await p.waitForTimeout(1500);
+await p.getByText('Packages and accommodation').first().click(); await p.waitForTimeout(900);
+await p.getByText('Trishul House').first().click(); await p.waitForTimeout(900);
+await shot('07-settings-type');
+check('type sheet has one Guest rooms line, no add field', (await dlg().getByText('Guest rooms').count()) > 0 && (await dlg().getByPlaceholder('T1–T6').count()) === 0);
+// Tidy: remove what was added (never used by a stay, so they are deleted).
+for (const r of after.filter((x) => /^Z/.test(x.name))) await fetch(`${APP}/api/guest-rooms/${r.id}`, { method: 'DELETE', headers: auth });
+// The sheet.
+const day = new Date().toISOString().slice(0, 10);
+const pdf = Buffer.from(await (await fetch(`${APP}/api/daily-schedule-pdf?date=${day}&view=rooms`, { headers: auth })).arrayBuffer());
+writeFileSync(`${OUT}/sheet.pdf`, pdf);
+execSync(`pdftoppm -r 70 -png -singlefile ${OUT}/sheet.pdf ${OUT}/08-sheet`);
+const text = execSync(`pdftotext -layout ${OUT}/sheet.pdf -`).toString();
+check('sheet prints counts and rooms', /To make up \d+/.test(text) && /Guest rooms — \d+/.test(text) && /Free/.test(text));
+writeFileSync(`${OUT}/README.md`, `# #559 UAT, 8 Oct (demo seed)\n\nBefore: the Guest rooms screen had no way to add a room (the attached screenshot in the brief); rooms were added only under Settings → Packages and accommodation → a type.\n\n| Step | Result | Shot |\n|---|---|---|\n| The screen has the + and a "Guest rooms · Names and beds" line | ${res[0][1] ? 'pass' : 'FAIL'} | ![](01-screen.png) |\n| + opens Add guest rooms | read | ![](02-add.png) ![](03-add-filled.png) |\n| Z1–Z3 added with 2 beds | ${res[1][1] ? 'pass' : 'FAIL'} | ![](04-after-add.png) |\n| The line lists every room by type | read | ![](05-manage.png) |\n| A tap changes a room | ${res[2][1] ? 'pass' : 'FAIL'} | ![](06-edit.png) |\n| Settings → a type has one Guest rooms line | ${res[3][1] ? 'pass' : 'FAIL'} | ![](07-settings-type.png) |\n| The guest rooms sheet | ${res[4][1] ? 'pass' : 'FAIL'} | ![](08-sheet.png) |\n`);
+await b.close();
+process.exit(res.every(([, ok]) => ok) ? 0 : 1);
