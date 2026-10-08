@@ -82,7 +82,7 @@ function provision(s) {
       s.state = 'building'; save();
       const slug = slugFor(s.centre, [...db.centres.map((c) => c.slug), 'shots', 'host']);
       const port = Math.max(Number(env.CENTRE_PORT_FROM || 8300) - 1, ...db.centres.map((c) => c.port)) + 1;
-      await centreSh({ ADMIN_EMAIL: s.email }, 'up', slug, String(port));
+      await centreSh({ ADMIN_EMAIL: s.email, CENTRE_NAME: s.centre }, 'up', slug, String(port));
       await up(port);
       await route(slug, svc(port));
       db.centres.push({ slug, port, email: s.email, centre: s.centre, ref: s.ref, created: Date.now() });

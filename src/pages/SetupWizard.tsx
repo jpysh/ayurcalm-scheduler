@@ -35,13 +35,21 @@ const SetupWizard = () => {
   };
   // A cloud trial (#247) starts with no example centre, so there is nothing to keep or clear.
   const [hasDemo, setHasDemo] = useState(true);
-  useEffect(() => { fetch(`${API_BASE}/settings`).then((r) => r.json()).then((s) => setHasDemo(s?.demo_data !== false)).catch(() => {}); }, []);
+  useEffect(() => {
+    fetch(`${API_BASE}/settings`).then((r) => r.json()).then((s) => {
+      setHasDemo(s?.demo_data !== false);
+      // A trial's sign-up already asked for the name (#577): the wizard starts with it.
+      if (s?.centre_name && s.centre_name !== "Wellness Centre") setForm((f) => (f.centre_name ? f : { ...f, centre_name: s.centre_name }));
+    }).catch(() => {});
+  }, []);
+  // Most often the person setting up is at the centre, so its zone is the phone's when the list has it (#577).
+  const phoneZone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ""; } })();
   const [form, setForm] = useState({
     centre_name: "",
     address: "",
     // The centre's timezone, not the browser's: the machine setting it up is
     // often not in the same country as the centre.
-    timezone: "Asia/Kolkata",
+    timezone: phoneZone && TIMEZONES.includes(phoneZone) ? phoneZone : "Asia/Kolkata",
     opening_time: "09:00",
     closing_time: "18:00",
     slot_minutes: 30,
@@ -126,7 +134,7 @@ const SetupWizard = () => {
           </div>
           <Group label="Booking slots" note="How far apart treatments can start."><Seg options={[[15, "15 min"], [20, "20 min"], [30, "30 min"], [60, "60 min"]]} value={form.slot_minutes} onChange={(m) => set("slot_minutes", m)} /></Group>
           <Group label="Working days" note="A centre with patients staying treats them every day, weekends included."><Days value={form.working_days} onChange={(v) => set("working_days", v)} /></Group>
-          <Dropdown label="Timezone" value={form.timezone} onChange={(e) => set("timezone", e.target.value)} note="The centre's, not this phone's.">
+          <Dropdown label="Timezone" value={form.timezone} onChange={(e) => set("timezone", e.target.value)} note={form.timezone === phoneZone ? `This phone is in ${phoneZone.replace(/_/g, " ")}. Change it if the centre is elsewhere.` : "The centre's, not this phone's."}>
             {TIMEZONES.map((z) => <option key={z} value={z}>{z.replace(/_/g, " ")}</option>)}
           </Dropdown>
           {next(1, form.working_days.length > 0, hasDemo ? "Continue" : "Finish")}
