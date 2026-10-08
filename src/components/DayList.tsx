@@ -54,9 +54,14 @@ type Props = {
   roomCount?: number;
   /** The day check's problems on a treatment, shown on its row. */
   flags?: Record<string, { text: string; blocking: boolean; info?: boolean }>;
+  /** First names of the guests whose stay starts or ends on this day (#583); past: the day is behind us. */
+  comings?: { in: string[]; out: string[]; past: boolean };
 };
 
-export default function DayList({ appointments, isToday, nowMinutes: NOW, view, setView, query, patients, roomsList, staff, therapyNameById, onOpen, onNotIn, headerAction, movedFrom = {}, roomCount, flags = {} }: Props) {
+/** Up to three first names, then how many more. */
+const namesOf = (l: string[]) => (l.length > 3 ? `${l.slice(0, 3).join(", ")} and ${l.length - 3} more` : l.join(", "));
+
+export default function DayList({ appointments, isToday, nowMinutes: NOW, view, setView, query, patients, roomsList, staff, therapyNameById, onOpen, onNotIn, headerAction, movedFrom = {}, roomCount, flags = {}, comings }: Props) {
   const [pickView, setPickView] = useState(false);
   const name = (list: Named[], id: string | null) => list.find((x) => String(x.id) === String(id))?.name || "";
   const colourOf = (id: string) => COLOURS[Math.max(0, staff.findIndex((s) => String(s.id) === id)) % COLOURS.length];
@@ -206,7 +211,13 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
       <BottomSheet open={pickView} onOpenChange={setPickView} title="Show the day by" note="The same treatments, grouped another way.">
         <Seg<DayView> options={[["time", "Time"], ["therapist", "Therapist"], ["room", "Room"], ["resident", "Patient"]]} value={view} onChange={(v) => { setView(v); setPickView(false); }} />
       </BottomSheet>
-      {rows.length ? body : <div className="p-3 text-center text-sm text-muted-foreground">{q ? `Nothing matches "${query}" on this day.` : "Nothing booked on this day."}</div>}
+      {comings && (comings.in.length || comings.out.length) ? (
+        <div className="px-1 pb-2 text-sm text-muted-foreground">
+          {comings.in.length ? <p>{comings.past ? "Arrived" : "Arriving"} · {namesOf(comings.in)}</p> : null}
+          {comings.out.length ? <p>{comings.past ? "Left" : "Leaving"} · {namesOf(comings.out)}</p> : null}
+        </div>
+      ) : null}
+      {rows.length ? body : <div className="p-3 text-center text-sm text-muted-foreground">{q ? `Nothing matches "${query}" on this day.` : comings && (comings.in.length || comings.out.length) ? "No treatments on this day." : "Nothing booked on this day."}</div>}
       {rows.length ? <div className="px-3 pt-3 text-center text-sm text-muted-foreground">End of the day</div> : null}
     </div>
   );

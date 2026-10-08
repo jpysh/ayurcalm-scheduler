@@ -44,28 +44,21 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #575: a returning guest's New stay offers the first consultation, like a new patient.
-const back = await api('POST', '/patients', { name: 'Uatback Guest', gender: 'female', stay: { start_date: plus(-30), end_date: plus(-24) } });
-const findCard = async () => { await viaMenu('Search'); await p.getByRole('searchbox').or(p.getByRole('textbox')).last().fill('Uatback'); await p.waitForTimeout(1200); await p.getByText('Uatback Guest').first().click(); await p.waitForTimeout(1200); };
-await step('New stay for a past guest offers the first consultation', '/admin/schedule', async () => {
-  await findCard(); await go(dlg().getByRole('button', { name: /^New stay/ })); await p.waitForTimeout(800);
-  const t = await text(dlg());
-  return { ok: /First consultation/.test(t) && /Later/.test(t), note: t.replace(/\n+/g, ' | ').slice(0, 160) };
+// #583: a day with guests arriving or leaving says who, even with no treatment.
+await api('POST', '/patients', { name: 'Anna Uatcome', gender: 'female', stay: { start_date: plus(40), end_date: plus(41) } });
+await api('POST', '/patients', { name: 'Berta Uatcome', gender: 'female', stay: { start_date: plus(40), end_date: plus(41) } });
+const jump = async (iso) => { await viaMenu('Change day'); await p.locator('input[type=date]').last().fill(iso); await p.waitForTimeout(1500); };
+await step('The arrival day names who arrives', '/admin/schedule', async () => {
+  await jump(plus(40)); const t = await text(p.locator('body'));
+  return { ok: /Arriving · Anna, Berta/.test(t) && /No treatments on this day\./.test(t), note: (t.match(/Arriving[^\n]*/) || ['no line'])[0] + ' · ' + (/No treatments on this day/.test(t) ? 'No treatments on this day.' : 'other empty line') };
 });
-await step('Add the stay: the toast names the consultation and the card has it booked', '/admin/schedule', async () => {
-  await findCard(); await go(dlg().getByRole('button', { name: /^New stay/ })); await go(dlg().getByRole('button', { name: 'Add the stay' }));
-  const toastText = await text(p.locator('[data-sonner-toast]').first());
-  await p.waitForTimeout(500);
-  const card = await text(dlg());
-  return { ok: /Stay added for Uatback/.test(toastText) && /consultation/i.test(toastText) && /Next[\s\S]*\d\d:\d\d/.test(card), note: `${toastText.replace(/\n+/g, ' ')} · ${(card.match(/Next\n[^\n]*/) || [''])[0].replace(/\n/g, ' ')}` };
+await step('The leaving day names who leaves', '/admin/schedule', async () => {
+  await jump(plus(41)); const t = await text(p.locator('body'));
+  return { ok: /Leaving · Anna, Berta/.test(t), note: (t.match(/Leaving[^\n]*/) || ['no line'])[0] };
 });
-await step('Later leaves the consultation to the card', '/admin/schedule', async () => {
-  const other = await api('POST', '/patients', { name: 'Uatback Second', gender: 'male', stay: { start_date: plus(-30), end_date: plus(-24) } });
-  await viaMenu('Search'); await p.getByRole('searchbox').or(p.getByRole('textbox')).last().fill('Uatback Second'); await p.waitForTimeout(1200); await p.getByText('Uatback Second').first().click(); await p.waitForTimeout(1200);
-  await go(dlg().getByRole('button', { name: /^New stay/ })); await go(dlg().getByRole('button', { name: 'Later', exact: true })); const sheet = await text(dlg());
-  await go(dlg().getByRole('button', { name: 'Add the stay' })); await p.waitForTimeout(500);
-  const card = await text(dlg());
-  return { ok: /Later, from their card/.test(sheet) && /None booked/.test(card), note: `sheet: ${sheet.replace(/\n+/g, ' ').slice(0, 100)} · card: ${(card.match(/Next\n[^\n]*/) || [''])[0].replace(/\n/g, ' ')}` };
+await step('A day with nobody coming or going still says nothing is booked', '/admin/schedule', async () => {
+  await jump(plus(60)); const t = await text(p.locator('body'));
+  return { ok: /Nothing booked on this day\./.test(t) && !/Arriving|Leaving/.test(t), note: /Nothing booked on this day/.test(t) ? 'Nothing booked on this day.' : 'other' };
 });
 await b.close();
 
