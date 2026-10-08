@@ -91,6 +91,11 @@ try {
   // The Log says a guest filled their details in, by whom and which fields, never the values (#499).
   const entry = ((await (await call('/log', undefined, admin)).json()).entries as { text: string; who: string }[]).find((e) => /filled in their own details/.test(e.text));
   assert.ok(entry && entry.who === 'the guest' && /country/.test(entry.text) && !/Germany|C01X00T47/.test(entry.text), `the Log: ${JSON.stringify(entry)}`);
+  // A foreign guest's visa goes to the card, where Form C reads it (#576).
+  assert.equal((await putDetails(p, { visa_number: 'V123456', visa_valid_until: '2030-03-01' })).status, 200);
+  const visa = await prisma.patient.findUniqueOrThrow({ where: { id: patient.id } });
+  assert.deepEqual([visa.visa_number, visa.visa_valid_until], ['V123456', '2030-03-01']);
+  assert.equal((await putDetails(p, { visa_valid_until: '01/03/2030' })).status >= 400, true, 'a visa date must be yyyy-mm-dd');
   assert.equal((await putDetails(t, { country: 'X' })).status, 403, 'a therapist link cannot write a patient');
   assert.ok((await putDetails(p, { name: 'Someone else' })).status >= 400, 'a link cannot change the name');
 
