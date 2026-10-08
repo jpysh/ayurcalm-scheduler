@@ -44,20 +44,16 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #496: a guest added ahead is on the Patients list under "Arriving soon".
+// #498: a guest not here yet opens their link on the first day of the stay, and is told when it is.
 await api('POST', '/settings/clear-demo-data');
-for (const [name, from, to] of [['Clara Weber', 1, 8], ['Dev Mehta', 5, 12], ['Far Away', 30, 37]]) {
-  const x = await api('POST', '/patients', { name, gender: name.startsWith('Clara') ? 'female' : 'male' });
-  await api('POST', `/patients/${x.id}/stays`, { start_date: plus(from), end_date: plus(to) });
-}
-await step('Patients lists the guests arriving in the next two weeks', '/admin/patients', async () => {
+const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female' });
+await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(3), end_date: plus(10) });
+const link = await api('POST', `/patients/${pt.id}/link`);
+await step('The link says when the stay starts, on that day', `/l/${link.token}`, async () => {
   const t = await text(p.locator('body'));
-  return { ok: /arriving soon/i.test(t) && /Clara Weber/.test(t) && /Dev Mehta/.test(t) && !/Far Away/.test(t) && !/No one is staying/.test(t), note: t.split('\n').filter((x) => /arriving soon|Arrives|in house|Weber|Mehta|Far/i.test(x)).join(' · ') };
-});
-await step('Tapping one opens their card', '/admin/patients', async () => {
-  await go(p.getByRole('button', { name: /^Clara Weber/ }).first());
-  const t = await text(dlg());
-  return { ok: /Arrives .* · leaves/.test(t), note: t.split('\n').slice(0, 3).join(' · ') };
+  const d = new Date(`${plus(3)}T00:00:00Z`);
+  const day = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+  return { ok: t.includes(`Your stay starts ${day}`) && !/Today\n/.test(t), note: t.split('\n').filter((x) => /stay starts|Today|Back to today|Nothing booked/.test(x)).join(' · ') };
 });
 await b.close();
 
