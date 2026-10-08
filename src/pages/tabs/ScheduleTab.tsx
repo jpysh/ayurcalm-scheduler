@@ -25,7 +25,7 @@ const nowInTZ = (timeZone: string) => {
 };
 
 /** The Schedule screen, and the day sheets the bottom bar prints for the day it is on. */
-export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime, refreshDay, movedFrom, problems, history, showDay, openResident, staffCount, addTherapist, addPatient }: Record<string, any>) {
+export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime, refreshDay, movedFrom, problems, history, showDay, openResident, staffCount, addTherapist, addRoom, addPatient }: Record<string, any>) {
   const [view, setView] = useState<DayView>("time");
   const [query, setQuery] = useState("");
   // Search is its own screen over every day (#165); the day list does not filter.
@@ -163,7 +163,7 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
   const bookDay = afterClosing ? new Date(Date.parse(`${dayKeyMemo}T00:00:00Z`) + 86400000).toISOString().slice(0, 10) : dayKeyMemo;
   const bookSheet = (
     <BookSheet open={booking} onClose={() => setBooking(false)} day={bookDay} today={ymdInTZ(new Date())} isToday={isToday && !afterClosing} nowMinutes={now} patient={bookFor} rev={staffCount}
-      onAction={addTherapist} onAddPatient={addPatient}
+      onAction={(a: { kind: string; amenities?: string[] }) => (a.kind === "add_room" ? addRoom(a) : addTherapist(a))} onAddPatient={addPatient}
       refresh={() => refreshDay(bookDay)} />
   );
 
