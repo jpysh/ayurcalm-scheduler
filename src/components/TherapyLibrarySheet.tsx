@@ -16,8 +16,10 @@ type Item = {
  * already has. Tick, adjust the name or minutes on the row, add. Any time, not
  * only at setup: a centre starts small and grows its menu.
  */
-export function TherapyLibrarySheet({ open, onOpenChange, onImported }: {
+export function TherapyLibrarySheet({ open, onOpenChange, onImported, onOwn }: {
   open: boolean; onOpenChange: (o: boolean) => void; onImported: () => void;
+  /** The way to a therapy that is not on the list (#595): the Add therapy sheet. */
+  onOwn?: () => void;
 }) {
   const [items, setItems] = useState<Item[] | null>(null);
   const [picked, setPicked] = useState<Record<string, boolean>>({});
@@ -64,6 +66,7 @@ export function TherapyLibrarySheet({ open, onOpenChange, onImported }: {
           {busy ? "Adding…" : chosen.length ? `Add ${chosen.length} therap${chosen.length === 1 ? "y" : "ies"}` : "Tick the therapies to add"}
         </Btn>
       ) : undefined}>
+      {onOwn ? <Btn kind="quiet" inline className="-ml-2 mb-1" onClick={onOwn}>Not on the list? Add one of your own ›</Btn> : null}
       {items === null ? <Loading /> : items.length === 0 ? <Empty text="You already have every therapy in the library." /> : (<>
         <Btn kind="quiet" inline className="-ml-2 mb-2"
           onClick={() => setPicked(chosen.length === items.length ? {} : Object.fromEntries(items.map((x) => [x.key, true])))}>
