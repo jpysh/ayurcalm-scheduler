@@ -44,7 +44,7 @@ export default function LinkView() {
   const [discharge, setDischarge] = useState<DischargeView | null>(null);
   const isDoctor = day?.who.kind === "doctor";
   // The morning round (#423): who is due a review today, with the last note; the plan written here is what the admin books from.
-  type RoundRow = { patient_id: string; name: string; day: number; days: number; booked: { start_time: string; doctor: string | null } | null; last: { date: string; note: string } | null; plan: string | null };
+  type RoundRow = { patient_id: string; name: string; day: number; days: number; booked: { start_time: string; doctor: string | null } | null; last: { date: string; note: string } | null; plan: string | null; facts?: { readings: string[]; treatments: string; diet: string | null } };
   const [round, setRound] = useState<RoundRow[]>([]);
   const [seeing, setSeeing] = useState<RoundRow | null>(null);
   const [plan, setPlan] = useState("");
@@ -213,6 +213,13 @@ export default function LinkView() {
         note={seeing ? `Day ${seeing.day} of ${seeing.days}` : undefined} foot={<Foot label="Save the plan" busy={busy} save={savePlan} />}>
         {seeing ? (<>
           <ListGroup><TextRow label={seeing.last ? `Last note · ${dayText(seeing.last.date)}` : "Last note"} faint={!seeing.last}>{seeing.last?.note || "No note yet: a first review."}</TextRow></ListGroup>
+          {seeing.facts ? (
+            <ListGroup title="This week">
+              <TextRow label="Readings" faint={!seeing.facts.readings.length}>{seeing.facts.readings.length ? seeing.facts.readings.join("  ·  ") : "None recorded yet"}</TextRow>
+              <TextRow label="Treatments, last 7 days" faint={!seeing.facts.treatments}>{seeing.facts.treatments || "None yet"}</TextRow>
+              <TextRow label="Diet" faint={!seeing.facts.diet}>{seeing.facts.diet || "No plan chosen"}</TextRow>
+            </ListGroup>
+          ) : null}
           <Area label="Plan for the coming week" note="The centre books the week from this." rows={5} value={plan} onChange={(e) => setPlan(e.target.value)} />
         </>) : null}
       </BottomSheet>

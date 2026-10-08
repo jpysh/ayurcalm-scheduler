@@ -118,6 +118,13 @@ try {
   const round = await (await call(`/public/link/${d}/round`)).json();
   const row = round.find((r: { patient_id: string }) => r.patient_id === guest.id);
   assert.ok(row, 'a patient with no review in the last week is on the round');
+  // What the doctor decides the week from (#530): the last readings, the week's treatments by therapy, the diet.
+  assert.deepEqual(row.facts, { readings: [], treatments: '', diet: null }, 'nothing yet: the fields are there and empty');
+  const weekAgo = await prisma.appointment.create({ data: { patient_id: guest.id, therapy_id: therapy.id, staff_id: therapist.id, scheduled_date: iso(-2), start_time: '10:00', duration_minutes: 60, session_number: 1, total_sessions: 1, status: 'completed', assignment_type: 'manual', record: { vitals: { bp: '124/82' } } } });
+  extra.push(weekAgo.id);
+  const again = (await (await call(`/public/link/${d}/round`)).json()).find((r: { patient_id: string }) => r.patient_id === guest.id);
+  assert.equal(again.facts.treatments, therapy.name, 'one treatment this week');
+  assert.match(again.facts.readings[0], /^BP 124\/82 · \d{4}-\d\d-\d\d$/, 'the reading the therapist recorded');
   assert.equal(row.day, 11); assert.equal(row.booked, null); assert.equal(row.last.note, 'Start Abhyanga daily');
   const put = (token: string, id: string) => fetch(`${API}/public/link/${token}/round/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: 'Shirodhara alternate days' }) });
   assert.equal((await put(d, guest.id)).status, 200);

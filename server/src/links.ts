@@ -12,6 +12,7 @@ import { PrismaClient, type Prisma } from '@prisma/client';
 import { centreClock, teamOf } from './availability.js';
 import { loadDay, staffDay } from './appointmentGuard.js';
 import { loadDietsForDay, mealLabel, mealOrder } from './dietResolution.js';
+import { lastReadings } from './residentDay.js';
 import { dischargeOf, saveDischarge } from './discharge.js';
 import { renderDischarge } from './pdf/dischargePdf.js';
 
@@ -254,7 +255,24 @@ linkRouter.get('/:token/round', async (req: Request, res: Response) => {
       plan: s.Patient.doctor_plan,
     }];
   });
-  res.json(round.sort((a, b) => (a.booked?.start_time ?? '99').localeCompare(b.booked?.start_time ?? '99') || a.name.localeCompare(b.name)));
+  // What the doctor needs to decide the week (#530): the last readings, the week's treatments by therapy, the diet.
+  // ponytail: three small queries a patient due today; one query per kind for the whole round if a centre has hundreds in house.
+  const given = await prisma.appointment.findMany({
+    where: { patient_id: { in: round.map((r) => r.patient_id) }, scheduled_date: { gte: new Date(today.getTime() - 6 * DAY_MS), lte: today }, status: { notIn: ['cancelled', 'no_show'] }, Therapy: { is_consultation: false } },
+    select: { patient_id: true, Therapy: { select: { name: true } } },
+  });
+  const diets = await loadDietsForDay(today, prisma);
+  const patients = new Map(stays.map((s) => [s.patient_id, s.Patient]));
+  const facts = new Map(await Promise.all(round.map(async (r) => {
+    const counts = new Map<string, number>();
+    for (const a of given) if (a.patient_id === r.patient_id) counts.set(a.Therapy.name, (counts.get(a.Therapy.name) ?? 0) + 1);
+    return [r.patient_id, {
+      readings: (await lastReadings(r.patient_id, today, prisma)).map((x) => `${x.text} · ${x.date}`),
+      treatments: [...counts].map(([n, c]) => (c > 1 ? `${n} ×${c}` : n)).join(', '),
+      diet: diets.dietFor(patients.get(r.patient_id)!, true).planName || null,
+    }] as const;
+  })));
+  res.json(round.map((r) => ({ ...r, facts: facts.get(r.patient_id) })).sort((a, b) => (a.booked?.start_time ?? '99').localeCompare(b.booked?.start_time ?? '99') || a.name.localeCompare(b.name)));
 });
 linkRouter.put('/:token/round/:patientId', async (req: Request, res: Response) => {
   if (!(await doctorOf(req, res))) return;
