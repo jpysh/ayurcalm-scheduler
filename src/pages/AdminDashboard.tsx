@@ -170,6 +170,14 @@ const AdminDashboard = () => {
     return `${y}-${m}-${d}`;
   };
 
+  // A chosen day (YYYY-MM-DD) as the instant of that day's noon on the centre's clock, so reading it back through ymdInTZ gives the same day on a phone in any zone (#599). Local midnight of the phone does not: ahead of the centre it is the evening before there.
+  const dayDate = (iso: string) => {
+    const noonUtc = new Date(`${iso}T12:00:00Z`);
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: ADMIN_TZ, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(noonUtc).map((x) => [x.type, Number(x.value)]));
+    return new Date(noonUtc.getTime() - (Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - noonUtc.getTime()));
+  };
+  const shiftDay = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+
   // The bar's search on the Team, Therapies and Events lists: it filters the list on screen.
   const [listQuery, setListQuery] = useState('');
   const [listSearching, setListSearching] = useState(false);
@@ -191,15 +199,10 @@ const AdminDashboard = () => {
         setRoomsList([]);
         setPatients([]);
       }
-      const monday = new Date(currentDate);
-      const day = currentDate.getDay();
-      const offset = day === 0 ? -6 : 1 - day;
-      monday.setDate(currentDate.getDate() + offset);
-      const weekDates: string[] = Array.from({ length: 7 }).map((_, i) => {
-        const d = new Date(monday);
-        d.setDate(monday.getDate() + i);
-        return ymdInTZ(d);
-      });
+      // Monday to Sunday of the chosen day, summed on the day string: local getDay and setDate mix the phone's zone with the centre's (#599).
+      const [cy, cm, cd] = ymdInTZ(currentDate).split('-').map(Number);
+      const wd = new Date(Date.UTC(cy, cm - 1, cd)).getUTCDay();
+      const weekDates: string[] = Array.from({ length: 7 }).map((_, i) => shiftDay(ymdInTZ(currentDate), (wd === 0 ? -6 : 1 - wd) + i));
       // One call for the week, not seven: each is a round trip on a hill-station signal (#416).
       const week = await fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?from=${weekDates[0]}&to=${weekDates[6]}`);
       const map: Record<string, ApiAppointment[]> = Object.fromEntries(weekDates.map((d) => [d, []]));
@@ -394,7 +397,6 @@ const AdminDashboard = () => {
   // an evening in Europe is already tomorrow in Asia/Kolkata — a therapist read
   // as absent on a day they are working. Both sides use the centre's day.
   const exceptionDayKey = todayKey;
-  const exceptionDay = useMemo(() => new Date(`${todayKey}T00:00:00`), [todayKey]);
   // Dismissed per day, in this browser: dismiss a note today and it is gone
   // today; mark someone else off and their move shows as new.
   const [dismissed, setDismissed] = useState<string[]>([]);
@@ -511,11 +513,11 @@ const AdminDashboard = () => {
   useEffect(() => { const t = setInterval(() => setMinute((m) => m + 1), 60000); return () => clearInterval(t); }, []);
 
   // Each screen keeps its own state and dialogs in its own file (#147).
-  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), movedFrom, problems: dayCheck.problems, history: dayCheck.history, showDay: (iso: string) => { setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id), staffCount: staff.length, addTherapist: (a: { gender?: string; therapy_id?: string }) => staffAdder.current?.(a), addRoom: (a: { amenities?: string[] }) => roomAdder.current?.(a), addPatient: (name: string, arriving: string, done: (p: { id: string; name: string }) => void) => patientAdder.current?.(name, arriving, done) });
+  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), movedFrom, problems: dayCheck.problems, history: dayCheck.history, showDay: (iso: string) => { setCurrentDate(dayDate(iso)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id), staffCount: staff.length, addTherapist: (a: { gender?: string; therapy_id?: string }) => staffAdder.current?.(a), addRoom: (a: { amenities?: string[] }) => roomAdder.current?.(a), addPatient: (name: string, arriving: string, done: (p: { id: string; name: string }) => void) => patientAdder.current?.(name, arriving, done) });
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, requestDelete, centre: { opening: centreHours.opening_time, closing: centreHours.closing_time } });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, requestDelete });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q: listQuery });
-  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, startDay, timeSlots, planDay: (iso) => { go('schedule'); setCurrentDate(new Date(`${iso}T00:00:00`)); refreshAppointmentsForDate(iso, true); setShowAttention(true); } });
+  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, startDay, timeSlots, planDay: (iso) => { go('schedule'); setCurrentDate(dayDate(iso)); refreshAppointmentsForDate(iso, true); setShowAttention(true); } });
   const eventsScreen = useEventsScreen({ events, setEvents, roomsList, staff, staffNameById, q: listQuery });
   // The treatment card opens the resident card, which the Residents screen holds.
   const residentOpener = useRef<((id: string) => void) | null>(null);
@@ -530,7 +532,7 @@ const AdminDashboard = () => {
   const patientsScreen = usePatientsScreen({ needs: attention.items.filter((i) => i.section === 'Patients' && i.kind === 'action' && i.patient_id), patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ, startDay,
     openTreatment: (a) => { go('schedule'); scheduleScreen.openCard(a); },
     // A day on the card books on that day (#350).
-    book: (p) => { go('schedule'); if (p?.date) { setCurrentDate(new Date(`${p.date}T00:00:00`)); refreshAppointmentsForDate(p.date, true); } scheduleScreen.openBook(p); },
+    book: (p) => { go('schedule'); if (p?.date) { setCurrentDate(dayDate(p.date)); refreshAppointmentsForDate(p.date, true); } scheduleScreen.openBook(p); },
     // The same words, over every treatment: the day's own search.
     openCatalogue: (which) => { setSettingsSheet(which); go('settings'); },
     openRules: () => setRules({ section: 'Patients' }),
@@ -591,7 +593,7 @@ const AdminDashboard = () => {
               if (!s || scheduleScreen.searching) return;
               const dx = e.changedTouches[0].clientX - s.x, dy = e.changedTouches[0].clientY - s.y;
               if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-                setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + (dx < 0 ? 1 : -1)));
+                setCurrentDate((d) => dayDate(shiftDay(ymdInTZ(d), dx < 0 ? 1 : -1)));
               }
             }}>
             {/* A new centre's first steps, until it can book (#60): each row opens the screen that adds it. */}
@@ -607,7 +609,7 @@ const AdminDashboard = () => {
                 <p className="px-1 pt-2 text-sm text-muted-foreground">Then tap + to book the first treatment.</p>
               </div>
             ) : null}
-            {loaded && !scheduleScreen.searching ? <WeekStrip day={dayKeyMemo} today={ymdInTZ(new Date())} moves={moves} setDay={(iso) => { const [y, m, d] = iso.split('-').map(Number); setCurrentDate(new Date(y, m - 1, d)); }} /> : null}
+            {loaded && !scheduleScreen.searching ? <WeekStrip day={dayKeyMemo} today={ymdInTZ(new Date())} moves={moves} setDay={(iso) => setCurrentDate(dayDate(iso))} /> : null}
             {loaded && scheduleScreen.tab}
           </TabsContent>
 
@@ -674,7 +676,7 @@ const AdminDashboard = () => {
         day={dayKeyMemo}
         today={ymdInTZ(new Date())}
         now={new Date().toLocaleTimeString("en-GB", { timeZone: ADMIN_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}
-        setDay={(iso) => { const [y, m, d] = iso.split('-').map(Number); setCurrentDate(new Date(y, m - 1, d)); }}
+        setDay={(iso) => setCurrentDate(dayDate(iso))}
         printing={!!scheduleScreen.pdfLoading}
         // After closing on today the evening job is tomorrow's sheet (#459), so Print gives that day and says so.
         printDay={evening ? tomorrowKey : dayKeyMemo}
@@ -685,7 +687,7 @@ const AdminDashboard = () => {
           // It just says so (#134). The rota is a second tap, a fresh gesture, so
           // the phone does not block its tab as a popup.
           const open = evening ? tomorrowFix : dayCheck.problems.filter((p) => p.problem_class === 'blocking').length;
-          const fixFirst = () => { if (evening) setCurrentDate(new Date(`${tomorrowKey}T00:00:00`)); setShowAttention(true); };
+          const fixFirst = () => { if (evening) setCurrentDate(dayDate(tomorrowKey)); setShowAttention(true); };
           // The two other sheets under the words, not beside them: two buttons in a row squeezed the text to a word a line (#273 O2).
           const more = "min-h-11 rounded-full px-1 text-base font-bold text-on-dark";
           toast(<div className="w-full">
@@ -724,7 +726,7 @@ const AdminDashboard = () => {
         day={exceptionDayKey}
         today={ymdInTZ(new Date())}
         problems={dayCheck.problems}
-        tomorrow={tomorrowFix ? { day: tomorrowKey, count: tomorrowFix, open: () => { const [y, m, d] = tomorrowKey.split('-').map(Number); setCurrentDate(new Date(y, m - 1, d)); } } : null}
+        tomorrow={tomorrowFix ? { day: tomorrowKey, count: tomorrowFix, open: () => setCurrentDate(dayDate(tomorrowKey)) } : null}
         replans={visibleReplans}
         dismissed={dismissed}
         dismiss={dismiss}
