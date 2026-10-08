@@ -1,6 +1,6 @@
 // Fake-clock checks for the trial lifecycle and sign-up limits (#247).
 import assert from 'node:assert/strict';
-import { next, deletesAt, refuse, slugFor } from './lifecycle.mjs';
+import { next, deletesAt, refuse, slugFor, linkOpen } from './lifecycle.mjs';
 const H = 3_600_000, D = 24 * H, t0 = Date.parse('2026-10-01T00:00:00Z');
 
 // Level 1 idle 72 h -> paused; paused 14 days -> deleted. No warnings: nothing is emailed.
@@ -33,4 +33,10 @@ assert.equal(refuse([], Array.from({ length: 25 }, (_, i) => ({ email: `e${i}` }
 assert.equal(slugFor('Shanti Kutir Ayurveda!', []), 'shanti-kutir-ayurveda');
 assert.equal(slugFor('Demo', []), 'demo-2');
 assert.equal(slugFor('Om', ['om', 'om-2']), 'om-3');
+// The sign-up page may ask again and again for 30 minutes after the centre is ready (#588).
+const up = { state: 'ready', ready_at: t0 };
+assert.equal(linkOpen(up, t0 + 5 * 60_000), true);
+assert.equal(linkOpen(up, t0 + 29 * 60_000), true);
+assert.equal(linkOpen(up, t0 + 31 * 60_000), false);
+assert.equal(linkOpen({ state: 'building' }, t0), false);
 console.log('provisioner lifecycle ok');

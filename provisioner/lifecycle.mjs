@@ -36,3 +36,6 @@ export function slugFor(name, taken) {
   while (reserved.has(s)) s = `${base}-${++n}`;
   return s;
 }
+
+/** A sign-up's page may be handed a sign-in link while its centre is ready and the link would still live (30 minutes, #588). */
+export const linkOpen = (s, now) => s.state === 'ready' && now - (s.ready_at ?? s.at) < 30 * 60_000;
