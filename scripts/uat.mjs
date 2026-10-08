@@ -44,14 +44,19 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #494: the Form C sheet shows the date of birth with its year.
+// #499: the Log names what changed on a stay, and what a guest filled in themselves.
 await api('POST', '/settings/clear-demo-data');
-const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female', country: 'Germany', date_of_birth: '1984-03-12', id_number: 'C01X00T47' });
-await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(0), end_date: plus(7) });
-await step('Form C shows the whole date of birth', '/admin/patients', async () => {
-  await go(p.getByRole('button', { name: /^Clara Weber/ }).first()); await go(dlg().getByRole('button', { name: /^Form C/ }));
-  const t = await text(dlg());
-  return { ok: /12 Mar 1984/.test(t), note: t.split('\n').filter((x) => /birth|1984|Arrived/.test(x)).join(' · ') };
+const pt = await api('POST', '/patients', { name: 'Clara Weber', gender: 'female' });
+const sy = await api('POST', `/patients/${pt.id}/stays`, { start_date: plus(1), end_date: plus(8) });
+const pk = (await api('GET', '/packages'))[0];
+await api('PUT', `/patients/${pt.id}/stays/${sy.id}`, { package_id: pk.id });
+await api('PUT', `/patients/${pt.id}/stays/${sy.id}`, { start_date: plus(1), end_date: plus(7) });
+const link = await api('POST', `/patients/${pt.id}/link`);
+await fetch(`${APP}/api/public/link/${link.token}/details`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: '+49 151 2345678', country: 'Germany', id_number: 'C01X00T47' }) });
+await step('The Log says what changed on the stay, and what the guest filled in', '/admin/log', async () => {
+  await p.waitForTimeout(800);
+  const t = await text(p.locator('body'));
+  return { ok: /stay: dates/.test(t) && /stay: package set/.test(t) && /filled in their own details: phone, country, id number/.test(t) && !/Germany|C01X00T47/.test(t), note: t.split('\n').filter((x) => /stay|details|guest/.test(x)).join(' · ') };
 });
 await b.close();
 
