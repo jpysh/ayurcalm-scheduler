@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { toast } from "sonner";
 import { useShareLink, waHref } from "@/components/ShareLink";
+import { inHouseNote } from "@/lib/inHouse";
 import { BottomSheet } from "@/components/BottomBar";
 import { API_BASE } from "@/lib/apiBase";
 import type { CardAppt } from "@/components/TreatmentCard";
@@ -23,7 +24,7 @@ const blankNew = () => ({ name: '', gender: '' as '' | 'Female' | 'Male' | 'Othe
 type Slot = { date: string; start_time: string; staff_id: string; staff_name: string; room_id: string; room_name: string };
 const clock = (timeZone: string) => new Date().toLocaleTimeString('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
 
-type InHouse = { id: string; name: string; Stays: { id: string; start_date: string; end_date: string }[] };
+type InHouse = { id: string; name: string; Stays: { id: string; start_date: string; end_date: string; on_site?: boolean }[] };
 type ResidentDay = {
   id: string; name: string;
   stay: (CardStay & { vitals: string | null; concerns: string | null; tests: string | null }) | null;
@@ -94,7 +95,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRule
   const leavesIn = (end: string) => Math.round((Date.parse(end) - Date.parse(`${today}T00:00:00Z`)) / DAY_MS);
   return (
     <div>
-      <PageHead title="Patients" note={inHouse === null ? '' : `${people.length} in house`} gear={{ label: 'What needs you: patient rules', run: openRules }} />
+      <PageHead title="Patients" note={inHouse === null ? '' : inHouseNote(people.map((x) => x.s!))} gear={{ label: 'What needs you: patient rules', run: openRules }} />
       {ql ? (
         found === null ? <Loading rows={3} /> : (<>
           <ListGroup title={`Patients matching “${found.q}”`} count={found.list.length}>
