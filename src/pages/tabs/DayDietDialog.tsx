@@ -28,6 +28,7 @@ export default function DayDietDialog({ patient, day, onClose, onChangePlan }: {
   const [busy, setBusy] = useState(false);
   // What the plan gives that day, shown in each empty box so the admin sees the meals, not "As plan" (#265 H2).
   const [plan, setPlan] = useState<Partial<Record<string, string>>>({});
+  const [away, setAway] = useState<string | null>(null);
 
   useEffect(() => {
     if (!patient || !date) return;
@@ -35,8 +36,10 @@ export default function DayDietDialog({ patient, day, onClose, onChangePlan }: {
     setSaved(empty);
     setTexts(empty);
     setPlan({});
+    setAway(null);
     fetch(`${API_BASE}/patients/${patient.id}/day?date=${date}`).then((r) => (r.ok ? r.json() : null))
-      .then((d: { meals?: { meal: string; text: string }[] } | null) => { if (!stale && d?.meals) setPlan(Object.fromEntries(d.meals.map((m) => [m.meal, m.text]))); })
+      
+      .then((d: { away?: string | null; meals?: { meal: string; text: string }[] } | null) => { if (!stale) setAway(d?.away ?? null); if (!stale && d?.meals) setPlan(Object.fromEntries(d.meals.map((m) => [m.meal, m.text]))); })
       .catch(() => {});
     fetch(`${API_BASE}/dietplans?patient_id=${patient.id}&date=${date}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
@@ -80,6 +83,8 @@ export default function DayDietDialog({ patient, day, onClose, onChangePlan }: {
       note="Type in a meal to change it for this day only. Leave it empty to follow the plan."
       foot={<SheetFoot busy={busy} ok={!!date} save={save} label="Save the meals" />}>
       <DateRow label="Day" value={date} onChange={setDate} />
+      {/* Away is said, never a dropped meal: the kitchen keeps it aside (#695). */}
+      {away ? <p className="mt-2 text-sm font-semibold">{away}</p> : null}
       {meals.map((meal) => (
         <Text key={meal} label={mealTitle[meal]} value={texts[meal]} maxLength={500} placeholder={plan[mealTitle[meal]] || "Nothing on the plan"}
           onChange={(e) => setTexts((t) => ({ ...t, [meal]: e.target.value }))} />
