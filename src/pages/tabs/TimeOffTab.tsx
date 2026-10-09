@@ -114,7 +114,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
       fetchJsonWithTimeout<{ id: string; guests: { name: string }[] }[]>(`${API_BASE}/guest-rooms/free?from=${s.date}&to=${nextDay(s.endDate)}`).then((r) => {
         if (stale || !Array.isArray(r)) return;
         const names = r.filter((x) => form.ids.includes(x.id)).flatMap((x) => x.guests.map((g) => g.name));
-        setImpact(names.length ? `${new Intl.ListFormat('en-GB').format(names)} ${names.length === 1 ? 'is' : 'are'} in ${form.ids.length === 1 ? 'it' : 'them'} then and will need another room. It waits under "need you"; nobody is moved for you.` : 'Nobody is in it then.');
+        setImpact(names.length ? `${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]} ${names.length === 1 ? 'is' : 'are'} in ${form.ids.length === 1 ? 'it' : 'them'} then and will need another room. It waits under "need you"; nobody is moved for you.` : 'Nobody is in it then.');
       }).catch(() => {});
     } else {
       const hours = s.start ? `&after=${s.start}&before=${s.end}` : '';
