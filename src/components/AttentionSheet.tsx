@@ -237,14 +237,15 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
         name: "Coming days", count: 0,
         body: coming?.length ? <ListGroup>{coming.map((c) => <Row key={c.date} title={`${dayText(c.date)} · ${c.count} to fix`} facts={c.headline ?? "Open the day to fix it before it starts"} trailing="Open ›" onClick={c.open} />)}</ListGroup> : null,
       }, {
-        name: "Patients", count: patientRows.length,
+        // Patients and Team are always today's: on a sheet headed with another day they say so (#663).
+        name: day === today ? "Patients" : "Today's patients", count: patientRows.length,
         body: patientRows.length + patientInfo.length ? <ListGroup>{patientRows.map((g) => {
           // Two things for one patient are one row; their card reaches both.
           const i = g.length > 1 ? { ...g[0], action: "card" as const } : g[0];
           return <Row key={i.id} title={i.who} facts={g.map((x) => x.what).join(" · ")} trailing={{ card: "Open card ›", diet: "Choose diet ›", summary: "Summary ›", followup: "Follow up ›" }[i.action ?? "card"]} onClick={() => onItem(i)} />;
         })}{patientInfo.map((i) => <Row key={i.id} title={i.who} facts={`${i.what} · information, not counted`} trailing="Open card ›" onClick={() => onItem(i)} />)}</ListGroup> : null,
       }, {
-        name: "Team", count: teamAct.length,
+        name: day === today ? "Team" : "Today's team", count: teamAct.length,
         body: teamAct.length + teamInfo.length ? <ListGroup>{[...teamAct, ...teamInfo].map((i) => <Row key={i.id} title={i.kind === "information" ? i.what : i.who} facts={i.kind === "information" ? "Information · not counted" : i.what} />)}</ListGroup> : null,
       }, {
         // What counts comes first on the sheet; the day's information follows everything (#661).
