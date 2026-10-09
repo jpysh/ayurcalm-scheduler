@@ -11,8 +11,13 @@ const SHORT: Record<string, string> = {
   GENDER_MISMATCH: "Therapist must match", STAFF_SHORT: "Needs 2 therapists", PATIENT_BUSY: "Patient booked twice",
   ROOM_BUSY: "Room booked twice", AMENITIES_MISSING: "Room lacks what it needs", NO_THERAPIST: "Needs a therapist", EVENT_OVERLAP: "Runs through an event",
 };
-const flagsFor = (problems: { appointment_id: string | null; kind: string; problem_class: string }[], history: Record<string, string> = {}) =>
-  Object.fromEntries([...Object.entries(history).map(([id, text]) => [id, { text, blocking: false, info: true }]), ...problems.filter((p) => p.appointment_id && p.kind !== "CONSULTED").map((p) => [p.appointment_id!, { text: SHORT[p.kind] || "Needs a look", blocking: p.problem_class === "blocking" }])]);
+const flagsFor = (problems: { appointment_id: string | null; kind: string; problem_class: string; what?: string; start_time?: string | null }[], history: Record<string, string> = {}) =>
+  Object.fromEntries([...Object.entries(history).map(([id, text]) => [id, { text, blocking: false, info: true }]), ...problems.filter((p) => p.appointment_id && p.kind !== "CONSULTED").map((p) => [p.appointment_id!, { text: partDay(p) || SHORT[p.kind] || "Needs a look", blocking: p.problem_class === "blocking" }])]);
+/** A therapist out for part of the day, said as when (#633): "Anjali leaves at 10:00", "Anjali away until 12:00". */
+const partDay = (p: { kind: string; what?: string; start_time?: string | null }) => {
+  const m = p.kind === "STAFF_OFF" ? p.what?.match(/^(\S+).* is not in from (\d\d:\d\d) to (\d\d:\d\d)/) : null;
+  return m ? (p.start_time && p.start_time < m[2] ? `${m[1]} leaves at ${m[2]}` : `${m[1]} away until ${m[3]}`) : null;
+};
 
 /** Minutes past midnight now, on the centre's clock. */
 const nowInTZ = (timeZone: string) => {
@@ -69,7 +74,8 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
 
   const isToday = dayKeyMemo === ymdInTZ(new Date());
   // Who arrives and who leaves on this day: the strip's '+5' and '−6', with names (#583).
-  const firstName = (n: string) => n.replace(/^Dr\.? /, "").split(" ")[0];
+  // First name and initial: a centre can have four Ananyas (#633).
+  const firstName = (n: string) => { const [f, ...rest] = n.replace(/^Dr\.? /, "").split(" "); const last = rest.at(-1); return last ? `${f} ${last[0]}.` : f; };
   const comings = {
     in: patients.filter((p: { stays?: { start_date: string }[] }) => (p.stays ?? []).some((s) => s.start_date.slice(0, 10) === dayKeyMemo)).map((p: { name: string }) => firstName(p.name)),
     out: patients.filter((p: { stays?: { end_date: string }[] }) => (p.stays ?? []).some((s) => s.end_date.slice(0, 10) === dayKeyMemo)).map((p: { name: string }) => firstName(p.name)),
