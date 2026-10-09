@@ -74,6 +74,8 @@ docker compose stop app
 gunzip -c backups/ayurcalm-YYYYMMDD-HHMM.sql.gz | docker compose exec -T db psql -q -U ayurcalm ayurcalm && docker compose start app
 ```
 
+**Is it all still working?** `scripts/daily-check.sh https://your-address/` prints one line each for the address, every backup (older than 26 hours is a problem), stopped containers and disk, and exits 1 if anything is wrong. Run it from a morning scheduled task.
+
 **Moving to or from the cloud:** Settings → Backups → *Download everything* gives one file; *Load a centre from a file* on a new install loads it.
 
 ## 4. Updates
