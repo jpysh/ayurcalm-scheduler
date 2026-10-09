@@ -44,14 +44,16 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #606: a centre in Auckland can pick its own zone.
-await step('Opening hours offers Pacific/Auckland and the other zones, grouped after the common ones', '/admin/settings', async () => {
-  await go(p.getByRole('button', { name: /Opening hours and holidays/ }));
-  const sel = dlg().getByLabel('Timezone');
-  const vals = await sel.locator('option').evaluateAll((o) => o.map((x) => x.value));
-  const groups = await sel.locator('optgroup').count();
-  await sel.selectOption('Pacific/Auckland');
-  return { ok: vals.includes('Pacific/Auckland') && vals.includes('Europe/Paris') && vals.length > 300 && groups === 1 && (await sel.inputValue()) === 'Pacific/Auckland', note: `${vals.length} zones, ${groups} group, Auckland picked` };
+// #607: a day patient is not "in house".
+await step('A day patient shows as "· N day" beside the in-house count, in Patients and in the Menu', '/admin/patients', async () => {
+  const read = async () => { const m = (await text(p.locator('body'))).match(/(\d+) in house(?: · (\d+) day)?/); return m ? [Number(m[1]), Number(m[2] || 0)] : [-1, -1]; };
+  const [h0, d0] = await read();
+  await api('POST', '/patients', { name: 'Uatday Visitor', gender: 'female', on_site: false, stay: { start_date: plus(0), end_date: plus(3) } });
+  await p.reload(); await p.waitForTimeout(1800);
+  const [h1, d1] = await read();
+  await menu();
+  const hint = (await text(dlg())).replace(/\n+/g, ' | ');
+  return { ok: h1 === h0 && d1 === d0 + 1 && new RegExp(`${h1} in house · ${d1} day`).test(hint), note: `before ${h0} in house, ${d0} day; after ${h1}, ${d1} · menu: ${(hint.match(/\d+ in house[^|]*/) || [''])[0]}` };
 });
 await b.close();
 

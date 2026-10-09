@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/apiBase";
+import { inHouseNote } from "@/lib/inHouse";
 import { Menu, Plus } from "lucide-react";
 import { BottomSearch, BottomSheet, DateRow, dayText, Group, ListGroup, plural, Row, Seg, Btn, Tile } from "@/components/kit";
 
@@ -77,7 +78,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
       setHelpWa(settings.support_whatsapp || null);
       const out = days.filter((d) => d.off).map((d) => staff.find((s) => s.id === d.staff_id)?.name.split(" ")[0]).filter(Boolean);
       setHints({
-        patients: `${residents.length} in house`,
+        patients: inHouseNote((residents as { Stays: { start_date: string; end_date: string; on_site?: boolean }[] }[]).flatMap((p) => p.Stays.filter((s) => s.start_date.slice(0, 10) <= today && s.end_date.slice(0, 10) >= today).slice(0, 1))),
         rooms: `${plural(rooms.length, "room")}${roomsOut ? ` · ${roomsOut} out` : ""}`,
         team: out.length === 0 ? "Everyone in" : out.length === 1 ? `${out[0]} not in` : `${out.length} not in`,
         schedule: dayText(day),
