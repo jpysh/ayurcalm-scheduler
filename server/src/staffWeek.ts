@@ -25,11 +25,25 @@ export async function staffWeek(start: string, prisma: PrismaClient) {
       if (whole) return { state: 'away' as const, start: hours.start, end: hours.end, why: whole.label, booked: 0, capacity: 0 };
       const out = offs.reduce((n, o) => n + Math.max(0, Math.min(close, o.e) - Math.max(open, o.s)), 0);
       const booked = ctx.appointments.filter((a) => teamOf(a).includes(s.id)).reduce((n, a) => n + a.duration_minutes, 0);
-      return { state: out ? ('part' as const) : ('in' as const), start: hours.start, end: hours.end, ...(out ? { why: offs[0].label } : {}), booked, capacity: close - open - out };
+      // In late or leaving early narrows the hours shown, so "09:00–15:00" and "of 6h" agree (#570).
+      let from = open, to = close;
+      for (const o of [...offs].sort((a, b) => a.s - b.s)) if (o.s <= from && o.e > from) from = o.e;
+      for (const o of [...offs].sort((a, b) => b.e - a.e)) if (o.e >= to && o.s < to) to = o.s;
+      return { state: out ? ('part' as const) : ('in' as const), start: hm(Math.min(from, to)), end: hm(to), ...(out ? { why: offs[0].label } : {}), booked, capacity: close - open - out };
     });
     return { id: s.id, name: s.name, role: s.role, days: days7 };
   });
-  return { start, days: days.map((d) => d.toISOString().slice(0, 10)), rows, gaps: ctxs.map((ctx, i) => gapsOn(ctx, rows, i)) };
+  // Rooms by the same pass (#573): the minutes booked in each against the minutes it is open.
+  const rooms = ctxs[0].rooms.filter((r) => r.is_active).map((r) => ({ id: r.id, days: ctxs.map((ctx, i) => {
+    const h = hoursOn(r.weekly_schedule, days[i]);
+    if (h === null) return { booked: 0, capacity: 0 };
+    const open = h ? h.s : toMinutes(ctx.settings?.opening_time || '09:00'), close = h ? h.e : toMinutes(ctx.settings?.closing_time || '18:00');
+    const offs = offOnDay(ctx.timeOff, 'room', r.id, ctx.day);
+    const out = offs.some((o) => o.whole) ? close - open : offs.reduce((n, o) => n + Math.max(0, Math.min(close, o.e) - Math.max(open, o.s)), 0);
+    const booked = ctx.appointments.filter((a) => a.room_id === r.id).reduce((n, a) => n + a.duration_minutes, 0);
+    return { booked, capacity: close - open - out };
+  }) }));
+  return { start, days: days.map((d) => d.toISOString().slice(0, 10)), rows, rooms, gaps: ctxs.map((ctx, i) => gapsOn(ctx, rows, i)) };
 }
 
 /** Fewer than this many therapists in for an hour is a gap (#351; decided by Claude, to confirm): one in cannot cover a two-therapist therapy or a swap. */

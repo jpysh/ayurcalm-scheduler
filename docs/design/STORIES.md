@@ -124,6 +124,27 @@ Score is before the fixes → after them; a story under 13 got one issue. The mi
 | An admin's phone in another zone than the centre (a New York centre from New York, Prague, Auckland) | pass | a full-day leave was saved a day early west of UTC; a chosen day showed the day before on a phone east of the centre; today's leave sat under Past | #597, #599, #601 |
 | A massage studio's first day | pass | the library offered only Ayurvedic names and no door to a therapy of one's own; the day sheet still groups by 'No diet plan' (open question, not a defect) | #595 |
 
+### Fifth walk, 9 Oct (a fresh New York trial, 375×812, from an Auckland phone for the whole walk)
+
+Score is before the fixes → after them; a story under 13 got one issue. Every PDF was read with pdftotext.
+
+| Story | Wow | What the walk found | Issue |
+|---|---|---|---|
+| First day (wizard from an Auckland phone) | 11 → 15 | the timezone list had 19 zones; Auckland was not one, and the wizard silently started on India | #606 |
+| s2 A therapist drops out of a two-therapist pair | 14 → 15 | the plan names the new pair ("Dev and Esh, same time") and moves it days later when no one of the right gender is free; History read "Therapist changed from Chandan to Dev" | #622 |
+| s5 Plan next week with a real week of history | 15 | Abhyanga and Shirodhara repeated, Book all 9, Undo | none |
+| s10 Leave with undo | 11 → 15 | delete asked "Delete this timeoff?", said "Deleted" with no Undo; a 4-day leave planned only its first day and went quiet | #608, #620 |
+| s12 Order of a purification | 15 | the warning, "Book Fri 9 Oct instead", the sheet reads right | none |
+| s13 Pairs and same-gender on the printed sheets | 15 | "with Bina", "NO THERAPIST" on the day it is not covered, nothing booked against the rules | none |
+| s21 Day patients | 12 → 15 | the kitchen sheet cooked for a day patient ("6 staying"); "in house" counted them | #607 |
+| s25 Passport photo | 12 → 14 | the photo showed in Form C but not beside the number in Details | #610 |
+| s26 Choose a guest room | 14 → 15 | three taps to "Trishul House · T1"; every price read "Rs" in a New York centre | #609 |
+| s27 Vitals | 14 | the therapist's BP appears on the card as "Readings" | none |
+| s45 Doctor round to a plan | 12 → 14 | after the plan, a new patient's week was one therapy at a time through the booking sheet | #611 |
+| Private links of staff | 12 → 15 | "Free trial: 30 days left" above a therapist's and a doctor's link | #618 |
+| Guest rooms out of use (re-run after #565) | 13 → 15 | the sheet read "1 bed free · out of use" for a room with a guest in it | #624 |
+| An Auckland phone, a New York centre | pass | at 07:30 New York (Auckland's next day) the day, the Menu and the Leave sheet kept to the centre's Friday | none |
+
 ## Each story
 
 Format: **Outcome** · **Trigger** · **First view** · **Wow** · **Fix** (the Audit track issue, or the smallest first step).

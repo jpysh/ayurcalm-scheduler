@@ -4,6 +4,7 @@
 // UAT_PASSWORD default to the demo admin (a trial centre has its own). Never opens the login form.
 import { chromium } from '@playwright/test';
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 
 const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';
 const OUT = `docs/design/uat/${process.argv[2] || new Date().toISOString().slice(0, 10)}`;
@@ -44,26 +45,20 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #622: a pair that changed members says so as a team.
-await step('A treatment of two therapists whose second changes reads "Therapists changed from A and B to A and C" in History', '/admin/schedule', async () => {
+// #624: the guest rooms sheet does not offer a bed in a room that is out of use.
+await step('A two-bed room out of use with a guest in it prints "out of use: Leak, needs another room" and no free bed', '/admin/timeoff', async () => {
   const tag = String(Date.now()).slice(-5);
-  const ther = await api('POST', '/therapies', { name: `Uat Pair ${tag}`, duration_minutes: 45, staff_required: 2, required_amenities: [] });
-  const mk = (n) => api('POST', '/staff', { name: n, gender: 'female', role: 'therapist', specializations: [ther.id] });
-  const [p1, p2, p3] = [await mk(`Uatpa${tag}`), await mk(`Uatpb${tag}`), await mk(`Uatpc${tag}`)];
-  const room = await api('POST', '/rooms', { name: `Uat pair room ${tag}`, amenities: [] });
-  const guest = await api('POST', '/patients', { name: `Uatpair ${tag}`, gender: 'female', stay: { start_date: plus(0), end_date: plus(5) } });
-  const made = await api('POST', '/appointments/one', { patient_id: guest.id, therapy_id: ther.id, date: plus(1), start_time: '10:00', staff_id: p1.id, co_staff_ids: [p2.id], room_id: room.id });
-  await api('PUT', `/appointments/${made.id}`, { co_staff_ids: [p3.id] });
-  const history = (await api('GET', `/appointments/${made.id}/history`));
-  const line = (history.entries || []).map((h) => h.text).find((t) => /Therapist/.test(t)) || 'none';
-  await p.goto(APP + '/admin/schedule'); await p.waitForTimeout(1500);
-  const d1 = new Date(`${plus(1)}T00:00:00Z`);
-  await p.getByRole('button', { name: /week ›/ }).click({ timeout: 1500 }).catch(() => {}); await p.waitForTimeout(500);
-  await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d1.getUTCDate()} ${d1.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) }));
-  await go(p.getByRole('button', { name: new RegExp(`Uatpair ${tag}`) }).first());
-  const card = (await text(dlg())).replace(/\n+/g, ' | ');
-  const want = `Therapists changed from Uatpa${tag} and Uatpb${tag} to Uatpa${tag} and Uatpc${tag}`;
-  return { ok: line === want && card.includes(want), note: `history: ${line}` };
+  const type = (await api('GET', '/accommodations'))[0];
+  await api('POST', '/guest-rooms', { name: `UO${tag}`, accommodation_id: type.id, beds: 2 });
+  const room = (await api('GET', '/guest-rooms')).find((r) => r.name === `UO${tag}`);
+  await api('POST', '/patients', { name: `Uatout ${tag}`, gender: 'female', guest_room_id: room.id, stay: { start_date: plus(0), end_date: plus(6) } });
+  await api('POST', '/timeoff', { entity_type: 'guest_room', entity_id: room.id, date: plus(1), start_date: plus(1), end_date: plus(2), description: 'Leak', plan: false });
+  const res = await fetch(`${APP}/api/daily-schedule-pdf?date=${plus(1)}&view=rooms`, { headers: { Authorization: `Bearer ${token}` } });
+  writeFileSync(`/tmp/uat-rooms-${tag}.pdf`, Buffer.from(await res.arrayBuffer()));
+  const text0 = execSync(`pdftotext -layout /tmp/uat-rooms-${tag}.pdf -`).toString();
+  const line = text0.split('\n').find((l) => l.includes(`UO${tag}`)) || 'no line';
+  await p.reload(); await p.waitForTimeout(1200);
+  return { ok: /out of use: Leak, needs another room/.test(line) && !/bed free/.test(line), note: line.trim().replace(/\s+/g, ' ') };
 });
 await b.close();
 

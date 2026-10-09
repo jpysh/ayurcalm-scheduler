@@ -25,7 +25,9 @@ const savedWithUndo = <T,>(text: string, path: string, before: unknown, old: T, 
   });
 
 // ---- Rooms ----
-export const roomSub = (r: UiRoom) => r.status !== "Active" ? "Out of use" : r.amenities.length ? `Has ${r.amenities.map(say).join(", ")}` : "Nothing special";
+/** What kind of room, in two words, from what it has (#573): the row's short fact; Details keeps the full list. */
+export const roomKind = (r: UiRoom) => r.amenities.includes("examination_bed") || r.amenities.includes("bp_monitor") ? "doctor's room"
+  : r.amenities.some((x) => x.includes("dhara")) ? "dhara room" : r.amenities.includes("massage_table") ? "table room" : "room";
 
 export function RoomSheet({ room, preset = [], open, onClose, amenityOptions, onSaved, remove }: {
   room: UiRoom | null; /** What a new room starts ticked with, when a booking found no room that has it (#544). */ preset?: string[]; open: boolean; onClose: () => void; amenityOptions: string[]; onSaved: (r: UiRoom) => void; remove: (r: UiRoom) => void;
@@ -83,7 +85,7 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
   preset?: { gender?: "Female" | "Male"; gives?: string[]; role?: "doctor" };
 }) {
   const [name, setName] = useState(""); const [role, setRole] = useState<"therapist" | "doctor">("therapist");
-  const [gender, setGender] = useState<"Female" | "Male">("Female"); const [gives, setGives] = useState<string[]>([]);
+  const [gender, setGender] = useState<"Female" | "Male" | "">(""); const [gives, setGives] = useState<string[]>([]);
   const [phone, setPhone] = useState(""); const [busy, setBusy] = useState(false);
   const full = `${centre.opening}-${centre.closing}`;
   const [week, setWeek] = useState<Week>({}); const [hoursPage, setHoursPage] = useState(false); const [touched, setTouched] = useState(false);
@@ -93,7 +95,8 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
     const h = person?.hours && Object.keys(person.hours).length ? person.hours : null;
     setWeek(Object.fromEntries(WEEK.map((d) => [d, h ? (h[d] ? `${h[d]!.start}-${h[d]!.end}` : "") : full])));
     setHoursPage(false); setTouched(false); setEdit(null);
-    setName(person?.name ?? ""); setRole(person?.role ?? preset?.role ?? "therapist"); setGender(person ? (person.gender === "Male" ? "Male" : "Female") : preset?.gender ?? "Female");
+    setName(person?.name ?? ""); setRole(person?.role ?? preset?.role ?? "therapist"); // A new person starts with no gender: a silent default sent same-gender therapies to the wrong therapist (#568).
+    setGender(person ? (person.gender === "Male" ? "Male" : "Female") : preset?.gender ?? "");
     setGives(person?.specializations ?? preset?.gives ?? []); setPhone(person?.phone ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, person]);
@@ -120,7 +123,7 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
       if (person) {
         const before = { name: person.name, role: person.role, gender: person.gender.toLowerCase(), phone: person.phone, specializations: person.specializations.map((n) => therapies.find((t) => t.name === n)?.id).filter(Boolean), ...(touched ? { weekly_schedule: person.hours ?? {} } : {}) };
         savedWithUndo(`${x.name} saved`, `/staff/${person.id}`, before, person, onSaved);
-      } else toast(`${x.name} added`);
+      } else toast(role === "therapist" && !ids.length ? `${x.name} added. They can give every therapy; open their card to limit that.` : `${x.name} added`);
       onClose();
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
@@ -136,7 +139,7 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
     <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={edit ? (edit.bulk ? "Several days" : edit.days[0][0].toUpperCase() + edit.days[0].slice(1)) : hoursPage ? `${name.trim() || "Their"} hours` : person ? person.name : "Add therapist or doctor"}
       note={edit ? (edit.bulk ? "Pick the days, then their hours." : "The same every week on this day.") : hoursPage ? "The same every week. A one-off change is leave for part of the day." : person ? "Change anything, then save." : "Name, role and gender are needed. The rest can wait."}
       onBack={edit ? () => setEdit(null) : hoursPage ? () => setHoursPage(false) : undefined}
-      foot={<SheetFoot busy={busy} ok={edit ? editOk : !!name.trim()} save={edit ? apply : save} label={edit ? "Apply" : hoursPage && person ? "Save the hours" : person ? "Save" : `Add ${name.trim() || "them"}`} remove={person && !hoursPage ? () => { onClose(); remove(person); } : undefined} removeLabel="Delete this person" />}>
+      foot={<SheetFoot busy={busy} ok={edit ? editOk : !!name.trim() && !!gender} save={edit ? apply : save} label={edit ? "Apply" : hoursPage && person ? "Save the hours" : person ? "Save" : `Add ${name.trim() || "them"}`} remove={person && !hoursPage ? () => { onClose(); remove(person); } : undefined} removeLabel="Delete this person" />}>
       {edit ? <div>
         {edit.bulk ? <>
           <Group label="Days"><Days value={edit.days} onChange={(days) => setEdit({ ...edit, days })} /></Group>
@@ -161,10 +164,10 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
       </div> : <>
       <Text label="Name" id="person-name" value={name} onChange={(e) => setName(e.target.value)} />
       <Group label="Role"><Seg<"therapist" | "doctor"> options={[["therapist", "Therapist"], ["doctor", "Doctor"]]} value={role} onChange={setRole} /></Group>
-      <Group label="Gender" note="Used when a therapy needs a therapist of the patient's gender."><Seg<"Female" | "Male"> options={[["Female", "Female"], ["Male", "Male"]]} value={gender} onChange={setGender} /></Group>
+      <Group label="Gender" note={gender ? "Used when a therapy needs a therapist of the patient's gender." : "Choose their gender. A therapy that needs the patient's gender uses it."}><Seg<"Female" | "Male" | ""> options={[["Female", "Female"], ["Male", "Male"]]} value={gender} onChange={setGender} /></Group>
       <div className="mt-3"><ChangeLine label="Hours" value={weekText(week)} onClick={() => setHoursPage(true)} /></div>
       {role === "therapist" ? (
-        <Group label="Therapies they give (optional)">
+        <Group label="Therapies they give (optional)" note={therapies.length ? "None ticked means they can give every therapy." : undefined}>
           {therapies.length ? <Chips options={therapies.map((t) => t.name)} value={gives} onChange={setGives} /> : <p className={noteText}>Add therapies first, then tick the ones they give.</p>}
         </Group>
       ) : null}

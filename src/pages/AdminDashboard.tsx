@@ -260,46 +260,22 @@ const AdminDashboard = () => {
 
   const requestDelete = async (kind: 'staff'|'room'|'therapy'|'patient'|'appointment', id: string, name?: string) => {
     const counts: Record<string, number> = {};
+    // Counted from the server's whole list, not the days loaded here (#567). A patient takes
+    // everything with them; anything else keeps its done treatments.
+    const param = { staff: 'staff_id', room: 'room_id', therapy: 'therapy_id', patient: 'patient_id' }[kind as string];
     try {
-      if (kind === 'staff') {
-        const appts = await fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?staff_id=${id}`);
-        const weeklyCount = Object.keys(appointmentsByDate).reduce((sum, k) => {
-          const list = Array.isArray(appointmentsByDate[k]) ? appointmentsByDate[k] : [];
-          return sum + list.filter((a) => a.staff_id === id).length;
-        }, 0);
-        counts.appointments = weeklyCount;
+      if (param) {
+        const appts = await fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?${param}=${id}`);
+        const today = ymdInTZ(new Date());
+        counts.done = kind === 'patient' ? 0 : appts.filter((a) => String(a.scheduled_date).slice(0, 10) < today).length;
+        counts.appointments = appts.length - counts.done;
         const timeoff = await fetchJsonWithTimeout<ApiTimeOffSimple[]>(`${API_BASE}/timeoff`);
-        counts.timeoff = (timeoff || []).filter(x => x.entity_type === 'staff' && x.entity_id === id).length;
-      } else if (kind === 'room') {
-        const appts = await fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?room_id=${id}`);
-        const weeklyCount = Object.keys(appointmentsByDate).reduce((sum, k) => {
-          const list = Array.isArray(appointmentsByDate[k]) ? appointmentsByDate[k] : [];
-          return sum + list.filter((a) => a.room_id === id).length;
-        }, 0);
-        counts.appointments = weeklyCount;
-        const timeoff = await fetchJsonWithTimeout<ApiTimeOffSimple[]>(`${API_BASE}/timeoff`);
-        counts.timeoff = (timeoff || []).filter(x => x.entity_type === 'room' && x.entity_id === id).length;
-      } else if (kind === 'therapy') {
-        const appts = await fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?therapy_id=${id}`);
-        const weeklyCount = Object.keys(appointmentsByDate).reduce((sum, k) => {
-          const list = Array.isArray(appointmentsByDate[k]) ? appointmentsByDate[k] : [];
-          return sum + list.filter((a) => String(a.therapy_id) === String(id)).length;
-        }, 0);
-        counts.appointments = weeklyCount;
-        const timeoff = await fetchJsonWithTimeout<ApiTimeOffSimple[]>(`${API_BASE}/timeoff`);
-        counts.timeoff = (timeoff || []).filter(x => x.entity_type === 'therapy' && x.entity_id === id).length;
-      } else if (kind === 'patient') {
-        const appts = await fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?patient_id=${id}`);
-        const weeklyCount = Object.keys(appointmentsByDate).reduce((sum, k) => {
-          const list = Array.isArray(appointmentsByDate[k]) ? appointmentsByDate[k] : [];
-          return sum + list.filter((a) => a.patient_id === id).length;
-        }, 0);
-        counts.appointments = weeklyCount;
+        counts.timeoff = (timeoff || []).filter(x => x.entity_type === kind && x.entity_id === id).length;
+      }
+      if (kind === 'patient') {
         type ApiDietPlanSimple = { id: string }[];
         const diet = await fetchJsonWithTimeout<ApiDietPlanSimple>(`${API_BASE}/dietplans?patient_id=${id}`);
         counts.dietplans = diet.length;
-        const timeoff = await fetchJsonWithTimeout<ApiTimeOffSimple[]>(`${API_BASE}/timeoff`);
-        counts.timeoff = (timeoff || []).filter(x => x.entity_type === 'patient' && x.entity_id === id).length;
       }
       } catch { return; }
     setConfirmDelete({ kind, id, name, counts });
@@ -785,7 +761,8 @@ const AdminDashboard = () => {
         foot={<SheetFoot save={executeDelete} label="Delete" tone="destructive" />}>
         {confirmDelete?.counts ? (
           <Consequence>{[
-            confirmDelete.counts.appointments ? `${confirmDelete.counts.appointments} treatment${confirmDelete.counts.appointments === 1 ? '' : 's'} booked will go with it.` : '',
+            confirmDelete.counts.appointments ? `${confirmDelete.counts.appointments} treatment${confirmDelete.counts.appointments === 1 ? '' : 's'} ${confirmDelete.counts.done ? 'coming up' : 'booked'} will go with it.` : '',
+            confirmDelete.counts.done ? `${confirmDelete.counts.done} already done stay on the records.` : '',
             confirmDelete.counts.timeoff ? `${confirmDelete.counts.timeoff} leave entr${confirmDelete.counts.timeoff === 1 ? 'y' : 'ies'} will go too.` : '',
             confirmDelete.counts.dietplans ? `${confirmDelete.counts.dietplans} diet plan${confirmDelete.counts.dietplans === 1 ? '' : 's'} will go too.` : '',
           ].filter(Boolean).join(' ') || 'Nothing else depends on it.'}</Consequence>

@@ -472,7 +472,7 @@ export function buildServer() {
       if (action === 'list') {
         const [staff, therapies] = await Promise.all([
           prisma.staff.findMany({ where: { is_active: true }, orderBy: { name: 'asc' } }),
-          prisma.therapy.findMany({ orderBy: { name: 'asc' } }),
+          prisma.therapy.findMany({ where: { is_active: true }, orderBy: { name: 'asc' } }),
         ]);
         return reply(`${plural(staff.length, 'therapist')}.`, {
           therapists: staff.map((s) => ({ therapist_id: s.id, name: s.name, gender: s.gender, trained_in: s.specializations.map((id) => therapies.find((t) => t.id === id)?.name).filter(Boolean) })),

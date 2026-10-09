@@ -147,9 +147,9 @@ every merge; other pull requests get the builds and the database-free tests only
 
 ## How a session works here
 
-Sessions are driven from GitHub issues: **#70 is the roadmap and
-lists them in order, one issue per session.** "Work on #N" is the whole brief —
-read that issue, do it, close it, and tick it off in #70. Never re-open or redo a closed session issue; if it
+Sessions are driven from GitHub issues: **#439 is the maintainer's short list (#70 is the
+history), and the milestone "Polish week" holds the current work.** "Work on #N" is the whole brief —
+read that issue, do it, close it, and tick it off in #439. Never re-open or redo a closed session issue; if it
 needs more, open a new one that builds on it.
 
 Everything below applies to every session without being restated.
@@ -188,25 +188,7 @@ are the exception.
 `git revert` on the merge commit undoes it cleanly. If the work turns out bigger
 than the issue implies, stop and say so before expanding scope.
 
-**Three loops check the work, each for what it is good at** (8 Oct reset; the reasons are
-in `docs/testing.md`, "Loops"):
-
-1. *Every PR, cheap:* tests, `tsc`, CI. A screen that changed visibly gets **one "after"
-   screenshot at 375×812** (and at 200% text if rows or labels changed) from its own
-   `scripts/uat-<issue>.mjs`, committed in `docs/design/uat/<date>-<slug>/`. Never append
-   to the shared `scripts/uat.mjs` (parallel PRs conflict on it) and no "before" shot unless
-   the change is a redesign. Report pass/fail; only a step that needs a human goes to the
-   maintainer, one line each. A pure server or wording change needs no screenshot.
-2. *A walk, on a schedule:* a time-boxed (60–90 min) session with a charter, on what a seeded
-   stack hides: a brand-new centre, another timezone, after closing, 200% text, a phone in a
-   different zone. Run it before a release and after about ten merged PRs in one area. File
-   each finding with its class, and when the class can be checked by a machine (a clock in
-   another zone, a screen's number against the server's, text cut at 200%) add that check
-   to the nightly set so the walk never finds it twice. Walks found 148 of the issues of 5–9 Oct;
-   per-PR shots found almost none of them.
-3. *Polish batches:* wording, spacing and cosmetics are collected under the `polish` label
-   and done one screen group per PR, with a before/after sheet for the maintainer, not
-   one PR per nit.
+**Three loops check the work** (reasons in `docs/testing.md`, "Loops"; the steps are project skills in `.claude/skills/`): *every PR* is cheap: tests, `tsc`, CI, and for a visibly changed screen one after-shot from its own `scripts/uat-<issue>.mjs` (never the shared `uat.mjs`) (skill `ship`); *walks* are scheduled, chartered and on state the seed hides, and each machine-checkable class becomes a nightly guard (skill `walk`); *polish* is batched one screen group per PR with a before/after sheet (skill `polish-batch`). Only a step that needs a human goes to the maintainer, one line each.
 
 Leave the app open in the browser pane, signed in by API token, phone size, on the screen the work touched.
 

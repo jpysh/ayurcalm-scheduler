@@ -362,7 +362,7 @@ async function noTimeWhy(ctx: Ctx, day: Date, nowMinutes: number | null, therapy
 export async function therapyFacts(dayISO: string, patientId: string, prisma: PrismaClient) {
   const day = new Date(`${dayISO}T00:00:00.000Z`);
   const [therapies, mine] = await Promise.all([
-    prisma.therapy.findMany({ orderBy: { name: 'asc' } }),
+    prisma.therapy.findMany({ where: { is_active: true }, orderBy: { name: 'asc' } }),
     prisma.appointment.findMany({ where: { patient_id: patientId, status: { notIn: ['cancelled', 'no_show'] } }, orderBy: [{ scheduled_date: 'desc' }, { start_time: 'desc' }], select: { therapy_id: true, scheduled_date: true, start_time: true } }),
   ]);
   const repeat = mine.find((a) => a.scheduled_date < day && !therapies.find((t) => t.id === a.therapy_id)?.is_consultation)?.therapy_id;
