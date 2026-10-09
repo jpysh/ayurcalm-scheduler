@@ -1,8 +1,8 @@
-import { Consequence, DateRow, dayText, Days, Empty, PickField, SheetNote, Foot, ListGroup, Row, Seg, Switch, Text, TimeList, TwoFoot } from "@/components/kit";
+import { Consequence, DateRow, dayText, Days, Empty, PickField, SheetNote, Foot, LinkRow, ListGroup, Row, Seg, Switch, Text, TimeList, TwoFoot } from "@/components/kit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
-import { API_TOKEN, fetchJsonWithTimeout, leaveWhen, toLocalInput, type UiTimeOff, type UiStaff, type UiRoom, type UiTherapy, type Patient } from "./shared";
+import { API_TOKEN, fetchJsonWithTimeout, leaveWhen, toLocalInput, type UiTimeOff, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
 import { HolidaysSheet } from "@/components/HolidaysSheet";
@@ -11,6 +11,19 @@ import { HolidaysSheet } from "@/components/HolidaysSheet";
 const entityKey = (t: string) => (t === 'GuestRoom' ? 'guest_room' : t.toLowerCase());
 const nextDay = (iso: string) => new Date(Date.parse(`${iso}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
 const sortKey = (h: UiTimeOff) => h.startDate || h.date || '';
+
+/** Days a thing is out, marked from its own screen (#671): Leave is people only, so each kind says it in its own words. */
+const OUT: Partial<Record<UiTimeOff['type'], { group: string; add: string; title: string; note: string; save: string; done: string }>> = {
+  Room: { group: 'Out of use', add: 'Out of use for some days', title: 'Room out of use', note: 'Nothing is booked into it then.', save: 'Mark the room out of use', done: 'out of use' },
+  GuestRoom: { group: 'Out of use', add: 'Out of use for some days', title: 'Guest room out of use', note: 'The room cannot be given to a guest on these days.', save: 'Mark the room out of use', done: 'out of use' },
+  Therapy: { group: 'Not given', add: 'Not given on some days', title: 'Therapy not given', note: 'It is not booked on these days, say when the oil has run out.', save: 'Save the days', done: 'not given' },
+  Patient: { group: 'Away', add: 'No treatments on these days', title: 'No treatments', note: 'Nothing is booked for them then, say for a day trip.', save: 'Save the days', done: 'has no treatments' },
+};
+/** Still to come, or a weekly repeat not yet ended: what the Upcoming filter keeps. */
+const upcoming = (h: UiTimeOff, today: string) => {
+  const end = (h.endDate || h.date || '').slice(0, 10);
+  return h.recurrence === 'weekly' ? !(end && end < today) : !!end && end >= today;
+};
 
 /** Leave (#285 story 9): one row each, who and when; a tap opens the same sheet that adds one. */
 const TimeOffTab = ({ today, timeOffs, viewMode, setViewMode, visibleRows, totalRef, nameOf, kindOf, isFullDay, weeklyLabel, openEdit, onHolidays }: {
@@ -23,7 +36,7 @@ const TimeOffTab = ({ today, timeOffs, viewMode, setViewMode, visibleRows, total
   // The centre's closed days are set once a year and live in their own sheet; this list is the team's, which changes daily.
   const closed = timeOffs.filter((h) => h.type === 'Center').sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
   const nextClosed = closed.find((h) => sortKey(h).slice(0, 10) >= today);
-  const rows = timeOffs.filter((h) => h.type !== 'Center').filter((h) => {
+  const rows = timeOffs.filter((h) => h.type === 'Staff').filter((h) => {
     if (viewMode === 'all') return true;
     const start = sortKey(h).slice(0, 10) || undefined;
     const endRaw = h.endDate || h.date;
@@ -51,9 +64,9 @@ const TimeOffTab = ({ today, timeOffs, viewMode, setViewMode, visibleRows, total
 export default TimeOffTab;
 
 /** The Time off screen: its filters, the Add dialog and the tab, held by the dashboard so they last as long as it does. */
-export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, loadReplans, refreshAppointmentsForDate, todayKey, startDay, centreToday, timeSlots, planDay }: {
+export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, roomNameById, therapyNameById, patientNameById, loadReplans, refreshAppointmentsForDate, todayKey, startDay, centreToday, timeSlots, planDay }: {
   timeOffs: UiTimeOff[]; setTimeOffs: React.Dispatch<React.SetStateAction<UiTimeOff[]>>;
-  staff: UiStaff[]; roomsList: UiRoom[]; therapies: UiTherapy[]; patients: Patient[];
+  staff: UiStaff[];
   staffNameById: Record<string, string>; roomNameById: Record<string, string>; therapyNameById: Record<string, string>; patientNameById: Record<string, string>;
   loadReplans: () => void; refreshAppointmentsForDate: (iso: string, silent?: boolean) => Promise<void>; todayKey: string; startDay: string; centreToday: string;
   /** The centre's slot times, "HH:MM": what part-day leave starts and ends on. */
@@ -142,6 +155,17 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     setSheet('edit');
   };
   const openAdd = (preset?: { type: UiTimeOff['type']; entity: string }) => { setEditing(null); setNewTimeOff({ ...blank(), ...(preset ?? {}) }); setSheet('new'); };
+  /** A room, guest room, therapy or patient lists its own days out on its sheet, and adds more there (#671). */
+  const outFor = (type: UiTimeOff['type'], entity: string) => {
+    const w = OUT[type]!;
+    const mine = timeOffs.filter((h) => h.type === type && h.entity === entity && upcoming(h, centreToday)).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+    return (
+      <ListGroup title={mine.length ? w.group : undefined}>
+        {mine.map((h) => <Row key={h.id} title={leaveWhen(h, isFullDay(h))} facts={[h.recurrence === 'weekly' ? weeklyLabel(h.weekdays) : '', h.description].filter(Boolean).join(' · ') || undefined} trailing="›" onClick={() => openEdit(h)} />)}
+        <LinkRow label={w.add} onClick={() => openAdd({ type, entity })} />
+      </ListGroup>
+    );
+  };
   const closeSheet = (o: boolean) => { if (!o) { setSheet(null); setEditing(null); } };
 
   const saveEdit = async () => {
@@ -212,9 +236,9 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
       if (!res.ok) throw new Error(String(res.status));
       const created = await res.json();
       setTimeOffs((prev) => prev.map((h) => h.id === tempId ? { id: created.id, startDate: created.start_date ? new Date(created.start_date).toISOString() : undefined, endDate: created.end_date ? new Date(created.end_date).toISOString() : undefined, recurrence: created.recurrence || undefined, weekdays: created.weekdays || undefined, type: optimistic.type, entity: created.entity_id ?? optimistic.entity, description: created.description ?? optimistic.description } : h));
-      if (room) {
-        const name = guestRooms.find((r) => r.id === optimistic.entity)?.name ?? 'The room';
-        toast(`${name} out of use ${newTimeOff.date === newTimeOff.endDate ? dayText(newTimeOff.date) : `${dayText(newTimeOff.date)} to ${dayText(newTimeOff.endDate)}`}`, {
+      if (optimistic.type !== 'Staff' && OUT[optimistic.type]) {
+        const name = nameOf(optimistic);
+        toast(`${name} ${OUT[optimistic.type]!.done} ${newTimeOff.date === newTimeOff.endDate ? dayText(newTimeOff.date) : `${dayText(newTimeOff.date)} to ${dayText(newTimeOff.endDate)}`}`, {
           action: { label: 'Undo', onClick: async () => { await fetch(`${API_BASE}/timeoff/${created.id}`, { method: 'DELETE' }); setTimeOffs((prev) => prev.filter((h) => h.id !== created.id)); } },
         });
       } else if (planNow) planDay(planFor);
@@ -225,28 +249,22 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     }
   };
 
+  const out = newTimeOff.type === 'Staff' || newTimeOff.type === 'Center' ? undefined : OUT[newTimeOff.type];
   const dialogs = (
     <>
       <HolidaysSheet open={showHolidays} onOpenChange={setShowHolidays} closed={closedDays} today={todayKey}
         onAdded={(rows) => setTimeOffs((prev) => [...prev, ...rows.map((x) => ({ id: x.id, date: new Date(x.date).toISOString(), type: "Center" as const, entity: "All", description: x.description }))])} />
-      <BottomSheet open={sheet !== null} onOpenChange={closeSheet} title={sheet === 'edit' ? 'Change leave' : 'New leave'} note={sheet === 'edit' ? `${editing ? nameOf(editing) : ''}. Change anything, then save.` : newTimeOff.type === 'GuestRoom' ? 'The room cannot be given to a guest on these days.' : 'Who is away, and when.'}
+      <BottomSheet open={sheet !== null} onOpenChange={closeSheet} title={out ? out.title : sheet === 'edit' ? 'Change leave' : 'New leave'} note={out ? out.note : sheet === 'edit' ? `${editing ? nameOf(editing) : ''}. Change anything, then save.` : 'Who is away, and when.'}
         foot={sheet === 'edit'
-          ? <Foot label="Save the leave" save={saveEdit} ok={newTimeOff.type === 'Center' || !!newTimeOff.entity} remove={() => { const h = editing; closeSheet(false); if (h) void removeLeave(h); }} removeLabel="Delete this leave" />
-          : newTimeOff.type === 'GuestRoom'
-            ? <Foot label="Mark the room out of use" ok={!!newTimeOff.entity} save={() => save(false)} />
+          ? <Foot label="Save the leave" save={saveEdit} ok={newTimeOff.type === 'Center' || !!newTimeOff.entity} remove={() => { const h = editing; closeSheet(false); if (h) void removeLeave(h); }} removeLabel={out ? 'Remove these days' : 'Delete this leave'} />
+          : out
+            ? <Foot label={out.save} ok={!!newTimeOff.entity} save={() => save(false)} />
             : <TwoFoot main="Save and plan the day" onMain={() => save(true)} alt="Save, plan later" onAlt={() => save(false)} ok={newTimeOff.type === 'Center' || !!newTimeOff.entity} />}>
-        {/* Who first, as one list (#265 H1): the old form asked for a "type" before the person. */}
-        <PickField label="Who or what" placeholder="Choose…"
-          value={newTimeOff.type === 'Center' ? 'Center:All' : newTimeOff.entity ? `${newTimeOff.type}:${newTimeOff.entity}` : ''}
-          onPick={(v) => { const [type, ...id] = v.split(':'); setNewTimeOff({ ...newTimeOff, type: type as UiTimeOff['type'], entity: id.join(':') }); }}
-          groups={[
-            { title: 'Therapists and doctors', options: staff.map((x) => ({ id: `Staff:${x.id}`, name: x.name })) },
-            { title: 'The whole centre', options: [{ id: 'Center:All', name: 'Closed for a day' }] },
-            { title: 'Rooms', folded: true, options: roomsList.map((r) => ({ id: `Room:${r.id}`, name: r.name })) },
-            { title: 'Guest rooms', folded: newTimeOff.type !== 'GuestRoom', options: guestRooms.filter((r) => r.is_active).map((r) => ({ id: `GuestRoom:${r.id}`, name: r.name })) },
-            { title: 'Therapies', folded: true, options: therapies.map((t) => ({ id: `Therapy:${String(t.id ?? t.name)}`, name: t.name })) },
-            { title: 'Patients', folded: true, options: patients.map((x) => ({ id: `Patient:${x.id}`, name: x.name })) },
-          ]} />
+        {/* Leave is people only (#671); anything else arrives here from its own sheet, already chosen. */}
+        {out ? <ListGroup><Row title={nameOf({ id: '', type: newTimeOff.type, entity: newTimeOff.entity, description: '' })} facts={kindOf({ id: '', type: newTimeOff.type, entity: newTimeOff.entity, description: '' })} /></ListGroup>
+          : <PickField label="Who" placeholder="Choose…" value={newTimeOff.entity ? `Staff:${newTimeOff.entity}` : ''}
+            onPick={(v) => setNewTimeOff({ ...newTimeOff, type: 'Staff', entity: v.split(':').slice(1).join(':') })}
+            groups={[{ title: 'Therapists and doctors', options: staff.map((x) => ({ id: `Staff:${x.id}`, name: x.name })) }]} />}
         {sheet === 'new' && newTimeOff.type !== 'Center' && !newTimeOff.entity ? <SheetNote>Choose who is away to save.</SheetNote> : null}
         <div className="grid grid-cols-2 gap-3">
           <DateRow label="From" value={newTimeOff.date} onChange={(v) => setNewTimeOff({ ...newTimeOff, date: v, endDate: newTimeOff.endDate < v ? v : newTimeOff.endDate })} />
@@ -269,5 +287,5 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
   );
 
   /** Public holidays live with Opening hours in Settings (#288); the sheet is here because it adds to this list. */
-  return { tab, dialogs, setVisibleRows: setVisibleTimeOffRows, totalRef: timeoffTotalRef, openAdd, openHolidays: () => setShowHolidays(true) };
+  return { tab, dialogs, outFor, setVisibleRows: setVisibleTimeOffRows, totalRef: timeoffTotalRef, openAdd, openHolidays: () => setShowHolidays(true) };
 }

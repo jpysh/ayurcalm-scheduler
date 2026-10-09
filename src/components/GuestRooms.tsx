@@ -28,7 +28,7 @@ const byType = (rooms: Room[]) => rooms.reduce<[string, Room[]][]>((out, r) => {
 }, []);
 const fetchRooms = (from: string, to: string) => fetchJsonWithTimeout<Room[]>(`${API_BASE}/guest-rooms/free?from=${from}&to=${to}`).then((r) => (Array.isArray(r) ? r : []));
 
-export function GuestRooms({ today, openPatient, newPatient, openSettings, adding, setAdding, openOut }: {
+export function GuestRooms({ today, openPatient, newPatient, openSettings, adding, setAdding, out }: {
   /** YYYY-MM-DD on the centre's clock. */
   today: string;
   openPatient: (id: string) => void;
@@ -40,7 +40,7 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
   adding: boolean;
   setAdding: (o: boolean) => void;
   /** Take a room out of use for some days: the Leave sheet with that room chosen. */
-  openOut: (roomId: string) => void;
+  out: (roomId: string) => React.ReactNode;
 }) {
   const [managing, setManaging] = useState(false);
   const [version, setVersion] = useState(0);
@@ -61,7 +61,7 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
 
   const sheets = <>
     <AddGuestRooms open={adding} onOpenChange={setAdding} onChanged={() => setVersion((v) => v + 1)} openTypes={openSettings} />
-    <ManageGuestRooms open={managing} onOpenChange={setManaging} openOut={openOut} onChanged={() => setVersion((v) => v + 1)} openTypes={openSettings} />
+    <ManageGuestRooms open={managing} onOpenChange={setManaging} out={out} onChanged={() => setVersion((v) => v + 1)} openTypes={openSettings} />
   </>;
 
   if (night && !night.length) return (

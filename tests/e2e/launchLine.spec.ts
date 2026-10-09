@@ -66,7 +66,7 @@ test("@smoke a therapist's leave is recorded from the menu", async ({ page, requ
   await page.getByRole('dialog').getByRole('button', { name: /^Leave/ }).click();
   await page.getByRole('button', { name: 'Add leave', exact: true }).click();
   const sheet = page.getByRole('dialog').last();
-  await sheet.getByRole('button', { name: /^Who or what/ }).click();
+  await sheet.getByRole('button', { name: /^Who\b/ }).click();
   await page.getByRole('dialog').last().getByRole('button').filter({ hasNotText: /Closed for a day|Show/ }).first().click();
   await sheet.locator('input[type=date]').first().fill('2030-03-06');
   await sheet.locator('input[type=date]').nth(1).fill('2030-03-06');
