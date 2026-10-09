@@ -77,6 +77,7 @@ async function main() {
     const eshaStay = await prisma.patientStay.create({ data: { patient_id: esha.id, start_date: at('2030-07-01'), end_date: at('2030-07-10'), duration_days: 10, discharge: { follow_up_date: DAY } } });
     o = await read();
     assert.deepEqual(o.items.filter((i) => i.rule === 'follow_up' && i.who.startsWith(TAG)).map((i) => [i.who, i.what]), [[`${TAG} Esha`, 'Follow-up due Tue 20 Aug']]);
+    assert.deepEqual(o.items.filter((i) => i.rule === 'follow_up' && i.who.startsWith(TAG)).map((i) => (i as { action?: string }).action), ['followup'], 'the row opens the follow-up message itself (#603)');
     assert.equal((await call('GET', `/patients/${esha.id}/day?date=${DAY}`)).follow_up.due, DAY);
     await call('PATCH', `/patients/${esha.id}/stays/${eshaStay.id}/follow-up`, { done: true });
     o = await read();
