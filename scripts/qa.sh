@@ -73,6 +73,7 @@ run search           "Search finds a resident's treatments on every day in the w
 run residentDay      "A resident's card shows which day of their stay it is, today's treatments without cancelled ones, and meals as the day sheet prints them"
 run attention       "What needs you: patient items follow the rules, a changed 'when' or an off switch changes them, the locked rule stays on, and Reset restores the defaults"
 run fastOpen        "A fast first open: the script is compressed and cached for a year, and the week comes in one call"
+run deleteKeepsDone  "Deleting a therapist, room or therapy takes its coming treatments; done ones stay on the record"
 run changeLog        "The Log shows each change in words, newest first, and the newest fix from the day's check can be undone from it"
 run dietOverride       "Editing a diet plan changes it for everyone except what one patient was told specifically"
 run onboarding         "After the setup wizard, the centre has its hours, timezone, therapies, rooms and therapists, and the day sheet prints"

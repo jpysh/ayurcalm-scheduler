@@ -175,6 +175,8 @@ model Therapy {
   name                  String
   required_amenities    String[]
   duration_minutes      Int
+  /// False once deleted after it was given (#567): kept so done treatments keep its name.
+  is_active             Boolean  @default(true)
   requires_gender_match Boolean  @default(false)
   /// How many therapists the treatment needs. A rule the guard enforces, not a
   /// choice made per booking: a four-hand Pizhichil always needs two.
