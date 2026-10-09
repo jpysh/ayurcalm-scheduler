@@ -152,6 +152,12 @@ try {
   assert.deepEqual([opened.date, opened.arrives], [first, first], 'opens on the first day of the stay they are waiting for');
   assert.equal((await (await call(`/public/link/${p}?date=${today}`)).json()).date, today, 'a day they ask for is still that day');
   assert.equal((await (await call(`/public/link/${t2}`)).json()).arrives, null, 'staff are not told about stays');
+  // After closing the link opens on tomorrow (#662); a closing time of 00:00 is always past, whatever the hour of the run.
+  const closing = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))!.closing_time;
+  await prisma.settings.update({ where: { id: 'singleton' }, data: { closing_time: '00:00' } });
+  try {
+    assert.equal((await (await call(`/public/link/${t2}`)).json()).date, iso(1).toISOString().slice(0, 10), 'after closing a therapist\'s link opens on tomorrow');
+  } finally { await prisma.settings.update({ where: { id: 'singleton' }, data: { closing_time: closing } }); }
   // One question on the leaving day (#509): asked once, kept on the stay, read by the admin as information.
   const leaver = await prisma.patient.create({ data: { name: `${tag} Leaver`, gender: 'female' } });
   leavers.push(leaver.id);
