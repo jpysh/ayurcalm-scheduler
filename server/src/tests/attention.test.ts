@@ -71,6 +71,11 @@ async function main() {
     await prisma.patientStay.create({ data: { patient_id: dora.id, start_date: at('2030-08-15'), end_date: at('2030-08-19'), duration_days: 5 } });
     o = await read();
     assert.deepEqual(o.items.filter((i) => i.rule === 'form_c' && i.who.startsWith(TAG)).map((i) => [i.who, i.what]), [[`${TAG} Dora`, 'Form C overdue since Fri 16 Aug']]);
+    // A day visitor who came and went yesterday is due today, not overdue (#664).
+    const ines = await prisma.patient.create({ data: { name: `${TAG} Ines`, gender: 'female', country: 'Spain' } });
+    await prisma.patientStay.create({ data: { patient_id: ines.id, start_date: at('2030-08-19'), end_date: at('2030-08-19'), duration_days: 1 } });
+    o = await read();
+    assert.deepEqual(o.items.filter((i) => i.rule === 'form_c' && i.who === `${TAG} Ines`).map((i) => i.what), ['Form C due by Tue 20 Aug']);
 
     // Follow-up (#487): the discharge asked for today, so it is due; marked done, it goes; the card says so.
     const esha = await prisma.patient.create({ data: { name: `${TAG} Esha`, gender: 'female' } });
