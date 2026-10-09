@@ -9,10 +9,11 @@ import { type UiTherapy } from "./shared";
 type ApiTherapy = { id: string; name: string; duration_minutes: number; required_amenities: string[]; requires_gender_match: boolean; staff_required?: number; once_per_course?: boolean; before_purification?: boolean; checklist?: UiTherapy["checklist"]; vitals?: string[] };
 
 /** The Therapies screen (#285 session 6): one row each, a tap or + opens the sheet, the library adds many. `q` is the bar's search. */
-export function useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q, out }: {
+export function useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q, out, flag }: {
   therapies: UiTherapy[]; setTherapies: React.Dispatch<React.SetStateAction<UiTherapy[]>>; amenityOptions: string[]; q: string;
   requestDelete: (kind: "therapy", id: string, name?: string) => void;
   /** The therapy's days not given (#671), drawn inside its sheet. */ out: (id: string) => React.ReactNode;
+  /** "Not available Thu 15 Oct" on the row (#695). */ flag: (id: string) => string | undefined;
 }) {
   const [open, setOpen] = useState<UiTherapy | "new" | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
@@ -28,7 +29,7 @@ export function useTherapiesScreen({ therapies, setTherapies, amenityOptions, re
       <PageHead title="Therapies" note={`${therapies.length}`} />
       <ListGroup><LinkRow label="Standard therapies" value="Add from the library" onClick={() => setShowLibrary(true)} /></ListGroup>
       {rows.length === 0 ? <Empty text={ql ? "No therapy matches." : "No therapies yet. Add from the library, or tap + to add one."} /> : (
-        <ListGroup title="Therapies" count={rows.length}>{rows.map((t) => <Row key={t.id} title={t.name} facts={therapySub(t)} trailing="›" onClick={() => setOpen(t)} />)}</ListGroup>
+        <ListGroup title="Therapies" count={rows.length}>{rows.map((t) => <Row key={t.id} title={t.name} facts={therapySub(t)} flag={flag(String(t.id))} trailing="›" onClick={() => setOpen(t)} />)}</ListGroup>
       )}
     </div>
   );

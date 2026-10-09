@@ -19,7 +19,7 @@ import { centreClock, eventClashes, outsideHours, type EventRow } from './availa
 import { loadDietsForDay } from './dietResolution.js';
 import { bookingOptions, bookingSuggestions, bookingWho, cardChoices, nextConsultations, notStaying, planNextWeek, therapyFacts, whyNoConsultation, whyNoTime } from './cardChoices.js';
 import { historyOf } from './history.js';
-import { searchPatients, searchTreatments } from './search.js';
+import { searchOut, searchPatients, searchTreatments } from './search.js';
 import { residentDay } from './residentDay.js';
 import { changeLog } from './changeLog.js';
 import { therapyLibrary } from './therapyLibrary.js';
@@ -1498,8 +1498,8 @@ app.get('/appointments/search', async (req: Request, res: Response) => {
   // The screen sends today ± the same number of days, so the middle is the centre's today.
   const today = new Date((from.getTime() + to.getTime()) / 2);
   today.setUTCHours(0, 0, 0, 0);
-  const [hits, patients] = await Promise.all([searchTreatments(query.q, from, to, prisma), searchPatients(query.q, today, prisma)]);
-  res.json({ hits, patients });
+  const [hits, patients, out] = await Promise.all([searchTreatments(query.q, from, to, prisma), searchPatients(query.q, today, prisma), searchOut(query.q, today, prisma)]);
+  res.json({ hits, patients, out });
 });
 
 // The + button's suggestions: who to book next, when, with whom, where (#136).

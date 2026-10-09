@@ -42,7 +42,7 @@ export function marked(text: string, q: string): ReactNode {
   return out;
 }
 
-export function SearchScreen({ query, setQuery, today, nowMinutes, residents, therapists, onOpen, onOpenPatient }: {
+export function SearchScreen({ query, setQuery, today, nowMinutes, residents, therapists, onOpen, onOpenPatient, onOpenOut }: {
   query: string;
   setQuery: (q: string) => void;
   /** YYYY-MM-DD and minutes past midnight, on the centre's clock. */
@@ -53,19 +53,22 @@ export function SearchScreen({ query, setQuery, today, nowMinutes, residents, th
   onOpen: (hit: Hit) => void;
   /** Opens the patient's card, past guests included (#412). */
   onOpenPatient?: (id: string) => void;
+  /** A thing not available (#695): opens its entry on Availability. */
+  onOpenOut?: (timeOffId: string) => void;
 }) {
   const [scope, setScope] = useState<Scope>("upcoming");
   const [hits, setHits] = useState<Hit[] | null>(null);
   const [people, setPeople] = useState<PatientHit[]>([]);
+  const [out, setOut] = useState<{ id: string; name: string; kind: string; when: string }[]>([]);
   const q = query.trim();
 
   useEffect(() => {
-    if (!q) { setHits(null); setPeople([]); return; }
+    if (!q) { setHits(null); setPeople([]); setOut([]); return; }
     // Typed, not submitted: wait for a pause so each letter is not a request.
     const t = setTimeout(() => {
       fetch(`${API_BASE}/appointments/search?q=${encodeURIComponent(q)}&from=${shift(today, -WINDOW_DAYS)}&to=${shift(today, WINDOW_DAYS)}`)
         .then((r) => (r.ok ? r.json() : { hits: [] }))
-        .then((d) => { setHits(Array.isArray(d.hits) ? d.hits : []); setPeople(Array.isArray(d.patients) ? d.patients : []); })
+        .then((d) => { setHits(Array.isArray(d.hits) ? d.hits : []); setPeople(Array.isArray(d.patients) ? d.patients : []); setOut(Array.isArray(d.out) ? d.out : []); })
         .catch(() => setHits([]));
     }, 250);
     return () => clearTimeout(t);
@@ -103,6 +106,11 @@ export function SearchScreen({ query, setQuery, today, nowMinutes, residents, th
           {people.slice(0, 5).map((p) => (
             <Row key={p.id} onClick={() => { remember(q); onOpenPatient(p.id); }} title={marked(p.name, q)} facts={stayLine(p)} />
           ))}
+        </ListGroup>
+      ) : null}
+      {out.length ? (
+        <ListGroup title="Not available" count={out.length}>
+          {out.map((o) => <Row key={o.id} title={marked(o.name, q)} facts={`${o.kind} · ${o.when}`} trailing={onOpenOut ? "›" : undefined} onClick={onOpenOut ? () => { remember(q); onOpenOut(o.id); } : undefined} />)}
         </ListGroup>
       ) : null}
       <div className="pt-3"><Seg<Scope> options={[["upcoming", "Upcoming"], ["past", "Past"], ["all", "All"]]} value={scope} onChange={setScope} /></div>

@@ -78,6 +78,17 @@ async function main() {
     const byCountry = (await (await fetch(`${API_BASE}/appointments/search?q=germany&from=2030-05-01&to=2030-05-31`, { headers: { Authorization: `Bearer ${token}` } })).json()).patients as { id: string }[];
     assert.ok(byCountry.some((p) => p.id === guest.id), 'a country finds the guest');
 
+    // A thing not available is found by its name, with when (#695).
+    const shut = await prisma.therapyRoom.create({ data: { name: `${TAG} Closed Room`, amenities: [], is_active: true, weekly_schedule: {} } });
+    const off = await prisma.timeOff.create({ data: { entity_type: 'room', entity_id: shut.id, date: new Date('2030-05-20T00:00:00.000Z'), start_date: new Date('2030-05-20T00:00:00.000Z'), end_date: new Date('2030-05-20T00:00:00.000Z') } });
+    try {
+      const out = (await (await fetch(`${API_BASE}/appointments/search?q=${encodeURIComponent(TAG + ' Closed')}&from=2030-05-01&to=2030-05-31`, { headers: { Authorization: `Bearer ${token}` } })).json()).out as { name: string; kind: string; when: string }[];
+      assert.deepEqual(out.map((o) => [o.kind, o.when]), [['Treatment room', 'Not available Mon 20 May']], 'a room not available is found with when');
+    } finally {
+      await prisma.timeOff.delete({ where: { id: off.id } });
+      await prisma.therapyRoom.delete({ where: { id: shut.id } });
+    }
+
     console.log('Search: a name finds every day in the window, in order; rooms and assisting therapists count; cancelled and out-of-window do not.');
   } finally {
     await tidy(prisma).catch(() => {});

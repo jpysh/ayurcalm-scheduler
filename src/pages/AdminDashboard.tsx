@@ -11,7 +11,7 @@ import { AttentionSheet, type DayProblem, type ReplanBatch } from "@/components/
 import { useStaffScreen } from "./tabs/StaffTab";
 import { useRoomsScreen } from "./tabs/RoomsTab";
 import { useTherapiesScreen } from "./tabs/TherapiesTab";
-import { useTimeOffScreen } from "./tabs/TimeOffTab";
+import { notAvailable, useTimeOffScreen } from "./tabs/TimeOffTab";
 import { useEventsScreen } from "./tabs/EventsTab";
 import { useDietScreen } from "./tabs/DietTab";
 import { usePatientsScreen } from "./tabs/PatientsTab";
@@ -504,10 +504,10 @@ const AdminDashboard = () => {
   useEffect(() => { const t = setInterval(() => setMinute((m) => m + 1), 60000); return () => clearInterval(t); }, []);
 
   // Each screen keeps its own state and dialogs in its own file (#147).
-  const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), movedFrom, problems: dayCheck.problems, history: dayCheck.history, showDay: (iso: string) => { setCurrentDate(dayDate(iso)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id), staffCount: staff.length, addTherapist: (a: { gender?: string; therapy_id?: string }) => staffAdder.current?.(a), addRoom: (a: { amenities?: string[] }) => roomAdder.current?.(a), addPatient: (name: string, arriving: string, done: (p: { id: string; name: string }) => void) => patientAdder.current?.(name, arriving, done) });
+  const scheduleScreen = useScheduleScreen({ openOut: (id: string) => timeOffScreen.openOne(id), ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), movedFrom, problems: dayCheck.problems, history: dayCheck.history, showDay: (iso: string) => { setCurrentDate(dayDate(iso)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id), staffCount: staff.length, addTherapist: (a: { gender?: string; therapy_id?: string }) => staffAdder.current?.(a), addRoom: (a: { amenities?: string[] }) => roomAdder.current?.(a), addPatient: (name: string, arriving: string, done: (p: { id: string; name: string }) => void) => patientAdder.current?.(name, arriving, done) });
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, requestDelete, centre: { opening: centreHours.opening_time, closing: centreHours.closing_time } });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, requestDelete, out: (id) => timeOffScreen.outFor('Room', id) });
-  const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q: listQuery, out: (id) => timeOffScreen.outFor('Therapy', id) });
+  const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q: listQuery, out: (id) => timeOffScreen.outFor('Therapy', id), flag: (id) => notAvailable(timeOffs, 'Therapy', id, ymdInTZ(new Date())) });
   // A day away applies to a guest staying or coming (#695).
   const guests = useMemo(() => patients.filter((p) => (p.stays ?? []).some((st) => st.end_date.slice(0, 10) >= ymdInTZ(new Date()))).map((p) => ({ id: p.id, name: p.name })), [patients]); // eslint-disable-line react-hooks/exhaustive-deps
   const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, roomNameById, therapyNameById, patientNameById, guests, todayKey, centreToday: ymdInTZ(new Date()), timezone: ADMIN_TZ, closingTime: centreHours.closing_time, timeSlots });
@@ -522,7 +522,7 @@ const AdminDashboard = () => {
   staffAdder.current = (a) => staffScreen.openAdd({ gender: a.gender === 'male' ? 'Male' : a.gender === 'female' ? 'Female' : undefined, gives: therapies.filter((t) => t.id === a.therapy_id).map((t) => t.name), role: therapies.find((t) => t.id === a.therapy_id)?.consultation ? 'doctor' : undefined });
   const patientAdder = useRef<((name: string, arriving: string, done: (p: { id: string; name: string }) => void) => void) | null>(null);
   const swipe = useRef<{ x: number; y: number } | null>(null);
-  const patientsScreen = usePatientsScreen({ out: (id) => timeOffScreen.outFor('Patient', id), needs: attention.items.filter((i) => i.section === 'Patients' && i.kind === 'action' && i.patient_id), patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ, startDay,
+  const patientsScreen = usePatientsScreen({ out: (id) => timeOffScreen.outFor('Patient', id), away: (id) => notAvailable(timeOffs, 'Patient', id, ymdInTZ(new Date())), needs: attention.items.filter((i) => i.section === 'Patients' && i.kind === 'action' && i.patient_id), patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ, startDay,
     openTreatment: (a) => { go('schedule'); scheduleScreen.openCard(a); },
     // A day on the card books on that day (#350).
     book: (p) => { go('schedule'); if (p?.date) { setCurrentDate(dayDate(p.date)); refreshAppointmentsForDate(p.date, true); } scheduleScreen.openBook(p); },

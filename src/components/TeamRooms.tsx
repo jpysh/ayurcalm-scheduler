@@ -109,13 +109,13 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
       } },
     });
   }
-  /** "Out of use from 14:00", "until 14:00", "until Wed 14 Oct", by the entry's own times and days. */
+  /** "Not available from 14:00", "until 14:00", "until Wed 14 Oct", by the entry's own times and days. */
   const outLine = (e: RoomOff) => {
     const last = (e.end_date ?? e.date ?? "").slice(0, 10);
-    if (firstOut(e) > today) return `Out of use ${dayText(firstOut(e))}${last > firstOut(e) ? ` to ${dayText(last)}` : ""}`;
-    if (last > today) return `Out of use until ${dayText(last)}`;
+    if (firstOut(e) > today) return `Not available ${dayText(firstOut(e))}${last > firstOut(e) ? ` to ${dayText(last)}` : ""}`;
+    if (last > today) return `Not available until ${dayText(last)}`;
     const fromT = e.start_time && e.start_time > opening ? e.start_time : null, toT = e.end_time && e.end_time < closing ? e.end_time : null;
-    return fromT && toT ? `Out of use ${fromT}–${toT}` : fromT ? `Out of use from ${fromT}` : toT ? `Out of use until ${toT}` : "Out of use today";
+    return fromT && toT ? `Not available ${fromT}–${toT}` : fromT ? `Not available from ${fromT}` : toT ? `Not available until ${toT}` : "Not available today";
   };
   // Their own hours that day (#571): a time at the edge of their shift changes nothing.
   const shift = pick?.kind === "staff" && on >= 0 ? week!.rows.find((r) => r.id === pick.id)?.days[on] : undefined;

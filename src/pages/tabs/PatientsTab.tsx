@@ -56,7 +56,7 @@ const DAY_MS = 86400000;
  * Residents (#63, docs/design/phone.html): who is in house today, arriving,
  * staying and leaving, from their stays. Search finds anyone, in house or not.
  */
-function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRules, needs, onNeed }: { patients: Patient[]; today: string; onOpen: (id: string) => void; onAdd: () => void; q: string; everything: (q: string) => void; openRules: () => void; /** What the rules in Settings say needs doing for a patient (#288), and what tapping one opens. */ needs: AttentionItem[]; onNeed: (i: AttentionItem) => void }) {
+function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRules, needs, onNeed, away }: { patients: Patient[]; today: string; onOpen: (id: string) => void; onAdd: () => void; q: string; everything: (q: string) => void; openRules: () => void; /** What the rules in Settings say needs doing for a patient (#288), and what tapping one opens. */ needs: AttentionItem[]; onNeed: (i: AttentionItem) => void; away: (id: string) => string | undefined }) {
   const [onlyNeeds, setOnlyNeeds] = useState(false);
   const [inHouse, setInHouse] = useState<InHouse[] | null>(null);
   useEffect(() => {
@@ -78,7 +78,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRule
     ['Staying', people.filter((x) => x.s!.start_date.slice(0, 10) !== today && x.s!.end_date.slice(0, 10) !== today)],
   ];
   // A flag only when something needs doing: the first thing the rules found, in its own words.
-  const flagOf = (id: string | number) => needs.filter((i) => i.patient_id === String(id)).map((i) => i.what).join(' · ') || undefined;
+  const flagOf = (id: string | number) => [...needs.filter((i) => i.patient_id === String(id)).map((i) => i.what), away(String(id))].filter(Boolean).join(' · ') || undefined;
   // One row a patient, with everything that needs doing under the name.
   const needy = [...new Set(needs.map((i) => i.patient_id!))].map((id) => needs.find((i) => i.patient_id === id)!);
   const row = (id: string | number, name: string, sub: string) => <Row key={id} title={name} facts={sub} flag={flagOf(id)} onClick={() => onOpen(String(id))} />;
@@ -384,9 +384,11 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
 }
 
 /** The Patients screen: the Add and Details dialogs and the tab, held by the dashboard so they last as long as it does. */
-export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, startDay, openTreatment, book, searchEverything, openCatalogue, openRules, needs, out }: {
+export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, startDay, openTreatment, book, searchEverything, openCatalogue, openRules, needs, out, away }: {
   /** The patient's days with no treatments (#671), drawn on their card. */
   out: (id: string) => React.ReactNode;
+  /** "Not available until …" on a guest's row (#695). */
+  away: (id: string) => string | undefined;
   /** The patient items the rules raise today: the "Needs attention" chip and the flags on rows. */
   needs: AttentionItem[];
   patients: PatientRow[]; setPatients: React.Dispatch<React.SetStateAction<PatientRow[]>>; staff: UiStaff[];
@@ -550,7 +552,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const backToCard = (close: () => void) => () => { close(); if (back) { setCardId(back); setBack(null); } };
   const tab = (
     <>
-      <ResidentsList patients={patients} today={today} onOpen={setCardId} onAdd={() => setShowAddPatient(true)} q={query} everything={searchEverything} openRules={openRules} needs={needs} onNeed={(i) => (i.action === 'diet' ? setDietFor({ id: i.patient_id!, name: i.who }) : setCardId(i.patient_id!))} />
+      <ResidentsList patients={patients} today={today} onOpen={setCardId} onAdd={() => setShowAddPatient(true)} q={query} everything={searchEverything} openRules={openRules} needs={needs} away={away} onNeed={(i) => (i.action === 'diet' ? setDietFor({ id: i.patient_id!, name: i.who }) : setCardId(i.patient_id!))} />
     </>
   );
 
