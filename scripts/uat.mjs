@@ -44,24 +44,14 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #611: a patient's first days are planned as a week, from ticks.
-await step('Plan next week for a patient with nothing yet lists the therapies to tick and books them on every day', '/admin/patients', async () => {
-  const guest = await api('POST', '/patients', { name: 'Uatfirst Guest', gender: 'female', stay: { start_date: plus(0), end_date: plus(9) } });
-  await p.reload(); await p.waitForTimeout(1500);
-  await go(p.getByRole('button', { name: /^Uatfirst Guest/ }).first());
-  await go(dlg().getByRole('button', { name: /^Plan next week/ }));
-  await p.waitForTimeout(1500);
-  const sheet = dlg();
-  const opened = (await text(sheet)).replace(/\n+/g, ' | ');
-  const boxes = sheet.getByRole('switch');
-  await boxes.nth(0).click(); await boxes.nth(1).click(); await p.waitForTimeout(400);
-  const foot = (await sheet.getByRole('button', { name: /^Book all/ }).innerText()).trim();
-  await p.screenshot({ path: `${OUT}/01-ticked.png` });
-  await go(sheet.getByRole('button', { name: /^Book all/ }));
-  await p.waitForTimeout(1500);
-  const booked = (await api('GET', `/appointments?patient_id=${guest.id}`)).length;
-  const n = Number(foot.replace(/\D/g, ''));
-  return { ok: /Tick what they start with/.test(opened) && n > 0 && booked === n, note: `${foot} · ${booked} treatments booked · sheet: ${opened.slice(0, 110)}` };
+// #618: a private link carries no trial notice. Needs a trial centre (TRIAL=true, a sheet printed).
+await step('The admin sees "Free trial: N days left"; a therapist\'s private link does not', '/admin/schedule', async () => {
+  const admin = (await text(p.locator('body'))).match(/Free trial: \d+ days? left\./)?.[0] || 'none';
+  const staff = (await api('GET', '/staff')).find((x) => x.role !== 'doctor');
+  const link = await api('POST', `/staff/${staff.id}/link`);
+  await p.goto(`${APP}/l/${link.token}`); await p.waitForTimeout(2000);
+  const onLink = (await text(p.locator('body'))).match(/Free trial[^\n]*/)?.[0] || 'none';
+  return { ok: admin !== 'none' && onLink === 'none', note: `admin: ${admin} · therapist link: ${onLink}` };
 });
 await b.close();
 
