@@ -265,7 +265,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
           </Group>
           <Switch label="Match the therapist's gender" note="Only for therapies that ask for it." on={settings.enforce_gender_match !== false} set={(v) => update("enforce_gender_match", v)} />
         </fieldset>
-        {isAdmin ? <div className="mt-3"><ListGroup><Row title="Public holidays" facts="Close the centre on India's gazetted days" trailing="›" onClick={() => { setSheet(null); openHolidays(); }} /></ListGroup></div> : null}
+        {isAdmin ? <div className="mt-3"><ListGroup><Row title="Centre closed days" facts="Public holidays and the centre's own days" trailing="›" onClick={() => { setSheet(null); openHolidays(); }} /></ListGroup></div> : null}
       </BottomSheet>
 
       <BottomSheet open={sheet === "catalogues"} onOpenChange={(o) => { if (!o) setSheet(null); }} title="Packages and accommodation" note="The lists a patient's card picks from. Reference only: nothing here bills.">
