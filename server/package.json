@@ -38,7 +38,8 @@
     "test:new-patient": "tsx src/tests/newPatient.test.ts",
     "test:search": "tsx src/tests/search.test.ts",
     "test:resident-day": "tsx src/tests/residentDay.test.ts",
-    "test:log": "tsx src/tests/changeLog.test.ts"
+    "test:log": "tsx src/tests/changeLog.test.ts",
+    "test:delete": "tsx src/tests/deleteKeepsDone.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "^2.0.2",

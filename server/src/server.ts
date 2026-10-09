@@ -210,12 +210,20 @@ app.post('/staff/:id/hours-check', async (req: Request, res: Response) => {
     .map((a) => ({ date: a.scheduled_date.toISOString().slice(0, 10), start_time: a.start_time, patient_name: a.Patient?.name ?? '', therapy_name: a.Therapy?.name ?? '' })) });
 });
 
+// Deleting someone or something takes its treatments from today on; done ones
+// stay on the patient's record and the printed history (#567).
+async function fromToday() {
+  const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  return { gte: new Date(`${centreClock(settings?.timezone || 'Asia/Kolkata').date}T00:00:00.000Z`) };
+}
+
 app.delete('/staff/:id', async (req: Request, res: Response) => {
   const id = req.params.id;
   try {
+    const ahead = await fromToday();
     await prisma.$transaction(async (tx) => {
-      await tx.appointment.deleteMany({ where: { staff_id: id } });
-      await tx.$executeRaw`UPDATE "Appointment" SET "co_staff_ids" = array_remove("co_staff_ids", ${id}) WHERE ${id} = ANY("co_staff_ids")`;
+      await tx.appointment.deleteMany({ where: { staff_id: id, scheduled_date: ahead } });
+      await tx.$executeRaw`UPDATE "Appointment" SET "co_staff_ids" = array_remove("co_staff_ids", ${id}) WHERE ${id} = ANY("co_staff_ids") AND "scheduled_date" >= ${ahead.gte}`;
       await tx.timeOff.deleteMany({ where: { entity_type: 'staff', entity_id: id } });
       await tx.staff.update({ where: { id }, data: { is_active: false } });
     });
@@ -258,8 +266,9 @@ app.put('/rooms/:id', async (req: Request, res: Response) => {
 app.delete('/rooms/:id', async (req: Request, res: Response) => {
   const id = req.params.id;
   try {
+    const ahead = await fromToday();
     await prisma.$transaction(async (tx) => {
-      await tx.appointment.deleteMany({ where: { room_id: id } });
+      await tx.appointment.deleteMany({ where: { room_id: id, scheduled_date: ahead } });
       await tx.timeOff.deleteMany({ where: { entity_type: 'room', entity_id: id } });
       await tx.therapyRoom.update({ where: { id }, data: { is_active: false } });
     });
@@ -271,7 +280,7 @@ app.delete('/rooms/:id', async (req: Request, res: Response) => {
 
 // Therapies
 app.get('/therapies', async (_req: Request, res: Response) => {
-  const data = await prisma.therapy.findMany();
+  const data = await prisma.therapy.findMany({ where: { is_active: true } });
   res.json(data);
 });
 
@@ -298,7 +307,7 @@ app.post('/therapies', async (req: Request, res: Response) => {
 // The standard library (#219), each marked if the centre already has one of
 // that name, so Therapies → Add from library offers only what is missing.
 app.get('/therapy-library', async (_req: Request, res: Response) => {
-  const have = new Set((await prisma.therapy.findMany({ select: { name: true } })).map((t) => t.name.toLowerCase()));
+  const have = new Set((await prisma.therapy.findMany({ where: { is_active: true }, select: { name: true } })).map((t) => t.name.toLowerCase()));
   res.json(therapyLibrary.map((t) => ({ ...t, added: have.has(t.name.toLowerCase()) })));
 });
 
@@ -319,7 +328,7 @@ app.post('/therapies/import', requireAdmin, async (req: Request, res: Response) 
     once_per_course: z.boolean().default(false),
     before_purification: z.boolean().default(false),
   })).min(1).max(100) }).parse(req.body);
-  const have = new Set((await prisma.therapy.findMany({ select: { name: true } })).map((t) => t.name.toLowerCase()));
+  const have = new Set((await prisma.therapy.findMany({ where: { is_active: true }, select: { name: true } })).map((t) => t.name.toLowerCase()));
   const fresh = items.filter((t) => !have.has(t.name.toLowerCase()));
   const created = await prisma.$transaction(fresh.map((data) => prisma.therapy.create({ data })));
   res.status(201).json({ created: created.length, skipped: items.length - fresh.length });
@@ -349,15 +358,18 @@ app.put('/therapies/:id', async (req: Request, res: Response) => {
 app.delete('/therapies/:id', async (req: Request, res: Response) => {
   const id = req.params.id;
   try {
+    const ahead = await fromToday();
     await prisma.$transaction(async (tx) => {
-      await tx.appointment.deleteMany({ where: { therapy_id: id } });
+      await tx.appointment.deleteMany({ where: { therapy_id: id, scheduled_date: ahead } });
       await tx.timeOff.deleteMany({ where: { entity_type: 'therapy', entity_id: id } });
       const affectedStaff = await tx.staff.findMany({ where: { specializations: { has: id } }, select: { id: true, specializations: true } });
       for (const s of affectedStaff) {
         const nextSpecs = (s.specializations || []).filter((sp) => sp !== id);
         await tx.staff.update({ where: { id: s.id }, data: { specializations: nextSpecs } });
       }
-      await tx.therapy.delete({ where: { id } });
+      // A therapy that was given stays, out of use, so its done treatments keep their name.
+      if (await tx.appointment.count({ where: { therapy_id: id } })) await tx.therapy.update({ where: { id }, data: { is_active: false } });
+      else await tx.therapy.delete({ where: { id } });
     });
     res.status(204).end();
   } catch (e) {
@@ -1360,6 +1372,7 @@ app.get('/appointments', async (req: Request, res: Response) => {
   const staff_id = req.query.staff_id as string | undefined;
   const patient_id = req.query.patient_id as string | undefined;
   const room_id = req.query.room_id as string | undefined;
+  const therapy_id = req.query.therapy_id as string | undefined;
   const where: Prisma.AppointmentWhereInput = {};
   if (date) where.scheduled_date = new Date(date);
   // A week in one call, for the week strip (#416).
@@ -1369,6 +1382,7 @@ app.get('/appointments', async (req: Request, res: Response) => {
   if (staff_id) where.OR = [{ staff_id }, { co_staff_ids: { has: staff_id } }];
   if (patient_id) where.patient_id = patient_id;
   if (room_id) where.room_id = room_id;
+  if (therapy_id) where.therapy_id = therapy_id;
   const data = await prisma.appointment.findMany({ where });
   if (!date) { res.json(data); return; }
   const dayKey = ymdInTZ(new Date(date));
