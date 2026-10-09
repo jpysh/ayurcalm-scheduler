@@ -1,0 +1,20 @@
+// node scripts/uat-571.mjs — Leaving early opens on the person's own end of shift, Save is off until the time changes, and the consequence line counts what moves. 375x812.
+import { chromium } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';
+const OUT = 'docs/design/uat/2026-10-09-part-day-leave';
+mkdirSync(OUT, { recursive: true });
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+const p = await ctx.newPage();
+await p.goto(APP + '/admin/team'); await p.waitForTimeout(2000);
+await p.getByText('Neha Singh', { exact: true }).click(); await p.waitForTimeout(500);
+await p.getByText('Leaving early', { exact: true }).click(); await p.waitForTimeout(500);
+const save = p.getByRole('button', { name: 'Move what they miss' });
+console.log('opens on', await p.locator('[role=dialog] select').inputValue(), '· save off:', await save.isDisabled());
+await p.locator('[role=dialog] select').selectOption('17:00'); await p.waitForTimeout(800);
+console.log('at 17:00 · save off:', await save.isDisabled(), '·', await p.getByRole('status').last().textContent());
+await p.screenshot({ path: `${OUT}/01.png` });
+await b.close();

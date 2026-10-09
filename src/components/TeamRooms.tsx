@@ -12,7 +12,7 @@ import { API_BASE } from "@/lib/apiBase";
 import PageHead from "@/components/PageHead";
 import { BottomSheet, WeekStrip } from "@/components/BottomBar";
 import { useShareLink } from "@/components/ShareLink";
-import { Callout, ChangeLine, DateRow, Empty, ListGroup, Row, SheetFoot, TimeList, dayText, plural, timesBetween } from "@/components/kit";
+import { Callout, ChangeLine, Consequence, DateRow, Empty, ListGroup, Row, SheetFoot, TimeList, dayText, plural, timesBetween } from "@/components/kit";
 import { roomSub } from "@/components/SetupSheets";
 import type { UiRoom, UiStaff } from "@/pages/tabs/shared";
 
@@ -102,7 +102,21 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
     });
   }
 
-  const times = timesBetween(opening, closing, 15);
+  // Their own hours that day (#571): a time at the edge of their shift changes nothing.
+  const shift = pick?.kind === "staff" && on >= 0 ? week!.rows.find((r) => r.id === pick.id)?.days[on] : undefined;
+  const sStart = shift?.start || opening, sEnd = shift?.end || closing;
+  const times = timesBetween(sStart, sEnd, 15);
+  const changed = !!at && (late === "away" ? !!until && until >= at : at !== (late === "late" ? sStart : sEnd));
+  const [impact, setImpact] = useState<number | null>(null);
+  useEffect(() => {
+    setImpact(null);
+    if (!pick || pick.kind !== "staff" || !late || !changed) return;
+    const q = late === "away" ? `from=${at}&to=${until}` : `from=${day}&to=${day}&${late === "late" ? "before" : "after"}=${at}`;
+    let stale = false;
+    fetch(`${API_BASE}/timeoff/impact?staff_id=${pick.id}&${q}`).then((r) => (r.ok ? r.json() : null)).then((r) => { if (!stale) setImpact(typeof r?.treatments === "number" ? r.treatments : null); }).catch(() => {});
+    return () => { stale = true; };
+  }, [pick, late, at, until, day, changed]);
+  const consequence = impact === null ? null : <Consequence>{impact ? `${plural(impact, "treatment")} will need a new therapist` : "No treatments to move"}</Consequence>;
   const from = nowHM > opening ? nowHM : null;
   const close = () => { setPick(null); setLate(null); };
   const none = !team.length && !roomRows.length && !idle.length;
@@ -151,8 +165,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
 
       <BottomSheet open={!!pick} onOpenChange={(o) => { if (!o) close(); }} title={pick?.name || ""}
         note={pick?.kind === "room" ? "What would you like to do with this room?" : late === null ? (day === today ? "What changes for them today?" : `What changes for them on ${dayText(day)}?`) : late === "away" ? "Which days are they away?" : late === "late" ? "When do they start?" : "When do they leave?"}
-        foot={pick && late === "away" ? <SheetFoot ok={!!at && !!until && until >= at} save={() => takeOut("staff", pick.id, pick.name, null, null, "Leave", { start: at, end: until })} label="Mark leave, move what they miss" />
-          : pick && late ? <SheetFoot ok={!!at} save={() => (late === "late" ? takeOut("staff", pick.id, pick.name, opening, at, `In late, at ${at}`, { start: day, end: day }) : takeOut("staff", pick.id, pick.name, at, closing, `Leaving early, at ${at}`, { start: day, end: day }))} label="Move what they miss" /> : undefined}>
+        foot={pick && late === "away" ? <SheetFoot ok={changed} save={() => takeOut("staff", pick.id, pick.name, null, null, "Leave", { start: at, end: until })} label="Mark leave, move what they miss" />
+          : pick && late ? <SheetFoot ok={changed} save={() => (late === "late" ? takeOut("staff", pick.id, pick.name, opening, at, `In late, at ${at}`, { start: day, end: day }) : takeOut("staff", pick.id, pick.name, at, closing, `Leaving early, at ${at}`, { start: day, end: day }))} label="Move what they miss" /> : undefined}>
         {pick?.kind === "room" ? (
           <ListGroup>
             <Row title="Out of use from now" facts="Moves what is booked in it" trailing="›" onClick={() => takeOut("room", pick.id, pick.name, from, null, "Out of use from now")} />
@@ -161,8 +175,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
         ) : pick && late === null ? (
           <ListGroup>
             <Row title={day === today ? "Not in from now" : "Not in that day"} facts="Moves what they miss" trailing="›" onClick={() => takeOut("staff", pick.id, pick.name, day === today ? from : null, null, day === today ? "Not in from now" : "Not in", { start: day, end: day })} />
-            <Row title="In late" facts="Choose the time they start" trailing="›" onClick={() => { setLate("late"); setAt(day === today && nowHM > opening ? nowHM : opening); }} />
-            <Row title="Leaving early" facts="Choose the time they leave" trailing="›" onClick={() => { setLate("early"); setAt(closing); }} />
+            <Row title="In late" facts="Choose the time they start" trailing="›" onClick={() => { setLate("late"); setAt(day === today && nowHM > sStart ? nowHM : sStart); }} />
+            <Row title="Leaving early" facts="Choose the time they leave" trailing="›" onClick={() => { setLate("early"); setAt(sEnd); }} />
             <Row title={day === today ? "Away another day" : "Away for days"} facts="Choose the days" trailing="›" onClick={() => { const t = day === today ? nextDay(today) : day; setLate("away"); setAt(t); setUntil(t); }} />
             <Row title="Share their link" facts="Their day on their own phone" trailing="›" onClick={() => { close(); link.share("staff", pick.id, pick.name); }} />
             <Row title="Make a new link" facts="The old one stops working" trailing="›" onClick={() => { close(); link.share("staff", pick.id, pick.name, true); }} />
@@ -172,9 +186,10 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
           <div className="grid grid-cols-2 gap-3">
             <DateRow label="From" value={at} min={today} onChange={(d) => { setAt(d); if (until < d) setUntil(d); }} />
             <DateRow label="To" value={until} min={at} onChange={setUntil} />
+            <div className="col-span-2">{consequence}</div>
           </div>
         ) : pick ? (
-          <TimeList label={late === "late" ? "In at" : "Leaving at"} times={times} value={at} onChange={setAt} />
+          <><TimeList label={late === "late" ? "In at" : "Leaving at"} times={times} value={at} onChange={setAt} />{consequence}</>
         ) : null}
       </BottomSheet>
       {link.sheet}

@@ -102,6 +102,13 @@ async function main() {
     await prisma.appointment.update({ where: { id: kept.id }, data: { staff_id: staff.id } });
     assert.equal((await call('GET', `/timeoff/impact?staff_id=${staff.id}&from=2030-03-05&to=2030-03-05`)).treatments, 1);
     assert.equal((await call('GET', `/timeoff/impact?staff_id=${staff.id}&from=2030-03-06&to=2030-03-07`)).treatments, 0);
+    const kt = (await prisma.appointment.findUnique({ where: { id: kept.id } }))!;
+    assert.equal((await call('GET', `/timeoff/impact?staff_id=${staff.id}&from=2030-03-05&to=2030-03-05&after=${kt.start_time}`)).treatments, 1, 'leaving at its start misses it');
+    const endHM = new Date(Date.UTC(2030, 0, 1, 0, Number(kt.start_time.slice(0, 2)) * 60 + Number(kt.start_time.slice(3, 5)) + kt.duration_minutes)).toISOString().slice(11, 16);
+    assert.equal((await call('GET', `/timeoff/impact?staff_id=${staff.id}&from=2030-03-05&to=2030-03-05&after=${endHM}`)).treatments, 0, 'leaving after it ends misses nothing');
+    // #571: a part-day leave that ends where it starts is refused, not saved as a junk row.
+    const zero = await raw('POST', '/timeoff', { entity_type: 'staff', entity_id: staff.id, start_date: '2030-03-05', end_date: '2030-03-05', start_time: '20:00', end_time: '20:00' });
+    assert.equal(zero.status, 400);
     const leave = await call('POST', '/timeoff', { entity_type: 'staff', entity_id: staff.id, start_date: '2030-03-05T09:00', end_date: '2030-03-05T18:00', plan: false });
     assert.equal(leave.replan, null, 'plan later records the leave and rebuilds nothing');
     assert.equal((await prisma.appointment.findUnique({ where: { id: kept.id } }))?.staff_id, staff.id);
