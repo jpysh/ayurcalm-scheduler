@@ -653,7 +653,8 @@ async function main() {
   // The demo is one made-up centre whatever CENTRE_NAME says; the setup wizard renames a real one.
   const support = process.env.DEFAULT_SUPPORT_WHATSAPP ?? '420777558262';
   const centre = { support_whatsapp: support || null, patient_support_whatsapp: support || null, centre_name: BABAJI ? 'Babaji Ayurveda' : 'Himalaya Ayurveda Retreat', address: 'Near the golf course, Ranikhet, Uttarakhand', logo: png('demo-logo.png') };
-  if (BABAJI) letterhead.footer_line = 'Babaji Ayurveda · sample data, not real patients';
+  // Nothing of the demo centre on the pilot's own papers (#682); the admin fills in the rest in Settings.
+  if (BABAJI) Object.assign(letterhead, { name_local: '', email: '', phones: '+91 00000 00000', website: '', discharge_format: 'BA/{YYYY}/{N}', footer_line: 'Babaji Ayurveda · sample data, not real patients' });
   await prisma.settings.upsert({ where: { id: 'singleton' }, update: { letterhead, ...centre }, create: { id: 'singleton', letterhead, ...centre, opening_time: '09:00', closing_time: '20:00' } });
   await Promise.all(doctors.map((d, i) => prisma.staff.update({ where: { id: d.id }, data: {
     qualification: ['BAMS, MD (Panchakarma)', 'BAMS, MD (Kayachikitsa)', 'BAMS'][i], reg_no: `UK-AY-${2100 + i * 37}`, signature: png(`sig-${i + 1}.png`),

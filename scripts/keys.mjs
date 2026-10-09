@@ -98,7 +98,7 @@ await sheet('Menu', '/admin/schedule', menu);
 await sheet('Booking sheet', '/admin/schedule', () => p.getByRole('button', { name: 'Book a treatment', exact: true }).click());
 await sheet('New patient', '/admin/patients', () => p.getByRole('button', { name: 'New patient', exact: true }).click());
 await sheet('Add leave', '/admin/timeoff', () => p.getByRole('button', { name: 'Add leave', exact: true }).click(), {
-  nested: async () => { await dlg().getByRole('button', { name: /^Who or what/ }).click(); },
+  nested: async () => { await dlg().getByRole('button', { name: /^Who\b/ }).click(); },
 });
 await sheet('Add a therapist or doctor', '/admin/team', () => p.getByRole('button', { name: 'Add a therapist or doctor', exact: true }).click());
 await sheet('Add a room', '/admin/rooms', () => p.getByRole('button', { name: 'Add a room', exact: true }).click());

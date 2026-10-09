@@ -43,7 +43,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   const [roomsOff, setRoomsOff] = useState<Map<string, RoomOff>>(new Map());
   const [week, setWeek] = useState<Week | null>(null);
   // The team is read a day at a time (#351), from the same week strip as the Day screen.
-  const [day, setDay] = useState(today);
+  // After closing it opens on tomorrow, as the Day screen does (#662): today's day is finished.
+  const [day, setDay] = useState(nowHM >= closing ? nextDay(today) : today);
   const [pick, setPick] = useState<Pick>(null);
   const link = useShareLink();
   const [late, setLate] = useState<Late>(null);
@@ -201,7 +202,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
           <ListGroup>
             {roomsOff.has(pick.id) && !roomsOff.get(pick.id)!.recurrence ? <Row title="Back in use" facts={outLine(roomsOff.get(pick.id)!)} trailing="›" onClick={() => backInUse(pick.id, pick.name, roomsOff.get(pick.id)!)} />
               : <Row title="Out of use from now" facts="Moves what is booked in it" trailing="›" onClick={() => takeOut("room", pick.id, pick.name, from, null, "Out of use from now")} />}
-            <Row title="Out of use for days" facts="Choose the days" trailing="›" onClick={() => { setLate("away"); setAt(today); setUntil(today); }} />
+            <Row title="Out of use for days" facts="Choose the days" trailing="›" onClick={() => { setLate("away"); setAt(day); setUntil(day); }} />
             <Row title="Details" facts="Name and what it has" trailing="›" onClick={() => { close(); openRoom(pick.id); }} />
           </ListGroup>
         ) : pick && late === null ? (

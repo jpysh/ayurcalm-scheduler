@@ -49,7 +49,10 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
   // A guest not here yet opens on their first day, and is told when it is, not shown an empty today (#498).
   const next = who.kind === 'patient' ? await prisma.patientStay.findFirst({ where: { patient_id: who.id, end_date: { gte: new Date(`${today}T00:00:00.000Z`) } }, orderBy: { start_date: 'asc' } }) : null;
   const arrives = next && next.start_date.toISOString().slice(0, 10) > today ? next.start_date.toISOString().slice(0, 10) : null;
-  const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).catch(arrives ?? today).parse(req.query.date);
+  // After closing, today is finished: the link opens on tomorrow as the admin's Day does (#662), unless a guest leaves today.
+  const tomorrow = new Date(Date.parse(`${today}T00:00:00.000Z`) + 86400000).toISOString().slice(0, 10);
+  const closed = clock.time >= (settings?.closing_time || '18:00') && !(who.kind === 'patient' && (!next || next.end_date.toISOString().slice(0, 10) <= today));
+  const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).catch(arrives ?? (closed ? tomorrow : today)).parse(req.query.date);
   const appts = await prisma.appointment.findMany({
     where: { ...mine(who), ...HAPPENING, scheduled_date: new Date(`${date}T00:00:00.000Z`) },
     orderBy: { start_time: 'asc' },
