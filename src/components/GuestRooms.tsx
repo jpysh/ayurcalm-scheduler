@@ -87,7 +87,7 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
             <Btn kind="quiet" inline className="-mr-2" onClick={() => { setFrom(""); setTo(""); }}>Clear</Btn>
           </div>
           {range === null ? <Loading rows={3} /> : range.some((r) => r.free) ? byType(range.filter((r) => r.free)).map(([type, rooms]) => (
-            <ListGroup key={type} title={type} count={rooms.length}>
+            <ListGroup key={type} title={type} count={`${rooms.length} free`}>
               {rooms.map((r) => <Row key={r.id} title={r.name} facts={r.beds > 1 ? `${r.beds} beds` : undefined} trailing="Add a patient ›" onClick={() => newPatient({ arriving: from, leaving: to, room: r.id })} />)}
             </ListGroup>
           )) : <Empty text="Every guest room is taken on at least one of those nights. Try other dates." />}
@@ -102,7 +102,7 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
           return out.length || into.length ? <p className={`px-1 pt-2 ${noteText}`}>{[out.length ? `Leaving${day === today ? " today" : ""}: ${out.join(", ")} to make up` : "", into.length ? `Arriving: ${into.join(", ")}` : ""].filter(Boolean).join(" · ")}</p> : null;
         })() : null}
         {night === null ? <Loading rows={6} /> : byType(night).map(([type, rooms]) => (
-          <ListGroup key={type} title={type} count={rooms.filter((r) => r.free).length}>
+          <ListGroup key={type} title={type} count={`${rooms.filter((r) => r.free).length} free`}>
             {rooms.map((r) => {
               const inIt = sleeping(r);
               const out = leaving(r);

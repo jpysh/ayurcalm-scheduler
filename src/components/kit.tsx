@@ -296,7 +296,7 @@ export const Row = ({ title, facts, trailing, flag, onClick, href }: { title: Re
 };
 
 /** White, radius 12, hairlines, a caption header with a count. */
-export const ListGroup = ({ title, count, children }: { title?: string; count?: number; children: ReactNode }) => (
+export const ListGroup = ({ title, count, children }: { title?: string; /** A bare number, or words when a number alone would not say what it counts ('4 free'). */ count?: number | string; children: ReactNode }) => (
   <section>
     {title ? <div className="flex justify-between px-1 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{title}{count !== undefined ? <span className="font-normal normal-case tracking-normal">{count}</span> : null}</div> : null}
     <div className="overflow-hidden rounded-xl bg-card">{children}</div>
