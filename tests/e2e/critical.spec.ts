@@ -634,3 +634,17 @@ test('tapping the date from the bottom returns to the top and the week strip set
   await expect(week).toBeVisible();
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
 });
+
+test("a trial admin who chose a password is not asked again after a reload (#711)", async ({ page }) => {
+  // The trial and the password save are faked, so the demo admin's password is untouched.
+  await page.route('**/api/public/support', async (r) => r.fulfill({ json: { ...(await (await r.fetch()).json()), trial: { started_at: null, ends_at: null, read_only: false, plan: null, paid_until: null } } }));
+  await page.route('**/set-password', (r) => r.fulfill({ json: { ok: true } }));
+  await signIn(page);
+  await page.waitForURL(/\/admin/);
+  await page.goto('/setup');
+  await page.getByLabel('Password').fill('a-new-password');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByText('What is your centre called?')).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('What is your centre called?')).toBeVisible();
+});
