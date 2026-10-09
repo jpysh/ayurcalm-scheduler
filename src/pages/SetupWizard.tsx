@@ -20,7 +20,8 @@ const SetupWizard = () => {
   const [busy, setBusy] = useState(false);
   const trial = useTrial();
   const [pw, setPw] = useState("");
-  useEffect(() => { if (trial) setStep(0); }, [trial]);
+  // Once saved, a reload goes on from the centre name rather than asking again (#711).
+  useEffect(() => { if (trial && !localStorage.getItem("passwordChosen")) setStep(0); }, [trial]);
   const savePassword = async () => {
     setBusy(true);
     try {
@@ -30,6 +31,7 @@ const SetupWizard = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { toast.error(data?.error || "Your password was not saved. Try again."); return; }
+      localStorage.setItem("passwordChosen", "1");
       setStep(1);
     } catch { toast.error("Your password was not saved. Check the connection and try again."); } finally { setBusy(false); }
   };
