@@ -34,9 +34,10 @@ export function buildGuestRoomsSheet(rooms: SheetRoom[], day: string) {
     else if (emptied && arriving.length) row = { room: r.name, kind: 'arriving', line: `Ready for ${list(arriving.map((g) => g.name))} · until ${dayText(arriving[0].end_date)}` };
     else if (!emptied) {
       const spare = r.beds - staying.length;
-      row = { room: r.name, kind: 'staying', line: `${list(staying.map((g) => g.name))} · until ${dayText(staying.map((g) => g.end_date).sort()[0])}${leaving.length ? ` · ${list(leaving.map((g) => g.name))} leaves today` : ''}${spare > 0 && r.beds > 1 ? ` · ${spare} bed free` : ''}` };
+      row = { room: r.name, kind: 'staying', line: `${list(staying.map((g) => g.name))} · until ${dayText(staying.map((g) => g.end_date).sort()[0])}${leaving.length ? ` · ${list(leaving.map((g) => g.name))} leaves today` : ''}${spare > 0 && r.beds > 1 && !r.out ? ` · ${spare} bed free` : ''}` };
     } else row = { room: r.name, kind: 'free', line: 'Free' };
-    if (r.out && row.kind !== 'out') row.line += ` · out of use${r.out.reason ? `: ${r.out.reason}` : ''}`;
+    // A guest still in a room taken out of use must move: the sheet says so as the inbox does (#624).
+    if (r.out && row.kind !== 'out') row.line += ` · out of use${r.out.reason ? `: ${r.out.reason}` : ''}${row.kind === 'staying' ? ', needs another room' : ''}`;
     const last = groups[groups.length - 1];
     if (last && last.type === r.type) last.rows.push(row); else groups.push({ type: r.type, rows: [row] });
   }

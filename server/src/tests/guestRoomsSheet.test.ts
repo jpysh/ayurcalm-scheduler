@@ -15,6 +15,7 @@ const rooms = [
   { name: 'N1', beds: 1, type: 'Nanda House', guests: [] },
   { name: 'N2', beds: 1, type: 'Nanda House', guests: [], out: { reason: 'No electricity' } },
   { name: 'N3', beds: 1, type: 'Nanda House', guests: [g('Rohan Das', '2026-10-01', '2026-10-14')], out: { reason: 'Leak' } },
+  { name: 'N4', beds: 2, type: 'Nanda House', guests: [g('Tara Bose', '2026-10-01', '2026-10-14')], out: { reason: null } },
 ];
 const s = buildGuestRoomsSheet(rooms, day);
 const by = Object.fromEntries(s.groups.flatMap((x) => x.rows).map((r) => [r.room, r]));
@@ -33,8 +34,9 @@ assert.equal(by.A1.kind, 'staying'); // one leaves, one stays: not a room to mak
 assert.equal(by.A1.line, 'Nisha Iyer · until Mon 12 Oct · Meera Reddy leaves today · 1 bed free');
 assert.equal(by.N2.kind, 'out');
 assert.equal(by.N2.line, 'Out of use: No electricity');
-assert.equal(by.N3.line, 'Rohan Das · until Wed 14 Oct · out of use: Leak');
-assert.deepEqual(s.counts, { rooms: 10, makeUp: 2, arriving: 2, staying: 4, free: 2, out: 1 });
+assert.equal(by.N3.line, 'Rohan Das · until Wed 14 Oct · out of use: Leak, needs another room');
+assert.equal(by.N4.line, 'Tara Bose · until Wed 14 Oct · out of use, needs another room'); // no spare bed in a room nobody may sleep in (#624)
+assert.deepEqual(s.counts, { rooms: 11, makeUp: 2, arriving: 2, staying: 5, free: 2, out: 1 });
 assert.deepEqual(s.first, ['T4']);
 assert.deepEqual(s.groups.map((x) => x.type), ['Trishul House', 'Nanda House']);
 
