@@ -62,7 +62,16 @@ export function describer(staff: Named, rooms: Named, therapies: Named) {
       out.push(`Moved to ${new Date(`${String(after.scheduled_date).slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}`);
     }
     if (after.start_time !== undefined && after.start_time !== before.start_time) out.push(`Start time changed from ${before.start_time} to ${after.start_time}`);
-    if (after.staff_id !== undefined && after.staff_id !== before.staff_id) out.push(`Therapist changed from ${nameIn(staff, before.staff_id)} to ${nameIn(staff, after.staff_id)}`);
+    // The whole team, not only the lead: a pair that lost one and gained another is not 'Chandan to Dev' (#622).
+    const team = (x: Snapshot, lead: unknown) => [lead, ...(Array.isArray(x.co_staff_ids) ? x.co_staff_ids : [])].filter(Boolean) as string[];
+    if (after.staff_id !== undefined || after.co_staff_ids !== undefined) {
+      const was = team(before, before.staff_id);
+      const now = team(after, after.staff_id !== undefined ? after.staff_id : before.staff_id);
+      const same = was.length === now.length && was.every((id) => now.includes(id));
+      const names = (ids: string[]) => ids.map((id) => nameIn(staff, id)).join(' and ');
+      if (was.length < 2 && now.length < 2) { if (after.staff_id !== undefined && after.staff_id !== before.staff_id) out.push(`Therapist changed from ${nameIn(staff, before.staff_id)} to ${nameIn(staff, after.staff_id)}`); }
+      else if (!same) out.push(`Therapists changed from ${names(was)} to ${names(now)}`);
+    }
     if (after.room_id !== undefined && after.room_id !== before.room_id) out.push(`Room changed from ${nameIn(rooms, before.room_id)} to ${nameIn(rooms, after.room_id)}`);
     if (after.therapy_id !== undefined && after.therapy_id !== before.therapy_id) out.push(`Treatment changed from ${nameIn(therapies, before.therapy_id)} to ${nameIn(therapies, after.therapy_id)}`);
     if (after.notes !== undefined && (after.notes || '') !== (before.notes || '')) out.push(after.notes ? `Note: ${after.notes}` : 'Note removed');

@@ -66,6 +66,7 @@ run kitchenDayPatient "The kitchen counts only the patients who stay on site; a 
 run residentStay     "A resident added in the app, with a stay and a diet plan, is on the day sheet; leaving early cancels what is left, and Undo restores it"
 run patientStories   "Meals by date, what a discharge summary lacks, package and accommodation, a shortened stay cancelled with its reason and undone, a leave planned later"
 run newPatient       "A new patient is saved with their details and a consultation booked through the guard, the booking sheet lists free therapists and rooms first, and patient search finds by name"
+run historyTeam "A treatment's History names the whole team when a pair lost one therapist and gained another"
 run treatmentCard    "Every time and room a treatment card offers saves, a busy therapist is not offered, a no-show frees theirs, and History says what changed"
 run bookingRules    "Booking from +: a repeated therapy or a long day is asked about and books on Book anyway, and every dead end carries a way forward"
 run search           "Search finds a resident's treatments on every day in the window, in order, by name, room or any therapist, and leaves out cancelled ones"
