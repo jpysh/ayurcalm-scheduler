@@ -111,6 +111,10 @@ async function main() {
     const found = await call('GET', `/patients/find?q=${TAG.toLowerCase()}%20meer&date=${DAY}`);
     assert.equal(found.patients.length, 1);
     assert.equal(found.patients[0].stay.end, '2030-05-12');
+    // Searched before they arrive, the stay ahead is an arrival, not a last stay (#677).
+    const ahead = (await call('GET', `/patients/find?q=${TAG.toLowerCase()}%20meer&date=2030-01-01`)).patients[0];
+    assert.equal(ahead.next_start, found.patients[0].stay.start);
+    assert.equal(ahead.last_end, null);
     console.log('New patient, booking sheet and patient search checks passed');
     await tidy(prisma);
   } finally {

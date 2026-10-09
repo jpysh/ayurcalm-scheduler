@@ -2,6 +2,7 @@
 // E2E_BASE_URL (default :8091, a throwaway stack). Signs in through the API, never the form.
 import { chromium } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { cutText } from './cutText.mjs';
 
 const APP = process.env.E2E_BASE_URL || 'http://localhost:8091';
 const OUT = 'docs/design/walk';
@@ -26,9 +27,9 @@ const shot = async (name, act) => {
     const m = await p.evaluate(() => {
       const root = document.querySelector('[role=dialog]:last-of-type') || document.body;
       const small = [...document.querySelectorAll('button,a,[role=button],select,input')].filter((e) => { const r = e.getBoundingClientRect(); return r.width && r.height && (r.height < 44) && getComputedStyle(e).visibility !== 'hidden'; }).length;
-      const clipped = [...document.querySelectorAll('*')].filter((e) => e.children.length === 0 && e.textContent.trim() && e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).textOverflow === 'ellipsis').map((e) => e.textContent.trim().slice(0, 40));
-      return { overflowX: document.documentElement.scrollWidth - innerWidth, small, clipped: clipped.slice(0, 8) };
+      return { overflowX: document.documentElement.scrollWidth - innerWidth, small };
     });
+    m.clipped = (await p.evaluate(cutText)).slice(0, 8);
     report.push({ id, ...m });
     await p.screenshot({ path: `${OUT}/${id}.png` });
   } catch (e) { report.push({ id, error: String(e).split('\n')[0] }); }

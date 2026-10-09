@@ -500,9 +500,9 @@ const AdminDashboard = () => {
   // Each screen keeps its own state and dialogs in its own file (#147).
   const scheduleScreen = useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), movedFrom, problems: dayCheck.problems, history: dayCheck.history, showDay: (iso: string) => { setCurrentDate(dayDate(iso)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id), staffCount: staff.length, addTherapist: (a: { gender?: string; therapy_id?: string }) => staffAdder.current?.(a), addRoom: (a: { amenities?: string[] }) => roomAdder.current?.(a), addPatient: (name: string, arriving: string, done: (p: { id: string; name: string }) => void) => patientAdder.current?.(name, arriving, done) });
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, requestDelete, centre: { opening: centreHours.opening_time, closing: centreHours.closing_time } });
-  const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, requestDelete });
-  const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q: listQuery });
-  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, loadReplans, refreshAppointmentsForDate, todayKey, startDay, centreToday: ymdInTZ(new Date()), timeSlots, planDay: (iso) => { go('schedule'); setCurrentDate(dayDate(iso)); refreshAppointmentsForDate(iso, true); setShowAttention(true); } });
+  const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, requestDelete, out: (id) => timeOffScreen.outFor('Room', id) });
+  const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q: listQuery, out: (id) => timeOffScreen.outFor('Therapy', id) });
+  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, roomNameById, therapyNameById, patientNameById, loadReplans, refreshAppointmentsForDate, todayKey, startDay, centreToday: ymdInTZ(new Date()), timeSlots, planDay: (iso) => { go('schedule'); setCurrentDate(dayDate(iso)); refreshAppointmentsForDate(iso, true); setShowAttention(true); } });
   const eventsScreen = useEventsScreen({ events, setEvents, roomsList, staff, staffNameById, q: listQuery });
   // The treatment card opens the resident card, which the Residents screen holds.
   const residentOpener = useRef<((id: string) => void) | null>(null);
@@ -514,7 +514,7 @@ const AdminDashboard = () => {
   staffAdder.current = (a) => staffScreen.openAdd({ gender: a.gender === 'male' ? 'Male' : a.gender === 'female' ? 'Female' : undefined, gives: therapies.filter((t) => t.id === a.therapy_id).map((t) => t.name), role: therapies.find((t) => t.id === a.therapy_id)?.consultation ? 'doctor' : undefined });
   const patientAdder = useRef<((name: string, arriving: string, done: (p: { id: string; name: string }) => void) => void) | null>(null);
   const swipe = useRef<{ x: number; y: number } | null>(null);
-  const patientsScreen = usePatientsScreen({ needs: attention.items.filter((i) => i.section === 'Patients' && i.kind === 'action' && i.patient_id), patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ, startDay,
+  const patientsScreen = usePatientsScreen({ out: (id) => timeOffScreen.outFor('Patient', id), needs: attention.items.filter((i) => i.section === 'Patients' && i.kind === 'action' && i.patient_id), patients, setPatients, staff, therapyNameById, timezone: ADMIN_TZ, startDay,
     openTreatment: (a) => { go('schedule'); scheduleScreen.openCard(a); },
     // A day on the card books on that day (#350).
     book: (p) => { go('schedule'); if (p?.date) { setCurrentDate(dayDate(p.date)); refreshAppointmentsForDate(p.date, true); } scheduleScreen.openBook(p); },
@@ -605,7 +605,7 @@ const AdminDashboard = () => {
           <TabsContent value="guestrooms" data-testid="tabpanel-guestrooms">
             {activeTab === 'guestrooms' ? <GuestRooms today={ymdInTZ(new Date())} openPatient={(id) => patientsScreen.openResident(id)}
               newPatient={(p) => patientsScreen.openAdd(p)} openSettings={() => { setSettingsSheet('accommodation'); go('settings'); }} adding={addingRooms} setAdding={setAddingRooms}
-                openOut={(id) => { timeOffScreen.openAdd({ type: 'GuestRoom', entity: id }); go('timeoff'); }} /> : null}
+                out={(id) => timeOffScreen.outFor('GuestRoom', id)} /> : null}
           </TabsContent>
 
           <TabsContent value="log" data-testid="tabpanel-log">
@@ -711,6 +711,7 @@ const AdminDashboard = () => {
         apiBase={API_BASE}
         day={exceptionDayKey}
         today={ymdInTZ(new Date())}
+        dayOver={exceptionDayKey === realToday && nowHM >= centreHours.closing_time}
         problems={dayCheck.problems}
         tomorrow={tomorrowFix ? { day: tomorrowKey, count: tomorrowFix, open: () => setCurrentDate(dayDate(tomorrowKey)) } : null}
         coming={comingDays.filter((c) => !(tomorrowFix && c.date === tomorrowKey)).map((c) => ({ ...c, open: () => setCurrentDate(dayDate(c.date)) }))}

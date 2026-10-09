@@ -115,13 +115,13 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
           <small className={`block text-sm whitespace-nowrap ${n ? "text-now font-semibold" : "font-normal text-muted-foreground"}`}>{hm(r.en)}</small>
         </span>
         <span className="flex-1 min-w-0">
-          <span className="flex items-start gap-2">
+          <span className="flex flex-wrap items-start gap-x-2">
             <span className={`text-base ${p ? "text-muted-foreground font-medium" : "font-semibold"}`}>
               {r.a.status === "no_show" ? <><s>{top}</s> <span className="text-sm font-medium text-muted-foreground">didn't come</span></> : top}
             </span>
             <span className="ml-auto pt-0.5 text-sm text-muted-foreground whitespace-nowrap inline-flex items-center gap-1"><DoorClosed className="h-3 w-3" aria-hidden />{r.room}</span>
           </span>
-          <span className="block text-sm text-muted-foreground">{line}</span>
+          <span className="block text-sm text-muted-foreground [overflow-wrap:anywhere]">{line}</span>
           {flag ? <span className={`block text-sm ${flag.blocking ? "font-semibold text-destructive" : flag.info ? "text-muted-foreground" : "text-notice"}`}>{flag.text}</span> : null}
           {movedFrom[r.a.id] ? (
             <span className="flex items-center gap-1 text-sm text-notice"><i className="h-2 w-2 rounded-full bg-warning" />Was {movedFrom[r.a.id].split(" ")[0]}'s</span>
@@ -218,7 +218,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
         </div>
       ) : null}
       {rows.length ? body : <div className="p-3 text-center text-sm text-muted-foreground">{q ? `Nothing matches "${query}" on this day.` : comings && (comings.in.length || comings.out.length) ? "No treatments on this day." : "Nothing booked on this day."}</div>}
-      {rows.length ? <div className="px-3 pt-3 text-center text-sm text-muted-foreground">End of the day</div> : null}
+      {rows.length ? <div className="px-3 pt-3 pb-20 text-center text-sm text-muted-foreground">End of the day</div> : null}
     </div>
   );
 }

@@ -414,7 +414,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await tap(page.getByRole('button', { name: 'Menu', exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Leave/ }));
       await tap(page.getByRole('button', { name: 'Add leave', exact: true }));
-      await tap(page.getByRole('dialog').getByRole('button', { name: /^Who or what/ }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Who\b/ }));
       await tap(page.getByRole('dialog').last().getByRole('button', { name: staff.find((x) => x.is_active)!.name, exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: 'Save, plan later' }));
       await expect(page.locator('[data-sonner-toast]').filter({ hasText: /Leave saved/ })).toBeVisible({ timeout: 20000 });
