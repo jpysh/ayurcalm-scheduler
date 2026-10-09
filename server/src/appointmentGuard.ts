@@ -112,6 +112,18 @@ export function findConflict(c: Candidate, ctx: DayContext): Conflict | null {
   const therapy = c.therapy_id ? ctx.therapies.find((t) => t.id === c.therapy_id) : undefined;
   const patient = ctx.patients.find((p) => p.id === c.patient_id);
 
+  // Marked off on their own screens (#670): until now only the auto-booker read
+  // these, so a treatment added by hand landed on the guest's day trip unnoticed.
+  const whenOff = (b: { whole: boolean; s: number; e: number }) => (b.whole ? 'on this day' : `from ${minutesToTime(b.s)} to ${minutesToTime(b.e)}`);
+  const therapyOff = c.therapy_id ? offOnDay(ctx.timeOff, 'therapy', c.therapy_id, ctx.day).find((b) => overlaps(b.s, b.e, start, end)) : undefined;
+  if (therapyOff) {
+    return { reason: 'THERAPY_OFF', message: `${therapy?.name || 'That therapy'} is not given ${whenOff(therapyOff)} (${therapyOff.label}).`, details: { therapy_id: c.therapy_id } };
+  }
+  const patientOff = offOnDay(ctx.timeOff, 'patient', c.patient_id, ctx.day).find((b) => overlaps(b.s, b.e, start, end));
+  if (patientOff) {
+    return { reason: 'PATIENT_OFF', message: `${patient?.name || 'The patient'} has no treatments ${whenOff(patientOff)} (${patientOff.label}).`, details: { patient_id: c.patient_id } };
+  }
+
   // A therapy that needs a therapist of the resident's own gender, where the
   // centre has left that rule switched on. The scheduler has always avoided
   // proposing these; nothing refused one that arrived another way.

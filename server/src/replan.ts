@@ -305,6 +305,9 @@ export async function planDay(
     };
 
     const canTake = (sid: string, s: number, e: number) => free(staffBusy[sid], s, e);
+    // The guard refuses these hours (#670), so no tier may offer them.
+    const shut = (d: Date, s: number, e: number) =>
+      [...(appt.therapy_id ? offOnDay(timeOff, 'therapy', appt.therapy_id, d) : []), ...offOnDay(timeOff, 'patient', appt.patient_id, d)].some((b) => overlaps(b.s, b.e, s, e));
     const roomFor = (s: number, e: number) => {
       if (appt.room_id && free(roomBusy[appt.room_id], s, e)) return appt.room_id;
       const alt = rooms.find(
@@ -316,11 +319,11 @@ export async function planDay(
     type Slot = { team: string[]; start: number; room: string; tier: 1 | 2 | 3; date: string };
     /** Tier 1, else tier 2: this day, first the same time and then any time. */
     const sameDay = (relax: boolean): Slot | null => {
-      const team = teamFor((sid) => canTake(sid, start, start + duration), true, relax);
+      const team = !shut(date, start, start + duration) && teamFor((sid) => canTake(sid, start, start + duration), true, relax);
       const room = team && roomFor(start, start + duration);
       if (team && room) return { team, start, room, tier: 1, date: ymd(date) };
       for (let t = firstSlot; t + duration <= close; t += 30) {
-        if (!free(patientBusy[appt.patient_id], t, t + duration)) continue;
+        if (!free(patientBusy[appt.patient_id], t, t + duration) || shut(date, t, t + duration)) continue;
         const r = roomFor(t, t + duration);
         if (!r) continue;
         const tm = teamFor((sid) => canTake(sid, t, t + duration), true, relax);
@@ -350,7 +353,7 @@ export async function planDay(
           const e = t + duration;
           const patientFree = !otherDay.some((a) => a.patient_id === appt.patient_id && a.id !== appt.id && hits(a, t, e)) &&
             !taken.some((x) => x.patient === appt.patient_id && overlaps(x.s, x.e, t, e));
-          if (!patientFree) continue;
+          if (!patientFree || shut(other, t, e)) continue;
           const busyThen = (sid: string) =>
             otherDay.some((a) => a.id !== appt.id && teamOf(a).includes(sid) && hits(a, t, e)) ||
             taken.some((x) => x.team.includes(sid) && overlaps(x.s, x.e, t, e)) ||
