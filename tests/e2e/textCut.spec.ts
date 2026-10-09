@@ -28,3 +28,17 @@ test('At 200% text the day and the team show every word whole', async ({ page })
   await page.waitForTimeout(800);
   expect(await page.evaluate(cutText), 'team').toEqual([]);
 });
+
+// Availability's list and picker, rebuilt in #695. The form is left out: its fields scroll
+// behind the fixed Save buttons, which the check reads as words run together.
+test('At 200% text Availability and its picker show every word whole', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/admin/timeoff');
+  await big(page);
+  await page.waitForTimeout(800);
+  expect(await page.evaluate(cutText), 'availability').toEqual([]);
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button').first().click();
+  await page.getByRole('dialog').last().getByText('Show staff').click();
+  await page.getByRole('dialog').last().getByRole('checkbox').first().click();
+  expect(await page.evaluate(cutText), 'picker').toEqual([]);
+});

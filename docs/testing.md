@@ -78,7 +78,7 @@ recurred, and what stops them recurring:
 | Clock: phone's zone against the centre's; after closing; midnight | nightly zone matrix (Pacific/Pago_Pago, America/New_York, Pacific/Auckland) on the day, leave and guest-link screens |
 | A screen's words or number disagree with the server's ("16 will go", the server deletes 66; "pill shows 12", it shows 5) | a server-computed count rendered, never re-derived; a test asserting both read the same function |
 | Seed hides first-day gaps (no therapies asked, examples not marked) | the sign-up-to-printed-sheet walk, run before a release |
-| Text cut at 200% | `tests/e2e/textCut.spec.ts` (nightly): the day and the team at 375px and 200% text, text clipped or drawn over text; `scripts/walk.mjs` uses the same check (`scripts/cutText.mjs`) on every screen |
+| Text cut at 200% | `tests/e2e/textCut.spec.ts` (nightly): the day, the team, and Availability with its picker at 375px and 200% text, text clipped or drawn over text; `scripts/walk.mjs` uses the same check (`scripts/cutText.mjs`) on every screen |
 | Wording and counts | polish batch per screen group |
 
 Industry practice agrees (session-based exploratory testing next to automated regression:
