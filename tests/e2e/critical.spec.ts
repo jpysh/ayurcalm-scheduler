@@ -437,18 +437,19 @@ test('leave for a day ahead is marked from Team, and a whole day carries no hour
   await passSetupIfShown(page);
   await openTab(page, 'Team');
   await activePanel(page).getByRole('button', { name: /\d{2}:\d{2}–\d{2}:\d{2}/ }).first().click();
-  const sheet = page.getByRole('dialog');
-  await sheet.getByRole('button', { name: 'Away another day' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Away (another day|for days)/ }).click();
+  // The one Availability form (#695) opens in place of the quick sheet.
+  const sheet = page.getByRole('dialog').last();
   // A fixed day far ahead, so the demo's own days are never touched.
   await sheet.getByLabel('From', { exact: true }).fill('2030-03-04');
-  await sheet.getByLabel('To', { exact: true }).fill('2030-03-05');
+  await sheet.getByLabel('Until', { exact: true }).fill('2030-03-05');
   const [req] = await Promise.all([
     page.waitForRequest((r) => r.url().endsWith('/timeoff') && r.method() === 'POST'),
-    sheet.getByRole('button', { name: /Mark leave/ }).click(),
+    sheet.getByRole('button', { name: 'Save, fix later' }).click(),
   ]);
   const body = req.postDataJSON();
   // Whole-day leave used to be saved as 09:00–18:00, leaving 07:00 yoga and 18:30 treatments on.
-  expect(body).toMatchObject({ start_date: '2030-03-04', end_date: '2030-03-05', start_time: null, end_time: null });
+  expect(body).toMatchObject({ start_date: '2030-03-04T00:00:00.000Z', end_date: '2030-03-05T00:00:00.000Z', start_time: null, end_time: null });
   const created = await (await req.response())!.json();
   const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
   expect((await request.delete(`/api/timeoff/${created.id}`, { headers: { Authorization: `Bearer ${token}` } })).ok()).toBe(true);
