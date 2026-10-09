@@ -51,11 +51,10 @@ const TimeOffTab = ({ today, timeOffs, viewMode, setViewMode, visibleRows, total
 export default TimeOffTab;
 
 /** The Time off screen: its filters, the Add dialog and the tab, held by the dashboard so they last as long as it does. */
-export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, startDay, centreToday, timeSlots, planDay }: {
+export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, loadReplans, refreshAppointmentsForDate, todayKey, startDay, centreToday, timeSlots, planDay }: {
   timeOffs: UiTimeOff[]; setTimeOffs: React.Dispatch<React.SetStateAction<UiTimeOff[]>>;
   staff: UiStaff[]; roomsList: UiRoom[]; therapies: UiTherapy[]; patients: Patient[];
   staffNameById: Record<string, string>; roomNameById: Record<string, string>; therapyNameById: Record<string, string>; patientNameById: Record<string, string>;
-  requestDelete: (kind: "timeoff", id: string, name?: string) => void;
   loadReplans: () => void; refreshAppointmentsForDate: (iso: string, silent?: boolean) => Promise<void>; todayKey: string; startDay: string; centreToday: string;
   /** The centre's slot times, "HH:MM": what part-day leave starts and ends on. */
   timeSlots: string[];
@@ -120,6 +119,23 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
   const nameOf = (h: UiTimeOff) => h.type === 'Center' ? 'Whole centre' : (h.type === 'Staff' ? staffNameById[h.entity] : h.type === 'Room' ? roomNameById[h.entity] : h.type === 'GuestRoom' ? guestRooms.find((r) => r.id === h.entity)?.name : h.type === 'Therapy' ? therapyNameById[h.entity] : patientNameById[h.entity]) ?? h.entity;
   // Rows mix people, rooms, therapies and patients; a name alone does not say which (#360).
   const kindOf = (h: UiTimeOff) => h.type === "Staff" ? (staff.find((s) => String(s.id) === h.entity)?.role === "doctor" ? "Doctor" : "Therapist") : h.type === "GuestRoom" ? "Guest room" : h.type;
+  // Removed at once and put back by Undo from the leave as the server held it (#608); the day's own moves are not redone, they wait under "need you".
+  const removeLeave = async (h: UiTimeOff) => {
+    const who = nameOf(h);
+    const kept = await fetchJsonWithTimeout<Record<string, unknown>[]>(`${API_BASE}/timeoff`).then((all) => (all || []).find((x) => x.id === h.id)).catch(() => undefined);
+    const res = await fetch(`${API_BASE}/timeoff/${h.id}`, { method: 'DELETE', headers: { ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) } });
+    if (!res.ok) { toast.error('The leave was not removed. Try again.'); return; }
+    setTimeOffs((prev) => prev.filter((x) => x.id !== h.id));
+    window.dispatchEvent(new Event('timeoff-changed'));
+    toast(h.type === 'Center' ? 'Closed day removed' : `Leave for ${who} removed`, { action: kept ? { label: 'Undo', onClick: async () => {
+      const { id: _id, ...back } = kept;
+      const again = await fetch(`${API_BASE}/timeoff`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...back, plan: false }) });
+      if (!again.ok) { toast.error('The leave could not be put back.'); return; }
+      const made = await again.json();
+      setTimeOffs((prev) => [...prev, { ...h, id: made.id }]);
+      window.dispatchEvent(new Event('timeoff-changed'));
+    } } : undefined });
+  };
   const openEdit = (h: UiTimeOff) => {
     setEditing(h);
     setNewTimeOff({ date: (h.startDate || h.date || todayKey).slice(0, 10), endDate: (h.endDate || h.date || todayKey).slice(0, 10), type: h.type, entity: h.entity, fullDay: isFullDay(h), description: h.description || '', startTime: h.startTime || '', endTime: h.endTime || '', recurrence: h.recurrence, weekdays: h.weekdays });
@@ -215,7 +231,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
         onAdded={(rows) => setTimeOffs((prev) => [...prev, ...rows.map((x) => ({ id: x.id, date: new Date(x.date).toISOString(), type: "Center" as const, entity: "All", description: x.description }))])} />
       <BottomSheet open={sheet !== null} onOpenChange={closeSheet} title={sheet === 'edit' ? 'Change leave' : 'New leave'} note={sheet === 'edit' ? `${editing ? nameOf(editing) : ''}. Change anything, then save.` : newTimeOff.type === 'GuestRoom' ? 'The room cannot be given to a guest on these days.' : 'Who is away, and when.'}
         foot={sheet === 'edit'
-          ? <Foot label="Save the leave" save={saveEdit} ok={newTimeOff.type === 'Center' || !!newTimeOff.entity} remove={() => { const h = editing; closeSheet(false); if (h) requestDelete('timeoff', h.id, h.description); }} removeLabel="Delete this leave" />
+          ? <Foot label="Save the leave" save={saveEdit} ok={newTimeOff.type === 'Center' || !!newTimeOff.entity} remove={() => { const h = editing; closeSheet(false); if (h) void removeLeave(h); }} removeLabel="Delete this leave" />
           : newTimeOff.type === 'GuestRoom'
             ? <Foot label="Mark the room out of use" ok={!!newTimeOff.entity} save={() => save(false)} />
             : <TwoFoot main="Save and plan the day" onMain={() => save(true)} alt="Save, plan later" onAlt={() => save(false)} ok={newTimeOff.type === 'Center' || !!newTimeOff.entity} />}>

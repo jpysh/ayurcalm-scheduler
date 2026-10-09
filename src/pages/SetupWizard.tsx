@@ -49,7 +49,7 @@ const SetupWizard = () => {
     address: "",
     // The centre's timezone, not the browser's: the machine setting it up is
     // often not in the same country as the centre.
-    timezone: phoneZone && TIMEZONES.includes(phoneZone) ? phoneZone : "Asia/Kolkata",
+    timezone: phoneZone && (TIMEZONES.includes(phoneZone) || allZones().includes(phoneZone)) ? phoneZone : "Asia/Kolkata",
     opening_time: "09:00",
     closing_time: "18:00",
     slot_minutes: 30,
@@ -135,7 +135,7 @@ const SetupWizard = () => {
           <Group label="Booking slots" note="How far apart treatments can start."><Seg options={[[15, "15 min"], [20, "20 min"], [30, "30 min"], [60, "60 min"]]} value={form.slot_minutes} onChange={(m) => set("slot_minutes", m)} /></Group>
           <Group label="Working days" note="A centre with patients staying treats them every day, weekends included."><Days value={form.working_days} onChange={(v) => set("working_days", v)} /></Group>
           <Dropdown label="Timezone" value={form.timezone} onChange={(e) => set("timezone", e.target.value)} note={form.timezone === phoneZone ? `This phone is in ${phoneZone.replace(/_/g, " ")}. Change it if the centre is elsewhere.` : "The centre's, not this phone's."}>
-            {TIMEZONES.map((z) => <option key={z} value={z}>{z.replace(/_/g, " ")}</option>)}
+            <ZoneOptions also={form.timezone} />
           </Dropdown>
           {next(1, form.working_days.length > 0, hasDemo ? "Continue" : "Finish")}
         </form>
@@ -161,6 +161,20 @@ const SetupWizard = () => {
 };
 
 // The zones a wellness centre is likely to be in; any other is set in Settings.
+/** Every zone this phone knows: the server accepts any real one, so a centre in Auckland or Paris can set its own clock (#606). */
+const allZones = (): string[] => { try { return (Intl as unknown as { supportedValuesOf(key: string): string[] }).supportedValuesOf("timeZone"); } catch { return []; } };
+
+/** The common zones first, then the rest in their own group. */
+export function ZoneOptions({ also = "" }: { also?: string }) {
+  const first = [...new Set([...TIMEZONES, also].filter(Boolean))];
+  const rest = allZones().filter((z) => !first.includes(z));
+  const name = (z: string) => z.replace(/_/g, " ");
+  return (<>
+    {first.map((z) => <option key={z} value={z}>{name(z)}</option>)}
+    {rest.length > 0 && <optgroup label="All other zones">{rest.map((z) => <option key={z} value={z}>{name(z)}</option>)}</optgroup>}
+  </>);
+}
+
 export const TIMEZONES = ["Asia/Kolkata", "Asia/Colombo", "Asia/Kathmandu", "Asia/Dubai", "Asia/Bangkok", "Asia/Singapore", "Asia/Tokyo", "Australia/Sydney", "Europe/London", "Europe/Berlin", "Europe/Prague", "Europe/Madrid", "Africa/Johannesburg", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Sao_Paulo", "UTC"];
 
 export default SetupWizard;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { toast } from "sonner";
 import { useShareLink, waHref } from "@/components/ShareLink";
+import { inHouseNote } from "@/lib/inHouse";
 import { BottomSheet } from "@/components/BottomBar";
 import { API_BASE } from "@/lib/apiBase";
 import type { CardAppt } from "@/components/TreatmentCard";
@@ -9,7 +10,7 @@ import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
 import { PhotoImg, shrinkPhoto } from "@/components/PassportPhoto";
-import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, rupees, Btn, LinkBtn } from "@/components/kit";
+import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, money, Btn, LinkBtn } from "@/components/kit";
 import { AccommodationSheet, DietSheet, DischargeSheet, NextWeekSheet, PackageSheet, StaySheet, takenBy, type CardStay, type GuestRoomNight, type StayTarget } from "@/components/CardSheets";
 import { marked } from "@/components/SearchScreen";
 import type { AttentionItem } from "@/lib/attention";
@@ -23,7 +24,7 @@ const blankNew = () => ({ name: '', gender: '' as '' | 'Female' | 'Male' | 'Othe
 type Slot = { date: string; start_time: string; staff_id: string; staff_name: string; room_id: string; room_name: string };
 const clock = (timeZone: string) => new Date().toLocaleTimeString('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
 
-type InHouse = { id: string; name: string; Stays: { id: string; start_date: string; end_date: string }[] };
+type InHouse = { id: string; name: string; Stays: { id: string; start_date: string; end_date: string; on_site?: boolean }[] };
 type ResidentDay = {
   id: string; name: string;
   stay: (CardStay & { vitals: string | null; concerns: string | null; tests: string | null }) | null;
@@ -94,7 +95,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRule
   const leavesIn = (end: string) => Math.round((Date.parse(end) - Date.parse(`${today}T00:00:00Z`)) / DAY_MS);
   return (
     <div>
-      <PageHead title="Patients" note={inHouse === null ? '' : `${people.length} in house`} gear={{ label: 'What needs you: patient rules', run: openRules }} />
+      <PageHead title="Patients" note={inHouse === null ? '' : inHouseNote(people.map((x) => x.s!))} gear={{ label: 'What needs you: patient rules', run: openRules }} />
       {ql ? (
         found === null ? <Loading rows={3} /> : (<>
           <ListGroup title={`Patients matching “${found.q}”`} count={found.list.length}>
@@ -296,8 +297,8 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
           {/* Story 4: everything a patient may have is a row with an arrow, filled when it is decided; nothing is forced. */}
           <div className="mt-3 border-t border-border">
             <ChangeLine label="Diet" value={d.plan_name ? (d.diet_next ? `${d.plan_name}, then ${d.diet_next.name} from ${dayText(d.diet_next.from)}` : d.plan_name) : "Not decided yet"} faint={!d.plan_name} onClick={() => changeMeals(d)} />
-            {up ? <ChangeLine label="Package" value={up.package ? `${up.package.days} days · ${rupees(up.package.price)}` : "Not decided yet"} faint={!up.package} onClick={() => changePackage(d)} /> : null}
-            {up && up.on_site !== false ? <ChangeLine label="Accommodation" value={up.accommodation ? `${up.accommodation.name}${up.accommodation.room ? ` · ${up.accommodation.room.name}` : ""} · ${nights} nights · ${rupees(nights * up.accommodation.price_per_day)}` : "Not decided yet"} faint={!up.accommodation} onClick={() => changeHouse(d)} /> : null}
+            {up ? <ChangeLine label="Package" value={up.package ? `${up.package.days} days · ${money(up.package.price)}` : "Not decided yet"} faint={!up.package} onClick={() => changePackage(d)} /> : null}
+            {up && up.on_site !== false ? <ChangeLine label="Accommodation" value={up.accommodation ? `${up.accommodation.name}${up.accommodation.room ? ` · ${up.accommodation.room.name}` : ""} · ${nights} nights · ${money(nights * up.accommodation.price_per_day)}` : "Not decided yet"} faint={!up.accommodation} onClick={() => changeHouse(d)} /> : null}
             {d.follow_up ? <ChangeLine label="Follow-up" value={d.follow_up.done ? `Done ${dayText(d.follow_up.done)}` : `Due ${dayText(d.follow_up.due)}`} onClick={() => setFollowUp(true)} /> : null}
             {d.form_c ? <ChangeLine label="Form C" value={d.form_c.filed ? `Filed ${dayText(d.form_c.filed)}` : `Due by ${dayText(d.form_c.due)}${d.form_c.fields.some(([, v]) => !v) ? ` · ${d.form_c.fields.filter(([, v]) => !v).length} missing` : ''}`} onClick={() => setFormC(true)} /> : null}
             <ChangeLine label="Passport photo" value={d.passport_photo ? `Kept ${dayText(d.passport_photo)}` : "Take a photo"} faint={!d.passport_photo} onClick={() => (d.passport_photo ? setPhotoOpen(true) : photoInput.current?.click())} />
@@ -636,6 +637,8 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           <Text label="Emergency phone (optional)" type="tel" inputMode="tel" value={infoDraft.emergencyPhone || ''} onChange={(e) => setInfoDraft({ ...infoDraft, emergencyPhone: e.target.value })} />
           <Text label="Address (optional)" value={infoDraft.address || ''} onChange={(e) => setInfoDraft({ ...infoDraft, address: e.target.value })} />
           <Text label="Country (optional)" value={infoDraft.country || ''} onChange={(e) => setInfoDraft({ ...infoDraft, country: e.target.value })} />
+          {/* The number is typed from the kept photo, so the photo sits beside it (#610). */}
+          <PhotoImg id={String(infoPatient.id)} kept="details" small quiet />
           <Text label="Passport or ID (optional)" value={infoDraft.idNumber || ''} onChange={(e) => setInfoDraft({ ...infoDraft, idNumber: e.target.value })} />
           {/* For Form C (#415): asked only of a guest from outside India. */}
           {infoDraft.country?.trim() && !/^(india|indian|bharat|in)$/i.test(infoDraft.country.trim()) ? (<>

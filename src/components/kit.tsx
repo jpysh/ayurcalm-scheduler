@@ -456,8 +456,11 @@ export const LineSelect = ({ label, value, onChange, free, busy = [], busyLabel 
   </select>
 );
 
-/** "Rs 70,750": whole rupees, grouped the Indian way. Reference figures, never an invoice (#53). */
-export const rupees = (n: number) => `Rs ${n.toLocaleString("en-IN")}`;
+let currency = "Rs";
+/** The centre's symbol, read from Settings when the app opens (#609). */
+export const setCurrency = (symbol?: string | null) => { currency = symbol?.trim() || "Rs"; };
+/** "Rs 70,750" or "$1,600": whole units, reference figures, never an invoice (#53). Rupees group the Indian way; a letter symbol gets a space. */
+export const money = (n: number) => `${currency}${/[A-Za-z]$/.test(currency) ? " " : ""}${n.toLocaleString(currency === "Rs" || currency === "₹" ? "en-IN" : "en-GB")}`;
 
 /**
  * Today and Tomorrow above the phone's own calendar: most changes start on one of them.

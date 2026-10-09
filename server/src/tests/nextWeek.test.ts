@@ -106,6 +106,16 @@ async function main() {
     assert.deepEqual(lateBody.warnings[0].actions.map((x: { kind: string; date?: string }) => [x.kind, x.date]), [['set_date', '2030-05-04'], ['book_anyway', undefined]]);
     assert.match(lateBody.warnings[0].actions[0].label, /^Book Sat 4 May instead$/);
 
+    // A patient's first days (#611): nothing to repeat, so the therapies the admin ticks book on every day of the week.
+    const fresh = await call('POST', '/patients', { name: `${TAG} Fresh`, gender: 'female', stay: { start_date: REVIEW, end_date: day(12) } });
+    const empty = await call('GET', `/patients/${fresh.id}/next-week?date=${REVIEW}`);
+    assert.equal(empty.lines.length, 0, 'a patient with no history has nothing to repeat');
+    const start = await call('POST', `/patients/${fresh.id}/next-week`, { date: REVIEW, review: false, lines: [{ from_therapy_id: kati.id, therapy_id: kati.id }, { from_therapy_id: shiro.id, therapy_id: shiro.id }] });
+    assert.equal(start.count, 14, 'two therapies on each of the seven days, from the day after the review');
+    assert.equal(await prisma.appointment.count({ where: { patient_id: fresh.id, therapy_id: kati.id } }), 7);
+    const noConsult = await raw('POST', `/patients/${fresh.id}/next-week`, { date: REVIEW, review: false, lines: [{ from_therapy_id: consult.id, therapy_id: consult.id }] });
+    assert.equal((await noConsult.json()).count, 0, 'a consultation is never a line of the week');
+
     console.log('Plan next week: this week repeats a week on at its times, a swap changes one line, and Book all books every line and the review or nothing; a once-a-course therapy and the Snehapana before it are left out, and a second one is asked about.');
   } finally {
     await tidy(prisma).catch(() => {});
