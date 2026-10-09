@@ -50,7 +50,10 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   const [at, setAt] = useState("");
   const [until, setUntil] = useState("");
 
+  // Bumped by every reload, so the week's rows and gap line follow a part-day change at once (#570).
+  const [weekTick, setWeekTick] = useState(0);
   const load = useCallback(() => {
+    setWeekTick((n) => n + 1);
     fetch(`${API_BASE}/staff-day?date=${today}`).then((r) => (r.ok ? r.json() : []))
       .then((rows: { staff_id: string; off: string | null }[]) => setOffToday(Object.fromEntries(rows.map((x) => [x.staff_id, x.off]))))
       .catch(() => setOffToday({}));
@@ -63,7 +66,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   const sunday = new Date(Date.parse(`${day}T00:00:00Z`) - new Date(`${day}T00:00:00Z`).getUTCDay() * 86400000).toISOString().slice(0, 10);
   useEffect(() => {
     fetch(`${API_BASE}/staff-week?start=${sunday}`).then((r) => (r.ok ? r.json() : null)).then(setWeek).catch(() => setWeek(null));
-  }, [sunday, staff]);
+  }, [sunday, staff, weekTick]);
   const on = week && week.start === sunday ? week.days.indexOf(day) : -1;
 
   const ql = q.trim().toLowerCase();
