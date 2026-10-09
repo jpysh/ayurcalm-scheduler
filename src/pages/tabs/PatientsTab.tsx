@@ -129,7 +129,8 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRule
 }
 
 /** One resident: the stay, today's treatments, today's meals, and what to change. */
-function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, changeMeals, changePackage, changeHouse, changeStay, book, details, detailsHint }: {
+function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, changeMeals, changePackage, changeHouse, changeStay, book, details, detailsHint, out }: {
+  out: (id: string) => React.ReactNode;
   id: string | null; today: string; onClose: () => void;
   /** The inbox opens the card already on its follow-up message (#603); asked once the card has loaded. */
   startOn?: 'followup' | null; onStarted?: () => void;
@@ -306,6 +307,7 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
             {up ? <ChangeLine label="Stay" value={`${stayDay(up.start_date)} to ${stayDay(up.end_date)}`} onClick={() => changeStay(d)} /> : <ChangeLine label={d.last_stay ? 'New stay' : 'Stay'} value={d.last_stay?.package ? `From today · ${d.last_stay.package.name}` : 'Not staying · add a stay'} faint={!d.last_stay} onClick={() => changeStay(d)} />}
             <ChangeLine label="Details" value={detailsHint(d.id)} faint onClick={() => details(d.id)} />
           </div>
+          {d.stay ? <div className="mt-3">{out(d.id)}</div> : null}
           {/* Story 8: what the summary still lacks. It informs and never blocks; printing is always there. */}
           {leavingToday ? null : bar}
           {/* Not here (yet, or any more) there is no day to rest: the group is only for a guest who is staying or has something booked (#514). */}
@@ -382,7 +384,9 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
 }
 
 /** The Patients screen: the Add and Details dialogs and the tab, held by the dashboard so they last as long as it does. */
-export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, startDay, openTreatment, book, searchEverything, openCatalogue, openRules, needs }: {
+export function usePatientsScreen({ patients, setPatients, staff, therapyNameById, timezone, startDay, openTreatment, book, searchEverything, openCatalogue, openRules, needs, out }: {
+  /** The patient's days with no treatments (#671), drawn on their card. */
+  out: (id: string) => React.ReactNode;
   /** The patient items the rules raise today: the "Needs attention" chip and the flags on rows. */
   needs: AttentionItem[];
   patients: PatientRow[]; setPatients: React.Dispatch<React.SetStateAction<PatientRow[]>>; staff: UiStaff[];
@@ -562,7 +566,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         editList={() => { setHouseFor(null); setBack(null); openCatalogue('accommodation'); }} />
       <StaySheet patient={stayFor?.patient ?? null} target={stayFor ? { ...stayFor.target, end: stayEnd ?? stayFor.target.end } : null} today={today}
         now={clock(timezone)} onClose={backToCard(() => { setStayFor(null); setStayEnd(null); })} onSaved={() => { if (stayFor) void refreshStays(stayFor.patient.id); }} />
-      <ResidentCard id={cardId} today={today} startOn={startOn} onStarted={() => setStartOn(null)} onClose={() => { setCardId(null); setStartOn(null); }}
+      <ResidentCard out={out} id={cardId} today={today} startOn={startOn} onStarted={() => setStartOn(null)} onClose={() => { setCardId(null); setStartOn(null); }}
         openTreatment={(a) => { setCardId(null); openTreatment(a); }}
         changeMeals={(p) => { setBack(p.id); setCardId(null); setDietFor(p); }}
         changePackage={(p) => { const st = p.stay ?? p.coming; if (st) { setBack(p.id); setCardId(null); setPackFor({ patient: p, stay: st }); } }}
