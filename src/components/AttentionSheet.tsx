@@ -198,7 +198,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
     return item(p.id, p.what, [at, p.no_fix_reason].filter(Boolean).join(". "), <>{fixCause}{see}</>, fixCause.length > 0);
   };
 
-  // One cause is one row (#418): a therapist not in is "Ravi Gupta is not in · 4 treatments", not four rows saying it again.
+  // One cause is one row (#418), its two buttons side by side (#637): a therapist not in is "Ravi Gupta is not in · 4 treatments", not four rows saying it again.
   const causes = Object.values(act.reduce<Record<string, DayProblem[]>>((by, p) => { (by[p.what] ??= []).push(p); return by; }, {}));
   const causeRow = (g: DayProblem[]) => {
     const key = g[0].what;
@@ -209,7 +209,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
       g.map((p) => `${p.start_time} ${p.patient_name}${p.fix && one ? ` → ${p.fix.label}` : ""}`).join(" · "), <>
         {one ? <button type="button" data-main className={tb(true)} disabled={busy !== null} onClick={() => apply(null, ...g.map((p) => p.fix!))}>{busy === "all" ? "Fixing…" : `Fix all ${g.length} as shown`}</button> : null}
         <button type="button" className={tb(!one)} onClick={() => setOpened([...opened, key])}>{one ? "Choose each" : `Open the ${n}`}</button>
-      </>, true)];
+      </>)];
   };
 
   // The sheet opens on whatever day is on screen, so it names that day (#193).
