@@ -44,18 +44,21 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #603: a follow-up that is due opens its own message from the inbox.
-await step('The inbox row for a due follow-up says "Follow up" and opens the message', '/admin/schedule', async () => {
-  const guest = await api('POST', '/patients', { name: 'Uatfollow Guest', gender: 'female', phone: '+919447001199', stay: { start_date: plus(-9), end_date: plus(-1) } });
-  const sid = guest.Stays?.[0]?.id;
-  await api('PUT', `/patients/${guest.id}/stays/${sid}/discharge`, { follow_up_date: plus(0) }).catch(() => null);
+// #608: a leave is removed at once and Undo puts it back.
+await step('Delete this leave removes it with "Leave for … removed · Undo"; Undo brings it back', '/admin/timeoff', async () => {
+  const staff = (await api('GET', '/staff')).find((x) => x.role !== 'doctor');
+  const first = staff.name.split(' ')[0];
+  await api('POST', '/timeoff', { entity_type: 'staff', entity_id: staff.id, start_date: plus(2), end_date: plus(2), date: plus(2), description: 'Uat undo', plan: false });
   await p.reload(); await p.waitForTimeout(1500);
-  await go(p.getByRole('button', { name: 'Menu', exact: true })); await go(dlg().getByText(/need you/));
-  const row = dlg().getByRole('button', { name: /Uatfollow Guest/ }); const there = await row.count();
-  const rowText = there ? (await row.first().innerText()).replace(/\n+/g, ' | ') : 'no row';
-  if (there) await go(row.first());
-  const sheet = (await text(dlg())).replace(/\n+/g, ' | ');
-  return { ok: /Follow up/.test(rowText) && /Send on WhatsApp/.test(sheet), note: `row: ${rowText.slice(0, 80)} · sheet: ${sheet.slice(0, 90)}` };
+  await go(p.getByRole('button', { name: new RegExp(`^${first}`) }).first());
+  await go(dlg().getByRole('button', { name: /Delete this leave/ }));
+  await p.waitForTimeout(600);
+  const toastText = (await p.locator('[data-sonner-toast]').first().innerText().catch(() => '')).replace(/\n+/g, ' | ');
+  const gone = await p.getByText('Uat undo').count();
+  await go(p.locator('[data-sonner-toast]').getByRole('button', { name: 'Undo' }));
+  await p.waitForTimeout(1200);
+  const back = await p.getByText('Uat undo').count();
+  return { ok: /Leave for .* removed/.test(toastText) && /Undo/.test(toastText) && gone === 0 && back === 1, note: `toast: ${toastText} · after delete ${gone} row, after Undo ${back}` };
 });
 await b.close();
 
