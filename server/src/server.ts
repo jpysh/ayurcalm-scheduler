@@ -1618,13 +1618,13 @@ app.delete('/appointments/:id', async (req: Request, res: Response) => {
   } catch {}
   res.status(204).end();
 });
-const ADMIN_TZ = process.env.ADMIN_TZ || 'Asia/Kolkata';
+// Stored dates are calendar days at UTC midnight, so they are read in UTC; a zone west of UTC would give the day before (#723).
 const ymdInTZ = (date: Date) => {
-  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: ADMIN_TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' });
   const parts = fmt.formatToParts(date);
   const y = parts.find((p) => p.type === 'year')?.value || String(date.getFullYear());
   const m = parts.find((p) => p.type === 'month')?.value || String(date.getMonth() + 1).padStart(2, '0');
   const d = parts.find((p) => p.type === 'day')?.value || String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 };
-const weekdayNameInTZ = (date: Date) => new Intl.DateTimeFormat('en-GB', { timeZone: ADMIN_TZ, weekday: 'long' }).format(date).toLowerCase();
+const weekdayNameInTZ = (date: Date) => new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'long' }).format(date).toLowerCase();
