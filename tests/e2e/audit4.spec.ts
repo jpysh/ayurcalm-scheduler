@@ -153,11 +153,11 @@ test('P1: Add leave has Full day and Every week as switches, not Yes / None drop
   await expect(form.getByRole('combobox').filter({ hasText: /^(Yes|No|None|Weekly)$/ })).toHaveCount(0);
 });
 
-// The wizard starts on the phone's own timezone when the list has it, else on India (#577).
-for (const [phone, starts] of [['Europe/Berlin', 'Europe/Berlin'], ['Pacific/Pago_Pago', 'Asia/Kolkata']] as const) {
+// The wizard starts on the phone's own timezone, and offers every zone (#577, #606).
+for (const [phone, starts] of [['Europe/Berlin', 'Europe/Berlin'], ['Pacific/Auckland', 'Pacific/Auckland']] as const) {
   test.describe(`P2: the wizard picks the timezone from a list, phone in ${phone}`, () => {
     test.use({ timezoneId: phone });
-    test('starts on the phone, or India, and can be changed', async ({ page }) => {
+    test('starts on the phone zone and can be changed', async ({ page }) => {
       // Setup unfinished for this page only: nothing is written to the centre.
       await page.route('**/api/settings', async (route) => {
         if (route.request().method() !== 'GET') return route.continue();

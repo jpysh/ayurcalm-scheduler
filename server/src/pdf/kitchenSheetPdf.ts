@@ -20,7 +20,7 @@ export async function generateKitchenSheetPdf(dateISO: string, prisma: PrismaCli
   const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
   const centreName = settings?.centre_name || process.env.CENTRE_NAME || 'Wellness Centre';
   const [stays, diets, treated, events] = await Promise.all([
-    prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } }, include: { Patient: true } }),
+    prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day }, on_site: true }, include: { Patient: true } }),
     loadDietsForDay(day, prisma),
     prisma.appointment.findMany({ where: { scheduled_date: day, status: { notIn: ['cancelled', 'no_show'] } }, select: { patient_id: true } }),
     prisma.programEvent.findMany({ where: { patients_scope: { not: 'custom' } } }),
