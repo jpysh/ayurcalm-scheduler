@@ -84,7 +84,7 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
     centre: settings?.centre_name || 'Wellness Centre',
     // The centre's clock, so 'over' is decided where the treatment is, not by the phone's timezone (#529).
     date, today, now: clock.time, arrives, off, meals,
-    feedback: ended ? { given: (ended.feedback as { rating: string; note: string } | null) ?? null } : null,
+    feedback: ended ? { given: (ended.feedback as { rating: string; note: string } | null) ?? null, visit: !ended.on_site } : null,
     items: appts.map((a) => {
       const record = (a.record || {}) as Record;
       const base = {
