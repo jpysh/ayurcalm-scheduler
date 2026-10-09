@@ -511,3 +511,36 @@ export function headlineFor(all: DayProblem[]): string | null {
       : `${worst.what.replace(/\.$/, '')} — ${who}`;
   return `${head}${tail}`;
 }
+
+export type RangeRow = { date: string; who: string; start_time: string | null; fix: Fix };
+
+/**
+ * "Save and fix" over several days (#695): each day's own plan, gathered into
+ * one list to accept as one batch with one Undo. Only rows with a single answer
+ * that stays on its own day join it, so no two days' answers can meet on the
+ * same minute; a row that needs a choice or another day waits under What needs
+ * you for the admin, as does anything with no answer.
+ */
+export async function planRange(from: string, to: string, prisma: PrismaClient, opts: { now?: Clock } = {}) {
+  const rows: RangeRow[] = [];
+  let left = 0;
+  // ponytail: capped at 31 days, as one plan; a longer absence plans its first month.
+  for (let d = new Date(`${from}T00:00:00.000Z`), n = 0; ymd(d) <= to && n < 31; d.setUTCDate(d.getUTCDate() + 1), n++) {
+    const day = new Date(d);
+    // A row left for the admin stays where it is, so the rest is planned again
+    // around it: its slot was counted as free once the planner moved it away.
+    const pins: Pin[] = [];
+    let check = await checkDay(day, prisma, { now: opts.now });
+    const waits = (c: DayCheck) => c.problems.filter((p) => p.problem_class === 'blocking' && p.appointment_id && !(p.fix && p.choices.length <= 1 && p.fix.date === c.date) && !pins.some((x) => x.appointment_id === p.appointment_id));
+    for (let more = waits(check); more.length && pins.length < 200; more = waits(check)) {
+      const held = await prisma.appointment.findMany({ where: { id: { in: more.map((p) => p.appointment_id!) } } });
+      pins.push(...held.map((a) => ({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id, start_time: a.start_time, date: check.date })));
+      check = await checkDay(day, prisma, { now: opts.now, pins });
+    }
+    for (const p of check.problems.filter((x) => x.problem_class === 'blocking')) {
+      if (p.fix && !p.fix.pinned && p.choices.length <= 1 && p.fix.date === check.date) rows.push({ date: check.date, who: p.who, start_time: p.start_time, fix: p.fix });
+      else left++;
+    }
+  }
+  return { rows, left };
+}

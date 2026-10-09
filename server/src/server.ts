@@ -14,7 +14,7 @@ import { newLinkToken } from './links.js';
 import { findConflict, HAPPENING, loadDay, nearestFreeTime, oncePerCourse, softWarnings, staffDay, type Action } from './appointmentGuard.js';
 import { replanRoomDay, replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
 import { dietTimeline, startDietFrom, extendDiet } from './patientDiet.js';
-import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
+import { checkDay, headlineFor, planRange, rowOptions } from './dayCheck.js';
 import { centreClock, eventClashes, outsideHours, type EventRow } from './availability.js';
 import { loadDietsForDay } from './dietResolution.js';
 import { bookingOptions, bookingSuggestions, bookingWho, cardChoices, nextConsultations, notStaying, planNextWeek, therapyFacts, whyNoConsultation, whyNoTime } from './cardChoices.js';
@@ -973,6 +973,13 @@ app.get('/day-check/upcoming', async (req: Request, res: Response) => {
     if (blocking.length > 0) out.push({ date: check.date, count: blocking.length, headline: headlineFor(blocking) });
   }
   res.json({ from, days, days_with_problems: out });
+});
+
+/** One plan for every day an absence covers (#695), written only when accepted through /day-check/accept. */
+app.get('/day-check/range', async (req: Request, res: Response) => {
+  const q = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).safeParse(req.query);
+  if (!q.success || q.data.to < q.data.from) { res.status(400).json({ error: 'from and to=YYYY-MM-DD required' }); return; }
+  res.json(await planRange(q.data.from, q.data.to, prisma));
 });
 
 /** Other ways to place one treatment, when the admin does not like the row. */
