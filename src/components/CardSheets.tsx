@@ -434,9 +434,11 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
   const [swaps, setSwaps] = useState<Record<string, string>>({});
   const [withReview, setWithReview] = useState(true);
   const [busy, setBusy] = useState(false);
+  // A patient's first days: nothing to repeat, so the therapies are ticked from the centre's own list (#611).
+  const [starts, setStarts] = useState<Record<string, boolean>>({});
   useEffect(() => {
     if (!patient) return;
-    setPlan(null); setSwaps({}); setWithReview(true);
+    setPlan(null); setSwaps({}); setWithReview(true); setStarts({});
     fetchJsonWithTimeout<WeekPlan>(`${API_BASE}/patients/${patient.id}/next-week?date=${review}`).then((p) => {
       setPlan(p); setWithReview(!!p.review);
       // A line with nothing left to book, or a day with no free time, starts unticked, so Book all works as it opens.
@@ -446,11 +448,14 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
       .then((t) => setTherapies(t.filter((x) => !x.is_consultation && x.is_active !== false).sort((a, b) => a.name.localeCompare(b.name)))).catch(() => setTherapies([]));
   }, [patient?.id, review]);
   const ticked = plan?.lines.filter((l) => !off[l.from_therapy_id]) || [];
-  const count = ticked.reduce((n, l) => n + l.sessions.length + l.missing.length, 0) + (withReview && plan?.review ? 1 : 0);
+  const starting = !!plan && !plan.lines.length;
+  const startIds = starting ? therapies.filter((t) => starts[t.id]).map((t) => t.id) : [];
+  const weekDays = plan ? Math.round((Date.parse(plan.to) - Date.parse(plan.from)) / 86400000) + 1 : 0;
+  const count = starting ? startIds.length * Math.max(weekDays, 0) : ticked.reduce((n, l) => n + l.sessions.length + l.missing.length, 0) + (withReview && plan?.review ? 1 : 0);
   const bookAll = async () => {
     if (!patient || !plan) return;
     setBusy(true);
-    const res = await fetch(`${API_BASE}/patients/${patient.id}/next-week`, { method: "POST", headers: json, body: JSON.stringify({ date: review, review: withReview, lines: ticked.map((l) => ({ from_therapy_id: l.from_therapy_id, therapy_id: swaps[l.from_therapy_id] || l.therapy_id })) }) });
+    const res = await fetch(`${API_BASE}/patients/${patient.id}/next-week`, { method: "POST", headers: json, body: JSON.stringify({ date: review, review: withReview, lines: starting ? startIds.map((id) => ({ from_therapy_id: id, therapy_id: id })) : ticked.map((l) => ({ from_therapy_id: l.from_therapy_id, therapy_id: swaps[l.from_therapy_id] || l.therapy_id })) }) });
     const body = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) { toast.error(body.message || "Nothing was booked. Try again."); return; }
@@ -463,8 +468,8 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
   };
   return (
     <BottomSheet open={!!patient} onOpenChange={(o) => { if (!o) onClose(); }} title={patient ? `Next week · ${first(patient.name)}` : "Next week"}
-      note={plan?.lines.length ? `${dayText(plan.from)} to ${dayText(plan.to)}, as this week. Untick or swap a line; all of it is booked or none.` : undefined}
-      foot={plan && (plan.lines.length || plan.review) ? <Foot label={count ? `Book all ${count}` : "Nothing ticked"} ok={count > 0} busy={busy} save={bookAll} /> : undefined}>
+      note={plan?.lines.length ? `${dayText(plan.from)} to ${dayText(plan.to)}, as this week. Untick or swap a line; all of it is booked or none.` : starting && weekDays > 0 ? `Tick what they start with. Each is booked on every day, ${dayText(plan!.from)} to ${dayText(plan!.to)}; all of it or none.` : undefined}
+      foot={plan && (plan.lines.length || plan.review || (starting && therapies.length)) ? <Foot label={count ? `Book all ${count}` : "Nothing ticked"} ok={count > 0} busy={busy} save={bookAll} /> : undefined}>
       {plan === null ? <Loading rows={3} /> : (<>
         {plan.brief ? <ListGroup title="Doctor's plan"><TextRow label="The brief for this week">{plan.brief}</TextRow></ListGroup> : null}
         <ListGroup title="Therapies">
@@ -479,7 +484,10 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
                 {done ? null : <ChangeLine label="Swap" value={name} select={<LineSelect label={`Swap ${l.therapy_name}`} value={swapped || l.therapy_id} onChange={(v) => setSwaps({ ...swaps, [l.from_therapy_id]: v })} free={therapies} />} />}
               </SwitchRow>
             );
-          }) : <Empty text="Nothing given yet to repeat. Book their first days; after the review, this repeats them." action={<Btn kind="primary" onClick={() => bookDay(firstDay)}>Book {dayText(firstDay)}</Btn>} />}
+          }) : therapies.length ? <>
+            {therapies.map((t) => <SwitchRow key={t.id} title={t.name} on={!!starts[t.id]} set={(v) => setStarts({ ...starts, [t.id]: v })} facts={`${plural(Math.max(weekDays, 0), "day")}, times found on Book all`} />)}
+            <Row title="Book one by hand" trailing="›" onClick={() => bookDay(firstDay)} />
+          </> : <Empty text="Nothing given yet to repeat. Book their first days; after the review, this repeats them." action={<Btn kind="primary" onClick={() => bookDay(firstDay)}>Book {dayText(firstDay)}</Btn>} />}
         </ListGroup>
         {plan.review || plan.review_missing ? (
           <ListGroup title="Next review">
