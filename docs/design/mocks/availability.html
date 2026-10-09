@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Availability redesign</title>
+<style>
+:root { --bg:#eef1ea; --card:#fff; --ink:#1d2420; --mute:#6b736d; --line:#e3e7df; --green:#2f5d46; --soft:#dfe9e1; --red:#b2452c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#141815; --card:#1e2420; --ink:#eef2ee; --mute:#9aa49d; --line:#2c342f; --green:#7fbf9b; --soft:#24332a; --red:#e48a73; } }
+:root[data-theme="dark"] { --bg:#141815; --card:#1e2420; --ink:#eef2ee; --mute:#9aa49d; --line:#2c342f; --green:#7fbf9b; --soft:#24332a; --red:#e48a73; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.4 -apple-system, system-ui, sans-serif; padding:16px; }
+h1 { font-size:22px; margin:0 0 4px; } h2 { font-size:17px; margin:28px 0 8px; } .lead { color:var(--mute); margin:0 0 16px; max-width:760px; }
+.row-of { display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; }
+.step { width:300px; max-width:100%; }
+.cap { font-size:13px; color:var(--mute); margin:0 0 6px; min-height:36px; } .cap b { color:var(--ink); }
+.phone { background:var(--bg); border:1px solid var(--line); border-radius:28px; padding:14px 12px 70px; min-height:580px; position:relative; overflow:hidden; }
+.head { display:flex; justify-content:space-between; align-items:baseline; margin:4px 4px 10px; } .head b { font-size:20px; } .head span { color:var(--mute); font-size:13px; }
+.grp { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--mute); margin:12px 6px 4px; display:flex; justify-content:space-between; }
+.list { background:var(--card); border-radius:14px; overflow:hidden; }
+.it { padding:10px 14px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:8px; } .it:last-child { border:0; }
+.it b { display:block; font-weight:600; } .it small { color:var(--mute); } .tr { color:var(--mute); }
+.flag { color:var(--red); font-size:13px; } .ok { color:var(--green); font-size:13px; }
+.sheet { position:absolute; left:0; right:0; bottom:0; background:var(--card); border-radius:22px 22px 0 0; padding:14px 14px 16px; box-shadow:0 -8px 24px rgba(0,0,0,.12); }
+.grab { width:36px; height:4px; border-radius:2px; background:var(--line); margin:0 auto 10px; }
+.sheet h3 { margin:0 0 2px; font-size:19px; } .note { color:var(--mute); font-size:13px; margin:0 0 10px; }
+.chips { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 10px; } .chip { border:1px solid var(--line); border-radius:999px; padding:6px 11px; font-size:13px; } .chip.on { background:var(--green); color:var(--card); border-color:var(--green); } .chip.off { opacity:.35; }
+.pair { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; } .fld { border:1px solid var(--line); border-radius:10px; padding:6px 10px; } .fld small { display:block; color:var(--mute); font-size:11px; }
+.cons { background:var(--soft); border-radius:10px; padding:8px 10px; font-size:13px; margin:8px 0 10px; }
+.btn { display:block; text-align:center; border-radius:999px; padding:11px; font-weight:600; margin-top:6px; } .btn.p { background:var(--green); color:var(--card); } .btn.q { border:1px solid var(--line); }
+.search { border:1px solid var(--line); border-radius:999px; padding:8px 12px; color:var(--mute); margin-bottom:6px; }
+.fab { position:absolute; bottom:14px; width:48px; height:48px; border-radius:50%; background:var(--green); color:var(--card); display:grid; place-items:center; font-size:24px; } .fab.menu { right:12px; } .fab.plus { right:68px; }
+.tiles { display:grid; grid-template-columns:1fr 1fr; gap:8px; } .tile { background:var(--card); border-radius:14px; padding:12px; } .tile b { display:block; } .tile small { color:var(--mute); } .tile.new { outline:2px solid var(--green); }
+.kind { font-size:11px; color:var(--mute); text-transform:uppercase; letter-spacing:.05em; }
+.box { background:var(--card); border-radius:14px; padding:14px 18px; margin-top:12px; max-width:980px; } .box li { margin:4px 0; }
+table { border-collapse:collapse; width:100%; font-size:13px; } td, th { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; } th { color:var(--mute); font-weight:600; }
+.paper { background:#fff; color:#111; border-radius:4px; padding:12px; font:12px/1.5 ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<h1>Availability: the redesign</h1>
+<p class="lead">For approval, 9 Oct. "Team" becomes <b>Staff</b>, "Leave" becomes <b>Availability</b>. One form for anything not available (staff, a treatment room, a guest room, a therapy, a guest), reached from the thing itself or from Availability.</p>
+
+<h2>A. Getting there</h2>
+<div class="row-of">
+
+<div class="step"><p class="cap"><b>1 · Menu.</b> Staff and Availability are new names; nothing else moves.</p>
+<div class="phone">
+  <div class="head"><b>Menu</b></div>
+  <div class="tiles">
+    <div class="tile"><b>Patients</b><small>Who is staying</small></div>
+    <div class="tile"><b>Guest rooms</b><small>Who sleeps where</small></div>
+    <div class="tile new"><b>Staff</b><small>Who is in today</small></div>
+    <div class="tile"><b>Rooms</b><small>Where treatments happen</small></div>
+    <div class="tile new"><b>Availability</b><small>2 now · 3 coming</small></div>
+    <div class="tile"><b>Diet plans</b><small>Meals by plan</small></div>
+    <div class="tile"><b>Settings</b><small>Centre, users, AI</small></div>
+    <div class="tile"><b>Back to the day</b><small>The list</small></div>
+  </div>
+  <div class="fab menu">≡</div>
+</div></div>
+
+<div class="step"><p class="cap"><b>2 · Availability.</b> Everything not available, now and coming, each row with its kind and what it affects.</p>
+<div class="phone">
+  <div class="head"><b>Availability</b><span>2 now · 3 coming</span></div>
+  <div class="grp"><span>Not available now</span><span>2</span></div>
+  <div class="list">
+    <div class="it"><div><b>Ravi Gupta</b><small>Staff · Therapist · until end of today · Sick</small><div class="flag">3 treatments need another therapist</div></div><span class="tr">›</span></div>
+    <div class="it"><div><b>Room 3</b><small>Treatment room · until 14:00 · Heater</small><div class="ok">Nothing booked in it then</div></div><span class="tr">›</span></div>
+  </div>
+  <div class="grp"><span>Coming up</span><span>3</span></div>
+  <div class="list">
+    <div class="it"><div><b>Shirodhara</b><small>Therapy · Thu 15 Oct · Oil ran out</small><div class="flag">2 bookings need moving</div></div><span class="tr">›</span></div>
+    <div class="it"><div><b>Diya Sharma</b><small>Guest · Sat 17 Oct, 09:00–13:00 · Day trip</small></div><span class="tr">›</span></div>
+    <div class="it"><div><b>T1, T2</b><small>Guest rooms · Mon 19 to Tue 20 Oct · Painting</small></div><span class="tr">›</span></div>
+  </div>
+  <div class="grp"><span>The centre</span></div>
+  <div class="list"><div class="it"><div><b>Centre closed days</b><small>Next: Dussehra, Tue 20 Oct</small></div><span class="tr">›</span></div></div>
+  <div class="fab plus">+</div><div class="fab menu">≡</div>
+</div></div>
+
+<div class="step"><p class="cap"><b>3 · + "What is not available?"</b> Search, plain groups, one or several.</p>
+<div class="phone">
+  <div class="head"><b>Availability</b></div>
+  <div class="sheet" style="top:60px">
+    <div class="grab"></div><h3>What is not available?</h3><p class="note">Choose one or several of the same kind.</p>
+    <div class="search">⌕ Type a name</div>
+    <div class="grp"><span>Staff</span><span>18 ›</span></div>
+    <div class="grp"><span>Treatment rooms</span><span>12 ›</span></div>
+    <div class="grp"><span>Guest rooms</span><span>24 ⌄</span></div>
+    <div class="list" style="border:1px solid var(--line)"><div class="it"><b>☑ T1</b></div><div class="it"><b>☑ T2</b></div><div class="it"><b>☐ T3</b></div></div>
+    <div class="grp"><span>Therapies</span><span>31 ›</span></div>
+    <div class="grp"><span>Guests staying</span><span>39 ›</span></div>
+    <div class="btn p" style="margin-top:12px">Next: 2 guest rooms</div>
+  </div>
+</div></div>
+
+<div class="step"><p class="cap"><b>4 · Or from the thing.</b> The same three rows on every kind: <i>Available again</i> (when not) · <i>Not available…</i> · <i>Details</i>.</p>
+<div class="phone">
+  <div class="head"><b>Rooms</b><span>12 rooms · 1 not available</span></div>
+  <div class="list">
+    <div class="it"><div><b>Room 3</b><small>dhara room</small><div class="flag">Not available until 14:00</div></div><span class="tr">›</span></div>
+    <div class="it"><div><b>Room 4</b><small>table room · 6h of 11h booked</small></div><span class="tr">›</span></div>
+  </div>
+  <div class="sheet" style="top:220px">
+    <div class="grab"></div><h3>Room 3</h3><p class="note">Not available until 14:00 · Heater</p>
+    <div class="list" style="border:1px solid var(--line)">
+      <div class="it"><div><b>Available again</b><small>From now; one tap, with Undo</small></div><span class="tr">›</span></div>
+      <div class="it"><div><b>Not available…</b><small>Change the time or days</small></div><span class="tr">›</span></div>
+      <div class="it"><div><b>Details</b><small>Name and what it has</small></div><span class="tr">›</span></div>
+    </div>
+  </div>
+</div></div>
+
+</div>
+
+<h2>B. The one form, for each kind</h2>
+<p class="lead">Same layout every time: when (three chips), reason, what it affects, one or two buttons. Only the words change. No "every week" switch: something that always happens belongs in the thing's <b>hours</b>.</p>
+<div class="row-of">
+
+<div class="step"><p class="cap"><b>Staff</b> · sick call this morning</p>
+<div class="phone"><div class="sheet" style="top:20px">
+  <div class="grab"></div><span class="kind">Staff · Therapist</span><h3>Ravi Gupta: not available</h3>
+  <div class="chips"><span class="chip on">From now</span><span class="chip">Part of a day</span><span class="chip">Some days</span></div>
+  <div class="pair"><div class="fld"><small>From</small>Now, 10:20</div><div class="fld"><small>Until</small>End of today</div></div>
+  <div class="fld" style="margin-bottom:8px"><small>Reason (optional)</small>Sick</div>
+  <div class="cons">3 treatments today will need another therapist.</div>
+  <div class="btn p">Save and fix the day</div><div class="btn q">Save, fix later</div>
+  <p class="note" style="margin-top:8px">On Staff, "In late" and "Leaving early" stay as quick rows; they open this form on <i>Part of a day</i>.</p>
+</div></div></div>
+
+<div class="step"><p class="cap"><b>Treatment room</b> · painting Mon–Wed</p>
+<div class="phone"><div class="sheet" style="top:20px">
+  <div class="grab"></div><span class="kind">Treatment room</span><h3>Room 4: not available</h3>
+  <div class="chips"><span class="chip">From now</span><span class="chip">Part of a day</span><span class="chip on">Some days</span></div>
+  <div class="pair"><div class="fld"><small>From</small>Mon 12 Oct</div><div class="fld"><small>Until</small>Wed 14 Oct</div></div>
+  <div class="fld" style="margin-bottom:8px"><small>Reason (optional)</small>Painting</div>
+  <div class="cons">9 treatments in it those days will need another room.</div>
+  <div class="btn p">Save and fix those days</div><div class="btn q">Save, fix later</div>
+</div></div></div>
+
+<div class="step"><p class="cap"><b>Guest rooms</b> · two at once</p>
+<div class="phone"><div class="sheet" style="top:20px">
+  <div class="grab"></div><span class="kind">Guest rooms</span><h3>T1, T2: not available</h3>
+  <div class="chips"><span class="chip off">From now</span><span class="chip off">Part of a day</span><span class="chip on">Some days</span></div>
+  <div class="pair"><div class="fld"><small>From</small>Mon 19 Oct</div><div class="fld"><small>Until</small>Tue 20 Oct</div></div>
+  <div class="fld" style="margin-bottom:8px"><small>Reason (optional)</small>Painting</div>
+  <div class="cons">Anil Rao is in T2 then and will need another room. It waits under "need you"; nobody is moved for you.</div>
+  <div class="btn p">Save</div>
+  <p class="note" style="margin-top:8px">Whole nights only: a guest sleeps there.</p>
+</div></div></div>
+
+<div class="step"><p class="cap"><b>Therapy</b> · oil ran out</p>
+<div class="phone"><div class="sheet" style="top:20px">
+  <div class="grab"></div><span class="kind">Therapy</span><h3>Shirodhara: not available</h3>
+  <div class="chips"><span class="chip">From now</span><span class="chip">Part of a day</span><span class="chip on">Some days</span></div>
+  <div class="pair"><div class="fld"><small>From</small>Thu 15 Oct</div><div class="fld"><small>Until</small>Thu 15 Oct</div></div>
+  <div class="fld" style="margin-bottom:8px"><small>Reason (optional)</small>Oil ran out</div>
+  <div class="cons">2 Shirodhara bookings that day will need another day.</div>
+  <div class="btn p">Save and fix that day</div><div class="btn q">Save, fix later</div>
+</div></div></div>
+
+<div class="step"><p class="cap"><b>Guest</b> · day trip</p>
+<div class="phone"><div class="sheet" style="top:20px">
+  <div class="grab"></div><span class="kind">Guest</span><h3>Diya Sharma: not available</h3>
+  <div class="chips"><span class="chip">From now</span><span class="chip on">Part of a day</span><span class="chip">Some days</span></div>
+  <div class="pair"><div class="fld"><small>Sat 17 Oct, from</small>09:00</div><div class="fld"><small>Until</small>13:00</div></div>
+  <div class="fld" style="margin-bottom:8px"><small>Reason (optional)</small>Day trip</div>
+  <div class="cons">1 treatment then (10:00 Abhyanga) will need another time. Lunch is marked "Away" on the kitchen sheet.</div>
+  <div class="btn p">Save and fix that day</div><div class="btn q">Save, fix later</div>
+</div></div></div>
+
+</div>
+
+<h2>C. Where it shows afterwards</h2>
+<div class="row-of">
+
+<div class="step"><p class="cap"><b>Every list row</b> says it, the way Rooms already does.</p>
+<div class="phone">
+  <div class="head"><b>Therapies</b><span>31</span></div>
+  <div class="list">
+    <div class="it"><div><b>Abhyanga</b><small>60 min · needs massage table</small></div><span class="tr">›</span></div>
+    <div class="it"><div><b>Shirodhara</b><small>75 min · needs shirodhara stand</small><div class="flag">Not available Thu 15 Oct</div></div><span class="tr">›</span></div>
+  </div>
+  <div class="head" style="margin-top:18px"><b>Staff</b><span>16 in · 2 not in</span></div>
+  <div class="list">
+    <div class="it"><div><b><s>Ravi Gupta</s></b><small>Therapist · Sick</small><div class="flag">Not available today</div></div><span class="tr">›</span></div>
+    <div class="it"><div><b>Asha Yadav</b><small>Therapist · 07:00–15:00</small><div class="flag">Not available from Mon 19 Oct</div></div><span class="tr">›</span></div>
+  </div>
+  <div class="head" style="margin-top:18px"><b>Search</b><span>"shiro"</span></div>
+  <div class="list"><div class="it"><div><b>Shirodhara</b><small>Therapy · Not available Thu 15 Oct</small></div><span class="tr">›</span></div></div>
+</div></div>
+
+<div class="step"><p class="cap"><b>From a staff issue.</b> "Room not usable" from a therapist's link gets one action.</p>
+<div class="phone">
+  <div class="head"><b>What needs you</b></div>
+  <div class="grp"><span>Raised by staff</span><span>1</span></div>
+  <div class="list"><div class="it"><div><b>Room 5</b><small>Room not usable: no hot water · Asha, 09:40</small></div><span class="tr" style="color:var(--green)">Not available ›</span></div></div>
+  <p class="note" style="margin:10px 6px">Opens the form with Room 5 chosen, "From now", and the reason filled in.</p>
+  <div class="grp"><span>Coming up</span><span>2</span></div>
+  <div class="list">
+    <div class="it"><div><b>Thu 15 Oct · 2 to fix</b><small>Shirodhara not available</small></div><span class="tr">Open ›</span></div>
+    <div class="it"><div><b>Mon 19 Oct · 1 to fix</b><small>Anil Rao needs another room</small></div><span class="tr">Open ›</span></div>
+  </div>
+</div></div>
+
+<div class="step"><p class="cap"><b>Kitchen sheet</b> (the meals bug fixed): an away guest is marked, not dropped.</p>
+<div class="phone">
+  <div class="head"><b>Meals · Sat 17 Oct</b></div>
+  <div class="paper">
+LUNCH                     38<br>
+Kapha diet                12<br>
+&nbsp; Aarohi Verma<br>
+&nbsp; Diya Sharma   AWAY 09:00–13:00<br>
+&nbsp; Meera Nair<br>
+&nbsp; …<br>
+Pitta diet                14<br>
+&nbsp; …
+  </div>
+  <p class="note" style="margin:10px 6px">The kitchen decides: pack it, keep it, or skip it.</p>
+</div></div>
+
+</div>
+
+<h2>D. Each use case, before and after</h2>
+<div class="box">
+<table>
+<tr><th>Kind</th><th>Use case</th><th>Before</th><th>After</th></tr>
+<tr><td>Staff</td><td>Sick call now</td><td>Staff → person → Not in from now</td><td>Same, same form</td></tr>
+<tr><td>Staff</td><td>Leave in 3 weeks</td><td>Two different forms</td><td>Person → Not available… or Availability +</td></tr>
+<tr><td>Staff</td><td>Off every Wednesday</td><td>Weekly hours <i>or</i> weekly repeat leave</td><td>Weekly hours only</td></tr>
+<tr><td>Staff</td><td>3 at a training</td><td>One at a time</td><td>Several at once</td></tr>
+<tr><td>Treatment room</td><td>Painting Mon–Wed</td><td>Two ways in</td><td>Room → Not available…; Details has no copy</td></tr>
+<tr><td>Treatment room</td><td>End a weekly block</td><td>Only by deleting it in details</td><td>No weekly blocks; regular closed hours are the room's hours</td></tr>
+<tr><td>Guest room</td><td>Leak, 2 days</td><td>Names and beds → room → scroll</td><td>Tap the room → Not available…</td></tr>
+<tr><td>Guest room</td><td>T1–T6 painted</td><td>One at a time</td><td>Several at once</td></tr>
+<tr><td>Therapy</td><td>Oil ran out</td><td>Inside the details form, nothing said about bookings</td><td>Tap it → Not available…, "2 bookings need another day"</td></tr>
+<tr><td>Guest</td><td>Day trip</td><td>Bottom of card; kitchen still cooks</td><td>On the card next to Stay; kitchen sheet says Away</td></tr>
+</table>
+</div>
+
+<div class="box">
+<b>Still left out, on purpose</b>
+<ul>
+<li>Equipment broken while the room still works (steam box): its own issue, when a centre asks.</li>
+<li>A guest's day away before they arrive: planned with them once they are here.</li>
+<li>History of past days not available: the change log and day sheets keep it.</li>
+</ul>
+</div>
+</body>
+</html>

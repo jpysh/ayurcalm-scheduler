@@ -1,4 +1,4 @@
-# Leave holds people only; everything else is marked out from its own screen
+# (Replaced by 2026-10-09-availability.md, #695) Leave holds people only
 
 9 Oct 2026, #671 (server part #670). Decided by the maintainer.
 
