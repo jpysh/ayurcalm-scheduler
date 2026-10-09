@@ -130,7 +130,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
   const body = (f: NonNullable<typeof form>, id: string) => {
     const s = stored(f);
     // Whole days are calendar days, stored as midnight UTC like every other date (#597).
-    return { entity_type: entityKey(f.kind), entity_id: id, start_date: `${s.date}T00:00:00.000Z`, end_date: `${s.endDate}T00:00:00.000Z`, start_time: s.start, end_time: s.end, description: f.description, recurrence: null, weekdays: [], plan: false };
+    return { entity_type: entityKey(f.kind), entity_id: id, start_date: `${s.date}T00:00:00.000Z`, end_date: `${s.endDate}T00:00:00.000Z`, start_time: s.start, end_time: s.end, description: f.description, plan: false };
   };
 
   /** Several at once are all saved or none: one that fails takes back the ones before it. */

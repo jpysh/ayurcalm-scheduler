@@ -96,7 +96,7 @@ async function main() {
     const onlyAwayCanGive = await book(four.id, onlyTwo.id, away.id, roomC.id, '11:00');
 
     const leave = await prisma.timeOff.create({
-      data: { entity_type: 'staff', entity_id: away.id, date: day, description: 'Parity leave', weekdays: [] },
+      data: { entity_type: 'staff', entity_id: away.id, date: day, description: 'Parity leave' },
     });
     made.push({ table: 'timeOff', id: leave.id });
 

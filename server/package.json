@@ -12,7 +12,6 @@
     "seed": "ts-node src/seed.ts",
     "fix:remove-dr": "tsx src/scripts/removeDoctorPrefix.ts",
     "fix:rooms-randomize": "tsx src/scripts/renameRoomsAndRandomizeAmenities.ts",
-    "migrate:center-timeoff-dev-to-prod": "tsx src/scripts/migrateCenterTimeOffDevToProd.ts",
     "test:validation": "tsx src/tests/validation.test.ts",
     "test:auto-assign": "tsx src/tests/autoAssign.test.ts",
     "test:diet": "tsx src/tests/dietResolution.test.ts",

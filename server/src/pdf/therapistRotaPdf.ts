@@ -21,21 +21,19 @@ type TimeOffRow = {
   entity_type: string; entity_id: string | null;
   date: Date | null; start_date: Date | null; end_date: Date | null;
   start_time: string | null; end_time: string | null;
-  recurrence: string | null; weekdays: string[]; description: string | null;
+  description: string | null;
 };
 
 /**
  * The absences that land on this day for this therapist. Read the same way the
- * scheduler reads them (`server/src/scheduler.ts`): a single date, a date range,
- * or a weekly recurrence on a matching weekday.
+ * scheduler reads them (`server/src/scheduler.ts`): a single date or a date range.
  */
-const timeOffToday = (rows: TimeOffRow[], staffId: string, day: Date, weekday: string) =>
+const timeOffToday = (rows: TimeOffRow[], staffId: string, day: Date) =>
   rows.filter((h) => {
     if (h.entity_type !== 'staff' || h.entity_id !== staffId) return false;
     const dateHit = h.date != null && h.date.toDateString() === day.toDateString();
     const rangeHit = h.start_date != null && h.end_date != null && h.start_date <= day && h.end_date >= day;
-    const weeklyHit = h.recurrence === 'weekly' && Array.isArray(h.weekdays) && h.weekdays.includes(weekday);
-    return dateHit || rangeHit || weeklyHit;
+    return dateHit || rangeHit;
   });
 
 /** An absence with no hours on it takes the whole day; one with hours takes only those. */
@@ -79,7 +77,6 @@ export const buildRota = (input: {
 }): Rota => {
   const { day, appts, events, timeOff, patientById, therapyById, roomById } = input;
   const staffName = new Map(input.staff.map((s) => [s.id, s.name] as const));
-  const weekday = weekdayNames[day.getDay()];
 
   const staff = input.staff
     .filter((s) => s.is_active && (!input.onlyStaffId || s.id === input.onlyStaffId))
@@ -88,7 +85,7 @@ export const buildRota = (input: {
   // Bands come from what is actually scheduled, so a centre working 09:00-16:30
   // prints no column for 20:00. Widened past the hour when an hour would be too
   // narrow to read a treatment in, the same way the centre sheet does.
-  const offsByStaff = new Map(staff.map((s) => [s.id, timeOffToday(timeOff, s.id, day, weekday)] as const));
+  const offsByStaff = new Map(staff.map((s) => [s.id, timeOffToday(timeOff, s.id, day)] as const));
   // A therapist out for the whole day prints no entries, so nothing of theirs
   // should open a column either: their 07:30 class was giving the sheet an empty
   // 07:00 band.

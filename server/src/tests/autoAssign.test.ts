@@ -42,15 +42,7 @@ async function main() {
     const gStaffF = await prisma.staff.create({ data: { name: 'GM Staff F', gender: 'female', is_active: true, specializations: [gTherapy.id], weekly_schedule: fullWeek as any } });
     const gStaffM = await prisma.staff.create({ data: { name: 'GM Staff M', gender: 'male', is_active: true, specializations: [gTherapy.id], weekly_schedule: fullWeek as any } });
     const gPatient = await prisma.patient.create({ data: { name: 'GM Patient', gender: 'female' } });
-    const centerWeeklies = await prisma.timeOff.findMany({ where: { entity_type: 'center', recurrence: 'weekly' } });
-    const blocked = new Set<string>();
-    for (const h of centerWeeklies) {
-      if (Array.isArray((h as any).weekdays)) {
-        for (const d of (h as any).weekdays as string[]) blocked.add(d);
-      }
-    }
-    const candidates = ['monday','tuesday','wednesday','thursday','friday'];
-    const pick = candidates.find((d) => !blocked.has(d)) || 'thursday';
+    const pick = 'monday';
     const wdIdx: Record<string, number> = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
     const gStart = nextDay(anchor, wdIdx[pick]).toISOString().slice(0,10);
     const gmPayloadPreferredMale = { patient_id: gPatient.id, therapy_id: gTherapy.id, total_sessions: 1, preferred_days: [pick], preferred_time_range: { start: '09:00', end: '12:00' }, start_date: gStart, preview_only: false, preferred_staff_id: gStaffM.id };
@@ -73,7 +65,7 @@ async function main() {
     const cStaff = await prisma.staff.create({ data: { name: 'Center Staff', gender: 'other', is_active: true, specializations: [cTherapy.id], weekly_schedule: { thursday: { start: '09:00', end: '18:00' } } } });
     const cPatient = await prisma.patient.create({ data: { name: 'Center Patient', gender: 'other' } });
     const cStart = nextDay(anchor, 4).toISOString().slice(0,10);
-    const cHoliday = await prisma.timeOff.create({ data: { entity_type: 'center', entity_id: null, date: anchor, recurrence: 'weekly', weekdays: ['thursday'], start_date: anchor } });
+    const cHoliday = await prisma.timeOff.create({ data: { entity_type: 'center', entity_id: null, date: new Date(cStart), start_date: new Date(cStart), end_date: new Date(cStart) } });
     const cPayload = { patient_id: cPatient.id, therapy_id: cTherapy.id, total_sessions: 1, preferred_days: ['thursday'], preferred_time_range: { start: '09:00', end: '12:00' }, start_date: cStart, end_date: cStart, preview_only: true };
     const cRes = await Promise.race([ autoSchedule(cPayload, prisma), new Promise((resolve) => setTimeout(() => resolve({ success: false, appointments: [], suggestions: [], conflicts: { reason: 'TEST_TIMEOUT', alternatives: [] } }), 4000)) ]) as any;
     if (cRes.success || (cRes.suggestions || []).length > 0) { console.error('Expected no suggestions on center holiday'); process.exit(9); }
@@ -112,7 +104,7 @@ async function main() {
     const thStaff = await prisma.staff.create({ data: { name: 'TH Staff', gender: 'other', is_active: true, specializations: [thTherapy.id], weekly_schedule: { friday: { start: '09:00', end: '18:00' } } } });
     const thPatient = await prisma.patient.create({ data: { name: 'TH Patient', gender: 'other' } });
     const nextFri = nextDay(anchor, 5).toISOString().slice(0,10);
-    await prisma.timeOff.create({ data: { entity_type: 'therapy', entity_id: thTherapy.id, recurrence: 'weekly', weekdays: ['friday'], date: anchor } });
+    await prisma.timeOff.create({ data: { entity_type: 'therapy', entity_id: thTherapy.id, date: new Date(nextFri), start_date: new Date(nextFri), end_date: new Date(nextFri) } });
     const thPayload = { patient_id: thPatient.id, therapy_id: thTherapy.id, total_sessions: 1, preferred_days: ['friday'], preferred_time_range: { start: '09:00', end: '12:00' }, start_date: nextFri, end_date: nextFri, preview_only: true };
     const thRes = await Promise.race([ autoSchedule(thPayload, prisma), new Promise((resolve) => setTimeout(() => resolve({ success: false, appointments: [], suggestions: [], conflicts: { reason: 'TEST_TIMEOUT', alternatives: [] } }), 6000)) ]) as any;
     if (thRes.success || (thRes.suggestions || []).length > 0) { console.error('Expected no suggestions on therapy holiday'); process.exit(13); }

@@ -211,7 +211,7 @@ const AdminDashboard = () => {
       setAppointmentsByDate(map);
       setLoaded(true);
       try {
-        type ApiTimeOff = { id?: string; entity_type: 'center'|'staff'|'room'|'guest_room'|'therapy'|'patient'; entity_id?: string | null; date?: string | null; start_date?: string | null; end_date?: string | null; start_time?: string | null; end_time?: string | null; recurrence?: 'weekly' | null; weekdays?: string[] | null; description?: string | null };
+        type ApiTimeOff = { id?: string; entity_type: 'center'|'staff'|'room'|'guest_room'|'therapy'|'patient'; entity_id?: string | null; date?: string | null; start_date?: string | null; end_date?: string | null; start_time?: string | null; end_time?: string | null; description?: string | null };
         const [tOff, hol] = await Promise.all([
           fetchJsonWithTimeout<ApiTimeOff[]>(`${API_BASE}/timeoff`),
           fetchJsonWithTimeout<ApiTimeOff[]>(`${API_BASE}/holidays`),
@@ -231,8 +231,6 @@ const AdminDashboard = () => {
           endDate: x.end_date ? new Date(x.end_date).toISOString() : undefined,
           startTime: x.start_time || undefined,
           endTime: x.end_time || undefined,
-          recurrence: x.recurrence || undefined,
-          weekdays: (x.weekdays || undefined) as UiTimeOff['weekdays'],
           type:
             x.entity_type === "center" ? "Center" :
             x.entity_type === "staff" ? "Staff" :

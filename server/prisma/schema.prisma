@@ -244,8 +244,6 @@ model TimeOff {
   end_date    DateTime?
   start_time  String?
   end_time    String?
-  recurrence  String?
-  weekdays    String[]
   description String?
 
   @@map("Holiday")

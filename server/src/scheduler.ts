@@ -215,27 +215,25 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     }
 
     // exclude time off (batch)
-    const holidays = await prisma.timeOff.findMany({ where: { OR: [ { date: nd }, { AND: [ { start_date: { lte: nd } }, { end_date: { gte: nd } } ] }, { recurrence: 'weekly' } ] } });
-    const weekdayName = Object.keys(weekdayIndex)[nd.getDay()] as Weekday;
-    const isWeeklyMatch = (h: any) => h.recurrence === 'weekly' && Array.isArray(h.weekdays) && h.weekdays.includes(weekdayName);
+    const holidays = await prisma.timeOff.findMany({ where: { OR: [ { date: nd }, { AND: [ { start_date: { lte: nd } }, { end_date: { gte: nd } } ] } ] } });
     if (centreClosed(settings, holidays, nd)) {
       conflicts.reason = 'CENTER_HOLIDAY';
       conflicts.details = { ...(conflicts.details || {}), center_holiday: true };
       currentDate.setDate(nd.getDate() + 1);
       continue;
     }
-    const therapyHoliday = holidays.some((h) => h.entity_type === 'therapy' && h.entity_id === input.therapy_id && ((h.date && h.date.toDateString() === nd.toDateString()) || (h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd) || isWeeklyMatch(h)));
+    const therapyHoliday = holidays.some((h) => h.entity_type === 'therapy' && h.entity_id === input.therapy_id && ((h.date && h.date.toDateString() === nd.toDateString()) || (h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd)));
     if (therapyHoliday) {
       currentDate.setDate(nd.getDate() + 1);
       continue;
     }
-    const patientHoliday = holidays.some((h) => h.entity_type === 'patient' && h.entity_id === input.patient_id && ((h.date && h.date.toDateString() === nd.toDateString()) || (h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd) || isWeeklyMatch(h)));
+    const patientHoliday = holidays.some((h) => h.entity_type === 'patient' && h.entity_id === input.patient_id && ((h.date && h.date.toDateString() === nd.toDateString()) || (h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd)));
     if (patientHoliday) {
       currentDate.setDate(nd.getDate() + 1);
       continue;
     }
-    let roomsAvail: TherapyRoom[] = roomsOk.filter((r) => !holidays.some((h) => h.entity_type === 'room' && h.entity_id === r.id && ((h.date && h.date.toDateString() === nd.toDateString()) || (h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd) || isWeeklyMatch(h))));
-    let staffAvail: Staff[] = staffOk.filter((s) => !holidays.some((h) => h.entity_type === 'staff' && h.entity_id === s.id && ((h.date && h.date.toDateString() === nd.toDateString()) || (h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd) || isWeeklyMatch(h))));
+    let roomsAvail: TherapyRoom[] = roomsOk.filter((r) => !holidays.some((h) => h.entity_type === 'room' && h.entity_id === r.id && ((h.date && h.date.toDateString() === nd.toDateString()) || (h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd))));
+    let staffAvail: Staff[] = staffOk.filter((s) => !holidays.some((h) => h.entity_type === 'staff' && h.entity_id === s.id && ((h.date && h.date.toDateString() === nd.toDateString()) || (h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd))));
     if (input.preferred_room_id) roomsAvail = roomsAvail.filter((r) => r.id === input.preferred_room_id);
     // A named therapist leads; the rest of the team, when the therapy needs one,
     // comes from everyone else free.
@@ -308,10 +306,8 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
           if (!(h.entity_type === 'room' && h.entity_id === r.id)) return false;
           const dateHit = h.date && h.date.toDateString() === nd.toDateString();
           const rangeHit = h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd;
-          const weeklyHit = isWeeklyMatch(h);
-          if (!(dateHit || rangeHit || weeklyHit)) return false;
-          // If weekly or date-only, treat as full-day block
-          if (weeklyHit || !h.start_time || !h.end_time) return true;
+          if (!(dateHit || rangeHit)) return false;
+          if (!h.start_time || !h.end_time) return true;
           // If explicit time range provided, use that
           if (h.start_time && h.end_time) {
             const hs = toMinutes(h.start_time);
@@ -338,9 +334,8 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
             if (!(h.entity_type === 'staff' && h.entity_id === s.id)) return false;
             const dateHit = h.date && h.date.toDateString() === nd.toDateString();
             const rangeHit = h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd;
-            const weeklyHit = isWeeklyMatch(h);
-            if (!(dateHit || rangeHit || weeklyHit)) return false;
-            if (weeklyHit || !h.start_time || !h.end_time) return true;
+            if (!(dateHit || rangeHit)) return false;
+            if (!h.start_time || !h.end_time) return true;
             if (h.start_time && h.end_time) {
               const hs = toMinutes(h.start_time);
               const he = toMinutes(h.end_time);
