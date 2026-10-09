@@ -125,7 +125,7 @@ every merge; other pull requests get the builds and the database-free tests only
 
 ## Tests and checks (detail: `docs/testing.md`)
 
-- **Blocks a merge:** builds, `tsc` at 0 errors (`npx tsc -p tsconfig.app.json --noEmit`), `npm run qa` (server rule tests) and the six `@smoke` browser tests. Nothing else blocks.
+- **Blocks a merge:** builds, `tsc` at 0 errors (`npx tsc -p tsconfig.app.json --noEmit`), `npm run qa` (server rule tests) and the ten `@smoke` browser tests. Nothing else blocks.
 - **Advisory, nightly (issue "Nightly browser tests"):** every other browser test and the tap-count report. Never fixed inside a feature PR; one weekly "test repair" PR clears them.
 - Screens are checked by a screenshot UAT (`node scripts/uat.mjs <date-slug>`, committed to `docs/design/uat/`), not new browser tests. Run it for a big or visual change.
 - Locally run only the smoke set and the server tests for the area changed. A bug fix always leaves one test. Dates in tests are a fixed day in 2030, never `new Date()`.
