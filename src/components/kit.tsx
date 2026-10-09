@@ -363,7 +363,7 @@ export function Picker<T extends string>({ options, value, onChange, onEdit }: {
 /** The main action, and beneath it one quiet alternative. Never two fills. */
 export const TwoFoot = ({ main, onMain, alt, onAlt, busy, ok = true }: { main: string; onMain: () => void; alt: string; onAlt: () => void; busy?: boolean; ok?: boolean }) => (
   <div className="grid gap-1">
-    <button type="button" className={`${wide} bg-primary text-primary-foreground disabled:opacity-50`} disabled={busy || !ok} onClick={onMain}>{busy ? "Saving…" : main}</button>
+    <button type="button" className={`${wide} bg-primary text-base text-primary-foreground disabled:opacity-50`} disabled={busy || !ok} onClick={onMain}>{busy ? "Saving…" : main}</button>
     <button type="button" className={`${wide} text-sm font-semibold text-primary`} disabled={busy || !ok} onClick={onAlt}>{alt}</button>
   </div>
 );

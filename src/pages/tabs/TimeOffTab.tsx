@@ -61,6 +61,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
   timeSlots: string[];
 }) {
   const [showHolidays, setShowHolidays] = useState(false);
+  const [showLater, setShowLater] = useState(false);
   const closedDays = useMemo(() => new Set(timeOffs.filter((h) => h.type === "Center").map((h) => (h.date || h.startDate || "").slice(0, 10))), [timeOffs]);
   const [guestRooms, setGuestRooms] = useState<{ id: string; name: string; is_active: boolean }[]>([]);
   useEffect(() => { fetchJsonWithTimeout<{ id: string; name: string; is_active: boolean }[]>(`${API_BASE}/guest-rooms`).then((r) => setGuestRooms(Array.isArray(r) ? r : [])).catch(() => {}); }, [timeOffs.length]);
@@ -176,9 +177,10 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
 
   // Save and fix (#695): one plan over every day in the range, shown before anything moves, accepted once.
   type RangeRow = { date: string; who: string; start_time: string | null; fix: { label: string; appointment_id: string; staff_id: string | null; co_staff_ids: string[]; room_id: string | null; start_time: string; date: string; cancel?: boolean } };
-  const [plan, setPlan] = useState<{ rows: RangeRow[]; left: number } | null>(null);
+  type Waiting = { date: string; who: string; start_time: string | null; what: string };
+  const [plan, setPlan] = useState<{ rows: RangeRow[]; left: number; waiting: Waiting[] } | null>(null);
   const planRange = async (from: string, to: string) => {
-    const r = await fetchJsonWithTimeout<{ rows: RangeRow[]; left: number }>(`${API_BASE}/day-check/range?from=${from}&to=${to}`).catch(() => null);
+    const r = await fetchJsonWithTimeout<{ rows: RangeRow[]; left: number; waiting: Waiting[] }>(`${API_BASE}/day-check/range?from=${from}&to=${to}`).catch(() => null);
     if (!r) { toast.error('The plan could not be worked out. It waits under "need you".'); return; }
     if (!r.rows.length) { toast(r.left ? `${plural(r.left, 'treatment')} need${r.left === 1 ? 's' : ''} you to choose; ${r.left === 1 ? 'it waits' : 'they wait'} under "need you".` : 'Nothing needed moving.'); return; }
     setPlan(r);
@@ -246,6 +248,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
   const live = timeOffs.filter((h) => h.type !== 'Center' && nowOrLater(h, centreToday)).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
   const now = live.filter((h) => isNow(h, centreToday, hm));
   const coming = live.filter((h) => !isNow(h, centreToday, hm));
+  // The soonest ten, the rest folded: a centre's leave ran to 80 rows on one screen (#706).
+  const soon = coming.slice(0, 10), later = coming.slice(10);
   const closed = timeOffs.filter((h) => h.type === 'Center').sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
   const nextClosed = closed.find((h) => sortKey(h).slice(0, 10) >= centreToday);
   const tab = (
@@ -253,7 +257,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
       <PageHead title="Availability" note={`${now.length} now · ${coming.length} coming`} />
       {live.length === 0 ? <Empty text="Everything is available. Tap + when something is not." /> : null}
       {now.length ? <ListGroup title="Not available now" count={now.length}>{now.map(rowFor)}</ListGroup> : null}
-      {coming.length ? <div className="mt-3"><ListGroup title="Coming up" count={coming.length}>{coming.map(rowFor)}</ListGroup></div> : null}
+      {soon.length ? <div className="mt-3"><ListGroup title="Coming up" count={soon.length}>{soon.map(rowFor)}</ListGroup></div> : null}
+      {later.length ? <div className="mt-3"><ListGroup title="Later" count={later.length}>{showLater ? later.map(rowFor) : <Row title={`Show ${later.length} more`} facts={`From ${dayText(sortKey(later[0]).slice(0, 10))}`} trailing="›" onClick={() => setShowLater(true)} />}</ListGroup></div> : null}
       <div className="mt-3"><ListGroup title="The centre"><Row title="Centre closed days" facts={nextClosed ? `Next: ${nextClosed.description || 'Closed'}, ${leaveWhen(nextClosed, true)}` : 'None coming up'} trailing="›" onClick={() => setShowHolidays(true)} /></ListGroup></div>
     </div>
   );
@@ -327,6 +332,11 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
             {rows.map((r) => <Row key={r.fix.appointment_id} title={[r.start_time, r.who].filter(Boolean).join(' · ')} facts={r.fix.label} />)}
           </ListGroup>
         )) : null}
+        {plan?.waiting?.length ? (
+          <ListGroup title="Waiting for you" count={plan.waiting.length}>
+            {plan.waiting.map((w, i) => <Row key={i} title={[w.date === centreToday ? null : dayText(w.date), w.start_time, w.who].filter(Boolean).join(' · ')} facts={w.what} />)}
+          </ListGroup>
+        ) : null}
       </BottomSheet>
     </>
   );
