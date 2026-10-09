@@ -637,6 +637,8 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           <Text label="Emergency phone (optional)" type="tel" inputMode="tel" value={infoDraft.emergencyPhone || ''} onChange={(e) => setInfoDraft({ ...infoDraft, emergencyPhone: e.target.value })} />
           <Text label="Address (optional)" value={infoDraft.address || ''} onChange={(e) => setInfoDraft({ ...infoDraft, address: e.target.value })} />
           <Text label="Country (optional)" value={infoDraft.country || ''} onChange={(e) => setInfoDraft({ ...infoDraft, country: e.target.value })} />
+          {/* The number is typed from the kept photo, so the photo sits beside it (#610). */}
+          <PhotoImg id={String(infoPatient.id)} kept="details" small quiet />
           <Text label="Passport or ID (optional)" value={infoDraft.idNumber || ''} onChange={(e) => setInfoDraft({ ...infoDraft, idNumber: e.target.value })} />
           {/* For Form C (#415): asked only of a guest from outside India. */}
           {infoDraft.country?.trim() && !/^(india|indian|bharat|in)$/i.test(infoDraft.country.trim()) ? (<>

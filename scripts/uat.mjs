@@ -44,21 +44,26 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #608: a leave is removed at once and Undo puts it back.
-await step('Delete this leave removes it with "Leave for … removed · Undo"; Undo brings it back', '/admin/timeoff', async () => {
-  const staff = (await api('GET', '/staff')).find((x) => x.role !== 'doctor');
-  const first = staff.name.split(' ')[0];
-  await api('POST', '/timeoff', { entity_type: 'staff', entity_id: staff.id, start_date: plus(2), end_date: plus(2), date: plus(2), description: 'Uat undo', plan: false });
-  await p.reload(); await p.waitForTimeout(1500);
-  await go(p.getByRole('button', { name: new RegExp(`^${first}`) }).first());
-  await go(dlg().getByRole('button', { name: /Delete this leave/ }));
-  await p.waitForTimeout(600);
-  const toastText = (await p.locator('[data-sonner-toast]').first().innerText().catch(() => '')).replace(/\n+/g, ' | ');
-  const gone = await p.getByText('Uat undo').count();
-  await go(p.locator('[data-sonner-toast]').getByRole('button', { name: 'Undo' }));
-  await p.waitForTimeout(1200);
-  const back = await p.getByText('Uat undo').count();
-  return { ok: /Leave for .* removed/.test(toastText) && /Undo/.test(toastText) && gone === 0 && back === 1, note: `toast: ${toastText} · after delete ${gone} row, after Undo ${back}` };
+// #610: the kept passport photo is beside the passport number in Details.
+await step('Details shows the kept photo just above "Passport or ID"; a patient with none shows no photo and no spinner', '/admin/patients', async () => {
+  const guest = await api('POST', '/patients', { name: 'Uatpass Guest', gender: 'male', country: 'Germany', stay: { start_date: plus(0), end_date: plus(5) } });
+  const bare = await api('POST', '/patients', { name: 'Uatbare Guest', gender: 'male', stay: { start_date: plus(0), end_date: plus(5) } });
+  const jpg = await p.screenshot({ type: 'jpeg', quality: 60 });
+  await fetch(`${APP}/api/patients/${guest.id}/passport-photo`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'image/jpeg' }, body: jpg });
+  const look = async (name) => {
+    await p.goto(APP + '/admin/patients'); await p.waitForTimeout(1500);
+    await go(p.getByRole('button', { name: new RegExp(`^${name}`) }).first());
+    await go(dlg().getByRole('button', { name: /^Details/ }));
+    await p.waitForTimeout(800);
+    const field = dlg().getByLabel('Passport or ID (optional)'); await field.scrollIntoViewIfNeeded();
+    const img = dlg().getByRole('img', { name: 'Passport or ID' });
+    const shown = await img.count();
+    const gap = shown ? (await field.boundingBox()).y - ((await img.boundingBox()).y + (await img.boundingBox()).height) : null;
+    return { shown, gap, spinner: await dlg().locator('[aria-busy="true"], .animate-pulse').count() };
+  };
+  const bareLook = await look('Uatbare');
+  const withLook = await look('Uatpass');
+  return { ok: withLook.shown === 1 && withLook.gap !== null && withLook.gap >= 0 && withLook.gap < 40 && bareLook.shown === 0 && bareLook.spinner === 0, note: `with photo: ${withLook.shown} image, ${withLook.gap === null ? '-' : Math.round(withLook.gap)}px above the field · without: ${bareLook.shown} image, ${bareLook.spinner} spinner` };
 });
 await b.close();
 
