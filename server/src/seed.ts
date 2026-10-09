@@ -100,7 +100,11 @@ async function main() {
   // with about 45 in house; the lite one the public demo and a new install show,
   // about 12 in house, small enough for an admin to take in at a glance.
   const LITE = process.env.DEMO_MODE === 'true' || process.env.SEED_SIZE === 'lite';
-  const SIZE = LITE
+  // The first pilot's own instance (#658): their size, ten guest rooms a little under half full.
+  const BABAJI = process.env.SEED_SIZE === 'babaji';
+  const SIZE = BABAJI
+    ? { therapists: 8, rooms: 6, doctors: 1, history: 3, arrivals: [0, 1] }
+    : LITE
     ? { therapists: 6, rooms: 5, doctors: 1, history: 3, arrivals: [0, 1, 1, 2] }
     : { therapists: 16, rooms: 12, doctors: 2, history: 14, arrivals: [2, 3, 3, 4] };
 
@@ -528,7 +532,7 @@ async function main() {
   // Guest rooms (#456), numbered by house, and everyone staying put in the first room of
   // their house free for all their nights, two to a two-bed room: a couple shares one.
   // A house that fills leaves the rest without a room, as a full centre would.
-  const roomPlan: Record<string, [string, number]> = { 'Trishul House': ['T1–T12', 1], 'Nanda House': ['N1–N10', 1], 'Special Apartments': ['A1–A4', 2], Huts: ['H1–H6', 1] };
+  const roomPlan: Record<string, [string, number]> = BABAJI ? { 'Trishul House': ['T1–T4', 1], 'Nanda House': ['N1–N3', 1], 'Special Apartments': ['A1', 2], Huts: ['H1–H2', 1] } : { 'Trishul House': ['T1–T12', 1], 'Nanda House': ['N1–N10', 1], 'Special Apartments': ['A1–A4', 2], Huts: ['H1–H6', 1] };
   for (const h of houses) {
     const [names, beds] = roomPlan[h.name] ?? [];
     if (names) await prisma.guestRoom.createMany({ data: expandRoomNames(names).map((name) => ({ name, accommodation_id: h.id, beds })), skipDuplicates: true });
@@ -648,7 +652,8 @@ async function main() {
   // Before the summaries, so their numbers follow the centre's format.
   // The demo is one made-up centre whatever CENTRE_NAME says; the setup wizard renames a real one.
   const support = process.env.DEFAULT_SUPPORT_WHATSAPP ?? '420777558262';
-  const centre = { support_whatsapp: support || null, patient_support_whatsapp: support || null, centre_name: 'Himalaya Ayurveda Retreat', address: 'Near the golf course, Ranikhet, Uttarakhand', logo: png('demo-logo.png') };
+  const centre = { support_whatsapp: support || null, patient_support_whatsapp: support || null, centre_name: BABAJI ? 'Babaji Ayurveda' : 'Himalaya Ayurveda Retreat', address: 'Near the golf course, Ranikhet, Uttarakhand', logo: png('demo-logo.png') };
+  if (BABAJI) letterhead.footer_line = 'Babaji Ayurveda · sample data, not real patients';
   await prisma.settings.upsert({ where: { id: 'singleton' }, update: { letterhead, ...centre }, create: { id: 'singleton', letterhead, ...centre, opening_time: '09:00', closing_time: '20:00' } });
   await Promise.all(doctors.map((d, i) => prisma.staff.update({ where: { id: d.id }, data: {
     qualification: ['BAMS, MD (Panchakarma)', 'BAMS, MD (Kayachikitsa)', 'BAMS'][i], reg_no: `UK-AY-${2100 + i * 37}`, signature: png(`sig-${i + 1}.png`),
