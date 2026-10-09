@@ -62,7 +62,15 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
 }) {
   const [showHolidays, setShowHolidays] = useState(false);
   const [showLater, setShowLater] = useState(false);
-  const closedDays = useMemo(() => new Set(timeOffs.filter((h) => h.type === "Center").map((h) => (h.date || h.startDate || "").slice(0, 10))), [timeOffs]);
+  const closedDays = useMemo(() => timeOffs.filter((h) => h.type === "Center").map((h) => ({ id: h.id, date: sortKey(h).slice(0, 10), endDate: (h.endDate || h.date || '').slice(0, 10), description: h.description })), [timeOffs]);
+  /** After the closed-days sheet changes something: the centre's rows read again from the server. */
+  const reloadClosed = async () => {
+    const all = await fetchJsonWithTimeout<{ id: string; entity_type: string; date: string | null; start_date: string | null; end_date: string | null; description: string | null }[]>(`${API_BASE}/timeoff`).catch(() => null);
+    if (!Array.isArray(all)) return;
+    const centre: UiTimeOff[] = all.filter((x) => x.entity_type === 'center').map((x) => ({ id: x.id, date: x.date ? new Date(x.date).toISOString() : undefined, startDate: x.start_date ? new Date(x.start_date).toISOString() : undefined, endDate: x.end_date ? new Date(x.end_date).toISOString() : undefined, type: 'Center', entity: 'All', description: x.description || '' }));
+    setTimeOffs((prev) => [...prev.filter((h) => h.type !== 'Center'), ...centre]);
+    window.dispatchEvent(new Event('timeoff-changed'));
+  };
   const [guestRooms, setGuestRooms] = useState<{ id: string; name: string; is_active: boolean }[]>([]);
   useEffect(() => { fetchJsonWithTimeout<{ id: string; name: string; is_active: boolean }[]>(`${API_BASE}/guest-rooms`).then((r) => setGuestRooms(Array.isArray(r) ? r : [])).catch(() => {}); }, [timeOffs.length]);
 
@@ -276,8 +284,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
   const fixLabel = !s ? '' : s.date === s.endDate ? (s.date === centreToday ? 'Save and fix the day' : 'Save and fix that day') : 'Save and fix those days';
   const dialogs = (
     <>
-      <HolidaysSheet open={showHolidays} onOpenChange={setShowHolidays} closed={closedDays} today={todayKey}
-        onAdded={(rows) => setTimeOffs((prev) => [...prev, ...rows.map((x) => ({ id: x.id, date: new Date(x.date).toISOString(), type: "Center" as const, entity: "All", description: x.description }))])} />
+      <HolidaysSheet open={showHolidays} onOpenChange={setShowHolidays} closed={closedDays} today={centreToday} onChanged={reloadClosed} />
       <BottomSheet open={picking} onOpenChange={setPicking} title="What is not available?" note="Choose one or several of the same kind."
         foot={<>
           <SearchField value={q} onChange={setQ} placeholder="Type a name" />
