@@ -162,9 +162,13 @@ Everything below applies to every session without being restated.
 - A large issue goes in parts merged in order; never stack more than one open dependent PR. A failure unrelated to the change: fix it in the same PR if it blocks the merge and takes under 15 minutes, else open a small issue.
 - Found something outside the issue? Open a small issue, place it in #70's
   order, and leave it out of this PR.
-- Finish by merging the PR once CI is green, ticking #70, giving the "check it
-  yourself" list, and writing the prompt for the next session (under 15 lines,
-  one code block) from what you learned.
+- Open the PR with auto-merge on (the `main needs CI` ruleset requires `fast`, `scope`
+  and `full`); GitHub merges it when they pass, so go on to the next issue and do not
+  wait. A conflict or a red check wakes the session: merge `main` in, fix, push. Tick
+  the maintainer's list (#439; #70 is the history) and write the next-session prompt
+  (under 15 lines, one code block) when a session ends.
+- **Create the issue first and use the number it returns** in code comments, docs and
+  the PR; a guessed number (#522, #561) was wrong twice and had to be rewritten.
 
 **Verify the premise before building on it.** Findings in our own issues have
 been wrong (#55's top finding was). Reproduce the problem first; if it does not
@@ -184,11 +188,31 @@ are the exception.
 `git revert` on the merge commit undoes it cleanly. If the work turns out bigger
 than the issue implies, stop and say so before expanding scope.
 
-**Finish with the UAT table, not a "check it yourself" list.** Report pass/fail with screenshots; only a step that needs a human (a CAPTCHA, a real phone's print, a password, an account) goes to the maintainer, one line each. Leave the app open in the browser pane, signed in by API token, phone size, on the screen the work touched.
+**Three loops check the work, each for what it is good at** (8 Oct reset; the reasons are
+in `docs/testing.md`, "Loops"):
+
+1. *Every PR, cheap:* tests, `tsc`, CI. A screen that changed visibly gets **one "after"
+   screenshot at 375×812** (and at 200% text if rows or labels changed) from its own
+   `scripts/uat-<issue>.mjs`, committed in `docs/design/uat/<date>-<slug>/`. Never append
+   to the shared `scripts/uat.mjs` (parallel PRs conflict on it) and no "before" shot unless
+   the change is a redesign. Report pass/fail; only a step that needs a human goes to the
+   maintainer, one line each. A pure server or wording change needs no screenshot.
+2. *A walk, on a schedule:* a time-boxed (60–90 min) session with a charter, on what a seeded
+   stack hides: a brand-new centre, another timezone, after closing, 200% text, a phone in a
+   different zone. Run it before a release and after about ten merged PRs in one area. File
+   each finding with its class, and when the class can be checked by a machine (a clock in
+   another zone, a screen's number against the server's, text cut at 200%) add that check
+   to the nightly set so the walk never finds it twice. Walks found 148 of the issues of 5–9 Oct;
+   per-PR shots found almost none of them.
+3. *Polish batches:* wording, spacing and cosmetics are collected under the `polish` label
+   and done one screen group per PR, with a before/after sheet for the maintainer, not
+   one PR per nit.
+
+Leave the app open in the browser pane, signed in by API token, phone size, on the screen the work touched.
 
 **Count the taps.** `tests/e2e/tapCount.spec.ts` prints each job's taps against the design's target (a report, not a gate); a session that changes a job states before and after in the PR.
 
-**Record every decision, keep sessions short** (6 Oct). A decision the maintainer makes in chat becomes a GitHub issue placed in #70's order plus a line in `docs/design/DESIGN.md` before the session ends; before asking, grep issues and DESIGN.md for it. One task per session: after about six merged PRs or one finished UAT, stop, log on #70 with a "decisions this session" list, and write the next prompt there (under 15 lines), not only in chat.
+**Record every decision, keep sessions focused** (6 Oct, revised 9 Oct). A decision made in chat becomes a GitHub issue plus **its own file** in `docs/design/decisions/` (see its README) before the session ends; `DESIGN.md` keeps the rules and the decisions up to 9 Oct. Before asking, grep issues, `DESIGN.md` and `decisions/`. One theme per session; with auto-merge on there is no PR count to stop at: stop when the theme is finished or a decision is the maintainer's, log the decisions on the maintainer's list, and write the next prompt there (under 15 lines), not only in chat. Run `npx prisma generate` in `server/` before `tsc` after a pull, or the stale client prints dozens of false errors.
 
 **Design for the admin's phone.** One operator, one centre, and they may never
 open a desktop after setup.

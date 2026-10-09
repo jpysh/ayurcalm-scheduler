@@ -1,0 +1,15 @@
+version: 2
+# Weekly and grouped, so there is one pull request a week to read, not one per package.
+# Lockfiles are written on Linux by Dependabot itself (see CLAUDE.md: never from a Mac).
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    groups: { weekly: { patterns: ["*"] } }
+  - package-ecosystem: npm
+    directory: /server
+    schedule: { interval: weekly }
+    groups: { weekly: { patterns: ["*"] } }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
