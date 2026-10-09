@@ -25,7 +25,11 @@ export async function staffWeek(start: string, prisma: PrismaClient) {
       if (whole) return { state: 'away' as const, start: hours.start, end: hours.end, why: whole.label, booked: 0, capacity: 0 };
       const out = offs.reduce((n, o) => n + Math.max(0, Math.min(close, o.e) - Math.max(open, o.s)), 0);
       const booked = ctx.appointments.filter((a) => teamOf(a).includes(s.id)).reduce((n, a) => n + a.duration_minutes, 0);
-      return { state: out ? ('part' as const) : ('in' as const), start: hours.start, end: hours.end, ...(out ? { why: offs[0].label } : {}), booked, capacity: close - open - out };
+      // In late or leaving early narrows the hours shown, so "09:00–15:00" and "of 6h" agree (#570).
+      let from = open, to = close;
+      for (const o of [...offs].sort((a, b) => a.s - b.s)) if (o.s <= from && o.e > from) from = o.e;
+      for (const o of [...offs].sort((a, b) => b.e - a.e)) if (o.e >= to && o.s < to) to = o.s;
+      return { state: out ? ('part' as const) : ('in' as const), start: hm(Math.min(from, to)), end: hm(to), ...(out ? { why: offs[0].label } : {}), booked, capacity: close - open - out };
     });
     return { id: s.id, name: s.name, role: s.role, days: days7 };
   });
