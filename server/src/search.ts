@@ -79,3 +79,42 @@ export async function searchPatients(q: string, today: Date, prisma: PrismaClien
     };
   }).sort((a, b) => rank[a.when] - rank[b.when] || a.name.localeCompare(b.name));
 }
+
+export type OutHit = { id: string; type: string; entity_id: string; name: string; kind: string; when: string };
+
+const KIND: Record<string, string> = { staff: 'Staff', room: 'Treatment room', guest_room: 'Guest room', therapy: 'Therapy', patient: 'Guest' };
+const short = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
+
+/** "Not available today", "… Thu 15 Oct", "… from Mon 19 Oct", "… until Wed 14 Oct": the line every list and Search uses (#695). */
+export function notAvailableLine(start: Date, end: Date, today: Date) {
+  const t = today.getTime();
+  if (start.getTime() <= t) return end.getTime() > t ? `Not available until ${short(end)}` : 'Not available today';
+  return start.getTime() === end.getTime() ? `Not available ${short(start)}` : `Not available from ${short(start)}`;
+}
+
+/** Anything not available now or later whose name matches (#695): a therapy, a room, a guest room, someone. */
+export async function searchOut(q: string, today: Date, prisma: PrismaClient): Promise<OutHit[]> {
+  const rows = await prisma.timeOff.findMany({ where: { entity_type: { not: 'center' }, entity_id: { not: null }, OR: [{ end_date: { gte: today } }, { end_date: null, date: { gte: today } }] }, orderBy: [{ start_date: 'asc' }, { date: 'asc' }] });
+  if (!rows.length) return [];
+  const ids = rows.map((r) => r.entity_id!);
+  const [staff, rooms, guestRooms, therapies, patients] = await Promise.all([
+    prisma.staff.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+    prisma.therapyRoom.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+    prisma.guestRoom.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+    prisma.therapy.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+    prisma.patient.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+  ]);
+  const names = new Map([...staff, ...rooms, ...guestRooms, ...therapies, ...patients].map((x) => [x.id, x.name]));
+  const needle = q.toLowerCase();
+  const seen = new Set<string>();
+  const out: OutHit[] = [];
+  for (const r of rows) {
+    const name = names.get(r.entity_id!);
+    // The soonest absence speaks for the thing; one row each.
+    if (!name || !name.toLowerCase().includes(needle) || seen.has(r.entity_id!)) continue;
+    seen.add(r.entity_id!);
+    const start = r.start_date ?? r.date!, end = r.end_date ?? r.date!;
+    out.push({ id: r.id, type: r.entity_type, entity_id: r.entity_id!, name, kind: KIND[r.entity_type] ?? r.entity_type, when: notAvailableLine(start, end, today) });
+  }
+  return out.slice(0, 5);
+}
