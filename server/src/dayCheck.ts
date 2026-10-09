@@ -112,6 +112,8 @@ const ymd = (d: Date) => d.toISOString().slice(0, 10);
 const COST: Record<string, number> = {
   STAFF_OFF: 0,
   ROOM_OFF: 0,
+  THERAPY_OFF: 0,
+  PATIENT_OFF: 0,
   STAFF_BUSY: 1,
   STAFF_IN_EVENT: 1,
   GENDER_MISMATCH: 2,
@@ -234,7 +236,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
         kind: conflict.reason,
         problem_class: 'blocking',
         what: underWay ? `${nameOfPatient(a.patient_id).split(' ')[0]} is waiting: ${conflict.message}` : conflict.message,
-        group_key: `${conflict.reason}:${conflict.reason === 'ROOM_BUSY' || conflict.reason === 'ROOM_OFF' ? a.room_id : culprit}`,
+        group_key: `${conflict.reason}:${conflict.reason === 'ROOM_BUSY' || conflict.reason === 'ROOM_OFF' ? a.room_id : conflict.reason === 'THERAPY_OFF' ? a.therapy_id : conflict.reason === 'PATIENT_OFF' ? a.patient_id : culprit}`,
         group_label: conflict.message,
         staff_id: culprit,
         cost: COST[conflict.reason] ?? 9,

@@ -162,12 +162,12 @@ export type OffRow = {
 };
 
 /**
- * The hours a therapist or room is out on a day. Time off with hours takes only
+ * The hours a therapist, room, therapy or patient is out on a day. Time off with hours takes only
  * those hours: a therapist two hours late is still in for the afternoon. Time off
  * without hours takes the whole day. The guard and the planner both read this,
  * so what one refuses the other never proposes.
  */
-export const offOnDay = (rows: OffRow[], type: 'staff' | 'room', id: string, day: Date): (Busy & { whole: boolean })[] =>
+export const offOnDay = (rows: OffRow[], type: 'staff' | 'room' | 'therapy' | 'patient', id: string, day: Date): (Busy & { whole: boolean })[] =>
   rows
     .filter((h) => h.entity_type === type && h.entity_id === id && eventHitsDay(h as unknown as EventRow, day))
     .map((h) => {

@@ -7,7 +7,7 @@ import { API_BASE } from "@/lib/apiBase";
 
 // A problem on a row, in a few words: the pill's sheet says the rest.
 const SHORT: Record<string, string> = {
-  STAFF_OFF: "Therapist not in", ROOM_OFF: "Room out of use", STAFF_BUSY: "Therapist booked twice", STAFF_IN_EVENT: "Therapist in an event",
+  STAFF_OFF: "Therapist not in", ROOM_OFF: "Room out of use", THERAPY_OFF: "Therapy not given that day", PATIENT_OFF: "Patient has no treatments then", STAFF_BUSY: "Therapist booked twice", STAFF_IN_EVENT: "Therapist in an event",
   GENDER_MISMATCH: "Therapist must match", STAFF_SHORT: "Needs 2 therapists", PATIENT_BUSY: "Patient booked twice",
   ROOM_BUSY: "Room booked twice", AMENITIES_MISSING: "Room lacks what it needs", NO_THERAPIST: "Needs a therapist", EVENT_OVERLAP: "Runs through an event",
 };

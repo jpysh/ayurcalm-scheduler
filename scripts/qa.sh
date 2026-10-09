@@ -41,6 +41,7 @@ run dietResolution     "Each resident gets the right meals for their diet plan o
 run shortenWords       "Long names are shortened sensibly to fit the day sheet"
 run availability       "A therapist counts as busy during their absences and the centre's events"
 run offHours         "A therapist out for some hours, or a room out of use, is refused only in those hours"
+run offDays          "A therapy or patient marked off is refused, raised by the day check, and never offered back by the plan"
 run therapistRota      "The therapist rota shows who works when, and why someone is away"
 run scheduleInvariants "The demo schedule has no double bookings, today is properly full, and today has a therapist off to fix"
 run validation         "A half-filled form is refused politely, not crashed on, and nobody signed out can save, and staff cannot change a diet plan"
