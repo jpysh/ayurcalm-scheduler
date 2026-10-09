@@ -183,7 +183,7 @@ export const ISSUE_KINDS = ['room', 'co_therapist', 'patient_absent', 'sos', 'pe
 linkRouter.post('/:token/issues', async (req: Request, res: Response) => {
   const who = await personOf(String(req.params.token));
   if (!who) return gone(res);
-  if (who.kind === 'patient') { res.status(403).json({ error: 'Issues come from the team.' }); return; }
+  if (who.kind === 'patient') { res.status(403).json({ error: 'Issues come from staff.' }); return; }
   const body = z.object({ kind: z.enum(ISSUE_KINDS), note: text.optional(), appointment_id: z.string().uuid().optional() }).strict().parse(req.body);
   if (body.appointment_id && !(await prisma.appointment.findFirst({ where: { id: body.appointment_id, ...mine(who) } }))) {
     res.status(404).json({ error: 'Not one of your treatments.' }); return;

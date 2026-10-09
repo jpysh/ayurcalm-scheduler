@@ -42,7 +42,7 @@ async function openTab(page: Page, name: string) {
   // The editors for the lists open from Team, not the menu (#137).
   const fromTeam: Record<string, RegExp> = { Therapies: /^Therapies/, Events: /^Classes and events/ };
   if (fromTeam[name]) {
-    await openTab(page, 'Team');
+    await openTab(page, 'Staff');
     await activePanel(page).getByRole('button', { name: fromTeam[name] }).click();
     return;
   }
@@ -74,7 +74,7 @@ test('@smoke admin signs in with Enter and every tab shows its content', async (
   await signIn(page);
   await passSetupIfShown(page);
   for (const [tab, text] of [
-    ['Team', 'Therapists'],
+    ['Staff', 'Therapists'],
     ['Rooms', ' rooms'],
     ['Therapies', 'Therapies'],
     ['Diet plans', 'Plans'],
@@ -88,7 +88,7 @@ test('@smoke admin signs in with Enter and every tab shows its content', async (
     await expect(activePanel(page)).toContainText(text, { timeout: 15000 });
   }
   // A page has one header line, as the design's (#193): its name, and no "‹ The day" line above it.
-  for (const [tab, title] of [['Patients', 'Patients'], ['Team', 'Team'], ['Rooms', 'Rooms'], ['Availability', 'Availability'], ['Diet plans', 'Diet plans'], ['Settings', 'Settings']]) {
+  for (const [tab, title] of [['Patients', 'Patients'], ['Staff', 'Staff'], ['Rooms', 'Rooms'], ['Availability', 'Availability'], ['Diet plans', 'Diet plans'], ['Settings', 'Settings']]) {
     await openTab(page, tab);
     await expect(activePanel(page).getByRole('heading', { level: 1 })).toHaveText(title);
     await expect(page.getByRole('button', { name: '‹ The day' })).toHaveCount(0);
@@ -435,7 +435,7 @@ test('Therapies offers the standard library, and a seeded centre already has all
 test('leave for a day ahead is marked from Team, and a whole day carries no hours (#219)', async ({ page, request }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  await openTab(page, 'Team');
+  await openTab(page, 'Staff');
   await activePanel(page).getByRole('button', { name: /\d{2}:\d{2}–\d{2}:\d{2}/ }).first().click();
   await page.getByRole('dialog').getByRole('button', { name: /^Away (another day|for days)/ }).click();
   // The one Availability form (#695) opens in place of the quick sheet.
@@ -503,7 +503,7 @@ test('a resident arriving today has the arrival steps still to do (#219)', async
 test('Team is read by day: each person\'s hours and how booked, any day of the strip (#351)', async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  await openTab(page, 'Team');
+  await openTab(page, 'Staff');
   await expect(activePanel(page).getByText(/^\d{2}:\d{2}–\d{2}:\d{2} · .+ booked/).first()).toBeVisible({ timeout: 15000 });
   await activePanel(page).getByLabel('Week').getByRole('button').nth(3).click();
   await expect(activePanel(page).getByText(/ in on /)).toBeVisible();

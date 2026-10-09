@@ -429,7 +429,7 @@ export async function whyNoTime(dayISO: string, pick: { patient_id: string; ther
   if (able >= needed) return undefined;
   // A consultation is given by a doctor (#460): naming a therapist sent the admin to add the wrong role.
   const who = therapy.is_consultation ? 'a doctor' : `${needed === 1 ? 'a therapist' : `${needed} therapists together`}${sameGender ? ` of ${patient.name.split(' ')[0]}'s gender` : ''}`;
-  return `${therapy.name} needs ${who}, and ${able === 0 ? 'nobody here gives it yet' : `only ${able} here ${able === 1 ? 'gives' : 'give'} it`}. Add one in Team.`;
+  return `${therapy.name} needs ${who}, and ${able === 0 ? 'nobody here gives it yet' : `only ${able} here ${able === 1 ? 'gives' : 'give'} it`}. Add one in Staff.`;
 }
 
 export type ConsultationSlot = { date: string; start_time: string; duration_minutes: number; therapy_id: string; staff_id: string; staff_name: string; room_id: string; room_name: string };
@@ -443,7 +443,7 @@ export type ConsultationSlot = { date: string; start_time: string; duration_minu
 export async function whyNoConsultation(prisma: PrismaClient): Promise<string | undefined> {
   const therapy = await prisma.therapy.findFirst({ where: { is_consultation: true } });
   if (!therapy) return 'Add Consultation from the therapy library to book doctor visits.';
-  if (!(await prisma.staff.count({ where: { is_active: true, role: 'doctor' } }))) return 'Add a doctor in Team to book consultations.';
+  if (!(await prisma.staff.count({ where: { is_active: true, role: 'doctor' } }))) return 'Add a doctor in Staff to book consultations.';
   const rooms = await prisma.therapyRoom.findMany({ where: { is_active: true } });
   if (!rooms.some((r) => therapy.required_amenities.every((a) => r.amenities.includes(a)))) return `No room is set up for consultations. Add a room that has ${therapy.required_amenities.map((a) => a.replace(/_/g, ' ')).join(' and ')}.`;
   return undefined;

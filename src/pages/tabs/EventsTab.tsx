@@ -131,7 +131,7 @@ export function useEventsScreen({ events, setEvents, roomsList, staff, staffName
         {form.days === "weekdays" ? <div className="mt-2"><Days value={form.weekdays} onChange={(v) => set({ weekdays: v })} /></div> : null}
         {form.days === "once" ? <DateRow label="On" value={form.date} onChange={(d) => set({ date: d })} /> : null}
         <Dropdown label="Run by (optional)" value={form.staff_ids[0] || ""} onChange={(e) => set({ staff_ids: e.target.value ? [e.target.value, ...form.staff_ids.slice(1).filter((x) => x !== e.target.value)] : [] })}>
-          <option value="">Nobody from the team</option>
+          <option value="">No staff</option>
           {staff.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
         </Dropdown>
         <Dropdown label="Room (optional)" value={form.room_id} onChange={(e) => set({ room_id: e.target.value })}>

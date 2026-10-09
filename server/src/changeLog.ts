@@ -144,7 +144,7 @@ export const logWrites = (prisma: PrismaClient) => async (req: Request, res: Res
 type Wrote = { method?: string; path?: string; body?: Record<string, unknown> | null; made?: string | null; was?: Record<string, unknown> | null };
 type Named = { id: string; name: string }[];
 const KIND: Record<string, string> = {
-  staff: 'team member', rooms: 'room', therapies: 'therapy', timeoff: 'leave', holidays: 'centre closed day', dietplans: 'diet plan',
+  staff: 'staff member', rooms: 'room', therapies: 'therapy', timeoff: 'leave', holidays: 'centre closed day', dietplans: 'diet plan',
   'program-events': 'event', users: 'user account', packages: 'package', accommodations: 'accommodation', 'guest-rooms': 'guest room', 'diet-templates': 'diet plan',
   patients: 'patient', appointments: 'treatment',
 };
@@ -187,7 +187,7 @@ function wrote(w: Wrote, lists: { patients: Named; staff: Named; rooms: Named; t
     if ((w.path || '').endsWith('/follow-up')) return `${who}'s follow-up marked ${b.done ? 'done' : 'not done'}`;
     return what[sub] || `${who} changed`;
   }
-  if (kind === 'staff' && sub === 'link') return `${named(id) || 'A team member'}'s private link renewed, the old one stopped`;
+  if (kind === 'staff' && sub === 'link') return `${named(id) || 'A staff member'}'s private link renewed, the old one stopped`;
   if (kind === 'users' && sub === 'set-password') return 'A password was set';
   if (kind === 'therapies' && id === 'import' && Array.isArray(b.items)) {
     const names = (b.items as { name?: string }[]).map((x) => x.name).filter(Boolean);
