@@ -355,7 +355,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
       problem_class: 'worth_knowing',
       who: nameOfPatient(stay.patient_id),
       start_time: null,
-      what: 'Nothing is booked for them today.',
+      what: 'Nothing is booked for them.',
       group_key: 'IDLE_RESIDENT',
       group_label: 'Patients in house with nothing booked',
       appointment_id: null,
@@ -378,7 +378,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
     raw.push({
       id: `DAY_FULL:${stay.patient_id}`, kind: 'DAY_FULL', problem_class: 'worth_knowing',
       who: nameOfPatient(stay.patient_id), start_time: null,
-      what: `${n} treatments today, more than the usual ${max}.`,
+      what: `${n} treatments, more than the usual ${max}.`,
       group_key: 'DAY_FULL', group_label: 'Patients with a long day',
       appointment_id: null, patient_id: stay.patient_id, patient_name: nameOfPatient(stay.patient_id), staff_id: null,
       blocked_by_preferred_staff: false, fix: null, choices: [], no_fix_reason: null, cost: COST.IDLE_RESIDENT,

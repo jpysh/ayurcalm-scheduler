@@ -47,6 +47,10 @@ async function main() {
     await prisma.patientStay.create({ data: { patient_id: aarav.id, start_date: at('2030-08-18'), end_date: at(DAY), duration_days: 3 } });
     await prisma.patientStay.create({ data: { patient_id: bela.id, start_date: at('2030-08-19'), end_date: at('2030-08-21'), duration_days: 3 } });
 
+    // The day check is read for tomorrow after closing, so its words name no day (#712).
+    const idle = (await call('GET', `/day-check?date=${DAY}`)).problems.filter((p: { kind: string; who: string }) => p.kind === 'IDLE_RESIDENT' && p.who.startsWith(TAG));
+    assert.ok(idle.length && idle.every((p: { what: string }) => !/today/.test(p.what)), 'nothing booked says no "today"');
+
     let o = await read();
     const mine = (r: string) => o.items.filter((i) => i.rule === r && i.who.startsWith(TAG)).map((i) => i.who);
     assert.deepEqual(mine('leaves_today'), [`${TAG} Aarav`]);
