@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { useTrial } from "@/lib/centreName";
-import { TIMEZONES } from "@/pages/SetupWizard";
+import { ZoneOptions } from "@/pages/SetupWizard";
 import { AssistantSection } from "@/components/AssistantSection";
 import { AccommodationEditor, PackagesEditor } from "@/components/Catalogues";
 import { BackupsSheet, HelpSheet, PrintedSheet, ago, type Backups } from "@/components/SettingsMore";
@@ -257,7 +257,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
             <Seg options={[...new Set([...SLOT_OPTIONS, settings.slot_minutes])].sort((a, b) => a - b).map((m) => [m, `${m} min`] as [number, string])} value={settings.slot_minutes} onChange={(m) => update("slot_minutes", m)} />
           </Group>
           <Dropdown label="Timezone" id="timezone" value={settings.timezone} onChange={(e) => update("timezone", e.target.value)}>
-            {[...new Set([...TIMEZONES, settings.timezone])].map((z) => <option key={z} value={z}>{z.replace(/_/g, " ")}</option>)}
+            <ZoneOptions also={settings.timezone} />
           </Dropdown>
           <Group label="Most treatments for one patient in a day">
             <Seg options={[2, 3, 4, 5, 6, 8].map((n) => [n, String(n)] as [number, string])} value={settings.max_treatments_per_day ?? 4} onChange={(n) => update("max_treatments_per_day", n)} />
