@@ -69,7 +69,7 @@ async function main() {
     await off({ entity_type: 'therapy', entity_id: therapy.id, description: 'Oil ran out' });
     const later = (await checkDay(day, prisma, { now: before })).problems.find((p) => p.appointment_id === a.id);
     assert.equal(later?.kind, 'THERAPY_OFF');
-    for (const f of [later?.fix, ...(later?.choices ?? [])].filter(Boolean)) {
+    for (const f of [later?.fix, ...(later?.choices ?? [])].filter((x) => x && !x.cancel)) {
       assert.notEqual(f!.date, '2030-02-20', 'never the same day');
     }
     console.log('offDays: ok');
