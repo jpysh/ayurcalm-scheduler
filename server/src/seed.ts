@@ -440,7 +440,13 @@ async function main() {
   const candidates = [onLeaveToday, ...staff
     .filter((s) => s.id !== onLeaveToday.id && ![yogaStaff.id, prayerStaff.id, eveningYoga.id, eveningPrayer.id].includes(s.id) && !offTodayIds.has(s.id))
     .sort((a, b) => todays.filter((t) => t.staff_id === a.id).length - todays.filter((t) => t.staff_id === b.id).length)];
-  const absent = candidates.find((c) => { const { own, moved } = movableTo(c); const n = own.length + moved.length; return n >= 3 && n <= 4; });
+  const fits = (c: (typeof staff)[number], evening: boolean) => {
+    const { own, moved } = movableTo(c);
+    const n = own.length + moved.length;
+    return n >= 3 && n <= 4 && (!evening || [...own, ...moved].some((a) => a.start_time >= '18:00'));
+  };
+  // Someone with an evening one first: on some days the first who fits had nothing after 18:00 (#717).
+  const absent = candidates.find((c) => fits(c, true)) ?? candidates.find((c) => fits(c, false));
   if (absent) {
     if (absent.id !== onLeaveToday.id) {
       await prisma.timeOff.updateMany({ where: { entity_type: 'staff', entity_id: onLeaveToday.id, date: centreToday() }, data: { entity_id: absent.id } });
