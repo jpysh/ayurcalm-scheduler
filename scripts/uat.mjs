@@ -44,21 +44,14 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #608: a leave is removed at once and Undo puts it back.
-await step('Delete this leave removes it with "Leave for … removed · Undo"; Undo brings it back', '/admin/timeoff', async () => {
+// #618: a private link carries no trial notice. Needs a trial centre (TRIAL=true, a sheet printed).
+await step('The admin sees "Free trial: N days left"; a therapist\'s private link does not', '/admin/schedule', async () => {
+  const admin = (await text(p.locator('body'))).match(/Free trial: \d+ days? left\./)?.[0] || 'none';
   const staff = (await api('GET', '/staff')).find((x) => x.role !== 'doctor');
-  const first = staff.name.split(' ')[0];
-  await api('POST', '/timeoff', { entity_type: 'staff', entity_id: staff.id, start_date: plus(2), end_date: plus(2), date: plus(2), description: 'Uat undo', plan: false });
-  await p.reload(); await p.waitForTimeout(1500);
-  await go(p.getByRole('button', { name: new RegExp(`^${first}`) }).first());
-  await go(dlg().getByRole('button', { name: /Delete this leave/ }));
-  await p.waitForTimeout(600);
-  const toastText = (await p.locator('[data-sonner-toast]').first().innerText().catch(() => '')).replace(/\n+/g, ' | ');
-  const gone = await p.getByText('Uat undo').count();
-  await go(p.locator('[data-sonner-toast]').getByRole('button', { name: 'Undo' }));
-  await p.waitForTimeout(1200);
-  const back = await p.getByText('Uat undo').count();
-  return { ok: /Leave for .* removed/.test(toastText) && /Undo/.test(toastText) && gone === 0 && back === 1, note: `toast: ${toastText} · after delete ${gone} row, after Undo ${back}` };
+  const link = await api('POST', `/staff/${staff.id}/link`);
+  await p.goto(`${APP}/l/${link.token}`); await p.waitForTimeout(2000);
+  const onLink = (await text(p.locator('body'))).match(/Free trial[^\n]*/)?.[0] || 'none';
+  return { ok: admin !== 'none' && onLink === 'none', note: `admin: ${admin} · therapist link: ${onLink}` };
 });
 await b.close();
 
