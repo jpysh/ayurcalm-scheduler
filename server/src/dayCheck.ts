@@ -78,6 +78,8 @@ export type DayProblem = {
   no_fix_reason: string | null;
   /** The fix for the cause, when the cause is the team (#368). */
   actions?: Action[];
+  /** A therapist's "Room not usable" (#695): the room, so one tap opens Not available on it. */
+  room_out?: { room_id: string; reason: string | null };
 };
 
 export type ProblemGroup = {
@@ -323,7 +325,8 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
       id: `ISSUE:${i.id}`, kind: 'ISSUE', problem_class: 'worth_knowing', urgent: i.kind === 'sos',
       who: a ? `${nameOfStaff(i.staff_id)} — ${nameOfPatient(a.patient_id)}` : nameOfStaff(i.staff_id), start_time: a?.start_time ?? null,
       what: [ISSUE[i.kind] || i.kind, i.note].filter(Boolean).join(': '),
-      group_key: 'ISSUE', group_label: 'Raised by the team',
+      group_key: 'ISSUE', group_label: 'Raised by staff',
+      ...(i.kind === 'room' && a?.room_id ? { room_out: { room_id: a.room_id, reason: i.note ?? null } } : {}),
       appointment_id: null, patient_id: a?.patient_id ?? null, patient_name: a ? nameOfPatient(a.patient_id) : '', staff_id: i.staff_id,
       blocked_by_preferred_staff: false, fix: null, choices: [], no_fix_reason: null, cost: i.kind === 'sos' ? -1 : COST.IDLE_RESIDENT,
     });

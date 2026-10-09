@@ -43,6 +43,8 @@ export type DayProblem = {
   no_fix_reason: string | null;
   /** The fix for the cause when it is the team (#368): add a therapist, or let fewer give it. */
   actions?: { kind: "add_staff" | "allow_fewer"; label: string; therapy_id?: string; gender?: string; count?: number }[];
+  /** A therapist's "Room not usable" (#695): the room to mark not available. */
+  room_out?: { room_id: string; reason: string | null };
 };
 
 export type ReplanBatch = {
@@ -58,7 +60,7 @@ type Done = { text: string; undo: (() => Promise<boolean>) | null };
 const listed = (names: string[]) => names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 const first = (name: string) => name.split(" ")[0];
 
-export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, tomorrow, coming, replans, dismissed, dismiss, undoReplan, onChanged, seeIt, afterConsultation, items, onItem, openRules, addStaff, dayOver }: {
+export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, tomorrow, coming, replans, dismissed, dismiss, undoReplan, onChanged, seeIt, afterConsultation, items, onItem, openRules, addStaff, dayOver, roomOut }: {
   open: boolean;
   /** A dead end's fix (#368): the add-a-therapist sheet, with the therapy ticked. */
   addStaff: (a: { gender?: string; therapy_id?: string }) => void;
@@ -87,6 +89,8 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   openRules: () => void;
   /** Today, past closing: a doctor's note asks for a change to a day that is finished. */
   dayOver?: boolean;
+  /** The Availability form on a room, from now, with the therapist's reason (#695). */
+  roomOut: (roomId: string, reason: string | null) => void;
 }) {
   const [done, setDone] = useState<Done | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -241,8 +245,8 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
         name: day === today ? "Patients" : "Today's patients", count: patientRows.length,
         body: patientRows.length + patientInfo.length ? <ListGroup>{patientRows.map((g) => {
           // Two things for one patient are one row; their card reaches both.
-          const i = g.length > 1 ? { ...g[0], action: "card" as const } : g[0];
-          return <Row key={i.id} title={i.who} facts={g.map((x) => x.what).join(" · ")} trailing={{ card: "Open card ›", diet: "Choose diet ›", summary: "Summary ›", followup: "Follow up ›" }[i.action ?? "card"]} onClick={() => onItem(i)} />;
+          const i = g.length > 1 ? { ...g[0], action: "card" as const, move: undefined } : g[0];
+          return <Row key={i.id} title={i.who} facts={g.map((x) => x.what).join(" · ")} trailing={i.move ? `Move to ${i.move.room_name} ›` : { card: "Open card ›", diet: "Choose diet ›", summary: "Summary ›", followup: "Follow up ›", move: "Open card ›" }[i.action ?? "card"]} onClick={() => onItem(i)} />;
         })}{patientInfo.map((i) => <Row key={i.id} title={i.who} facts={`${i.what} · information, not counted`} trailing="Open card ›" onClick={() => onItem(i)} />)}</ListGroup> : null,
       }, {
         name: day === today ? "Team" : "Today's team", count: teamAct.length,
@@ -268,6 +272,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
               <button type="button" className={tb(true)} onClick={() => afterConsultation(p, "treatments")}>Treatments</button>
               <button type="button" className={tb()} onClick={() => dismiss(p.id)}>Dismiss</button>
             </> : <>
+              {p.room_out ? <button type="button" className={tb(true)} onClick={() => { onOpenChange(false); roomOut(p.room_out!.room_id, p.room_out!.reason); }}>Not available</button> : null}
               {p.appointment_id ? <button type="button" className={tb()} onClick={() => seeIt(p.appointment_id!)}>See it</button> : null}
               <button type="button" className={tb()} onClick={() => dismiss(p.id)}>Dismiss</button>
             </>))}

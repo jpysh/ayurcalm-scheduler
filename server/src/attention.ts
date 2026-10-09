@@ -12,7 +12,7 @@ import { centreClock } from './availability.js';
 import { checkDay, dayName } from './dayCheck.js';
 import { loadDay, staffDay } from './appointmentGuard.js';
 import { loadDietsForDay } from './dietResolution.js';
-import { nightsEnd, outNight } from './guestRooms.js';
+import { firstFreeRoom, nightsEnd, outNight } from './guestRooms.js';
 
 const DAY_MS = 86400000;
 
@@ -71,7 +71,9 @@ export type Item = {
   what: string;
   patient_id?: string;
   /** What the one tap does: open their card, their meals, their discharge summary, their follow-up message. */
-  action?: 'card' | 'diet' | 'summary' | 'followup';
+  action?: 'card' | 'diet' | 'summary' | 'followup' | 'move';
+  /** action 'move' (#695): the room free on every night left, applied only when tapped. */
+  move?: { patient_id: string; stay_id: string; room_id: string; room_name: string; from_room_id: string };
 };
 
 /** A guest whose country is not India needs a Form C within 24 hours of arriving (#415). An empty country is not assumed foreign. */
@@ -118,7 +120,13 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
     const off = await prisma.timeOff.findMany({ where: { entity_type: 'guest_room' } });
     for (const s of inRooms) {
       const hit = outNight(off, s.guest_room_id!, s.start_date > day ? s.start_date : day, nightsEnd(s.start_date, s.end_date));
-      if (hit) add(rule('room_out'), s, `${s.GuestRoom!.name} is out of use from ${dayName(hit.date).replace(',', '')}${hit.reason ? `: ${hit.reason}` : ''}. Needs another room`, 'card');
+      if (!hit) continue;
+      const what = `${s.GuestRoom!.name} is not available from ${dayName(hit.date).replace(',', '')}${hit.reason ? `: ${hit.reason}` : ''}`;
+      // Same type first, then any: the room is offered, never given until tapped.
+      const to = (await firstFreeRoom(prisma, s.start_date, s.end_date, s.accommodation_id, s.id)) ?? (await firstFreeRoom(prisma, s.start_date, s.end_date, null, s.id));
+      if (!to) { add(rule('room_out'), s, `${what}. No room is free for those nights`, 'card'); continue; }
+      add(rule('room_out'), s, what, 'move');
+      found[found.length - 1].move = { patient_id: s.Patient.id, stay_id: s.id, room_id: to.id, room_name: to.name, from_room_id: s.guest_room_id! };
     }
   }
   // The doctor's follow-up day (#487): due from that day, for a month, until marked done.

@@ -7,7 +7,9 @@ export type Rule = {
 };
 export type AttentionItem = {
   id: string; rule: string; section: "Patients" | "Team"; kind: "action" | "information"; who: string; what: string;
-  patient_id?: string; action?: "card" | "diet" | "summary" | "followup";
+  patient_id?: string; action?: "card" | "diet" | "summary" | "followup" | "move";
+  /** action "move" (#695): a free room for the nights left, applied only when tapped. */
+  move?: { patient_id: string; stay_id: string; room_id: string; room_name: string; from_room_id: string };
 };
 export type Attention = { rules: Rule[]; items: AttentionItem[] };
 

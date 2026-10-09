@@ -1,10 +1,9 @@
 /**
  * Team, and Rooms: two screens from one component since #328, each with its own + (#137, docs/design/phone.html; rebuilt from the kit in #285 session 6):
  * who is working today and which rooms there are, and the one thing each is asked
- * most: a therapist not in, in late or leaving early; a room out of use. Each is
- * time off from now, the same as the day's headings, so the server moves what it
- * touches at once, and Undo removes it. Details and therapies are one more row on
- * the same sheet, so editing is a tap on the thing itself.
+ * most: a therapist not in, in late or leaving early; a room not available. Each
+ * opens the one Availability form (#695), already on the right kind of time, so
+ * nothing moves until the admin says so. Details are one more row on the same sheet.
  */
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -12,14 +11,13 @@ import { API_BASE } from "@/lib/apiBase";
 import PageHead from "@/components/PageHead";
 import { BottomSheet, WeekStrip } from "@/components/BottomBar";
 import { useShareLink } from "@/components/ShareLink";
-import { Callout, ChangeLine, Consequence, DateRow, Empty, ListGroup, Row, SheetFoot, TimeList, dayText, plural, timesBetween } from "@/components/kit";
+import { Callout, ChangeLine, Empty, ListGroup, Row, dayText, plural } from "@/components/kit";
 import { roomKind } from "@/components/SetupSheets";
 import type { UiRoom, UiStaff } from "@/pages/tabs/shared";
 
 type Pick = { kind: "staff" | "room"; id: string; name: string } | null;
-type Late = "late" | "early" | "away" | null;
 
-export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closing, refresh, openPerson, openRoom, openScreen, openRules }: {
+export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closing, refresh, openPerson, openRoom, openScreen, openRules, markOut }: {
   /** Which screen: the team (with the week and the centre's lists) or the rooms. */
   kind: "team" | "rooms";
   staff: UiStaff[];
@@ -38,6 +36,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   openScreen: (screen: "therapies" | "events") => void;
   /** The gear on the head: the rules for what Team raises (#288). */
   openRules: () => void;
+  /** The Availability form, opened on this thing and this kind of time (#695). */
+  markOut: (p: MarkOut) => void;
 }) {
   const [offToday, setOffToday] = useState<Record<string, string | null>>({});
   const [roomsOff, setRoomsOff] = useState<Map<string, RoomOff>>(new Map());
@@ -47,9 +47,6 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   const [day, setDay] = useState(nowHM >= closing ? nextDay(today) : today);
   const [pick, setPick] = useState<Pick>(null);
   const link = useShareLink();
-  const [late, setLate] = useState<Late>(null);
-  const [at, setAt] = useState("");
-  const [until, setUntil] = useState("");
 
   // Bumped by every reload, so the week's rows and gap line follow a part-day change at once (#570).
   const [weekTick, setWeekTick] = useState(0);
@@ -65,6 +62,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
       .catch(() => setRoomsOff(new Map()));
   }, [today]);
   useEffect(() => { load(); }, [load]);
+  // Saved in the shared form, so this list hears about it the way the Day does.
+  useEffect(() => { const on = () => { void refresh(); load(); }; window.addEventListener("timeoff-changed", on); return () => window.removeEventListener("timeoff-changed", on); }, [load, refresh]);
   // The week the chosen day is in, from Sunday as the strip draws it; a day in the same week needs no fetch.
   const sunday = new Date(Date.parse(`${day}T00:00:00Z`) - new Date(`${day}T00:00:00Z`).getUTCDay() * 86400000).toISOString().slice(0, 10);
   useEffect(() => {
@@ -95,25 +94,6 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   const firstOut = (e: RoomOff) => (e.start_date ?? e.date ?? "").slice(0, 10);
   const roomsOut = rooms.filter((r) => { const e = roomsOff.get(String(r.id)); return roomActive(r) && e && firstOut(e) <= today; }).length;
 
-  /** Time off between from and until; null means the edge of the day. Days default to today. */
-  async function takeOut(kind: "staff" | "room", id: string, name: string, from: string | null, until: string | null, what: string, days = { start: today, end: today }) {
-    setPick(null);
-    setLate(null);
-    const res = await fetch(`${API_BASE}/timeoff`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entity_type: kind, entity_id: id, date: days.start, start_date: days.start, end_date: days.end, start_time: from, end_time: from || until ? until || closing : null, description: what }),
-    });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) { toast.error(body.error || "That could not be saved."); return; }
-    const moved = (body.replan || []).reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0);
-    await refresh();
-    load();
-    const told = what === "Leave" || what === "Out of use" ? `${name} ${what === "Leave" ? "away" : "out of use"} ${days.start === days.end ? dayText(days.start) : `${dayText(days.start)} to ${dayText(days.end)}`}` : `${name}: ${what.toLowerCase()}${days.start === today ? "" : ` · ${dayText(days.start)}`}`;
-    toast(`${told}${moved ? ` · ${moved} moved` : ""}`, {
-      action: { label: "Undo", onClick: async () => { await fetch(`${API_BASE}/timeoff/${body.id}`, { method: "DELETE" }); await refresh(); load(); } },
-    });
-  }
-
   /** A room back in use deletes the day's entry; Undo puts the same entry back (#572). */
   async function backInUse(id: string, name: string, e: RoomOff) {
     close();
@@ -140,20 +120,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   // Their own hours that day (#571): a time at the edge of their shift changes nothing.
   const shift = pick?.kind === "staff" && on >= 0 ? week!.rows.find((r) => r.id === pick.id)?.days[on] : undefined;
   const sStart = shift?.start || opening, sEnd = shift?.end || closing;
-  const times = timesBetween(sStart, sEnd, 15);
-  const changed = !!at && (late === "away" ? !!until && until >= at : at !== (late === "late" ? sStart : sEnd));
-  const [impact, setImpact] = useState<number | null>(null);
-  useEffect(() => {
-    setImpact(null);
-    if (!pick || pick.kind !== "staff" || !late || !changed) return;
-    const q = late === "away" ? `from=${at}&to=${until}` : `from=${day}&to=${day}&${late === "late" ? "before" : "after"}=${at}`;
-    let stale = false;
-    fetch(`${API_BASE}/timeoff/impact?type=staff&ids=${pick.id}&${q}`).then((r) => (r.ok ? r.json() : null)).then((r) => { if (!stale) setImpact(typeof r?.treatments === "number" ? r.treatments : null); }).catch(() => {});
-    return () => { stale = true; };
-  }, [pick, late, at, until, day, changed]);
-  const consequence = impact === null ? null : <Consequence>{impact ? `${plural(impact, "treatment")} will need a new therapist` : "No treatments to move"}</Consequence>;
-  const from = nowHM > opening ? nowHM : null;
-  const close = () => { setPick(null); setLate(null); };
+  const close = () => setPick(null);
   const none = !team.length && !roomRows.length && !idle.length;
 
   return (
@@ -199,34 +166,23 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
       ) : null}
 
       <BottomSheet open={!!pick} onOpenChange={(o) => { if (!o) close(); }} title={pick?.name || ""}
-        note={pick?.kind === "room" ? (late === "away" ? "Which days is it out of use?" : "What would you like to do with this room?") : late === null ? (day === today ? "What changes for them today?" : `What changes for them on ${dayText(day)}?`) : late === "away" ? "Which days are they away?" : late === "late" ? "When do they start?" : "When do they leave?"}
-        foot={pick && late === "away" ? <SheetFoot ok={changed} save={() => takeOut(pick.kind, pick.id, pick.name, null, null, pick.kind === "room" ? "Out of use" : "Leave", { start: at, end: until })} label={pick.kind === "room" ? "Mark out of use, move what is booked" : "Mark leave, move what they miss"} />
-          : pick && late ? <SheetFoot ok={changed} save={() => (late === "late" ? takeOut("staff", pick.id, pick.name, opening, at, `In late, at ${at}`, { start: day, end: day }) : takeOut("staff", pick.id, pick.name, at, closing, `Leaving early, at ${at}`, { start: day, end: day }))} label="Move what they miss" /> : undefined}>
-        {pick?.kind === "room" && late === null ? (
+        note={pick?.kind === "room" ? "What would you like to do with this room?" : day === today ? "What changes for them today?" : `What changes for them on ${dayText(day)}?`}>
+        {pick?.kind === "room" ? (
           <ListGroup>
-            {roomsOff.has(pick.id) ? <Row title="Back in use" facts={outLine(roomsOff.get(pick.id)!)} trailing="›" onClick={() => backInUse(pick.id, pick.name, roomsOff.get(pick.id)!)} />
-              : <Row title="Out of use from now" facts="Moves what is booked in it" trailing="›" onClick={() => takeOut("room", pick.id, pick.name, from, null, "Out of use from now")} />}
-            <Row title="Out of use for days" facts="Choose the days" trailing="›" onClick={() => { setLate("away"); setAt(day); setUntil(day); }} />
+            {roomsOff.has(pick.id) ? <Row title="Available again" facts={outLine(roomsOff.get(pick.id)!)} trailing="›" onClick={() => backInUse(pick.id, pick.name, roomsOff.get(pick.id)!)} /> : null}
+            <Row title="Not available…" facts="From now, part of a day or some days" trailing="›" onClick={() => { close(); markOut({ type: "Room", entity: pick.id }); }} />
             <Row title="Details" facts="Name and what it has" trailing="›" onClick={() => { close(); openRoom(pick.id); }} />
           </ListGroup>
-        ) : pick && late === null ? (
+        ) : pick ? (
           <ListGroup>
-            <Row title={day === today ? "Not in from now" : "Not in that day"} facts="Moves what they miss" trailing="›" onClick={() => takeOut("staff", pick.id, pick.name, day === today ? from : null, null, day === today ? "Not in from now" : "Not in", { start: day, end: day })} />
-            <Row title="In late" facts="Choose the time they start" trailing="›" onClick={() => { setLate("late"); setAt(day === today && nowHM > sStart ? nowHM : sStart); }} />
-            <Row title="Leaving early" facts="Choose the time they leave" trailing="›" onClick={() => { setLate("early"); setAt(sEnd); }} />
-            <Row title={day === today ? "Away another day" : "Away for days"} facts="Choose the days" trailing="›" onClick={() => { const t = day === today ? nextDay(today) : day; setLate("away"); setAt(t); setUntil(t); }} />
+            <Row title={day === today ? "Not in from now" : "Not in that day"} facts="Choose what to do with what they miss" trailing="›" onClick={() => { close(); markOut(day === today ? { type: "Staff", entity: pick.id, mode: "now" } : { type: "Staff", entity: pick.id, mode: "days", date: day }); }} />
+            <Row title="In late" facts="Choose the time they start" trailing="›" onClick={() => { close(); markOut({ type: "Staff", entity: pick.id, mode: "part", date: day, startTime: sStart, endTime: day === today && nowHM > sStart ? nowHM : undefined, description: "In late" }); }} />
+            <Row title="Leaving early" facts="Choose the time they leave" trailing="›" onClick={() => { close(); markOut({ type: "Staff", entity: pick.id, mode: "part", date: day, endTime: sEnd, description: "Leaving early" }); }} />
+            <Row title={day === today ? "Away another day" : "Away for days"} facts="Choose the days" trailing="›" onClick={() => { close(); markOut({ type: "Staff", entity: pick.id, mode: "days", date: day === today ? nextDay(today) : day }); }} />
             <Row title="Share their link" facts="Their day on their own phone" trailing="›" onClick={() => { close(); link.share("staff", pick.id, pick.name); }} />
             <Row title="Make a new link" facts="The old one stops working" trailing="›" onClick={() => { close(); link.share("staff", pick.id, pick.name, true); }} />
             <Row title="Details and therapies" facts="Name, role, gender, phone" trailing="›" onClick={() => { close(); openPerson(pick.id); }} />
           </ListGroup>
-        ) : pick && late === "away" ? (
-          <div className="grid grid-cols-2 gap-3">
-            <DateRow label="From" value={at} min={today} onChange={(d) => { setAt(d); if (until < d) setUntil(d); }} />
-            <DateRow label="To" value={until} min={at} onChange={setUntil} />
-            <div className="col-span-2">{consequence}</div>
-          </div>
-        ) : pick ? (
-          <><TimeList label={late === "late" ? "In at" : "Leaving at"} times={times} value={at} onChange={setAt} />{consequence}</>
         ) : null}
       </BottomSheet>
       {link.sheet}
@@ -237,6 +193,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
 /** The day after a YYYY-MM-DD, as one. */
 const nextDay = (ymd: string) => new Date(Date.parse(ymd) + 86400000).toISOString().slice(0, 10);
 
+/** What the Availability form opens on: the thing, and which kind of time with what filled in. */
+export type MarkOut = { type: "Staff" | "Room" | "Therapy" | "GuestRoom" | "Patient"; entity: string; mode?: "now" | "part" | "days"; date?: string; startTime?: string; endTime?: string; description?: string };
 type RoomOff = { id: string; date?: string | null; start_date?: string | null; end_date?: string | null; start_time: string | null; end_time: string | null; description?: string | null };
 type Day = { state: "in" | "part" | "away" | "off"; start?: string; end?: string; why?: string; booked: number; capacity: number };
 type Week = { start: string; days: string[]; rows: { id: string; name: string; role: string; days: Day[] }[]; gaps: { start: string; end: string; in: number }[][]; rooms: { id: string; days: { booked: number; capacity: number }[] }[] };

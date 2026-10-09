@@ -124,6 +124,14 @@ const AdminDashboard = () => {
   useEffect(() => { fetch(`${API_BASE}/guest-rooms`).then((r) => (r.ok ? r.json() : [])).then((r) => setHasGuestRooms(Array.isArray(r) && r.some((x: { is_active: boolean }) => x.is_active))).catch(() => {}); }, [activeTab]);
   // What needs you (#288): the rules and the patient and team items they raise; the rules sheet opens from Settings, the pill and the gear on Patients and Team.
   const attention = useAttention();
+  // A guest room not available (#695): the free room offered under What needs you, applied only on this tap, with Undo.
+  const moveGuest = async (who: string, m: NonNullable<AttentionItem['move']>) => {
+    const put = (room: string) => fetch(`${API_BASE}/patients/${m.patient_id}/stays/${m.stay_id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify({ guest_room_id: room }) });
+    const res = await put(m.room_id);
+    if (!res.ok) { toast.error((await res.json().catch(() => ({}))).message || 'That room is no longer free.'); attention.reload(); return; }
+    attention.reload();
+    toast(`${who} moved to ${m.room_name}`, { action: { label: 'Undo', onClick: async () => { if (!(await put(m.from_room_id)).ok) toast.error('It could not be put back: that room is not available.'); attention.reload(); } } });
+  };
   const [rules, setRules] = useState<{ section: "Day" | "Patients" | "Team" | null } | null>(null);
   // A link on another screen to a Settings list ("Edit the list" on a picker).
   const [settingsSheet, setSettingsSheet] = useState<string | null>(null);
@@ -607,14 +615,14 @@ const AdminDashboard = () => {
               nowHM={new Date().toLocaleTimeString("en-GB", { timeZone: ADMIN_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}
               opening={centreHours.opening_time} closing={centreHours.closing_time}
               refresh={() => refreshAppointmentsForDate(ymdInTZ(new Date()), true)}
-              openPerson={staffScreen.openEdit} openRoom={roomsScreen.openEdit} openScreen={go} openRules={() => setRules({ section: 'Team' })} />
+              openPerson={staffScreen.openEdit} openRoom={roomsScreen.openEdit} openScreen={go} openRules={() => setRules({ section: 'Team' })} markOut={timeOffScreen.openAdd} />
           </TabsContent>
           <TabsContent value="rooms" data-testid="tabpanel-rooms">
             <TeamRooms kind="rooms" staff={staff} rooms={roomsList} q={listQuery} today={ymdInTZ(new Date())}
               nowHM={new Date().toLocaleTimeString("en-GB", { timeZone: ADMIN_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}
               opening={centreHours.opening_time} closing={centreHours.closing_time}
               refresh={() => refreshAppointmentsForDate(ymdInTZ(new Date()), true)}
-              openPerson={staffScreen.openEdit} openRoom={roomsScreen.openEdit} openScreen={go} openRules={() => setRules({ section: 'Team' })} />
+              openPerson={staffScreen.openEdit} openRoom={roomsScreen.openEdit} openScreen={go} openRules={() => setRules({ section: 'Team' })} markOut={timeOffScreen.openAdd} />
           </TabsContent>
 
           {/* Therapies Tab */}
@@ -696,6 +704,7 @@ const AdminDashboard = () => {
       />
 
             <AttentionSheet
+        roomOut={(id, reason) => timeOffScreen.openAdd({ type: 'Room', entity: id, mode: 'now', description: reason ? `Not usable: ${reason}` : 'Not usable' })}
         open={showAttention}
         onOpenChange={setShowAttention}
         apiBase={API_BASE}
@@ -714,6 +723,7 @@ const AdminDashboard = () => {
         addStaff={(a) => staffAdder.current?.(a)}
         onItem={(i: AttentionItem) => {
           setShowAttention(false);
+          if (i.move) { void moveGuest(i.who, i.move); return; }
           if (i.action === 'diet') patientsScreen.openMeals({ id: i.patient_id!, name: i.who });
           else if (i.action === 'followup') patientsScreen.openFollowUp(i.patient_id!);
           else patientsScreen.openResident(i.patient_id!);

@@ -6,6 +6,7 @@ import { API_TOKEN, fetchJsonWithTimeout, leaveWhen, type UiTimeOff, type UiStaf
 import PageHead from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
 import { HolidaysSheet } from "@/components/HolidaysSheet";
+import type { MarkOut } from "@/components/TeamRooms";
 
 type Kind = Exclude<UiTimeOff['type'], 'Center'>;
 type Mode = 'now' | 'part' | 'days';
@@ -77,14 +78,15 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
   const [form, setForm] = useState<(typeof blank & { kind: Kind; ids: string[]; editing?: UiTimeOff }) | null>(null);
   const set = (p: Partial<typeof blank>) => setForm((f) => (f ? { ...f, ...p } : f));
 
-  const openAdd = (preset?: { type: UiTimeOff['type']; entity: string }) => {
-    if (preset && preset.type !== 'Center') { startForm(preset.type, [preset.entity]); return; }
+  const openAdd = (preset?: MarkOut | { type: 'Center'; entity: string }) => {
+    if (preset && preset.type !== 'Center') { startForm(preset.type, [preset.entity], preset); return; }
     setChosen(null); setQ(''); setOpen(null); setPicking(true);
   };
-  const startForm = (kind: Kind, ids: string[]) => {
+  const startForm = (kind: Kind, ids: string[], p: Partial<MarkOut> = {}) => {
     setPicking(false);
     // A guest room is let by the night, so it is only ever whole days.
-    setForm({ ...blank, mode: kind === 'GuestRoom' ? 'days' : 'now', kind, ids });
+    const date = p.date ?? centreToday;
+    setForm({ ...blank, mode: kind === 'GuestRoom' ? 'days' : p.mode ?? 'now', date, endDate: date, startTime: p.startTime ?? '', endTime: p.endTime ?? '', description: p.description ?? '', kind, ids });
   };
   const openEdit = (h: UiTimeOff) => {
     if (h.type === 'Center') return;
@@ -218,11 +220,13 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
 
   const rowFor = (h: UiTimeOff) => <Row key={h.id} title={nameOf(h.type, h.entity)} facts={[kindOf(h), leaveWhen(h, isFullDay(h)), h.description].filter(Boolean).join(' · ')} trailing="›" onClick={() => openEdit(h)} />;
 
-  /** A thing's own sheet lists its times not available and marks another there (#671). */
+  /** A thing's own sheet, the same rows for every kind (#695): Available again when it is not, its times, Not available…. */
   const outFor = (type: UiTimeOff['type'], entity: string) => {
     const mine = timeOffs.filter((h) => h.type === type && h.entity === entity && nowOrLater(h, centreToday)).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+    const nowOut = mine.find((h) => isNow(h, centreToday, clockIn(timezone)));
     return (
       <ListGroup title={mine.length ? 'Not available' : undefined}>
+        {nowOut ? <Row title="Available again" facts="From now; Undo puts it back" trailing="›" onClick={() => void remove(nowOut)} /> : null}
         {mine.map((h) => <Row key={h.id} title={leaveWhen(h, isFullDay(h))} facts={h.description || undefined} trailing="›" onClick={() => openEdit(h)} />)}
         <LinkRow label="Not available…" onClick={() => openAdd({ type, entity })} />
       </ListGroup>
