@@ -44,24 +44,19 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #601: Upcoming and Past on the Leave screen follow the centre's day, not the phone's midnight (run with UAT_TZ=America/New_York on a stack set to New York time).
-const staffRow = (await api('GET', '/staff'))[0];
-const mkLeave = async (iso, note) => api('POST', '/timeoff', { entity_type: 'staff', entity_id: staffRow.id, date: iso, start_date: `${iso}T00:00:00.000Z`, end_date: `${iso}T00:00:00.000Z`, description: note, plan: false });
-const today0 = plus(0), yday = plus(-1);
-const [todayLeave, ydayLeave] = [await mkLeave(today0, 'Uat today'), await mkLeave(yday, 'Uat yesterday')];
-for (const zone of ['America/New_York', 'Pacific/Auckland', 'Asia/Kolkata']) {
-  await step(`Today's leave is Upcoming and yesterday's is Past, phone in ${zone}`, '/admin/timeoff', async () => {
-    const c = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, timezoneId: zone });
-    await c.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
-    const q = await c.newPage(); await q.goto(APP + '/admin/timeoff'); await q.waitForTimeout(1800);
-    const list = async () => (await q.locator('[data-testid=timeoff-table]').innerText());
-    const up = await list(); await q.getByText('Past', { exact: true }).click(); await q.waitForTimeout(600); const past = await list();
-    await q.screenshot({ path: `${OUT}/${zone.replace('/', '-')}.png` }); await c.close();
-    const ok = /Uat today/.test(up) && !/Uat yesterday/.test(up) && /Uat yesterday/.test(past) && !/Uat today/.test(past);
-    return { ok, note: `Upcoming has today's: ${/Uat today/.test(up)}, yesterday's: ${/Uat yesterday/.test(up)}; Past has today's: ${/Uat today/.test(past)}, yesterday's: ${/Uat yesterday/.test(past)}` };
-  });
-}
-for (const l of [todayLeave, ydayLeave]) if (l?.id) await api('DELETE', `/timeoff/${l.id}`);
+// #603: a follow-up that is due opens its own message from the inbox.
+await step('The inbox row for a due follow-up says "Follow up" and opens the message', '/admin/schedule', async () => {
+  const guest = await api('POST', '/patients', { name: 'Uatfollow Guest', gender: 'female', phone: '+919447001199', stay: { start_date: plus(-9), end_date: plus(-1) } });
+  const sid = guest.Stays?.[0]?.id;
+  await api('PUT', `/patients/${guest.id}/stays/${sid}/discharge`, { follow_up_date: plus(0) }).catch(() => null);
+  await p.reload(); await p.waitForTimeout(1500);
+  await go(p.getByRole('button', { name: 'Menu', exact: true })); await go(dlg().getByText(/need you/));
+  const row = dlg().getByRole('button', { name: /Uatfollow Guest/ }); const there = await row.count();
+  const rowText = there ? (await row.first().innerText()).replace(/\n+/g, ' | ') : 'no row';
+  if (there) await go(row.first());
+  const sheet = (await text(dlg())).replace(/\n+/g, ' | ');
+  return { ok: /Follow up/.test(rowText) && /Send on WhatsApp/.test(sheet), note: `row: ${rowText.slice(0, 80)} · sheet: ${sheet.slice(0, 90)}` };
+});
 await b.close();
 
 writeFileSync(`${OUT}/lines.json`, JSON.stringify(lines));

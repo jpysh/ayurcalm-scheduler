@@ -7,7 +7,7 @@ export type Rule = {
 };
 export type AttentionItem = {
   id: string; rule: string; section: "Patients" | "Team"; kind: "action" | "information"; who: string; what: string;
-  patient_id?: string; action?: "card" | "diet" | "summary";
+  patient_id?: string; action?: "card" | "diet" | "summary" | "followup";
 };
 export type Attention = { rules: Rule[]; items: AttentionItem[] };
 

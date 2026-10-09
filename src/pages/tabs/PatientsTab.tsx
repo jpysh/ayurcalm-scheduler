@@ -128,8 +128,10 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRule
 }
 
 /** One resident: the stay, today's treatments, today's meals, and what to change. */
-function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePackage, changeHouse, changeStay, book, details, detailsHint }: {
+function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, changeMeals, changePackage, changeHouse, changeStay, book, details, detailsHint }: {
   id: string | null; today: string; onClose: () => void;
+  /** The inbox opens the card already on its follow-up message (#603); asked once the card has loaded. */
+  startOn?: 'followup' | null; onStarted?: () => void;
   openTreatment: (a: CardAppt) => void; changeMeals: (p: { id: string; name: string }) => void;
   changePackage: (p: ResidentDay) => void; changeHouse: (p: ResidentDay) => void;
   changeStay: (p: ResidentDay) => void; book: (p: { id: string; name: string; consult?: boolean; date?: string }) => void; details: (id: string) => void;
@@ -205,6 +207,7 @@ function ResidentCard({ id, today, onClose, openTreatment, changeMeals, changePa
     setPhotoOpen(false); load();
   };
   const [followUp, setFollowUp] = useState(false);
+  useEffect(() => { if (startOn === 'followup' && d?.id === id && d?.follow_up) { setFollowUp(true); onStarted?.(); } }, [startOn, d?.id, d?.follow_up?.stay_id]); // eslint-disable-line react-hooks/exhaustive-deps
   const markFollowUp = async (done: boolean) => {
     const res = await fetch(`${API_BASE}/patients/${d!.id}/stays/${d!.follow_up!.stay_id}/follow-up`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ done }) });
     if (!res.ok) { toast.error("That could not be saved."); return; }
@@ -531,6 +534,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [cardId, setCardId] = useState<string | null>(null);
+  const [startOn, setStartOn] = useState<'followup' | null>(null);
   const [dietFor, setDietFor] = useState<{ id: string; name: string } | null>(null);
   const [dayMealsFor, setDayMealsFor] = useState<{ id: string; name: string } | null>(null);
   const [packFor, setPackFor] = useState<{ patient: { id: string; name: string }; stay: CardStay } | null>(null);
@@ -557,7 +561,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         editList={() => { setHouseFor(null); setBack(null); openCatalogue('accommodation'); }} />
       <StaySheet patient={stayFor?.patient ?? null} target={stayFor ? { ...stayFor.target, end: stayEnd ?? stayFor.target.end } : null} today={today}
         now={clock(timezone)} onClose={backToCard(() => { setStayFor(null); setStayEnd(null); })} onSaved={() => { if (stayFor) void refreshStays(stayFor.patient.id); }} />
-      <ResidentCard id={cardId} today={today} onClose={() => setCardId(null)}
+      <ResidentCard id={cardId} today={today} startOn={startOn} onStarted={() => setStartOn(null)} onClose={() => { setCardId(null); setStartOn(null); }}
         openTreatment={(a) => { setCardId(null); openTreatment(a); }}
         changeMeals={(p) => { setBack(p.id); setCardId(null); setDietFor(p); }}
         changePackage={(p) => { const st = p.stay ?? p.coming; if (st) { setBack(p.id); setCardId(null); setPackFor({ patient: p, stay: st }); } }}
@@ -655,7 +659,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     </>
   );
 
-  return { tab, dialogs, openResident: setCardId, openMeals: setDietFor, openAdd: (from?: { name?: string; arriving: string; leaving?: string; room?: string; done?: (p: { id: string; name: string }) => void }) => {
+  return { tab, dialogs, openResident: setCardId, openFollowUp: (id: string) => { setStartOn('followup'); setCardId(id); }, openMeals: setDietFor, openAdd: (from?: { name?: string; arriving: string; leaving?: string; room?: string; done?: (p: { id: string; name: string }) => void }) => {
     if (from) { setNewPatient({ ...blankNew(), name: from.name ?? '', arriving: from.arriving, leaving: from.leaving ?? addDays(from.arriving, 13) }); if (from.done) setInline(() => from.done); }
     // From Guest rooms (#456): the room tapped stays chosen while it is free for the dates.
     if (from?.room) setGuestRoom(from.room);
