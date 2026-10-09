@@ -454,7 +454,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   return (
     <>
     <BottomSheet open={open} onOpenChange={(o) => { if (!o) close(); }} title={booked ? "Booked" : chosen ? chosen.name : "Book a treatment"}
-      note={booked ? chosen?.name : chosen ? chosen.note : "Who is it for?"}
+      note={booked ? chosen?.name : chosen ? chosen.note : `Who is it for, ${date === today ? "today" : dayText(date)}?`}
       foot={booked ? undefined
         : chosen
         ? <SheetFoot busy={busy} ok={!!slot} save={book} label={label} />
