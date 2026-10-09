@@ -412,12 +412,13 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     await job(page, rows, "Record a therapist's leave", async (tap) => {
       await showDay(page, day);
       await tap(page.getByRole('button', { name: 'Menu', exact: true }));
-      await tap(page.getByRole('dialog').getByRole('button', { name: /^Leave/ }));
-      await tap(page.getByRole('button', { name: 'Add leave', exact: true }));
-      await tap(page.getByRole('dialog').getByRole('button', { name: /^Who\b/ }));
-      await tap(page.getByRole('dialog').last().getByRole('button', { name: staff.find((x) => x.is_active)!.name, exact: true }));
-      await tap(page.getByRole('dialog').getByRole('button', { name: 'Save, plan later' }));
-      await expect(page.locator('[data-sonner-toast]').filter({ hasText: /Leave saved/ })).toBeVisible({ timeout: 20000 });
+      await tap(page.getByRole('dialog').getByRole('button', { name: /^Availability/ }));
+      await tap(page.getByRole('button', { name: 'Mark not available', exact: true }));
+      await tap(page.getByRole('dialog').last().getByRole('button', { name: 'Show staff' }));
+      await tap(page.getByRole('dialog').last().getByRole('checkbox', { name: staff.find((x) => x.is_active)!.name, exact: true }));
+      await tap(page.getByRole('dialog').last().getByRole('button', { name: /^Next/ }));
+      await tap(page.getByRole('dialog').last().getByRole('button', { name: 'Save, fix later' }));
+      await expect(page.locator('[data-sonner-toast]').filter({ hasText: /not available/ })).toBeVisible({ timeout: 20000 });
     });
 
     // Menu, Diet plans, a plan, then Save. Typing is not counted; the walk saves the plan as it is, so nothing changes.

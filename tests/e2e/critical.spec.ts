@@ -78,7 +78,7 @@ test('@smoke admin signs in with Enter and every tab shows its content', async (
     ['Rooms', ' rooms'],
     ['Therapies', 'Therapies'],
     ['Diet plans', 'Plans'],
-    ['Leave', 'Upcoming'],
+    ['Availability', 'Centre closed days'],
     ['Events', 'Events'],
     ['Patients', 'in house'],
     ['Settings', 'Centre and letterhead'],
@@ -88,7 +88,7 @@ test('@smoke admin signs in with Enter and every tab shows its content', async (
     await expect(activePanel(page)).toContainText(text, { timeout: 15000 });
   }
   // A page has one header line, as the design's (#193): its name, and no "‹ The day" line above it.
-  for (const [tab, title] of [['Patients', 'Patients'], ['Team', 'Team'], ['Rooms', 'Rooms'], ['Leave', 'Leave'], ['Diet plans', 'Diet plans'], ['Settings', 'Settings']]) {
+  for (const [tab, title] of [['Patients', 'Patients'], ['Team', 'Team'], ['Rooms', 'Rooms'], ['Availability', 'Availability'], ['Diet plans', 'Diet plans'], ['Settings', 'Settings']]) {
     await openTab(page, tab);
     await expect(activePanel(page).getByRole('heading', { level: 1 })).toHaveText(title);
     await expect(page.getByRole('button', { name: '‹ The day' })).toHaveCount(0);

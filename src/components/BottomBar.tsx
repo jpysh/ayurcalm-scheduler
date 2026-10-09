@@ -16,7 +16,7 @@ export const SCREENS = [
   ["guestrooms", "Guest rooms", "Who sleeps where"],
   ["team", "Team", "Who is in today"],
   ["rooms", "Rooms", "Where treatments happen"],
-  ["timeoff", "Leave", "Future time off"],
+  ["timeoff", "Availability", "Anything not available"],
   ["diet", "Diet plans", "Meals by plan"],
   ["settings", "Settings", "Centre, users, AI"],
   ["schedule", "Back to the day", "The list"],

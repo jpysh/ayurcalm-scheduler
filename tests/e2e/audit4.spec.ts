@@ -141,18 +141,6 @@ test('U3: a long sheet scrolls inside the phone, its top still reachable', async
   await expect(sheet.getByRole('button', { name: 'Add them' })).toBeInViewport();
 });
 
-test('P1: Add leave has Full day and Every week as switches, not Yes / None dropdowns', async ({ page }) => {
-  await signIn(page);
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: /^Leave/ }).click();
-  await page.getByRole('button', { name: 'Add leave', exact: true }).click();
-  const form = page.getByRole('dialog');
-  await expect(form.getByRole('switch', { name: 'Full day' })).toBeChecked();
-  await form.getByRole('switch', { name: 'Every week' }).click();
-  await expect(form.getByRole('button', { name: /day$/ }).first()).toBeVisible();
-  await expect(form.getByRole('combobox').filter({ hasText: /^(Yes|No|None|Weekly)$/ })).toHaveCount(0);
-});
-
 // The wizard starts on the phone's own timezone, and offers every zone (#577, #606).
 for (const [phone, starts] of [['Europe/Berlin', 'Europe/Berlin'], ['Pacific/Auckland', 'Pacific/Auckland']] as const) {
   test.describe(`P2: the wizard picks the timezone from a list, phone in ${phone}`, () => {
@@ -179,7 +167,7 @@ for (const [phone, starts] of [['Europe/Berlin', 'Europe/Berlin'], ['Pacific/Auc
   });
 }
 
-test('#283: Add leave, New resident and Opening hours show no native date or time box and no AM/PM', async ({ page }) => {
+test('#283: Not available, New resident and Opening hours show no native date or time box and no AM/PM', async ({ page }) => {
   await signIn(page);
   const open = async (menu: RegExp, button: string | RegExp) => {
     await page.goto('/admin/schedule');
@@ -194,10 +182,15 @@ test('#283: Add leave, New resident and Opening hours show no native date or tim
     expect(await form.locator('input[type=date], input[type=time], input[type=datetime-local]').evaluateAll((all) => all.filter((e) => getComputedStyle(e).opacity !== '0').length)).toBe(0);
     expect(await form.innerText()).not.toMatch(/\b[AP]M\b/i);
   };
-  const leave = await open(/^Leave/, 'Add leave');
-  await leave.getByRole('switch', { name: 'Full day' }).click();
-  await expect(leave.getByLabel('Starts')).toHaveValue(/^\d\d:\d\d$/);
-  await expect(leave.getByLabel('From')).toHaveAttribute('type', 'date');
+  await open(/^Availability/, 'Mark not available');
+  const picker = page.getByRole('dialog').last();
+  await picker.getByRole('button', { name: 'Show staff' }).click();
+  await picker.getByRole('checkbox').first().check();
+  await picker.getByRole('button', { name: /^Next/ }).click();
+  const leave = page.getByRole('dialog').last();
+  await leave.getByRole('button', { name: 'Part of a day', exact: true }).click();
+  await expect(leave.getByLabel('From')).toHaveValue(/^\d\d:\d\d$/);
+  await expect(leave.getByLabel('Day')).toHaveAttribute('type', 'date');
   await clean(leave);
   const resident = await open(/^Patients/, 'New patient');
   await expect(resident.getByText(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{1,2} \w+$/).first()).toBeVisible();

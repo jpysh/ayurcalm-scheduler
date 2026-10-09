@@ -1021,11 +1021,18 @@ app.get('/timeoff', getTimeOffHandler);
 // India's public holidays, for the Leave screen to offer as centre-closed days.
 app.get('/holidays/india', (_req: Request, res: Response) => { res.json(indiaHolidays); });
 // The consequence line under a leave (#285 story 9): how many treatments the days would leave without their therapist.
+// What marking something not available affects, before the tap (#695): treatments for a person, room, therapy or guest; one or several of a kind.
 app.get('/timeoff/impact', async (req: Request, res: Response) => {
   const hm = z.string().regex(/^\d{2}:\d{2}$/);
-  const q = z.object({ staff_id: z.string().uuid(), from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), after: hm.optional(), before: hm.optional() }).parse(req.query);
+  const q = z.object({
+    type: z.enum(['staff', 'room', 'therapy', 'patient']),
+    ids: z.string().transform((v) => v.split(',')).pipe(z.array(z.string().uuid()).min(1).max(100)),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), after: hm.optional(), before: hm.optional(),
+  }).parse(req.query);
+  const who: Prisma.AppointmentWhereInput = q.type === 'staff' ? { OR: [{ staff_id: { in: q.ids } }, { co_staff_ids: { hasSome: q.ids } }] }
+    : q.type === 'room' ? { room_id: { in: q.ids } } : q.type === 'therapy' ? { therapy_id: { in: q.ids } } : { patient_id: { in: q.ids } };
   const rows = await prisma.appointment.findMany({
-    where: { ...HAPPENING, scheduled_date: { gte: new Date(`${q.from}T00:00:00.000Z`), lte: new Date(`${q.to}T00:00:00.000Z`) }, OR: [{ staff_id: q.staff_id }, { co_staff_ids: { has: q.staff_id } }] },
+    where: { ...HAPPENING, scheduled_date: { gte: new Date(`${q.from}T00:00:00.000Z`), lte: new Date(`${q.to}T00:00:00.000Z`) }, ...who },
     select: { start_time: true, duration_minutes: true },
   });
   // In late or leaving early (#571): only the treatments that overlap the hours away.
