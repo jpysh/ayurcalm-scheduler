@@ -14,7 +14,7 @@ async function signIn(page: import('@playwright/test').Page) {
   await page.getByRole('dialog').getByRole('button', { name: /^Patients/ }).click();
 }
 
-test('a patient is added from four fields, gets a consultation, and lands on their card', async ({ page, request }) => {
+test('@smoke a patient is added from four fields, gets a consultation, and lands on their card', async ({ page, request }) => {
   const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
   const headers = { Authorization: `Bearer ${token}` };
   await signIn(page);
