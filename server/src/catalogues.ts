@@ -102,6 +102,7 @@ guestRoomsRouter.put('/:id', requireAdmin, async (req: Request, res: Response) =
 });
 guestRoomsRouter.delete('/:id', requireAdmin, async (req: Request, res: Response) => {
   const id = String(req.params.id);
+  await prisma.timeOff.deleteMany({ where: { entity_type: 'guest_room', entity_id: id } });
   const inUse = await prisma.patientStay.count({ where: { guest_room_id: id } });
   if (inUse) { await prisma.guestRoom.update({ where: { id }, data: { is_active: false } }); res.json({ retired: true, patients: inUse }); return; }
   await prisma.guestRoom.delete({ where: { id } });

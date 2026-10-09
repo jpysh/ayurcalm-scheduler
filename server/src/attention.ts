@@ -12,6 +12,7 @@ import { centreClock } from './availability.js';
 import { checkDay, dayName } from './dayCheck.js';
 import { loadDay, staffDay } from './appointmentGuard.js';
 import { loadDietsForDay } from './dietResolution.js';
+import { nightsEnd, outNight } from './guestRooms.js';
 
 const DAY_MS = 86400000;
 
@@ -37,6 +38,7 @@ export const RULES: Rule[] = [
   { id: 'leaves_today', section: 'Patients', kind: 'action', on: true, name: 'Leaves today and has no discharge summary' },
   { id: 'arrival_open', section: 'Patients', kind: 'action', on: true, hours: 24, from: 'of arriving', name: 'Arrival steps still open' },
   { id: 'no_diet', section: 'Patients', kind: 'action', on: true, hours: 24, from: 'of arriving', name: 'No diet plan' },
+  { id: 'room_out', section: 'Patients', kind: 'action', on: true, name: "A guest's room is out of use" },
   { id: 'form_c', section: 'Patients', kind: 'action', on: true, name: 'Form C for a foreign guest, due a day after arriving' },
   { id: 'follow_up', section: 'Patients', kind: 'action', on: true, name: 'Follow-up due after discharge' },
   { id: 'leaves_tomorrow', section: 'Patients', kind: 'action', on: false, name: 'Leaves tomorrow and the discharge summary is not started' },
@@ -110,6 +112,15 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
       add(rule('form_c'), s, `Form C ${due < today ? 'overdue since' : 'due by'} ${dayName(due).replace(',', '')}`, 'card');
     }
     if (hoursIn(s) >= (rule('no_diet').hours ?? 24) && !diets.dietFor(s.Patient, true).planName) add(rule('no_diet'), s, 'No diet plan', 'diet');
+  }
+  // A room taken out of use (#563) with a guest already in it, now or booked: they need another room.
+  const inRooms = await prisma.patientStay.findMany({ where: { guest_room_id: { not: null }, on_site: true, end_date: { gte: day } }, include: { Patient: { select: { id: true, name: true } }, GuestRoom: { select: { name: true } } } });
+  if (inRooms.length) {
+    const off = await prisma.timeOff.findMany({ where: { entity_type: 'guest_room' } });
+    for (const s of inRooms) {
+      const hit = outNight(off, s.guest_room_id!, s.start_date > day ? s.start_date : day, nightsEnd(s.start_date, s.end_date));
+      if (hit) add(rule('room_out'), s, `${s.GuestRoom!.name} is out of use from ${dayName(hit.date).replace(',', '')}${hit.reason ? `: ${hit.reason}` : ''}. Needs another room`, 'card');
+    }
   }
   // The doctor's follow-up day (#487): due from that day, for a month, until marked done.
   const left = await prisma.patientStay.findMany({ where: { follow_up_done: null, discharge: { not: Prisma.DbNull }, end_date: { lte: day, gte: new Date(day.getTime() - 400 * DAY_MS) } }, include: { Patient: { select: { id: true, name: true } } } });

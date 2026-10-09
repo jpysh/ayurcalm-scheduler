@@ -28,7 +28,7 @@ const byType = (rooms: Room[]) => rooms.reduce<[string, Room[]][]>((out, r) => {
 }, []);
 const fetchRooms = (from: string, to: string) => fetchJsonWithTimeout<Room[]>(`${API_BASE}/guest-rooms/free?from=${from}&to=${to}`).then((r) => (Array.isArray(r) ? r : []));
 
-export function GuestRooms({ today, openPatient, newPatient, openSettings, adding, setAdding }: {
+export function GuestRooms({ today, openPatient, newPatient, openSettings, adding, setAdding, openOut }: {
   /** YYYY-MM-DD on the centre's clock. */
   today: string;
   openPatient: (id: string) => void;
@@ -39,6 +39,8 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
   /** The + on the bar adds guest rooms (#559); the shell holds the state because the bar is the shell's. */
   adding: boolean;
   setAdding: (o: boolean) => void;
+  /** Take a room out of use for some days: the Leave sheet with that room chosen. */
+  openOut: (roomId: string) => void;
 }) {
   const [managing, setManaging] = useState(false);
   const [version, setVersion] = useState(0);
@@ -59,7 +61,7 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
 
   const sheets = <>
     <AddGuestRooms open={adding} onOpenChange={setAdding} onChanged={() => setVersion((v) => v + 1)} openTypes={openSettings} />
-    <ManageGuestRooms open={managing} onOpenChange={setManaging} onChanged={() => setVersion((v) => v + 1)} openTypes={openSettings} />
+    <ManageGuestRooms open={managing} onOpenChange={setManaging} openOut={openOut} onChanged={() => setVersion((v) => v + 1)} openTypes={openSettings} />
   </>;
 
   if (night && !night.length) return (
@@ -105,15 +107,17 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
               const inIt = sleeping(r);
               const out = leaving(r);
               // What a room needs this morning first: who arrives, who leaves (the room to make up), then who is in.
-              const facts = [
+              const facts: string[] = [
                 ...arriving(r).map((g) => `${first(g.name)} arrives · until ${dayText(g.end_date)}`),
                 ...inIt.filter((g) => g.start_date !== day).map((g) => `${g.name} · until ${dayText(g.end_date)}`),
                 ...out.map((g) => `${first(g.name)} leaves${day === today ? " today" : ""}`),
-              ].join(" · ");
+              ];
+              // Out of use (#563) first: it is why the room is not offered.
+              if (r.out) facts.unshift(`Out of use${r.out.reason ? `: ${r.out.reason}` : ""} · until ${dayText(r.out.until)}`);
               const spare = r.beds - inIt.length;
-              return <Row key={r.id} title={r.name} facts={facts || undefined}
-                trailing={!inIt.length ? "Free" : spare > 0 ? `${spare} bed free` : undefined}
-                onClick={() => (inIt[0] ? openPatient(inIt[0].patient_id) : newPatient({ arriving: day, leaving: addDays(day, 13), room: r.id }))} />;
+              return <Row key={r.id} title={r.name} facts={facts.join(" · ") || undefined}
+                trailing={r.out && !inIt.length ? "Out" : !inIt.length ? "Free" : spare > 0 ? `${spare} bed free` : undefined}
+                onClick={r.out && !inIt.length ? undefined : () => (inIt[0] ? openPatient(inIt[0].patient_id) : newPatient({ arriving: day, leaving: addDays(day, 13), room: r.id }))} />;
             })}
           </ListGroup>
         ))}

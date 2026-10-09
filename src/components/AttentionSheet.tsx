@@ -58,7 +58,7 @@ type Done = { text: string; undo: (() => Promise<boolean>) | null };
 const listed = (names: string[]) => names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 const first = (name: string) => name.split(" ")[0];
 
-export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, tomorrow, replans, dismissed, dismiss, undoReplan, onChanged, seeIt, afterConsultation, items, onItem, openRules, addStaff }: {
+export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, tomorrow, coming, replans, dismissed, dismiss, undoReplan, onChanged, seeIt, afterConsultation, items, onItem, openRules, addStaff }: {
   open: boolean;
   /** A dead end's fix (#368): the add-a-therapist sheet, with the therapy ticked. */
   addStaff: (a: { gender?: string; therapy_id?: string }) => void;
@@ -70,6 +70,8 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   problems: DayProblem[];
   /** After closing on today (#458): tomorrow's things to fix, opened on that day. */
   tomorrow?: { day: string; count: number; open: () => void } | null;
+  /** The days after this one that the server would refuse (#620): a leave of several days plans one day at a time. Never counted on the pill. */
+  coming?: { date: string; count: number; headline: string | null; open: () => void }[];
   replans: ReplanBatch[];
   /** Notes and replans the admin has dismissed today. */
   dismissed: string[];
@@ -105,7 +107,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   const teamInfo = items.filter((i) => i.kind === "information" && i.section === "Team" && !didForYou.some((b) => b.staff_name === i.who));
   // What a guest said on leaving, when it was good or fine (#509): grey, under Patients.
   const patientInfo = items.filter((i) => i.kind === "information" && i.section === "Patients");
-  const empty = act.length + urgent.length + notes.length + didForYou.length + patientAct.length + patientInfo.length + teamAct.length + teamInfo.length + (tomorrow?.count ?? 0) === 0;
+  const empty = act.length + urgent.length + notes.length + didForYou.length + patientAct.length + patientInfo.length + teamAct.length + teamInfo.length + (tomorrow?.count ?? 0) + (coming?.length ?? 0) === 0;
 
   // Nothing left: say so, then get out of the way, as the design does. Not
   // while an Undo is showing: with the pill gone it could not be reached again.
@@ -253,6 +255,9 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
       }, {
         name: "Tomorrow", count: tomorrow?.count ?? 0,
         body: tomorrow ? <ListGroup><Row key="tomorrow" title={`${dayText(tomorrow.day)} · ${tomorrow.count} to fix`} facts="Open the day to fix it before it starts" trailing="Open ›" onClick={tomorrow.open} /></ListGroup> : null,
+      }, {
+        name: "Coming days", count: 0,
+        body: coming?.length ? <ListGroup>{coming.map((c) => <Row key={c.date} title={`${dayText(c.date)} · ${c.count} to fix`} facts={c.headline ?? "Open the day to fix it before it starts"} trailing="Open ›" onClick={c.open} />)}</ListGroup> : null,
       }, {
         name: "Patients", count: patientRows.length,
         body: patientRows.length + patientInfo.length ? <ListGroup>{patientRows.map((g) => {

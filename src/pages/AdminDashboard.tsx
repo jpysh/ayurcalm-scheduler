@@ -92,7 +92,7 @@ const useServerHealth = (base: string) => {
 type ApiTherapy = { id: string; name: string; required_amenities: string[]; duration_minutes: number; requires_gender_match: boolean; staff_required?: number; once_per_course?: boolean; before_purification?: boolean; is_consultation?: boolean; checklist?: { text: string; required: boolean }[]; vitals?: string[] };
 type ApiStaff = { id: string; name: string; gender: "male" | "female" | "other"; specializations: string[]; phone?: string; weekly_schedule?: UiStaff["hours"] };
 type ApiRoom = { id: string; name: string; amenities: string[]; is_active: boolean };
-type ApiTimeOffSimple = { id?: string; entity_type: 'center'|'staff'|'room'|'therapy'|'patient'; entity_id?: string | null };
+type ApiTimeOffSimple = { id?: string; entity_type: 'center'|'staff'|'room'|'guest_room'|'therapy'|'patient'; entity_id?: string | null };
 type ApiPatient = { id: string; name: string; gender: "male" | "female" | "other"; phone?: string; email?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; date_of_birth?: string | null; medical_notes?: string | null; Stays?: { start_date: string; end_date: string }[] };
 const AdminDashboard = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -211,7 +211,7 @@ const AdminDashboard = () => {
       setAppointmentsByDate(map);
       setLoaded(true);
       try {
-        type ApiTimeOff = { id?: string; entity_type: 'center'|'staff'|'room'|'therapy'|'patient'; entity_id?: string | null; date?: string | null; start_date?: string | null; end_date?: string | null; start_time?: string | null; end_time?: string | null; recurrence?: 'weekly' | null; weekdays?: string[] | null; description?: string | null };
+        type ApiTimeOff = { id?: string; entity_type: 'center'|'staff'|'room'|'guest_room'|'therapy'|'patient'; entity_id?: string | null; date?: string | null; start_date?: string | null; end_date?: string | null; start_time?: string | null; end_time?: string | null; recurrence?: 'weekly' | null; weekdays?: string[] | null; description?: string | null };
         const [tOff, hol] = await Promise.all([
           fetchJsonWithTimeout<ApiTimeOff[]>(`${API_BASE}/timeoff`),
           fetchJsonWithTimeout<ApiTimeOff[]>(`${API_BASE}/holidays`),
@@ -237,6 +237,7 @@ const AdminDashboard = () => {
             x.entity_type === "center" ? "Center" :
             x.entity_type === "staff" ? "Staff" :
             x.entity_type === "room" ? "Room" :
+            x.entity_type === "guest_room" ? "GuestRoom" :
             x.entity_type === "therapy" ? "Therapy" : "Patient",
           entity: x.entity_id ?? "All",
           description: x.description ?? "",
@@ -467,6 +468,16 @@ const AdminDashboard = () => {
       .catch(() => setTomorrowFix(0));
   }, [evening, tomorrowKey, dayCheck]);
 
+  // The days ahead that still have something to fix, for the inbox (#620); read when it opens and after a change.
+  const [comingDays, setComingDays] = useState<{ date: string; count: number; headline: string | null }[]>([]);
+  useEffect(() => {
+    if (!showAttention) return;
+    fetch(`${API_BASE}/day-check/upcoming?from=${dayKeyMemo}&days=14`)
+      .then((r) => (r.ok ? r.json() : { days_with_problems: [] }))
+      .then((d) => setComingDays(Array.isArray(d.days_with_problems) ? d.days_with_problems : []))
+      .catch(() => setComingDays([]));
+  }, [showAttention, dayKeyMemo, dayCheck]);
+
   const location = useLocation();
   const navigate = useNavigate();
   useServerHealth(API_BASE);
@@ -617,7 +628,8 @@ const AdminDashboard = () => {
 
           <TabsContent value="guestrooms" data-testid="tabpanel-guestrooms">
             {activeTab === 'guestrooms' ? <GuestRooms today={ymdInTZ(new Date())} openPatient={(id) => patientsScreen.openResident(id)}
-              newPatient={(p) => patientsScreen.openAdd(p)} openSettings={() => { setSettingsSheet('accommodation'); go('settings'); }} adding={addingRooms} setAdding={setAddingRooms} /> : null}
+              newPatient={(p) => patientsScreen.openAdd(p)} openSettings={() => { setSettingsSheet('accommodation'); go('settings'); }} adding={addingRooms} setAdding={setAddingRooms}
+                openOut={(id) => { timeOffScreen.openAdd({ type: 'GuestRoom', entity: id }); go('timeoff'); }} /> : null}
           </TabsContent>
 
           <TabsContent value="log" data-testid="tabpanel-log">
@@ -725,6 +737,7 @@ const AdminDashboard = () => {
         today={ymdInTZ(new Date())}
         problems={dayCheck.problems}
         tomorrow={tomorrowFix ? { day: tomorrowKey, count: tomorrowFix, open: () => setCurrentDate(dayDate(tomorrowKey)) } : null}
+        coming={comingDays.filter((c) => !(tomorrowFix && c.date === tomorrowKey)).map((c) => ({ ...c, open: () => setCurrentDate(dayDate(c.date)) }))}
         replans={visibleReplans}
         dismissed={dismissed}
         dismiss={dismiss}

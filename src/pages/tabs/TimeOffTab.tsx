@@ -1,4 +1,4 @@
-import { Consequence, DateRow, Days, Empty, PickField, SheetNote, Foot, ListGroup, Row, Seg, Switch, Text, TimeList, TwoFoot } from "@/components/kit";
+import { Consequence, DateRow, dayText, Days, Empty, PickField, SheetNote, Foot, ListGroup, Row, Seg, Switch, Text, TimeList, TwoFoot } from "@/components/kit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
@@ -7,6 +7,9 @@ import PageHead from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
 import { HolidaysSheet } from "@/components/HolidaysSheet";
 
+/** The server's name for what is away: a guest room is `guest_room`, the rest are the lower-cased type. */
+const entityKey = (t: string) => (t === 'GuestRoom' ? 'guest_room' : t.toLowerCase());
+const nextDay = (iso: string) => new Date(Date.parse(`${iso}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
 const sortKey = (h: UiTimeOff) => h.startDate || h.date || '';
 
 /** Leave (#285 story 9): one row each, who and when; a tap opens the same sheet that adds one. */
@@ -63,18 +66,21 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
   const [editing, setEditing] = useState<UiTimeOff | null>(null);
   const [showHolidays, setShowHolidays] = useState(false);
   const closedDays = useMemo(() => new Set(timeOffs.filter((h) => h.type === "Center").map((h) => (h.date || h.startDate || "").slice(0, 10))), [timeOffs]);
+  // Guest rooms (#563): the same leave list and sheet take a room out for some days, say for no electricity.
+  const [guestRooms, setGuestRooms] = useState<{ id: string; name: string; is_active: boolean }[]>([]);
+  useEffect(() => { fetchJsonWithTimeout<{ id: string; name: string; is_active: boolean }[]>(`${API_BASE}/guest-rooms`).then((r) => setGuestRooms(Array.isArray(r) ? r : [])).catch(() => {}); }, [timeOffs.length]);
   const [visibleTimeOffRows, setVisibleTimeOffRows] = useState(20);
   const timeoffTotalRef = useRef(0);
   useEffect(() => { setVisibleTimeOffRows(20); }, [timeOffs, holidayViewMode]);
   // Most leave is a therapist's whole day, starting today (#137).
   const blank = () => ({
-    date: startDay, endDate: startDay, type: "Staff" as "Center" | "Staff" | "Room" | "Therapy" | "Patient", entity: "", fullDay: true, description: "", startTime: "", endTime: "",
+    date: startDay, endDate: startDay, type: "Staff" as "Center" | "Staff" | "Room" | "GuestRoom" | "Therapy" | "Patient", entity: "", fullDay: true, description: "", startTime: "", endTime: "",
     recurrence: undefined as 'weekly' | undefined, weekdays: undefined as UiTimeOff['weekdays'],
   });
   const [newTimeOff, setNewTimeOff] = useState({
     date: startDay,
     endDate: startDay,
-    type: "Staff" as "Center" | "Staff" | "Room" | "Therapy" | "Patient",
+    type: "Staff" as "Center" | "Staff" | "Room" | "GuestRoom" | "Therapy" | "Patient",
     entity: "",
     fullDay: true,
     description: "",
@@ -91,6 +97,15 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     return () => { stale = true; };
   }, [sheet, newTimeOff.type, newTimeOff.entity, newTimeOff.date, newTimeOff.endDate]);
 
+  // A guest already in the room on those days will need another one (#563); said before the tap.
+  const [inRoom, setInRoom] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!sheet || newTimeOff.type !== 'GuestRoom' || !newTimeOff.entity) { setInRoom(null); return; }
+    let stale = false;
+    fetchJsonWithTimeout<{ id: string; guests: { name: string }[] }[]>(`${API_BASE}/guest-rooms/free?from=${newTimeOff.date}&to=${nextDay(newTimeOff.endDate)}`)
+      .then((r) => { if (!stale) setInRoom(Array.isArray(r) ? r.find((x) => x.id === newTimeOff.entity)?.guests.map((g) => g.name) ?? [] : null); });
+    return () => { stale = true; };
+  }, [sheet, newTimeOff.type, newTimeOff.entity, newTimeOff.date, newTimeOff.endDate]);
   const isFullDay = (h: UiTimeOff) => {
     // No hours is the whole day, wherever the centre's day starts or ends.
     return !h.startTime || !h.endTime;
@@ -101,9 +116,9 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     return `Weekly: ${weekdays.map((w) => map[w] || w).join(', ')}`;
   };
 
-  const nameOf = (h: UiTimeOff) => h.type === 'Center' ? 'Whole centre' : (h.type === 'Staff' ? staffNameById[h.entity] : h.type === 'Room' ? roomNameById[h.entity] : h.type === 'Therapy' ? therapyNameById[h.entity] : patientNameById[h.entity]) ?? h.entity;
+  const nameOf = (h: UiTimeOff) => h.type === 'Center' ? 'Whole centre' : (h.type === 'Staff' ? staffNameById[h.entity] : h.type === 'Room' ? roomNameById[h.entity] : h.type === 'GuestRoom' ? guestRooms.find((r) => r.id === h.entity)?.name : h.type === 'Therapy' ? therapyNameById[h.entity] : patientNameById[h.entity]) ?? h.entity;
   // Rows mix people, rooms, therapies and patients; a name alone does not say which (#360).
-  const kindOf = (h: UiTimeOff) => h.type === "Staff" ? (staff.find((s) => String(s.id) === h.entity)?.role === "doctor" ? "Doctor" : "Therapist") : h.type;
+  const kindOf = (h: UiTimeOff) => h.type === "Staff" ? (staff.find((s) => String(s.id) === h.entity)?.role === "doctor" ? "Doctor" : "Therapist") : h.type === "GuestRoom" ? "Guest room" : h.type;
   // Removed at once and put back by Undo from the leave as the server held it (#608); the day's own moves are not redone, they wait under "need you".
   const removeLeave = async (h: UiTimeOff) => {
     const who = nameOf(h);
@@ -126,7 +141,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     setNewTimeOff({ date: (h.startDate || h.date || todayKey).slice(0, 10), endDate: (h.endDate || h.date || todayKey).slice(0, 10), type: h.type, entity: h.entity, fullDay: isFullDay(h), description: h.description || '', startTime: h.startTime || '', endTime: h.endTime || '', recurrence: h.recurrence, weekdays: h.weekdays });
     setSheet('edit');
   };
-  const openAdd = () => { setEditing(null); setNewTimeOff(blank()); setSheet('new'); };
+  const openAdd = (preset?: { type: UiTimeOff['type']; entity: string }) => { setEditing(null); setNewTimeOff({ ...blank(), ...(preset ?? {}) }); setSheet('new'); };
   const closeSheet = (o: boolean) => { if (!o) { setSheet(null); setEditing(null); } };
 
   const saveEdit = async () => {
@@ -135,7 +150,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     const startTime = n.startTime || timeSlots[0] || '09:00';
     const endTime = n.endTime || timeSlots[timeSlots.length - 1] || '18:00';
     const payload = {
-      entity_type: n.type.toLowerCase(), entity_id: n.type === 'Center' ? null : n.entity,
+      entity_type: entityKey(n.type), entity_id: n.type === 'Center' ? null : n.entity,
       start_date: `${n.date}T00:00:00.000Z`, end_date: `${n.endDate}T00:00:00.000Z`,
       start_time: n.fullDay ? null : startTime, end_time: n.fullDay ? null : endTime,
       recurrence: n.recurrence, weekdays: n.weekdays, description: n.description,
@@ -164,13 +179,14 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
       return;
     }
     const planFor = newTimeOff.date;
-    const entity_type = newTimeOff.type.toLowerCase();
+    const entity_type = entityKey(newTimeOff.type);
     const tempId = `temp-${Date.now()}`;
     const startTime = newTimeOff.startTime || timeSlots[0] || '09:00';
     const endTime = newTimeOff.endTime || timeSlots[timeSlots.length - 1] || '18:00';
     // Whole days are calendar days, stored as midnight UTC like every other date, whatever zone the phone is in (#597).
-    const startIso = newTimeOff.fullDay ? `${newTimeOff.date}T00:00:00.000Z` : `${newTimeOff.date}T${startTime}`;
-    const endIso = newTimeOff.fullDay ? `${newTimeOff.endDate}T00:00:00.000Z` : `${newTimeOff.endDate}T${endTime}`;
+    const room = newTimeOff.type === 'GuestRoom';
+    const startIso = newTimeOff.fullDay || room ? `${newTimeOff.date}T00:00:00.000Z` : `${newTimeOff.date}T${startTime}`;
+    const endIso = newTimeOff.fullDay || room ? `${newTimeOff.endDate}T00:00:00.000Z` : `${newTimeOff.endDate}T${endTime}`;
     const optimistic: UiTimeOff = { id: tempId, startDate: startIso, endDate: endIso, recurrence: newTimeOff.recurrence, weekdays: newTimeOff.weekdays as UiTimeOff['weekdays'], type: newTimeOff.type, entity: newTimeOff.type === 'Center' ? 'All' : (newTimeOff.entity || ''), description: newTimeOff.description };
     setTimeOffs((prev) => [...prev, optimistic]);
     setSheet(null);
@@ -184,8 +200,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
           entity_id: optimistic.entity === 'All' ? null : (optimistic.entity || null),
           start_date: optimistic.startDate,
           end_date: optimistic.endDate,
-          start_time: newTimeOff.fullDay ? null : startTime,
-          end_time: newTimeOff.fullDay ? null : endTime,
+          start_time: room || newTimeOff.fullDay ? null : startTime,
+          end_time: room || newTimeOff.fullDay ? null : endTime,
           recurrence: optimistic.recurrence,
           weekdays: optimistic.weekdays,
           description: optimistic.description,
@@ -196,7 +212,12 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
       if (!res.ok) throw new Error(String(res.status));
       const created = await res.json();
       setTimeOffs((prev) => prev.map((h) => h.id === tempId ? { id: created.id, startDate: created.start_date ? new Date(created.start_date).toISOString() : undefined, endDate: created.end_date ? new Date(created.end_date).toISOString() : undefined, recurrence: created.recurrence || undefined, weekdays: created.weekdays || undefined, type: optimistic.type, entity: created.entity_id ?? optimistic.entity, description: created.description ?? optimistic.description } : h));
-      if (planNow) planDay(planFor);
+      if (room) {
+        const name = guestRooms.find((r) => r.id === optimistic.entity)?.name ?? 'The room';
+        toast(`${name} out of use ${newTimeOff.date === newTimeOff.endDate ? dayText(newTimeOff.date) : `${dayText(newTimeOff.date)} to ${dayText(newTimeOff.endDate)}`}`, {
+          action: { label: 'Undo', onClick: async () => { await fetch(`${API_BASE}/timeoff/${created.id}`, { method: 'DELETE' }); setTimeOffs((prev) => prev.filter((h) => h.id !== created.id)); } },
+        });
+      } else if (planNow) planDay(planFor);
       else toast.success('Leave saved. The day still needs planning: it waits under "need you".');
     } catch {
       setTimeOffs((prev) => prev.filter((h) => h.id !== tempId));
@@ -208,10 +229,12 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
     <>
       <HolidaysSheet open={showHolidays} onOpenChange={setShowHolidays} closed={closedDays} today={todayKey}
         onAdded={(rows) => setTimeOffs((prev) => [...prev, ...rows.map((x) => ({ id: x.id, date: new Date(x.date).toISOString(), type: "Center" as const, entity: "All", description: x.description }))])} />
-      <BottomSheet open={sheet !== null} onOpenChange={closeSheet} title={sheet === 'edit' ? 'Change leave' : 'New leave'} note={sheet === 'edit' ? `${editing ? nameOf(editing) : ''}. Change anything, then save.` : 'Who is away, and when.'}
+      <BottomSheet open={sheet !== null} onOpenChange={closeSheet} title={sheet === 'edit' ? 'Change leave' : 'New leave'} note={sheet === 'edit' ? `${editing ? nameOf(editing) : ''}. Change anything, then save.` : newTimeOff.type === 'GuestRoom' ? 'The room cannot be given to a guest on these days.' : 'Who is away, and when.'}
         foot={sheet === 'edit'
           ? <Foot label="Save the leave" save={saveEdit} ok={newTimeOff.type === 'Center' || !!newTimeOff.entity} remove={() => { const h = editing; closeSheet(false); if (h) void removeLeave(h); }} removeLabel="Delete this leave" />
-          : <TwoFoot main="Save and plan the day" onMain={() => save(true)} alt="Save, plan later" onAlt={() => save(false)} ok={newTimeOff.type === 'Center' || !!newTimeOff.entity} />}>
+          : newTimeOff.type === 'GuestRoom'
+            ? <Foot label="Mark the room out of use" ok={!!newTimeOff.entity} save={() => save(false)} />
+            : <TwoFoot main="Save and plan the day" onMain={() => save(true)} alt="Save, plan later" onAlt={() => save(false)} ok={newTimeOff.type === 'Center' || !!newTimeOff.entity} />}>
         {/* Who first, as one list (#265 H1): the old form asked for a "type" before the person. */}
         <PickField label="Who or what" placeholder="Choose…"
           value={newTimeOff.type === 'Center' ? 'Center:All' : newTimeOff.entity ? `${newTimeOff.type}:${newTimeOff.entity}` : ''}
@@ -220,6 +243,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
             { title: 'Therapists and doctors', options: staff.map((x) => ({ id: `Staff:${x.id}`, name: x.name })) },
             { title: 'The whole centre', options: [{ id: 'Center:All', name: 'Closed for a day' }] },
             { title: 'Rooms', folded: true, options: roomsList.map((r) => ({ id: `Room:${r.id}`, name: r.name })) },
+            { title: 'Guest rooms', folded: newTimeOff.type !== 'GuestRoom', options: guestRooms.filter((r) => r.is_active).map((r) => ({ id: `GuestRoom:${r.id}`, name: r.name })) },
             { title: 'Therapies', folded: true, options: therapies.map((t) => ({ id: `Therapy:${String(t.id ?? t.name)}`, name: t.name })) },
             { title: 'Patients', folded: true, options: patients.map((x) => ({ id: `Patient:${x.id}`, name: x.name })) },
           ]} />
@@ -228,16 +252,17 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, ther
           <DateRow label="From" value={newTimeOff.date} onChange={(v) => setNewTimeOff({ ...newTimeOff, date: v, endDate: newTimeOff.endDate < v ? v : newTimeOff.endDate })} />
           <DateRow label="To" value={newTimeOff.endDate} min={newTimeOff.date} onChange={(v) => setNewTimeOff({ ...newTimeOff, endDate: v })} />
         </div>
-        <Switch label="Full day" on={newTimeOff.fullDay} set={(v) => setNewTimeOff({ ...newTimeOff, fullDay: v })} />
-        {newTimeOff.fullDay ? null : (
+        {newTimeOff.type === 'GuestRoom' ? null : <Switch label="Full day" on={newTimeOff.fullDay} set={(v) => setNewTimeOff({ ...newTimeOff, fullDay: v })} />}
+        {newTimeOff.fullDay || newTimeOff.type === 'GuestRoom' ? null : (
           <div className="grid grid-cols-2 gap-3">
             <TimeList label="Starts" times={timeSlots} value={newTimeOff.startTime || timeSlots[0] || '09:00'} onChange={(t) => setNewTimeOff({ ...newTimeOff, startTime: t })} />
             <TimeList label="Ends" times={timeSlots} after={newTimeOff.date === newTimeOff.endDate ? (newTimeOff.startTime || timeSlots[0]) : undefined} value={newTimeOff.endTime || timeSlots[timeSlots.length - 1] || '18:00'} onChange={(t) => setNewTimeOff({ ...newTimeOff, endTime: t })} />
           </div>
         )}
-        <Switch label="Every week" on={newTimeOff.recurrence === 'weekly'} set={(v) => setNewTimeOff({ ...newTimeOff, recurrence: v ? 'weekly' : undefined, weekdays: v ? (newTimeOff.weekdays || [(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const)[new Date(`${newTimeOff.date}T00:00:00Z`).getUTCDay()]]) : undefined })} />
+        {newTimeOff.type === 'GuestRoom' ? null : <Switch label="Every week" on={newTimeOff.recurrence === 'weekly'} set={(v) => setNewTimeOff({ ...newTimeOff, recurrence: v ? 'weekly' : undefined, weekdays: v ? (newTimeOff.weekdays || [(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const)[new Date(`${newTimeOff.date}T00:00:00Z`).getUTCDay()]]) : undefined })} />}
         {newTimeOff.recurrence === 'weekly' ? <Days value={newTimeOff.weekdays || []} onChange={(v) => setNewTimeOff({ ...newTimeOff, weekdays: v as UiTimeOff['weekdays'] })} /> : null}
         <Text label="Reason (optional)" id="newTimeOffDescription" value={newTimeOff.description} onChange={(e) => setNewTimeOff({ ...newTimeOff, description: e.target.value })} />
+        {newTimeOff.type === 'GuestRoom' && inRoom ? <Consequence>{inRoom.length ? `${inRoom.join(' and ')} ${inRoom.length === 1 ? 'is' : 'are'} in it then, and will need another room: it waits under "need you".` : 'Nobody is in it then.'}</Consequence> : null}
         {impact === null ? null : <Consequence>{impact === 0 ? 'No treatments are booked then.' : `${impact} treatment${impact === 1 ? '' : 's'} ${newTimeOff.date === newTimeOff.endDate ? 'that day' : 'on those days'} will need a new therapist.`}</Consequence>}
       </BottomSheet>
     </>

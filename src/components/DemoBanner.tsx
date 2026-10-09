@@ -4,7 +4,9 @@ import { useDemo, useTrial } from "@/lib/centreName";
 export function DemoBanner() {
   const demo = useDemo();
   const trial = useTrial();
-  if (trial?.ends_at || trial?.read_only) {
+  // A private link belongs to a guest, a therapist or a doctor: the trial and plan notes are the admin's, never theirs (#618).
+  const onLink = window.location.pathname.startsWith("/l/");
+  if (!onLink && (trial?.ends_at || trial?.read_only)) {
     const days = Math.ceil((Date.parse(trial.ends_at) - Date.now()) / 86400000);
     return (
       <div role="status" className="bg-notice-bg px-4 py-2 text-center text-sm text-notice">
