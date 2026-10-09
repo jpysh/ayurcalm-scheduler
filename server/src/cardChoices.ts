@@ -517,21 +517,29 @@ export async function planNextWeek(patientId: string, reviewISO: string, prisma:
     byTherapy.set(a.therapy_id, e);
   }
   const consult = [...past].reverse().find((a) => a.Therapy?.is_consultation);
-  const lines = [...byTherapy.entries()]
-    .filter(([id]) => !opts.only || opts.only.includes(id))
-    .map(([id, e]) => {
-      const t = therapies.find((x) => x.id === (opts.swaps?.[id] || id))!;
-      return { from_therapy_id: id, therapy_id: t.id, therapy_name: t.name, start_time: e.last.start_time, staff_name: '', sessions: [], missing: [], _pref: e.last, _dates: [...e.dates].filter((d) => d > reviewISO && d <= to) };
-    })
-    .sort((a, b) => a.start_time.localeCompare(b.start_time)) as (WeekLine & { _pref: (typeof past)[number]; _dates: string[] })[];
-  let reviewOut: WeekPlan['review'] = null;
-  let reviewMissing: string | undefined;
-  const reviewDate = shift(reviewISO, 7);
-  const wantReview = opts.review !== false && !!consult && reviewDate <= last;
   // Never a day already gone: a review planned late fills only what is left of the week.
   const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: settings?.timezone || 'Asia/Kolkata' }).format(new Date());
   const first = shift(reviewISO, 1) > today ? shift(reviewISO, 1) : today;
+  type Pref = { staff_id: string | null; room_id: string | null };
+  const lines = [...byTherapy.entries()]
+    .filter(([id]) => !opts.only || opts.only.includes(id))
+    .map(([id, e]) => {
+      const t = therapies.find((x) => x.id === (opts.swaps?.[id] || id))!;
+      return { from_therapy_id: id, therapy_id: t.id, therapy_name: t.name, start_time: e.last.start_time, staff_name: '', sessions: [], missing: [], _pref: e.last as Pref, _dates: [...e.dates].filter((d) => d > reviewISO && d <= to) };
+    })
+    // A therapy ticked that this week never had (a patient's first days, #611): every day of the week, from the centre's opening time.
+    .concat((opts.only || []).filter((id) => !byTherapy.has(id) && therapies.some((t) => t.id === (opts.swaps?.[id] || id) && !t.is_consultation)).map((id) => {
+      const t = therapies.find((x) => x.id === (opts.swaps?.[id] || id))!;
+      const days: string[] = [];
+      for (let d = first; d <= to; d = shift(d, 1)) days.push(d);
+      return { from_therapy_id: id, therapy_id: t.id, therapy_name: t.name, start_time: settings?.opening_time || '09:00', staff_name: '', sessions: [], missing: [], _pref: { staff_id: null, room_id: null } as Pref, _dates: days };
+    }))
+    .sort((a, b) => a.start_time.localeCompare(b.start_time)) as (WeekLine & { _pref: Pref; _dates: string[] })[];
+  let reviewOut: WeekPlan['review'] = null;
+  let reviewMissing: string | undefined;
+  const reviewDate = shift(reviewISO, 7);
+  const wantReview = opts.review !== false && !!consult && reviewDate <= last;
   // Day by day, each placement added to the day before the next is tried, so two lines never take the same minute.
   for (let d = first; d <= reviewDate && d <= last; d = shift(d, 1)) {
     const day = new Date(`${d}T00:00:00.000Z`);

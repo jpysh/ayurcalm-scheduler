@@ -44,21 +44,24 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #609: prices carry the centre's own currency symbol.
-await step('Settings has a currency symbol; set to $, the accommodation picker reads "$1,600 a day", not "Rs"', '/admin/settings', async () => {
-  const set = async (c) => { const cur = await api('GET', '/settings'); await api('PUT', '/settings', { ...cur, currency: c, letterhead: undefined, setup_reviewed: undefined }); };
-  await set('$');
+// #611: a patient's first days are planned as a week, from ticks.
+await step('Plan next week for a patient with nothing yet lists the therapies to tick and books them on every day', '/admin/patients', async () => {
+  const guest = await api('POST', '/patients', { name: 'Uatfirst Guest', gender: 'female', stay: { start_date: plus(0), end_date: plus(9) } });
   await p.reload(); await p.waitForTimeout(1500);
-  await go(p.getByRole('button', { name: /Centre and letterhead/ }));
-  const field = await dlg().getByLabel('Currency symbol').inputValue();
-  await p.keyboard.press('Escape'); await p.waitForTimeout(500);
-  const who = (await api('GET', `/patients?resident_on=${plus(0)}`)).find((x) => x.Stays.some((st) => st.on_site !== false && st.start_date.slice(0, 10) <= plus(0) && st.end_date.slice(0, 10) >= plus(0)));
-  await p.goto(APP + '/admin/patients'); await p.waitForTimeout(1500);
-  await go(p.getByRole('button', { name: new RegExp(`^${who.name}`) }).first());
-  await go(dlg().getByRole('button', { name: /^Accommodation/ }));
-  const sheet = (await text(dlg())).replace(/\n+/g, ' | ');
-  await set('Rs');
-  return { ok: field === '$' && /\$[\d,]+ a day/.test(sheet) && !/Rs /.test(sheet), note: `field "${field}" · ${(sheet.match(/\$[\d,]+ a day/) || ['no price'])[0]} · Rs left: ${/Rs /.test(sheet)}` };
+  await go(p.getByRole('button', { name: /^Uatfirst Guest/ }).first());
+  await go(dlg().getByRole('button', { name: /^Plan next week/ }));
+  await p.waitForTimeout(1500);
+  const sheet = dlg();
+  const opened = (await text(sheet)).replace(/\n+/g, ' | ');
+  const boxes = sheet.getByRole('switch');
+  await boxes.nth(0).click(); await boxes.nth(1).click(); await p.waitForTimeout(400);
+  const foot = (await sheet.getByRole('button', { name: /^Book all/ }).innerText()).trim();
+  await p.screenshot({ path: `${OUT}/01-ticked.png` });
+  await go(sheet.getByRole('button', { name: /^Book all/ }));
+  await p.waitForTimeout(1500);
+  const booked = (await api('GET', `/appointments?patient_id=${guest.id}`)).length;
+  const n = Number(foot.replace(/\D/g, ''));
+  return { ok: /Tick what they start with/.test(opened) && n > 0 && booked === n, note: `${foot} · ${booked} treatments booked · sheet: ${opened.slice(0, 110)}` };
 });
 await b.close();
 
