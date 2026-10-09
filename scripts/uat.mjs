@@ -44,16 +44,26 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #607: a day patient is not "in house".
-await step('A day patient shows as "· N day" beside the in-house count, in Patients and in the Menu', '/admin/patients', async () => {
-  const read = async () => { const m = (await text(p.locator('body'))).match(/(\d+) in house(?: · (\d+) day)?/); return m ? [Number(m[1]), Number(m[2] || 0)] : [-1, -1]; };
-  const [h0, d0] = await read();
-  await api('POST', '/patients', { name: 'Uatday Visitor', gender: 'female', on_site: false, stay: { start_date: plus(0), end_date: plus(3) } });
-  await p.reload(); await p.waitForTimeout(1800);
-  const [h1, d1] = await read();
-  await menu();
-  const hint = (await text(dlg())).replace(/\n+/g, ' | ');
-  return { ok: h1 === h0 && d1 === d0 + 1 && new RegExp(`${h1} in house · ${d1} day`).test(hint), note: `before ${h0} in house, ${d0} day; after ${h1}, ${d1} · menu: ${(hint.match(/\d+ in house[^|]*/) || [''])[0]}` };
+// #610: the kept passport photo is beside the passport number in Details.
+await step('Details shows the kept photo just above "Passport or ID"; a patient with none shows no photo and no spinner', '/admin/patients', async () => {
+  const guest = await api('POST', '/patients', { name: 'Uatpass Guest', gender: 'male', country: 'Germany', stay: { start_date: plus(0), end_date: plus(5) } });
+  const bare = await api('POST', '/patients', { name: 'Uatbare Guest', gender: 'male', stay: { start_date: plus(0), end_date: plus(5) } });
+  const jpg = await p.screenshot({ type: 'jpeg', quality: 60 });
+  await fetch(`${APP}/api/patients/${guest.id}/passport-photo`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'image/jpeg' }, body: jpg });
+  const look = async (name) => {
+    await p.goto(APP + '/admin/patients'); await p.waitForTimeout(1500);
+    await go(p.getByRole('button', { name: new RegExp(`^${name}`) }).first());
+    await go(dlg().getByRole('button', { name: /^Details/ }));
+    await p.waitForTimeout(800);
+    const field = dlg().getByLabel('Passport or ID (optional)'); await field.scrollIntoViewIfNeeded();
+    const img = dlg().getByRole('img', { name: 'Passport or ID' });
+    const shown = await img.count();
+    const gap = shown ? (await field.boundingBox()).y - ((await img.boundingBox()).y + (await img.boundingBox()).height) : null;
+    return { shown, gap, spinner: await dlg().locator('[aria-busy="true"], .animate-pulse').count() };
+  };
+  const bareLook = await look('Uatbare');
+  const withLook = await look('Uatpass');
+  return { ok: withLook.shown === 1 && withLook.gap !== null && withLook.gap >= 0 && withLook.gap < 40 && bareLook.shown === 0 && bareLook.spinner === 0, note: `with photo: ${withLook.shown} image, ${withLook.gap === null ? '-' : Math.round(withLook.gap)}px above the field · without: ${bareLook.shown} image, ${bareLook.spinner} spinner` };
 });
 await b.close();
 
