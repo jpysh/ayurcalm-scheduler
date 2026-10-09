@@ -12,6 +12,8 @@ const rooms = [
   { name: 'T5', beds: 1, type: 'Trishul House', guests: [g('Ishita Mehra', '2026-10-08', '2026-10-28')] },
   { name: 'T6', beds: 1, type: 'Trishul House', guests: [g('Gone Already', '2026-10-01', '2026-10-05')] },
   { name: 'A1', beds: 2, type: 'Trishul House', guests: [g('Nisha Iyer', '2026-10-01', '2026-10-12'), g('Meera Reddy', '2026-10-01', '2026-10-08')] },
+  { name: 'A2', beds: 2, type: 'Trishul House', guests: [g('Meera Patel', '2026-10-01', '2026-10-18'), g('Meera Iyer', '2026-10-01', '2026-10-11')] },
+  { name: 'A3', beds: 2, type: 'Trishul House', guests: [g('Diya Yadav', '2026-10-01', '2026-10-12'), g('Arjun Das', '2026-10-08', '2026-10-15')] },
   { name: 'N1', beds: 1, type: 'Nanda House', guests: [] },
   { name: 'N2', beds: 1, type: 'Nanda House', guests: [], out: { reason: 'No electricity' } },
   { name: 'N3', beds: 1, type: 'Nanda House', guests: [g('Rohan Das', '2026-10-01', '2026-10-14')], out: { reason: 'Leak' } },
@@ -32,11 +34,14 @@ assert.equal(by.T6.kind, 'free');
 assert.equal(by.N1.line, 'Free');
 assert.equal(by.A1.kind, 'staying'); // one leaves, one stays: not a room to make up
 assert.equal(by.A1.line, 'Nisha Iyer · until Mon 12 Oct · Meera Reddy leaves today · 1 bed free');
+// A shared room gives each guest their own leaving date, and an arrival into it is a bed to ready (#660).
+assert.equal(by.A2.line, 'Meera Patel until Sun 18 Oct, Meera Iyer until Sun 11 Oct');
+assert.equal(by.A3.line, 'Diya Yadav · until Mon 12 Oct · ready a bed for Arjun Das (arrives today) · until Thu 15 Oct');
 assert.equal(by.N2.kind, 'out');
 assert.equal(by.N2.line, 'Out of use: No electricity');
 assert.equal(by.N3.line, 'Rohan Das · until Wed 14 Oct · out of use: Leak, needs another room');
 assert.equal(by.N4.line, 'Tara Bose · until Wed 14 Oct · out of use, needs another room'); // no spare bed in a room nobody may sleep in (#624)
-assert.deepEqual(s.counts, { rooms: 11, makeUp: 2, arriving: 2, staying: 5, free: 2, out: 1 });
+assert.deepEqual(s.counts, { rooms: 13, makeUp: 3, arriving: 3, staying: 7, free: 2, out: 1 });
 assert.deepEqual(s.first, ['T4']);
 assert.deepEqual(s.groups.map((x) => x.type), ['Trishul House', 'Nanda House']);
 
