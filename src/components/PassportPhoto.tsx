@@ -14,14 +14,18 @@ export async function shrinkPhoto(file: File): Promise<Blob> {
 }
 
 /** The kept photo; `kept` changes when it is retaken, so the picture follows. */
-export function PhotoImg({ id, kept, small, onOpen }: { id: string; kept: string; small?: boolean; onOpen?: () => void }) {
+export function PhotoImg({ id, kept, small, quiet, onOpen }: { id: string; kept: string; small?: boolean; quiet?: boolean; onOpen?: () => void }) {
   const [src, setSrc] = useState<string | null>(null);
+  const [none, setNone] = useState(false);
   useEffect(() => {
     let url = ""; let dead = false;
-    fetch(`${API_BASE}/patients/${id}/passport-photo`).then((r) => (r.ok ? r.blob() : null)).then((b) => { if (b && !dead) { url = URL.createObjectURL(b); setSrc(url); } }).catch(() => {});
+    setNone(false);
+    fetch(`${API_BASE}/patients/${id}/passport-photo`).then((r) => (r.ok ? r.blob() : null)).then((b) => { if (dead) return; if (b) { url = URL.createObjectURL(b); setSrc(url); } else setNone(true); }).catch(() => { if (!dead) setNone(true); });
     return () => { dead = true; if (url) URL.revokeObjectURL(url); };
   }, [id, kept]);
-  if (!src) return <Loading rows={2} />;
+  // Nobody kept one: nothing to show, and no spinner that never ends (#610).
+  if (none) return null;
+  if (!src) return quiet ? null : <Loading rows={2} />;
   const img = <img src={src} alt="Passport or ID" className={`w-full rounded-xl border ${small ? "max-h-40 object-contain" : ""}`} />;
   return <div className="mb-3">{onOpen ? <button type="button" className="block w-full" aria-label="Open the photo" onClick={onOpen}>{img}</button> : img}</div>;
 }

@@ -24,7 +24,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout, API_TOKEN, type ApiAppointment, type ApiProgramEvent, type Patient, type UiRoom, type UiStaff, type UiTherapy, type UiTimeOff } from "./tabs/shared";
 import PageHead, { BackContext } from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
-import { Consequence, dayText, ListGroup, Row, SheetFoot } from "@/components/kit";
+import { Consequence, dayText, ListGroup, Row, SheetFoot, setCurrency } from "@/components/kit";
 
 /** Builds the schedule's time rows from the centre's opening hours. */
 const buildTimeSlots = (openingTime: string, closingTime: string, slotMinutes: number) => {
@@ -109,6 +109,7 @@ const AdminDashboard = () => {
       .then((s) => {
         // Setup is a gate, not a suggestion (#60): an admin who never finished it goes back to it.
         if (s?.setup_complete === false && localStorage.getItem("authRole") === "Admin") { navigate("/setup"); return; }
+        setCurrency(s?.currency);
         if (s?.opening_time && s?.closing_time) {
           setCentreHours({ opening_time: s.opening_time, closing_time: s.closing_time, slot_minutes: s.slot_minutes ?? 30, timezone: s.timezone || "Asia/Kolkata" });
         }
@@ -129,7 +130,7 @@ const AdminDashboard = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
   // Until the first load lands, an empty list means "not yet", not "a new centre" (#220).
   const [loaded, setLoaded] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState<{ kind: 'staff'|'room'|'therapy'|'patient'|'timeoff'|'appointment'; id: string; name?: string; counts?: Record<string, number> } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ kind: 'staff'|'room'|'therapy'|'patient'|'appointment'; id: string; name?: string; counts?: Record<string, number> } | null>(null);
 
   const TAB_ORDER = SCREENS.map(([key]) => key as string);
   const [staff, setStaff] = useState<UiStaff[]>([]);
@@ -256,7 +257,7 @@ const AdminDashboard = () => {
     }
   };
 
-  const requestDelete = async (kind: 'staff'|'room'|'therapy'|'patient'|'timeoff'|'appointment', id: string, name?: string) => {
+  const requestDelete = async (kind: 'staff'|'room'|'therapy'|'patient'|'appointment', id: string, name?: string) => {
     const counts: Record<string, number> = {};
     try {
       if (kind === 'staff') {
@@ -368,9 +369,6 @@ const AdminDashboard = () => {
           }
           return next;
         });
-      } else if (kind === 'timeoff') {
-        await fetch(`${API_BASE}/timeoff/${id}`, { method: 'DELETE', headers: { ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) } });
-        setTimeOffs(prev => prev.filter(h => h.id !== id));
       }
       toast.success('Deleted');
     } catch (e) {
@@ -517,7 +515,7 @@ const AdminDashboard = () => {
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, requestDelete, centre: { opening: centreHours.opening_time, closing: centreHours.closing_time } });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, requestDelete });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q: listQuery });
-  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, requestDelete, loadReplans, refreshAppointmentsForDate, todayKey, startDay, centreToday: ymdInTZ(new Date()), timeSlots, planDay: (iso) => { go('schedule'); setCurrentDate(dayDate(iso)); refreshAppointmentsForDate(iso, true); setShowAttention(true); } });
+  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, roomsList, therapies, patients, staffNameById, roomNameById, therapyNameById, patientNameById, loadReplans, refreshAppointmentsForDate, todayKey, startDay, centreToday: ymdInTZ(new Date()), timeSlots, planDay: (iso) => { go('schedule'); setCurrentDate(dayDate(iso)); refreshAppointmentsForDate(iso, true); setShowAttention(true); } });
   const eventsScreen = useEventsScreen({ events, setEvents, roomsList, staff, staffNameById, q: listQuery });
   // The treatment card opens the resident card, which the Residents screen holds.
   const residentOpener = useRef<((id: string) => void) | null>(null);
