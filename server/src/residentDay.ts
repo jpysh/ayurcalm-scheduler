@@ -6,7 +6,7 @@
  */
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { loadDietsForDay, mealLabel, mealOrder } from './dietResolution.js';
-import { centreClock, startedBefore, toMinutes } from './availability.js';
+import { awayLabel, centreClock, startedBefore, toMinutes } from './availability.js';
 import { dischargeOf } from './discharge.js';
 import { formCDue, isForeign } from './attention.js';
 
@@ -103,6 +103,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
     passport_photo: (await prisma.patientPhoto.findUnique({ where: { patient_id: patientId }, select: { updated_at: true } }))?.updated_at.toISOString() ?? null,
     feedback: told ? { rating: told.rating, note: told.note } : null,
     readings,
+    away: awayLabel(await prisma.timeOff.findMany({ where: { entity_type: 'patient', entity_id: patientId } }), patientId, day),
     id: patient.id,
     name: patient.name,
     stay: stay && shape(stay),

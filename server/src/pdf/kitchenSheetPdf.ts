@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { madeWith } from '../product.js';
 import { kitchenMeals, loadDietsForDay, mealLabel } from '../dietResolution.js';
 import { addHeader } from './dailySchedulePdf.js';
+import { awayLabel } from '../availability.js';
 
 /**
  * The kitchen's page for one day (#414): one A4, per meal how many of each plan
@@ -19,16 +20,19 @@ export async function generateKitchenSheetPdf(dateISO: string, prisma: PrismaCli
   const day = new Date(dateISO);
   const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
   const centreName = settings?.centre_name || process.env.CENTRE_NAME || 'Wellness Centre';
-  const [stays, diets, treated, events] = await Promise.all([
+  const [stays, diets, treated, events, timeOff] = await Promise.all([
     prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day }, on_site: true }, include: { Patient: true } }),
     loadDietsForDay(day, prisma),
     prisma.appointment.findMany({ where: { scheduled_date: day, status: { notIn: ['cancelled', 'no_show'] } }, select: { patient_id: true } }),
     prisma.programEvent.findMany({ where: { patients_scope: { not: 'custom' } } }),
+    prisma.timeOff.findMany({ where: { entity_type: 'patient' } }),
   ]);
   // Only the patients staying eat the centre's meals; an outpatient goes home.
   const withTreatment = new Set(treated.map((a) => a.patient_id));
   const people = [...new Map(stays.map((s) => [s.patient_id, s.Patient])).values()]
-    .map((p) => ({ name: p.name, diet: diets.dietFor(p, withTreatment.has(p.id)) }));
+    .map((p) => ({ name: p.name, diet: diets.dietFor(p, withTreatment.has(p.id)), away: awayLabel(timeOff, p.id, day) }));
+  // A guest out for the day still eats: the cook keeps their plate aside rather than not cooking it (#695).
+  const away = people.filter((p) => p.away).sort((a, b) => a.name.localeCompare(b.name));
   const meals = kitchenMeals(people);
   // A meal prints with the window it is served in, when the centre has one by that name.
   const windowOf = (label: string) => {
@@ -44,6 +48,11 @@ export async function generateKitchenSheetPdf(dateISO: string, prisma: PrismaCli
   if (!people.length) doc.font('Helvetica').fontSize(11).text('Nobody is staying this day.', x);
 
   const COUNT_W = 34;
+  if (away.length) {
+    doc.font('Helvetica-Bold').fontSize(11).text('Away — keep their meals aside', x, doc.y, { width: w });
+    for (const p of away) doc.font('Helvetica-Bold').fontSize(10).text(p.name, x + COUNT_W, doc.y, { width: w - COUNT_W, continued: true }).font('Helvetica').text(`  ${p.away}`);
+    doc.moveDown(0.6);
+  }
   for (const m of people.length ? meals : []) {
     if (!m.counts.length && !m.exceptions.length) continue;
     doc.font('Helvetica-Bold').fontSize(12).text(`${mealLabel[m.meal]}${windowOf(mealLabel[m.meal])} — ${m.total}`, x, doc.y + 4, { width: w });

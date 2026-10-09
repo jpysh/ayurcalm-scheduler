@@ -175,6 +175,15 @@ export const offOnDay = (rows: OffRow[], type: 'staff' | 'room' | 'therapy' | 'p
       return { s: whole ? 0 : toMinutes(h.start_time!), e: whole ? 24 * 60 : toMinutes(h.end_time!), label: h.description || 'time off', whole };
     });
 
+/** How the kitchen and the meals sheet say a guest is out (#695): "AWAY all day" or "AWAY 09:00–13:00", or null. Their meals still count. */
+export const awayLabel = (rows: OffRow[], patientId: string, day: Date): string | null => {
+  const off = offOnDay(rows, 'patient', patientId, day);
+  if (!off.length) return null;
+  if (off.some((b) => b.whole)) return 'AWAY all day';
+  const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  return `AWAY ${off.sort((a, b) => a.s - b.s).map((b) => `${hm(b.s)}–${hm(b.e)}`).join(', ')}`;
+};
+
 /**
  * Every hour a person is not there on a day: leave, plus the hours outside their weekly
  * pattern (#409). The guard refuses both, so the planner must avoid both.
