@@ -25,7 +25,9 @@ const savedWithUndo = <T,>(text: string, path: string, before: unknown, old: T, 
   });
 
 // ---- Rooms ----
-export const roomSub = (r: UiRoom) => r.status !== "Active" ? "Out of use" : r.amenities.length ? `Has ${r.amenities.map(say).join(", ")}` : "Nothing special";
+/** What kind of room, in two words, from what it has (#573): the row's short fact; Details keeps the full list. */
+export const roomKind = (r: UiRoom) => r.amenities.includes("examination_bed") || r.amenities.includes("bp_monitor") ? "doctor's room"
+  : r.amenities.some((x) => x.includes("dhara")) ? "dhara room" : r.amenities.includes("massage_table") ? "table room" : "room";
 
 export function RoomSheet({ room, preset = [], open, onClose, amenityOptions, onSaved, remove }: {
   room: UiRoom | null; /** What a new room starts ticked with, when a booking found no room that has it (#544). */ preset?: string[]; open: boolean; onClose: () => void; amenityOptions: string[]; onSaved: (r: UiRoom) => void; remove: (r: UiRoom) => void;

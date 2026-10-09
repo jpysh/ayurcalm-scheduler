@@ -13,7 +13,7 @@ import PageHead from "@/components/PageHead";
 import { BottomSheet, WeekStrip } from "@/components/BottomBar";
 import { useShareLink } from "@/components/ShareLink";
 import { Callout, ChangeLine, DateRow, Empty, ListGroup, Row, SheetFoot, TimeList, dayText, plural, timesBetween } from "@/components/kit";
-import { roomSub } from "@/components/SetupSheets";
+import { roomKind } from "@/components/SetupSheets";
 import type { UiRoom, UiStaff } from "@/pages/tabs/shared";
 
 type Pick = { kind: "staff" | "room"; id: string; name: string } | null;
@@ -81,6 +81,11 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   const idle = isTeam
     ? staff.filter((s) => !staffActive(s) && match(s.name)).map((s) => ({ kind: "staff" as const, id: String(s.id), name: s.name, facts: "Not working here now" })).sort(byName)
     : rooms.filter((r) => !roomActive(r) && match(r.name)).map((r) => ({ kind: "room" as const, id: String(r.id), name: r.name, facts: "Out of use" })).sort(byName);
+  /** "6h 15m of 11h booked · table room", for the day chosen. */
+  const roomLine = (r: UiRoom) => {
+    const d = on < 0 ? undefined : week!.rooms.find((x) => x.id === String(r.id))?.days[on];
+    return d && d.capacity ? `${hrs(d.booked)} of ${hrs(d.capacity)} booked · ${roomKind(r)}` : roomKind(r);
+  };
   const roomsOut = rooms.filter((r) => roomActive(r) && roomsOff.has(String(r.id))).length;
 
   /** Time off between from and until; null means the edge of the day. Days default to today. */
@@ -132,7 +137,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
       ) : null)}
       {roomRows.length ? (
         <ListGroup title="Rooms" count={roomRows.length}>
-          {roomRows.map((r) => <Row key={r.id} title={r.name} facts={roomSub(r)} flag={roomsOff.has(String(r.id)) ? "Out of use today" : undefined} trailing="›" onClick={() => setPick({ kind: "room", id: String(r.id), name: r.name })} />)}
+          {roomRows.map((r) => <Row key={r.id} title={r.name} facts={roomLine(r)} flag={roomsOff.has(String(r.id)) ? "Out of use today" : undefined} trailing="›" onClick={() => setPick({ kind: "room", id: String(r.id), name: r.name })} />)}
         </ListGroup>
       ) : null}
       {idle.length ? (
@@ -186,7 +191,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
 const nextDay = (ymd: string) => new Date(Date.parse(ymd) + 86400000).toISOString().slice(0, 10);
 
 type Day = { state: "in" | "part" | "away" | "off"; start?: string; end?: string; why?: string; booked: number; capacity: number };
-type Week = { start: string; days: string[]; rows: { id: string; name: string; role: string; days: Day[] }[]; gaps: { start: string; end: string; in: number }[][] };
+type Week = { start: string; days: string[]; rows: { id: string; name: string; role: string; days: Day[] }[]; gaps: { start: string; end: string; in: number }[][]; rooms: { id: string; days: { booked: number; capacity: number }[] }[] };
 const hrs = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}`);
 /** Over 90% leaves no room for a swap, under 25% is someone free to take one (#351); words, not a flag, as neither needs doing now. */
 // Nothing booked already reads "0 min of 9h booked"; "lightly booked" on top of it was noise (#463).
