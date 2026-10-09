@@ -38,6 +38,7 @@ export default function LinkView() {
   const { token = "" } = useParams();
   const [date, setDate] = useState<string | null>(null);
   const [day, setDay] = useState<Day | null>(null);
+  const [unfolded, setUnfolded] = useState<string[]>([]);
   const [gone, setGone] = useState(false);
   const [raise, setRaise] = useState<{ appointment_id?: string } | null>(null);
   const [issueNote, setIssueNote] = useState("");
@@ -147,10 +148,15 @@ export default function LinkView() {
         {day.items.length === 0 ? <ListGroup><Empty text={day.off ? `Day off${/day off/i.test(day.off) ? "" : ` · ${day.off}`}.` : "Nothing booked."} /></ListGroup> : <ListGroup>{day.items.map((it) => {
           const end = hm(toMin(it.start_time) + it.duration_minutes);
           const over = day.date < day.today || (day.date === day.today && end <= hm((toMin(day.now) + Math.floor((Date.now() - loadedAt.current) / 60000)) % 1440));
+          const facts = [staff ? it.patient : null, it.room, it.with.length ? `with ${it.with.join(" & ")}` : null].filter(Boolean).join(" · ");
+          // A finished treatment folds to one row, so the next one is on the first screen (#640).
+          if (staff && it.done && !unfolded.includes(it.id)) {
+            return <Row key={it.id} title={`${it.start_time}–${end} · ${it.therapy}`} facts={`Done · ${facts}`} trailing="Open ›" onClick={() => setUnfolded([...unfolded, it.id])} />;
+          }
           return (
             <ItemRow key={it.id} form
               title={<span aria-label={`${it.start_time} ${it.therapy}`}>{it.start_time}–{end} · {it.therapy}</span>}
-              facts={[staff ? it.patient : null, it.room, it.with.length ? `with ${it.with.join(" & ")}` : null].filter(Boolean).join(" · ")}>
+              facts={facts}>
               {!staff && it.description ? <p className="text-sm">{it.description}</p> : null}
               {staff && (it.products?.length || it.amenities?.length) ? <p className="text-sm">{[...(it.amenities || []), ...(it.products || [])].join(", ")}</p> : null}
 
