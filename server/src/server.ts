@@ -417,11 +417,17 @@ app.get('/patients/find', async (req: Request, res: Response) => {
     return { p, stay, plan: stay ? diets.dietFor(p, false).planName || '' : '' };
   }).filter((x) => x.p.name.toLowerCase().includes(ql) || x.plan.toLowerCase().includes(ql)).sort((a, b) => Number(!!b.stay) - Number(!!a.stay) || a.p.name.localeCompare(b.p.name)).slice(0, 40);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
-  res.json({ patients: found.map(({ p, stay, plan }) => ({
+  res.json({ patients: found.map(({ p, stay, plan }) => {
+    // Stays come newest first, so the next one ahead is the last of those that start after the day.
+    const next = p.Stays.filter((s) => s.start_date > day).pop();
+    const last = p.Stays.find((s) => s.end_date < day);
+    return {
     id: p.id, name: p.name, plan,
     stay: stay ? { start: iso(stay.start_date), end: iso(stay.end_date) } : null,
-    last_end: stay ? null : p.Stays[0] ? iso(p.Stays[0].end_date) : null,
-  })) });
+    // A booked visit ahead is not their last stay (#677): name it as an arrival.
+    next_start: stay ? null : next ? iso(next.start_date) : null,
+    last_end: stay ? null : last ? iso(last.end_date) : null,
+  }; }) });
 });
 
 app.post('/patients', async (req: Request, res: Response) => {

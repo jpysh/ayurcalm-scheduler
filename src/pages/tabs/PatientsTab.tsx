@@ -48,7 +48,7 @@ type ResidentDay = {
   readings: { date: string; text: string }[];
   last_consultation: Visit | null; next_consultation: Visit | null;
 };
-type Found = { id: string; name: string; plan: string; stay: { start: string; end: string } | null; last_end: string | null };
+type Found = { id: string; name: string; plan: string; stay: { start: string; end: string } | null; next_start: string | null; last_end: string | null };
 type Visit = { id: string; date: string; start_time: string; doctor: string | null; note: string | null };
 const DAY_MS = 86400000;
 
@@ -104,7 +104,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRule
               const day = f.stay ? Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(f.stay.start)) / DAY_MS) + 1 : 0;
               const of = f.stay ? Math.round((Date.parse(f.stay.end) - Date.parse(f.stay.start)) / DAY_MS) + 1 : 0;
               return <Row key={f.id} onClick={() => onOpen(f.id)} title={marked(f.name, found.q)}
-                facts={f.stay ? <>Day {day} of {of} · Diet: {f.plan ? marked(f.plan, found.q) : 'not chosen'}</> : f.last_end ? `Not in house · last stay to ${stayDay(f.last_end)}` : 'Not in house'}
+                facts={f.stay ? <>Day {day} of {of} · Diet: {f.plan ? marked(f.plan, found.q) : 'not chosen'}</> : f.next_start ? `Not in house · arrives ${stayDay(f.next_start)}` : f.last_end ? `Not in house · last stay to ${stayDay(f.last_end)}` : 'Not in house'}
                 flag={f.stay && n <= 3 ? (n <= 0 ? 'Leaves today' : n === 1 ? 'Leaves tomorrow' : `Leaves in ${n} days`) : undefined} />;
             }) : <Empty text={`No patient or diet plan matches “${found.q}”.`} />}
           </ListGroup>
