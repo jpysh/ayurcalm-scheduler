@@ -30,7 +30,7 @@ const nowInTZ = (timeZone: string) => {
 };
 
 /** The Schedule screen, and the day sheets the bottom bar prints for the day it is on. */
-export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime, refreshDay, movedFrom, problems, history, showDay, openResident, staffCount, addTherapist, addRoom, addPatient }: Record<string, any>) {
+export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime, refreshDay, movedFrom, problems, history, showDay, openResident, openOut, staffCount, addTherapist, addRoom, addPatient }: Record<string, any>) {
   const [view, setView] = useState<DayView>("time");
   const [query, setQuery] = useState("");
   // Search is its own screen over every day (#165); the day list does not filter.
@@ -117,6 +117,7 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
       therapists={staff.filter((s: { status?: string }) => s.status !== 'Inactive').map((s: { name: string }) => s.name.replace(/^Dr\.? /, 'Dr ').split(' ').slice(0, s.name.startsWith('Dr') ? 2 : 1).join(' '))}
       onOpen={(h) => { setFromSearch(true); setCard(h); }}
       onOpenPatient={openResident}
+      onOpenOut={openOut}
     />
   ) : (
     <DayList

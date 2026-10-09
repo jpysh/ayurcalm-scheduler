@@ -34,6 +34,15 @@ const isNow = (h: UiTimeOff, today: string, hm: string) => {
   return (start < today || h.startTime! <= hm) && (end > today || h.endTime! > hm);
 };
 
+/** The line a list row carries while its thing is not available, now or coming (#695); the server says it the same way in Search. */
+export const notAvailable = (timeOffs: UiTimeOff[], type: UiTimeOff['type'], entity: string, today: string) => {
+  const h = timeOffs.filter((x) => x.type === type && x.entity === entity && nowOrLater(x, today)).sort((a, b) => sortKey(a).localeCompare(sortKey(b)))[0];
+  if (!h) return undefined;
+  const start = sortKey(h).slice(0, 10), end = (h.endDate || h.date || '').slice(0, 10);
+  if (start <= today) return end > today ? `Not available until ${dayText(end)}` : 'Not available today';
+  return start === end ? `Not available ${dayText(start)}` : `Not available from ${dayText(start)}`;
+};
+
 /** The centre's clock now, "HH:MM", whatever zone the phone is in. */
 const clockIn = (timeZone: string) => new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
 
@@ -323,5 +332,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
   );
 
   /** Public holidays live with Opening hours in Settings (#288); the sheet is here because it adds to this list. */
-  return { tab, dialogs, outFor, openAdd, openHolidays: () => setShowHolidays(true) };
+  /** Search's row for a thing not available opens its entry (#695). */
+  const openOne = (id: string) => { const h = timeOffs.find((x) => x.id === id); if (h) openEdit(h); };
+  return { tab, dialogs, outFor, openAdd, openOne, openHolidays: () => setShowHolidays(true) };
 }
