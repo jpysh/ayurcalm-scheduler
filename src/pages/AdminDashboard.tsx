@@ -466,6 +466,16 @@ const AdminDashboard = () => {
       .catch(() => setTomorrowFix(0));
   }, [evening, tomorrowKey, dayCheck]);
 
+  // The days ahead that still have something to fix, for the inbox (#620); read when it opens and after a change.
+  const [comingDays, setComingDays] = useState<{ date: string; count: number; headline: string | null }[]>([]);
+  useEffect(() => {
+    if (!showAttention) return;
+    fetch(`${API_BASE}/day-check/upcoming?from=${dayKeyMemo}&days=14`)
+      .then((r) => (r.ok ? r.json() : { days_with_problems: [] }))
+      .then((d) => setComingDays(Array.isArray(d.days_with_problems) ? d.days_with_problems : []))
+      .catch(() => setComingDays([]));
+  }, [showAttention, dayKeyMemo, dayCheck]);
+
   const location = useLocation();
   const navigate = useNavigate();
   useServerHealth(API_BASE);
@@ -724,6 +734,7 @@ const AdminDashboard = () => {
         today={ymdInTZ(new Date())}
         problems={dayCheck.problems}
         tomorrow={tomorrowFix ? { day: tomorrowKey, count: tomorrowFix, open: () => setCurrentDate(dayDate(tomorrowKey)) } : null}
+        coming={comingDays.filter((c) => !(tomorrowFix && c.date === tomorrowKey)).map((c) => ({ ...c, open: () => setCurrentDate(dayDate(c.date)) }))}
         replans={visibleReplans}
         dismissed={dismissed}
         dismiss={dismiss}

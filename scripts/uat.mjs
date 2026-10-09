@@ -44,26 +44,24 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #610: the kept passport photo is beside the passport number in Details.
-await step('Details shows the kept photo just above "Passport or ID"; a patient with none shows no photo and no spinner', '/admin/patients', async () => {
-  const guest = await api('POST', '/patients', { name: 'Uatpass Guest', gender: 'male', country: 'Germany', stay: { start_date: plus(0), end_date: plus(5) } });
-  const bare = await api('POST', '/patients', { name: 'Uatbare Guest', gender: 'male', stay: { start_date: plus(0), end_date: plus(5) } });
-  const jpg = await p.screenshot({ type: 'jpeg', quality: 60 });
-  await fetch(`${APP}/api/patients/${guest.id}/passport-photo`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'image/jpeg' }, body: jpg });
-  const look = async (name) => {
-    await p.goto(APP + '/admin/patients'); await p.waitForTimeout(1500);
-    await go(p.getByRole('button', { name: new RegExp(`^${name}`) }).first());
-    await go(dlg().getByRole('button', { name: /^Details/ }));
-    await p.waitForTimeout(800);
-    const field = dlg().getByLabel('Passport or ID (optional)'); await field.scrollIntoViewIfNeeded();
-    const img = dlg().getByRole('img', { name: 'Passport or ID' });
-    const shown = await img.count();
-    const gap = shown ? (await field.boundingBox()).y - ((await img.boundingBox()).y + (await img.boundingBox()).height) : null;
-    return { shown, gap, spinner: await dlg().locator('[aria-busy="true"], .animate-pulse').count() };
-  };
-  const bareLook = await look('Uatbare');
-  const withLook = await look('Uatpass');
-  return { ok: withLook.shown === 1 && withLook.gap !== null && withLook.gap >= 0 && withLook.gap < 40 && bareLook.shown === 0 && bareLook.spinner === 0, note: `with photo: ${withLook.shown} image, ${withLook.gap === null ? '-' : Math.round(withLook.gap)}px above the field · without: ${bareLook.shown} image, ${bareLook.spinner} spinner` };
+// #620: a leave of several days names the later days in the inbox.
+await step('After fixing the first day of a three-day leave, What needs you lists the two days still to fix', '/admin/schedule', async () => {
+  const staff = (await api('GET', '/staff')).filter((x) => x.role !== 'doctor');
+  const therapies = (await api('GET', '/therapies')).filter((t) => !t.is_consultation && t.staff_required === 1);
+  let who = null, ther = null;
+  for (const t of therapies) { const w = staff.find((x) => (x.specializations || []).includes(t.id)); if (w) { who = w; ther = t; break; } }
+  const guest = await api('POST', '/patients', { name: 'Uatcoming Guest', gender: who.gender === 'male' ? 'male' : 'female', stay: { start_date: plus(0), end_date: plus(8) } });
+  await api('POST', '/appointments', { patient_id: guest.id, therapy_id: ther.id, total_sessions: 3, preferred_time_range: { start: '10:00', end: '16:00' }, start_date: plus(1), end_date: plus(3), preferred_staff_id: who.id });
+  await api('POST', '/timeoff', { entity_type: 'staff', entity_id: who.id, date: plus(1), start_date: plus(1), end_date: plus(3), plan: false, description: 'Uat coming' });
+  await p.goto(APP + '/admin/schedule'); await p.waitForTimeout(1500);
+  const d1 = new Date(`${plus(1)}T00:00:00Z`);
+  await p.getByRole('button', { name: /week ›/ }).click({ timeout: 1500 }).catch(() => {}); await p.waitForTimeout(500);
+  await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d1.getUTCDate()} ${d1.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) }));
+  await menu(); await go(dlg().getByText(/need you/));
+  const sheet = (await text(dlg())).replace(/\n+/g, ' | ');
+  const coming = (sheet.match(/COMING DAYS[^|]*(\|[^|]*){0,6}/i) || [''])[0];
+  const rows = (coming.match(/\d+ to fix/g) || []).length;
+  return { ok: rows === 2, note: `${rows} coming days · ${coming.slice(0, 150)}` };
 });
 await b.close();
 
