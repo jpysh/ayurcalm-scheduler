@@ -1441,8 +1441,10 @@ app.put('/appointments/:id', async (req: Request, res: Response) => {
     },
   });
   // What changed, for the treatment's History (#136): only the fields sent.
-  const before = Object.fromEntries(Object.keys(body).map((k) => [k, (existing as Record<string, unknown>)[k]]));
-  await prisma.auditLog.create({ data: { admin_id: 'admin', action: 'update', entity_type: 'appointment', entity_id: id, old_value: before as Prisma.InputJsonValue, new_value: body as Prisma.InputJsonValue } });
+  // A team change carries the lead too, so History can name the whole team (#622).
+  const lead = body.co_staff_ids !== undefined && body.staff_id === undefined ? { staff_id: existing.staff_id } : {};
+  const before = { ...Object.fromEntries(Object.keys(body).map((k) => [k, (existing as Record<string, unknown>)[k]])), ...lead };
+  await prisma.auditLog.create({ data: { admin_id: 'admin', action: 'update', entity_type: 'appointment', entity_id: id, old_value: before as Prisma.InputJsonValue, new_value: { ...body, ...lead } as Prisma.InputJsonValue } });
   res.json(appt);
 });
 

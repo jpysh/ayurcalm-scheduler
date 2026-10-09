@@ -44,24 +44,26 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #611: a patient's first days are planned as a week, from ticks.
-await step('Plan next week for a patient with nothing yet lists the therapies to tick and books them on every day', '/admin/patients', async () => {
-  const guest = await api('POST', '/patients', { name: 'Uatfirst Guest', gender: 'female', stay: { start_date: plus(0), end_date: plus(9) } });
-  await p.reload(); await p.waitForTimeout(1500);
-  await go(p.getByRole('button', { name: /^Uatfirst Guest/ }).first());
-  await go(dlg().getByRole('button', { name: /^Plan next week/ }));
-  await p.waitForTimeout(1500);
-  const sheet = dlg();
-  const opened = (await text(sheet)).replace(/\n+/g, ' | ');
-  const boxes = sheet.getByRole('switch');
-  await boxes.nth(0).click(); await boxes.nth(1).click(); await p.waitForTimeout(400);
-  const foot = (await sheet.getByRole('button', { name: /^Book all/ }).innerText()).trim();
-  await p.screenshot({ path: `${OUT}/01-ticked.png` });
-  await go(sheet.getByRole('button', { name: /^Book all/ }));
-  await p.waitForTimeout(1500);
-  const booked = (await api('GET', `/appointments?patient_id=${guest.id}`)).length;
-  const n = Number(foot.replace(/\D/g, ''));
-  return { ok: /Tick what they start with/.test(opened) && n > 0 && booked === n, note: `${foot} · ${booked} treatments booked · sheet: ${opened.slice(0, 110)}` };
+// #622: a pair that changed members says so as a team.
+await step('A treatment of two therapists whose second changes reads "Therapists changed from A and B to A and C" in History', '/admin/schedule', async () => {
+  const tag = String(Date.now()).slice(-5);
+  const ther = await api('POST', '/therapies', { name: `Uat Pair ${tag}`, duration_minutes: 45, staff_required: 2, required_amenities: [] });
+  const mk = (n) => api('POST', '/staff', { name: n, gender: 'female', role: 'therapist', specializations: [ther.id] });
+  const [p1, p2, p3] = [await mk(`Uatpa${tag}`), await mk(`Uatpb${tag}`), await mk(`Uatpc${tag}`)];
+  const room = await api('POST', '/rooms', { name: `Uat pair room ${tag}`, amenities: [] });
+  const guest = await api('POST', '/patients', { name: `Uatpair ${tag}`, gender: 'female', stay: { start_date: plus(0), end_date: plus(5) } });
+  const made = await api('POST', '/appointments/one', { patient_id: guest.id, therapy_id: ther.id, date: plus(1), start_time: '10:00', staff_id: p1.id, co_staff_ids: [p2.id], room_id: room.id });
+  await api('PUT', `/appointments/${made.id}`, { co_staff_ids: [p3.id] });
+  const history = (await api('GET', `/appointments/${made.id}/history`));
+  const line = (history.entries || []).map((h) => h.text).find((t) => /Therapist/.test(t)) || 'none';
+  await p.goto(APP + '/admin/schedule'); await p.waitForTimeout(1500);
+  const d1 = new Date(`${plus(1)}T00:00:00Z`);
+  await p.getByRole('button', { name: /week ›/ }).click({ timeout: 1500 }).catch(() => {}); await p.waitForTimeout(500);
+  await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d1.getUTCDate()} ${d1.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) }));
+  await go(p.getByRole('button', { name: new RegExp(`Uatpair ${tag}`) }).first());
+  const card = (await text(dlg())).replace(/\n+/g, ' | ');
+  const want = `Therapists changed from Uatpa${tag} and Uatpb${tag} to Uatpa${tag} and Uatpc${tag}`;
+  return { ok: line === want && card.includes(want), note: `history: ${line}` };
 });
 await b.close();
 
