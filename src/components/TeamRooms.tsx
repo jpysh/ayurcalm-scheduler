@@ -238,8 +238,8 @@ type Day = { state: "in" | "part" | "away" | "off"; start?: string; end?: string
 type Week = { start: string; days: string[]; rows: { id: string; name: string; role: string; days: Day[] }[]; gaps: { start: string; end: string; in: number }[][]; rooms: { id: string; days: { booked: number; capacity: number }[] }[] };
 const hrs = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}`);
 /** Over 90% leaves no room for a swap, under 25% is someone free to take one (#351); words, not a flag, as neither needs doing now. */
-// Nothing booked already reads "0 min of 9h booked"; "lightly booked" on top of it was noise (#463).
-const load = (d: Day) => !d.capacity || !d.booked ? "" : d.booked / d.capacity > 0.9 ? " · nearly full" : d.booked / d.capacity < 0.25 ? " · lightly booked" : "";
+// "1h 20m of 6h booked" already says how light a day is; only a nearly full one is worth a word (#463, #635).
+const load = (d: Day) => d.capacity && d.booked / d.capacity > 0.9 ? " · nearly full" : "";
 /** "07:00–15:00 · 5h of 8h booked"; away with the reason; a day off says so. */
 const dayLine = (d?: Day) => !d ? undefined
   : d.state === "off" ? "Day off"
