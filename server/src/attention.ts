@@ -103,14 +103,13 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
     found.push({ id: `${r.id}:${s.Patient.id}`, rule: r.id, section: r.section as 'Patients', kind: r.kind, who: s.Patient.name, what, patient_id: s.Patient.id, action });
   // Form C is owed even after the guest has gone, so a stay that ended in the last fortnight unfiled still asks.
   const leftUnfiled = await prisma.patientStay.findMany({ where: { form_c_filed: null, end_date: { lt: day, gte: new Date(day.getTime() - 14 * DAY_MS) } }, include: { Patient: { select: { id: true, name: true, country: true } } } });
-  for (const s of leftUnfiled) if (isForeign(s.Patient.country)) add(rule('form_c'), s, `Form C overdue since ${dayName(formCDue(s.start_date)).replace(',', '')}`, 'card');
+  // Overdue from the day after it was due, whether or not the guest is still here (#664).
+  const formC = (s: { start_date: Date }) => { const due = formCDue(s.start_date); return `Form C ${due < today ? 'overdue since' : 'due by'} ${dayName(due).replace(',', '')}`; };
+  for (const s of leftUnfiled) if (isForeign(s.Patient.country)) add(rule('form_c'), s, formC(s), 'card');
   for (const s of stays) {
     if (ymd(s.end_date) === today && !s.discharge) add(rule('leaves_today'), s, 'Leaves today, no discharge summary', 'summary');
     if (hoursIn(s) >= (rule('arrival_open').hours ?? 24) && !s.vitals && !s.concerns && !s.tests) add(rule('arrival_open'), s, 'Arrival steps still open', 'card');
-    if (isForeign(s.Patient.country) && !s.form_c_filed) {
-      const due = formCDue(s.start_date);
-      add(rule('form_c'), s, `Form C ${due < today ? 'overdue since' : 'due by'} ${dayName(due).replace(',', '')}`, 'card');
-    }
+    if (isForeign(s.Patient.country) && !s.form_c_filed) add(rule('form_c'), s, formC(s), 'card');
     if (hoursIn(s) >= (rule('no_diet').hours ?? 24) && !diets.dietFor(s.Patient, true).planName) add(rule('no_diet'), s, 'No diet plan', 'diet');
   }
   // A room taken out of use (#563) with a guest already in it, now or booked: they need another room.
