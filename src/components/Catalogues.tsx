@@ -1,6 +1,6 @@
 /**
  * Settings → Packages and Accommodation (#285 stories 11 and 12): the centre's own
- * reference lists that a patient's card picks from. Prices are whole rupees and
+ * reference lists that a patient's card picks from. Prices are whole numbers in the centre's currency and
  * nothing here bills. One editor for both, so they look and behave the same.
  */
 import { useEffect, useState, type ReactNode } from "react";
@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import { confirmSheet } from "@/components/ConfirmSheet";
-import { BottomSheet, Empty, Foot, ListGroup, LinkRow, Loading, Row, SectionHead, Text, noteText, rupees, Btn } from "@/components/kit";
+import { BottomSheet, Empty, Foot, ListGroup, LinkRow, Loading, Row, SectionHead, Text, noteText, money, Btn } from "@/components/kit";
 import { ManageGuestRooms } from "@/components/GuestRoomManage";
 
 type Item = { id: string; name: string; notes: string | null; is_active: boolean; patients: number } & Record<string, unknown>;
@@ -65,14 +65,14 @@ function CatalogueEditor({ path, noun, fields, facts, trailing, extra }: { path:
 
 export const PackagesEditor = () => (
   <CatalogueEditor path="packages" noun="package"
-    fields={[{ key: "name", label: "Name" }, { key: "days", label: "Days", number: true }, { key: "price", label: "Price in rupees", number: true, hint: "One figure, with the registration charge included." }, { key: "notes", label: "Notes", optional: true }]}
-    facts={(i) => `${i.days} days`} trailing={(i) => rupees(Number(i.price))} />
+    fields={[{ key: "name", label: "Name" }, { key: "days", label: "Days", number: true }, { key: "price", label: "Price", number: true, hint: "One figure, with the registration charge included." }, { key: "notes", label: "Notes", optional: true }]}
+    facts={(i) => `${i.days} days`} trailing={(i) => money(Number(i.price))} />
 );
 
 export const AccommodationEditor = ({ openTypes = () => {} }: { openTypes?: () => void }) => (
   <CatalogueEditor path="accommodations" noun="accommodation type"
-    fields={[{ key: "name", label: "Name" }, { key: "price_per_day", label: "Price a day in rupees", number: true, hint: "The total is this times the nights. No extra charges." }, { key: "notes", label: "Notes", optional: true }]}
-    facts={(i) => [`${rupees(Number(i.price_per_day))} a day`, i.rooms ? `${i.rooms} guest room${i.rooms === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ")} trailing={() => ""}
+    fields={[{ key: "name", label: "Name" }, { key: "price_per_day", label: "Price a day", number: true, hint: "The total is this times the nights. No extra charges." }, { key: "notes", label: "Notes", optional: true }]}
+    facts={(i) => [`${money(Number(i.price_per_day))} a day`, i.rooms ? `${i.rooms} guest room${i.rooms === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ")} trailing={() => ""}
     extra={(i, changed) => <GuestRoomsOf type={i} changed={changed} openTypes={openTypes} />} />
 );
 

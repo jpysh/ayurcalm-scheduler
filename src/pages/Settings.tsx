@@ -16,7 +16,7 @@ import { ChangePasswordCard, UsersSection } from "@/components/UsersSection";
 import PageHead from "@/components/PageHead";
 import type { Attention } from "@/lib/attention";
 import {
-  Area, BottomSheet, ChecklistBar, Days, Dropdown, Group, ListGroup, Loading, PickPhoto, Row, Seg, SectionHead, SheetFoot, Switch, Text, TimeList, WEEK, noteText, timesBetween, Btn, dayText } from "@/components/kit";
+  Area, BottomSheet, ChecklistBar, Days, Dropdown, Group, ListGroup, Loading, PickPhoto, Row, Seg, SectionHead, SheetFoot, Switch, Text, TimeList, WEEK, noteText, timesBetween, Btn, dayText, setCurrency } from "@/components/kit";
 
 const DAY_TIMES = timesBetween("00:00", "23:30", 30);
 const SLOT_OPTIONS = [15, 20, 30, 60];
@@ -24,7 +24,7 @@ const MAX_LOGO_BYTES = 500 * 1024;
 
 type Letterhead = { seal_logo: string; name_local: string; registration_line: string; accreditation_line: string; phones: string; email: string; website: string; footer_line: string; discharge_format: string };
 type Settings = {
-  centre_name: string; address: string | null; timezone: string; opening_time: string; closing_time: string; slot_minutes: number; working_days: string[];
+  centre_name: string; address: string | null; currency?: string; timezone: string; opening_time: string; closing_time: string; slot_minutes: number; working_days: string[];
   logo: string | null; demo_data: boolean; support_whatsapp: string | null; patient_support_whatsapp: string | null; setup_complete: boolean;
   enforce_gender_match: boolean; max_treatments_per_day?: number; letterhead: Letterhead | null; plan: string | null; show_footer: boolean; setup_reviewed: string[];
 };
@@ -103,7 +103,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
       const res = await fetch(`${API_BASE}/settings`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          centre_name: settings.centre_name, address: settings.address, timezone: settings.timezone, opening_time: settings.opening_time, closing_time: settings.closing_time,
+          centre_name: settings.centre_name, address: settings.address, currency: settings.currency || "Rs", timezone: settings.timezone, opening_time: settings.opening_time, closing_time: settings.closing_time,
           slot_minutes: settings.slot_minutes, working_days: settings.working_days, logo: settings.logo,
           support_whatsapp: settings.support_whatsapp ?? "", patient_support_whatsapp: settings.patient_support_whatsapp ?? "",
           enforce_gender_match: settings.enforce_gender_match !== false, max_treatments_per_day: settings.max_treatments_per_day ?? 4, show_footer: settings.show_footer !== false,
@@ -201,6 +201,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
         foot={isAdmin ? <SheetFoot busy={saving} save={save} label="Save" /> : undefined}>
         <fieldset disabled={!isAdmin} className="m-0 min-w-0 border-0 p-0">
           <Text label="Centre name" id="centre_name" value={settings.centre_name} onChange={(e) => update("centre_name", e.target.value)} />
+          <Text label="Currency symbol" id="currency" maxLength={4} note="Shown before the prices of packages and rooms, for reference. For example Rs, $, €." value={settings.currency ?? "Rs"} onChange={(e) => { update("currency", e.target.value); setCurrency(e.target.value); }} />
           <Area label="Address (optional)" id="address" rows={2} value={settings.address ?? ""} onChange={(e) => update("address", e.target.value)} />
           <Group label="Logo (optional)" note="PNG or JPG, under 500KB.">
             <div className="flex items-center gap-3">

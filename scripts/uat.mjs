@@ -44,14 +44,21 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #606: a centre in Auckland can pick its own zone.
-await step('Opening hours offers Pacific/Auckland and the other zones, grouped after the common ones', '/admin/settings', async () => {
-  await go(p.getByRole('button', { name: /Opening hours and holidays/ }));
-  const sel = dlg().getByLabel('Timezone');
-  const vals = await sel.locator('option').evaluateAll((o) => o.map((x) => x.value));
-  const groups = await sel.locator('optgroup').count();
-  await sel.selectOption('Pacific/Auckland');
-  return { ok: vals.includes('Pacific/Auckland') && vals.includes('Europe/Paris') && vals.length > 300 && groups === 1 && (await sel.inputValue()) === 'Pacific/Auckland', note: `${vals.length} zones, ${groups} group, Auckland picked` };
+// #609: prices carry the centre's own currency symbol.
+await step('Settings has a currency symbol; set to $, the accommodation picker reads "$1,600 a day", not "Rs"', '/admin/settings', async () => {
+  const set = async (c) => { const cur = await api('GET', '/settings'); await api('PUT', '/settings', { ...cur, currency: c, letterhead: undefined, setup_reviewed: undefined }); };
+  await set('$');
+  await p.reload(); await p.waitForTimeout(1500);
+  await go(p.getByRole('button', { name: /Centre and letterhead/ }));
+  const field = await dlg().getByLabel('Currency symbol').inputValue();
+  await p.keyboard.press('Escape'); await p.waitForTimeout(500);
+  const who = (await api('GET', `/patients?resident_on=${plus(0)}`)).find((x) => x.Stays.some((st) => st.on_site !== false && st.start_date.slice(0, 10) <= plus(0) && st.end_date.slice(0, 10) >= plus(0)));
+  await p.goto(APP + '/admin/patients'); await p.waitForTimeout(1500);
+  await go(p.getByRole('button', { name: new RegExp(`^${who.name}`) }).first());
+  await go(dlg().getByRole('button', { name: /^Accommodation/ }));
+  const sheet = (await text(dlg())).replace(/\n+/g, ' | ');
+  await set('Rs');
+  return { ok: field === '$' && /\$[\d,]+ a day/.test(sheet) && !/Rs /.test(sheet), note: `field "${field}" · ${(sheet.match(/\$[\d,]+ a day/) || ['no price'])[0]} · Rs left: ${/Rs /.test(sheet)}` };
 });
 await b.close();
 

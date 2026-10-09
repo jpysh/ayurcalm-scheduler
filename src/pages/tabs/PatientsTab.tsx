@@ -9,7 +9,7 @@ import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, toLocalInput, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
 import { PhotoImg, shrinkPhoto } from "@/components/PassportPhoto";
-import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, rupees, Btn, LinkBtn } from "@/components/kit";
+import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, money, Btn, LinkBtn } from "@/components/kit";
 import { AccommodationSheet, DietSheet, DischargeSheet, NextWeekSheet, PackageSheet, StaySheet, takenBy, type CardStay, type GuestRoomNight, type StayTarget } from "@/components/CardSheets";
 import { marked } from "@/components/SearchScreen";
 import type { AttentionItem } from "@/lib/attention";
@@ -296,8 +296,8 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
           {/* Story 4: everything a patient may have is a row with an arrow, filled when it is decided; nothing is forced. */}
           <div className="mt-3 border-t border-border">
             <ChangeLine label="Diet" value={d.plan_name ? (d.diet_next ? `${d.plan_name}, then ${d.diet_next.name} from ${dayText(d.diet_next.from)}` : d.plan_name) : "Not decided yet"} faint={!d.plan_name} onClick={() => changeMeals(d)} />
-            {up ? <ChangeLine label="Package" value={up.package ? `${up.package.days} days · ${rupees(up.package.price)}` : "Not decided yet"} faint={!up.package} onClick={() => changePackage(d)} /> : null}
-            {up && up.on_site !== false ? <ChangeLine label="Accommodation" value={up.accommodation ? `${up.accommodation.name}${up.accommodation.room ? ` · ${up.accommodation.room.name}` : ""} · ${nights} nights · ${rupees(nights * up.accommodation.price_per_day)}` : "Not decided yet"} faint={!up.accommodation} onClick={() => changeHouse(d)} /> : null}
+            {up ? <ChangeLine label="Package" value={up.package ? `${up.package.days} days · ${money(up.package.price)}` : "Not decided yet"} faint={!up.package} onClick={() => changePackage(d)} /> : null}
+            {up && up.on_site !== false ? <ChangeLine label="Accommodation" value={up.accommodation ? `${up.accommodation.name}${up.accommodation.room ? ` · ${up.accommodation.room.name}` : ""} · ${nights} nights · ${money(nights * up.accommodation.price_per_day)}` : "Not decided yet"} faint={!up.accommodation} onClick={() => changeHouse(d)} /> : null}
             {d.follow_up ? <ChangeLine label="Follow-up" value={d.follow_up.done ? `Done ${dayText(d.follow_up.done)}` : `Due ${dayText(d.follow_up.due)}`} onClick={() => setFollowUp(true)} /> : null}
             {d.form_c ? <ChangeLine label="Form C" value={d.form_c.filed ? `Filed ${dayText(d.form_c.filed)}` : `Due by ${dayText(d.form_c.due)}${d.form_c.fields.some(([, v]) => !v) ? ` · ${d.form_c.fields.filter(([, v]) => !v).length} missing` : ''}`} onClick={() => setFormC(true)} /> : null}
             <ChangeLine label="Passport photo" value={d.passport_photo ? `Kept ${dayText(d.passport_photo)}` : "Take a photo"} faint={!d.passport_photo} onClick={() => (d.passport_photo ? setPhotoOpen(true) : photoInput.current?.click())} />
