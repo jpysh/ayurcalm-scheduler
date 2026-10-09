@@ -121,7 +121,7 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
       if (person) {
         const before = { name: person.name, role: person.role, gender: person.gender.toLowerCase(), phone: person.phone, specializations: person.specializations.map((n) => therapies.find((t) => t.name === n)?.id).filter(Boolean), ...(touched ? { weekly_schedule: person.hours ?? {} } : {}) };
         savedWithUndo(`${x.name} saved`, `/staff/${person.id}`, before, person, onSaved);
-      } else toast(`${x.name} added`);
+      } else toast(role === "therapist" && !ids.length ? `${x.name} added. They can give every therapy; open their card to limit that.` : `${x.name} added`);
       onClose();
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
@@ -165,7 +165,7 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
       <Group label="Gender" note={gender ? "Used when a therapy needs a therapist of the patient's gender." : "Choose their gender. A therapy that needs the patient's gender uses it."}><Seg<"Female" | "Male" | ""> options={[["Female", "Female"], ["Male", "Male"]]} value={gender} onChange={setGender} /></Group>
       <div className="mt-3"><ChangeLine label="Hours" value={weekText(week)} onClick={() => setHoursPage(true)} /></div>
       {role === "therapist" ? (
-        <Group label="Therapies they give (optional)">
+        <Group label="Therapies they give (optional)" note={therapies.length ? "None ticked means they can give every therapy." : undefined}>
           {therapies.length ? <Chips options={therapies.map((t) => t.name)} value={gives} onChange={setGives} /> : <p className={noteText}>Add therapies first, then tick the ones they give.</p>}
         </Group>
       ) : null}
