@@ -93,7 +93,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
     return d && d.capacity ? `${hrs(d.booked)} of ${hrs(d.capacity)} booked · ${roomKind(r)}` : roomKind(r);
   };
   const firstOut = (e: RoomOff) => (e.start_date ?? e.date ?? "").slice(0, 10);
-  const roomsOut = rooms.filter((r) => { const e = roomsOff.get(String(r.id)); return roomActive(r) && e && (e.recurrence || firstOut(e) <= today); }).length;
+  const roomsOut = rooms.filter((r) => { const e = roomsOff.get(String(r.id)); return roomActive(r) && e && firstOut(e) <= today; }).length;
 
   /** Time off between from and until; null means the edge of the day. Days default to today. */
   async function takeOut(kind: "staff" | "room", id: string, name: string, from: string | null, until: string | null, what: string, days = { start: today, end: today }) {
@@ -132,8 +132,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   /** "Out of use from 14:00", "until 14:00", "until Wed 14 Oct", by the entry's own times and days. */
   const outLine = (e: RoomOff) => {
     const last = (e.end_date ?? e.date ?? "").slice(0, 10);
-    if (!e.recurrence && firstOut(e) > today) return `Out of use ${dayText(firstOut(e))}${last > firstOut(e) ? ` to ${dayText(last)}` : ""}`;
-    if (!e.recurrence && last > today) return `Out of use until ${dayText(last)}`;
+    if (firstOut(e) > today) return `Out of use ${dayText(firstOut(e))}${last > firstOut(e) ? ` to ${dayText(last)}` : ""}`;
+    if (last > today) return `Out of use until ${dayText(last)}`;
     const fromT = e.start_time && e.start_time > opening ? e.start_time : null, toT = e.end_time && e.end_time < closing ? e.end_time : null;
     return fromT && toT ? `Out of use ${fromT}–${toT}` : fromT ? `Out of use from ${fromT}` : toT ? `Out of use until ${toT}` : "Out of use today";
   };
@@ -204,7 +204,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
           : pick && late ? <SheetFoot ok={changed} save={() => (late === "late" ? takeOut("staff", pick.id, pick.name, opening, at, `In late, at ${at}`, { start: day, end: day }) : takeOut("staff", pick.id, pick.name, at, closing, `Leaving early, at ${at}`, { start: day, end: day }))} label="Move what they miss" /> : undefined}>
         {pick?.kind === "room" && late === null ? (
           <ListGroup>
-            {roomsOff.has(pick.id) && !roomsOff.get(pick.id)!.recurrence ? <Row title="Back in use" facts={outLine(roomsOff.get(pick.id)!)} trailing="›" onClick={() => backInUse(pick.id, pick.name, roomsOff.get(pick.id)!)} />
+            {roomsOff.has(pick.id) ? <Row title="Back in use" facts={outLine(roomsOff.get(pick.id)!)} trailing="›" onClick={() => backInUse(pick.id, pick.name, roomsOff.get(pick.id)!)} />
               : <Row title="Out of use from now" facts="Moves what is booked in it" trailing="›" onClick={() => takeOut("room", pick.id, pick.name, from, null, "Out of use from now")} />}
             <Row title="Out of use for days" facts="Choose the days" trailing="›" onClick={() => { setLate("away"); setAt(day); setUntil(day); }} />
             <Row title="Details" facts="Name and what it has" trailing="›" onClick={() => { close(); openRoom(pick.id); }} />
@@ -237,7 +237,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
 /** The day after a YYYY-MM-DD, as one. */
 const nextDay = (ymd: string) => new Date(Date.parse(ymd) + 86400000).toISOString().slice(0, 10);
 
-type RoomOff = { id: string; date?: string | null; start_date?: string | null; end_date?: string | null; start_time: string | null; end_time: string | null; recurrence?: string | null; description?: string | null };
+type RoomOff = { id: string; date?: string | null; start_date?: string | null; end_date?: string | null; start_time: string | null; end_time: string | null; description?: string | null };
 type Day = { state: "in" | "part" | "away" | "off"; start?: string; end?: string; why?: string; booked: number; capacity: number };
 type Week = { start: string; days: string[]; rows: { id: string; name: string; role: string; days: Day[] }[]; gaps: { start: string; end: string; in: number }[][]; rooms: { id: string; days: { booked: number; capacity: number }[] }[] };
 const hrs = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}`);

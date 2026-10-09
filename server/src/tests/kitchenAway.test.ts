@@ -36,8 +36,8 @@ async function main() {
       await prisma.patientStay.create({ data: { patient_id: p.id, start_date: new Date(DAY), end_date: new Date('2030-03-14'), duration_days: 3, on_site: true } });
       made.push(p);
     }
-    await prisma.timeOff.create({ data: { entity_type: 'patient', entity_id: made[0].id, date: new Date(DAY), start_time: '09:00', end_time: '13:00', weekdays: [] } });
-    await prisma.timeOff.create({ data: { entity_type: 'patient', entity_id: made[1].id, date: new Date(DAY), weekdays: [] } });
+    await prisma.timeOff.create({ data: { entity_type: 'patient', entity_id: made[0].id, date: new Date(DAY), start_time: '09:00', end_time: '13:00' } });
+    await prisma.timeOff.create({ data: { entity_type: 'patient', entity_id: made[1].id, date: new Date(DAY) } });
 
     const before = await generateKitchenSheetPdf(DAY, prisma);
     const f = join(dir, 'kitchen.pdf');
@@ -54,7 +54,7 @@ async function main() {
     const after = execFileSync('pdftotext', ['-layout', f, '-']).toString().replace(/\s+/g, ' ');
     assert.equal(staying(text), staying(after), 'an away guest was dropped from the kitchen count');
 
-    await prisma.timeOff.create({ data: { entity_type: 'patient', entity_id: made[0].id, date: new Date(DAY), start_time: '09:00', end_time: '13:00', weekdays: [] } });
+    await prisma.timeOff.create({ data: { entity_type: 'patient', entity_id: made[0].id, date: new Date(DAY), start_time: '09:00', end_time: '13:00' } });
     assert.equal((await residentDay(made[0].id, DAY, prisma))?.away, 'AWAY 09:00–13:00', 'the meals sheet does not say the guest is away');
     assert.equal((await residentDay(made[2].id, DAY, prisma))?.away, null);
     console.log('kitchen: an away guest is marked, and still counted');

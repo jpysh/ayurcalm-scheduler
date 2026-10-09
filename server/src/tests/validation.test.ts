@@ -57,10 +57,10 @@ async function main() {
       if (id) await prisma.programEvent.delete({ where: { id } });
     }],
 
-    ['time off with no recurrence is created, not a 500', async () => {
+    ['time off with only a date range is created, not a 500', async () => {
       const res = await post('/timeoff', {
         entity_type: 'center', start_date: today(), end_date: today(),
-        recurrence: null, weekdays: null, description: 'Validation Test TimeOff',
+        description: 'Validation Test TimeOff',
       });
       if (res.status !== 201) throw new Error(`status ${res.status}: ${await res.text()}`);
       const { id } = await res.json();

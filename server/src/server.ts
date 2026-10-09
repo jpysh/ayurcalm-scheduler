@@ -729,8 +729,6 @@ const timeoffSchema = z.object({
   end_date: z.string().optional().nullable(),
   start_time: z.string().optional().nullable(),
   end_time: z.string().optional().nullable(),
-  recurrence: z.enum(['weekly']).optional().nullable(),
-  weekdays: z.array(z.enum(['sunday','monday','tuesday','wednesday','thursday','friday','saturday'])).optional().nullable(),
   description: z.string().optional().nullable(),
   /** False records the leave and leaves the day for the admin to plan (#285 story 9); absent plans it, as the assistant expects. */
   plan: z.boolean().optional(),
@@ -748,20 +746,7 @@ const getTimeOffHandler = async (req: Request, res: Response) => {
         { AND: [{ start_date: { lte: toD } }, { end_date: { gte: fromD } }] },
       ],
     };
-    const base = await prisma.timeOff.findMany({ where: baseWhere, orderBy: [{ start_date: 'desc' }, { date: 'desc' }] });
-    const days: string[] = [];
-    for (let d = new Date(fromD); d <= toD; d.setDate(d.getDate() + 1)) {
-      days.push(weekdayNameInTZ(new Date(d)));
-    }
-    const weeklies = await prisma.timeOff.findMany({ where: { recurrence: 'weekly', weekdays: { hasSome: days } }, orderBy: [{ start_date: 'desc' }, { date: 'desc' }] });
-    const filteredWeeklies = weeklies.filter((h) => {
-      if (h.start_date && h.end_date) return h.start_date <= toD && h.end_date >= fromD;
-      if (h.start_date && !h.end_date) return h.start_date <= toD;
-      if (!h.start_date && h.end_date) return h.end_date >= fromD;
-      return true;
-    });
-    const data = [...base, ...filteredWeeklies];
-    res.json(data);
+    res.json(await prisma.timeOff.findMany({ where: baseWhere, orderBy: [{ start_date: 'desc' }, { date: 'desc' }] }));
     return;
   }
   const data = await prisma.timeOff.findMany({ orderBy: [{ start_date: 'desc' }, { date: 'desc' }] });
@@ -773,14 +758,12 @@ const createTimeOffHandler = async (req: Request, res: Response) => {
     // A part-day leave that ends where it starts covers nothing yet looks saved (#571).
     const { plan, ...body } = timeoffSchema.refine((b) => !b.start_time || !b.end_time || b.start_time < b.end_time, 'The leave must end after it starts.').parse(req.body);
     const data: any = { ...body };
-    if (!data.weekdays) data.weekdays = [];
     if (body.date) data.date = new Date(body.date);
     if (body.start_date) data.start_date = new Date(body.start_date);
     if (body.end_date) data.end_date = new Date(body.end_date);
     if (!data.date) {
       if (data.start_date) data.date = new Date(data.start_date);
       else if (data.end_date) data.date = new Date(data.end_date);
-      else if (data.recurrence === 'weekly') data.date = new Date();
     }
     const h = await prisma.timeOff.create({ data });
 
@@ -830,7 +813,6 @@ const updateTimeOffHandler = async (req: Request, res: Response) => {
   try {
     const { plan: _plan, ...body } = timeoffSchema.partial().parse(req.body);
     const data: any = { ...body };
-    if (data.weekdays === null) data.weekdays = [];
     if (body.date) data.date = new Date(body.date);
     if (body.start_date) data.start_date = new Date(body.start_date);
     if (body.end_date) data.end_date = new Date(body.end_date);

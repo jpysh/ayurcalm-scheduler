@@ -29,7 +29,7 @@ const base = {
 
 const off = (over: Record<string, unknown>) => ({
   entity_type: 'staff', entity_id: null, date: null, start_date: null, end_date: null,
-  start_time: null, end_time: null, recurrence: null, weekdays: [], description: null, ...over,
+  start_time: null, end_time: null, description: null, ...over,
 } as any);
 
 // Inactive staff are not on the rota at all, and the rest are alphabetical.
@@ -89,14 +89,6 @@ const off = (over: Record<string, unknown>) => ({
   const greyed = kumar.cells.filter((c) => c.some((l) => l.grey));
   assert.equal(greyed.length, 2, '14:00-17:00 spans the afternoon and the evening');
   assert.ok(greyed.every((c) => c.some((l) => l.text === 'Not available 14:00–17:00 — Dentist')));
-}
-
-// A weekly recurring absence lands on its weekday.
-{
-  const { rows } = buildRota({ ...base, timeOff: [off({ entity_id: 's3', recurrence: 'weekly', weekdays: ['wednesday'], description: 'Weekly off' })] });
-  assert.equal(rows.find((r) => r.name === 'Priya Menon')!.available, false);
-  const other = buildRota({ ...base, timeOff: [off({ entity_id: 's3', recurrence: 'weekly', weekdays: ['monday'], description: 'Weekly off' })] });
-  assert.equal(other.rows.find((r) => r.name === 'Priya Menon')!.available, true);
 }
 
 // Asked for one therapist, the rota is only that therapist.

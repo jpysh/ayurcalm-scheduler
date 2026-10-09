@@ -7,7 +7,7 @@ const day = new Date('2030-03-13T00:00:00.000Z');
 
 const off = (over: Record<string, unknown>) => ({
   id: String(Math.random()), entity_type: 'staff', entity_id: null, date: day, start_date: null, end_date: null,
-  start_time: null, end_time: null, recurrence: null, weekdays: [], description: null, ...over,
+  start_time: null, end_time: null, description: null, ...over,
 });
 
 const ctx = (timeOff: unknown[]) => ({

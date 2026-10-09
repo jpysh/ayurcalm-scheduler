@@ -158,7 +158,7 @@ export type OffRow = {
   entity_type: string; entity_id: string | null;
   date: Date | null; start_date: Date | null; end_date: Date | null;
   start_time: string | null; end_time: string | null;
-  recurrence: string | null; weekdays: string[]; description: string | null;
+  description: string | null;
 };
 
 /**

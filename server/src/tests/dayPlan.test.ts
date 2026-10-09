@@ -80,7 +80,7 @@ async function main() {
     const second = await book(patients[1].id, away.id, roomA.id, '10:00');
     const third = await book(patients[2].id, away.id, roomA.id, '11:00');
     const leave = await prisma.timeOff.create({
-      data: { entity_type: 'staff', entity_id: away.id, date: day, description: 'Plan leave', weekdays: [] },
+      data: { entity_type: 'staff', entity_id: away.id, date: day, description: 'Plan leave' },
     });
     made.push({ table: 'timeOff', id: leave.id });
 
@@ -211,7 +211,7 @@ async function main() {
     made.push({ table: 'therapy', id: pair.id });
     await prisma.staff.update({ where: { id: away.id }, data: { specializations: [therapy.id, pair.id] } });
     await prisma.staff.update({ where: { id: coverOne.id }, data: { specializations: [therapy.id, pair.id] } });
-    const long = await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: away.id, start_date: day, end_date: new Date(day.getTime() + 40 * 86400000), description: 'Plan long leave', weekdays: [] } });
+    const long = await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: away.id, start_date: day, end_date: new Date(day.getTime() + 40 * 86400000), description: 'Plan long leave' } });
     made.push({ table: 'timeOff', id: long.id });
     const four = await prisma.appointment.create({ data: {
       patient_id: patients[0].id, therapy_id: pair.id, staff_id: coverOne.id, co_staff_ids: [away.id], room_id: rooms[1].id,
