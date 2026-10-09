@@ -18,11 +18,8 @@ for (const zone of ['America/New_York', 'Pacific/Auckland', 'Asia/Kolkata']) {
         await p.waitForURL(/\/admin/);
       };
       await signIn(page);
-      let sent: { start_date: string; end_date: string } | null = null;
-      let madeId = '';
-      page.on('response', async (r) => {
-        if (/\/api\/timeoff$/.test(r.url()) && r.request().method() === 'POST') { sent = r.request().postDataJSON(); madeId = (await r.json()).id; }
-      });
+      // The response is awaited, not listened for: a handler still reading the body when the test ended threw "Test ended" and left the leave behind.
+      const made = page.waitForResponse((r) => /\/api\/timeoff$/.test(r.url()) && r.request().method() === 'POST');
       await page.goto('/admin/timeoff');
       await page.getByRole('button', { name: /^(\+|Add)/ }).first().click();
       const sheet = page.getByRole('dialog').last();
@@ -31,9 +28,11 @@ for (const zone of ['America/New_York', 'Pacific/Auckland', 'Asia/Kolkata']) {
       await sheet.locator('input[type=date]').first().fill(DAY);
       await sheet.locator('input[type=date]').nth(1).fill(DAY);
       await sheet.getByRole('button', { name: 'Save, plan later' }).click();
-      await expect.poll(() => sent).not.toBeNull();
-      expect(sent!.start_date.slice(0, 10)).toBe(DAY);
-      expect(sent!.end_date.slice(0, 10)).toBe(DAY);
+      const res = await made;
+      const sent = res.request().postDataJSON() as { start_date: string; end_date: string };
+      expect(sent.start_date.slice(0, 10)).toBe(DAY);
+      expect(sent.end_date.slice(0, 10)).toBe(DAY);
+      const madeId = (await res.json()).id;
       if (madeId) await request.delete(`/api/timeoff/${madeId}`, { headers });
     });
   });
