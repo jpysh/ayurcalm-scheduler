@@ -526,7 +526,8 @@ export type RangeRow = { date: string; who: string; start_time: string | null; f
  */
 export async function planRange(from: string, to: string, prisma: PrismaClient, opts: { now?: Clock } = {}) {
   const rows: RangeRow[] = [];
-  let left = 0;
+  /** What waits for the admin, named, so the plan says what it leaves (#706). */
+  const waiting: { date: string; who: string; start_time: string | null; what: string }[] = [];
   // ponytail: capped at 31 days, as one plan; a longer absence plans its first month.
   for (let d = new Date(`${from}T00:00:00.000Z`), n = 0; ymd(d) <= to && n < 31; d.setUTCDate(d.getUTCDate() + 1), n++) {
     const day = new Date(d);
@@ -542,8 +543,8 @@ export async function planRange(from: string, to: string, prisma: PrismaClient, 
     }
     for (const p of check.problems.filter((x) => x.problem_class === 'blocking')) {
       if (p.fix && !p.fix.pinned && p.choices.length <= 1 && p.fix.date === check.date) rows.push({ date: check.date, who: p.who, start_time: p.start_time, fix: p.fix });
-      else left++;
+      else waiting.push({ date: check.date, who: p.who, start_time: p.start_time, what: p.what });
     }
   }
-  return { rows, left };
+  return { rows, left: waiting.length, waiting };
 }
