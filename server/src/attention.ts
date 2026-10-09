@@ -68,8 +68,8 @@ export type Item = {
   who: string;
   what: string;
   patient_id?: string;
-  /** What the one tap does: open their card, their meals, their discharge summary. */
-  action?: 'card' | 'diet' | 'summary';
+  /** What the one tap does: open their card, their meals, their discharge summary, their follow-up message. */
+  action?: 'card' | 'diet' | 'summary' | 'followup';
 };
 
 /** A guest whose country is not India needs a Form C within 24 hours of arriving (#415). An empty country is not assumed foreign. */
@@ -115,7 +115,7 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
   const left = await prisma.patientStay.findMany({ where: { follow_up_done: null, discharge: { not: Prisma.DbNull }, end_date: { lte: day, gte: new Date(day.getTime() - 400 * DAY_MS) } }, include: { Patient: { select: { id: true, name: true } } } });
   for (const s of left) {
     const due = (s.discharge as { follow_up_date?: string } | null)?.follow_up_date;
-    if (due && due <= today && due > ymd(new Date(day.getTime() - 30 * DAY_MS))) add(rule('follow_up'), s, `Follow-up due ${dayName(due).replace(',', '')}`, 'card');
+    if (due && due <= today && due > ymd(new Date(day.getTime() - 30 * DAY_MS))) add(rule('follow_up'), s, `Follow-up due ${dayName(due).replace(',', '')}`, 'followup');
   }
   // What a guest told the centre on their leaving day (#509), for a week: good and fine in grey, not good counted.
   const told = await prisma.patientStay.findMany({ where: { feedback: { not: Prisma.DbNull }, end_date: { lte: day, gte: new Date(day.getTime() - 7 * DAY_MS) } }, include: { Patient: { select: { id: true, name: true } } } });

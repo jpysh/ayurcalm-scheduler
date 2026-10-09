@@ -737,6 +737,7 @@ const AdminDashboard = () => {
         onItem={(i: AttentionItem) => {
           setShowAttention(false);
           if (i.action === 'diet') patientsScreen.openMeals({ id: i.patient_id!, name: i.who });
+          else if (i.action === 'followup') patientsScreen.openFollowUp(i.patient_id!);
           else patientsScreen.openResident(i.patient_id!);
         }}
         afterConsultation={(p, what) => {
