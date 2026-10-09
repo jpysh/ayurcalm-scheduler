@@ -58,7 +58,7 @@ type Done = { text: string; undo: (() => Promise<boolean>) | null };
 const listed = (names: string[]) => names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 const first = (name: string) => name.split(" ")[0];
 
-export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, tomorrow, coming, replans, dismissed, dismiss, undoReplan, onChanged, seeIt, afterConsultation, items, onItem, openRules, addStaff }: {
+export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, tomorrow, coming, replans, dismissed, dismiss, undoReplan, onChanged, seeIt, afterConsultation, items, onItem, openRules, addStaff, dayOver }: {
   open: boolean;
   /** A dead end's fix (#368): the add-a-therapist sheet, with the therapy ticked. */
   addStaff: (a: { gender?: string; therapy_id?: string }) => void;
@@ -85,6 +85,8 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   items: AttentionItem[];
   onItem: (i: AttentionItem) => void;
   openRules: () => void;
+  /** Today, past closing: a doctor's note asks for a change to a day that is finished. */
+  dayOver?: boolean;
 }) {
   const [done, setDone] = useState<Done | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -98,7 +100,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   const fixable = act.filter((p) => p.fix && p.choices.length <= 1);
   // A resident with nothing booked is a rest day, not a note (#144).
   const urgent = problems.filter((p) => p.urgent && !dismissed.includes(p.id));
-  const notes = problems.filter((p) => p.problem_class === "worth_knowing" && p.kind !== "IDLE_RESIDENT" && !p.urgent && !dismissed.includes(p.id));
+  const notes = problems.filter((p) => p.problem_class === "worth_knowing" && p.kind !== "IDLE_RESIDENT" && !p.urgent && !dismissed.includes(p.id) && !(dayOver && p.kind === "CONSULTED"));
   const patientAct = items.filter((i) => i.section === "Patients" && i.kind === "action");
   const patientRows = Object.values(patientAct.reduce<Record<string, AttentionItem[]>>((by, i) => { (by[i.patient_id ?? i.who] ??= []).push(i); return by; }, {}));
   const teamAct = items.filter((i) => i.section === "Team" && i.kind === "action");
@@ -218,7 +220,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
       // The one inbox for the whole app (story 1). Patients and Team come from the rules in Settings, What needs you; empty sections do not show.
       sections={[{
         name: "Day", count: act.length + urgent.length,
-        body: act.length + urgent.length + didForYou.length + notes.length === 0 ? null : (
+        body: act.length + urgent.length === 0 ? null : (
           <div className="space-y-3">
             {fixable.length > 1 && causes.length > 1 ? <Btn kind="primary" disabled={busy !== null} onClick={() => apply(null, ...fixable.map((p) => p.fix!))}>{busy === "all" ? "Fixing…" : `Fix all ${fixable.length} as shown`}</Btn> : null}
             {urgent.length ? <ListGroup>{urgent.map((p) => item(p.id, [p.start_time, p.who].filter(Boolean).join(" · "), null, <>
@@ -226,8 +228,28 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
               <button type="button" className={tb()} onClick={() => dismiss(p.id)}>Dismiss</button>
             </>))}</ListGroup> : null}
             {act.length ? <ListGroup>{causes.flatMap(causeRow)}</ListGroup> : null}
-            {didForYou.length + notes.length ? (
-              <ListGroup title="Information · not counted">
+          </div>
+        ),
+      }, {
+        name: "Tomorrow", count: tomorrow?.count ?? 0,
+        body: tomorrow ? <ListGroup><Row key="tomorrow" title={`${dayText(tomorrow.day)} · ${tomorrow.count} to fix`} facts="Open the day to fix it before it starts" trailing="Open ›" onClick={tomorrow.open} /></ListGroup> : null,
+      }, {
+        name: "Coming days", count: 0,
+        body: coming?.length ? <ListGroup>{coming.map((c) => <Row key={c.date} title={`${dayText(c.date)} · ${c.count} to fix`} facts={c.headline ?? "Open the day to fix it before it starts"} trailing="Open ›" onClick={c.open} />)}</ListGroup> : null,
+      }, {
+        name: "Patients", count: patientRows.length,
+        body: patientRows.length + patientInfo.length ? <ListGroup>{patientRows.map((g) => {
+          // Two things for one patient are one row; their card reaches both.
+          const i = g.length > 1 ? { ...g[0], action: "card" as const } : g[0];
+          return <Row key={i.id} title={i.who} facts={g.map((x) => x.what).join(" · ")} trailing={{ card: "Open card ›", diet: "Choose diet ›", summary: "Summary ›", followup: "Follow up ›" }[i.action ?? "card"]} onClick={() => onItem(i)} />;
+        })}{patientInfo.map((i) => <Row key={i.id} title={i.who} facts={`${i.what} · information, not counted`} trailing="Open card ›" onClick={() => onItem(i)} />)}</ListGroup> : null,
+      }, {
+        name: "Team", count: teamAct.length,
+        body: teamAct.length + teamInfo.length ? <ListGroup>{[...teamAct, ...teamInfo].map((i) => <Row key={i.id} title={i.kind === "information" ? i.what : i.who} facts={i.kind === "information" ? "Information · not counted" : i.what} />)}</ListGroup> : null,
+      }, {
+        // What counts comes first on the sheet; the day's information follows everything (#661).
+        name: "Information · not counted", count: 0,
+        body: didForYou.length + notes.length ? <ListGroup>
             {didForYou.map((b) => item(b.batch_id, `${b.staff_name} is not in ${day === today ? "today" : `on ${dayName}`}`,
               b.moved.length
                 ? `${first(b.staff_name)}'s ${b.moved.length} treatment${b.moved.length === 1 ? "" : "s"} went to ${listed([...new Set(b.moved.map((m) => first(m.to.staff_name)))])}.`
@@ -248,26 +270,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
               {p.appointment_id ? <button type="button" className={tb()} onClick={() => seeIt(p.appointment_id!)}>See it</button> : null}
               <button type="button" className={tb()} onClick={() => dismiss(p.id)}>Dismiss</button>
             </>))}
-              </ListGroup>
-            ) : null}
-          </div>
-        ),
-      }, {
-        name: "Tomorrow", count: tomorrow?.count ?? 0,
-        body: tomorrow ? <ListGroup><Row key="tomorrow" title={`${dayText(tomorrow.day)} · ${tomorrow.count} to fix`} facts="Open the day to fix it before it starts" trailing="Open ›" onClick={tomorrow.open} /></ListGroup> : null,
-      }, {
-        name: "Coming days", count: 0,
-        body: coming?.length ? <ListGroup>{coming.map((c) => <Row key={c.date} title={`${dayText(c.date)} · ${c.count} to fix`} facts={c.headline ?? "Open the day to fix it before it starts"} trailing="Open ›" onClick={c.open} />)}</ListGroup> : null,
-      }, {
-        name: "Patients", count: patientRows.length,
-        body: patientRows.length + patientInfo.length ? <ListGroup>{patientRows.map((g) => {
-          // Two things for one patient are one row; their card reaches both.
-          const i = g.length > 1 ? { ...g[0], action: "card" as const } : g[0];
-          return <Row key={i.id} title={i.who} facts={g.map((x) => x.what).join(" · ")} trailing={{ card: "Open card ›", diet: "Choose diet ›", summary: "Summary ›", followup: "Follow up ›" }[i.action ?? "card"]} onClick={() => onItem(i)} />;
-        })}{patientInfo.map((i) => <Row key={i.id} title={i.who} facts={`${i.what} · information, not counted`} trailing="Open card ›" onClick={() => onItem(i)} />)}</ListGroup> : null,
-      }, {
-        name: "Team", count: teamAct.length,
-        body: teamAct.length + teamInfo.length ? <ListGroup>{[...teamAct, ...teamInfo].map((i) => <Row key={i.id} title={i.kind === "information" ? i.what : i.who} facts={i.kind === "information" ? "Information · not counted" : i.what} />)}</ListGroup> : null,
+              </ListGroup> : null,
       }]}>
       {done ? (
         <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-primary">

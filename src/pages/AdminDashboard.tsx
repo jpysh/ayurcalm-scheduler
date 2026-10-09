@@ -711,6 +711,7 @@ const AdminDashboard = () => {
         apiBase={API_BASE}
         day={exceptionDayKey}
         today={ymdInTZ(new Date())}
+        dayOver={exceptionDayKey === realToday && nowHM >= centreHours.closing_time}
         problems={dayCheck.problems}
         tomorrow={tomorrowFix ? { day: tomorrowKey, count: tomorrowFix, open: () => setCurrentDate(dayDate(tomorrowKey)) } : null}
         coming={comingDays.filter((c) => !(tomorrowFix && c.date === tomorrowKey)).map((c) => ({ ...c, open: () => setCurrentDate(dayDate(c.date)) }))}
