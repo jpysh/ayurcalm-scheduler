@@ -197,7 +197,9 @@ export function staffDay(ctx: DayContext) {
   return ctx.staff.filter((s) => s.is_active).map((s) => {
     const offs = offOnDay(ctx.timeOff, 'staff', s.id, ctx.day);
     const hours = hoursOn(s.weekly_schedule, ctx.day);
-    const off = hours === null ? { label: 'Day off' } : offs.find((b) => b.whole);
+    // Time off over all their hours is the whole day, whatever hours it was given (#704).
+    const [hs, he] = hours ? [hours.s, hours.e] : [toMinutes(ctx.settings?.opening_time || '09:00'), toMinutes(ctx.settings?.closing_time || '18:00')];
+    const off = hours === null ? { label: 'Day off' } : offs.find((b) => b.whole || (b.s <= hs && b.e >= he));
     const busy = [
       ...(hours ? [{ s: 0, e: hours.s, label: 'not working' }, { s: hours.e, e: 24 * 60, label: 'not working' }].filter((b) => b.e > b.s) : []),
       ...offs.filter((b) => !b.whole).map(({ s: from, e, label }) => ({ s: from, e, label })),
