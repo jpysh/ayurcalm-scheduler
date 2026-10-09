@@ -40,7 +40,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   openRules: () => void;
 }) {
   const [offToday, setOffToday] = useState<Record<string, string | null>>({});
-  const [roomsOff, setRoomsOff] = useState<Set<string>>(new Set());
+  const [roomsOff, setRoomsOff] = useState<Map<string, RoomOff>>(new Map());
   const [week, setWeek] = useState<Week | null>(null);
   // The team is read a day at a time (#351), from the same week strip as the Day screen.
   const [day, setDay] = useState(today);
@@ -58,8 +58,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
       .then((rows: { staff_id: string; off: string | null }[]) => setOffToday(Object.fromEntries(rows.map((x) => [x.staff_id, x.off]))))
       .catch(() => setOffToday({}));
     fetch(`${API_BASE}/timeoff?from=${today}&to=${today}`).then((r) => (r.ok ? r.json() : []))
-      .then((rows: { entity_type: string; entity_id: string }[]) => setRoomsOff(new Set(rows.filter((x) => x.entity_type === "room").map((x) => x.entity_id))))
-      .catch(() => setRoomsOff(new Set()));
+      .then((rows: (RoomOff & { entity_type: string; entity_id: string })[]) => setRoomsOff(new Map(rows.filter((x) => x.entity_type === "room").map((x) => [x.entity_id, x]))))
+      .catch(() => setRoomsOff(new Map()));
   }, [today]);
   useEffect(() => { load(); }, [load]);
   // The week the chosen day is in, from Sunday as the strip draws it; a day in the same week needs no fetch.
@@ -99,12 +99,34 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
     const moved = (body.replan || []).reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0);
     await refresh();
     load();
-    const told = what === "Leave" ? `${name} away ${days.start === days.end ? dayText(days.start) : `${dayText(days.start)} to ${dayText(days.end)}`}` : `${name}: ${what.toLowerCase()}${days.start === today ? "" : ` · ${dayText(days.start)}`}`;
+    const told = what === "Leave" || what === "Out of use" ? `${name} ${what === "Leave" ? "away" : "out of use"} ${days.start === days.end ? dayText(days.start) : `${dayText(days.start)} to ${dayText(days.end)}`}` : `${name}: ${what.toLowerCase()}${days.start === today ? "" : ` · ${dayText(days.start)}`}`;
     toast(`${told}${moved ? ` · ${moved} moved` : ""}`, {
       action: { label: "Undo", onClick: async () => { await fetch(`${API_BASE}/timeoff/${body.id}`, { method: "DELETE" }); await refresh(); load(); } },
     });
   }
 
+  /** A room back in use deletes the day's entry; Undo puts the same entry back (#572). */
+  async function backInUse(id: string, name: string, e: RoomOff) {
+    close();
+    const res = await fetch(`${API_BASE}/timeoff/${e.id}`, { method: "DELETE" });
+    if (!res.ok) { toast.error("That could not be saved."); return; }
+    await refresh();
+    load();
+    toast(`${name} back in use`, {
+      action: { label: "Undo", onClick: async () => {
+        await fetch(`${API_BASE}/timeoff`, { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entity_type: "room", entity_id: id, date: e.date?.slice(0, 10), start_date: e.start_date?.slice(0, 10) ?? null, end_date: e.end_date?.slice(0, 10) ?? null, start_time: e.start_time, end_time: e.end_time, description: e.description }) });
+        await refresh(); load();
+      } },
+    });
+  }
+  /** "Out of use from 14:00", "until 14:00", "until Wed 14 Oct", by the entry's own times and days. */
+  const outLine = (e: RoomOff) => {
+    const last = (e.end_date ?? e.date ?? "").slice(0, 10);
+    if (!e.recurrence && last > today) return `Out of use until ${dayText(last)}`;
+    const fromT = e.start_time && e.start_time > opening ? e.start_time : null, toT = e.end_time && e.end_time < closing ? e.end_time : null;
+    return fromT && toT ? `Out of use ${fromT}–${toT}` : fromT ? `Out of use from ${fromT}` : toT ? `Out of use until ${toT}` : "Out of use today";
+  };
   const times = timesBetween(opening, closing, 15);
   const from = nowHM > opening ? nowHM : null;
   const close = () => { setPick(null); setLate(null); };
@@ -135,7 +157,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
       ) : null)}
       {roomRows.length ? (
         <ListGroup title="Rooms" count={roomRows.length}>
-          {roomRows.map((r) => <Row key={r.id} title={r.name} facts={roomSub(r)} flag={roomsOff.has(String(r.id)) ? "Out of use today" : undefined} trailing="›" onClick={() => setPick({ kind: "room", id: String(r.id), name: r.name })} />)}
+          {roomRows.map((r) => <Row key={r.id} title={r.name} facts={roomSub(r)} flag={roomsOff.has(String(r.id)) ? outLine(roomsOff.get(String(r.id))!) : undefined} trailing="›" onClick={() => setPick({ kind: "room", id: String(r.id), name: r.name })} />)}
         </ListGroup>
       ) : null}
       {idle.length ? (
@@ -153,12 +175,14 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
       ) : null}
 
       <BottomSheet open={!!pick} onOpenChange={(o) => { if (!o) close(); }} title={pick?.name || ""}
-        note={pick?.kind === "room" ? "What would you like to do with this room?" : late === null ? (day === today ? "What changes for them today?" : `What changes for them on ${dayText(day)}?`) : late === "away" ? "Which days are they away?" : late === "late" ? "When do they start?" : "When do they leave?"}
-        foot={pick && late === "away" ? <SheetFoot ok={!!at && !!until && until >= at} save={() => takeOut("staff", pick.id, pick.name, null, null, "Leave", { start: at, end: until })} label="Mark leave, move what they miss" />
+        note={pick?.kind === "room" ? (late === "away" ? "Which days is it out of use?" : "What would you like to do with this room?") : late === null ? (day === today ? "What changes for them today?" : `What changes for them on ${dayText(day)}?`) : late === "away" ? "Which days are they away?" : late === "late" ? "When do they start?" : "When do they leave?"}
+        foot={pick && late === "away" ? <SheetFoot ok={!!at && !!until && until >= at} save={() => takeOut(pick.kind, pick.id, pick.name, null, null, pick.kind === "room" ? "Out of use" : "Leave", { start: at, end: until })} label={pick.kind === "room" ? "Mark out of use, move what is booked" : "Mark leave, move what they miss"} />
           : pick && late ? <SheetFoot ok={!!at} save={() => (late === "late" ? takeOut("staff", pick.id, pick.name, opening, at, `In late, at ${at}`, { start: day, end: day }) : takeOut("staff", pick.id, pick.name, at, closing, `Leaving early, at ${at}`, { start: day, end: day }))} label="Move what they miss" /> : undefined}>
-        {pick?.kind === "room" ? (
+        {pick?.kind === "room" && late === null ? (
           <ListGroup>
-            <Row title="Out of use from now" facts="Moves what is booked in it" trailing="›" onClick={() => takeOut("room", pick.id, pick.name, from, null, "Out of use from now")} />
+            {roomsOff.has(pick.id) && !roomsOff.get(pick.id)!.recurrence ? <Row title="Back in use" facts={outLine(roomsOff.get(pick.id)!)} trailing="›" onClick={() => backInUse(pick.id, pick.name, roomsOff.get(pick.id)!)} />
+              : <Row title="Out of use from now" facts="Moves what is booked in it" trailing="›" onClick={() => takeOut("room", pick.id, pick.name, from, null, "Out of use from now")} />}
+            <Row title="Out of use for days" facts="Choose the days" trailing="›" onClick={() => { setLate("away"); setAt(today); setUntil(today); }} />
             <Row title="Details" facts="Name and what it has" trailing="›" onClick={() => { close(); openRoom(pick.id); }} />
           </ListGroup>
         ) : pick && late === null ? (
@@ -188,6 +212,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
 /** The day after a YYYY-MM-DD, as one. */
 const nextDay = (ymd: string) => new Date(Date.parse(ymd) + 86400000).toISOString().slice(0, 10);
 
+type RoomOff = { id: string; date?: string | null; start_date?: string | null; end_date?: string | null; start_time: string | null; end_time: string | null; recurrence?: string | null; description?: string | null };
 type Day = { state: "in" | "part" | "away" | "off"; start?: string; end?: string; why?: string; booked: number; capacity: number };
 type Week = { start: string; days: string[]; rows: { id: string; name: string; role: string; days: Day[] }[]; gaps: { start: string; end: string; in: number }[][] };
 const hrs = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}`);
