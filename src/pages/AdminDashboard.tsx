@@ -24,7 +24,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout, API_TOKEN, type ApiAppointment, type ApiProgramEvent, type Patient, type UiRoom, type UiStaff, type UiTherapy, type UiTimeOff } from "./tabs/shared";
 import PageHead, { BackContext } from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
-import { Consequence, dayText, ListGroup, Row, SheetFoot } from "@/components/kit";
+import { Consequence, dayText, ListGroup, Row, SheetFoot, setCurrency } from "@/components/kit";
 
 /** Builds the schedule's time rows from the centre's opening hours. */
 const buildTimeSlots = (openingTime: string, closingTime: string, slotMinutes: number) => {
@@ -109,6 +109,7 @@ const AdminDashboard = () => {
       .then((s) => {
         // Setup is a gate, not a suggestion (#60): an admin who never finished it goes back to it.
         if (s?.setup_complete === false && localStorage.getItem("authRole") === "Admin") { navigate("/setup"); return; }
+        setCurrency(s?.currency);
         if (s?.opening_time && s?.closing_time) {
           setCentreHours({ opening_time: s.opening_time, closing_time: s.closing_time, slot_minutes: s.slot_minutes ?? 30, timezone: s.timezone || "Asia/Kolkata" });
         }
