@@ -764,7 +764,8 @@ const getTimeOffHandler = async (req: Request, res: Response) => {
 
 const createTimeOffHandler = async (req: Request, res: Response) => {
   try {
-    const { plan, ...body } = timeoffSchema.parse(req.body);
+    // A part-day leave that ends where it starts covers nothing yet looks saved (#571).
+    const { plan, ...body } = timeoffSchema.refine((b) => !b.start_time || !b.end_time || b.start_time < b.end_time, 'The leave must end after it starts.').parse(req.body);
     const data: any = { ...body };
     if (!data.weekdays) data.weekdays = [];
     if (body.date) data.date = new Date(body.date);
@@ -1008,11 +1009,15 @@ app.get('/timeoff', getTimeOffHandler);
 app.get('/holidays/india', (_req: Request, res: Response) => { res.json(indiaHolidays); });
 // The consequence line under a leave (#285 story 9): how many treatments the days would leave without their therapist.
 app.get('/timeoff/impact', async (req: Request, res: Response) => {
-  const q = z.object({ staff_id: z.string().uuid(), from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
-  const treatments = await prisma.appointment.count({
+  const hm = z.string().regex(/^\d{2}:\d{2}$/);
+  const q = z.object({ staff_id: z.string().uuid(), from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), after: hm.optional(), before: hm.optional() }).parse(req.query);
+  const rows = await prisma.appointment.findMany({
     where: { ...HAPPENING, scheduled_date: { gte: new Date(`${q.from}T00:00:00.000Z`), lte: new Date(`${q.to}T00:00:00.000Z`) }, OR: [{ staff_id: q.staff_id }, { co_staff_ids: { has: q.staff_id } }] },
+    select: { start_time: true, duration_minutes: true },
   });
-  res.json({ treatments });
+  // In late or leaving early (#571): only the treatments that overlap the hours away.
+  const min = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  res.json({ treatments: rows.filter((a) => (!q.before || min(a.start_time) < min(q.before)) && (!q.after || min(a.start_time) + a.duration_minutes > min(q.after))).length });
 });
 app.post('/timeoff', createTimeOffHandler);
 app.delete('/timeoff/:id', deleteTimeOffHandler);
