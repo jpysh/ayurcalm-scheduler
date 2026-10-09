@@ -108,21 +108,20 @@ test('@smoke a therapist off: the pill names it, its fix clears the day, and Und
   await signIn(page);
 
   // Mark her off, the way the admin does.
-  await openTab(page, 'Leave');
-  await page.getByRole('button', { name: 'Add leave', exact: true }).click();
-  const form = page.getByRole('dialog');
-  // Nobody chosen yet: neither save can be tapped, and the sheet says why (#337).
-  await expect(form.getByRole('button', { name: 'Save, plan later', exact: true })).toBeDisabled();
-  await expect(form.getByText('Choose who is away to save.')).toBeVisible();
-  // Who first, from one list (#265).
-  await form.getByRole('button', { name: /^Who\b/ }).click();
-  await page.getByRole('dialog').last().getByRole('button', { name: THERAPIST, exact: true }).click();
-  await expect(form.getByRole('switch', { name: 'Full day' })).toBeChecked();
+  await openTab(page, 'Availability');
+  // What is not available first, then the one form (#695).
+  await page.getByRole('button', { name: 'Mark not available', exact: true }).click();
+  const picker = page.getByRole('dialog').last();
+  await picker.getByRole('button', { name: 'Show staff' }).click();
+  await picker.getByRole('checkbox', { name: THERAPIST, exact: true }).check();
+  await picker.getByRole('button', { name: /^Next/ }).click();
+  const form = page.getByRole('dialog').last();
+  await form.getByRole('button', { name: 'Some days', exact: true }).click();
   await form.locator('input[type=date]').nth(0).fill(DAY);
   await form.locator('input[type=date]').nth(1).fill(DAY);
   // Plan later (#285 story 9): the leave waits on the pill, which is what this walk fixes.
-  await form.getByRole('button', { name: 'Save, plan later', exact: true }).click();
-  await expect(page.getByText(/Leave saved/)).toBeVisible({ timeout: 15000 });
+  await form.getByRole('button', { name: 'Save, fix later', exact: true }).click();
+  await expect(page.getByText(/not available/).first()).toBeVisible({ timeout: 15000 });
 
   // The date is on the bar only on the day (#285), so go back to it first.
   await openTab(page, 'Back to the day');

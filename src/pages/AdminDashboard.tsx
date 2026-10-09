@@ -502,7 +502,9 @@ const AdminDashboard = () => {
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, requestDelete, centre: { opening: centreHours.opening_time, closing: centreHours.closing_time } });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, requestDelete, out: (id) => timeOffScreen.outFor('Room', id) });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q: listQuery, out: (id) => timeOffScreen.outFor('Therapy', id) });
-  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, roomNameById, therapyNameById, patientNameById, loadReplans, refreshAppointmentsForDate, todayKey, startDay, centreToday: ymdInTZ(new Date()), timeSlots, planDay: (iso) => { go('schedule'); setCurrentDate(dayDate(iso)); refreshAppointmentsForDate(iso, true); setShowAttention(true); } });
+  // A day away applies to a guest staying or coming (#695).
+  const guests = useMemo(() => patients.filter((p) => (p.stays ?? []).some((st) => st.end_date.slice(0, 10) >= ymdInTZ(new Date()))).map((p) => ({ id: p.id, name: p.name })), [patients]); // eslint-disable-line react-hooks/exhaustive-deps
+  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, roomNameById, therapyNameById, patientNameById, guests, todayKey, centreToday: ymdInTZ(new Date()), timezone: ADMIN_TZ, closingTime: centreHours.closing_time, timeSlots, planDay: (iso) => { go('schedule'); setCurrentDate(dayDate(iso)); refreshAppointmentsForDate(iso, true); setShowAttention(true); } });
   const eventsScreen = useEventsScreen({ events, setEvents, roomsList, staff, staffNameById, q: listQuery });
   // The treatment card opens the resident card, which the Residents screen holds.
   const residentOpener = useRef<((id: string) => void) | null>(null);
@@ -529,7 +531,7 @@ const AdminDashboard = () => {
   const dietScreen = useDietScreen({ active: activeTab === 'diet' });
   const plusFor = activeTab === 'schedule' ? guard('Book a treatment', 'booked', scheduleScreen.openBook)
     : activeTab === 'patients' ? guard('New patient', 'added', patientsScreen.openAdd)
-    : activeTab === 'timeoff' ? guard('Add leave', 'added', timeOffScreen.openAdd)
+    : activeTab === 'timeoff' ? guard('Mark not available', 'added', () => timeOffScreen.openAdd())
     : activeTab === 'diet' ? guard('New diet plan', 'added', dietScreen.openAdd)
     : activeTab === 'team' ? guard('Add a therapist or doctor', 'added', () => staffScreen.openAdd())
     : activeTab === 'rooms' ? guard('Add a room', 'added', roomsScreen.openAdd)
@@ -538,16 +540,6 @@ const AdminDashboard = () => {
     : activeTab === 'events' ? guard('Add event', 'added', eventsScreen.openAdd)
     : null;
 
-  // Leave grows as the admin scrolls to the bottom; the other lists are short.
-  useEffect(() => {
-    if (activeTab !== 'timeoff') return;
-    const onScroll = () => {
-      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 24) timeOffScreen.setVisibleRows((prev) => Math.min(prev + 20, timeOffScreen.totalRef.current));
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
 
 
   const signOut = () => {

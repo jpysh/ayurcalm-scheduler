@@ -148,7 +148,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
     if (!pick || pick.kind !== "staff" || !late || !changed) return;
     const q = late === "away" ? `from=${at}&to=${until}` : `from=${day}&to=${day}&${late === "late" ? "before" : "after"}=${at}`;
     let stale = false;
-    fetch(`${API_BASE}/timeoff/impact?staff_id=${pick.id}&${q}`).then((r) => (r.ok ? r.json() : null)).then((r) => { if (!stale) setImpact(typeof r?.treatments === "number" ? r.treatments : null); }).catch(() => {});
+    fetch(`${API_BASE}/timeoff/impact?type=staff&ids=${pick.id}&${q}`).then((r) => (r.ok ? r.json() : null)).then((r) => { if (!stale) setImpact(typeof r?.treatments === "number" ? r.treatments : null); }).catch(() => {});
     return () => { stale = true; };
   }, [pick, late, at, until, day, changed]);
   const consequence = impact === null ? null : <Consequence>{impact ? `${plural(impact, "treatment")} will need a new therapist` : "No treatments to move"}</Consequence>;
