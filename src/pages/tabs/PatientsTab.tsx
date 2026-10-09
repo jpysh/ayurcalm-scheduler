@@ -316,7 +316,7 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
               {d.treatments.length ? d.treatments.map((t) => (
                 <Row key={t.id} onClick={() => openTreatment(t)} title={<>{t.start_time} · {t.status === 'no_show' ? <s>{t.therapy_name}</s> : t.therapy_name}</>}
                   facts={t.staff_names.length ? `with ${t.staff_names.join(' & ')}` : 'No therapist yet'} trailing={t.room_name || undefined} />
-              )) : <Empty text="Rest day: nothing booked today." />}
+              )) : <Empty text={d.stay?.day === 1 ? "Arrives today: nothing booked yet." : "Rest day: nothing booked today."} />}
             </ListGroup>
           ) : null}
           {/* Arrival (#219): the first days, until the intake is written. Then the plan follows from the consultation. */}

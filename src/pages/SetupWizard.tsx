@@ -43,7 +43,7 @@ const SetupWizard = () => {
     }).catch(() => {});
   }, []);
   // Most often the person setting up is at the centre, so its zone is the phone's when the list has it (#577).
-  const phoneZone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ""; } })();
+  const phoneZone = (() => { try { return current(Intl.DateTimeFormat().resolvedOptions().timeZone); } catch { return ""; } })();
   const [form, setForm] = useState({
     centre_name: "",
     address: "",
@@ -162,7 +162,10 @@ const SetupWizard = () => {
 
 // The zones a wellness centre is likely to be in; any other is set in Settings.
 /** Every zone this phone knows: the server accepts any real one, so a centre in Auckland or Paris can set its own clock (#606). */
-const allZones = (): string[] => { try { return (Intl as unknown as { supportedValuesOf(key: string): string[] }).supportedValuesOf("timeZone"); } catch { return []; } };
+const allZones = (): string[] => { try { return (Intl as unknown as { supportedValuesOf(key: string): string[] }).supportedValuesOf("timeZone").map(current); } catch { return []; } };
+// Chrome still reports some zones by their old names, so India read "Asia/Calcutta" and was listed twice (#713).
+const RENAMED: Record<string, string> = { "Asia/Calcutta": "Asia/Kolkata", "Asia/Katmandu": "Asia/Kathmandu", "Asia/Saigon": "Asia/Ho_Chi_Minh", "Asia/Rangoon": "Asia/Yangon" };
+const current = (z: string) => RENAMED[z] ?? z;
 
 /** The common zones first, then the rest in their own group. */
 export function ZoneOptions({ also = "" }: { also?: string }) {
