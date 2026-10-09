@@ -44,26 +44,21 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #610: the kept passport photo is beside the passport number in Details.
-await step('Details shows the kept photo just above "Passport or ID"; a patient with none shows no photo and no spinner', '/admin/patients', async () => {
-  const guest = await api('POST', '/patients', { name: 'Uatpass Guest', gender: 'male', country: 'Germany', stay: { start_date: plus(0), end_date: plus(5) } });
-  const bare = await api('POST', '/patients', { name: 'Uatbare Guest', gender: 'male', stay: { start_date: plus(0), end_date: plus(5) } });
-  const jpg = await p.screenshot({ type: 'jpeg', quality: 60 });
-  await fetch(`${APP}/api/patients/${guest.id}/passport-photo`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'image/jpeg' }, body: jpg });
-  const look = async (name) => {
-    await p.goto(APP + '/admin/patients'); await p.waitForTimeout(1500);
-    await go(p.getByRole('button', { name: new RegExp(`^${name}`) }).first());
-    await go(dlg().getByRole('button', { name: /^Details/ }));
-    await p.waitForTimeout(800);
-    const field = dlg().getByLabel('Passport or ID (optional)'); await field.scrollIntoViewIfNeeded();
-    const img = dlg().getByRole('img', { name: 'Passport or ID' });
-    const shown = await img.count();
-    const gap = shown ? (await field.boundingBox()).y - ((await img.boundingBox()).y + (await img.boundingBox()).height) : null;
-    return { shown, gap, spinner: await dlg().locator('[aria-busy="true"], .animate-pulse').count() };
-  };
-  const bareLook = await look('Uatbare');
-  const withLook = await look('Uatpass');
-  return { ok: withLook.shown === 1 && withLook.gap !== null && withLook.gap >= 0 && withLook.gap < 40 && bareLook.shown === 0 && bareLook.spinner === 0, note: `with photo: ${withLook.shown} image, ${withLook.gap === null ? '-' : Math.round(withLook.gap)}px above the field · without: ${bareLook.shown} image, ${bareLook.spinner} spinner` };
+// #609: prices carry the centre's own currency symbol.
+await step('Settings has a currency symbol; set to $, the accommodation picker reads "$1,600 a day", not "Rs"', '/admin/settings', async () => {
+  const set = async (c) => { const cur = await api('GET', '/settings'); await api('PUT', '/settings', { ...cur, currency: c, letterhead: undefined, setup_reviewed: undefined }); };
+  await set('$');
+  await p.reload(); await p.waitForTimeout(1500);
+  await go(p.getByRole('button', { name: /Centre and letterhead/ }));
+  const field = await dlg().getByLabel('Currency symbol').inputValue();
+  await p.keyboard.press('Escape'); await p.waitForTimeout(500);
+  const who = (await api('GET', `/patients?resident_on=${plus(0)}`)).find((x) => x.Stays.some((st) => st.on_site !== false && st.start_date.slice(0, 10) <= plus(0) && st.end_date.slice(0, 10) >= plus(0)));
+  await p.goto(APP + '/admin/patients'); await p.waitForTimeout(1500);
+  await go(p.getByRole('button', { name: new RegExp(`^${who.name}`) }).first());
+  await go(dlg().getByRole('button', { name: /^Accommodation/ }));
+  const sheet = (await text(dlg())).replace(/\n+/g, ' | ');
+  await set('Rs');
+  return { ok: field === '$' && /\$[\d,]+ a day/.test(sheet) && !/Rs /.test(sheet), note: `field "${field}" · ${(sheet.match(/\$[\d,]+ a day/) || ['no price'])[0]} · Rs left: ${/Rs /.test(sheet)}` };
 });
 await b.close();
 

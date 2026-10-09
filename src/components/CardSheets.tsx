@@ -11,7 +11,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import {
   Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, LineSelect, Picker, QuickDates, Row, Seg, SwitchRow, Text, TextRow, Timeline,
-  dayText, noteText, rupees, toastUndo, Btn } from "@/components/kit";
+  dayText, noteText, money, toastUndo, Btn } from "@/components/kit";
 
 const DAY_MS = 86400000;
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
@@ -239,7 +239,7 @@ export function PackageSheet({ patient, stay, onClose, onSaved, editList, matchS
         ) : null}
         <div className="mt-3">
         <Picker value={pick} onChange={setPick} onEdit={editList}
-          options={[{ id: "none", name: "Not decided yet" }, ...list.filter((p) => p.is_active || p.id === stay.package?.id).map((p) => ({ id: p.id, name: p.name, note: p.notes || undefined, fact: rupees(p.price) }))]} />
+          options={[{ id: "none", name: "Not decided yet" }, ...list.filter((p) => p.is_active || p.id === stay.package?.id).map((p) => ({ id: p.id, name: p.name, note: p.notes || undefined, fact: money(p.price) }))]} />
         </div>
         <p className={`mt-2 ${noteText}`}>The price includes the registration charge. For reference, not an invoice.</p>
       </>)}
@@ -289,7 +289,7 @@ export function AccommodationSheet({ patient, stay, onClose, onSaved, editList }
     <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} title={`Accommodation for ${first(patient.name)}`} note={`${plural(nights, "night")}, ${dayText(stay.start_date)} to ${dayText(stay.end_date)}.`}
       foot={<Foot label={chosen ? `Use ${chosen.name}${chosenRoom ? ` · ${chosenRoom.name}` : ""}` : pick === "none" ? "No accommodation" : "Choose a type"} ok={!!pick} busy={busy} save={save} />}>
       {list === null ? <Loading rows={3} /> : (<>
-        {chosen ? <Consequence>{`${plural(nights, "night")} × ${rupees(chosen.price_per_day)} = ${rupees(chosen.price_per_day * nights)}. For reference, not an invoice.`}</Consequence> : null}
+        {chosen ? <Consequence>{`${plural(nights, "night")} × ${money(chosen.price_per_day)} = ${money(chosen.price_per_day * nights)}. For reference, not an invoice.`}</Consequence> : null}
         {chosen && ofType.length ? (
           <div className="mt-3 border-t border-border">
             <ChangeLine label="Guest room" value={chosenRoom ? chosenRoom.name : "Not chosen"} faint={!chosenRoom}
@@ -302,7 +302,7 @@ export function AccommodationSheet({ patient, stay, onClose, onSaved, editList }
         <div className="mt-3">
         <Picker value={pick} onChange={(id) => (id === "none" ? (setPick("none"), setRoom("")) : choose(id))} onEdit={editList}
           options={[{ id: "none", name: "No accommodation" }, ...list.filter((h) => h.is_active || h.id === stay.accommodation?.id).map((h) => ({ id: h.id, name: h.name,
-            note: [`${rupees(h.price_per_day)} a day`, rooms.some((r) => r.accommodation_id === h.id) ? `${freeOf(h.id).length} free` : "", h.notes || ""].filter(Boolean).join(" · "), fact: rupees(h.price_per_day * nights) }))]} />
+            note: [`${money(h.price_per_day)} a day`, rooms.some((r) => r.accommodation_id === h.id) ? `${freeOf(h.id).length} free` : "", h.notes || ""].filter(Boolean).join(" · "), fact: money(h.price_per_day * nights) }))]} />
         </div>
       </>)}
     </BottomSheet>
@@ -351,7 +351,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
   const lines = [
     delta < 0 ? `${plural(-delta, "day")} shorter.${cancels ? ` ${plural(cancels, "treatment")} after ${dayText(end)} will be marked cancelled (stay shortened) and stay in the record.` : ""} Meals stop that day.` : "",
     delta > 0 ? `${plural(delta, "day")} longer. Meals carry on to ${dayText(end)}.` : "",
-    changed && target.accommodation ? `Accommodation: ${plural(between(start, end), "night")}, ${rupees(between(start, end) * target.accommodation.price_per_day)}.` : "",
+    changed && target.accommodation ? `Accommodation: ${plural(between(start, end), "night")}, ${money(between(start, end) * target.accommodation.price_per_day)}.` : "",
     changed && target.package && target.package.days !== days ? `Package: ${target.package.days} days; the stay is now ${days}.` : "",
     room ? `${room.taken} ${room.move_to ? `Saving moves them to ${room.move_to.name}${room.move_to.type !== target.accommodation?.name ? ` (${room.move_to.type})` : ""} for the whole stay.` : "No guest room is free for every night, so saving leaves them without one."}` : "",
   ].filter(Boolean);

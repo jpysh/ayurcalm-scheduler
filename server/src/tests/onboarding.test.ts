@@ -63,6 +63,13 @@ async function main() {
     assert.equal(after.closing_time, '20:00');
     assert.equal(after.working_days.length, 7, 'The working days were not kept');
 
+    // The currency in front of a price is the centre's (#609): kept when the wizard leaves it out, set, and bounded.
+    assert.equal(after.currency, before.currency, 'The wizard changed the currency it never sent');
+    const dollars = await api('/settings', { method: 'PUT', body: JSON.stringify({ ...wizard, currency: '$' }) });
+    assert.ok(dollars.ok, `A dollar sign was refused: ${dollars.status}`);
+    assert.equal((await (await api('/settings')).json()).currency, '$', 'The currency was not kept');
+    assert.equal((await api('/settings', { method: 'PUT', body: JSON.stringify({ ...wizard, currency: 'TOOLONG' }) })).status, 400, 'A seven-letter currency was accepted');
+
     assert.ok(await prisma.therapy.count() > 0, 'The centre has no therapies');
     assert.ok(await prisma.therapyRoom.count({ where: { is_active: true } }) > 0, 'The centre has no rooms');
     assert.ok(await prisma.staff.count({ where: { is_active: true } }) > 0, 'The centre has no therapists');
@@ -102,10 +109,10 @@ async function main() {
 
     console.log('Onboarding: settings kept, setup complete, centre has what it needs, day sheet prints; starting your own centre keeps the therapies and rooms.');
   } finally {
-    const { centre_name, address, timezone, opening_time, closing_time, slot_minutes, working_days, logo, setup_complete } = before;
+    const { centre_name, address, timezone, opening_time, closing_time, slot_minutes, working_days, logo, setup_complete, currency } = before;
     await api('/settings', {
       method: 'PUT',
-      body: JSON.stringify({ centre_name, address, timezone, opening_time, closing_time, slot_minutes, working_days, logo, setup_complete }),
+      body: JSON.stringify({ centre_name, address, timezone, opening_time, closing_time, slot_minutes, working_days, logo, setup_complete, currency }),
     });
     await prisma.$disconnect();
   }
