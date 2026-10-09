@@ -40,7 +40,7 @@ const clockIn = (timeZone: string) => new Intl.DateTimeFormat('en-GB', { timeZon
  * Availability (#695): everything not available, now and coming, of every kind. A tap opens
  * the same form that marks it; + asks what is not available first.
  */
-export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, roomNameById, therapyNameById, patientNameById, guests, todayKey, centreToday, timezone, closingTime, timeSlots, planDay }: {
+export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, roomNameById, therapyNameById, patientNameById, guests, todayKey, centreToday, timezone, closingTime, timeSlots }: {
   timeOffs: UiTimeOff[]; setTimeOffs: React.Dispatch<React.SetStateAction<UiTimeOff[]>>;
   staff: UiStaff[];
   staffNameById: Record<string, string>; roomNameById: Record<string, string>; therapyNameById: Record<string, string>; patientNameById: Record<string, string>;
@@ -49,8 +49,6 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
   todayKey: string; centreToday: string; timezone: string; closingTime: string;
   /** The centre's slot times, "HH:MM": what part of a day starts and ends on. */
   timeSlots: string[];
-  /** Save and fix: shows the day with the plan for it, to accept. */
-  planDay: (iso: string) => void;
 }) {
   const [showHolidays, setShowHolidays] = useState(false);
   const closedDays = useMemo(() => new Set(timeOffs.filter((h) => h.type === "Center").map((h) => (h.date || h.startDate || "").slice(0, 10))), [timeOffs]);
@@ -162,7 +160,31 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
       setTimeOffs((prev) => prev.filter((x) => !made.some((h) => h.id === x.id)));
       window.dispatchEvent(new Event('timeoff-changed'));
     } } });
-    if (fixNow) planDay(s.date);
+    if (fixNow) void planRange(s.date, s.endDate);
+  };
+
+  // Save and fix (#695): one plan over every day in the range, shown before anything moves, accepted once.
+  type RangeRow = { date: string; who: string; start_time: string | null; fix: { label: string; appointment_id: string; staff_id: string | null; co_staff_ids: string[]; room_id: string | null; start_time: string; date: string; cancel?: boolean } };
+  const [plan, setPlan] = useState<{ rows: RangeRow[]; left: number } | null>(null);
+  const planRange = async (from: string, to: string) => {
+    const r = await fetchJsonWithTimeout<{ rows: RangeRow[]; left: number }>(`${API_BASE}/day-check/range?from=${from}&to=${to}`).catch(() => null);
+    if (!r) { toast.error('The plan could not be worked out. It waits under "need you".'); return; }
+    if (!r.rows.length) { toast(r.left ? `${plural(r.left, 'treatment')} need${r.left === 1 ? 's' : ''} you to choose; ${r.left === 1 ? 'it waits' : 'they wait'} under "need you".` : 'Nothing needed moving.'); return; }
+    setPlan(r);
+  };
+  const acceptPlan = async () => {
+    if (!plan) return;
+    const p = plan;
+    setPlan(null);
+    const res = await fetch(`${API_BASE}/day-check/accept`, { method: 'POST', headers, body: JSON.stringify({ date: p.rows[0].date, moves: p.rows.map((r) => ({ ...r.fix, co_staff_ids: r.fix.co_staff_ids || [] })) }) });
+    if (!res.ok) { toast.error('The days changed while this was open. Nothing was moved; it waits under "need you".'); return; }
+    const batch = (await res.json()).batch_id as string | null;
+    window.dispatchEvent(new Event('timeoff-changed'));
+    toast(`${plural(p.rows.length, 'treatment')} fixed${p.left ? `. ${p.left} wait${p.left === 1 ? 's' : ''} under "need you".` : '.'}`, { action: batch ? { label: 'Undo', onClick: async () => {
+      const u = await fetch(`${API_BASE}/replan/undo`, { method: 'POST', headers, body: JSON.stringify({ batch_id: batch }) });
+      if (!u.ok) toast.error('That could not be undone.');
+      window.dispatchEvent(new Event('timeoff-changed'));
+    } } : undefined });
   };
 
   const saveEdit = async () => {
@@ -283,6 +305,15 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
           <Text label="Reason (optional)" id="newTimeOffDescription" value={f.description} onChange={(e) => set({ description: e.target.value })} />
           {impact ? <Consequence>{impact}</Consequence> : null}
         </> : null}
+      </BottomSheet>
+      <BottomSheet open={!!plan} onOpenChange={(o) => { if (!o) setPlan(null); }} title="The plan"
+        note={plan ? `${plural(plan.rows.length, 'treatment')} to move${plan.left ? `; ${plan.left} more wait${plan.left === 1 ? 's' : ''} for you under "need you"` : ''}. Nothing moves until you accept.` : undefined}
+        foot={<TwoFoot main="Accept the plan" onMain={acceptPlan} alt="Not now" onAlt={() => setPlan(null)} />}>
+        {plan ? Object.entries(plan.rows.reduce<Record<string, RangeRow[]>>((by, r) => { (by[r.date] ??= []).push(r); return by; }, {})).map(([date, rows]) => (
+          <ListGroup key={date} title={date === centreToday ? 'Today' : dayText(date)} count={rows.length}>
+            {rows.map((r) => <Row key={r.fix.appointment_id} title={[r.start_time, r.who].filter(Boolean).join(' · ')} facts={r.fix.label} />)}
+          </ListGroup>
+        )) : null}
       </BottomSheet>
     </>
   );

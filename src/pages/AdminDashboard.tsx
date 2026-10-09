@@ -504,7 +504,7 @@ const AdminDashboard = () => {
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q: listQuery, out: (id) => timeOffScreen.outFor('Therapy', id) });
   // A day away applies to a guest staying or coming (#695).
   const guests = useMemo(() => patients.filter((p) => (p.stays ?? []).some((st) => st.end_date.slice(0, 10) >= ymdInTZ(new Date()))).map((p) => ({ id: p.id, name: p.name })), [patients]); // eslint-disable-line react-hooks/exhaustive-deps
-  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, roomNameById, therapyNameById, patientNameById, guests, todayKey, centreToday: ymdInTZ(new Date()), timezone: ADMIN_TZ, closingTime: centreHours.closing_time, timeSlots, planDay: (iso) => { go('schedule'); setCurrentDate(dayDate(iso)); refreshAppointmentsForDate(iso, true); setShowAttention(true); } });
+  const timeOffScreen = useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, roomNameById, therapyNameById, patientNameById, guests, todayKey, centreToday: ymdInTZ(new Date()), timezone: ADMIN_TZ, closingTime: centreHours.closing_time, timeSlots });
   const eventsScreen = useEventsScreen({ events, setEvents, roomsList, staff, staffNameById, q: listQuery });
   // The treatment card opens the resident card, which the Residents screen holds.
   const residentOpener = useRef<((id: string) => void) | null>(null);

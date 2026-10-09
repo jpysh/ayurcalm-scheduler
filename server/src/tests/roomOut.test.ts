@@ -8,7 +8,8 @@
 import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
-import { replanRoomDay, undoReplan } from '../replan.js';
+import { acceptPlan, replanRoomDay, undoReplan } from '../replan.js';
+import { planRange } from '../dayCheck.js';
 import { requireDemoData } from './demoGuard.js';
 
 const allDay = Object.fromEntries(
@@ -32,7 +33,7 @@ async function main() {
     made.push({ table: 'staff', id: staff.id });
     const patient = await prisma.patient.create({ data: { name: 'Out P1', gender: 'other' } });
     made.push({ table: 'patient', id: patient.id });
-    const appts = [];
+    const appts: { id: string }[] = [];
     for (const d of days) {
       const a = await prisma.appointment.create({ data: { patient_id: patient.id, therapy_id: therapy.id, staff_id: staff.id, room_id: shut.id, scheduled_date: d, start_time: '10:00', duration_minutes: 60, session_number: 1, total_sessions: 1, status: 'pending', assignment_type: 'manual' } });
       made.push({ table: 'appointment', id: a.id });
@@ -56,6 +57,27 @@ async function main() {
       const back = await prisma.appointment.findUniqueOrThrow({ where: { id: a.id } });
       assert.equal(back.room_id, shut.id, 'Undo puts it back');
       assert.equal(back.start_time, '10:00');
+    }
+    // Save and fix (#695): both days in one plan, written as one batch that one Undo puts back.
+    const range = await planRange('2030-03-09', '2030-03-10', prisma, { now });
+    const mine = range.rows.filter((r) => appts.some((a) => a.id === r.fix.appointment_id));
+    assert.deepEqual(mine.map((r) => r.date).sort(), ['2030-03-09', '2030-03-10'], 'one plan covers both days');
+    const done = await acceptPlan(mine.map((r) => r.fix), prisma);
+    assert.ok('batch_id' in done, 'the plan is accepted whole');
+    for (const a of appts) assert.notEqual((await prisma.appointment.findUniqueOrThrow({ where: { id: a.id } })).room_id, shut.id, 'moved by the one plan');
+    await undoReplan(done.batch_id, prisma);
+    for (const a of appts) assert.equal((await prisma.appointment.findUniqueOrThrow({ where: { id: a.id } })).room_id, shut.id, 'one Undo puts both days back');
+    batches.push(done.batch_id);
+
+    // A row left for the admin keeps its slot: the rest of the plan must not take it, or
+    // the whole plan is refused. The demo centre's next week, with whatever it holds.
+    const today = new Date().toISOString().slice(0, 10), week = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    const all = await planRange(today, week, prisma);
+    if (all.rows.length) {
+      const whole = await acceptPlan(all.rows.map((r) => r.fix), prisma);
+      assert.ok('batch_id' in whole, `the week's plan is accepted whole: ${JSON.stringify(whole)}`);
+      await undoReplan(whole.batch_id, prisma);
+      batches.push(whole.batch_id);
     }
     await prisma.auditLog.deleteMany({ where: { id: { in: batches } } });
     console.log('roomOut: ok');
