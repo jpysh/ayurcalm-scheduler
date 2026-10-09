@@ -92,7 +92,7 @@ const useServerHealth = (base: string) => {
 type ApiTherapy = { id: string; name: string; required_amenities: string[]; duration_minutes: number; requires_gender_match: boolean; staff_required?: number; once_per_course?: boolean; before_purification?: boolean; is_consultation?: boolean; checklist?: { text: string; required: boolean }[]; vitals?: string[] };
 type ApiStaff = { id: string; name: string; gender: "male" | "female" | "other"; specializations: string[]; phone?: string; weekly_schedule?: UiStaff["hours"] };
 type ApiRoom = { id: string; name: string; amenities: string[]; is_active: boolean };
-type ApiTimeOffSimple = { id?: string; entity_type: 'center'|'staff'|'room'|'therapy'|'patient'; entity_id?: string | null };
+type ApiTimeOffSimple = { id?: string; entity_type: 'center'|'staff'|'room'|'guest_room'|'therapy'|'patient'; entity_id?: string | null };
 type ApiPatient = { id: string; name: string; gender: "male" | "female" | "other"; phone?: string; email?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; date_of_birth?: string | null; medical_notes?: string | null; Stays?: { start_date: string; end_date: string }[] };
 const AdminDashboard = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -211,7 +211,7 @@ const AdminDashboard = () => {
       setAppointmentsByDate(map);
       setLoaded(true);
       try {
-        type ApiTimeOff = { id?: string; entity_type: 'center'|'staff'|'room'|'therapy'|'patient'; entity_id?: string | null; date?: string | null; start_date?: string | null; end_date?: string | null; start_time?: string | null; end_time?: string | null; recurrence?: 'weekly' | null; weekdays?: string[] | null; description?: string | null };
+        type ApiTimeOff = { id?: string; entity_type: 'center'|'staff'|'room'|'guest_room'|'therapy'|'patient'; entity_id?: string | null; date?: string | null; start_date?: string | null; end_date?: string | null; start_time?: string | null; end_time?: string | null; recurrence?: 'weekly' | null; weekdays?: string[] | null; description?: string | null };
         const [tOff, hol] = await Promise.all([
           fetchJsonWithTimeout<ApiTimeOff[]>(`${API_BASE}/timeoff`),
           fetchJsonWithTimeout<ApiTimeOff[]>(`${API_BASE}/holidays`),
@@ -237,6 +237,7 @@ const AdminDashboard = () => {
             x.entity_type === "center" ? "Center" :
             x.entity_type === "staff" ? "Staff" :
             x.entity_type === "room" ? "Room" :
+            x.entity_type === "guest_room" ? "GuestRoom" :
             x.entity_type === "therapy" ? "Therapy" : "Patient",
           entity: x.entity_id ?? "All",
           description: x.description ?? "",
@@ -617,7 +618,8 @@ const AdminDashboard = () => {
 
           <TabsContent value="guestrooms" data-testid="tabpanel-guestrooms">
             {activeTab === 'guestrooms' ? <GuestRooms today={ymdInTZ(new Date())} openPatient={(id) => patientsScreen.openResident(id)}
-              newPatient={(p) => patientsScreen.openAdd(p)} openSettings={() => { setSettingsSheet('accommodation'); go('settings'); }} adding={addingRooms} setAdding={setAddingRooms} /> : null}
+              newPatient={(p) => patientsScreen.openAdd(p)} openSettings={() => { setSettingsSheet('accommodation'); go('settings'); }} adding={addingRooms} setAdding={setAddingRooms}
+                openOut={(id) => { timeOffScreen.openAdd({ type: 'GuestRoom', entity: id }); go('timeoff'); }} /> : null}
           </TabsContent>
 
           <TabsContent value="log" data-testid="tabpanel-log">

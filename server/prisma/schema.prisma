@@ -351,6 +351,7 @@ enum TimeOffEntity {
   center
   staff
   room
+  guest_room
   therapy
   patient
 

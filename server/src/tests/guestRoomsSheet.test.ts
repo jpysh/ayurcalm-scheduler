@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { buildGuestRoomsSheet } from '../pdf/guestRoomsSheetPdf.js';
+import { outNight } from '../guestRooms.js';
 
 const day = '2026-10-08'; // a Thursday
 const g = (name: string, start_date: string, end_date: string) => ({ name, start_date, end_date });
@@ -12,6 +13,8 @@ const rooms = [
   { name: 'T6', beds: 1, type: 'Trishul House', guests: [g('Gone Already', '2026-10-01', '2026-10-05')] },
   { name: 'A1', beds: 2, type: 'Trishul House', guests: [g('Nisha Iyer', '2026-10-01', '2026-10-12'), g('Meera Reddy', '2026-10-01', '2026-10-08')] },
   { name: 'N1', beds: 1, type: 'Nanda House', guests: [] },
+  { name: 'N2', beds: 1, type: 'Nanda House', guests: [], out: { reason: 'No electricity' } },
+  { name: 'N3', beds: 1, type: 'Nanda House', guests: [g('Rohan Das', '2026-10-01', '2026-10-14')], out: { reason: 'Leak' } },
 ];
 const s = buildGuestRoomsSheet(rooms, day);
 const by = Object.fromEntries(s.groups.flatMap((x) => x.rows).map((r) => [r.room, r]));
@@ -28,9 +31,20 @@ assert.equal(by.T6.kind, 'free');
 assert.equal(by.N1.line, 'Free');
 assert.equal(by.A1.kind, 'staying'); // one leaves, one stays: not a room to make up
 assert.equal(by.A1.line, 'Nisha Iyer · until Mon 12 Oct · Meera Reddy leaves today · 1 bed free');
-assert.deepEqual(s.counts, { rooms: 8, makeUp: 2, arriving: 2, staying: 3, free: 2 });
+assert.equal(by.N2.kind, 'out');
+assert.equal(by.N2.line, 'Out of use: No electricity');
+assert.equal(by.N3.line, 'Rohan Das · until Wed 14 Oct · out of use: Leak');
+assert.deepEqual(s.counts, { rooms: 10, makeUp: 2, arriving: 2, staying: 4, free: 2, out: 1 });
 assert.deepEqual(s.first, ['T4']);
 assert.deepEqual(s.groups.map((x) => x.type), ['Trishul House', 'Nanda House']);
+
+// Out of use is the whole days from the first to the last, both included; the first such night in the asked nights wins.
+const offRow = (start: string, end: string, why: string | null) => ({ entity_id: 'r1', date: null, start_date: new Date(`${start}T00:00:00Z`), end_date: new Date(`${end}T00:00:00Z`), description: why });
+const d = (x: string) => new Date(`${x}T00:00:00Z`);
+assert.deepEqual(outNight([offRow('2026-10-09', '2026-10-10', 'No electricity')], 'r1', d('2026-10-08'), d('2026-10-12')), { date: '2026-10-09', until: '2026-10-10', reason: 'No electricity' });
+assert.equal(outNight([offRow('2026-10-09', '2026-10-10', null)], 'r1', d('2026-10-10'), d('2026-10-11'))?.date, '2026-10-10'); // the last day is still out
+assert.equal(outNight([offRow('2026-10-09', '2026-10-10', null)], 'r1', d('2026-10-11'), d('2026-10-14')), null); // free again from the next day
+assert.equal(outNight([offRow('2026-10-09', '2026-10-10', null)], 'r2', d('2026-10-09'), d('2026-10-10')), null); // another room
 // A centre with none.
 assert.equal(buildGuestRoomsSheet([], day).counts.rooms, 0);
 console.log('guest rooms sheet ok');

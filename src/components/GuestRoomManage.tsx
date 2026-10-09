@@ -68,8 +68,10 @@ export function AddGuestRooms({ open, onOpenChange, typeId, onChanged, openTypes
 }
 
 /** Every guest room by type, a tap to change one; `typeId` keeps one type's. */
-export function ManageGuestRooms({ open, onOpenChange, typeId, onChanged, openTypes }: {
+export function ManageGuestRooms({ open, onOpenChange, typeId, onChanged, openTypes, openOut }: {
   open: boolean; onOpenChange: (o: boolean) => void; typeId?: string; onChanged: () => void; openTypes: () => void;
+  /** Where a room is taken out of use for some days (Leave); not offered from Settings. */
+  openOut?: (roomId: string) => void;
 }) {
   const [rooms, setRooms] = useState<Room[] | null>(null);
   const [types, setTypes] = useState<Type[]>([]);
@@ -112,6 +114,7 @@ export function ManageGuestRooms({ open, onOpenChange, typeId, onChanged, openTy
         {edit ? <div className="grid gap-3">
           <Text label="Name" autoComplete="off" maxLength={20} value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
           <Group label="Beds"><Seg<number> options={BEDS} value={edit.beds} onChange={(n) => setEdit({ ...edit, beds: n })} /></Group>
+          {openOut ? <ListGroup><LinkRow label="Out of use for some days" value="No electricity, repairs" onClick={() => { const id = edit.id; setEdit(null); onOpenChange(false); openOut(id); }} /></ListGroup> : null}
         </div> : null}
       </BottomSheet>
     </>
