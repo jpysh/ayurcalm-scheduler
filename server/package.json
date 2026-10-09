@@ -41,28 +41,28 @@
     "test:log": "tsx src/tests/changeLog.test.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/express": "^2.0.0",
-    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/express": "^2.0.2",
+    "@modelcontextprotocol/node": "^2.1.1",
     "@modelcontextprotocol/server": "^2.0.0",
-    "@prisma/client": "^5.22.0",
+    "@prisma/client": "^7.10.0",
     "bcrypt": "^6.0.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.5",
     "express": "^5.1.0",
-    "express-rate-limit": "^7.5.1",
+    "express-rate-limit": "^8.7.1",
     "jsonwebtoken": "^9.0.3",
-    "pdfkit": "^0.14.0",
+    "pdfkit": "^0.20.2",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.5",
+    "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
-    "prisma": "^5.22.0",
+    "prisma": "^7.10.0",
     "ts-node": "^10.9.2",
-    "tsx": "^4.19.2",
-    "typescript": "^5.6.3",
-    "vitest": "^4.1.5"
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
   }
 }
