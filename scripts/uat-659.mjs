@@ -1,0 +1,27 @@
+// E2E_BASE_URL=http://localhost:8091 node scripts/uat-659.mjs — #659: a room out from tomorrow says so on its Rooms row. 375x812.
+import { chromium } from '@playwright/test';
+import { mkdirSync, writeFileSync } from 'node:fs';
+const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';
+const OUT = 'docs/design/uat/2026-10-09-room-out-moves';
+mkdirSync(OUT, { recursive: true });
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+const room = (await (await fetch(`${APP}/api/rooms`, { headers: auth })).json()).find((r) => r.is_active);
+const { timezone } = await (await fetch(`${APP}/api/settings`, { headers: auth })).json();
+const day = (n) => new Date(Date.now() + n * 86400000).toLocaleDateString('en-CA', { timeZone: timezone || 'Asia/Kolkata' });
+const off = await (await fetch(`${APP}/api/timeoff`, { method: 'POST', headers: auth, body: JSON.stringify({ entity_type: 'room', entity_id: room.id, date: day(1), start_date: day(1), end_date: day(3), description: 'Out of use' }) })).json();
+const moved = (off.replan || []).reduce((n, r) => n + r.moved.length, 0);
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+const p = await ctx.newPage();
+await p.goto(`${APP}/admin/rooms`); await p.waitForTimeout(2500);
+await p.getByText(room.name, { exact: true }).first().scrollIntoViewIfNeeded();
+await p.screenshot({ path: `${OUT}/01-rooms-row.png` });
+const shown = (await p.locator('body').innerText()).includes('Out of use ');
+await fetch(`${APP}/api/timeoff/${off.id}`, { method: 'DELETE', headers: auth });
+const res = [['treatments moved off the room', moved > 0], ['the Rooms row says the days it is out', shown]];
+for (const [n, ok] of res) console.log(ok ? 'pass' : 'FAIL', n);
+writeFileSync(`${OUT}/README.md`, `# #659 UAT, 9 Oct (demo seed)\n\n${moved} treatments moved.\n\n| Step | Result |\n|---|---|\n${res.map(([n, ok]) => `| ${n} | ${ok ? 'pass' : 'FAIL'} |`).join('\n')}\n\n![](01-rooms-row.png)\n`);
+await b.close();
+process.exit(res.every(([, ok]) => ok) ? 0 : 1);
