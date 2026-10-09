@@ -14,7 +14,7 @@ export const SCREENS = [
   ["patients", "Patients", "Who is staying"],
   // Only when the centre has guest rooms: its hint is filled in then (#456).
   ["guestrooms", "Guest rooms", "Who sleeps where"],
-  ["team", "Team", "Who is in today"],
+  ["team", "Staff", "Who is in today"],
   ["rooms", "Rooms", "Where treatments happen"],
   ["timeoff", "Availability", "Anything not available"],
   ["diet", "Diet plans", "Meals by plan"],

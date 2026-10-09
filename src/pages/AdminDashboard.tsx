@@ -688,7 +688,7 @@ const AdminDashboard = () => {
         plus={plusFor}
         // One search: on Patients it filters that list, anywhere else it searches the day.
         search={['team', 'rooms', 'therapies', 'events'].includes(activeTab)
-          ? { query: listQuery, setQuery: setListQuery, on: listSearching, setOn: setListSearching, placeholder: activeTab === 'team' ? 'Search the team' : `Search ${activeTab}`, label: `Search ${activeTab === 'team' ? 'the team' : activeTab}`, start: () => setListSearching(true) }
+          ? { query: listQuery, setQuery: setListQuery, on: listSearching, setOn: setListSearching, placeholder: activeTab === 'team' ? 'Search staff' : `Search ${activeTab}`, label: `Search ${activeTab === 'team' ? 'staff' : activeTab}`, start: () => setListSearching(true) }
           : activeTab === 'patients'
           ? { query: patientsScreen.query, setQuery: patientsScreen.setQuery, on: patientsScreen.searching, setOn: patientsScreen.setSearching, placeholder: 'Search patients', label: 'Search patients', start: () => patientsScreen.setSearching(true) }
           : { query: scheduleScreen.query, setQuery: scheduleScreen.setQuery, on: scheduleScreen.searching, setOn: scheduleScreen.setSearching, placeholder: 'Name, therapy or room', label: 'Search', hint: 'Patients, therapists, treatments, any day', start: () => { go('schedule'); scheduleScreen.setSearching(true); } }}

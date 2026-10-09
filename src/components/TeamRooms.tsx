@@ -126,13 +126,13 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   return (
     <div>
       {isTeam ? <>
-        <PageHead title="Team" note={day === today ? `${staff.filter(staffActive).length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}` : `${on < 0 ? "…" : inOn} in on ${dayText(day)}`} gear={{ label: "What needs you: team rules", run: openRules }} />
+        <PageHead title="Staff" note={day === today ? `${staff.filter(staffActive).length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}` : `${on < 0 ? "…" : inOn} in on ${dayText(day)}`} gear={{ label: "What needs you: staff rules", run: openRules }} />
         <WeekStrip day={day} today={today} setDay={setDay} />
       </> : <PageHead title="Rooms" note={`${plural(rooms.filter(roomActive).length, "room")}${roomsOut ? ` · ${roomsOut} out` : ""}`} />}
       {isTeam && on >= 0 && week!.gaps[on].length && !ql ? (
         <div className="mt-3"><Callout tone="notice" title="Too few therapists in">{week!.gaps[on].map((g) => `${g.start}–${g.end} · ${g.in ? `only ${g.in} in` : "no one in"}`).join("; ")}</Callout></div>
       ) : null}
-      {none ? <Empty text={ql ? (isTeam ? "No one matches." : "No room matches.") : isTeam ? "No one in the team yet. Tap + to add someone." : "No rooms yet. Tap + to add one."} /> : null}
+      {none ? <Empty text={ql ? (isTeam ? "No one matches." : "No room matches.") : isTeam ? "No staff yet. Tap + to add someone." : "No rooms yet. Tap + to add one."} /> : null}
       {([["Doctors", doctors], ["Therapists", therapists]] as const).map(([title, list]) => list.length ? (
         <ListGroup key={title} title={title} count={list.length}>
           {list.map((s) => {

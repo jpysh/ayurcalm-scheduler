@@ -12,7 +12,7 @@ async function signIn(page: Page) {
 }
 const toTeam = async (page: Page) => {
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: /^Team/ }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Staff/ }).click();
 };
 // Team and Rooms are two screens since #345, and + sits on the bar, named for what it adds (#313).
 const plusFor: Record<string, [string, string]> = {

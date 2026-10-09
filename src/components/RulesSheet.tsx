@@ -65,7 +65,7 @@ export function RulesSheet({ open, onOpenChange, section, attention, reload }: {
       <div ref={body}>
         {(["Day", "Patients", "Team"] as const).map((s) => (
           <div key={s} data-section={s}>
-            <ListGroup title={s}>
+            <ListGroup title={s === "Team" ? "Staff" : s}>
               {rules.filter((r) => r.section === s).map((r) => (
                 <SwitchRow key={r.id} title={r.name} on={r.on} locked={r.locked} set={(v) => change(r.id, { on: v })}
                   facts={r.on ? [r.kind === "information" ? "Information only, not counted" : "Counts on the pill", r.waiting ?? (r.kind === "information" ? (r.count ? `${r.count} today` : "nobody today") : r.count ? `would raise ${r.count} today` : "nothing today")].join(" · ") : `Off · ${r.kind === "information" ? "not shown" : "not on the pill"}${r.count ? `, ${r.count} today` : ""}`}

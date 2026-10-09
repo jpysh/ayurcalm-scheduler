@@ -24,7 +24,7 @@ test('At 200% text the day and the team show every word whole', async ({ page })
   }
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: /^Team/ }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Staff/ }).click();
   await page.waitForTimeout(800);
   expect(await page.evaluate(cutText), 'team').toEqual([]);
 });
