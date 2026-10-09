@@ -65,3 +65,22 @@ password, an account) goes to the maintainer, one line each. Leave the app open 
 **Count the taps.** `tests/e2e/tapCount.spec.ts` prints each daily job's taps
 beside the design's target. It is a report in the nightly run, not a gate. A session that
 builds a job states before and after in the PR.
+
+## Loops (8 Oct 2026)
+
+Between 5 and 9 Oct, 148 issues were filed and nearly all came from **walks** (a whole
+journey on a fresh centre, in another timezone, after closing, at 200% text), not from
+per-PR screenshots, which mostly confirm what the author just built. The classes that
+recurred, and what stops them recurring:
+
+| Class (examples) | Guard |
+|---|---|
+| Clock: phone's zone against the centre's; after closing; midnight | nightly zone matrix (Pacific/Pago_Pago, America/New_York, Pacific/Auckland) on the day, leave and guest-link screens |
+| A screen's words or number disagree with the server's ("16 will go", the server deletes 66; "pill shows 12", it shows 5) | a server-computed count rendered, never re-derived; a test asserting both read the same function |
+| Seed hides first-day gaps (no therapies asked, examples not marked) | the sign-up-to-printed-sheet walk, run before a release |
+| Text cut at 200% | one Playwright pass over every screen at 375px and 200% text, in the nightly set |
+| Wording and counts | polish batch per screen group |
+
+Industry practice agrees (session-based exploratory testing next to automated regression:
+automate what is known and stable, explore what is new or changed, and turn each found bug
+into a regression check once fixed).
