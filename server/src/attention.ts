@@ -76,6 +76,8 @@ export type Item = {
   move?: { patient_id: string; stay_id: string; room_id: string; room_name: string; from_room_id: string };
 };
 
+/** Form C reports where a foreigner sleeps, so a day patient (not on site) owes none (#719). */
+export const owesFormC = (country: string | null | undefined, stay: { on_site: boolean }) => stay.on_site && isForeign(country);
 /** A guest whose country is not India needs a Form C within 24 hours of arriving (#415). An empty country is not assumed foreign. */
 export const isForeign = (country: string | null | undefined) => !!country?.trim() && !/^(india|indian|bharat|in)$/i.test(country.trim());
 /** The day it is due: the day after arrival, since the stay has no arrival hour. */
@@ -107,11 +109,11 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
   const leftUnfiled = await prisma.patientStay.findMany({ where: { form_c_filed: null, end_date: { lt: day, gte: new Date(day.getTime() - 14 * DAY_MS) } }, include: { Patient: { select: { id: true, name: true, country: true } } } });
   // Overdue from the day after it was due, whether or not the guest is still here (#664).
   const formC = (s: { start_date: Date }) => { const due = formCDue(s.start_date); return `Form C ${due < today ? 'overdue since' : 'due by'} ${dayName(due).replace(',', '')}`; };
-  for (const s of leftUnfiled) if (isForeign(s.Patient.country)) add(rule('form_c'), s, formC(s), 'card');
+  for (const s of leftUnfiled) if (owesFormC(s.Patient.country, s)) add(rule('form_c'), s, formC(s), 'card');
   for (const s of stays) {
     if (ymd(s.end_date) === today && !s.discharge) add(rule('leaves_today'), s, 'Leaves today, no discharge summary', 'summary');
     if (hoursIn(s) >= (rule('arrival_open').hours ?? 24) && !s.vitals && !s.concerns && !s.tests) add(rule('arrival_open'), s, 'Arrival steps still open', 'card');
-    if (isForeign(s.Patient.country) && !s.form_c_filed) add(rule('form_c'), s, formC(s), 'card');
+    if (owesFormC(s.Patient.country, s) && !s.form_c_filed) add(rule('form_c'), s, formC(s), 'card');
     if (hoursIn(s) >= (rule('no_diet').hours ?? 24) && !diets.dietFor(s.Patient, true).planName) add(rule('no_diet'), s, 'No diet plan', 'diet');
   }
   // A room taken out of use (#563) with a guest already in it, now or booked: they need another room.
