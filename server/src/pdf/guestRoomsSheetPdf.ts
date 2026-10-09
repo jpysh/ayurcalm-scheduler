@@ -10,6 +10,10 @@ export type RoomRow = { room: string; kind: 'turnover' | 'leaving' | 'arriving' 
 
 const dayText = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
 const list = (names: string[]) => names.join(', ');
+// Guests sharing a room often leave on different days; housekeeping needs each one's (#660).
+const until = (gs: Guest[], note = '') => new Set(gs.map((g) => g.end_date)).size === 1
+  ? `${list(gs.map((g) => g.name))}${note} · until ${dayText(gs[0].end_date)}`
+  : `${list(gs.map((g) => `${g.name} until ${dayText(g.end_date)}`))}${note}`;
 
 /**
  * What the housekeeper reads for one day, per room (#559): the room to make up first when someone
@@ -19,6 +23,8 @@ const list = (names: string[]) => names.join(', ');
  */
 export function buildGuestRoomsSheet(rooms: SheetRoom[], day: string) {
   const groups: { type: string; rows: RoomRow[] }[] = [];
+  let sharedMakeUp = 0;
+  let sharedArriving = 0;
   for (const r of rooms) {
     const sleeping = r.guests.filter((g) => g.start_date <= day && day < g.end_date);
     const arriving = sleeping.filter((g) => g.start_date === day);
@@ -28,13 +34,15 @@ export function buildGuestRoomsSheet(rooms: SheetRoom[], day: string) {
     const outText = r.out ? `Out of use${r.out.reason ? `: ${r.out.reason}` : ''}` : '';
     // A shared room where one guest leaves and another stays is not empty to make up.
     const emptied = !staying.length;
-    if (emptied && leaving.length && arriving.length) row = { room: r.name, kind: 'turnover', line: `Make up, then ready for ${list(arriving.map((g) => g.name))} (arrives today) · until ${dayText(arriving[0].end_date)}` };
+    if (emptied && leaving.length && arriving.length) row = { room: r.name, kind: 'turnover', line: `Make up, then ready for ${until(arriving, ' (arrives today)')}` };
     else if (emptied && leaving.length) row = { room: r.name, kind: 'leaving', line: `Make up · ${list(leaving.map((g) => g.name))} leaves today` };
     else if (emptied && r.out) row = { room: r.name, kind: 'out', line: outText };
-    else if (emptied && arriving.length) row = { room: r.name, kind: 'arriving', line: `Ready for ${list(arriving.map((g) => g.name))} · until ${dayText(arriving[0].end_date)}` };
+    else if (emptied && arriving.length) row = { room: r.name, kind: 'arriving', line: `Ready for ${until(arriving)}` };
     else if (!emptied) {
-      const spare = r.beds - staying.length;
-      row = { room: r.name, kind: 'staying', line: `${list(staying.map((g) => g.name))} · until ${dayText(staying.map((g) => g.end_date).sort()[0])}${leaving.length ? ` · ${list(leaving.map((g) => g.name))} leaves today` : ''}${spare > 0 && r.beds > 1 && !r.out ? ` · ${spare} bed free` : ''}` };
+      const spare = r.beds - sleeping.length;
+      if (leaving.length) sharedMakeUp++;
+      if (arriving.length) sharedArriving++;
+      row = { room: r.name, kind: 'staying', line: `${until(staying)}${leaving.length ? ` · ${list(leaving.map((g) => g.name))} leaves today` : ''}${arriving.length ? ` · ready a bed for ${until(arriving, ' (arrives today)')}` : ''}${spare > 0 && r.beds > 1 && !r.out ? ` · ${spare} bed free` : ''}` };
     } else row = { room: r.name, kind: 'free', line: 'Free' };
     // A guest still in a room taken out of use must move: the sheet says so as the inbox does (#624).
     if (r.out && row.kind !== 'out') row.line += ` · out of use${r.out.reason ? `: ${r.out.reason}` : ''}${row.kind === 'staying' ? ', needs another room' : ''}`;
@@ -45,7 +53,7 @@ export function buildGuestRoomsSheet(rooms: SheetRoom[], day: string) {
   const n = (k: RoomRow['kind'][]) => all.filter((r) => k.includes(r.kind)).length;
   return {
     groups,
-    counts: { rooms: all.length, makeUp: n(['turnover', 'leaving']), arriving: n(['turnover', 'arriving']), staying: n(['staying']), free: n(['free']), out: n(['out']) },
+    counts: { rooms: all.length, makeUp: n(['turnover', 'leaving']) + sharedMakeUp, arriving: n(['turnover', 'arriving']) + sharedArriving, staying: n(['staying']), free: n(['free']), out: n(['out']) },
     first: all.filter((r) => r.kind === 'turnover').map((r) => r.room),
   };
 }
