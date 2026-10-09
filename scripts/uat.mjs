@@ -44,18 +44,14 @@ const plus = (n) => ymd(new Date(day0.getTime() + n * 86400000));
 const tomorrow = async () => { const d = new Date(`${plus(1)}T00:00:00Z`); await go(p.getByRole('button', { name: new RegExp(`^\\w+,? ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}$`) })); };
 const AM = ['massage_table', 'shower', 'shirodhara_stand', 'steam', 'herbal_paste', 'bp_monitor', 'examination_bed'];
 
-// #603: a follow-up that is due opens its own message from the inbox.
-await step('The inbox row for a due follow-up says "Follow up" and opens the message', '/admin/schedule', async () => {
-  const guest = await api('POST', '/patients', { name: 'Uatfollow Guest', gender: 'female', phone: '+919447001199', stay: { start_date: plus(-9), end_date: plus(-1) } });
-  const sid = guest.Stays?.[0]?.id;
-  await api('PUT', `/patients/${guest.id}/stays/${sid}/discharge`, { follow_up_date: plus(0) }).catch(() => null);
-  await p.reload(); await p.waitForTimeout(1500);
-  await go(p.getByRole('button', { name: 'Menu', exact: true })); await go(dlg().getByText(/need you/));
-  const row = dlg().getByRole('button', { name: /Uatfollow Guest/ }); const there = await row.count();
-  const rowText = there ? (await row.first().innerText()).replace(/\n+/g, ' | ') : 'no row';
-  if (there) await go(row.first());
-  const sheet = (await text(dlg())).replace(/\n+/g, ' | ');
-  return { ok: /Follow up/.test(rowText) && /Send on WhatsApp/.test(sheet), note: `row: ${rowText.slice(0, 80)} · sheet: ${sheet.slice(0, 90)}` };
+// #606: a centre in Auckland can pick its own zone.
+await step('Opening hours offers Pacific/Auckland and the other zones, grouped after the common ones', '/admin/settings', async () => {
+  await go(p.getByRole('button', { name: /Opening hours and holidays/ }));
+  const sel = dlg().getByLabel('Timezone');
+  const vals = await sel.locator('option').evaluateAll((o) => o.map((x) => x.value));
+  const groups = await sel.locator('optgroup').count();
+  await sel.selectOption('Pacific/Auckland');
+  return { ok: vals.includes('Pacific/Auckland') && vals.includes('Europe/Paris') && vals.length > 300 && groups === 1 && (await sel.inputValue()) === 'Pacific/Auckland', note: `${vals.length} zones, ${groups} group, Auckland picked` };
 });
 await b.close();
 
