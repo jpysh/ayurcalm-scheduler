@@ -58,8 +58,10 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
     fetch(`${API_BASE}/staff-day?date=${today}`).then((r) => (r.ok ? r.json() : []))
       .then((rows: { staff_id: string; off: string | null }[]) => setOffToday(Object.fromEntries(rows.map((x) => [x.staff_id, x.off]))))
       .catch(() => setOffToday({}));
-    fetch(`${API_BASE}/timeoff?from=${today}&to=${today}`).then((r) => (r.ok ? r.json() : []))
-      .then((rows: (RoomOff & { entity_type: string; entity_id: string })[]) => setRoomsOff(new Map(rows.filter((x) => x.entity_type === "room").map((x) => [x.entity_id, x]))))
+    // A fortnight ahead, so a room taken out from tomorrow says so on its row (#659); the soonest entry wins.
+    const ahead = new Date(Date.parse(`${today}T00:00:00Z`) + 13 * 86400000).toISOString().slice(0, 10);
+    fetch(`${API_BASE}/timeoff?from=${today}&to=${ahead}`).then((r) => (r.ok ? r.json() : []))
+      .then((rows: (RoomOff & { entity_type: string; entity_id: string })[]) => setRoomsOff(new Map(rows.filter((x) => x.entity_type === "room").sort((a, b) => (b.start_date ?? b.date ?? "").localeCompare(a.start_date ?? a.date ?? "")).map((x) => [x.entity_id, x]))))
       .catch(() => setRoomsOff(new Map()));
   }, [today]);
   useEffect(() => { load(); }, [load]);
@@ -90,7 +92,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
     const d = on < 0 ? undefined : week!.rooms.find((x) => x.id === String(r.id))?.days[on];
     return d && d.capacity ? `${hrs(d.booked)} of ${hrs(d.capacity)} booked · ${roomKind(r)}` : roomKind(r);
   };
-  const roomsOut = rooms.filter((r) => roomActive(r) && roomsOff.has(String(r.id))).length;
+  const firstOut = (e: RoomOff) => (e.start_date ?? e.date ?? "").slice(0, 10);
+  const roomsOut = rooms.filter((r) => { const e = roomsOff.get(String(r.id)); return roomActive(r) && e && (e.recurrence || firstOut(e) <= today); }).length;
 
   /** Time off between from and until; null means the edge of the day. Days default to today. */
   async function takeOut(kind: "staff" | "room", id: string, name: string, from: string | null, until: string | null, what: string, days = { start: today, end: today }) {
@@ -129,6 +132,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   /** "Out of use from 14:00", "until 14:00", "until Wed 14 Oct", by the entry's own times and days. */
   const outLine = (e: RoomOff) => {
     const last = (e.end_date ?? e.date ?? "").slice(0, 10);
+    if (!e.recurrence && firstOut(e) > today) return `Out of use ${dayText(firstOut(e))}${last > firstOut(e) ? ` to ${dayText(last)}` : ""}`;
     if (!e.recurrence && last > today) return `Out of use until ${dayText(last)}`;
     const fromT = e.start_time && e.start_time > opening ? e.start_time : null, toT = e.end_time && e.end_time < closing ? e.end_time : null;
     return fromT && toT ? `Out of use ${fromT}–${toT}` : fromT ? `Out of use from ${fromT}` : toT ? `Out of use until ${toT}` : "Out of use today";

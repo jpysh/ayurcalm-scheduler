@@ -12,7 +12,7 @@ import { dischargeOf, saveDischarge } from './discharge.js';
 import { staffWeek } from './staffWeek.js';
 import { newLinkToken } from './links.js';
 import { findConflict, HAPPENING, loadDay, nearestFreeTime, oncePerCourse, softWarnings, staffDay, type Action } from './appointmentGuard.js';
-import { replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
+import { replanRoomDay, replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
 import { dietTimeline, startDietFrom, extendDiet } from './patientDiet.js';
 import { checkDay, headlineFor, rowOptions } from './dayCheck.js';
 import { centreClock, eventClashes, outsideHours, type EventRow } from './availability.js';
@@ -792,6 +792,13 @@ const createTimeOffHandler = async (req: Request, res: Response) => {
       const days = datesCovered(h);
       const results = [];
       for (const d of days) results.push(await replanStaffDay(h.entity_id, d, prisma, { apply: true, timeOffId: h.id }));
+      replan = results.filter((r) => r.moved.length || r.proposed.length || r.unplaced.length);
+    }
+    // A room out of use is the same moment (#659): each day it covers is planned
+    // once, so its treatments cannot be sent to the same other room at the same minute.
+    if (h.entity_type === 'room' && h.entity_id && plan !== false) {
+      const results = [];
+      for (const d of datesCovered(h)) results.push(await replanRoomDay(h, d, prisma));
       replan = results.filter((r) => r.moved.length || r.proposed.length || r.unplaced.length);
     }
     res.status(201).json({ ...h, replan });

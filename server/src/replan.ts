@@ -20,7 +20,7 @@
  * them, so it is put to the admin: only their Accept applies it.
  */
 import { PrismaClient, Prisma } from '@prisma/client';
-import { centreClock, gives, offOnDay, staffAwayOnDay, stayOn, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow } from './availability.js';
+import { centreClock, gives, offOnDay, staffAwayOnDay, stayOn, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow, type OffRow } from './availability.js';
 import { HAPPENING, findConflict, loadDay, type Action, type Conflict } from './appointmentGuard.js';
 
 /** Which of the tier 4 choices a move is. */
@@ -611,6 +611,24 @@ export const replanStaffDay = (
   prisma: PrismaClient,
   opts: { apply?: boolean; timeOffId?: string; now?: Clock } = {},
 ) => planDay(staffId, date, prisma, opts);
+
+/**
+ * A room's day while it is out of use (#659): the treatments in the hours it is
+ * out, rehoused in one pass and recorded against the absence so deleting it or
+ * Undo puts them back.
+ */
+export async function replanRoomDay(
+  off: OffRow & { id: string; entity_id: string | null },
+  date: Date,
+  prisma: PrismaClient,
+  opts: { now?: Clock } = {},
+) {
+  const hours = offOnDay([off], 'room', off.entity_id ?? '', date);
+  const ids = (await prisma.appointment.findMany({ where: { ...HAPPENING, scheduled_date: date, room_id: off.entity_id }, select: { id: true, start_time: true, duration_minutes: true } }))
+    .filter((a) => hours.some((b) => overlaps(b.s, b.e, toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes)))
+    .map((a) => a.id);
+  return planDay(null, date, prisma, { ...opts, apply: true, timeOffId: off.id, appointmentIds: ids });
+}
 
 /** Put a replan back exactly as it was. */
 export async function undoReplan(batchId: string, prisma: PrismaClient) {
