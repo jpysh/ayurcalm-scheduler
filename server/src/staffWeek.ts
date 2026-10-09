@@ -21,7 +21,8 @@ export async function staffWeek(start: string, prisma: PrismaClient) {
       const hours = h ? { start: hm(h.s), end: hm(h.e) } : { start: ctx.settings?.opening_time || '09:00', end: ctx.settings?.closing_time || '18:00' };
       const open = toMinutes(hours.start), close = toMinutes(hours.end);
       const offs = offOnDay(ctx.timeOff, 'staff', s.id, ctx.day);
-      const whole = offs.find((o) => o.whole);
+      // Time off over all their hours is the whole day, whatever hours it was given (#704).
+      const whole = offs.find((o) => o.whole || (o.s <= open && o.e >= close));
       if (whole) return { state: 'away' as const, start: hours.start, end: hours.end, why: whole.label, booked: 0, capacity: 0 };
       const out = offs.reduce((n, o) => n + Math.max(0, Math.min(close, o.e) - Math.max(open, o.s)), 0);
       const booked = ctx.appointments.filter((a) => teamOf(a).includes(s.id)).reduce((n, a) => n + a.duration_minutes, 0);

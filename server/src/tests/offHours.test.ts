@@ -35,6 +35,12 @@ const at = (start_time: string) => ({ scheduled_date: day, start_time, duration_
   assert.deepEqual(asha.busy.map((b) => [b.s, b.e]), [[540, 660]]);
 }
 
+// Not available from before they start until after they stop is the whole day, not "in" for none of it (#704).
+{
+  const [asha] = staffDay(ctx([off({ entity_id: 's1', start_time: '05:10', end_time: '20:00', description: 'Sick' })]));
+  assert.ok(asha.off, 'time off over all their hours is a day off');
+}
+
 // Time off with no hours still takes the whole day.
 assert.equal(findConflict(at('16:00'), ctx([off({ entity_id: 's1', description: 'Sick' })]))?.message, 'Asha is not in on this day (Sick).');
 
