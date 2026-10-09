@@ -25,6 +25,12 @@ for c in $(docker ps -a --filter status=exited --filter status=restarting --form
   fail "container $c is not running"
 done
 
+# Server errors from the app's own log, so one operator needs no Sentry account.
+for c in $(docker ps --format '{{.Names}}' | grep -- '-app-'); do
+  n=$(docker logs --since 24h "$c" 2>&1 | grep -ci error)
+  [ "$n" -eq 0 ] && ok "$c no errors in 24 hours" || fail "$c logged $n errors in 24 hours: docker logs --since 24h $c | grep -i error"
+done
+
 used=$(df -P / | awk 'NR==2 {print $5}' | tr -d %)
 [ "$used" -lt 85 ] && ok "disk ${used}% used" || fail "disk ${used}% used"
 
