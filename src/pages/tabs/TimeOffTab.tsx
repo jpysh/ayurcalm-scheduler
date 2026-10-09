@@ -264,7 +264,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
         {out ? <ListGroup><Row title={nameOf({ id: '', type: newTimeOff.type, entity: newTimeOff.entity, description: '' })} facts={kindOf({ id: '', type: newTimeOff.type, entity: newTimeOff.entity, description: '' })} /></ListGroup>
           : <PickField label="Who" placeholder="Choose…" value={newTimeOff.entity ? `Staff:${newTimeOff.entity}` : ''}
             onPick={(v) => setNewTimeOff({ ...newTimeOff, type: 'Staff', entity: v.split(':').slice(1).join(':') })}
-            groups={[{ title: 'Therapists and doctors', options: staff.map((x) => ({ id: `Staff:${x.id}`, name: x.name })) }]} />}
+            groups={(['Therapists', 'Doctors'] as const).map((title) => ({ title, options: staff.filter((x) => (x.role === 'doctor') === (title === 'Doctors')).sort((a, b) => a.name.localeCompare(b.name)).map((x) => ({ id: `Staff:${x.id}`, name: x.name })) })).filter((g) => g.options.length)} />}
         {sheet === 'new' && newTimeOff.type !== 'Center' && !newTimeOff.entity ? <SheetNote>Choose who is away to save.</SheetNote> : null}
         <div className="grid grid-cols-2 gap-3">
           <DateRow label="From" value={newTimeOff.date} onChange={(v) => setNewTimeOff({ ...newTimeOff, date: v, endDate: newTimeOff.endDate < v ? v : newTimeOff.endDate })} />
