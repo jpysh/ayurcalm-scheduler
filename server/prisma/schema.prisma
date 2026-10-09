@@ -387,6 +387,8 @@ model Settings {
   /// schedule, the warnings and the day sheet. India by default: that is who
   /// this was built for, and a wrong guess prints the wrong day's sheet.
   timezone                 String   @default("Asia/Kolkata")
+  /// The symbol before a price on the card, for reference (#609): Rs, $, €.
+  currency                 String   @default("Rs")
   opening_time             String   @default("09:00")
   closing_time             String   @default("18:00")
   slot_minutes             Int      @default(30)

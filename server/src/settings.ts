@@ -50,6 +50,7 @@ const settingsSchema = z.object({
   centre_name: z.string().trim().min(1).max(120),
   address: z.string().trim().max(400).nullish(),
   timezone: z.string().trim().min(1).max(64).refine(isRealTimezone, 'Expected an IANA timezone name, such as Asia/Kolkata'),
+  currency: z.string().trim().min(1).max(4).optional(),
   opening_time: timeString,
   closing_time: timeString,
   slot_minutes: z.number().int().refine(n => [15, 20, 30, 60].includes(n), 'Expected 15, 20, 30 or 60'),
