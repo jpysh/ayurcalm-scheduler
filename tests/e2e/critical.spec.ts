@@ -374,10 +374,13 @@ test('@smoke an admin who never finished setup is sent back to it (#60)', async 
     await page.waitForURL(/\/admin\/schedule/);
     await expect(page.getByRole('link', { name: 'Make it mine' })).toBeVisible();
     // An empty one is sent to setup and kept there.
+    // The redirect to setup cancels a settings request mid-flight; that is not a failure (#762).
     await page.route('**/api/settings', async (route) => {
       if (route.request().method() !== 'GET') return route.continue();
-      const res = await route.fetch();
-      await route.fulfill({ response: res, json: { ...(await res.json()), demo_data: false } });
+      try {
+        const res = await route.fetch();
+        await route.fulfill({ response: res, json: { ...(await res.json()), demo_data: false } });
+      } catch { /* the page moved on */ }
     });
     await signIn(page);
     await page.waitForURL(/\/setup/);

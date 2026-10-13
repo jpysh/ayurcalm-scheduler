@@ -64,6 +64,11 @@ try {
     await prisma.staff.update({ where: { id: therapist.id }, data: { weekly_schedule: was ?? {} } });
     assert.deepEqual(d3.away, ['Not in 14:00–16:00 · 14:00 off'], JSON.stringify(d3.away)); }
   assert.deepEqual(day.items[0].checklist, [{ text: 'Oil warmed', required: true, done: false }]);
+  // Away all day with a treatment still on their name: the link says so above it (#760).
+  { const off = await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: therapist.id, date: new Date(DAY), description: 'Family emergency' } });
+    const d4 = await (await call(`/public/link/${t}?date=${DAY}`)).json();
+    await prisma.timeOff.delete({ where: { id: off.id } });
+    assert.deepEqual([d4.items.length, d4.away], [1, ['Not in all day · Family emergency']], JSON.stringify(d4.away)); }
   // A day off says so rather than "Nothing booked" (#424).
   await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: therapist.id, date: new Date('2030-03-14'), description: 'Family wedding' } });
   assert.equal((await (await call(`/public/link/${t}?date=2030-03-14`)).json()).off, 'Family wedding', 'the link does not say the day is off');

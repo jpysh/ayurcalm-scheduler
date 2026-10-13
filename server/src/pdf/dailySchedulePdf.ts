@@ -68,7 +68,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     prisma.programEvent.findMany({ where: { recurrence: 'weekly' } }),
     loadDietsForDay(day, prisma),
     prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } }, include: { GuestRoom: { select: { name: true } } } }),
-    prisma.timeOff.findMany({ where: { entity_type: 'staff' } }),
+    prisma.timeOff.findMany({ where: { entity_type: { in: ['staff', 'room'] } } }),
   ]);
 
   const roomById = Object.fromEntries(rooms.map((r) => [r.id, r.name]));
@@ -80,6 +80,11 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const isOff = (id: string, a: { start_time: string; duration_minutes: number | null }) => {
     const s = toMinutes(a.start_time);
     return offOnDay(timeOff, 'staff', id, day).some((b) => overlaps(b.s, b.e, s, s + (a.duration_minutes || 0)));
+  };
+  // A room out of use is as blocking as a therapist off, so the sheet marks it the same way (#758).
+  const roomOut = (a: { room_id: string | null; start_time: string; duration_minutes: number | null }) => {
+    const s = toMinutes(a.start_time);
+    return !!a.room_id && offOnDay(timeOff, 'room', a.room_id, day).some((b) => overlaps(b.s, b.e, s, s + (a.duration_minutes || 0)));
   };
 
   const weekdayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const;
@@ -294,10 +299,11 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
             text: [
               a.status === 'no_show' ? "DIDN'T COME" : '',
               teamOf(a).some((id) => isOff(id, a)) ? 'NO THERAPIST' : '',
+              roomOut(a) ? 'ROOM OUT' : '',
               `${therapyById[a.therapy_id] || a.therapy_id} ${a.duration_minutes || 0}m`,
               // Everyone working it, so a resident knows two people are coming.
               teamOf(a).map((id) => `${noDr(staffById[id] || id)}${isOff(id, a) ? ' (off)' : ''}`).join(' & '),
-              a.room_id ? roomById[a.room_id] || a.room_id : '',
+              a.room_id ? `${roomById[a.room_id] || a.room_id}${roomOut(a) ? ' (out)' : ''}` : '',
             ].filter(Boolean).join(' · '),
           })),
           ...ownEvents.filter((e) => inSlot(e.start_time) && eventAppliesToPatient(e, id)).map((e) => ({
