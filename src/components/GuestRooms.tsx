@@ -9,7 +9,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import PageHead from "@/components/PageHead";
 import { WeekStrip } from "@/components/BottomBar";
-import { Btn, DateRow, Empty, LinkRow, ListGroup, Loading, Row, SectionHead, dayText, noteText } from "@/components/kit";
+import { Btn, DateRow, datePair, Empty, LinkRow, ListGroup, Loading, Row, SectionHead, dayText, noteText } from "@/components/kit";
 import { AddGuestRooms, ManageGuestRooms } from "@/components/GuestRoomManage";
 import type { GuestRoomNight } from "@/components/CardSheets";
 
@@ -76,7 +76,7 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
     <div>
       <PageHead title="Guest rooms" note={night ? `${free} free ${tonight}` : undefined} />
       <SectionHead>Is a room free?</SectionHead>
-      <div className="grid grid-cols-2 gap-3">
+      <div className={datePair}>
         <DateRow label="Arriving" value={from} min={today} onChange={(v) => { setFrom(v); if (!to || to <= v) setTo(addDays(v, 14)); }} />
         <DateRow label="Leaving" value={to} min={from ? addDays(from, 1) : today} onChange={setTo} />
       </div>

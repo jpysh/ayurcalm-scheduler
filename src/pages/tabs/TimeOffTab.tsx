@@ -1,4 +1,4 @@
-import { Btn, Consequence, DateRow, dayText, Empty, Foot, LinkRow, ListGroup, plural, Row, SearchField, Seg, SheetNote, Text, Tick, TimeList, TwoFoot } from "@/components/kit";
+import { Btn, Consequence, DateRow, datePair, dayText, Empty, Foot, LinkRow, ListGroup, plural, Row, SearchField, Seg, SheetNote, Text, Tick, TimeList, TwoFoot } from "@/components/kit";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
@@ -325,7 +325,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
               <TimeList label="Until" times={[...timeSlots, closingTime]} after={f.startTime || timeSlots[0]} value={f.endTime || closingTime} onChange={(t) => set({ endTime: t })} />
             </div>
           </> : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className={datePair}>
               <DateRow label="From" value={f.date} onChange={(v) => set({ date: v, endDate: f.endDate < v ? v : f.endDate })} />
               <DateRow label="Until" value={f.endDate} min={f.date} onChange={(v) => set({ endDate: v })} />
             </div>

@@ -127,6 +127,9 @@ export const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" :
  * The date box is there, unseen, over the whole row: a tap lands on it, which
  * is the one way every phone opens its calendar.
  */
+/** Two date boxes side by side, stacked once large text leaves no room for a word (#794). */
+export const datePair = "grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3";
+
 export function DateRow({ label, value, onChange, min, max }: { label: string; value: string; onChange: (iso: string) => void; min?: string; max?: string }) {
   return (
     <div className="min-w-0">

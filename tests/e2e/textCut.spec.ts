@@ -42,3 +42,12 @@ test('At 200% text Availability and its picker show every word whole', async ({ 
   await page.getByRole('dialog').last().getByRole('checkbox').first().click();
   expect(await page.evaluate(cutText), 'picker').toEqual([]);
 });
+
+// Its two date boxes sat two to a row whatever the text size, and "Choose" broke into three lines (#794).
+test('At 200% text Guest rooms shows every word whole', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/admin/guestrooms');
+  await big(page);
+  await page.waitForTimeout(800);
+  expect(await page.evaluate(cutText), 'guest rooms').toEqual([]);
+});
