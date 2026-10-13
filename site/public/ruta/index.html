@@ -2,7 +2,7 @@
 <html lang="en" data-cc="IN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ruta: therapy scheduling for wellness centres</title>
 <meta name="description" content="Ruta runs a wellness centre's day from one phone: guests, therapies, therapists and rooms, reassigned in one tap when someone calls in sick. Free 30-day trial, no card.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%2216%22 fill=%22%23e9a23b%22/%3E%3C/svg%3E">
@@ -11,84 +11,128 @@
 <meta property="og:description" content="Therapies, therapists and rooms for your wellness centre, planned from one phone. Free for 30 days.">
 <meta property="og:image" content="https://jains.es/ruta/img/day.jpg">
 <meta name="theme-color" content="#0f2a1f">
+<script>
+// Decided before first paint, so the scenes never jump from a plain layout to a pinned one.
+if(!matchMedia('(prefers-reduced-motion: reduce)').matches)document.documentElement.classList.add('fx');
+</script>
+<link rel="preload" as="image" href="/ruta/img/hero.jpg" fetchpriority="high">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,300&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,300&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
-:root{--forest:#0f2a1f;--forest2:#1f4636;--cream:#f6efe4;--sand:#efe0c8;--sage:#dfe8dd;--saffron:#e9a23b;--ink:#15201a;--muted:#5f675f;--soft:#a9b5ad}
+:root{--forest:#0f2a1f;--forest2:#1f4636;--cream:#f6efe4;--sand:#efe0c8;--sage:#dfe8dd;--saffron:#e9a23b;--ink:#15201a;--muted:#5f675f;--soft:#a9b5ad;--wa:#dcf8c6;--pw:min(56vw,240px)}
 *{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{margin:0;background:var(--cream);color:var(--ink);font:17px/1.55 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+html{background:var(--forest)}
+body{margin:0;background:var(--cream);color:var(--ink);font:17px/1.55 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 a{color:inherit}
 .it{font-style:italic;color:var(--saffron)}
+.mess .it{color:#b5651d}
 h1,h2,.serif{font-family:Fraunces,Georgia,serif;font-weight:300;letter-spacing:-.025em}
 h1{font-size:clamp(50px,13vw,96px);line-height:.95;margin:0 0 18px}
-h2{font-size:clamp(38px,9vw,64px);line-height:1;margin:0 0 18px}
+h2{font-size:clamp(38px,9.5vw,64px);line-height:1;margin:0 0 18px}
 h3{margin:0 0 6px;font-size:19px}
 .wrap{max-width:1040px;margin:0 auto;padding:0 20px}
 section{padding:88px 0}
 .dark{background:var(--forest);color:#f3ece0}.dark .muted{color:var(--soft)}
 .muted{color:var(--muted)}
-.btn{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 26px;border-radius:99px;background:var(--saffron);color:#1a1206;text-decoration:none;font-weight:700;border:0;transition:transform .2s}
-.btn:active{transform:scale(.97)}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 26px;border-radius:99px;background:var(--saffron);color:#1a1206;text-decoration:none;font-weight:700;border:0}
 .btn.ghost{background:transparent;color:inherit;border:1.5px solid currentColor}
 .ctas{display:flex;gap:10px;flex-wrap:wrap}
-.note{font-size:14px;opacity:.75;margin-top:12px}
+.note{font-size:14px;color:inherit;opacity:.85;margin-top:12px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+/* film grain over everything: warmth, and it hides banding in the dark greens */
+body:after{content:"";position:fixed;inset:-50%;z-index:60;pointer-events:none;opacity:.07;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 
-/* hero */
-.hero{position:relative;height:100svh;min-height:600px;color:#fff;overflow:hidden;background:var(--forest)}
-.hero video,.hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(1.08);animation:drift 20s ease-out forwards}
-@keyframes drift{to{transform:scale(1)}}
-.hero:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(15,42,31,.35),rgba(15,42,31,0) 25%,rgba(15,42,31,.2) 45%,rgba(15,42,31,.96))}
-.top{position:absolute;z-index:3;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:16px 20px}
-.logo{font:500 26px Fraunces,serif;text-decoration:none;color:#fff}
-.pill{border:1px solid rgba(255,255,255,.55);border-radius:99px;padding:9px 16px;font-size:14px;font-weight:600;color:#fff;text-decoration:none;backdrop-filter:blur(8px);background:rgba(255,255,255,.08)}
+.top{position:fixed;z-index:50;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:10px 16px 10px 20px;padding-top:max(10px,env(safe-area-inset-top));color:#fff;transition:background .4s,backdrop-filter .4s}
+.top.solid{background:rgba(15,42,31,.78);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.logo{font:500 26px Fraunces,serif;text-decoration:none}
+.pill{display:inline-flex;align-items:center;min-height:44px;border:1px solid rgba(255,255,255,.6);border-radius:99px;padding:0 18px;font-size:14px;font-weight:600;text-decoration:none}
+.prog{position:fixed;z-index:51;top:0;left:0;height:2px;width:100%;background:var(--saffron);transform-origin:0 50%;transform:scaleX(0)}
+.dock{position:fixed;z-index:49;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));display:flex;gap:8px;padding:8px;border-radius:99px;background:rgba(15,42,31,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 10px 30px rgba(0,0,0,.3);transform:translateY(140%);transition:transform .5s cubic-bezier(.2,.8,.2,1);max-width:480px;margin:0 auto}
+.dock.on{transform:none}
+.dock .btn{flex:1;min-height:48px}
+.dock .wa{flex:0 0 48px;padding:0;background:#25d366;color:#fff}
+
+/* scene 1: the film is masked down to the phone's screen and becomes the app */
+.hero{position:relative;height:100svh;min-height:580px;overflow:hidden;background:var(--forest);color:#fff}
+.film{position:absolute;inset:0;overflow:hidden;background:#000;will-change:clip-path}
+.film video,.film .poster,.film .app{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.film .app{opacity:0;left:50%;top:50%;inset:auto;width:calc(var(--pw) - 18px);height:calc(var(--pw)*2.027 - 18px);transform:translate(-50%,-50%);object-fit:cover;object-position:top}
+.shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(15,42,31,.4),rgba(15,42,31,0) 25%,rgba(15,42,31,.15) 45%,rgba(15,42,31,.95));pointer-events:none}
+.bezel{position:absolute;left:50%;top:50%;width:var(--pw);aspect-ratio:444/900;transform:translate(-50%,-50%);border-radius:40px;border:9px solid #0a1a13;box-shadow:0 0 0 1px rgba(255,255,255,.12),0 40px 90px rgba(0,0,0,.55);opacity:0;visibility:hidden;pointer-events:none}
 .hero .in{position:absolute;z-index:2;left:0;right:0;bottom:0;padding:0 20px 36px;max-width:1040px;margin:0 auto}
-.lead{font-size:18px;max-width:30rem;margin:0 0 24px;opacity:.92}
+.lead{font-size:18px;max-width:30rem;margin:0 0 24px;opacity:.95}
 .swap{display:inline-grid;vertical-align:bottom}
-.swap span{grid-area:1/1;opacity:0;transform:translateY(.4em);transition:opacity .7s,transform .7s}
-.swap span.on{opacity:1;transform:none}
-.cue{position:absolute;z-index:2;right:20px;bottom:40px;width:1px;height:56px;background:rgba(255,255,255,.35);overflow:hidden}
-.cue:after{content:"";position:absolute;left:0;top:-50%;width:1px;height:50%;background:#fff;animation:cue 2s infinite}
+.swap span{grid-area:1/1;opacity:0;filter:blur(8px);transform:translateY(.3em);transition:opacity .5s,transform .5s,filter .5s}
+.swap span.on{opacity:1;transform:none;filter:none}
+.then{position:absolute;z-index:2;left:20px;right:20px;top:max(64px,calc(env(safe-area-inset-top) + 56px));text-align:center;opacity:0;visibility:hidden}
+.then h2{font-size:clamp(28px,7vw,56px);margin:0}
+.then2{top:auto;bottom:max(96px,calc(env(safe-area-inset-bottom) + 88px))}
+.cue{position:absolute;z-index:2;left:50%;bottom:10px;transform:translateX(-50%);font-size:11px;letter-spacing:.2em;text-transform:uppercase;opacity:.75;display:flex;flex-direction:column;align-items:center;gap:6px}
+.cue i{display:block;width:1px;height:28px;background:rgba(255,255,255,.35);position:relative;overflow:hidden}
+.cue i:after{content:"";position:absolute;left:0;top:-50%;width:1px;height:50%;background:#fff;animation:cue 2s infinite}
 @keyframes cue{to{top:100%}}
 
-.marq{background:var(--forest);color:var(--saffron);overflow:hidden;white-space:nowrap;padding:16px 0;border-top:1px solid rgba(255,255,255,.08);font:italic 300 24px Fraunces,serif}
+.marq{background:var(--forest);color:var(--saffron);overflow:hidden;white-space:nowrap;padding:16px 0;border-top:1px solid rgba(255,255,255,.08);font:italic 300 24px/1.3 Fraunces,serif}
 .marq span{display:inline-block;animation:m 40s linear infinite}
 @keyframes m{to{transform:translateX(-50%)}}
 
-/* statement that fills in as you scroll */
-.fill{font:300 clamp(34px,8.5vw,60px)/1.12 Fraunces,serif;letter-spacing:-.02em;margin:0}
-.fill .w{opacity:.15;transition:opacity .4s}.fill .w.on{opacity:1}
+/* scene 2: the mess, then the list */
+.mess{position:relative;height:100svh;overflow:hidden;background:var(--forest);color:#f3ece0;padding:0}
+.mess .h{position:absolute;left:20px;right:20px;top:11svh}
+.mess .h2{opacity:0;visibility:hidden}
+.mess .h h2{font-size:clamp(34px,9vw,60px);margin:0}
+.mess .h p{margin:8px 0 0;color:var(--soft)}
+.bits{position:absolute;inset:0}
+.bit{position:absolute;left:50%;top:58%;max-width:62vw;padding:9px 12px;border-radius:14px;font-size:14.5px;line-height:1.35;box-shadow:0 10px 24px rgba(0,0,0,.3);color:#15201a;white-space:nowrap}
+.bit.wa{background:var(--wa);border-top-left-radius:4px}
+.bit.wa small{display:block;font-size:11px;color:#3d7a52;font-weight:700}
+.bit.pp{background:#fff3b0;border-radius:2px;font-family:"Bradley Hand","Segoe Print","Comic Sans MS",cursive;font-size:16px}
+.tidy{position:absolute;left:50%;top:56%;width:min(86vw,360px);transform:translate(-50%,-50%);background:#fff;border-radius:22px;padding:12px;color:var(--ink);box-shadow:0 30px 60px rgba(0,0,0,.4);opacity:0;visibility:hidden}
+.tidy .row{margin-bottom:6px}
+.tidy .row:last-child{margin-bottom:0}
 
-/* pinned phone story */
-.story{display:grid;grid-template-columns:1fr;position:relative}
-.stage{position:sticky;top:0;height:100svh;display:flex;align-items:flex-start;padding-top:7svh;justify-content:center;z-index:1;pointer-events:none}
-.phone{position:relative;width:min(56vw,240px);aspect-ratio:444/900;border-radius:42px;border:9px solid #0a1a13;background:#fff;overflow:hidden;box-shadow:0 40px 80px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.08)}
-.phone .scr{position:absolute;inset:0;opacity:0;transition:opacity .8s,transform .8s;transform:scale(1.04)}
-.phone .scr.on{opacity:1;transform:none}
-.phone img,.phone video{width:100%;height:100%;object-fit:cover;display:block}
-.mock{padding:42px 10px 10px;font-size:12.5px;color:var(--ink);background:#fff;height:100%}
+/* scene 3: one phone, turning through the day */
+.story{position:relative;height:100svh;overflow:hidden;background:var(--forest);color:#f3ece0;padding:0;perspective:1100px}
+.glow{position:absolute;left:50%;top:36%;width:150vw;height:150vw;max-width:900px;max-height:900px;transform:translate(-50%,-50%);background:radial-gradient(circle,rgba(233,162,59,.24),transparent 60%);pointer-events:none}
+.rig{position:absolute;left:50%;top:max(64px,calc(env(safe-area-inset-top) + 56px));width:var(--pw);transform-style:preserve-3d}
+.phone{position:relative;width:100%;aspect-ratio:444/900;border-radius:40px;border:9px solid #0a1a13;background:#fff;overflow:hidden;box-shadow:0 40px 80px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.08)}
+.phone .scr{position:absolute;inset:0;opacity:0;visibility:hidden}
+.phone .scr:first-child{opacity:1;visibility:inherit}
+.phone img{width:100%;height:100%;object-fit:cover;display:block}
+.mock{padding:40px 10px 10px;font-size:12.5px;color:var(--ink);background:#fff;height:100%}
 .mock .hd{font-weight:700;font-size:15px;margin:0 4px 10px}
-.row{display:flex;gap:8px;padding:9px 8px;border-left:3px solid #9bbfa9;border-radius:6px;margin-bottom:6px;background:#f4f6f4;transition:background .6s,border-color .6s}
-.row b{display:block}.row small{color:var(--muted)}.row .t{width:40px;font-weight:700}
-.row.off{border-color:#c9473f;background:#fbe7e5}.row.ok{border-color:var(--saffron);background:#fdf1dc}
-.toast{position:absolute;left:10px;right:10px;bottom:14px;background:var(--forest);color:#fff;border-radius:14px;padding:10px 12px;font-size:12.5px;opacity:0;transform:translateY(10px);transition:.5s}
-.toast.on{opacity:1;transform:none}
-.chap{min-height:100svh;display:flex;align-items:flex-end;padding:0 20px 4svh;position:relative;z-index:2;margin-top:-100svh}
-.chap:first-of-type{margin-top:-100svh}
-.chap+.chap{margin-top:0}
-.chap .card{background:rgba(15,42,31,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:16px 20px;max-width:26rem;color:#f3ece0}
-.chap .k{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--saffron);font-weight:700}
-.chap h3{font:300 26px/1.08 Fraunces,serif;margin:6px 0 8px}
-.chap p{margin:0;color:var(--soft)}
+.row{display:flex;gap:8px;padding:9px 8px;border-left:3px solid #9bbfa9;border-radius:6px;margin-bottom:6px;background:#f4f6f4;position:relative;overflow:hidden;font-size:12.5px;line-height:1.4}
+.row b{display:block}.row small{color:var(--muted);display:block}.row .t{width:40px;font-weight:700;flex:none}
+.row .who{position:relative;display:block;height:1.5em}
+.row .who small{position:absolute;left:0;top:0;white-space:nowrap;line-height:1.5em}
+.row .who .b{opacity:0}
+.row .tint{position:absolute;inset:0;opacity:0;pointer-events:none}
+.tint.off{background:rgba(201,71,63,.16)}.tint.ok{background:rgba(233,162,59,.22)}
+.toast{position:absolute;left:10px;right:10px;bottom:14px;background:var(--forest);color:#fff;border-radius:14px;padding:10px 12px;font-size:12.5px;opacity:0}
+.tap{position:absolute;left:62%;top:47%;width:44px;height:44px;border-radius:50%;background:rgba(233,162,59,.45);border:2px solid var(--saffron);opacity:0;transform:scale(.4)}
+.slot{position:absolute;left:50%;top:calc(64px + var(--pw)*1.015 + 58px);width:min(88vw,380px);height:10px;transform:translateX(-50%);border-radius:99px;background:#07140e;box-shadow:inset 0 2px 4px rgba(0,0,0,.6);opacity:0;visibility:hidden}
+.paper{position:absolute;left:50%;top:calc(64px + var(--pw)*1.015 + 63px);width:min(84vw,360px);transform:translateX(-50%);overflow:hidden;height:0}
+.paper img{display:block;width:100%;height:auto;border-radius:0 0 6px 6px;box-shadow:0 20px 40px rgba(0,0,0,.4)}
+.cap{position:absolute;left:20px;right:20px;bottom:max(84px,calc(env(safe-area-inset-bottom) + 76px));opacity:0;visibility:hidden}
+.cap.first{opacity:1;visibility:inherit}
+.cap .k{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--saffron);font-weight:700}
+.cap h3{font:300 clamp(26px,7vw,40px)/1.05 Fraunces,serif;margin:6px 0 6px}
+.cap p{margin:0;color:var(--soft);font-size:15.5px;max-width:28rem}
+.dots{position:absolute;right:8px;top:44%;display:flex;flex-direction:column;gap:9px}
+.dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.25);transition:background .3s,transform .3s}
+.dots i.on{background:var(--saffron);transform:scale(1.5)}
 
-/* swipe cards */
-.rail{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:4px 20px 18px;margin:0 -20px;scrollbar-width:none}
-.rail::-webkit-scrollbar{display:none}
-.tile{flex:0 0 78%;max-width:340px;scroll-snap-align:center;border-radius:26px;padding:22px;min-height:260px;display:flex;flex-direction:column;justify-content:space-between}
-.tile .n{font:300 64px/1 Fraunces,serif}
-.tile p{margin:0}
-.t1{background:var(--saffron);color:#1a1206}.t2{background:var(--sage)}.t3{background:var(--forest2);color:#f3ece0}.t4{background:var(--sand)}.t5{background:#f3d9c4}.t6{background:var(--forest);color:#f3ece0}
-.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
+/* scene 4: the features stack, each card settling over the last */
+.feat{position:relative;background:var(--cream);padding:0;height:100svh;overflow:hidden}
+.feat .head{position:absolute;left:20px;right:20px;top:max(70px,9svh)}
+.feat .head h2{font-size:clamp(34px,9vw,60px);margin:0 0 4px}
+.deck{position:absolute;left:20px;right:20px;top:calc(max(70px,9svh) + 140px);bottom:max(90px,calc(env(safe-area-inset-bottom) + 84px));max-width:460px;margin:0 auto}
+.card{position:absolute;inset:0;border-radius:30px;padding:26px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 -10px 40px rgba(0,0,0,.12);transform-origin:50% 0}
+.card .n{font:300 clamp(70px,22vw,120px)/.9 Fraunces,serif;letter-spacing:-.04em}
+.card b{font-size:21px;display:block;margin-bottom:6px}
+.card p{margin:0;font-size:16.5px}
+.c1{background:var(--saffron);color:#1a1206}.c2{background:var(--forest2);color:#f3ece0}.c3{background:var(--sage)}.c4{background:var(--sand)}.c5{background:var(--forest);color:#f3ece0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;max-width:1040px;margin:0 auto;padding:40px 20px 0}
 .chips span{border:1px solid currentColor;border-radius:99px;padding:7px 15px;font-size:15px}
 
 /* demo */
@@ -98,7 +142,7 @@ section{padding:88px 0}
 /* pricing */
 .toggle{display:inline-flex;background:rgba(255,255,255,.1);border-radius:99px;padding:4px;margin-bottom:18px}
 input[name=billing]{position:absolute;opacity:0;pointer-events:none}
-.toggle label{padding:9px 16px;border-radius:99px;cursor:pointer;font-size:15px;font-weight:600}
+.toggle label{padding:11px 16px;border-radius:99px;cursor:pointer;font-size:15px;font-weight:600}
 #m:checked~.toggle label[for=m],#y:checked~.toggle label[for=y]{background:#f3ece0;color:var(--forest)}
 #m:focus-visible~.toggle label[for=m],#y:focus-visible~.toggle label[for=y]{outline:2px solid var(--saffron)}
 .yr{display:none}#y:checked~.plans .yr{display:inline}#y:checked~.plans .mo{display:none}
@@ -106,12 +150,10 @@ input[name=billing]{position:absolute;opacity:0;pointer-events:none}
 .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
 .plan{border:1px solid rgba(255,255,255,.16);border-radius:26px;padding:24px;display:flex;flex-direction:column}
 .plan.best{background:var(--saffron);color:#1a1206;border-color:transparent}
-.plan.best .muted{color:#4a3510}
 .price{font:300 52px/1.05 Fraunces,serif;margin:10px 0 2px}
-.per{font-size:14px;opacity:.8}
-.plan ul{padding-left:18px;margin:16px 0;font-size:15px;flex:1;opacity:.85}
+.per{font-size:14px;opacity:.85}
+.plan ul{padding-left:18px;margin:16px 0;font-size:15px;flex:1;opacity:.9}
 .plan.best .btn{background:var(--forest);color:#fff}
-.plan .btn.ghost{color:inherit}
 
 details{border-top:1px solid #d9cdb9;padding:4px 0}
 details:last-of-type{border-bottom:1px solid #d9cdb9}
@@ -121,100 +163,156 @@ summary:after{content:"+";font:300 28px Fraunces,serif;color:var(--saffron);tran
 details[open] summary:after{transform:rotate(45deg)}
 details p{color:var(--muted);margin:0 0 18px}
 
-.end{text-align:center}
+.end{text-align:center;padding-bottom:120px}
 .end h2{font-size:clamp(46px,12vw,88px)}
-footer{padding:40px 0 60px;font-size:15px;color:var(--soft)}
+footer{padding:40px 0 0;font-size:15px;color:var(--soft)}
 footer a{color:#f3ece0}
 
-.r{opacity:0;transform:translateY(32px);transition:opacity 1s cubic-bezier(.2,.7,.2,1),transform 1s cubic-bezier(.2,.7,.2,1)}
-.r.on{opacity:1;transform:none}
-@media (min-width:860px){
-  .demo{grid-template-columns:1fr 1fr}
-  .chap{padding-left:max(20px,calc(50vw - 500px))}
-  .tile{flex-basis:300px}
-}
-@media (prefers-reduced-motion:reduce){
-  *,*:after{animation:none!important;transition:none!important}
-  .r{opacity:1;transform:none}.fill .w{opacity:1}
-}
+/* Without motion every scene is a plain, readable block. */
+html:not(.fx) .then,html:not(.fx) .bezel,html:not(.fx) .cue,html:not(.fx) .bits,html:not(.fx) .mess .h1,html:not(.fx) .dots,html:not(.fx) .slot{display:none}
+html:not(.fx) .mess,html:not(.fx) .story,html:not(.fx) .feat{height:auto;padding:88px 0}
+html:not(.fx) .mess .h,html:not(.fx) .tidy,html:not(.fx) .rig,html:not(.fx) .cap,html:not(.fx) .feat .head,html:not(.fx) .deck,html:not(.fx) .card,html:not(.fx) .paper{position:relative;inset:auto;left:auto;right:auto;top:auto;bottom:auto;transform:none;opacity:1;visibility:visible;margin:0 20px 24px}
+html:not(.fx) .rig,html:not(.fx) .tidy{margin:0 auto 28px}
+html:not(.fx) .paper{height:auto;margin:0 auto 28px}html:not(.fx) .paper img{transform:none}
+html:not(.fx) .phone .scr{position:relative;opacity:1;visibility:visible;display:none}html:not(.fx) .phone .scr:first-child{display:block;position:relative}
+html:not(.fx) .card{min-height:260px;margin:0 0 12px}html:not(.fx) .deck{margin:24px 20px 0}
+@media (min-width:860px){.demo{grid-template-columns:1fr 1fr}.cap{left:max(20px,calc(50vw - 500px))}}
+@media (prefers-reduced-motion:reduce){.marq span,.cue i:after{animation:none}.swap span,.dock,.dots i{transition:none}}
+@media (max-height:700px){:root{--pw:min(56vw,30svh)}.cap p{font-size:14.5px}}
+
+#seq{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.oil{position:relative;height:100svh;overflow:hidden;background:var(--forest);color:#f3ece0;padding:0}
+#gl{position:absolute;inset:0;width:100%;height:100%}
+.oh{position:absolute;left:20px;right:20px;top:max(70px,9svh);text-align:center}
+.oh h2{font-size:clamp(32px,8.5vw,58px);margin:0}
+.oh2{top:auto;bottom:max(96px,calc(env(safe-area-inset-bottom) + 88px));opacity:0;visibility:hidden}
+.lbl span{position:absolute;left:50%;transform:translate(-50%,-50%);font:600 14px/1 "JetBrains Mono",ui-monospace,monospace;color:#2a1a05;white-space:nowrap;opacity:0;visibility:hidden}
+.row .t,.cap .k,.mock .hd{font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:500;letter-spacing:0}
+.mess{background:#f3d9cf;color:var(--ink)}
+.mess .h p{color:#6b5048}
+.mess .bit{box-shadow:0 12px 26px rgba(80,30,20,.18)}
+.mess .tidy{box-shadow:0 30px 60px rgba(80,30,20,.25)}
+.snd{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.6);background:transparent;color:#fff;cursor:pointer;margin-left:auto;margin-right:8px}
+.snd[aria-pressed=true]{background:var(--saffron);border-color:var(--saffron);color:#1a1206}
+html:not(.fx) .oil,html:not(.fx) #seq,html:not(.fx) .snd{display:none}
 </style>
 </head>
 <body>
+<div class="prog" aria-hidden="true"></div>
+<div class="top" id="top"><a class="logo" href="/ruta">Ruta</a><button class="snd" id="snd" aria-pressed="false" aria-label="Sound"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg></button><a class="pill" href="https://signup.jains.es/">Start free</a></div>
+<div class="dock" id="dock"><a class="btn" href="https://signup.jains.es/">Start free for 30 days</a><a class="btn wa" href="https://wa.me/420777558262" aria-label="WhatsApp us"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.4 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .6l-.4.6-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 1c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg></a></div>
 
-<header class="hero">
-  <video id="bg" muted loop playsinline poster="/ruta/img/hero.jpg" aria-hidden="true"></video>
-  <div class="top"><a class="logo" href="/ruta">Ruta</a><a class="pill" href="https://demo.jains.es">See it live</a></div>
-  <div class="in">
-    <h1>Run a <span class="swap it" aria-hidden="true"><span class="on">calmer</span><span>fuller</span><span>kinder</span><span>lighter</span></span><span class="sr" style="position:absolute;left:-9999px">calmer</span> centre.</h1>
-    <p class="lead">Every therapy, therapist and room for your wellness centre, planned from one phone. Ayurveda, spa, massage, physio.</p>
-    <div class="ctas"><a class="btn" href="https://signup.jains.es/">Start free for 30 days</a></div>
-    <p class="note">No card. Your own centre in about two minutes.</p>
+<header class="hero" id="hero">
+  <div class="film" id="film">
+    <img class="poster" src="/ruta/img/hero.jpg" alt="" fetchpriority="high" width="480" height="720">
+    <canvas id="seq" aria-hidden="true"></canvas>
+    <img class="app" src="/ruta/img/day.jpg" alt="" width="444" height="900">
+    <div class="shade"></div>
   </div>
-  <div class="cue" aria-hidden="true"></div>
+  <div class="bezel" aria-hidden="true"></div>
+  <div class="in" id="intro">
+    <h1><span aria-hidden="true">Run a <span class="swap it"><span class="on">calmer</span><span>fuller</span><span>kinder</span><span>calmer</span></span> centre.</span><span class="sr">Run a calmer centre.</span></h1>
+    <p class="lead">Every therapy, therapist and room, planned from one phone. Someone calls in sick? One tap moves their day. For Ayurveda, spa, massage and physio.</p>
+    <div class="ctas"><a class="btn" href="https://signup.jains.es/">Start free for 30 days</a><a class="btn ghost" href="https://demo.jains.es">See it live</a></div>
+    <p class="note">Then ₹999 a month, only if you stay. No card needed to start.</p>
+  </div>
+  <div class="then" aria-hidden="true"><h2>From the treatment room</h2></div>
+  <div class="then then2" aria-hidden="true"><h2>to the palm of your hand.</h2></div>
+  <div class="cue" aria-hidden="true">Scroll<i></i></div>
 </header>
 
 <div class="marq" aria-hidden="true"><span>Abhyanga · Shirodhara · Deep tissue · Hot stone · Swedana · Reflexology · Physio · Nasya · Panchakarma · Thai · Abhyanga · Shirodhara · Deep tissue · Hot stone · Swedana · Reflexology · Physio · Nasya · Panchakarma · Thai · </span></div>
 
-<section class="dark"><div class="wrap">
-  <p class="fill" id="fill">Fewer WhatsApp threads. Less paper on the wall. No guest waiting for a room that is taken. More time for the people on the table.</p>
-</div></section>
+<section class="oil" id="oil" aria-label="From one pour to a calm day">
+  <canvas id="gl" aria-hidden="true"></canvas>
+  <div class="oh oh1"><h2>Every treatment starts with a little oil.</h2></div>
+  <div class="oh oh2"><h2>Ruta makes the rest <span class="it">flow.</span></h2></div>
+  <div class="lbl" aria-hidden="true"><span style="top:25%">09:00 · Abhyanga · Asha</span><span style="top:37.5%">10:30 · Shirodhara · Meera</span><span style="top:50%">12:00 · Hot stone · Ravi</span><span style="top:62.5%">14:00 · Swedana · Asha</span><span style="top:75%">15:30 · Nasya · Kiran</span></div>
+</section>
 
-<div class="dark story" id="story">
-  <div class="stage" aria-hidden="true"><div class="phone">
-    <div class="scr on"><img src="/ruta/img/day.jpg" alt=""></div>
-    <div class="scr"><div class="mock"><div class="hd">Today · 10:30</div>
+<section class="mess" id="mess" aria-label="Before and after Ruta">
+  <div class="h h1"><h2>A morning at most centres.</h2><p>Messages, notes on paper, and one person holding the whole day in their head.</p></div>
+  <div class="h h2"><h2>The same morning, <span class="it">with Ruta.</span></h2><p>One calm list. Everyone sees their own part of it.</p></div>
+  <div class="bits" aria-hidden="true">
+    <div class="bit wa"><small>Kiran</small>Not well today, can't come 🙏</div>
+    <div class="bit pp">Shirodhara 10:30 – who??</div>
+    <div class="bit wa"><small>Front desk</small>Is Room 2 free at 11?</div>
+    <div class="bit pp">Steam room – broken!</div>
+    <div class="bit wa"><small>Mrs Rao</small>Only Asha please</div>
+    <div class="bit wa"><small>Ravi</small>Which room am I in?</div>
+    <div class="bit pp">Hot stone 12:00 ✗ Kiran</div>
+    <div class="bit wa"><small>Kitchen</small>How many on khichdi?</div>
+  </div>
+  <div class="tidy" aria-hidden="true">
+    <div class="row"><span class="t">09:00</span><div><b>Abhyanga</b><small>Asha · Room Ganga</small></div></div>
+    <div class="row"><span class="t">10:30</span><div><b>Shirodhara</b><small>Asha · Room Yamuna</small></div></div>
+    <div class="row"><span class="t">11:00</span><div><b>Swedana</b><small>Ravi · Room 2</small></div></div>
+    <div class="row"><span class="t">12:00</span><div><b>Hot stone</b><small>Meera · Room Kaveri</small></div></div>
+    <div class="row"><span class="t">13:00</span><div><b>Lunch</b><small>6 khichdi · 3 regular</small></div></div>
+  </div>
+</section>
+
+<section class="story" id="story" aria-label="A day with Ruta">
+  <div class="glow" aria-hidden="true"></div>
+  <div class="rig" aria-hidden="true"><div class="phone">
+    <div class="scr"><img src="/ruta/img/day.jpg" alt="" width="444" height="900" loading="lazy"></div>
+    <div class="scr"><div class="mock"><div class="hd">Today · 08:10</div>
       <div class="row"><span class="t">09:00</span><div><b>Abhyanga</b><small>Asha · Room Ganga</small></div></div>
-      <div class="row" id="x"><span class="t">10:30</span><div><b>Shirodhara</b><small id="xs">Kiran · Room Yamuna</small></div></div>
-      <div class="row" id="y2"><span class="t">12:00</span><div><b>Hot stone</b><small id="ys">Kiran · Room Kaveri</small></div></div>
+      <div class="row rx"><i class="tint off"></i><i class="tint ok"></i><span class="t">10:30</span><div><b>Shirodhara</b><span class="who"><small class="a">Kiran · Room Yamuna</small><small class="b">Asha · Room Yamuna ✓</small></span></div></div>
+      <div class="row rx"><i class="tint off"></i><i class="tint ok"></i><span class="t">12:00</span><div><b>Hot stone</b><span class="who"><small class="a">Kiran · Room Kaveri</small><small class="b">Meera · Room Kaveri ✓</small></span></div></div>
       <div class="row"><span class="t">14:00</span><div><b>Swedana</b><small>Ravi · Steam room</small></div></div>
       <div class="row"><span class="t">15:30</span><div><b>Reflexology</b><small>Meera · Room Ganga</small></div></div>
-      <div class="toast" id="toast">2 treatments moved to who is free · Undo</div></div></div>
-    <div class="scr"><img src="/ruta/img/card.jpg" alt=""></div>
+      <div class="tap"></div>
+      <div class="toast">2 treatments moved to who is free · Undo</div></div></div>
+    <div class="scr"><img src="/ruta/img/card.jpg" alt="" width="444" height="900" loading="lazy"></div>
   </div></div>
-  <div class="chap"><div class="card"><div class="k">06:45 · Morning</div><h3>The whole day, one scroll.</h3><p>Every treatment with its time, guest, therapist and room. Sort by therapist, room or guest.</p></div></div>
-  <div class="chap"><div class="card"><div class="k">08:10 · Kiran calls in sick</div><h3>One tap. Breathe.</h3><p>Ruta finds who is free, keeps each guest with a therapist they may see, and moves the day. Undo puts it back.</p></div></div>
-  <div class="chap"><div class="card"><div class="k">All day · Every guest</div><h3>One card holds the stay.</h3><p>Plan, diet, notes and every visit. Each therapist opens their own day from a private link, no sign-in.</p></div></div>
-</div>
+  <div class="slot" aria-hidden="true"></div>
+  <div class="paper" aria-hidden="true"><img src="/ruta/img/sheet.jpg" alt="" width="1287" height="910"></div>
+  <div class="cap first"><div class="k">06:45 · Morning</div><h3>The whole day, one scroll.</h3><p>Every treatment with its time, guest, therapist and room. Sort by therapist, room or guest.</p></div>
+  <div class="cap"><div class="k">08:10 · Kiran calls in sick</div><h3>One tap. <span class="it">Breathe.</span></h3><p>Ruta finds who is free, keeps each guest with a therapist they may see, and moves the day. Undo puts it back.</p></div>
+  <div class="cap"><div class="k">All day · Every guest</div><h3>One card holds the stay.</h3><p>Plan, diet, notes and every visit. Each therapist opens their own day from a private link.</p></div>
+  <div class="cap"><div class="k">07:00 · On the wall</div><h3>The day, printed.</h3><p>Guests, therapies, rooms and meals on one A4 for the team. Rotas too.</p></div>
+  <div class="dots" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i></div>
+</section>
 
-<section><div class="wrap">
-  <h2 class="r">Everything the front desk <span class="it">juggles</span>.</h2>
-  <p class="muted r" style="max-width:32rem">Swipe through. It is all in the free trial.</p>
-  <div class="rail r">
-    <div class="tile t1"><span class="n">2 min</span><p><b>To your own centre</b><br>With an example day to play with before you touch your own.</p></div>
-    <div class="tile t3"><span class="n">1 tap</span><p><b>Someone off? Covered</b><br>Who is free, in a free room, by the rules your centre keeps.</p></div>
-    <div class="tile t2"><span class="n">0</span><p><b>Double-booked rooms</b><br>Ruta checks every room and therapist before anything is saved.</p></div>
-    <div class="tile t4"><span class="n">A4</span><p><b>The day on the wall</b><br>Guests, therapies, rooms and meals, printed for the team. Rotas too.</p></div>
-    <div class="tile t5"><span class="n">✍︎</span><p><b>Discharge summary</b><br>Your letterhead, treatments, vitals and medicines, ready to sign.</p></div>
-    <div class="tile t6"><span class="n">↓</span><p><b>Leave with your data</b><br>One “Download everything” file. It loads into a free self-hosted copy.</p></div>
+<section class="feat" id="feat">
+  <div class="head"><h2>Everything the front desk juggles.</h2><p class="muted" style="margin:0">All of it in the free trial.</p></div>
+  <div class="deck">
+    <div class="card c1"><span class="n">2&nbsp;min</span><p><b>To your own centre</b>With an example day to play with before you touch your own.</p></div>
+    <div class="card c2"><span class="n">1&nbsp;tap</span><p><b>Someone off? Covered</b>Who is free, in a free room, by the rules your centre keeps.</p></div>
+    <div class="card c3"><span class="n">0</span><p><b>Double-booked rooms</b>Ruta checks every room and therapist before anything is saved.</p></div>
+    <div class="card c4"><span class="n">Signed</span><p><b>Discharge summary</b>Your letterhead, treatments, vitals and medicines, ready to sign.</p></div>
+    <div class="card c5"><span class="n">Yours</span><p><b>Leave with your data</b>One “Download everything” file. It loads into a free self-hosted copy.</p></div>
   </div>
-  <div class="chips r"><span>Ayurveda centres</span><span>Day spas</span><span>Massage studios</span><span>Physiotherapy</span><span>Retreats</span></div>
-</div></section>
+</section>
+<div class="chips" style="background:var(--cream);padding-bottom:20px"><span>Ayurveda centres</span><span>Day spas</span><span>Massage studios</span><span>Physiotherapy</span><span>Retreats</span></div>
 
 <section class="dark"><div class="wrap demo">
-  <div class="r"><h2>Thirty seconds, <span class="it">start to sheet</span>.</h2><p class="muted">Sign up, open the example day, make it yours, and tomorrow is planned. On a phone, exactly as you will use it.</p>
+  <div class="up"><h2>Thirty seconds, start to finish.</h2><p class="muted">Sign up, open the example day, make it yours, and tomorrow is planned. On a phone, exactly as you will use it.</p>
   <div class="ctas" style="margin-top:22px"><a class="btn" href="https://signup.jains.es/">Try it free</a><a class="btn ghost" href="https://demo.jains.es">See it live</a></div></div>
-  <video class="clip r" data-src="/ruta/video.mp4" width="375" height="812" muted loop playsinline controls preload="none" aria-label="30 seconds on a phone: sign up, the example day, Make it mine, and tomorrow planned"></video>
+  <video class="clip up" data-src="/ruta/video.mp4" width="375" height="812" muted loop playsinline controls preload="none" aria-label="30 seconds on a phone: sign up, the example day, Make it mine, and tomorrow planned"></video>
 </div></section>
 
 <section class="dark" id="pricing" style="padding-top:20px"><div class="wrap">
-  <h2 class="r">Simple <span class="it">pricing</span>.</h2>
+  <h2 class="up">Simple pricing.</h2>
+  <p class="muted" style="margin:-6px 0 18px">30 days free, then ₹999 a month per centre, on our cloud or your own computer.</p>
   <input type="radio" name="billing" id="m" checked><input type="radio" name="billing" id="y">
   <div class="toggle" role="group" aria-label="Billing period"><label for="m">Monthly</label><label for="y">Yearly: 2 months free</label></div>
   <div class="plans">
-    <div class="plan r">
+    <div class="plan up">
       <h3>Free trial</h3>
       <div class="price"><span class="inr">₹0</span><span class="usd">$0</span></div><div class="per">30 days, no card</div>
       <ul><li>The full app on your own address</li><li>The clock starts with your first guest or printed sheet</li><li>Upgrade any day; nothing is deleted at the end</li></ul>
       <a class="btn" href="https://signup.jains.es/">Start free trial</a>
     </div>
-    <div class="plan best r">
+    <div class="plan best up">
       <h3>Cloud + support</h3>
       <div class="price"><span class="inr"><span class="mo">₹999</span><span class="yr">₹9,990</span></span><span class="usd"><span class="mo">$19</span><span class="yr">$190</span></span></div>
       <div class="per"><span class="mo">per centre a month</span><span class="yr">per centre a year</span><span class="inr">, incl. GST</span></div>
       <ul><li>Hosting, HTTPS, nightly backups, updates</li><li>Support on WhatsApp, email and phone, working hours IST</li><li>Setup help: we enter your therapies, rooms, programmes and rota from your paper sheets</li><li>AI assistant connector, hosted</li></ul>
       <a class="btn" href="https://wa.me/420777558262?text=I%27d%20like%20Ruta%20Cloud%20%2B%20support.">Choose on WhatsApp</a>
     </div>
-    <div class="plan r">
+    <div class="plan up">
       <h3>On-premise + support</h3>
       <div class="price"><span class="inr"><span class="mo">₹999</span><span class="yr">₹9,990</span></span><span class="usd"><span class="mo">$19</span><span class="yr">$190</span></span></div>
       <div class="per"><span class="mo">per centre a month</span><span class="yr">per centre a year</span><span class="inr">, incl. GST</span></div>
@@ -222,59 +320,199 @@ footer a{color:#f3ece0}
       <a class="btn ghost" href="https://wa.me/420777558262?text=I%27d%20like%20Ruta%20On-premise%20%2B%20support.">Choose on WhatsApp</a>
     </div>
   </div>
-  <p class="note">Or run it yourself for free: Ruta is open source. <a href="https://github.com/jpysh/ayurcalm-scheduler/blob/main/docs/self-host.md">Self-host guide</a> (community help only).</p>
 </div></section>
 
 <section><div class="wrap">
-  <h2 class="r">Questions.</h2>
+  <h2 class="up">Questions.</h2>
   <details><summary>Can I leave with my data?</summary><p>Always. Settings → Download everything gives one file with all your guests, bookings, letterhead and signatures. It loads into a free self-hosted Ruta, or back into the cloud.</p></details>
   <details><summary>What happens when the trial ends?</summary><p>Nothing is deleted. The centre becomes read-only for 60 days and Download everything keeps working. Choose a plan any day to carry on.</p></details>
   <details><summary>Where is our data kept?</summary><p>Cloud centres run on servers we look after, with an encrypted copy made every night and kept in a second place. On-premise keeps everything on your own computer.</p></details>
   <details><summary>Do we need the internet all day?</summary><p>Cloud needs a connection to change the day; the printed sheet works without one. On-premise works on the centre's own Wi-Fi.</p></details>
   <details><summary>Is support included in the trial?</summary><p>The trial is the full app without support. Upgrade on any day of the trial to get support and setup help straight away.</p></details>
+  <details><summary>We have two centres. How does that work?</summary><p>Each centre is its own Ruta, with its own address and plan. One person can sign in to both.</p></details>
   <details><summary>Can we cancel?</summary><p>Yes, any month. You keep your data: download it, or self-host for free.</p></details>
 </div></section>
 
 <section class="dark end"><div class="wrap">
-  <h2 class="r">Tomorrow,<br><span class="it">already planned.</span></h2>
-  <div class="ctas r" style="justify-content:center;margin-top:26px"><a class="btn" href="https://signup.jains.es/">Start free for 30 days</a><a class="btn ghost" href="https://wa.me/420777558262">WhatsApp us</a></div>
+  <h2 class="up">Tomorrow,<br><span class="it">already planned.</span></h2>
+  <div class="ctas up" style="justify-content:center;margin-top:26px"><a class="btn" href="https://signup.jains.es/">Start free for 30 days</a><a class="btn ghost" href="https://wa.me/420777558262">WhatsApp us</a></div><p class="note">30 days free, then ₹999 a month incl. GST. No card needed to start.</p>
   <footer>
     <p><b>Talk to us:</b> <a href="https://wa.me/420777558262">WhatsApp +420 777 558 262</a> · <a href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a>. Replies the same working day, IST.</p>
     <p><a href="/ruta/pilot">Pilot notice: your data</a></p>
-    <p>Ruta is open source (MIT). Made for wellness centres: Ayurveda, spas, massage and physio.</p>
+    <p>Ruta is open source (MIT): <a href="https://github.com/jpysh/ayurcalm-scheduler/blob/main/docs/self-host.md">run it yourself for free</a>, community help only. Made for wellness centres: Ayurveda, spas, massage and physio.</p>
   </footer>
 </div></section>
 
+<script type="x-shader/x-fragment" id="oilfs">
+precision highp float;uniform vec2 r;uniform float t,p,m;
+float smin(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}
+float box(vec2 q,vec2 b,float rr){vec2 d=abs(q)-b+rr;return length(max(d,0.))+min(max(d.x,d.y),0.)-rr;}
+float sdf(vec2 q){
+  float a=r.x/r.y;
+  float top=1.1-2.6*m, end=1.1-2.3*p;
+  float wob=.018*sin(q.y*5.+t*2.)+.008*sin(q.y*13.-t*3.);
+  float w=.03*(1.+.3*sin(q.y*9.+t*4.))*(1.-.6*m);
+  float ds=abs(q.x-wob)-w; ds=max(ds,q.y-top); ds=max(ds,end-q.y);
+  float drop=length(q-vec2(wob,end))-w*1.6*(1.-m); ds=smin(ds,drop,.03);
+  float dr=1e3;
+  for(int i=0;i<5;i++){float y=.5-float(i)*.25; float L=a*.82*smoothstep(float(i)*.12,float(i)*.12+.45,m);
+    dr=min(dr,box(q-vec2(0.,y),vec2(max(L,.001),.058),.058));}
+  return smin(ds,dr,.09);
+}
+void main(){
+  vec2 q=(2.*gl_FragCoord.xy-r)/r.y;
+  float d=sdf(q),e=1.5/r.y;
+  vec2 n2=vec2(sdf(q+vec2(e,0.))-sdf(q-vec2(e,0.)),sdf(q+vec2(0.,e))-sdf(q-vec2(0.,e)));
+  float depth=clamp(-d*14.,0.,1.);vec3 n=normalize(vec3(-n2/(2.*e)*(1.-depth),1.));
+  vec3 L=normalize(vec3(-.5,.7,.9)),H=normalize(L+vec3(0.,0.,1.));
+  vec3 base=mix(vec3(.55,.30,.05),vec3(.95,.68,.22),depth);
+  vec3 col=base*(.45+.65*max(dot(n,L),0.))+vec3(1.,.93,.75)*pow(max(dot(n,H),0.),60.)*.9;
+  col+=vec3(.9,.6,.2)*.08*(1.-depth);
+  float al=smoothstep(e,-e,d);
+  gl_FragColor=vec4(col*al,al);
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+<script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js" defer></script>
 <script>
 // A referral (?ref=) goes with the visitor to the sign-up form (#249).
 var r=new URLSearchParams(location.search).get("ref");if(r&&/^[a-z0-9-]{1,40}$/.test(r))document.querySelectorAll('a[href^="https://signup.jains.es"]').forEach(function(a){a.href+="?ref="+r});
 
-var still=matchMedia('(prefers-reduced-motion: reduce)').matches;
-// The hero film costs a slow phone its data, so it plays only on a connection that can carry it.
-var c=navigator.connection,bg=document.getElementById('bg');
-if(!still&&!(c&&(c.saveData||/2g/.test(c.effectiveType||'')))){bg.src='/ruta/hero.mp4';bg.play().catch(function(){})}
+var still=!document.documentElement.classList.contains('fx');
+var top_=document.getElementById('top'),dock=document.getElementById('dock'),hero=document.getElementById('hero'),endS=document.querySelector('.end');
+var pinned=function(){return window.ScrollTrigger&&ScrollTrigger.getAll().some(function(t){return t.pin&&t.isActive})};
+function bars(){var y=scrollY,h=innerHeight;top_.classList.toggle('solid',y>h*.6);dock.classList.toggle('on',y>h*.9&&endS.getBoundingClientRect().top>h*.8&&!pinned())}
+addEventListener('scroll',bars,{passive:true});bars();
 
-var io=function(fn,th){return new IntersectionObserver(function(es){es.forEach(function(e){fn(e)})},{threshold:th||.2})};
-var rev=io(function(e){if(e.isIntersecting){e.target.classList.add('on');rev.unobserve(e.target)}});
-document.querySelectorAll('.r').forEach(function(el){rev.observe(el)});
+var snd=document.getElementById('snd'),ac=null,master=null;
+function bowl(f,at,len,g){var o=ac.createOscillator(),e=ac.createGain();o.frequency.value=f;o.type='sine';e.gain.setValueAtTime(0,at);e.gain.linearRampToValueAtTime(g,at+.02);e.gain.exponentialRampToValueAtTime(.0001,at+len);o.connect(e).connect(master);o.start(at);o.stop(at+len)}
+function strike(){if(!ac||ac.state!=='running')return;var t=ac.currentTime;[[220,1],[440*1.18,.4],[660*1.41,.2]].forEach(function(h){bowl(h[0],t,6,.18*h[1])})}
+snd.addEventListener('click',function(){var on=snd.getAttribute('aria-pressed')!=='true';snd.setAttribute('aria-pressed',on);
+  if(!ac){ac=new (window.AudioContext||window.webkitAudioContext)();master=ac.createGain();master.gain.value=.5;master.connect(ac.destination);
+    [110,164.8].forEach(function(f){var o=ac.createOscillator(),g=ac.createGain(),l=ac.createOscillator(),lg=ac.createGain();o.frequency.value=f;g.gain.value=.04;l.frequency.value=.08;lg.gain.value=.025;l.connect(lg).connect(g.gain);o.connect(g).connect(master);o.start();l.start()})}
+  if(on){ac.resume();strike()}else ac.suspend()});
+var clip=document.querySelector('.clip');
+new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){if(!clip.src)clip.src=clip.dataset.src;if(!still)clip.play().catch(function(){})}else clip.pause()})},{threshold:.3}).observe(clip);
 
-if(!still){var sw=document.querySelectorAll('.swap span'),si=0;setInterval(function(){sw[si].classList.remove('on');si=(si+1)%sw.length;sw[si].classList.add('on')},2400)}
+// The headline word turns once and comes to rest, so nothing on the page moves for ever.
+if(!still){var sw=document.querySelectorAll('.swap span'),si=0,ti=setInterval(function(){sw[si].classList.remove('on');si++;sw[si].classList.add('on');if(si==sw.length-1)clearInterval(ti)},2200)}
 
-var fill=document.getElementById('fill');
-fill.innerHTML=fill.textContent.split(' ').map(function(w){return '<span class="w">'+w+'</span>'}).join(' ');
-var ws=fill.querySelectorAll('.w');
-function paint(){var b=fill.getBoundingClientRect(),h=innerHeight,p=Math.min(1,Math.max(0,(h*.85-b.top)/(b.height+h*.35)));ws.forEach(function(w,i){w.classList.toggle('on',still||i<p*ws.length)})}
 
-var scr=document.querySelectorAll('.phone .scr'),x=document.getElementById('x'),y2=document.getElementById('y2'),xs=document.getElementById('xs'),ys=document.getElementById('ys'),toast=document.getElementById('toast'),played=false;
-function reassign(){if(played)return;played=true;
-  setTimeout(function(){x.className=y2.className='row off';xs.textContent=ys.textContent='Kiran · on leave'},500);
-  setTimeout(function(){x.className=y2.className='row ok';xs.textContent='Asha · Room Yamuna ✓';ys.textContent='Meera · Room Kaveri ✓';toast.classList.add('on')},1900)}
-var chaps=document.querySelectorAll('.chap'),ch=io(function(e){if(!e.isIntersecting)return;var i=[].indexOf.call(chaps,e.target);scr.forEach(function(s,j){s.classList.toggle('on',i==j)});if(i==1)reassign()},.5);
-chaps.forEach(function(el){ch.observe(el)});
+document.addEventListener('DOMContentLoaded',function(){
+  if(still)return;
+  if(!window.gsap||!window.ScrollTrigger){document.documentElement.classList.remove('fx');return}
+  gsap.registerPlugin(ScrollTrigger);
+  ScrollTrigger.config({ignoreMobileResize:true});
+  // Smooth scrolling only with a mouse or trackpad: on touch it fights the resting points.
+  if(window.Lenis&&matchMedia('(pointer:fine)').matches){var lenis=new Lenis({lerp:.1});lenis.on('scroll',ScrollTrigger.update);gsap.ticker.add(function(t){lenis.raf(t*1000)});gsap.ticker.lagSmoothing(0)}
+  var vh=function(k){return function(){return '+='+Math.round(innerHeight*k)}};
 
-var clip=document.querySelector('.clip'),cv=io(function(e){if(e.isIntersecting){if(!clip.src)clip.src=clip.dataset.src;if(!still)clip.play().catch(function(){})}else clip.pause()},.3);cv.observe(clip);
+  gsap.to('.prog',{scaleX:1,ease:'none',scrollTrigger:{start:0,end:'max',scrub:.3}});
 
-addEventListener('scroll',paint,{passive:true});paint();
+  // Scene 1: the film is masked down to the phone screen and becomes the app.
+  var film=document.getElementById('film');
+  function inset(){var pw=Math.min(innerWidth*.56,240,innerHeight*.3)-18,ph=(pw+18)*900/444-18,w=film.offsetWidth,h=film.offsetHeight,x=(w-pw)/2,y=(h-ph)/2;return 'inset('+y+'px '+x+'px '+y+'px '+x+'px round 31px)'}
+  // The pour is 90 stills drawn to a canvas, so scrolling plays it forward and back like a film.
+  var seq=document.getElementById('seq'),sx=seq.getContext('2d'),N=90,imgs=[],fr={i:0};
+  function sizeSeq(){var d=Math.min(devicePixelRatio,2);seq.width=seq.offsetWidth*d;seq.height=seq.offsetHeight*d;draw()}
+  function draw(){var im=imgs[Math.round(fr.i)];if(!im||!im.complete||!im.naturalWidth)return;var cw=seq.width,ch=seq.height,k=Math.max(cw/im.naturalWidth,ch/im.naturalHeight),w=im.naturalWidth*k,h=im.naturalHeight*k;sx.drawImage(im,(cw-w)/2,(ch-h)/2,w,h)}
+  for(var i=0;i<N;i++){var im=new Image();im.src='/ruta/frames/f'+String(i+1).padStart(3,'0')+'.jpg';if(!i)im.onload=draw;imgs.push(im)}
+  sizeSeq();addEventListener('resize',sizeSeq);
+  gsap.timeline({scrollTrigger:{trigger:'#hero',start:'top top',end:vh(2.6),pin:true,scrub:.5,invalidateOnRefresh:true,snap:{snapTo:[0,.42,1],duration:{min:.4,max:1},ease:'power2.inOut',delay:.08}}})
+   .to(fr,{i:N-1,duration:.42,ease:'none',onUpdate:draw},0)
+   .to('#intro,.cue',{y:-60,autoAlpha:0,duration:.12,ease:'power1.in'},.08)
+   .to(film,{clipPath:inset,duration:.3,ease:'power2.inOut'},.46)
+   .to('.shade',{opacity:0,duration:.15},.5)
+   .to('.bezel',{autoAlpha:1,duration:.1},.66)
+   .fromTo('.then:not(.then2)',{y:30,autoAlpha:0},{y:0,autoAlpha:1,duration:.12},.52)
+   .to('.film .app',{opacity:1,duration:.12},.76)
+   .fromTo('.then2',{y:30,autoAlpha:0},{y:0,autoAlpha:1,duration:.12},.82)
+   .to({},{duration:.06});
+  gsap.set(film,{clipPath:'inset(0px 0px 0px 0px round 0px)'});
+
+  // The signature: golden oil falls, then spreads into the day's rows. Drawn by the graphics chip.
+  var gl=document.getElementById('gl').getContext('webgl',{premultipliedAlpha:true,antialias:true}),oilU={p:0,m:0};
+  if(gl){
+    var vs='attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
+    var fs=document.getElementById('oilfs').textContent;
+    var mk=function(t,src){var o=gl.createShader(t);gl.shaderSource(o,src);gl.compileShader(o);return o},pr=gl.createProgram();
+    gl.attachShader(pr,mk(gl.VERTEX_SHADER,vs));gl.attachShader(pr,mk(gl.FRAGMENT_SHADER,fs));gl.linkProgram(pr);gl.useProgram(pr);
+    gl.bindBuffer(gl.ARRAY_BUFFER,gl.createBuffer());gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+    var la=gl.getAttribLocation(pr,'a');gl.enableVertexAttribArray(la);gl.vertexAttribPointer(la,2,gl.FLOAT,false,0,0);
+    var uR=gl.getUniformLocation(pr,'r'),uT=gl.getUniformLocation(pr,'t'),uP=gl.getUniformLocation(pr,'p'),uM=gl.getUniformLocation(pr,'m');
+    var cv=gl.canvas,live=false;
+    var sizeGl=function(){var d=Math.min(devicePixelRatio,2);cv.width=cv.offsetWidth*d;cv.height=cv.offsetHeight*d;gl.viewport(0,0,cv.width,cv.height)};
+    sizeGl();addEventListener('resize',sizeGl);
+    gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+    gsap.ticker.add(function(t){if(!live)return;gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.uniform2f(uR,cv.width,cv.height);gl.uniform1f(uT,t);gl.uniform1f(uP,oilU.p);gl.uniform1f(uM,oilU.m);gl.drawArrays(gl.TRIANGLES,0,3)});
+    gsap.timeline({scrollTrigger:{trigger:'#oil',start:'top top',end:vh(2),pin:true,scrub:.6,
+      snap:{snapTo:[0,1],duration:{min:.4,max:1},ease:'power2.inOut',delay:.08}}})
+     .to(oilU,{p:1,duration:.35,ease:'power1.in'},0)
+     .to(oilU,{m:1,duration:.4,ease:'power2.inOut'},.4)
+     .to('.oh1',{autoAlpha:0,y:-20,duration:.1},.45)
+     .fromTo('.oh2',{autoAlpha:0,y:20},{autoAlpha:1,y:0,duration:.1},.75)
+     .to('.lbl span',{autoAlpha:1,duration:.06,stagger:.025},.74)
+     .to({},{duration:.08});
+    // Drawn only while the scene is on screen, so the graphics chip rests the rest of the time.
+    new IntersectionObserver(function(es){live=es[0].isIntersecting}).observe(cv);
+  }
+
+  // Scene 2: the morning's mess piles up, then folds into one list.
+  var bits=gsap.utils.toArray('.bit'),W=innerWidth,H=innerHeight;
+  var spots=[[-.28,-.16,-8],[.22,-.1,6],[-.18,.02,4],[.26,.06,-5],[-.24,.18,-3],[.18,.22,7],[-.06,.3,-6],[.1,-.22,3]];
+  var m=gsap.timeline({scrollTrigger:{trigger:'#mess',start:'top top',end:vh(2.2),pin:true,invalidateOnRefresh:true,scrub:.6,snap:{snapTo:[0,.45,1],duration:{min:.3,max:.8},ease:'power2.inOut',delay:.08}}});
+  bits.forEach(function(b,i){var s=spots[i];gsap.set(b,{xPercent:-50,yPercent:-50,x:0,y:H*.5,rotation:0,autoAlpha:0});
+    m.to(b,{x:function(){return s[0]*innerWidth},y:function(){return s[1]*innerHeight},rotation:s[2],autoAlpha:1,duration:.12,ease:'back.out(1.6)'},.02+i*.035)});
+  m.to('.mess .h1',{autoAlpha:0,y:-20,duration:.08},.5)
+   .to(bits,{x:0,y:function(i){var t=document.querySelector('.tidy'),rw=t.querySelectorAll('.row')[i%5];return t.offsetTop-t.offsetHeight/2+rw.offsetTop+rw.offsetHeight/2-innerHeight*.58},
+      rotation:0,scale:.8,duration:.14,stagger:.012,ease:'expo.out'},.5)
+   .to(bits,{autoAlpha:0,duration:.05},.66)
+   .fromTo('.tidy',{autoAlpha:0,scale:.6},{autoAlpha:1,scale:1,duration:.12,ease:'back.out(1.4)'},.64)
+   .fromTo('.tidy .row',{x:-30,autoAlpha:0},{x:0,autoAlpha:1,stagger:.025,duration:.08},.68)
+   .fromTo('.mess .h2',{autoAlpha:0,y:20},{autoAlpha:1,y:0,duration:.1},.66)
+   .to({},{duration:.12});
+
+  // Scene 3: one phone turning through the day; each chapter is a resting point.
+  var scr=gsap.utils.toArray('.phone .scr'),caps=gsap.utils.toArray('.cap'),dots=gsap.utils.toArray('.dots i');
+  gsap.set('.rig',{xPercent:-50});
+  var s=gsap.timeline({scrollTrigger:{trigger:'#story',start:'top top',end:vh(4),pin:true,scrub:.6,
+    snap:{snapTo:[0,1/3,2/3,1],duration:{min:.3,max:.9},ease:'power2.inOut',delay:.08},
+    onUpdate:function(st){var i=Math.round(st.progress*3);dots.forEach(function(d,j){d.classList.toggle('on',i==j)})}}});
+  var swapTo=function(a,b,at,turn){s.to(caps[a],{autoAlpha:0,y:-20,duration:.06},at)
+     .to('.rig',{rotationY:turn,rotationX:4,duration:.08,ease:'power2.inOut'},at)
+     .to(scr[a]||{},{autoAlpha:0,duration:.04},at+.04).to(scr[b]||{},{autoAlpha:1,duration:.04},at+.04)
+     .to('.rig',{rotationY:0,rotationX:0,duration:.08,ease:'power2.inOut'},at+.08)
+     .fromTo(caps[b],{autoAlpha:0,y:20},{autoAlpha:1,y:0,duration:.06},at+.08)};
+  s.fromTo('.rig',{y:80,rotationX:18,scale:.9},{y:0,rotationX:0,scale:1,duration:.1},0)
+   .to('#story',{backgroundColor:'#3b2410',duration:.1},.14).to('#story',{backgroundColor:'#0f2a1f',duration:.1},.46).to('#story',{backgroundColor:'#1b1f3b',duration:.1},.76);
+  swapTo(0,1,.14,-35);
+  s.to('.rx',{x:-4,duration:.005,repeat:5,yoyo:true},.27).to('.phone',{filter:'saturate(.2)',duration:.01},.27).to('.phone',{filter:'saturate(1)',duration:.02},.31)
+   .to('.tap',{opacity:1,scale:1,duration:.03},.27).to('.tap',{opacity:0,scale:1.6,duration:.03},.3)
+   .to('.rx .tint.off',{opacity:1,duration:.02,stagger:.01},.27)
+   .to('.rx .who .a',{opacity:0,y:-10,duration:.03,stagger:.015},.31).fromTo('.rx .who .b',{opacity:0,y:10},{opacity:1,y:0,duration:.03,stagger:.015},.32)
+   .to('.rx .tint.off',{opacity:0,duration:.02},.32).to('.rx .tint.ok',{opacity:1,duration:.02,stagger:.01},.32)
+   .fromTo('.toast',{opacity:0,y:10},{opacity:1,y:0,duration:.03,ease:'back.out(2)',onComplete:strike},.35);
+  swapTo(1,2,.44,35);
+  // the sheet comes out of a slot under the phone
+  s.to(caps[2],{autoAlpha:0,y:-20,duration:.06},.76)
+   .to('.rig',{scale:.5,transformOrigin:'50% 20%',duration:.1,ease:'power2.inOut'},.76)
+   .to('.slot',{autoAlpha:1,duration:.04},.8)
+   ;
+  s.fromTo('.paper',{height:0},{height:function(){return document.querySelector('.paper').offsetWidth*910/1287},duration:.12,ease:'steps(14)'},.84);
+  s   .fromTo('.paper img',{yPercent:-100},{yPercent:0,duration:.12,ease:'steps(14)'},.84)
+   .fromTo(caps[3],{autoAlpha:0,y:20},{autoAlpha:1,y:0,duration:.06},.86)
+   .to({},{duration:.06});
+
+  // Scene 4: each feature card slides up and the one beneath steps back.
+  var cards=gsap.utils.toArray('.card'),f=gsap.timeline({scrollTrigger:{trigger:'#feat',start:'top top',end:vh(3),pin:true,scrub:.6,
+    snap:{snapTo:1/(cards.length-1),duration:{min:.2,max:.6},ease:'power1.inOut',delay:.06}}});
+  cards.forEach(function(c,i){if(!i)return;f.fromTo(c,{yPercent:110},{yPercent:0,duration:1,ease:'none'},i-1)
+    .to(cards[i-1],{scale:.92,y:-14,filter:'brightness(.88)',duration:1,ease:'none'},i-1)
+    .from(c.querySelector('.n'),{yPercent:60,autoAlpha:0,duration:.4},i-.85)});
+
+  gsap.utils.toArray('.up').forEach(function(el){gsap.from(el,{y:50,autoAlpha:0,duration:1.1,ease:'power3.out',scrollTrigger:{trigger:el,start:'top 88%'}})});
+});
 </script>
 </body>
 </html>
