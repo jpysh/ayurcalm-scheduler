@@ -86,7 +86,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
   };
   const nameOf = (type: UiTimeOff['type'], id: string) => (type === 'Center' ? 'Whole centre' : type === 'Staff' ? staffNameById[id] : type === 'Room' ? roomNameById[id] : type === 'GuestRoom' ? guestRooms.find((r) => r.id === id)?.name : type === 'Therapy' ? therapyNameById[id] : patientNameById[id]) ?? id;
   // Rows mix people, rooms, therapies and guests; a name alone does not say which (#360).
-  const kindOf = (h: Pick<UiTimeOff, 'type' | 'entity'>) => h.type === 'Staff' ? `Staff · ${staff.find((s) => String(s.id) === h.entity)?.role === 'doctor' ? 'Doctor' : 'Therapist'}` : h.type === 'GuestRoom' ? 'Guest room' : h.type === 'Room' ? 'Treatment room' : h.type === 'Patient' ? 'Guest' : h.type;
+  const kindOf = (h: Pick<UiTimeOff, 'type' | 'entity'>) => h.type === 'Staff' ? (staff.find((s) => String(s.id) === h.entity)?.role === 'doctor' ? 'Doctor' : 'Therapist') : h.type === 'GuestRoom' ? 'Guest room' : h.type === 'Room' ? 'Treatment room' : h.type === 'Patient' ? 'Guest' : h.type;
 
   // The picker: one kind, one or several of it.
   const [picking, setPicking] = useState(false);
@@ -265,7 +265,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
   const nextClosed = closed.find((h) => sortKey(h).slice(0, 10) >= centreToday);
   const tab = (
     <div data-testid="timeoff-table">
-      <PageHead title="Availability" note={`${now.length} now · ${coming.length} coming`} />
+      <PageHead title="Availability" note={`${now.length || 'None'} now · ${coming.length} coming`} />
       {live.length === 0 ? <Empty text="Everything is available. Tap + when something is not." /> : null}
       {now.length ? <ListGroup title="Not available now" count={now.length}>{now.map(rowFor)}</ListGroup> : null}
       {soon.length ? <div className="mt-3"><ListGroup title="Coming up" count={soon.length}>{soon.map(rowFor)}</ListGroup></div> : null}
