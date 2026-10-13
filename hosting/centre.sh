@@ -18,6 +18,9 @@ dir=$DATA/$slug; mkdir -p "$dir/backups"
 # A trial's TRIAL and ADMIN_EMAIL (#247) are kept with its secrets, so a later up or a failover keeps them.
 [ -f "$dir/env" ] || printf 'JWT_SECRET=%s\nPOSTGRES_PASSWORD=%s\nTRIAL=%s\nADMIN_EMAIL=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 16)" "${TRIAL:-}" "${ADMIN_EMAIL:-}" > "$dir/env"
 set -a; . "$dir/env"; set +a
+# Feedback from a hosted centre reaches the maintainer's morning (#818); the key is the sign-up service's.
+FEEDBACK_KEY=$(sed -n 's/^FEEDBACK_KEY=//p' "$DATA/provisioner.env" 2>/dev/null || true)
+[ -n "$FEEDBACK_KEY" ] && export FEEDBACK_KEY FEEDBACK_URL="http://host.docker.internal:${PROVISIONER_PORT:-8200}/feedback"
 export BACKUP_DIR="$dir/backups" BEHIND_CLOUDFLARE=true
 if [ "$slug" = demo ]; then export DEMO_MODE=true DEMO_RESET_MINUTES=60; fi
 case $cmd in

@@ -1377,6 +1377,19 @@ app.get('/appointments', async (req: Request, res: Response) => {
   res.json(filtered);
 });
 
+// "Report a problem or an idea" (#818): on a centre we host, the words reach the maintainer's morning;
+// anywhere else forwarded is false and the screen opens WhatsApp with them instead.
+app.post('/feedback', async (req: Request, res: Response) => {
+  const { text } = z.object({ text: z.string().trim().min(1).max(2000) }).parse(req.body);
+  if (!process.env.FEEDBACK_URL) { res.json({ forwarded: false }); return; }
+  const centre = (await prisma.settings.findUnique({ where: { id: 'singleton' }, select: { centre_name: true } }))?.centre_name || '';
+  const ok = await fetch(process.env.FEEDBACK_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Feedback-Key': process.env.FEEDBACK_KEY || '' },
+    body: JSON.stringify({ centre, from: req.user!.email, text }), signal: AbortSignal.timeout(5000),
+  }).then((r) => r.ok, () => false);
+  res.json({ forwarded: ok });
+});
+
 app.post('/appointments', async (req: Request, res: Response) => {
   try {
     const result = await autoSchedule(req.body, prisma);

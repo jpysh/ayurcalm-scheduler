@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { PRODUCT, PLANS, SALES_WHATSAPP } from "../../server/src/product";
 import { API_BASE } from "@/lib/apiBase";
 import { confirmSheet } from "@/components/ConfirmSheet";
-import { BottomSheet, ChangeLine, Empty, LineSelect, ListGroup, Row, SheetFoot, Switch, Tick, dayText, noteText, say, wide, Btn } from "@/components/kit";
+import { Area, BottomSheet, ChangeLine, Empty, Foot, LineSelect, ListGroup, Row, SheetFoot, Switch, Tick, dayText, noteText, say, wide, Btn } from "@/components/kit";
 
 export type Backups = { count: number; latest: { name: string; size: number; at: string } | null };
 export type Trial = { ends_at: string | null; read_only: boolean; plan: string | null; paid_until: string | null };
@@ -138,6 +138,16 @@ export function HelpSheet({ open, onOpenChange, centre, supportWhatsapp, trial, 
   showFooter: boolean; setShowFooter: (v: boolean) => void; saveFooter: () => void;
 }) {
   const [plan, setPlan] = useState(false);
+  const [words, setWords] = useState<string | null>(null);
+  // Written here so it reaches whoever looks after the app (#818); where nobody hosts it, WhatsApp opens with the words.
+  const report = async () => {
+    const text = (words || "").trim();
+    if (!text) return;
+    const r = await fetch(`${API_BASE}/feedback`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }).then((x) => x.json(), () => ({}));
+    setWords(null);
+    if (r.forwarded) toast.success("Sent. We reply on WhatsApp or by email.");
+    else wa(supportWhatsapp, `${PRODUCT}: a problem or an idea from ${centre}: ${text}`);
+  };
   const [demoOpen, setDemoOpen] = useState(false);
   const [keep, setKeep] = useState<string[]>(["therapies", "rooms"]);
   const [working, setWorking] = useState(false);
@@ -170,12 +180,16 @@ export function HelpSheet({ open, onOpenChange, centre, supportWhatsapp, trial, 
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} title="Help and plan">
       <ListGroup>
-        {supportWhatsapp ? <Row title="Report a problem or an idea" facts="On WhatsApp, to whoever looks after the app" trailing="›" onClick={() => wa(supportWhatsapp, `${PRODUCT}: a problem or an idea from ${centre}: `)} /> : null}
+        {supportWhatsapp ? <Row title="Report a problem or an idea" facts="Straight to whoever looks after the app" trailing="›" onClick={() => setWords("")} /> : null}
         {admin ? <Row title="Invite a centre" facts="On WhatsApp · you both get 3 months free" trailing="›"
           onClick={() => wa("", `We run ${centre} on ${PRODUCT}: patients, therapists and the day sheet on one phone. Free for 30 days: https://jains.es/ruta?ref=${encodeURIComponent(window.location.host.split(".")[0])}`)} /> : null}
         {admin && trial ? <Row title="Plan" facts={planHint(trial)} trailing="›" onClick={() => setPlan(true)} /> : null}
         {admin && demo ? <Row title="Demo data" facts="Clear it, or reset it from today" trailing="›" onClick={() => setDemoOpen(true)} /> : null}
       </ListGroup>
+
+      <BottomSheet open={words !== null} onOpenChange={(o) => { if (!o) setWords(null); }} title="Report a problem or an idea" foot={<Foot label="Send" save={report} ok={!!words?.trim()} />}>
+        <Area label="What happened, or what would help" rows={5} value={words || ""} onChange={(e) => setWords(e.target.value)} />
+      </BottomSheet>
 
       <BottomSheet open={plan} onOpenChange={setPlan} title="Plan" note={trial ? `${planHint(trial)}.` : undefined}>
         <ListGroup>

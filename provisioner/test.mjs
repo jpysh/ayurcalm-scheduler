@@ -60,3 +60,14 @@ console.log('provisioner lifecycle ok');
   assert.match(r.headers.get('location'), /^\/go\?k=/);
   console.log('sign-up straight in ok');
 }
+
+// The morning (#818): the push picks a health problem first, then a silent trial about to end.
+{
+  const { morning } = await import('./morning.mjs');
+  const now = Date.parse('2030-04-10T07:00:00Z'), D = 86_400_000;
+  const db = { signups: [{ at: now - 3600_000 }], waitlist: [], centres: [{ centre: 'Shanti', email: 's@x', created: now - 28 * D, trial: { ends_at: new Date(now + 2 * D).toISOString() } }] };
+  assert.match(morning(db, ['demo is down'], now), /^Today's push: Fix: demo is down/);
+  assert.match(morning(db, [], now), /^Today's push: Call Shanti \(s@x\): trial ends in 2 days/);
+  assert.match(morning(db, [], now), /Sign-ups: 1 yesterday, 1 this week/);
+  console.log('morning ok');
+}
