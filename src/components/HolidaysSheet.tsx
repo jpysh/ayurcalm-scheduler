@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
-import { BottomSheet, DateRow, Empty, LinkRow, ListGroup, Row, SheetFoot, Text, Tick, dayText } from "@/components/kit";
+import { BottomSheet, DateRow, datePair, Empty, LinkRow, ListGroup, Row, SheetFoot, Text, Tick, dayText } from "@/components/kit";
 
 type Holiday = { date: string; name: string };
 export type ClosedDay = { id: string; date: string; endDate: string; description: string };
@@ -73,7 +73,7 @@ export function HolidaysSheet({ open, onOpenChange, closed, today, onChanged }: 
     return (
       <BottomSheet open={open} onOpenChange={onOpenChange} title="Close the centre" onBack={() => setAdding(null)}
         foot={<SheetFoot busy={busy} ok={!!adding.date} save={addOwn} label="Close the centre" />}>
-        <div className="grid grid-cols-2 gap-3">
+        <div className={datePair}>
           <DateRow label="From" value={adding.date} min={today} onChange={(v) => setAdding({ ...adding, date: v, endDate: adding.endDate < v ? v : adding.endDate })} />
           <DateRow label="Until" value={adding.endDate} min={adding.date} onChange={(v) => setAdding({ ...adding, endDate: v })} />
         </div>
