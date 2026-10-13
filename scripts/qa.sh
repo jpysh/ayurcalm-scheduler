@@ -44,6 +44,7 @@ run offHours         "A therapist out for some hours, or a room out of use, is r
 run offDays          "A therapy or patient marked off is refused, raised by the day check, and never offered back by the plan"
 run roomOut          "A room taken out of use for days has its treatments moved, and Undo puts them back"
 run therapistRota      "The therapist rota shows who works when, and why someone is away"
+run centreDay          "Nothing on the server reads the machine's date as the centre's today"
 run scheduleInvariants "The demo schedule has no double bookings, today is properly full, and today has a therapist off to fix"
 run validation         "A half-filled form is refused politely, not crashed on, and nobody signed out can save, and staff cannot change a diet plan"
 run autoAssign         "Auto-booking a course respects gender, holidays, and times already past"
