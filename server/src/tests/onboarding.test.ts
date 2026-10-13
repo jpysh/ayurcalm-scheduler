@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 import { requireDemoData } from './demoGuard.js';
-import { wipeDemo } from '../demoData.js';
+import { wipeDemo, makeItMine } from '../demoData.js';
 
 const API_BASE = process.env.API_BASE || `http://127.0.0.1:${process.env.PORT || 4100}/api`;
 const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || 'admin@example.com';
@@ -108,9 +108,32 @@ async function main() {
       assert.equal(await tx.programEvent.count({ where: { NOT: { patient_ids: { isEmpty: true } } } }), 0, 'A kept event still names a resident who is gone');
       throw ROLLBACK;
     }, { timeout: 120000 }).catch((e) => { if (e !== ROLLBACK) throw e; });
+    // Make it mine (#729): the admin's team, the rooms and therapies they ticked, and nothing of the example's people.
+    await prisma.$transaction(async (tx) => {
+      const rooms = await tx.therapyRoom.findMany({ where: { is_active: true }, take: 3 });
+      const therapies = await tx.therapy.findMany({ where: { is_active: true, is_consultation: false }, take: 5 });
+      await makeItMine(tx, {
+        centre_name: 'Mine Test Centre',
+        team: [{ name: 'Dr Asha', gender: 'female', doctor: true }, { name: 'Ravi', gender: 'male', doctor: false }, { name: 'Lata', gender: 'female', doctor: false }],
+        rooms: [{ id: rooms[0].id, name: 'Lotus' }, { id: rooms[1].id, name: rooms[1].name }],
+        therapy_ids: therapies.slice(0, 3).map((t) => t.id),
+      });
+      assert.equal(await tx.patient.count(), 0, 'Make it mine kept the example residents');
+      assert.deepEqual((await tx.staff.findMany({ orderBy: { name: 'asc' } })).map((s) => `${s.name} ${s.role}`), ['Dr Asha doctor', 'Lata therapist', 'Ravi therapist']);
+      assert.deepEqual((await tx.therapyRoom.findMany({ where: { is_active: true } })).map((r) => r.id).sort(), [rooms[0].id, rooms[1].id].sort(), 'An unticked room is still in use');
+      assert.equal((await tx.therapyRoom.findUnique({ where: { id: rooms[0].id } }))?.name, 'Lotus', 'A renamed room kept its old name');
+      const active = await tx.therapy.findMany({ where: { is_active: true } });
+      assert.equal(active.filter((t) => !t.is_consultation).length, 3, 'An unticked therapy is still offered');
+      assert.ok(active.some((t) => t.is_consultation), 'The consultation was switched off; no resident could be seen');
+      const ravi = await tx.staff.findFirst({ where: { name: 'Ravi' } });
+      assert.deepEqual([...(ravi?.specializations ?? [])].sort(), therapies.slice(0, 3).map((t) => t.id).sort(), 'A new therapist cannot give the ticked therapies');
+      const s = await tx.settings.findUnique({ where: { id: 'singleton' } });
+      assert.equal(s?.demo_data, false); assert.equal(s?.setup_complete, true); assert.equal(s?.centre_name, 'Mine Test Centre');
+      throw ROLLBACK;
+    }, { timeout: 120000 }).catch((e) => { if (e !== ROLLBACK) throw e; });
     assert.ok(await prisma.patient.count() > 0, 'The rollback did not put the demo centre back');
 
-    console.log('Onboarding: settings kept, setup complete, centre has what it needs, day sheet prints; starting your own centre keeps the therapies and rooms.');
+    console.log('Onboarding: settings kept, setup complete, centre has what it needs, day sheet prints; starting your own centre keeps the therapies and rooms; Make it mine leaves the admin\'s team, rooms and therapies.');
   } finally {
     const { centre_name, address, timezone, opening_time, closing_time, slot_minutes, working_days, logo, setup_complete, currency } = before;
     await api('/settings', {

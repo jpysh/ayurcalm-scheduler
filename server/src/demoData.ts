@@ -46,3 +46,22 @@ export async function wipeDemo(tx: Prisma.TransactionClient, keep: Keep[] = []) 
   await tx.settings.updateMany({ data: { demo_data: false, letterhead: Prisma.DbNull } });
   return { appointments: appointments.count, patients: patients.count, staff: staff.count, rooms: rooms.count, therapies: therapies.count };
 }
+
+export type Mine = { centre_name: string; team: { name: string; gender: 'male' | 'female'; doctor: boolean }[]; rooms: { id: string; name: string }[]; therapy_ids: string[] };
+
+/**
+ * Make it mine (#729): the example's residents, bookings and team go; the
+ * rooms and therapies ticked stay (renamed, the rest switched off, so their
+ * amenities and rules come with them); the admin's team replaces the example's.
+ */
+export async function makeItMine(tx: Prisma.TransactionClient, body: Mine) {
+  await wipeDemo(tx, ['therapies', 'rooms']);
+  await tx.therapyRoom.updateMany({ where: { id: { notIn: body.rooms.map((r) => r.id) } }, data: { is_active: false } });
+  for (const r of body.rooms) await tx.therapyRoom.update({ where: { id: r.id }, data: { name: r.name, is_active: true } });
+  // A consultation is how every new resident starts, so it is never switched off.
+  await tx.therapy.updateMany({ where: { id: { notIn: body.therapy_ids }, is_consultation: false }, data: { is_active: false } });
+  const kept = await tx.therapy.findMany({ where: { is_active: true }, select: { id: true, is_consultation: true } });
+  const skills = (doctor: boolean) => kept.filter((t) => t.is_consultation === doctor).map((t) => t.id);
+  await tx.staff.createMany({ data: body.team.map((p) => ({ name: p.name, gender: p.gender, role: p.doctor ? 'doctor' : 'therapist', specializations: skills(p.doctor), weekly_schedule: {}, is_active: true })) });
+  await tx.settings.update({ where: { id: 'singleton' }, data: { centre_name: body.centre_name, setup_complete: true } });
+}

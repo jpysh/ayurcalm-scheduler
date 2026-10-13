@@ -9,6 +9,7 @@ import Login from "./pages/Login";
 import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 import SetupWizard from "./pages/SetupWizard";
+import MakeItMine from "./pages/MakeItMine";
 import { API_BASE } from "@/lib/apiBase";
 
 
@@ -88,6 +89,7 @@ const App = () => {
               <Route path="/login" element={<Login />} />
               <Route path="/l/:token" element={<LinkView />} />
               <Route path="/setup" element={<ProtectedRoute><SetupWizard /></ProtectedRoute>} />
+              <Route path="/setup/mine" element={<ProtectedRoute><MakeItMine /></ProtectedRoute>} />
               <Route path="/:username/schedule" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/:username/staff" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/:username/rooms" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />

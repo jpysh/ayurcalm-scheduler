@@ -20,9 +20,7 @@ async function passSetupIfShown(page: Page) {
   if (!page.url().includes('/setup')) return;
   await page.getByLabel('Centre name').fill('Test Centre');
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: /^Keep the example data for now/ }).click();
-  await page.getByRole('button', { name: 'Keep the example data' }).click();
+  await page.getByRole('button', { name: 'Finish' }).click();
   await page.waitForURL(/\/admin/);
 }
 
@@ -664,7 +662,8 @@ test("a trial admin who chose a password is not asked again after a reload (#711
   await page.goto('/setup');
   await page.getByLabel('Password').fill('a-new-password');
   await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByText('What is your centre called?')).toBeVisible();
-  await page.reload();
+  // An example centre opens on its day after the password (#728).
+  await page.waitForURL(/\/admin\/schedule/);
+  await page.goto('/setup');
   await expect(page.getByText('What is your centre called?')).toBeVisible();
 });

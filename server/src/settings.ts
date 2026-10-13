@@ -3,7 +3,7 @@ import { exportCentre, importCentre, ImportRefused } from './transfer.js';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from './server.js';
-import { wipeDemo, KEEPABLE, type Keep } from './demoData.js';
+import { wipeDemo, makeItMine, KEEPABLE, type Keep } from './demoData.js';
 import { letterheadSchema } from './discharge.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -147,6 +147,22 @@ const clearDemoData = (keep: Keep[] = []) => prisma.$transaction((tx) => wipeDem
 settingsRouter.post('/clear-demo-data', requireAdmin, async (req: Request, res: Response) => {
   const { keep } = z.object({ keep: z.union([z.literal('templates'), z.array(z.enum(KEEPABLE))]).optional() }).parse(req.body ?? {});
   res.json({ ok: true, deleted: await clearDemoData(keep === 'templates' ? ['therapies', 'rooms'] : keep) });
+});
+
+/**
+ * Make it mine (#729), in one go (see makeItMine). Residents are added
+ * afterwards through POST /patients, the same guard as any new resident.
+ */
+settingsRouter.post('/make-it-mine', requireAdmin, async (req: Request, res: Response) => {
+  const name = z.string().trim().min(1).max(80);
+  const body = z.object({
+    centre_name: name,
+    team: z.array(z.object({ name, gender: z.enum(['male', 'female']), doctor: z.boolean() })).min(1).max(60),
+    rooms: z.array(z.object({ id: z.string().uuid(), name })).min(1).max(60),
+    therapy_ids: z.array(z.string().uuid()).min(1).max(200),
+  }).parse(req.body);
+  await prisma.$transaction((tx) => makeItMine(tx, body), { timeout: 120000 });
+  res.json({ ok: true });
 });
 
 /**
