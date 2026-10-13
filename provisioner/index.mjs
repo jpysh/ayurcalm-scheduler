@@ -22,7 +22,7 @@ const env = process.env;
 const DB = `${DATA}/provisioner.json`;
 
 // ---- state: one JSON file, written whole (a few dozen centres at most) ----
-const db = existsSync(DB) ? JSON.parse(readFileSync(DB, 'utf8')) : { signups: [], centres: [], waitlist: [] };
+const db = { feedback: [], ...(existsSync(DB) ? JSON.parse(readFileSync(DB, 'utf8')) : { signups: [], centres: [], waitlist: [] }) };
 const save = () => { writeFileSync(`${DB}.tmp`, JSON.stringify(db, null, 1)); renameSync(`${DB}.tmp`, DB); };
 
 // ---- outside world ----
@@ -190,8 +190,17 @@ export const server = http.createServer(async (req, res) => {
     const c = own && db.centres.find((x) => x.slug === own[1]);
     if (c) return wake(req, res, c);
     if (req.method === 'GET' && url.pathname === '/') return send(res, 200, form('', url.searchParams.get('ref')));
+    // A hosted centre's "Report a problem or an idea" (#818): kept for the morning, and told at once.
+    if (req.method === 'POST' && url.pathname === '/feedback' && env.FEEDBACK_KEY && req.headers['x-feedback-key'] === env.FEEDBACK_KEY) {
+      const f = await new Promise((ok) => { let b = ''; req.on('data', (d) => { if ((b += d).length > 8192) req.destroy(); }); req.on('end', () => { try { ok(JSON.parse(b)); } catch { ok({}); } }); });
+      if (typeof f.text !== 'string' || !f.text.trim()) return send(res, 400, '');
+      const item = { centre: String(f.centre || '').slice(0, 80), from: String(f.from || '').slice(0, 120), text: f.text.trim().slice(0, 2000), at: Date.now() };
+      db.feedback.unshift(item); save();
+      await telegram(`Feedback from ${item.centre} (${item.from}): ${item.text}`);
+      return send(res, 200, '');
+    }
     // The maintainer's morning (#818): only with the key from provisioner.env; no key set, no page.
-    if (url.pathname === '/dashboard' && env.DASHBOARD_KEY && url.searchParams.get('key') === env.DASHBOARD_KEY) return send(res, 200, page(`<h1>Morning</h1><pre style="white-space:pre-wrap;font:inherit">${esc(morning(db, latest, Date.now()))}</pre>`), { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
+    if (url.pathname === '/dashboard' && env.DASHBOARD_KEY && url.searchParams.get('key') === env.DASHBOARD_KEY) return send(res, 200, page(`<h1>Morning</h1><pre style="white-space:pre-wrap;font:inherit">${esc(morning(db, latest, Date.now(), db.feedback))}</pre>`), { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
     // The landing page's "N of 10 founding places left" (#245). Founding centres not hosted here: FOUNDING_ELSEWHERE.
     if (url.pathname === '/founding') {
       const taken = db.centres.filter((c) => c.trial?.plan === 'founding').length + Number(env.FOUNDING_ELSEWHERE || 0);
@@ -244,7 +253,7 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
   setInterval(async () => {
     await tick().catch(console.error); await watch().catch(console.error);
     const d = new Date();
-    if (d.getHours() === 7 && sent !== d.toDateString()) { sent = d.toDateString(); await telegram(morning(db, latest, Date.now())); }
+    if (d.getHours() === 7 && sent !== d.toDateString()) { sent = d.toDateString(); await telegram(morning(db, latest, Date.now(), db.feedback)); }
   }, 3_600_000);
   watch().catch(console.error);
 }

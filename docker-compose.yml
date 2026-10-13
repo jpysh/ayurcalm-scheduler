@@ -36,6 +36,8 @@ services:
   app:
     build: .
     restart: unless-stopped
+    # Docker Desktop has this name already; a Linux host needs it for FEEDBACK_URL (#818).
+    extra_hosts: ["host.docker.internal:host-gateway"]
     depends_on:
       db:
         condition: service_healthy
@@ -55,6 +57,9 @@ services:
       # Cloud trials only (#247): the 30-day clock, and the admin who signed up.
       TRIAL: ${TRIAL:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      # Hosted centres only (#818): feedback goes on to the sign-up service on the same host.
+      FEEDBACK_URL: ${FEEDBACK_URL:-}
+      FEEDBACK_KEY: ${FEEDBACK_KEY:-}
       # Writes per address in 5 minutes. Unset in a real install (40); qa raises it.
       RATE_LIMIT_WRITES: ${RATE_LIMIT_WRITES:-}
       RATE_LIMIT_CALLS: ${RATE_LIMIT_CALLS:-}
