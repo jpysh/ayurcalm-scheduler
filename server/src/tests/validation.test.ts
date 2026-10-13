@@ -57,6 +57,22 @@ async function main() {
       if (id) await prisma.programEvent.delete({ where: { id } });
     }],
 
+    // #732: yesterday's treatments are over; in UTC a morning east of India is still yesterday.
+    ['an event on yesterday is not refused by what was done yesterday', async () => {
+      const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+      const centreToday = new Intl.DateTimeFormat('en-CA', { timeZone: settings?.timezone || 'Asia/Kolkata' }).format(new Date());
+      const yesterday = new Date(Date.parse(`${centreToday}T00:00:00Z`) - 86400000);
+      const done = await prisma.appointment.findFirst({ where: { scheduled_date: yesterday, staff_id: { not: null }, status: { notIn: ['cancelled', 'no_show'] } } });
+      if (!done) throw new Error('no treatment yesterday in the demo data');
+      const res = await post('/program-events', {
+        start_time: done.start_time, end_time: '23:00', activity_name: 'Validation Yesterday Event',
+        staff_id: done.staff_id, date: yesterday.toISOString().slice(0, 10),
+      });
+      if (res.status !== 201) throw new Error(`status ${res.status}: ${await res.text()}`);
+      const { id } = await res.json();
+      if (id) await prisma.programEvent.delete({ where: { id } });
+    }],
+
     ['time off with only a date range is created, not a 500', async () => {
       const res = await post('/timeoff', {
         entity_type: 'center', start_date: today(), end_date: today(),
