@@ -78,6 +78,8 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
     if (patient?.Stays.length) {
       const diet = (await loadDietsForDay(day, prisma)).dietFor(patient, appts.length > 0);
       meals = mealOrder.filter((m) => diet.meals[m]).map((m) => ({ meal: mealLabel[m], text: diet.meals[m]! }));
+      // No plan yet: the kitchen feeds them the usual food, so the link says so rather than nothing (#764).
+      if (!meals.length) meals = [{ meal: 'All meals', text: "The centre's usual food" }];
     }
   }
   // On the leaving day, and for a week after, the guest is asked how the stay was, once (#509).
