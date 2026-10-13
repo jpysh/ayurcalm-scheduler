@@ -30,3 +30,25 @@ for (const zone of ['America/New_York', 'Pacific/Auckland', 'Asia/Kolkata']) {
     });
   });
 }
+
+// #743: a part of today that has ended is over, not "Coming up".
+test('a part of today that has ended is gone', async ({ page, request }) => {
+  const { token } = await (await request.post('/api/auth/login', { data: { email: 'admin@example.com', password: 'demo1234' } })).json();
+  const headers = { Authorization: `Bearer ${token}` };
+  const settings = await (await request.get('/api/settings', { headers })).json();
+  const iso = new Date().toLocaleDateString('en-CA', { timeZone: settings.timezone });
+  const staff = (await (await request.get('/api/staff', { headers })).json())[0];
+  const id = (await (await request.post('/api/timeoff', { headers, data: { entity_type: 'staff', entity_id: staff.id, date: iso, start_date: `${iso}T00:00:00.000Z`, end_date: `${iso}T00:00:00.000Z`, start_time: '00:00', end_time: '00:01', description: 'Zoneended', plan: false } })).json()).id as string;
+  try {
+    await page.goto('/login');
+    await page.getByLabel('Email').fill('admin@example.com');
+    await page.getByLabel('Password').fill('demo1234');
+    await page.getByLabel('Password').press('Enter');
+    await page.waitForURL(/\/admin/);
+    await page.goto('/admin/timeoff');
+    await expect(page.getByTestId('timeoff-table')).toBeVisible();
+    await expect(page.getByTestId('timeoff-table')).not.toContainText('Zoneended');
+  } finally {
+    await request.delete(`/api/timeoff/${id}`, { headers });
+  }
+});
