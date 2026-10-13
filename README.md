@@ -7,6 +7,8 @@
 
 [Website](https://jains.es/ruta) · [Live demo](https://demo.jains.es) · [Free cloud trial](https://signup.jains.es) · [Self-host guide](docs/self-host.md) · [Admin guide](docs/admin-guide.md)
 
+<a href="https://jains.es/ruta/video.mp4"><img src="site/public/ruta/video.gif" width="260" alt="30 seconds on a phone: sign up, the example day, Make it mine, and tomorrow planned"></a>
+
 Plan residents and their stays, therapists, rooms, therapies and daily programme in one place. Auto-assign fills the day around room amenities, therapist time off and opening hours, and the day sheet prints every resident's treatments and meals for the notice board. Built for residential Ayurveda centres; nothing in it is Ayurveda-specific.
 
 Made for the admin's phone. A desktop only widens it.
