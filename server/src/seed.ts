@@ -5,7 +5,7 @@ import { ensureStarterDietTemplates, usualNotes } from './dietTemplateSeed.js';
 import { ensureStarterCatalogues } from './catalogueSeed.js';
 import { expandRoomNames } from './guestRooms.js';
 import { PrismaClient } from '@prisma/client';
-import { hoursOn, staffEventBusy } from './availability.js';
+import { centreClock, hoursOn, staffEventBusy } from './availability.js';
 import bcrypt from 'bcrypt';
 import { DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD } from './auth.js';
 import { indiaHolidays } from "./indiaHolidays.js";
@@ -553,15 +553,17 @@ async function main() {
     .filter((a) => !(a.staff_id && offToday.has(a.staff_id)) && a.patient_id !== loyal?.patient_id)
     // A missed or cancelled purification would undo the diet printed around it (#403).
     .filter((a) => !ONCE.includes(therapies.find((t) => t.id === a.therapy_id)?.name ?? ''));
-  const [noShow, cancelled, noted, moved] = [spare[0], spare[Math.floor(spare.length / 3)], spare[Math.floor(spare.length / 2)], spare[spare.length - 1]];
-  // Made this morning from 08:00, ten minutes apart, never after the reset itself (#396).
-  // A no-show is only known once the treatment has started (#402).
+  // A no-show is only known once the treatment has started (#402): a centre seeded before then has none yet (#753).
+  const nowMin = mins(centreClock(CENTRE_TZ).time);
+  const noShow = spare.find((a) => mins(a.start_time) + 15 <= nowMin);
+  const [cancelled, noted, moved] = [spare[Math.floor(spare.length / 3)], spare[Math.floor(spare.length / 2)], spare[spare.length - 1]];
+  // Made this morning from 08:00, ten minutes apart, never after the reset itself (#396), on the centre's clock.
   let changes = 0;
   const change = async (a: (typeof spare)[number] | undefined, data: Record<string, unknown>) => {
     if (!a) return;
     const after = await prisma.appointment.update({ where: { id: a.id }, data });
     const ist = data.status === 'no_show' ? mins(a.start_time) + 15 : 8 * 60 + 10 * changes++;
-    const timestamp = new Date(Math.min(Date.now(), today.getTime() + (ist - 330) * 60000));
+    const timestamp = new Date(Date.now() - Math.max(0, nowMin - ist) * 60000);
     await prisma.auditLog.create({ data: { admin_id: adminId, action: 'update', entity_type: 'appointment', entity_id: a.id, old_value: a as any, new_value: after as any, timestamp } });
   };
   await change(noShow, { status: 'no_show' });

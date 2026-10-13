@@ -84,6 +84,7 @@ run dietOverride       "Editing a diet plan changes it for everyone except what 
 run onboarding         "After the setup wizard, the centre has its hours, timezone, therapies, rooms and therapists, and the day sheet prints"
 run mcp                "Claude reads the centre only with the current key: the day, residents, who is free and the day sheet, and reading changes nothing"
 run mcpPlan            "Claude's plan for a day is the one Verify shows, written only on a yes, undone exactly; stale and expired plans write nothing"
+run seedClock          "Nothing on the seeded day is marked 'didn't come' before it has started, on the centre's clock"
 run demo               "The public demo is put back to the seeded centre every six hours, on fixed hours a restart does not move"
 # Last: it locks the container's own address out of sign-in for 15 minutes.
 run signInLimit        "Ten wrong passwords and the address waits 15 minutes; every page carries a security policy"
