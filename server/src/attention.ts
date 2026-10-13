@@ -36,7 +36,7 @@ export type Rule = {
 export const RULES: Rule[] = [
   { id: 'day', section: 'Day', kind: 'action', locked: true, on: true, name: 'A therapist is not in, a room is out, or treatments clash' },
   { id: 'leaves_today', section: 'Patients', kind: 'action', on: true, name: 'Leaves today and has no discharge summary' },
-  { id: 'arrival_open', section: 'Patients', kind: 'action', on: true, hours: 24, from: 'of arriving', name: 'Arrival steps still open' },
+  { id: 'arrival_open', section: 'Patients', kind: 'action', on: true, hours: 24, from: 'of arriving', name: 'Arrival notes not written' },
   { id: 'no_diet', section: 'Patients', kind: 'action', on: true, hours: 24, from: 'of arriving', name: 'No diet plan' },
   { id: 'room_out', section: 'Patients', kind: 'action', on: true, name: "A guest's room is out of use" },
   { id: 'form_c', section: 'Patients', kind: 'action', on: true, name: 'Form C for a foreign guest, due a day after arriving' },
@@ -112,7 +112,8 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
   for (const s of leftUnfiled) if (owesFormC(s.Patient.country, s)) add(rule('form_c'), s, formC(s), 'card');
   for (const s of stays) {
     if (ymd(s.end_date) === today && !s.discharge) add(rule('leaves_today'), s, 'Leaves today, no discharge summary', 'summary');
-    if (hoursIn(s) >= (rule('arrival_open').hours ?? 24) && !s.vitals && !s.concerns && !s.tests) add(rule('arrival_open'), s, 'Arrival steps still open', 'card');
+    // The notes, not the arrival checklist: the words say which (#812).
+    if (hoursIn(s) >= (rule('arrival_open').hours ?? 24) && !s.vitals && !s.concerns && !s.tests) add(rule('arrival_open'), s, 'Arrival notes not written', 'card');
     if (owesFormC(s.Patient.country, s) && !s.form_c_filed) add(rule('form_c'), s, formC(s), 'card');
     if (hoursIn(s) >= (rule('no_diet').hours ?? 24) && !diets.dietFor(s.Patient, true).planName) add(rule('no_diet'), s, 'No diet plan', 'diet');
   }
