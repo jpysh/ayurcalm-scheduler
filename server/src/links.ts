@@ -68,7 +68,8 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
   const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   // Only the part inside their shift (#749): a leave that ends before they start is nothing to them.
   const shift = ctx ? hoursOn(ctx.staff.find((x) => x.id === who.id)?.weekly_schedule, day) || { s: toMinutes(settings?.opening_time || '09:00'), e: toMinutes(settings?.closing_time || '18:00') } : null;
-  const away = ctx && shift && !off ? offOnDay(ctx.timeOff, 'staff', who.id, day).filter((b) => !b.whole)
+  // Away all day with treatments still on their name: say so above them, not only on an empty day (#760).
+  const away = off && appts.length ? [`Not in all day · ${off}`] : ctx && shift && !off ? offOnDay(ctx.timeOff, 'staff', who.id, day).filter((b) => !b.whole)
     .map((b) => ({ ...b, s: Math.max(b.s, shift.s), e: Math.min(b.e, shift.e) })).filter((b) => b.s < b.e)
     .map((b) => `Not in ${hm(b.s)}–${hm(b.e)} · ${b.label}`) : [];
   let meals: { meal: string; text: string }[] = [];
