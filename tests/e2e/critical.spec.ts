@@ -461,8 +461,18 @@ test('Opening hours offers India\'s public holidays, and a seeded centre is alre
   // Public holidays live with Opening hours in Settings (#288).
   await openTab(page, 'Settings');
   await activePanel(page).getByRole('button', { name: /^Opening hours/ }).click();
-  await page.getByRole('dialog').getByRole('button', { name: /^Public holidays/ }).click();
-  await expect(page.getByRole('dialog').getByText('Every public holiday ahead is already a closed day.')).toBeVisible({ timeout: 15000 });
+  await page.getByRole('dialog').getByRole('button', { name: /^Centre closed days/ }).click();
+  const sheet = page.getByRole('dialog').last();
+  await expect(sheet.getByText('Every public holiday ahead is already a closed day.')).toBeVisible({ timeout: 15000 });
+  // A day of the centre's own is added, listed, and opened again from the same sheet (#709).
+  await sheet.getByRole('button', { name: /^Close another day/ }).click();
+  await page.getByRole('dialog').last().getByLabel('From', { exact: true }).fill('2030-03-04');
+  await page.getByRole('dialog').last().getByLabel('Reason').fill('Walk retreat');
+  await page.getByRole('dialog').last().getByRole('button', { name: 'Close the centre' }).click();
+  const row = page.getByRole('dialog').last().getByRole('button', { name: /Walk retreat/ });
+  await expect(row).toBeVisible({ timeout: 10000 });
+  await row.click();
+  await expect(page.getByRole('dialog').last().getByText('Walk retreat')).toHaveCount(0, { timeout: 10000 });
 });
 
 test('a resident leaving today has a departure section and a summary to take home (#219)', async ({ page }) => {
