@@ -102,6 +102,7 @@ authRouter.post('/link', async (req: Request, res: Response) => {
     return;
   }
   usedLinks.add(link.jti);
+  await prisma.settings.updateMany({ where: { first_signin_at: null }, data: { first_signin_at: new Date() } });
   await prisma.user.update({ where: { id: user.id }, data: { last_login: new Date() } });
   const payload: AuthUser = { id: user.id, email: user.email, role: user.role, name: user.name };
   res.json({ token: jwt.sign(payload, jwtSecret(), { expiresIn: TOKEN_TTL }), user: payload });
