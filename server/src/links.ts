@@ -9,7 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { PrismaClient, type Prisma } from '@prisma/client';
-import { centreClock, teamOf } from './availability.js';
+import { centreClock, offOnDay, teamOf } from './availability.js';
 import { loadDay, staffDay } from './appointmentGuard.js';
 import { loadDietsForDay, mealLabel, mealOrder } from './dietResolution.js';
 import { lastReadings } from './residentDay.js';
@@ -62,7 +62,11 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
   const names = new Map((await prisma.staff.findMany({ where: { id: { in: staffIds } }, select: { id: true, name: true } })).map((s) => [s.id, s.name]));
   const day = new Date(`${date}T00:00:00.000Z`);
   // A free day says why (#424): a therapist's day off, and a patient's meals even with no treatment.
-  const off = who.kind === 'patient' ? null : staffDay(await loadDay(day, prisma)).find((d) => d.staff_id === who.id)?.off || null;
+  const ctx = who.kind === 'patient' ? null : await loadDay(day, prisma);
+  const off = ctx ? staffDay(ctx).find((d) => d.staff_id === who.id)?.off || null : null;
+  // Part of the day away says so, as the printed sheet does, so the link never reads as a full day (#745).
+  const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const away = ctx && !off ? offOnDay(ctx.timeOff, 'staff', who.id, day).filter((b) => !b.whole).map((b) => `Not in ${hm(b.s)}–${hm(b.e)} · ${b.label}`) : [];
   let meals: { meal: string; text: string }[] = [];
   if (who.kind === 'patient') {
     const patient = await prisma.patient.findUnique({ where: { id: who.id }, include: { Stays: { where: { start_date: { lte: day }, end_date: { gte: day } } } } });
@@ -83,7 +87,7 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
     ...(details ? { details: { ...details, date_of_birth: details.date_of_birth?.toISOString().slice(0, 10) ?? null } } : {}),
     centre: settings?.centre_name || 'Wellness Centre',
     // The centre's clock, so 'over' is decided where the treatment is, not by the phone's timezone (#529).
-    date, today, now: clock.time, arrives, off, meals,
+    date, today, now: clock.time, arrives, off, away, meals,
     feedback: ended ? { given: (ended.feedback as { rating: string; note: string } | null) ?? null, visit: !ended.on_site } : null,
     items: appts.map((a) => {
       const record = (a.record || {}) as Record;
