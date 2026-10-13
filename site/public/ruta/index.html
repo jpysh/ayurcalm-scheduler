@@ -52,11 +52,11 @@ input[name=billing]{position:absolute;opacity:0;pointer-events:none}
 .per{font-size:14px;color:var(--muted)}
 .plan ul{padding-left:18px;margin:14px 0;color:var(--muted);font-size:15px;flex:1}
 .tag{display:inline-block;background:var(--soft);color:var(--brand);font-weight:700;font-size:13px;border-radius:999px;padding:3px 10px}
-.left{color:var(--warn);font-weight:650;font-size:14px;margin-top:6px}
 details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;margin-bottom:8px}
 summary{cursor:pointer;font-weight:650;min-height:48px;display:flex;align-items:center}
 details p{color:var(--muted);margin:0 0 14px}
 footer{margin:64px 0 40px;color:var(--muted);font-size:15px}
+.proof{margin:14px 0 0;padding-left:12px;border-left:3px solid var(--brand);color:var(--ink);max-width:40rem}
 .clip{display:block;width:min(100%,300px);height:auto;margin:1.5rem auto 0;border-radius:1rem;box-shadow:0 4px 24px rgba(0,0,0,.12)}
 @media (max-width:720px){.shots{grid-template-columns:1fr 1fr}.shots figure:last-child{grid-column:1/-1}.ctas .btn{flex:1}}
 </style>
@@ -70,6 +70,7 @@ footer{margin:64px 0 40px;color:var(--muted);font-size:15px}
   <p class="lead">Ruta runs a residential Ayurveda centre from the admin's phone: each resident's therapies, who treats them, in which room, and one day sheet for the notice board.</p>
   <div class="ctas"><a class="btn primary" id="start" href="https://signup.jains.es/">Start free trial</a><a class="btn ghost" href="https://demo.jains.es">See it live</a></div>
   <p class="note">30 days free, no card. Your own centre in about two minutes.</p>
+  <p class="proof">Built to how residential Ayurveda centres run their day: panchakarma programmes, therapists matched by gender, a resident kept to their own therapist, and meals by diet plan.</p>
   <video class="clip" src="/ruta/video.mp4" width="375" height="812" muted autoplay loop playsinline controls aria-label="30 seconds on a phone: sign up, the example day, Make it mine, and tomorrow planned"></video>
 </section>
 
@@ -100,13 +101,11 @@ footer{margin:64px 0 40px;color:var(--muted);font-size:15px}
     <a class="btn primary" href="https://signup.jains.es/">Start free trial</a>
   </div>
   <div class="plan best">
-    <span class="tag">Founding price, locked for life</span>
-    <h3>Cloud + support</h3>
-    <div class="price"><span class="inr"><span class="mo">₹999</span><span class="yr">₹9,990</span><s class="mo">₹1,499</s><s class="yr">₹14,990</s></span><span class="usd"><span class="mo">$19</span><span class="yr">$190</span><s class="mo">$29</s><s class="yr">$290</s></span></div>
+        <h3>Cloud + support</h3>
+    <div class="price"><span class="inr"><span class="mo">₹999</span><span class="yr">₹9,990</span></span><span class="usd"><span class="mo">$19</span><span class="yr">$190</span></span></div>
     <div class="per"><span class="mo">per centre a month</span><span class="yr">per centre a year</span><span class="inr">, incl. GST</span></div>
-    <p class="left" id="left" hidden></p>
     <ul><li>Hosting, HTTPS, nightly backups, updates</li><li>Support on WhatsApp, email and phone, working hours IST</li><li>Setup help: we enter your therapies, rooms, programmes and rota from your paper sheets</li><li>AI assistant connector, hosted</li></ul>
-    <a class="btn primary" href="https://wa.me/420777558262?text=I%27d%20like%20Ruta%20Cloud%20%2B%20support%20at%20the%20founding%20price.">Choose on WhatsApp</a>
+    <a class="btn primary" href="https://wa.me/420777558262?text=I%27d%20like%20Ruta%20Cloud%20%2B%20support.">Choose on WhatsApp</a>
   </div>
   <div class="plan">
     <h3>On-premise + support</h3>
