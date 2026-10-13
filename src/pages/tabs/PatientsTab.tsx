@@ -20,6 +20,8 @@ type Patient = { id: string | number; name: string; phone?: string; gender: stri
 /** "26 Sep": a stay is whole days, so no time. */
 const longDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const stayDay = (iso?: string) => (iso ? dayText(iso) : '');
+/** One day reads once: a day patient's visit is not 'Fri 9 Oct to Fri 9 Oct' (#720). */
+const stayRange = (s: { start_date: string; end_date: string }) => s.start_date.slice(0, 10) === s.end_date.slice(0, 10) ? stayDay(s.start_date) : `${stayDay(s.start_date)} to ${stayDay(s.end_date)}`;
 const blankNew = () => ({ name: '', gender: '' as '' | 'Female' | 'Male' | 'Other', arriving: '', leaving: '', onSite: true, phone: '', emergencyContact: '', emergencyPhone: '', address: '', country: '', idNumber: '', registrationNumber: '' });
 type Slot = { date: string; start_time: string; staff_id: string; staff_name: string; room_id: string; room_name: string };
 const clock = (timeZone: string) => new Date().toLocaleTimeString('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
@@ -63,7 +65,8 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRule
     fetchJsonWithTimeout<InHouse[]>(`${API_BASE}/patients?resident_on=${today}&arriving_within=7`).then((r) => setInHouse(Array.isArray(r) ? r : [])).catch(() => setInHouse([]));
   }, [today, patients.length, patients.map((p) => `${p.actualStart}${p.actualEnd}`).join()]);
   const stayOf = (p: InHouse) => p.Stays.find((s) => s.start_date.slice(0, 10) <= today && s.end_date.slice(0, 10) >= today);
-  const dayOf = (s: { start_date: string; end_date: string }) => {
+  const dayOf = (s: { start_date: string; end_date: string; on_site?: boolean }) => {
+    if (s.on_site === false && s.start_date.slice(0, 10) === s.end_date.slice(0, 10)) return 'Day patient';
     const n = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(s.start_date)) / DAY_MS) + 1;
     const of = Math.round((Date.parse(s.end_date) - Date.parse(s.start_date)) / DAY_MS) + 1;
     return `Day ${n} of ${of} · leaves ${stayDay(s.end_date)}`;
@@ -248,7 +251,7 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
       {d ? (
         <div className="-mt-2 max-h-[70dvh] overflow-y-auto">
           <div className="text-sm text-muted-foreground">
-            {d.stay ? `Staying ${stayDay(d.stay.start_date)} to ${stayDay(d.stay.end_date)} · day ${d.stay.day} of ${d.stay.days}` : d.coming ? `Arrives ${stayDay(d.coming.start_date)} · leaves ${stayDay(d.coming.end_date)}` : d.last_stay ? `Stayed until ${stayDay(d.last_stay.end_date)}` : 'Not staying today'}
+            {d.stay ? `${d.stay.on_site === false ? 'Day patient ·' : 'Staying'} ${stayRange(d.stay)}${d.stay.days > 1 ? ` · day ${d.stay.day} of ${d.stay.days}` : ''}` : d.coming ? `Arrives ${stayDay(d.coming.start_date)} · leaves ${stayDay(d.coming.end_date)}` : d.last_stay ? `Stayed until ${stayDay(d.last_stay.end_date)}` : 'Not staying today'}
           </div>
           {leavingToday ? bar : null}
           {steps && !leavingToday ? <div className="mt-3"><ChecklistBar label="Arrival" done={steps.filter((x) => x[1]).length} total={steps.length} onClick={() => setArrival(true)} /></div> : null}
@@ -304,7 +307,7 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
             {d.form_c ? <ChangeLine label="Form C" value={d.form_c.filed ? `Filed ${dayText(d.form_c.filed)}` : `Due by ${dayText(d.form_c.due)}${d.form_c.fields.some(([, v]) => !v) ? ` · ${d.form_c.fields.filter(([, v]) => !v).length} missing` : ''}`} onClick={() => setFormC(true)} /> : null}
             <ChangeLine label="Passport photo" value={d.passport_photo ? `Kept ${dayText(d.passport_photo)}` : "Take a photo"} faint={!d.passport_photo} onClick={() => (d.passport_photo ? setPhotoOpen(true) : photoInput.current?.click())} />
             <input ref={photoInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { void keepPhoto(e.target.files?.[0]); e.target.value = ""; }} />
-            {up ? <ChangeLine label="Stay" value={`${stayDay(up.start_date)} to ${stayDay(up.end_date)}`} onClick={() => changeStay(d)} /> : <ChangeLine label={d.last_stay ? 'New stay' : 'Stay'} value={d.last_stay?.package ? `From today · ${d.last_stay.package.name}` : 'Not staying · add a stay'} faint={!d.last_stay} onClick={() => changeStay(d)} />}
+            {up ? <ChangeLine label="Stay" value={stayRange(up)} onClick={() => changeStay(d)} /> : <ChangeLine label={d.last_stay ? 'New stay' : 'Stay'} value={d.last_stay?.package ? `From today · ${d.last_stay.package.name}` : 'Not staying · add a stay'} faint={!d.last_stay} onClick={() => changeStay(d)} />}
             <ChangeLine label="Details" value={detailsHint(d.id)} faint onClick={() => details(d.id)} />
           </div>
           {d.stay ? <div className="mt-3">{out(d.id)}</div> : null}
