@@ -75,6 +75,8 @@ async function main() {
     await prisma.timeOff.create({ data: { entity_type: 'room', entity_id: room.id, date: new Date(`${DAY2}T00:00:00.000Z`), start_date: new Date(`${DAY2}T00:00:00.000Z`), end_date: new Date(`${DAY2}T00:00:00.000Z`), start_time: '07:00', end_time: '12:00', description: 'Plumbing' } });
     const sheet2 = pdfText(dir, 'patient2.pdf', await generateDailySchedulePdf(DAY2, prisma));
     assert.ok(sheet2.includes(`ROOM OUT · ${TAG} Sweda 60m · ${TAG} Kriti · ${TAG} Chandra (out)`), `The patient sheet does not mark a treatment in a room out of use: ${sheet2.slice(0, 600)}`);
+    const rota2 = pdfText(dir, 'rota2.pdf', await generateTherapistRotaPdf(DAY2, prisma));
+    assert.ok(rota2.includes(`ROOM OUT · ${TAG} Sweda 60m · ${TAG} Aarav · ${TAG} Chandra (out)`), `The rota does not mark a treatment in a room out of use: ${rota2.slice(0, 600)}`);
     console.log('A treatment booked with a therapist who is off is marked on both sheets.');
   } finally {
     await tidy(prisma).catch(() => {});
