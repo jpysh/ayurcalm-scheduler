@@ -1347,6 +1347,7 @@ app.get('/daily-schedule-pdf', async (req: Request, res: Response) => {
     if (!staffId && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
       const data = { pdf: Buffer.from(pdf), printed_at: new Date() };
       await prisma.printedSheet.upsert({ where: { date_kind: { date, kind } }, update: data, create: { date, kind, ...data } });
+      if (kind === 'residents') await prisma.settings.updateMany({ where: { first_sheet_at: null, demo_data: false }, data: { first_sheet_at: new Date() } });
       const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
       await prisma.printedSheet.deleteMany({ where: { date: { lt: cutoff } } });
     }

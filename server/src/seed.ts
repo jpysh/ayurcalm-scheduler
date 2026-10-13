@@ -649,7 +649,9 @@ async function main() {
   // Before the summaries, so their numbers follow the centre's format.
   // The demo is one made-up centre whatever CENTRE_NAME says, except a trial's, which shows its own name (#728).
   const support = process.env.DEFAULT_SUPPORT_WHATSAPP ?? '420777558262';
-  const centre = { support_whatsapp: support || null, patient_support_whatsapp: support || null, centre_name: (TRIAL_SEED && process.env.CENTRE_NAME?.trim().slice(0, 80)) || (BABAJI ? 'Babaji Ayurveda' : 'Himalaya Ayurveda Retreat'), address: 'Near the golf course, Ranikhet, Uttarakhand', logo: png('demo-logo.png') };
+  const centre = { support_whatsapp: support || null, patient_support_whatsapp: support || null, centre_name: (TRIAL_SEED && process.env.CENTRE_NAME?.trim().slice(0, 80)) || (BABAJI ? 'Babaji Ayurveda' : 'Himalaya Ayurveda Retreat'), address: 'Near the golf course, Ranikhet, Uttarakhand', logo: png('demo-logo.png'),
+    // The days above were built on ADMIN_TZ's date (#734); the app must read them on the same one.
+    ...(process.env.ADMIN_TZ ? { timezone: CENTRE_TZ } : {}) };
   // Nothing of the demo centre on the pilot's own papers (#682); the admin fills in the rest in Settings.
   if (BABAJI) Object.assign(letterhead, { name_local: '', email: '', phones: '+91 00000 00000', website: '', discharge_format: 'BA/{YYYY}/{N}', footer_line: 'Babaji Ayurveda · sample data, not real patients' });
   await prisma.settings.upsert({ where: { id: 'singleton' }, update: { letterhead, ...centre }, create: { id: 'singleton', letterhead, ...centre, opening_time: '09:00', closing_time: '20:00' } });

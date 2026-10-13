@@ -1,4 +1,5 @@
 import express, { Router, type Request, type Response, type NextFunction } from 'express';
+import { centreClock } from './availability.js';
 import { exportCentre, importCentre, ImportRefused } from './transfer.js';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
@@ -229,7 +230,7 @@ settingsRouter.get('/backups/latest', backupLimiter, requireAdmin, async (_req: 
 
 // Moving a centre between installs (#231): one file out, one file in.
 settingsRouter.get('/export', backupLimiter, requireAdmin, async (_req: Request, res: Response) => {
-  const day = new Date().toISOString().slice(0, 10);
+  const day = centreClock((await getSettings()).timezone).date;
   res.setHeader('Content-Type', 'application/gzip');
   res.setHeader('Content-Disposition', `attachment; filename="ayurcalm-export-${day}.json.gz"`);
   res.send(await exportCentre(prisma));
