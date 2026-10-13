@@ -11,6 +11,7 @@ import { promisify } from 'node:util';
 import { createHmac, randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync, renameSync, appendFileSync, existsSync } from 'node:fs';
 import { next, deletesAt, refuse, slugFor, linkOpen, took } from './lifecycle.mjs';
+import { morning } from './morning.mjs';
 
 const run = promisify(execFile);
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -128,6 +129,7 @@ export async function tick(now = Date.now()) {
 // Each problem is told once on Telegram, and once more when it clears. All clear pings HEALTHCHECKS_URL,
 // so a silent host (provisioner or Mac down) raises Healthchecks.io's own alarm.
 const open = new Set();
+let latest = [];
 export async function watch(now = Date.now()) {
   const problems = [];
   const sites = [{ slug: 'demo', port: 8201 }, ...db.centres.filter((c) => !c.paused_at)];
@@ -142,6 +144,7 @@ export async function watch(now = Date.now()) {
   for (const p of problems) if (!open.has(p)) { open.add(p); await telegram(`ALERT: ${p}`); }
   for (const p of [...open]) if (!problems.includes(p)) { open.delete(p); await telegram(`Cleared: ${p}`); }
   if (!problems.length && env.HEALTHCHECKS_URL) await fetch(env.HEALTHCHECKS_URL).catch(() => {});
+  latest = problems;
   return problems;
 }
 
@@ -187,6 +190,8 @@ export const server = http.createServer(async (req, res) => {
     const c = own && db.centres.find((x) => x.slug === own[1]);
     if (c) return wake(req, res, c);
     if (req.method === 'GET' && url.pathname === '/') return send(res, 200, form('', url.searchParams.get('ref')));
+    // The maintainer's morning (#818): only with the key from provisioner.env; no key set, no page.
+    if (url.pathname === '/dashboard' && env.DASHBOARD_KEY && url.searchParams.get('key') === env.DASHBOARD_KEY) return send(res, 200, page(`<h1>Morning</h1><pre style="white-space:pre-wrap;font:inherit">${esc(morning(db, latest, Date.now()))}</pre>`), { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
     // The landing page's "N of 10 founding places left" (#245). Founding centres not hosted here: FOUNDING_ELSEWHERE.
     if (url.pathname === '/founding') {
       const taken = db.centres.filter((c) => c.trial?.plan === 'founding').length + Number(env.FOUNDING_ELSEWHERE || 0);
@@ -234,6 +239,12 @@ export const server = http.createServer(async (req, res) => {
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {
   server.listen(Number(env.PORT || 8200), () => console.log(`provisioner on :${env.PORT || 8200}`));
-  setInterval(() => { tick().catch(console.error); watch().catch(console.error); }, 3_600_000);
+  // Hourly; the morning goes out on the first run in the 7 o'clock hour of the Mac's own clock (#818).
+  let sent = '';
+  setInterval(async () => {
+    await tick().catch(console.error); await watch().catch(console.error);
+    const d = new Date();
+    if (d.getHours() === 7 && sent !== d.toDateString()) { sent = d.toDateString(); await telegram(morning(db, latest, Date.now())); }
+  }, 3_600_000);
   watch().catch(console.error);
 }
