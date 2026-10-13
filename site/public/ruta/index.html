@@ -3,137 +3,278 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ruta: scheduling for Ayurveda centres</title>
-<meta name="description" content="Ruta runs a residential Ayurveda centre's day from the admin's phone: residents, therapists, rooms, and the day sheet printed for the notice board by 7 am. Free 30-day trial, no card.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%2216%22 fill=%22%233d6b50%22/%3E%3C/svg%3E">
+<title>Ruta: therapy scheduling for wellness centres</title>
+<meta name="description" content="Ruta runs a wellness centre's day from one phone: guests, therapies, therapists and rooms, reassigned in one tap when someone calls in sick. Free 30-day trial, no card.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%2216%22 fill=%22%23e9a23b%22/%3E%3C/svg%3E">
 <link rel="canonical" href="https://jains.es/ruta">
-<meta property="og:title" content="Ruta: your centre's day, printed and ready by 7 am">
-<meta property="og:description" content="Residents, therapists, rooms and the printed day sheet, from one phone. Free for 30 days.">
-<meta property="og:image" content="https://jains.es/ruta/img/sheet.jpg">
+<meta property="og:title" content="Ruta: run a calmer centre">
+<meta property="og:description" content="Therapies, therapists and rooms for your wellness centre, planned from one phone. Free for 30 days.">
+<meta property="og:image" content="https://jains.es/ruta/img/day.jpg">
+<meta name="theme-color" content="#0f2a1f">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,300&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f3f6f3;--card:#fff;--ink:#1c2b22;--muted:#56645b;--line:#dfe6e0;--brand:#3d6b50;--brand-ink:#fff;--soft:#e6efe8;--warn:#9a4a1a}
-@media (prefers-color-scheme:dark){:root{--bg:#131a16;--card:#1b241f;--ink:#e6ede8;--muted:#a3b1a8;--line:#2c3831;--brand:#6fae88;--brand-ink:#0f1612;--soft:#223029;--warn:#f0a36b}}
+:root{--forest:#0f2a1f;--forest2:#1f4636;--cream:#f6efe4;--sand:#efe0c8;--sage:#dfe8dd;--saffron:#e9a23b;--ink:#15201a;--muted:#5f675f;--soft:#a9b5ad}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-a{color:var(--brand)}
-.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
-header.top{display:flex;align-items:center;justify-content:space-between;padding:14px 0}
-.logo{font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--ink);text-decoration:none}
-.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 22px;border-radius:999px;font-weight:650;text-decoration:none;border:1.5px solid var(--brand)}
-.btn.primary{background:var(--brand);color:var(--brand-ink)}
-.btn.ghost{color:var(--brand);background:transparent}
-.hero{padding:28px 0 8px}
-h1{font-size:clamp(32px,6vw,52px);line-height:1.08;letter-spacing:-.025em;margin:0 0 14px}
-h2{font-size:clamp(24px,4vw,32px);letter-spacing:-.02em;margin:56px 0 16px}
-.lead{font-size:19px;color:var(--muted);max-width:40rem;margin:0 0 22px}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--cream);color:var(--ink);font:17px/1.55 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.it{font-style:italic;color:var(--saffron)}
+h1,h2,.serif{font-family:Fraunces,Georgia,serif;font-weight:300;letter-spacing:-.025em}
+h1{font-size:clamp(50px,13vw,96px);line-height:.95;margin:0 0 18px}
+h2{font-size:clamp(38px,9vw,64px);line-height:1;margin:0 0 18px}
+h3{margin:0 0 6px;font-size:19px}
+.wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+section{padding:88px 0}
+.dark{background:var(--forest);color:#f3ece0}.dark .muted{color:var(--soft)}
+.muted{color:var(--muted)}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 26px;border-radius:99px;background:var(--saffron);color:#1a1206;text-decoration:none;font-weight:700;border:0;transition:transform .2s}
+.btn:active{transform:scale(.97)}
+.btn.ghost{background:transparent;color:inherit;border:1.5px solid currentColor}
 .ctas{display:flex;gap:10px;flex-wrap:wrap}
-.note{font-size:14px;color:var(--muted);margin-top:10px}
-.shots{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:36px;align-items:start}
-.shots figure{margin:0}
-.shots img{width:100%;height:auto;border-radius:18px;border:1px solid var(--line);display:block;background:var(--card)}
-.shots figcaption{font-size:14px;color:var(--muted);margin-top:8px}
-.feat{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
-.feat div{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
-.feat b{display:block;margin-bottom:4px}
-.feat p{margin:0;color:var(--muted);font-size:15px}
-.toggle{display:inline-flex;background:var(--soft);border-radius:999px;padding:4px;margin-bottom:16px}
+.note{font-size:14px;opacity:.75;margin-top:12px}
+
+/* hero */
+.hero{position:relative;height:100svh;min-height:600px;color:#fff;overflow:hidden;background:var(--forest)}
+.hero video,.hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(1.08);animation:drift 20s ease-out forwards}
+@keyframes drift{to{transform:scale(1)}}
+.hero:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(15,42,31,.35),rgba(15,42,31,0) 25%,rgba(15,42,31,.2) 45%,rgba(15,42,31,.96))}
+.top{position:absolute;z-index:3;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:16px 20px}
+.logo{font:500 26px Fraunces,serif;text-decoration:none;color:#fff}
+.pill{border:1px solid rgba(255,255,255,.55);border-radius:99px;padding:9px 16px;font-size:14px;font-weight:600;color:#fff;text-decoration:none;backdrop-filter:blur(8px);background:rgba(255,255,255,.08)}
+.hero .in{position:absolute;z-index:2;left:0;right:0;bottom:0;padding:0 20px 36px;max-width:1040px;margin:0 auto}
+.lead{font-size:18px;max-width:30rem;margin:0 0 24px;opacity:.92}
+.swap{display:inline-grid;vertical-align:bottom}
+.swap span{grid-area:1/1;opacity:0;transform:translateY(.4em);transition:opacity .7s,transform .7s}
+.swap span.on{opacity:1;transform:none}
+.cue{position:absolute;z-index:2;right:20px;bottom:40px;width:1px;height:56px;background:rgba(255,255,255,.35);overflow:hidden}
+.cue:after{content:"";position:absolute;left:0;top:-50%;width:1px;height:50%;background:#fff;animation:cue 2s infinite}
+@keyframes cue{to{top:100%}}
+
+.marq{background:var(--forest);color:var(--saffron);overflow:hidden;white-space:nowrap;padding:16px 0;border-top:1px solid rgba(255,255,255,.08);font:italic 300 24px Fraunces,serif}
+.marq span{display:inline-block;animation:m 40s linear infinite}
+@keyframes m{to{transform:translateX(-50%)}}
+
+/* statement that fills in as you scroll */
+.fill{font:300 clamp(34px,8.5vw,60px)/1.12 Fraunces,serif;letter-spacing:-.02em;margin:0}
+.fill .w{opacity:.15;transition:opacity .4s}.fill .w.on{opacity:1}
+
+/* pinned phone story */
+.story{display:grid;grid-template-columns:1fr;position:relative}
+.stage{position:sticky;top:0;height:100svh;display:flex;align-items:flex-start;padding-top:7svh;justify-content:center;z-index:1;pointer-events:none}
+.phone{position:relative;width:min(56vw,240px);aspect-ratio:444/900;border-radius:42px;border:9px solid #0a1a13;background:#fff;overflow:hidden;box-shadow:0 40px 80px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.08)}
+.phone .scr{position:absolute;inset:0;opacity:0;transition:opacity .8s,transform .8s;transform:scale(1.04)}
+.phone .scr.on{opacity:1;transform:none}
+.phone img,.phone video{width:100%;height:100%;object-fit:cover;display:block}
+.mock{padding:42px 10px 10px;font-size:12.5px;color:var(--ink);background:#fff;height:100%}
+.mock .hd{font-weight:700;font-size:15px;margin:0 4px 10px}
+.row{display:flex;gap:8px;padding:9px 8px;border-left:3px solid #9bbfa9;border-radius:6px;margin-bottom:6px;background:#f4f6f4;transition:background .6s,border-color .6s}
+.row b{display:block}.row small{color:var(--muted)}.row .t{width:40px;font-weight:700}
+.row.off{border-color:#c9473f;background:#fbe7e5}.row.ok{border-color:var(--saffron);background:#fdf1dc}
+.toast{position:absolute;left:10px;right:10px;bottom:14px;background:var(--forest);color:#fff;border-radius:14px;padding:10px 12px;font-size:12.5px;opacity:0;transform:translateY(10px);transition:.5s}
+.toast.on{opacity:1;transform:none}
+.chap{min-height:100svh;display:flex;align-items:flex-end;padding:0 20px 4svh;position:relative;z-index:2;margin-top:-100svh}
+.chap:first-of-type{margin-top:-100svh}
+.chap+.chap{margin-top:0}
+.chap .card{background:rgba(15,42,31,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:16px 20px;max-width:26rem;color:#f3ece0}
+.chap .k{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--saffron);font-weight:700}
+.chap h3{font:300 26px/1.08 Fraunces,serif;margin:6px 0 8px}
+.chap p{margin:0;color:var(--soft)}
+
+/* swipe cards */
+.rail{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:4px 20px 18px;margin:0 -20px;scrollbar-width:none}
+.rail::-webkit-scrollbar{display:none}
+.tile{flex:0 0 78%;max-width:340px;scroll-snap-align:center;border-radius:26px;padding:22px;min-height:260px;display:flex;flex-direction:column;justify-content:space-between}
+.tile .n{font:300 64px/1 Fraunces,serif}
+.tile p{margin:0}
+.t1{background:var(--saffron);color:#1a1206}.t2{background:var(--sage)}.t3{background:var(--forest2);color:#f3ece0}.t4{background:var(--sand)}.t5{background:#f3d9c4}.t6{background:var(--forest);color:#f3ece0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
+.chips span{border:1px solid currentColor;border-radius:99px;padding:7px 15px;font-size:15px}
+
+/* demo */
+.demo{display:grid;gap:28px;align-items:center}
+.clip{display:block;width:min(70vw,300px);height:auto;margin:0 auto;border-radius:34px;border:8px solid #0a1a13;box-shadow:0 30px 60px rgba(0,0,0,.4)}
+
+/* pricing */
+.toggle{display:inline-flex;background:rgba(255,255,255,.1);border-radius:99px;padding:4px;margin-bottom:18px}
 input[name=billing]{position:absolute;opacity:0;pointer-events:none}
-.toggle label{padding:8px 16px;border-radius:999px;cursor:pointer;font-size:15px;font-weight:600}
-#m:checked~.toggle label[for=m],#y:checked~.toggle label[for=y]{background:var(--card)}
-#m:focus-visible~.toggle label[for=m],#y:focus-visible~.toggle label[for=y]{outline:2px solid var(--brand)}
+.toggle label{padding:9px 16px;border-radius:99px;cursor:pointer;font-size:15px;font-weight:600}
+#m:checked~.toggle label[for=m],#y:checked~.toggle label[for=y]{background:#f3ece0;color:var(--forest)}
+#m:focus-visible~.toggle label[for=m],#y:focus-visible~.toggle label[for=y]{outline:2px solid var(--saffron)}
 .yr{display:none}#y:checked~.plans .yr{display:inline}#y:checked~.plans .mo{display:none}
 .usd{display:none}html[data-cc=XX] .usd{display:inline}html[data-cc=XX] .inr{display:none}
-.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
-.plan{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;display:flex;flex-direction:column}
-.plan.best{border:2px solid var(--brand)}
-.plan h3{margin:0 0 4px;font-size:19px}
-.price{font-size:30px;font-weight:800;letter-spacing:-.02em;margin:8px 0 2px}
-.price s{font-size:17px;font-weight:500;color:var(--muted);margin-left:6px}
-.per{font-size:14px;color:var(--muted)}
-.plan ul{padding-left:18px;margin:14px 0;color:var(--muted);font-size:15px;flex:1}
-.tag{display:inline-block;background:var(--soft);color:var(--brand);font-weight:700;font-size:13px;border-radius:999px;padding:3px 10px}
-details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;margin-bottom:8px}
-summary{cursor:pointer;font-weight:650;min-height:48px;display:flex;align-items:center}
-details p{color:var(--muted);margin:0 0 14px}
-footer{margin:64px 0 40px;color:var(--muted);font-size:15px}
-.proof{margin:14px 0 0;padding-left:12px;border-left:3px solid var(--brand);color:var(--ink);max-width:40rem}
-.clip{display:block;width:min(100%,300px);height:auto;margin:1.5rem auto 0;border-radius:1rem;box-shadow:0 4px 24px rgba(0,0,0,.12)}
-@media (max-width:720px){.shots{grid-template-columns:1fr 1fr}.shots figure:last-child{grid-column:1/-1}.ctas .btn{flex:1}}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.plan{border:1px solid rgba(255,255,255,.16);border-radius:26px;padding:24px;display:flex;flex-direction:column}
+.plan.best{background:var(--saffron);color:#1a1206;border-color:transparent}
+.plan.best .muted{color:#4a3510}
+.price{font:300 52px/1.05 Fraunces,serif;margin:10px 0 2px}
+.per{font-size:14px;opacity:.8}
+.plan ul{padding-left:18px;margin:16px 0;font-size:15px;flex:1;opacity:.85}
+.plan.best .btn{background:var(--forest);color:#fff}
+.plan .btn.ghost{color:inherit}
+
+details{border-top:1px solid #d9cdb9;padding:4px 0}
+details:last-of-type{border-bottom:1px solid #d9cdb9}
+summary{cursor:pointer;font-weight:600;min-height:58px;display:flex;align-items:center;justify-content:space-between;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary:after{content:"+";font:300 28px Fraunces,serif;color:var(--saffron);transition:transform .3s}
+details[open] summary:after{transform:rotate(45deg)}
+details p{color:var(--muted);margin:0 0 18px}
+
+.end{text-align:center}
+.end h2{font-size:clamp(46px,12vw,88px)}
+footer{padding:40px 0 60px;font-size:15px;color:var(--soft)}
+footer a{color:#f3ece0}
+
+.r{opacity:0;transform:translateY(32px);transition:opacity 1s cubic-bezier(.2,.7,.2,1),transform 1s cubic-bezier(.2,.7,.2,1)}
+.r.on{opacity:1;transform:none}
+@media (min-width:860px){
+  .demo{grid-template-columns:1fr 1fr}
+  .chap{padding-left:max(20px,calc(50vw - 500px))}
+  .tile{flex-basis:300px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*:after{animation:none!important;transition:none!important}
+  .r{opacity:1;transform:none}.fill .w{opacity:1}
+}
 </style>
 </head>
 <body>
-<div class="wrap">
-<header class="top"><a class="logo" href="/ruta">Ruta</a><a class="btn ghost" href="https://demo.jains.es">See it live</a></header>
 
-<section class="hero">
-  <h1>Your centre's day, printed and ready by 7&nbsp;am</h1>
-  <p class="lead">Ruta runs a residential Ayurveda centre from the admin's phone: each resident's therapies, who treats them, in which room, and one day sheet for the notice board.</p>
-  <div class="ctas"><a class="btn primary" id="start" href="https://signup.jains.es/">Start free trial</a><a class="btn ghost" href="https://demo.jains.es">See it live</a></div>
-  <p class="note">30 days free, no card. Your own centre in about two minutes.</p>
-  <p class="proof">Built to how residential Ayurveda centres run their day: panchakarma programmes, therapists matched by gender, a resident kept to their own therapist, and meals by diet plan.</p>
-  <video class="clip" src="/ruta/video.mp4" width="375" height="812" muted autoplay loop playsinline controls aria-label="30 seconds on a phone: sign up, the example day, Make it mine, and tomorrow planned"></video>
-</section>
-
-<div class="shots">
-  <figure><img src="/ruta/img/day.jpg" width="444" height="900" alt="The day on a phone: each treatment with its time, resident, therapy, therapist and room"><figcaption>The whole day, one scroll.</figcaption></figure>
-  <figure><img src="/ruta/img/card.jpg" width="444" height="900" alt="One treatment opened: when, therapy, therapist, room, note and history" loading="lazy"><figcaption>Tap a treatment to move or change it.</figcaption></figure>
-  <figure><img src="/ruta/img/sheet.jpg" width="1287" height="910" alt="The printed day sheet: residents in rows, the day's therapies by time, meals for each group" loading="lazy"><figcaption>The sheet for the notice board, A4.</figcaption></figure>
-</div>
-
-<h2>What it does</h2>
-<div class="feat">
-  <div><b>The day sheet</b><p>Residents, therapies, therapists, rooms and meals on A4, from the phone. Therapist and doctor rotas too.</p></div>
-  <div><b>Therapist off? One tap</b><p>Ruta finds who is free and moves their treatments. Undo puts the day back.</p></div>
-  <div><b>Residents and stays</b><p>Arrival checklist, diet, treatment plan and every visit in one card.</p></div>
-  <div><b>Discharge summary</b><p>Your letterhead, day-by-day treatments, vitals and medicines, ready to sign.</p></div>
-  <div><b>Private links</b><p>Therapists, doctors and residents see their own day without signing in.</p></div>
-  <div><b>Leave with your data</b><p>One "Download everything" file, which loads into a free self-hosted copy.</p></div>
-</div>
-
-<h2 id="pricing">Pricing</h2>
-<input type="radio" name="billing" id="m" checked><input type="radio" name="billing" id="y">
-<div class="toggle" role="group" aria-label="Billing period"><label for="m">Monthly</label><label for="y">Yearly: 2 months free</label></div>
-<div class="plans">
-  <div class="plan">
-    <h3>Free trial</h3>
-    <div class="price"><span class="inr">₹0</span><span class="usd">$0</span></div><div class="per">30 days, no card</div>
-    <ul><li>The full app on your own address</li><li>The clock starts with your first resident or printed sheet</li><li>Upgrade any day; nothing is deleted at the end</li></ul>
-    <a class="btn primary" href="https://signup.jains.es/">Start free trial</a>
+<header class="hero">
+  <video id="bg" muted loop playsinline poster="/ruta/img/hero.jpg" aria-hidden="true"></video>
+  <div class="top"><a class="logo" href="/ruta">Ruta</a><a class="pill" href="https://demo.jains.es">See it live</a></div>
+  <div class="in">
+    <h1>Run a <span class="swap it" aria-hidden="true"><span class="on">calmer</span><span>fuller</span><span>kinder</span><span>lighter</span></span><span class="sr" style="position:absolute;left:-9999px">calmer</span> centre.</h1>
+    <p class="lead">Every therapy, therapist and room for your wellness centre, planned from one phone. Ayurveda, spa, massage, physio.</p>
+    <div class="ctas"><a class="btn" href="https://signup.jains.es/">Start free for 30 days</a></div>
+    <p class="note">No card. Your own centre in about two minutes.</p>
   </div>
-  <div class="plan best">
-        <h3>Cloud + support</h3>
-    <div class="price"><span class="inr"><span class="mo">₹999</span><span class="yr">₹9,990</span></span><span class="usd"><span class="mo">$19</span><span class="yr">$190</span></span></div>
-    <div class="per"><span class="mo">per centre a month</span><span class="yr">per centre a year</span><span class="inr">, incl. GST</span></div>
-    <ul><li>Hosting, HTTPS, nightly backups, updates</li><li>Support on WhatsApp, email and phone, working hours IST</li><li>Setup help: we enter your therapies, rooms, programmes and rota from your paper sheets</li><li>AI assistant connector, hosted</li></ul>
-    <a class="btn primary" href="https://wa.me/420777558262?text=I%27d%20like%20Ruta%20Cloud%20%2B%20support.">Choose on WhatsApp</a>
-  </div>
-  <div class="plan">
-    <h3>On-premise + support</h3>
-    <div class="price"><span class="inr"><span class="mo">₹999</span><span class="yr">₹9,990</span></span><span class="usd"><span class="mo">$19</span><span class="yr">$190</span></span></div>
-    <div class="per"><span class="mo">per centre a month</span><span class="yr">per centre a year</span><span class="inr">, incl. GST</span></div>
-    <ul><li>Ruta on your own computer at the centre</li><li>The same support and setup help</li><li>Your data never leaves the building</li></ul>
-    <a class="btn ghost" href="https://wa.me/420777558262?text=I%27d%20like%20Ruta%20On-premise%20%2B%20support.">Choose on WhatsApp</a>
-  </div>
-</div>
-<p class="note">Or run it yourself for free: Ruta is open source. <a href="https://github.com/jpysh/ayurcalm-scheduler/blob/main/docs/self-host.md">Self-host guide</a> (community help only).</p>
+  <div class="cue" aria-hidden="true"></div>
+</header>
 
-<h2>Questions</h2>
-<details><summary>Can I leave with my data?</summary><p>Always. Settings → Download everything gives one file with all your residents, bookings, letterhead and signatures. It loads into a free self-hosted Ruta, or back into the cloud.</p></details>
-<details><summary>What happens when the trial ends?</summary><p>Nothing is deleted. The centre becomes read-only for 60 days and Download everything keeps working. Choose a plan any day to carry on.</p></details>
-<details><summary>Where is our data kept?</summary><p>Cloud centres run on servers we look after, with an encrypted copy made every night and kept in a second place. On-premise keeps everything on your own computer.</p></details>
-<details><summary>Do we need the internet all day?</summary><p>Cloud needs a connection to change the day; the printed sheet works without one. On-premise works on the centre's own Wi-Fi.</p></details>
-<details><summary>Is support included in the trial?</summary><p>The trial is the full app without support. Upgrade on any day of the trial to get support and setup help straight away.</p></details>
-<details><summary>Can we cancel?</summary><p>Yes, any month. You keep your data: download it, or self-host for free.</p></details>
+<div class="marq" aria-hidden="true"><span>Abhyanga · Shirodhara · Deep tissue · Hot stone · Swedana · Reflexology · Physio · Nasya · Panchakarma · Thai · Abhyanga · Shirodhara · Deep tissue · Hot stone · Swedana · Reflexology · Physio · Nasya · Panchakarma · Thai · </span></div>
 
-<footer>
-  <p><b>Talk to us:</b> <a href="https://wa.me/420777558262">WhatsApp +420 777 558 262</a> · <a href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a>. Replies the same working day, IST.</p>
-  <p><a href="/ruta/pilot">Pilot notice: your data</a></p>
-  <p>Ruta is open source (MIT). Made for residential Ayurveda centres; it fits wellness retreats and spas too.</p>
-</footer>
+<section class="dark"><div class="wrap">
+  <p class="fill" id="fill">Fewer WhatsApp threads. Less paper on the wall. No guest waiting for a room that is taken. More time for the people on the table.</p>
+</div></section>
+
+<div class="dark story" id="story">
+  <div class="stage" aria-hidden="true"><div class="phone">
+    <div class="scr on"><img src="/ruta/img/day.jpg" alt=""></div>
+    <div class="scr"><div class="mock"><div class="hd">Today · 10:30</div>
+      <div class="row"><span class="t">09:00</span><div><b>Abhyanga</b><small>Asha · Room Ganga</small></div></div>
+      <div class="row" id="x"><span class="t">10:30</span><div><b>Shirodhara</b><small id="xs">Kiran · Room Yamuna</small></div></div>
+      <div class="row" id="y2"><span class="t">12:00</span><div><b>Hot stone</b><small id="ys">Kiran · Room Kaveri</small></div></div>
+      <div class="row"><span class="t">14:00</span><div><b>Swedana</b><small>Ravi · Steam room</small></div></div>
+      <div class="row"><span class="t">15:30</span><div><b>Reflexology</b><small>Meera · Room Ganga</small></div></div>
+      <div class="toast" id="toast">2 treatments moved to who is free · Undo</div></div></div>
+    <div class="scr"><img src="/ruta/img/card.jpg" alt=""></div>
+  </div></div>
+  <div class="chap"><div class="card"><div class="k">06:45 · Morning</div><h3>The whole day, one scroll.</h3><p>Every treatment with its time, guest, therapist and room. Sort by therapist, room or guest.</p></div></div>
+  <div class="chap"><div class="card"><div class="k">08:10 · Kiran calls in sick</div><h3>One tap. Breathe.</h3><p>Ruta finds who is free, keeps each guest with a therapist they may see, and moves the day. Undo puts it back.</p></div></div>
+  <div class="chap"><div class="card"><div class="k">All day · Every guest</div><h3>One card holds the stay.</h3><p>Plan, diet, notes and every visit. Each therapist opens their own day from a private link, no sign-in.</p></div></div>
 </div>
+
+<section><div class="wrap">
+  <h2 class="r">Everything the front desk <span class="it">juggles</span>.</h2>
+  <p class="muted r" style="max-width:32rem">Swipe through. It is all in the free trial.</p>
+  <div class="rail r">
+    <div class="tile t1"><span class="n">2 min</span><p><b>To your own centre</b><br>With an example day to play with before you touch your own.</p></div>
+    <div class="tile t3"><span class="n">1 tap</span><p><b>Someone off? Covered</b><br>Who is free, in a free room, by the rules your centre keeps.</p></div>
+    <div class="tile t2"><span class="n">0</span><p><b>Double-booked rooms</b><br>Ruta checks every room and therapist before anything is saved.</p></div>
+    <div class="tile t4"><span class="n">A4</span><p><b>The day on the wall</b><br>Guests, therapies, rooms and meals, printed for the team. Rotas too.</p></div>
+    <div class="tile t5"><span class="n">✍︎</span><p><b>Discharge summary</b><br>Your letterhead, treatments, vitals and medicines, ready to sign.</p></div>
+    <div class="tile t6"><span class="n">↓</span><p><b>Leave with your data</b><br>One “Download everything” file. It loads into a free self-hosted copy.</p></div>
+  </div>
+  <div class="chips r"><span>Ayurveda centres</span><span>Day spas</span><span>Massage studios</span><span>Physiotherapy</span><span>Retreats</span></div>
+</div></section>
+
+<section class="dark"><div class="wrap demo">
+  <div class="r"><h2>Thirty seconds, <span class="it">start to sheet</span>.</h2><p class="muted">Sign up, open the example day, make it yours, and tomorrow is planned. On a phone, exactly as you will use it.</p>
+  <div class="ctas" style="margin-top:22px"><a class="btn" href="https://signup.jains.es/">Try it free</a><a class="btn ghost" href="https://demo.jains.es">See it live</a></div></div>
+  <video class="clip r" data-src="/ruta/video.mp4" width="375" height="812" muted loop playsinline controls preload="none" aria-label="30 seconds on a phone: sign up, the example day, Make it mine, and tomorrow planned"></video>
+</div></section>
+
+<section class="dark" id="pricing" style="padding-top:20px"><div class="wrap">
+  <h2 class="r">Simple <span class="it">pricing</span>.</h2>
+  <input type="radio" name="billing" id="m" checked><input type="radio" name="billing" id="y">
+  <div class="toggle" role="group" aria-label="Billing period"><label for="m">Monthly</label><label for="y">Yearly: 2 months free</label></div>
+  <div class="plans">
+    <div class="plan r">
+      <h3>Free trial</h3>
+      <div class="price"><span class="inr">₹0</span><span class="usd">$0</span></div><div class="per">30 days, no card</div>
+      <ul><li>The full app on your own address</li><li>The clock starts with your first guest or printed sheet</li><li>Upgrade any day; nothing is deleted at the end</li></ul>
+      <a class="btn" href="https://signup.jains.es/">Start free trial</a>
+    </div>
+    <div class="plan best r">
+      <h3>Cloud + support</h3>
+      <div class="price"><span class="inr"><span class="mo">₹999</span><span class="yr">₹9,990</span></span><span class="usd"><span class="mo">$19</span><span class="yr">$190</span></span></div>
+      <div class="per"><span class="mo">per centre a month</span><span class="yr">per centre a year</span><span class="inr">, incl. GST</span></div>
+      <ul><li>Hosting, HTTPS, nightly backups, updates</li><li>Support on WhatsApp, email and phone, working hours IST</li><li>Setup help: we enter your therapies, rooms, programmes and rota from your paper sheets</li><li>AI assistant connector, hosted</li></ul>
+      <a class="btn" href="https://wa.me/420777558262?text=I%27d%20like%20Ruta%20Cloud%20%2B%20support.">Choose on WhatsApp</a>
+    </div>
+    <div class="plan r">
+      <h3>On-premise + support</h3>
+      <div class="price"><span class="inr"><span class="mo">₹999</span><span class="yr">₹9,990</span></span><span class="usd"><span class="mo">$19</span><span class="yr">$190</span></span></div>
+      <div class="per"><span class="mo">per centre a month</span><span class="yr">per centre a year</span><span class="inr">, incl. GST</span></div>
+      <ul><li>Ruta on your own computer at the centre</li><li>The same support and setup help</li><li>Your data never leaves the building</li></ul>
+      <a class="btn ghost" href="https://wa.me/420777558262?text=I%27d%20like%20Ruta%20On-premise%20%2B%20support.">Choose on WhatsApp</a>
+    </div>
+  </div>
+  <p class="note">Or run it yourself for free: Ruta is open source. <a href="https://github.com/jpysh/ayurcalm-scheduler/blob/main/docs/self-host.md">Self-host guide</a> (community help only).</p>
+</div></section>
+
+<section><div class="wrap">
+  <h2 class="r">Questions.</h2>
+  <details><summary>Can I leave with my data?</summary><p>Always. Settings → Download everything gives one file with all your guests, bookings, letterhead and signatures. It loads into a free self-hosted Ruta, or back into the cloud.</p></details>
+  <details><summary>What happens when the trial ends?</summary><p>Nothing is deleted. The centre becomes read-only for 60 days and Download everything keeps working. Choose a plan any day to carry on.</p></details>
+  <details><summary>Where is our data kept?</summary><p>Cloud centres run on servers we look after, with an encrypted copy made every night and kept in a second place. On-premise keeps everything on your own computer.</p></details>
+  <details><summary>Do we need the internet all day?</summary><p>Cloud needs a connection to change the day; the printed sheet works without one. On-premise works on the centre's own Wi-Fi.</p></details>
+  <details><summary>Is support included in the trial?</summary><p>The trial is the full app without support. Upgrade on any day of the trial to get support and setup help straight away.</p></details>
+  <details><summary>Can we cancel?</summary><p>Yes, any month. You keep your data: download it, or self-host for free.</p></details>
+</div></section>
+
+<section class="dark end"><div class="wrap">
+  <h2 class="r">Tomorrow,<br><span class="it">already planned.</span></h2>
+  <div class="ctas r" style="justify-content:center;margin-top:26px"><a class="btn" href="https://signup.jains.es/">Start free for 30 days</a><a class="btn ghost" href="https://wa.me/420777558262">WhatsApp us</a></div>
+  <footer>
+    <p><b>Talk to us:</b> <a href="https://wa.me/420777558262">WhatsApp +420 777 558 262</a> · <a href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a>. Replies the same working day, IST.</p>
+    <p><a href="/ruta/pilot">Pilot notice: your data</a></p>
+    <p>Ruta is open source (MIT). Made for wellness centres: Ayurveda, spas, massage and physio.</p>
+  </footer>
+</div></section>
+
 <script>
 // A referral (?ref=) goes with the visitor to the sign-up form (#249).
 var r=new URLSearchParams(location.search).get("ref");if(r&&/^[a-z0-9-]{1,40}$/.test(r))document.querySelectorAll('a[href^="https://signup.jains.es"]').forEach(function(a){a.href+="?ref="+r});
+
+var still=matchMedia('(prefers-reduced-motion: reduce)').matches;
+// The hero film costs a slow phone its data, so it plays only on a connection that can carry it.
+var c=navigator.connection,bg=document.getElementById('bg');
+if(!still&&!(c&&(c.saveData||/2g/.test(c.effectiveType||'')))){bg.src='/ruta/hero.mp4';bg.play().catch(function(){})}
+
+var io=function(fn,th){return new IntersectionObserver(function(es){es.forEach(function(e){fn(e)})},{threshold:th||.2})};
+var rev=io(function(e){if(e.isIntersecting){e.target.classList.add('on');rev.unobserve(e.target)}});
+document.querySelectorAll('.r').forEach(function(el){rev.observe(el)});
+
+if(!still){var sw=document.querySelectorAll('.swap span'),si=0;setInterval(function(){sw[si].classList.remove('on');si=(si+1)%sw.length;sw[si].classList.add('on')},2400)}
+
+var fill=document.getElementById('fill');
+fill.innerHTML=fill.textContent.split(' ').map(function(w){return '<span class="w">'+w+'</span>'}).join(' ');
+var ws=fill.querySelectorAll('.w');
+function paint(){var b=fill.getBoundingClientRect(),h=innerHeight,p=Math.min(1,Math.max(0,(h*.85-b.top)/(b.height+h*.35)));ws.forEach(function(w,i){w.classList.toggle('on',still||i<p*ws.length)})}
+
+var scr=document.querySelectorAll('.phone .scr'),x=document.getElementById('x'),y2=document.getElementById('y2'),xs=document.getElementById('xs'),ys=document.getElementById('ys'),toast=document.getElementById('toast'),played=false;
+function reassign(){if(played)return;played=true;
+  setTimeout(function(){x.className=y2.className='row off';xs.textContent=ys.textContent='Kiran · on leave'},500);
+  setTimeout(function(){x.className=y2.className='row ok';xs.textContent='Asha · Room Yamuna ✓';ys.textContent='Meera · Room Kaveri ✓';toast.classList.add('on')},1900)}
+var chaps=document.querySelectorAll('.chap'),ch=io(function(e){if(!e.isIntersecting)return;var i=[].indexOf.call(chaps,e.target);scr.forEach(function(s,j){s.classList.toggle('on',i==j)});if(i==1)reassign()},.5);
+chaps.forEach(function(el){ch.observe(el)});
+
+var clip=document.querySelector('.clip'),cv=io(function(e){if(e.isIntersecting){if(!clip.src)clip.src=clip.dataset.src;if(!still)clip.play().catch(function(){})}else clip.pause()},.3);cv.observe(clip);
+
+addEventListener('scroll',paint,{passive:true});paint();
 </script>
 </body>
 </html>
