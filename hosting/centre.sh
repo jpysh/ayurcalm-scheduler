@@ -4,6 +4,7 @@
 #   sh hosting/centre.sh down demo        stop it, data kept
 #   stop|start <slug>: pause a trial and back; delete <slug>: its data is gone
 #   reset-password <slug>: print a new password for the trial's admin (no email at launch, #247)
+#   timings <slug>: when its admin first came in and first printed their own sheet, epoch seconds (#730)
 #   paid <slug> <cloud|onprem|founding> <YYYY-MM-DD>: record a payment (#250); paid <slug> none clears it
 # Data lives in Docker volume ruta-<slug>_db-data; backups in $DATA/<slug>/backups.
 # The slug "demo" runs DEMO_MODE with an hourly reset. Secrets are made once
@@ -27,5 +28,6 @@ case $cmd in
   delete) docker compose -p "ruta-$slug" down -v && rm -rf "$dir" ;;
   reset-password) docker compose -p "ruta-$slug" exec -T app npx tsx server/src/scripts/resetPassword.ts "${ADMIN_EMAIL:?no ADMIN_EMAIL in $dir/env}" ;;
   paid)   docker compose -p "ruta-$slug" exec -T app npx tsx server/src/scripts/markPaid.ts "$3" "${4:-}" ;;
-  *)    echo "up|down|stop|start|delete|reset-password|paid" >&2; exit 1 ;;
+  timings) docker compose -p "ruta-$slug" exec -T db psql -U ayurcalm -d ayurcalm -Atc "select coalesce(extract(epoch from first_signin_at)::bigint::text, ''), coalesce(extract(epoch from first_sheet_at)::bigint::text, '') from \"Settings\"" ;;
+  *)    echo "up|down|stop|start|delete|reset-password|paid|timings" >&2; exit 1 ;;
 esac

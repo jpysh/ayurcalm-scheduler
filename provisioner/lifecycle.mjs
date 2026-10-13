@@ -37,5 +37,12 @@ export function slugFor(name, taken) {
   return s;
 }
 
+/** "4 min", "2 h 5 min", "3 days 1 h": how long a trial took to get somewhere (#730). */
+export function took(ms) {
+  const m = Math.max(0, Math.round(ms / 60_000)), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60);
+  if (d) return `${d} ${d === 1 ? 'day' : 'days'}${h ? ` ${h} h` : ''}`;
+  return h ? `${h} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`;
+}
+
 /** A sign-up's page may be handed a sign-in link while its centre is ready and the link would still live (30 minutes, #588). */
 export const linkOpen = (s, now) => s.state === 'ready' && now - (s.ready_at ?? s.at) < 30 * 60_000;
