@@ -409,8 +409,11 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
       toast.error(`${COURSE_WHY[body.conflicts?.reason] || "That course could not be placed"}. Nothing was booked: try fewer days, another time or another therapist.`);
       return;
     }
+    // Days the resident or a room was not free are skipped, so the course can start later than asked (#789).
+    const days: string[] = (body.appointments || []).map((a: { scheduled_date: string }) => a.scheduled_date.slice(0, 10)).sort();
+    const from = days[0] || date;
     await refresh();
-    setBooked({ text: `${sessions} × ${therapyName} at ${time}.`, ids: made, note: `Booked ${first}: ${sessions} × ${therapyName} at ${time}${date === today ? "" : ` from ${dayText(date)}`}`, date });
+    setBooked({ text: `${sessions} × ${therapyName} at ${time}, ${span(from, days[days.length - 1] || from)}.`, ids: made, note: `Booked ${first}: ${sessions} × ${therapyName} at ${time}, ${span(from, days[days.length - 1] || from)}`, date: from });
   };
   /** The sheet stays on Booked, so the note with Undo comes when it closes: at the bottom it would cover the buttons. */
   const close = () => {
