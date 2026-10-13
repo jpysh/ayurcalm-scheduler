@@ -104,7 +104,8 @@
       sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-size: 16px;
+    /* rem, not px: buttons and values with no size of their own grow with large text too (#796). */
+    font-size: 1rem;
     line-height: 1.375;
   }
 
