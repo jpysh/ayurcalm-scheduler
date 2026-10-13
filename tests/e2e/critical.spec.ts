@@ -385,6 +385,7 @@ test('@smoke an admin who never finished setup is sent back to it (#60)', async 
     await page.goto('/admin/schedule');
     await page.waitForURL(/\/setup/, { timeout: 15000 });
   } finally {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
     await put(true);
   }
 });
