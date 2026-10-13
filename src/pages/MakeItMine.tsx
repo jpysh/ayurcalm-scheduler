@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Area, Btn, FullPage, Group, Seg, Text, Tick, noteText, plural } from "@/components/kit";
 import { API_BASE } from "@/lib/apiBase";
+import { FromFile, ResidentRows, checkResidents, type Resident } from "@/components/ResidentImport";
 
 type Sex = "" | "female" | "male";
 type Named = { name: string; gender: Sex };
@@ -10,7 +11,7 @@ type Item = { id: string; name: string; on: boolean };
 
 /** One name per line, as typed or pasted from WhatsApp or a spreadsheet; a gender already chosen survives an edit. */
 const names = (text: string, before: Named[]): Named[] =>
-  [...new Set(text.split(/\r?\n/).map((l) => l.replace(/^[\s\d.)-]+/, "").replace(/\t.*$/, "").trim()).filter(Boolean))]
+  [...new Set(text.split(/\r?\n/).map((l) => l.replace(/^[\s\d.)-]+/, "").trim()).filter(Boolean))]
     .map((name) => ({ name, gender: before.find((b) => b.name === name)?.gender ?? "" }));
 
 const centreDay = (tz: string, plusDays = 0) => {
@@ -53,6 +54,12 @@ export default function MakeItMine() {
   const [therapies, setTherapies] = useState<Item[]>([]);
   const [residentsText, setResidentsText] = useState("");
   const [residents, setResidents] = useState<Named[]>([]);
+  // Rows pasted from a spreadsheet or read from a CSV carry their own dates (#741); names alone arrive tomorrow.
+  const [sheet, setSheet] = useState<Resident[]>([]);
+  const readResidents = async (text: string) => {
+    setResidentsText(text);
+    if (text.includes("\t")) { setResidents([]); setSheet(await checkResidents(text)); } else { setSheet([]); setResidents(names(text, residents)); }
+  };
 
   useEffect(() => {
     fetch(`${API_BASE}/settings`).then((r) => r.json()).then((s) => {
@@ -68,7 +75,8 @@ export default function MakeItMine() {
   const team = [...doctors.map((p) => ({ ...p, doctor: true })), ...therapists.map((p) => ({ ...p, doctor: false }))];
   const teamOk = !!centre.trim() && doctors.length > 0 && therapists.length > 0 && team.every((p) => p.gender);
   const kitOk = rooms.some((r) => r.on && r.name.trim()) && therapies.some((t) => t.on);
-  const residentsOk = residents.every((p) => p.gender);
+  const residentsOk = sheet.length ? sheet.every((p) => !p.problems.length) : residents.every((p) => p.gender);
+  const arriving = sheet.length ? sheet.length : residents.length;
 
   const finish = async () => {
     setBusy(true);
@@ -85,19 +93,21 @@ export default function MakeItMine() {
       // Each resident through the same door as one added by hand, so the consultation passes the same checks.
       const tomorrow = centreDay(tz, 1), leaving = centreDay(tz, 14);
       let booked = 0, added = 0;
-      for (const p of residents) {
-        const { slots = [] } = await fetch(`${API_BASE}/consultations/next?date=${tomorrow}`).then((r) => r.json()).catch(() => ({}));
-        const visit = slots.find((s: { date: string }) => s.date === tomorrow);
+      const list = sheet.length ? sheet : residents.map((p) => ({ ...p, arriving: tomorrow, leaving, phone: "" }));
+      for (const p of list) {
+        const { slots = [] } = await fetch(`${API_BASE}/consultations/next?date=${p.arriving}`).then((r) => r.json()).catch(() => ({}));
+        const visit = slots.find((s: { date: string }) => s.date === p.arriving);
         const r = await fetch(`${API_BASE}/patients`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: p.name, gender: p.gender, on_site: true, stay: { start_date: tomorrow, end_date: leaving },
+          body: JSON.stringify({ name: p.name, gender: p.gender, phone: p.phone || undefined, on_site: true, stay: { start_date: p.arriving, end_date: p.leaving },
             consultation: visit ? { date: visit.date, start_time: visit.start_time, staff_id: visit.staff_id, room_id: visit.room_id } : undefined }),
         });
         if (r.ok) { added++; if (visit) booked++; }
       }
-      toast.success(residents.length === 0 ? `Welcome, ${centre.trim()}`
-        : added < residents.length ? `${added} of ${residents.length} residents added. Add the rest from Residents.`
+      toast.success(list.length === 0 ? `Welcome, ${centre.trim()}`
+        : added < list.length ? `${added} of ${list.length} residents added. Add the rest from Residents.`
         : booked < added ? `${plural(added, "resident")} added; ${booked} consultations fit tomorrow. Book the rest from each card.`
+        : sheet.length ? `${plural(added, "resident")} added, each with a consultation on arrival.`
         : `${plural(added, "resident")} arrive tomorrow, each with a consultation.`);
       navigate(`/admin/schedule?date=${tomorrow}`);
       setTimeout(() => window.location.reload(), 400);
@@ -113,7 +123,7 @@ export default function MakeItMine() {
   const TITLES = ["", "Who works here?", "Your rooms and therapies", "Who arrives tomorrow?"];
 
   return (
-    <FullPage title={TITLES[step]} note={`Step ${step} of 3. The example goes when you finish; hours and the rest are in Settings.`}>
+    <FullPage title={step === 3 && sheet.length ? "Who is arriving?" : TITLES[step]} note={`Step ${step} of 3. The example goes when you finish; hours and the rest are in Settings.`}>
       {step === 1 && (
         <form onSubmit={(e) => { e.preventDefault(); setStep(2); }}>
           {whatsapp ? <p className={`mt-3 ${noteText}`}>Rather we set it up? <a className="font-semibold underline" href={`https://wa.me/${whatsapp.replace(/\D/g, "")}`}>Send us your list on WhatsApp</a>, free during the trial.</p> : null}
@@ -149,10 +159,11 @@ export default function MakeItMine() {
       {step === 3 && (
         <form onSubmit={(e) => { e.preventDefault(); void finish(); }}>
           <Area label="Residents" rows={8} value={residentsText} placeholder={"One name per line, or paste a list"}
-            note="Each gets a consultation tomorrow and a two-week stay; change either on their card."
-            onChange={(e) => { setResidentsText(e.target.value); setResidents(names(e.target.value, residents)); }} />
-          <WhoIs people={residents} set={setResidents} />
-          {foot(residentsOk && !busy, busy ? "Setting up…" : residents.length ? `Plan tomorrow for ${plural(residents.length, "resident")}` : "Finish without residents", 2)}
+            note="Each gets a consultation tomorrow and a two-week stay; change either on their card. Rows pasted from a spreadsheet keep their own dates."
+            onChange={(e) => void readResidents(e.target.value)} />
+          <FromFile onText={(t) => void readResidents(t)} />
+          {sheet.length ? <ResidentRows rows={sheet} set={setSheet} /> : <WhoIs people={residents} set={setResidents} />}
+          {foot(residentsOk && !busy, busy ? "Setting up…" : arriving ? `Plan ${sheet.length ? "arrivals" : "tomorrow"} for ${plural(arriving, "resident")}` : "Finish without residents", 2)}
         </form>
       )}
     </FullPage>

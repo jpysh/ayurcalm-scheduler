@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useShareLink, waHref } from "@/components/ShareLink";
 import { inHouseNote } from "@/lib/inHouse";
 import { BottomSheet } from "@/components/BottomBar";
+import { ResidentsFromSheet } from "@/components/ResidentImport";
 import { API_BASE } from "@/lib/apiBase";
 import type { CardAppt } from "@/components/TreatmentCard";
 import DayDietDialog from "./DayDietDialog";
@@ -411,6 +412,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
 }) {
   const ADMIN_TZ = timezone;
   const [showAddPatient, setShowAddPatient] = useState(false);
+  const [fromSheet, setFromSheet] = useState(false);
   const [newPatient, setNewPatient] = useState(blankNew);
   // Started from the booking sheet (#330): the name is filled in, no consultation is pre-booked, and the person goes back to the booking.
   const [inline, setInline] = useState<((p: { id: string; name: string }) => void) | null>(null);
@@ -585,8 +587,10 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         detailsHint={(id) => { const r = patients.find((x) => String(x.id) === id); return r?.phone || r?.emergencyContact ? [r.phone, r.emergencyContact].filter(Boolean).join(' · ') : 'Add phone, emergency contact…'; }}
         details={(id) => { const row = patients.find((x) => String(x.id) === id); setCardId(null); if (row) showPatientInfo(row); }} />
 
+      <ResidentsFromSheet open={fromSheet} onClose={() => setFromSheet(false)} onAdded={(created) => setPatients((prev) => [...prev, ...created.map((c) => toRow(c as Parameters<typeof toRow>[0]))])} />
       <BottomSheet open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) { setNewPatient(blankNew()); setInline(null); setGuestRoom(''); } }} title="New patient" note="Only name and gender are needed. Everything else can wait."
         foot={<Btn kind="primary" disabled={!newPatient.name.trim() || !newPatient.gender || newPatient.leaving < newPatient.arriving} onClick={saveNewPatient}>{newPatient.name.trim() ? `Add ${newPatient.name.trim()}` : 'Add patient'}</Btn>}>
+        {inline ? null : <Btn kind="quiet" inline className="-ml-1" onClick={() => { setShowAddPatient(false); setFromSheet(true); }}>Many at once? From a spreadsheet ›</Btn>}
         <Text label="Name" autoComplete="off" value={newPatient.name} valid={newPatient.name.trim().length > 1} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} />
         {/* Nothing chosen to start with (#283): a list that opened on Male made every resident one until corrected. */}
         <Group label="Gender">
