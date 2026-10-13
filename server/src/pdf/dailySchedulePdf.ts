@@ -5,10 +5,10 @@ import { madeWith } from '../product.js';
 import { loadDietsForDay, mealLabel, mealOrder } from '../dietResolution.js';
 import { PrismaClient } from '@prisma/client';
 
-const ADMIN_TZ = process.env.ADMIN_TZ || 'Asia/Kolkata';
-const fmtLong = (isoDate: string) => {
+// The sheet's date is a calendar day; read in the centre's zone it would be the day before west of UTC (#723).
+export const fmtLong = (isoDate: string) => {
   const d = new Date(isoDate);
-  return new Intl.DateTimeFormat('en-GB', { timeZone: ADMIN_TZ, weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(d);
+  return new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(d);
 };
 
 export const addHeader = (doc: any, dateStr: string, centreName: string, everyone = '') => {
