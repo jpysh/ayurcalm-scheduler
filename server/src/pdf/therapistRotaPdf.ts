@@ -1,5 +1,5 @@
 declare module 'pdfkit';
-import { hoursOn, teamOf } from '../availability.js';
+import { hoursOn, teamOf, offOnDay, overlaps } from '../availability.js';
 import PDFDocument from 'pdfkit';
 import { madeWith } from '../product.js';
 import { PrismaClient } from '@prisma/client';
@@ -77,6 +77,13 @@ export const buildRota = (input: {
 }): Rota => {
   const { day, appts, events, timeOff, patientById, therapyById, roomById } = input;
   const staffName = new Map(input.staff.map((s) => [s.id, s.name] as const));
+  // A room out of use is blocking, so the rota marks it as the day sheet does (#758, #770).
+  const roomOut = (a: { room_id: string | null; start_time: string; duration_minutes: number }) => {
+    const s = toMinutes(a.start_time);
+    return !!a.room_id && offOnDay(timeOff, 'room', a.room_id, day).some((b) => overlaps(b.s, b.e, s, s + (a.duration_minutes || 0)));
+  };
+  const roomName = (a: { room_id: string | null; start_time: string; duration_minutes: number }) =>
+    a.room_id ? `${roomById[a.room_id] || a.room_id}${roomOut(a) ? ' (out)' : ''}` : '';
 
   const staff = input.staff
     .filter((s) => s.is_active && (!input.onlyStaffId || s.id === input.onlyStaffId))
@@ -143,7 +150,7 @@ export const buildRota = (input: {
         .map((a) => ({
           t: a.start_time,
           bold: true,
-          text: ['NO THERAPIST', `${therapyById[a.therapy_id] || a.therapy_id} ${a.duration_minutes || 0}m`, patientById[a.patient_id] || a.patient_id, a.room_id ? roomById[a.room_id] || a.room_id : '']
+          text: ['NO THERAPIST', roomOut(a) ? 'ROOM OUT' : '', `${therapyById[a.therapy_id] || a.therapy_id} ${a.duration_minutes || 0}m`, patientById[a.patient_id] || a.patient_id, roomName(a)]
             .filter(Boolean).join(' · '),
         })));
       (mine.length ? unstaffed : out).push({
@@ -166,9 +173,10 @@ export const buildRota = (input: {
               grey: a.status === 'no_show',
               text: [
                 a.status === 'no_show' ? "DIDN'T COME" : '',
+                roomOut(a) ? 'ROOM OUT' : '',
                 `${therapyById[a.therapy_id] || a.therapy_id} ${a.duration_minutes || 0}m`,
                 patientById[a.patient_id] || a.patient_id,
-                a.room_id ? roomById[a.room_id] || a.room_id : '',
+                roomName(a),
               ].filter(Boolean).join(' · '),
             },
             // Who they are working with, under the treatment it belongs to.
@@ -254,7 +262,7 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
     prisma.appointment.findMany({ where: { scheduled_date: day, status: { not: 'cancelled' } } }),
     prisma.programEvent.findMany({ where: { OR: [{ date: day }, { AND: [{ start_date: { lte: day } }, { end_date: { gte: day } }] }] } }),
     prisma.programEvent.findMany({ where: { recurrence: 'weekly' } }),
-    prisma.timeOff.findMany({ where: { entity_type: 'staff' } }),
+    prisma.timeOff.findMany({ where: { entity_type: { in: ['staff', 'room'] } } }),
   ]);
 
   const events = [...eventsByDate, ...weeklyEvents.filter((e) => Array.isArray(e.weekdays) && e.weekdays.includes(weekday))];
