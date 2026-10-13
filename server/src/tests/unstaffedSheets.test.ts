@@ -25,6 +25,9 @@ async function tidy(prisma: PrismaClient) {
   await prisma.appointment.deleteMany({ where: { patient_id: { in: patients.map((p) => p.id) } } });
   await prisma.patient.deleteMany({ where: { name: { startsWith: TAG } } });
   await prisma.staff.deleteMany({ where: { name: { startsWith: TAG } } });
+  const rooms = await prisma.therapyRoom.findMany({ where: { name: { startsWith: TAG } }, select: { id: true } });
+  await prisma.timeOff.deleteMany({ where: { entity_id: { in: rooms.map((r: { id: string }) => r.id) } } });
+  await prisma.therapyRoom.deleteMany({ where: { name: { startsWith: TAG } } });
   await prisma.therapy.deleteMany({ where: { name: { startsWith: TAG } } });
 }
 
@@ -59,6 +62,19 @@ async function main() {
     const rota = pdfText(dir, 'rota.pdf', await generateTherapistRotaPdf(DAY, prisma));
     assert.ok(rota.includes('Needs a therapist'), 'The rota has no "Needs a therapist" group');
     assert.ok(rota.includes(`14:00 NO THERAPIST · ${TAG} Sweda 60m · ${TAG} Aarav`), 'The rota drops the treatment booked with a therapist who is off');
+
+    // A room out of use for part of the day is marked too, as the day check calls it blocking (#758).
+    const DAY2 = '2030-02-14';
+    const room = await prisma.therapyRoom.create({ data: { name: `${TAG} Chandra`, weekly_schedule: {} } });
+    await prisma.appointment.create({
+      data: {
+        patient_id: aarav.id, therapy_id: therapy.id, staff_id: kriti.id, room_id: room.id, scheduled_date: new Date(`${DAY2}T00:00:00.000Z`), start_time: '10:00', duration_minutes: 60,
+        session_number: 1, total_sessions: 1, status: 'pending', assignment_type: 'manual',
+      },
+    });
+    await prisma.timeOff.create({ data: { entity_type: 'room', entity_id: room.id, date: new Date(`${DAY2}T00:00:00.000Z`), start_date: new Date(`${DAY2}T00:00:00.000Z`), end_date: new Date(`${DAY2}T00:00:00.000Z`), start_time: '07:00', end_time: '12:00', description: 'Plumbing' } });
+    const sheet2 = pdfText(dir, 'patient2.pdf', await generateDailySchedulePdf(DAY2, prisma));
+    assert.ok(sheet2.includes(`ROOM OUT · ${TAG} Sweda 60m · ${TAG} Kriti · ${TAG} Chandra (out)`), `The patient sheet does not mark a treatment in a room out of use: ${sheet2.slice(0, 600)}`);
     console.log('A treatment booked with a therapist who is off is marked on both sheets.');
   } finally {
     await tidy(prisma).catch(() => {});
