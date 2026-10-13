@@ -188,16 +188,19 @@ test('@smoke the booking sheet books a course of sessions in one go, and Undo ta
     await sheet.getByRole('button', { name: /^Other therapies/ }).click();
     await page.getByPlaceholder('Search therapies').fill(`${TAG} Abhyanga`);
     await page.getByRole('dialog').last().getByRole('button', { name: new RegExp(`^${TAG} Abhyanga`) }).click();
+    // The resident is already treated on the 11th all day, so the server skips it; the line says so before Book (#792).
+    await call('post', '/appointments', { patient_id: patient.id, therapy_id: therapy.id, total_sessions: 1, start_date: '2030-04-11', end_date: '2030-04-11', preferred_days: [], preferred_time_range: { start: '09:00', end: '18:00' } });
     await sheet.getByRole('button', { name: '3', exact: true }).click();
+    await expect(sheet.getByText(/One a day, Wed 10 to Sat 13 Apr, at/)).toBeVisible({ timeout: 15000 });
     const book = sheet.getByRole('button', { name: /^Book \w+, 3 days from/ });
     await expect(book).toBeEnabled({ timeout: 15000 });
     await book.click();
     // The sheet stays on Booked (#330); Undo is on it.
-    await expect(sheet.getByText(/3 × .* at \d\d:\d\d, Wed 10 to Fri 12 Apr/)).toBeVisible({ timeout: 20000 });
+    await expect(sheet.getByText(/3 × .* at \d\d:\d\d, Wed 10 to Sat 13 Apr/)).toBeVisible({ timeout: 20000 });
     const booked = async () => ((await call('get', `/appointments?patient_id=${patient.id}`)) as { scheduled_date: string }[]).map((a) => a.scheduled_date.slice(0, 10)).sort();
-    expect(await booked()).toEqual(['2030-04-10', '2030-04-11', '2030-04-12']);
+    expect(await booked()).toEqual(['2030-04-10', '2030-04-11', '2030-04-12', '2030-04-13']);
     await sheet.getByRole('button', { name: 'Undo', exact: true }).click();
-    await expect.poll(booked, { timeout: 15000 }).toEqual([]);
+    await expect.poll(booked, { timeout: 15000 }).toEqual(['2030-04-11']);
   } finally {
     await tidy();
   }

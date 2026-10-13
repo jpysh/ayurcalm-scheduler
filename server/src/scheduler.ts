@@ -116,6 +116,8 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
   const conflicts: { reason: string; alternatives: { date: Date; start_time: string }[]; details?: Record<string, unknown> } = { reason: '', alternatives: [] };
 
   let sessionsScheduled = 0;
+  // The days a course lands on, so a preview can name them before anything is booked (#792).
+  const days: string[] = [];
   let pastStay = false;
   const currentDate = new Date(startDate);
   const overallDeadline = Date.now() + maxMs;
@@ -414,6 +416,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
       });
       appointments.push(appt);
     }
+    days.push(nd.toISOString().slice(0, 10));
     sessionsScheduled++;
     currentDate.setDate(nd.getDate() + 1);
   }
@@ -423,6 +426,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     success,
     appointments,
     suggestions,
+    days,
     conflicts: success ? undefined : conflicts,
   };
   } catch (e) {
