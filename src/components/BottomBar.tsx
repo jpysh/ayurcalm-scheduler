@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/apiBase";
 import { inHouseNote } from "@/lib/inHouse";
+import { outNow } from "@/lib/outNow";
 import { Menu, Plus } from "lucide-react";
 import { BottomSearch, BottomSheet, DateRow, dayText, Group, ListGroup, plural, Row, Seg, Btn, Tile } from "@/components/kit";
 
@@ -73,8 +74,8 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
       fetch(`${API_BASE}/rooms`).then((r) => (r.ok ? r.json() : [])),
       fetch(`${API_BASE}/timeoff?from=${today}&to=${today}`).then((r) => (r.ok ? r.json() : [])),
       fetch(`${API_BASE}/guest-rooms/free?from=${today}&to=${shift(today, 1)}`).then((r) => (r.ok ? r.json() : [])),
-    ]).then(([residents, days, staff, settings, rooms, off, guestRooms]: [unknown[], { staff_id: string; off: string | null }[], { id: string; name: string }[], { support_whatsapp?: string | null }, { id: string }[], { entity_type: string; entity_id: string }[], { free: boolean }[]]) => {
-      const roomsOut = new Set(off.filter((x) => x.entity_type === "room").map((x) => x.entity_id)).size;
+    ]).then(([residents, days, staff, settings, rooms, off, guestRooms]: [unknown[], { staff_id: string; off: string | null }[], { id: string; name: string }[], { support_whatsapp?: string | null }, { id: string }[], ({ entity_type: string; entity_id: string } & Parameters<typeof outNow>[0])[], { free: boolean }[]]) => {
+      const roomsOut = new Set(off.filter((x) => x.entity_type === "room" && outNow(x, today, now)).map((x) => x.entity_id)).size;
       setHelpWa(settings.support_whatsapp || null);
       const out = days.filter((d) => d.off).map((d) => staff.find((s) => s.id === d.staff_id)?.name.split(" ")[0]).filter(Boolean);
       setHints({
@@ -85,7 +86,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
         ...(guestRooms.length ? { guestrooms: `${guestRooms.filter((r) => r.free).length} free tonight` } : {}),
       });
     }).catch(() => setHints({}));
-  }, [sheet, today, day]);
+  }, [sheet, today, day, now]);
   const diff = Math.round((Date.parse(day) - Date.parse(today)) / 86400000);
   const when = diff === 0 ? `Today · ${now}` : diff === 1 ? "Tomorrow" : diff === -1 ? "Yesterday" : diff > 0 ? `In ${diff} days` : `${-diff} days ago`;
   const pick = (iso: string) => { setDay(iso); go("schedule"); setSheet(null); };
