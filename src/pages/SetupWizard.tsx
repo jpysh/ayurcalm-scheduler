@@ -1,18 +1,17 @@
 import { useEffect, useState } from "react";
-import { confirmSheet } from "@/components/ConfirmSheet";
 import { useNavigate } from "react-router-dom";
-import { Area, Btn, Days, Dropdown, FullPage, Group, Picker, Seg, Text, TimeList, noteText, timesBetween } from "@/components/kit";
+import { Area, Btn, Days, Dropdown, FullPage, Group, Seg, Text, TimeList, timesBetween } from "@/components/kit";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { useTrial } from "@/lib/centreName";
 
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
-type Keep = "templates" | "all" | "none";
 
 /**
- * Shown once, when an administrator signs in to an install whose settings have
- * never been completed. Three steps, then a choice about the demo data. A cloud
- * trial's admin arrives by a one-time link with no password (#247), so they set one first.
+ * Shown once, when an administrator signs in to an empty install whose settings
+ * have never been completed: its name, then its hours. A centre showing its
+ * example uses Make it mine instead (#729). A cloud trial's admin arrives by a
+ * one-time link with no password (#247), so they set one first.
  */
 const SetupWizard = () => {
   const navigate = useNavigate();
@@ -37,8 +36,8 @@ const SetupWizard = () => {
       setStep(1);
     } catch { toast.error("Your password was not saved. Check the connection and try again."); } finally { setBusy(false); }
   };
-  // A cloud trial (#247) starts with no example centre, so there is nothing to keep or clear.
-  const [hasDemo, setHasDemo] = useState(true);
+  // A centre showing its example goes on to its day after the password, and to Make it mine from there (#728, #729).
+  const [hasDemo, setHasDemo] = useState(false);
   useEffect(() => {
     fetch(`${API_BASE}/settings`).then((r) => r.json()).then((s) => {
       setHasDemo(s?.demo_data !== false);
@@ -64,17 +63,7 @@ const SetupWizard = () => {
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-  // What the starter kit holds, counted from the centre itself: therapies and rooms are kept, packages, accommodation and diet plans never go.
-  const [kit, setKit] = useState("");
-  const [start, setStart] = useState<Keep>("templates");
-  useEffect(() => {
-    if (step !== 3) return;
-    const n = (path: string) => fetch(`${API_BASE}/${path}`).then((r) => r.json()).then((l) => (Array.isArray(l) ? l.length : 0)).catch(() => 0);
-    Promise.all(["therapies", "rooms", "packages", "diet-templates"].map(n)).then(([t, r, p, d]) => setKit([`${t} therapies`, `${r} rooms`, `${p} packages`, `${d} diet plans`].join(", ")));
-  }, [step]);
-
-  /** all: keep the whole example centre; templates: keep its therapies and rooms only; none: start empty. */
-  const finish = async (keep: Keep) => {
+  const finish = async () => {
     setBusy(true);
     try {
       const res = await fetch(`${API_BASE}/settings`, {
@@ -88,12 +77,6 @@ const SetupWizard = () => {
         setStep(2);
         return;
       }
-      if (keep !== "all") {
-        const clear = await fetch(`${API_BASE}/settings/clear-demo-data`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(keep === "templates" ? { keep: "templates" } : {}) });
-        if (!clear.ok) {
-          toast.error("Saved your details, but could not clear the demo data");
-        }
-      }
       toast.success(`Welcome, ${form.centre_name}`);
       navigate("/admin/schedule");
       setTimeout(() => window.location.reload(), 400);
@@ -102,8 +85,8 @@ const SetupWizard = () => {
     }
   };
 
-  const of = hasDemo ? 3 : 2 + (trial ? 1 : 0);
-  const TITLES = ["Choose your password", "What is your centre called?", "When are you open?", "How do you want to start?"];
+  const of = 2 + (trial ? 1 : 0);
+  const TITLES = ["Choose your password", "What is your centre called?", "When are you open?"];
   const next = (to: number, ok: boolean, label = "Continue") => (
     <div className="mt-5 grid gap-1">
       <Btn kind="primary" type="submit" disabled={!ok || busy}>{label}</Btn>
@@ -112,7 +95,7 @@ const SetupWizard = () => {
   );
 
   return (
-    <FullPage title={TITLES[step]} note={step === 0 && hasDemo ? "Then your centre opens, with an example day to look around." : `Step ${step + (trial && !hasDemo ? 1 : 0)} of ${of}. You can change all of this later in Settings.`}>
+    <FullPage title={TITLES[step]} note={step === 0 && hasDemo ? "Then your centre opens, with an example day to look around." : `Step ${step + (trial ? 1 : 0)} of ${of}. You can change all of this later in Settings.`}>
       {step === 0 && (
         <form onSubmit={(e) => { e.preventDefault(); savePassword(); }}>
           <input type="email" autoComplete="username" value={localStorage.getItem("authUser") ?? ""} readOnly hidden />
@@ -131,7 +114,7 @@ const SetupWizard = () => {
       )}
 
       {step === 2 && (
-        <form onSubmit={(e) => { e.preventDefault(); if (hasDemo) setStep(3); else void finish("all"); }}>
+        <form onSubmit={(e) => { e.preventDefault(); void finish(); }}>
           <div className="grid grid-cols-2 gap-3">
             <TimeList label="Opens" value={form.opening_time} onChange={(t) => set("opening_time", t)} times={timesBetween("04:00", "14:00", 30)} />
             <TimeList label="Closes" value={form.closing_time} onChange={(t) => set("closing_time", t)} times={timesBetween("12:00", "23:30", 30)} after={form.opening_time} />
@@ -141,25 +124,10 @@ const SetupWizard = () => {
           <Dropdown label="Timezone" value={form.timezone} onChange={(e) => set("timezone", e.target.value)} note={form.timezone === phoneZone ? `This phone is in ${phoneZone.replace(/_/g, " ")}. Change it if the centre is elsewhere.` : "The centre's, not this phone's."}>
             <ZoneOptions also={form.timezone} />
           </Dropdown>
-          {next(1, form.working_days.length > 0, hasDemo ? "Continue" : "Finish")}
+          {next(1, form.working_days.length > 0, "Finish")}
         </form>
       )}
 
-      {step === 3 && (
-        <form onSubmit={(e) => { e.preventDefault(); void (async () => { if (start === "none" && !(await confirmSheet("Delete all the example patients, therapists, rooms, therapies and bookings?\n\nThis cannot be undone.", "Delete"))) return; await finish(start); })(); }}>
-          <p className={`mt-3 ${noteText}`}>This install came with an example centre: patients, therapists, rooms, therapies and three months of bookings, so you could see how it works.</p>
-          {/* The recommended start comes first: a real centre edits the starter therapies and rooms rather than typing them (#60, #288). */}
-          <div className="mt-3">
-            <Picker<Keep> value={start} onChange={setStart} options={[
-              { id: "templates", name: "Residential Ayurveda starter kit", note: "Therapies, rooms, packages, diet plans, rules", fact: "Recommended" },
-              { id: "all", name: "Keep the example data for now", note: "Patients and bookings, to look around" },
-              { id: "none", name: "Start completely empty", note: "Nothing from the examples" },
-            ]} />
-          </div>
-          <p className={`mt-3 ${noteText}`}>{start === "templates" ? `The kit holds ${kit || "the usual set"}, and sets the rules for what needs you. ` : ""}Review each in Settings, at your own pace; everything works as it is. Nothing here deletes your account.</p>
-          {next(2, true, busy ? "Setting up…" : start === "templates" ? "Start with the kit" : start === "all" ? "Keep the example data" : "Start empty")}
-        </form>
-      )}
     </FullPage>
   );
 };
