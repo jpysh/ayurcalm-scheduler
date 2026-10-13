@@ -41,6 +41,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
 }) {
   const [offToday, setOffToday] = useState<Record<string, string | null>>({});
   const [roomsOff, setRoomsOff] = useState<Map<string, RoomOff>>(new Map());
+  const [staffOff, setStaffOff] = useState<(RoomOff & { entity_id: string })[]>([]);
   const [week, setWeek] = useState<Week | null>(null);
   // The team is read a day at a time (#351), from the same week strip as the Day screen.
   // After closing it opens on tomorrow, as the Day screen does (#662): today's day is finished.
@@ -58,8 +59,11 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
     // A fortnight ahead, so a room taken out from tomorrow says so on its row (#659); the soonest entry wins.
     const ahead = new Date(Date.parse(`${today}T00:00:00Z`) + 13 * 86400000).toISOString().slice(0, 10);
     fetch(`${API_BASE}/timeoff?from=${today}&to=${ahead}`).then((r) => (r.ok ? r.json() : []))
-      .then((rows: (RoomOff & { entity_type: string; entity_id: string })[]) => setRoomsOff(new Map(rows.filter((x) => x.entity_type === "room").sort((a, b) => (b.start_date ?? b.date ?? "").localeCompare(a.start_date ?? a.date ?? "")).map((x) => [x.entity_id, x]))))
-      .catch(() => setRoomsOff(new Map()));
+      .then((rows: (RoomOff & { entity_type: string; entity_id: string })[]) => {
+        setRoomsOff(new Map(rows.filter((x) => x.entity_type === "room").sort((a, b) => (b.start_date ?? b.date ?? "").localeCompare(a.start_date ?? a.date ?? "")).map((x) => [x.entity_id, x])));
+        setStaffOff(rows.filter((x) => x.entity_type === "staff").sort((a, b) => (a.start_date ?? a.date ?? "").localeCompare(b.start_date ?? b.date ?? "")));
+      })
+      .catch(() => { setRoomsOff(new Map()); setStaffOff([]); });
   }, [today]);
   useEffect(() => { load(); }, [load]);
   // Saved in the shared form, so this list hears about it the way the Day does.
@@ -117,6 +121,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
     const fromT = e.start_time && e.start_time > opening ? e.start_time : null, toT = e.end_time && e.end_time < closing ? e.end_time : null;
     return fromT && toT ? `Not available ${fromT}–${toT}` : fromT ? `Not available from ${fromT}` : toT ? `Not available until ${toT}` : "Not available today";
   };
+  // A leave still to come, so nobody books the same days again (#737).
+  const nextOff = (id: string) => { const e = staffOff.find((x) => x.entity_id === id && firstOut(x) > day); return e ? outLine(e) : undefined; };
   // Their own hours that day (#571): a time at the edge of their shift changes nothing.
   const shift = pick?.kind === "staff" && on >= 0 ? week!.rows.find((r) => r.id === pick.id)?.days[on] : undefined;
   const sStart = shift?.start || opening, sEnd = shift?.end || closing;
@@ -140,7 +146,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
             const away = d?.state === "away" || d?.state === "off";
             return (
               <Row key={s.id} title={away ? <s className="text-muted-foreground">{s.name}</s> : s.name} facts={dayLine(d)}
-                flag={day === today && offToday[String(s.id)] && !away ? "Not in today" : undefined} trailing="›"
+                flag={day === today && offToday[String(s.id)] && !away ? "Not in today" : nextOff(String(s.id))} trailing="›"
                 onClick={() => (day < today ? openPerson(String(s.id)) : setPick({ kind: "staff", id: String(s.id), name: s.name }))} />
             );
           })}
@@ -178,7 +184,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
             <Row title={day === today ? "Not in from now" : "Not in that day"} facts="Choose what to do with what they miss" trailing="›" onClick={() => { close(); markOut(day === today ? { type: "Staff", entity: pick.id, mode: "now" } : { type: "Staff", entity: pick.id, mode: "days", date: day }); }} />
             <Row title="In late" facts="Choose the time they start" trailing="›" onClick={() => { close(); markOut({ type: "Staff", entity: pick.id, mode: "part", date: day, startTime: sStart, endTime: day === today && nowHM > sStart ? nowHM : undefined, description: "In late" }); }} />
             <Row title="Leaving early" facts="Choose the time they leave" trailing="›" onClick={() => { close(); markOut({ type: "Staff", entity: pick.id, mode: "part", date: day, endTime: sEnd, description: "Leaving early" }); }} />
-            <Row title={day === today ? "Away another day" : "Away for days"} facts="Choose the days" trailing="›" onClick={() => { close(); markOut({ type: "Staff", entity: pick.id, mode: "days", date: day === today ? nextDay(today) : day }); }} />
+            <Row title={day === today ? "Away another day" : "Away for days"} facts={nextOff(pick.id) ?? "Choose the days"} trailing="›" onClick={() => { close(); markOut({ type: "Staff", entity: pick.id, mode: "days", date: day === today ? nextDay(today) : day }); }} />
             <Row title="Share their link" facts="Their day on their own phone" trailing="›" onClick={() => { close(); link.share("staff", pick.id, pick.name); }} />
             <Row title="Make a new link" facts="The old one stops working" trailing="›" onClick={() => { close(); link.share("staff", pick.id, pick.name, true); }} />
             <Row title="Details and therapies" facts="Name, role, gender, phone" trailing="›" onClick={() => { close(); openPerson(pick.id); }} />

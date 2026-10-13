@@ -10,7 +10,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHmac, randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync, renameSync, appendFileSync, existsSync } from 'node:fs';
-import { next, deletesAt, refuse, slugFor, linkOpen } from './lifecycle.mjs';
+import { next, deletesAt, refuse, slugFor, linkOpen, took } from './lifecycle.mjs';
 
 const run = promisify(execFile);
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -96,10 +96,20 @@ function provision(s) {
   });
 }
 
+// How long each trial took to come in and to print its own day sheet (#730), told once each.
+async function timings(c) {
+  const [signin, sheet] = await centreSh({}, 'timings', c.slug).then((r) => r.stdout.trim().split('|').map((x) => (x ? Number(x) * 1000 : null)), () => []);
+  const from = db.signups.find((s) => s.slug === c.slug)?.at ?? c.created;
+  if (signin && !c.signin_at) { c.signin_at = signin; await telegram(`${c.centre}: came in ${took(signin - from)} after signing up`); }
+  if (sheet && !c.sheet_at) { c.sheet_at = sheet; await telegram(`${c.centre}: printed its own day sheet ${took(sheet - from)} after signing up`); }
+  save();
+}
+
 // ---- lifecycle, hourly ----
 export async function tick(now = Date.now()) {
   for (const c of [...db.centres]) {
     if (!c.paused_at) c.trial = await fetch(`http://localhost:${c.port}/api/public/support`).then((r) => r.json()).then((d) => d.trial, () => c.trial);
+    if (!c.paused_at && !c.sheet_at) await timings(c);
     const a = next(c, now);
     if (!a) continue;
     try {
@@ -143,7 +153,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 const form = (msg = '', ref = '') => page(`<h1>Start a free 30-day trial</h1><p>Your own centre at <b>yourname.${DOMAIN}</b>, ready in about two minutes. No card. Want to look first? <a href="https://demo.${DOMAIN}">See the demo</a>.</p>
 ${msg && `<p role="alert"><b>${esc(msg)}</b></p>`}<form method="post" action="/signup">${/^[a-z0-9-]{1,40}$/.test(ref || '') ? `<input type="hidden" name="ref" value="${ref}">` : ''}<label for="c">Centre name</label><input id="c" name="centre" required maxlength="80" autocomplete="organization">
 <label for="e">Your email</label><input id="e" name="email" type="email" required maxlength="120" autocomplete="email">
-${env.TURNSTILE_SITEKEY ? `<div class="cf-turnstile" data-sitekey="${env.TURNSTILE_SITEKEY}" style="margin-top:1rem"></div>` : ''}<button>${env.CF_EMAIL_TOKEN ? 'Email me the link' : 'Create my centre'}</button></form>
+${env.TURNSTILE_SITEKEY ? `<div class="cf-turnstile" data-sitekey="${env.TURNSTILE_SITEKEY}" style="margin-top:1rem"></div>` : ''}<button>Create my centre</button></form>
 ${env.CF_EMAIL_TOKEN ? `<h2 style="font-size:1rem;margin-top:2rem">Already have a centre?</h2><form method="post" action="/again"><label for="a">Your email</label><input id="a" name="email" type="email" required autocomplete="email"><button>Email me a sign-in link</button></form>` : ''}
 <p style="font-size:.85rem;margin-top:2rem">By starting a trial you accept the <a href="https://jains.es/ruta/pilot">pilot notice</a>. Questions: <a href="https://wa.me/420777558262">WhatsApp</a> · <a href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a></p>`);
 

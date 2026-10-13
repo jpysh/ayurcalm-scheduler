@@ -29,6 +29,7 @@ const main = async () => {
     prisma.programEvent.findMany(),
     prisma.timeOff.findMany({ where: { entity_type: 'staff' } }),
   ]);
+  const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
   const therapyById = new Map(therapies.map((t) => [t.id, t]));
   const roomById = new Map(rooms.map((r) => [r.id, r]));
   const patientById = new Map(patients.map((p) => [p.id, p]));
@@ -134,6 +135,11 @@ const main = async () => {
           assert.ok(h !== null && (!h || (s >= h.s && s + a.duration_minutes <= h.e)), `${staffById.get(id)?.name} at ${a.start_time} on ${a.scheduled_date.toISOString().slice(0, 10)} is outside their hours`);
         }
       }
+    }],
+
+    // #734: the seed builds its days on ADMIN_TZ's date, so the centre must read them there.
+    ['the centre reads its day in the zone it was seeded in', () => {
+      assert.equal(settings?.timezone, process.env.ADMIN_TZ || 'Asia/Kolkata');
     }],
 
     ['the sheet has enough patients to be worth printing', () => {
