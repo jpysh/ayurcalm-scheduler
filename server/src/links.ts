@@ -9,7 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { PrismaClient, type Prisma } from '@prisma/client';
-import { centreClock, offOnDay, teamOf } from './availability.js';
+import { centreClock, hoursOn, offOnDay, teamOf, toMinutes } from './availability.js';
 import { loadDay, staffDay } from './appointmentGuard.js';
 import { loadDietsForDay, mealLabel, mealOrder } from './dietResolution.js';
 import { lastReadings } from './residentDay.js';
@@ -66,7 +66,11 @@ linkRouter.get('/:token', async (req: Request, res: Response) => {
   const off = ctx ? staffDay(ctx).find((d) => d.staff_id === who.id)?.off || null : null;
   // Part of the day away says so, as the printed sheet does, so the link never reads as a full day (#745).
   const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-  const away = ctx && !off ? offOnDay(ctx.timeOff, 'staff', who.id, day).filter((b) => !b.whole).map((b) => `Not in ${hm(b.s)}–${hm(b.e)} · ${b.label}`) : [];
+  // Only the part inside their shift (#749): a leave that ends before they start is nothing to them.
+  const shift = ctx ? hoursOn(ctx.staff.find((x) => x.id === who.id)?.weekly_schedule, day) || { s: toMinutes(settings?.opening_time || '09:00'), e: toMinutes(settings?.closing_time || '18:00') } : null;
+  const away = ctx && shift && !off ? offOnDay(ctx.timeOff, 'staff', who.id, day).filter((b) => !b.whole)
+    .map((b) => ({ ...b, s: Math.max(b.s, shift.s), e: Math.min(b.e, shift.e) })).filter((b) => b.s < b.e)
+    .map((b) => `Not in ${hm(b.s)}–${hm(b.e)} · ${b.label}`) : [];
   let meals: { meal: string; text: string }[] = [];
   if (who.kind === 'patient') {
     const patient = await prisma.patient.findUnique({ where: { id: who.id }, include: { Stays: { where: { start_date: { lte: day }, end_date: { gte: day } } } } });
