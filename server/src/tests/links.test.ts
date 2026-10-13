@@ -53,6 +53,16 @@ try {
     const d2 = await (await call(`/public/link/${t}?date=${DAY}`)).json();
     await prisma.timeOff.delete({ where: { id: off.id } });
     assert.deepEqual(d2.away, ['Not in 14:00–18:00 · Leaving early'], JSON.stringify(d2.away)); }
+  // Only the part inside their shift is said; a leave wholly outside it is not said at all.
+  { const wd = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date(DAY).getUTCDay()];
+    const was = (await prisma.staff.findUniqueOrThrow({ where: { id: therapist.id } })).weekly_schedule;
+    await prisma.staff.update({ where: { id: therapist.id }, data: { weekly_schedule: { [wd]: { start: '10:00', end: '16:00' } } } });
+    const mk = (a: string, b: string) => prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: therapist.id, date: new Date(DAY), start_date: new Date(DAY), end_date: new Date(DAY), start_time: a, end_time: b, description: `${a} off` } });
+    const offs = [await mk('14:00', '20:00'), await mk('06:00', '09:00')];
+    const d3 = await (await call(`/public/link/${t}?date=${DAY}`)).json();
+    await prisma.timeOff.deleteMany({ where: { id: { in: offs.map((o) => o.id) } } });
+    await prisma.staff.update({ where: { id: therapist.id }, data: { weekly_schedule: was ?? {} } });
+    assert.deepEqual(d3.away, ['Not in 14:00–16:00 · 14:00 off'], JSON.stringify(d3.away)); }
   assert.deepEqual(day.items[0].checklist, [{ text: 'Oil warmed', required: true, done: false }]);
   // A day off says so rather than "Nothing booked" (#424).
   await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: therapist.id, date: new Date('2030-03-14'), description: 'Family wedding' } });
