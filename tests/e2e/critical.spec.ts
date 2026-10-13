@@ -193,7 +193,7 @@ test('@smoke the booking sheet books a course of sessions in one go, and Undo ta
     await expect(book).toBeEnabled({ timeout: 15000 });
     await book.click();
     // The sheet stays on Booked (#330); Undo is on it.
-    await expect(sheet.getByText(/3 × .* at \d\d:\d\d/)).toBeVisible({ timeout: 20000 });
+    await expect(sheet.getByText(/3 × .* at \d\d:\d\d, Wed 10 to Fri 12 Apr/)).toBeVisible({ timeout: 20000 });
     const booked = async () => ((await call('get', `/appointments?patient_id=${patient.id}`)) as { scheduled_date: string }[]).map((a) => a.scheduled_date.slice(0, 10)).sort();
     expect(await booked()).toEqual(['2030-04-10', '2030-04-11', '2030-04-12']);
     await sheet.getByRole('button', { name: 'Undo', exact: true }).click();
