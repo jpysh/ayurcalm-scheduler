@@ -1,0 +1,24 @@
+// E2E_BASE_URL=http://localhost:8747 node scripts/uat-747.mjs — #747: Leaving early opens on the last hour of the shift, not the whole day. 375x812.
+import { chromium } from '@playwright/test';
+import { mkdirSync, writeFileSync } from 'node:fs';
+const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';
+const OUT = 'docs/design/uat/2026-10-13-leaving-early-default';
+mkdirSync(OUT, { recursive: true });
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, timezoneId: 'Asia/Kolkata' });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+const p = await ctx.newPage();
+await p.goto(`${APP}/admin/team`); await p.waitForTimeout(3000);
+const facts = await p.getByRole('button', { name: /^Raj Das/ }).first().innerText();
+const end = facts.match(/\d\d:\d\d–(\d\d:\d\d)/)?.[1];
+await p.getByRole('button', { name: /^Raj Das/ }).first().click(); await p.waitForTimeout(800);
+await p.getByRole('dialog').last().getByRole('button', { name: /^Leaving early/ }).click(); await p.waitForTimeout(1500);
+await p.screenshot({ path: `${OUT}/01-leaving-early.png` });
+const from = await p.getByRole('dialog').last().getByLabel('From').inputValue();
+const want = end && `${String(Number(end.slice(0, 2)) - 1).padStart(2, '0')}${end.slice(2)}`;
+const ok = !!end && from === want;
+console.log(ok ? 'pass' : 'FAIL', `Leaving early opens From ${from} (shift ends ${end})`);
+writeFileSync(`${OUT}/README.md`, `# #747 UAT, 13 Oct (demo seed)\n\n${ok ? 'pass' : 'FAIL'}: Leaving early opens From ${from}, an hour before the shift ends at ${end}.\n\n![](01-leaving-early.png)\n`);
+await b.close();
+process.exit(ok ? 0 : 1);
