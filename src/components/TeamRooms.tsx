@@ -40,7 +40,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   markOut: (p: MarkOut) => void;
 }) {
   const [offToday, setOffToday] = useState<Record<string, string | null>>({});
-  const [roomsOff, setRoomsOff] = useState<Map<string, RoomOff>>(new Map());
+  const [roomsAll, setRoomsOff] = useState<Map<string, RoomOff>>(new Map());
   const [staffOff, setStaffOff] = useState<(RoomOff & { entity_id: string })[]>([]);
   const [week, setWeek] = useState<Week | null>(null);
   // The team is read a day at a time (#351), from the same week strip as the Day screen.
@@ -95,6 +95,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
     const d = on < 0 ? undefined : week!.rooms.find((x) => x.id === String(r.id))?.days[on];
     return d && d.capacity ? `${hrs(d.booked)} of ${hrs(d.capacity)} booked · ${roomKind(r)}` : roomKind(r);
   };
+  // A part of today that has ended is over, not out (#743).
+  const roomsOff = new Map([...roomsAll].filter(([, e]) => !((e.end_date ?? e.date ?? "").slice(0, 10) === today && e.end_time && e.end_time <= nowHM)));
   const firstOut = (e: RoomOff) => (e.start_date ?? e.date ?? "").slice(0, 10);
   const roomsOut = rooms.filter((r) => { const e = roomsOff.get(String(r.id)); return roomActive(r) && e && firstOut(e) <= today; }).length;
 

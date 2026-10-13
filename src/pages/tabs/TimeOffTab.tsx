@@ -24,8 +24,11 @@ const ONE: Record<Kind, [string, string]> = { Staff: ['staff', 'staff'], Room: [
 /** What each kind's treatments will need once it is not available. */
 const NEEDS: Partial<Record<Kind, [string, string]>> = { Staff: ['treatment', 'another therapist'], Room: ['treatment', 'another room'], Therapy: ['booking', 'another day'], Patient: ['treatment', 'another time'] };
 
-/** The day as the centre lives it: until it ends, or it starts later. */
-const nowOrLater = (h: UiTimeOff, today: string) => (h.endDate || h.date || '').slice(0, 10) >= today;
+/** The day as the centre lives it: until it ends, or it starts later; a part of today that has ended is over (#743). */
+const nowOrLater = (h: UiTimeOff, today: string, hm = '') => {
+  const end = (h.endDate || h.date || '').slice(0, 10);
+  return end > today || (end === today && (isFullDay(h) || !h.endTime || h.endTime > hm));
+};
 const isNow = (h: UiTimeOff, today: string, hm: string) => {
   const start = sortKey(h).slice(0, 10);
   if (start > today) return false;
@@ -241,7 +244,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
 
   /** A thing's own sheet, the same rows for every kind (#695): Available again when it is not, its times, Not available…. */
   const outFor = (type: UiTimeOff['type'], entity: string) => {
-    const mine = timeOffs.filter((h) => h.type === type && h.entity === entity && nowOrLater(h, centreToday)).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+    const mine = timeOffs.filter((h) => h.type === type && h.entity === entity && nowOrLater(h, centreToday, clockIn(timezone))).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
     const nowOut = mine.find((h) => isNow(h, centreToday, clockIn(timezone)));
     return (
       <ListGroup title={mine.length ? 'Not available' : undefined}>
@@ -253,7 +256,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
   };
 
   const hm = clockIn(timezone);
-  const live = timeOffs.filter((h) => h.type !== 'Center' && nowOrLater(h, centreToday)).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+  const live = timeOffs.filter((h) => h.type !== 'Center' && nowOrLater(h, centreToday, hm)).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
   const now = live.filter((h) => isNow(h, centreToday, hm));
   const coming = live.filter((h) => !isNow(h, centreToday, hm));
   // The soonest ten, the rest folded: a centre's leave ran to 80 rows on one screen (#706).
