@@ -80,6 +80,12 @@ async function main() {
     await prisma.patientStay.create({ data: { patient_id: ines.id, start_date: at('2030-08-19'), end_date: at('2030-08-19'), duration_days: 1 } });
     o = await read();
     assert.deepEqual(o.items.filter((i) => i.rule === 'form_c' && i.who === `${TAG} Ines`).map((i) => i.what), ['Form C due by Tue 20 Aug']);
+    // A foreign outpatient who sleeps elsewhere has no accommodation to report (#719).
+    const juno = await prisma.patient.create({ data: { name: `${TAG} Juno`, gender: 'female', country: 'Germany' } });
+    await prisma.patientStay.create({ data: { patient_id: juno.id, start_date: at(DAY), end_date: at(DAY), duration_days: 1, on_site: false } });
+    o = await read();
+    assert.deepEqual(o.items.filter((i) => i.rule === 'form_c' && i.who === `${TAG} Juno`), [], 'a day patient owes no Form C');
+    assert.ok(!(await call('GET', `/patients/${juno.id}/day?date=${DAY}`)).form_c, 'and her card has no Form C row');
 
     // Follow-up (#487): the discharge asked for today, so it is due; marked done, it goes; the card says so.
     const esha = await prisma.patient.create({ data: { name: `${TAG} Esha`, gender: 'female' } });
