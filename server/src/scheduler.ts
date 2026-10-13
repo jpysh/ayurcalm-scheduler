@@ -1,6 +1,6 @@
 import { PrismaClient, Appointment, Staff, TherapyRoom } from '@prisma/client';
 import { z } from 'zod';
-import { gives, staffEventBusy, eventBlocking, teamOf, mayTreatOn, centreClosed, type EventRow } from './availability.js';
+import { gives, staffEventBusy, eventBlocking, teamOf, mayTreatOn, centreClosed, centreClock, type EventRow } from './availability.js';
 import { HAPPENING } from './appointmentGuard.js';
 
 const inputSchema = z.object({
@@ -162,9 +162,10 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     }
 
     let slotWindowStart = windowStart;
-    const isSameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-    if (isSameDay(nd, nowDate)) {
-      const nowM = nowDate.getHours() * 60 + nowDate.getMinutes();
+    // Today and now on the centre's clock, not the server's: the container runs on UTC (#774).
+    const clock = centreClock(settings?.timezone || 'Asia/Kolkata', nowDate);
+    if (nd.toISOString().slice(0, 10) === clock.date) {
+      const nowM = toMinutes(clock.time);
       slotWindowStart = Math.max(slotWindowStart, nowM);
       if (slotWindowStart + duration > windowEnd) {
         conflicts.reason = conflicts.reason || 'NO_MATCHING_TIME_SLOTS';
