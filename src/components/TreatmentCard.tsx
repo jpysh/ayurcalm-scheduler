@@ -396,12 +396,22 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
     setBooked({ text: `${therapyName} at ${time}.`, count: body.day_count, ids: [body.id], note: `Booked ${first}: ${therapyName} at ${time}${date === today ? "" : `, ${dayText(date)}`}`, date });
   };
   /** A course: one a day from the date, at this time with this therapist and room. All of it or none of it. */
+  const courseCall = (preview_only: boolean) => fetch(`${API_BASE}/appointments`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ patient_id: chosen!.id, therapy_id: therapyId, total_sessions: sessions, start_date: date, end_date: addDays(date, sessions + 10), preferred_days: [], preferred_time_range: { start: time, end: hm(toM(time) + (slot?.duration_minutes || 60) + 30) }, preferred_staff_id: staffId || undefined, preferred_room_id: roomId || undefined, now: new Date().toISOString(), preview_only }),
+  });
+  // The line before booking names the days the server would book, not the asked-for span: skipped days push the end out (#792).
+  const [courseDays, setCourseDays] = useState<string[] | null>(null);
+  useEffect(() => {
+    setCourseDays(null);
+    if (sessions < 2 || !chosen || !therapyId || !time) return;
+    let live = true;
+    courseCall(true).then((r) => r.json()).then((b) => { if (live) setCourseDays(b.days || []); }).catch(() => {});
+    return () => { live = false; };
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [sessions, chosen, therapyId, date, time, staffId, roomId]);
   const bookCourse = async () => {
-    const end = hm(toM(time) + (slot?.duration_minutes || 60) + 30);
-    const res = await fetch(`${API_BASE}/appointments`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ patient_id: chosen!.id, therapy_id: therapyId, total_sessions: sessions, start_date: date, end_date: addDays(date, sessions + 10), preferred_days: [], preferred_time_range: { start: time, end }, preferred_staff_id: staffId || undefined, preferred_room_id: roomId || undefined, now: new Date().toISOString() }),
-    });
+    const res = await courseCall(false);
     const body = await res.json().catch(() => ({}));
     const made: string[] = (body.appointments || []).map((a: { id: string }) => a.id);
     if (!res.ok) {
@@ -507,7 +517,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
             <ChangeLine label="Room" value={nameOf(opts.rooms, roomId) || slot?.room_name || "None free"}
               select={<LineSelect label="Room" value={roomId} onChange={setRoomId} free={free(opts.rooms)} busy={busyOnes(opts.rooms)} />} />
             <p className="mt-2 text-sm text-muted-foreground">Chosen for you: free at {time}. Change any line.</p>
-            <Consequence>{sessions === 1 ? `One treatment, ${dayText(date)}, at ${time}` : `One a day, ${span(date, addDays(date, sessions - 1))}, at ${time}. A day ${first} is away, or the therapist or room is not free, is skipped; if they do not all fit, nothing is booked.`}</Consequence>
+            <Consequence>{sessions === 1 ? `One treatment, ${dayText(date)}, at ${time}` : courseDays === null ? `One a day from ${dayText(date)}, at ${time}.` : courseDays.length < sessions ? `Only ${courseDays.length} of ${sessions} days fit, so nothing would be booked. Try fewer days, another time or another therapist.` : `One a day, ${span(courseDays[0], courseDays[sessions - 1])}, at ${time}.${courseDays[sessions - 1] !== addDays(date, sessions - 1) ? ` Days ${first} is away, or the therapist or room is not free, are skipped.` : ""}`}</Consequence>
           </>)}
         </div>
       )}
