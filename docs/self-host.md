@@ -1,8 +1,13 @@
-# Run AyurCalm on your own Mac
+# Run Ruta on your own computer
 
-Free, on a Mac (or mini PC) that stays on at the centre. You get your own web address with HTTPS through a Cloudflare Tunnel: nothing opened on the router, no fixed IP needed. About an hour the first time.
+Free, on a computer that stays on at the centre. Tested on a Mac; a Windows or Linux PC with Docker should work the same way.
 
-**You need:** a Mac that stays on, a Cloudflare account (free), and a domain in that account (about ₹800 a year, or one you already have).
+Two ways to reach it:
+
+- **Centre Wi-Fi only** (step 1, then 1b). Phones on the centre's Wi-Fi open it; nothing is reachable from outside. No domain, no account, about 20 minutes.
+- **From anywhere** (steps 1 and 2). Your own web address with HTTPS through a Cloudflare Tunnel: nothing opened on the router, no fixed IP. Needs a free Cloudflare account and a domain (about ₹800 a year). About an hour.
+
+Start with Wi-Fi only; add step 2 later without reinstalling.
 
 ## 1. The app
 
@@ -25,6 +30,20 @@ Free, on a Mac (or mini PC) that stays on at the centre. You get your own web ad
 5. Open http://localhost:8080, sign in with `admin@example.com` / `demo1234`, and **change that password** (Settings → People with access) before step 2. The setup wizard then clears the demo and asks for the centre's details.
 
 Docker restarts the app by itself after a reboot or a crash.
+
+## 1b. Phones on the centre Wi-Fi
+
+Find the computer's name: on a Mac, System Settings → General → Sharing, shown under **Local hostname** (for example `Reception.local`). On each phone connected to the centre Wi-Fi, open:
+
+```
+http://Reception.local:8080
+```
+
+If that name does not open (some Android phones), use the computer's address instead: System Settings → Wi-Fi → Details → IP address, for example `http://192.168.1.20:8080`. Ask whoever set up the router to reserve that address for this computer so it never changes.
+
+Add it to the home screen (Share → Add to Home Screen) so staff open it like an app.
+
+This is plain `http` inside your own network: fine for a trusted centre Wi-Fi, not for a guest Wi-Fi shared with residents. If residents use the same Wi-Fi, do step 2 and use the https address instead.
 
 ## 2. Your web address (named Cloudflare Tunnel)
 

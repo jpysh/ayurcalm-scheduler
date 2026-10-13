@@ -9,7 +9,19 @@
 
 Plan residents and their stays, therapists, rooms, therapies and daily programme in one place. Auto-assign fills the day around room amenities, therapist time off and opening hours, and the day sheet prints every resident's treatments and meals for the notice board. Built for residential Ayurveda centres; nothing in it is Ayurveda-specific.
 
-![The daily schedule: therapy rooms across the top, appointments with therapy, duration and assigned therapist](docs/screenshot-dashboard.png)
+Made for the admin's phone. A desktop only widens it.
+
+<p>
+<img src="docs/guide/1-today.png" width="200" alt="Today: the day's treatments grouped by hour">
+<img src="docs/guide/2-fix.png" width="200" alt="For your action: a therapist on leave, each treatment with a suggested replacement">
+<img src="docs/guide/3-book.png" width="200" alt="Book a treatment: the next free slot, best resident first">
+</p>
+
+## Three ways in
+
+1. **Look around:** the [live demo](https://demo.jains.es), a busy example centre. Nothing to install.
+2. **Try it on your centre:** a [free cloud trial](https://signup.jains.es). We host it; you get a web address for every phone.
+3. **Run it yourself, free:** on a computer that stays on at the centre. Phones reach it over the centre Wi-Fi, or from anywhere with your own web address. [Self-host guide](docs/self-host.md).
 
 ## Cloud or self-host?
 
@@ -26,7 +38,7 @@ You can move between them at any time and always leave with your data.
 
 ## Quick start
 
-You need [Docker](https://docs.docker.com/get-docker/).
+You need [Docker](https://docs.docker.com/get-docker/) on a computer with about 2 GB of free memory. Tested on macOS.
 
 ```bash
 git clone https://github.com/jpysh/ayurcalm-scheduler.git
@@ -34,9 +46,9 @@ cd ayurcalm-scheduler
 docker compose up -d
 ```
 
-Open **http://localhost:8080** and sign in as `admin@example.com` / `demo1234`. The first boot seeds an example centre (about 40 residents a day), and a setup wizard asks for your centre's name and hours. Change the password before putting it on a network.
+Open **http://localhost:8080** (or `http://<computer-name>.local:8080` from a phone on the same Wi-Fi) and sign in as `admin@example.com` / `demo1234`. The first boot seeds an example centre (about 40 residents a day), and a setup wizard asks for your centre's name and hours. Change the password before putting it on a network.
 
-Running it for a real centre, with HTTPS and backups: [docs/self-host.md](docs/self-host.md).
+Running it for a real centre (Wi-Fi only, or a web address with HTTPS, plus backups and updates): [docs/self-host.md](docs/self-host.md).
 
 ## Stack
 
