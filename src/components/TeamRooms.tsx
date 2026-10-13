@@ -125,6 +125,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   };
   // A leave still to come, so nobody books the same days again (#737).
   const nextOff = (id: string) => { const e = staffOff.find((x) => x.entity_id === id && firstOut(x) > day); return e ? outLine(e) : undefined; };
+  // On the row only a week ahead, in grey (#751): red is kept for who is not in today.
+  const soonOff = (id: string) => { const e = staffOff.find((x) => x.entity_id === id && firstOut(x) > day && firstOut(x) <= addDays(day, 7)); return e ? outLine(e) : undefined; };
   // Their own hours that day (#571): a time at the edge of their shift changes nothing.
   const shift = pick?.kind === "staff" && on >= 0 ? week!.rows.find((r) => r.id === pick.id)?.days[on] : undefined;
   const sStart = shift?.start || opening, sEnd = shift?.end || closing;
@@ -147,8 +149,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
             const d = dayOf(s);
             const away = d?.state === "away" || d?.state === "off";
             return (
-              <Row key={s.id} title={away ? <s className="text-muted-foreground">{s.name}</s> : s.name} facts={dayLine(d)}
-                flag={day === today && offToday[String(s.id)] && !away ? "Not in today" : nextOff(String(s.id))} trailing="›"
+              <Row key={s.id} title={away ? <s className="text-muted-foreground">{s.name}</s> : s.name} facts={[dayLine(d), soonOff(String(s.id))].filter(Boolean).join(" · ")}
+                flag={day === today && offToday[String(s.id)] && !away ? "Not in today" : undefined} trailing="›"
                 onClick={() => (day < today ? openPerson(String(s.id)) : setPick({ kind: "staff", id: String(s.id), name: s.name }))} />
             );
           })}
@@ -202,6 +204,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
 const shiftBy = (hm: string, by: number) => { const m = Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5)) + by; return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
 
 /** The day after a YYYY-MM-DD, as one. */
+const addDays = (ymd: string, n: number) => new Date(Date.parse(ymd) + n * 86400000).toISOString().slice(0, 10);
 const nextDay = (ymd: string) => new Date(Date.parse(ymd) + 86400000).toISOString().slice(0, 10);
 
 /** What the Availability form opens on: the thing, and which kind of time with what filled in. */
