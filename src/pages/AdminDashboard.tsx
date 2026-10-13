@@ -185,6 +185,9 @@ const AdminDashboard = () => {
     const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: ADMIN_TZ, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(noonUtc).map((x) => [x.type, Number(x.value)]));
     return new Date(noonUtc.getTime() - (Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - noonUtc.getTime()));
   };
+  // A day named in the address (?date=YYYY-MM-DD) opens on that day, e.g. tomorrow after Make it mine (#755).
+  const dateParam = new URLSearchParams(window.location.search).get('date');
+  useEffect(() => { if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) setCurrentDate(dayDate(dateParam)); }, [ADMIN_TZ]); // eslint-disable-line react-hooks/exhaustive-deps
   const shiftDay = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 
   // The bar's search on the Team, Therapies and Events lists: it filters the list on screen.

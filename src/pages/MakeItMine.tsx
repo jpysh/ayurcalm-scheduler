@@ -99,7 +99,7 @@ export default function MakeItMine() {
         : added < residents.length ? `${added} of ${residents.length} residents added. Add the rest from Residents.`
         : booked < added ? `${plural(added, "resident")} added; ${booked} consultations fit tomorrow. Book the rest from each card.`
         : `${plural(added, "resident")} arrive tomorrow, each with a consultation.`);
-      navigate("/admin/schedule");
+      navigate(`/admin/schedule?date=${tomorrow}`);
       setTimeout(() => window.location.reload(), 400);
     } finally { setBusy(false); }
   };
