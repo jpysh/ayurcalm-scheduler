@@ -1184,8 +1184,8 @@ app.get('/program-events', async (req: Request, res: Response) => {
  * never fails over something that was already there.
  */
 async function eventClashRefusal(next: EventRow, before: EventRow | null): Promise<{ error: string; clashes: unknown[] } | null> {
-  const today = new Date(new Date().toDateString());
-  const appts = await prisma.appointment.findMany({ where: { scheduled_date: { gte: today }, ...HAPPENING } });
+  // The centre's day, not the machine's (#732): in UTC a Sydney morning is still yesterday.
+  const appts = await prisma.appointment.findMany({ where: { scheduled_date: await fromToday(), ...HAPPENING } });
   const old = new Set(before ? eventClashes(before, appts).map((a) => a.id) : []);
   const clashes = eventClashes(next, appts).filter((a) => !old.has(a.id));
   if (clashes.length === 0) return null;
@@ -1193,7 +1193,7 @@ async function eventClashRefusal(next: EventRow, before: EventRow | null): Promi
   const name = (list: { id: string; name: string }[], id: string | null) => list.find((x) => x.id === id)?.name || '';
   const lines = clashes
     .sort((m, n) => +m.scheduled_date - +n.scheduled_date || m.start_time.localeCompare(n.start_time))
-    .map((a) => `${name(staff, a.staff_id)} has ${name(patients, a.patient_id)}, ${name(therapies, a.therapy_id)} at ${a.start_time} on ${a.scheduled_date.toDateString().slice(0, 10)}`);
+    .map((a) => `${name(staff, a.staff_id)} has ${name(patients, a.patient_id)}, ${name(therapies, a.therapy_id)} at ${a.start_time} on ${a.scheduled_date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '')}`);
   const shown = lines.slice(0, 5).join('; ');
   const more = lines.length > 5 ? `; and ${lines.length - 5} more` : '';
   return {
