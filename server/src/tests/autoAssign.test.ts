@@ -94,6 +94,13 @@ async function main() {
     if (sdRes.success) { console.error('Expected same-day guard to block scheduling'); process.exit(11); }
     const sdDetails = sdRes.conflicts?.details as any;
     if (!sdDetails?.same_day_guard_applied) { console.error('Expected same_day_guard_applied detail'); process.exit(12); }
+    // 04:00 UTC is 09:30 in Kolkata: a 09:00 start has gone on the centre's clock, though not on the server's (#774).
+    if ((await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone === 'Asia/Kolkata') {
+      const tzPayload = { ...sdPayload, preferred_time_range: { start: '09:00', end: '11:00' }, preview_only: true, now: `${sdStart}T04:00:00.000Z` };
+      const tzRes = await autoSchedule(tzPayload, prisma) as any;
+      const at = (tzRes.suggestions || [])[0]?.start_time;
+      if (!at || at < '09:30') { console.error('A course was offered before now on the centre clock:', at, tzRes.conflicts); process.exit(13); }
+    }
     await prisma.patient.delete({ where: { id: sdPatient.id } });
     await prisma.staff.delete({ where: { id: sdStaff.id } });
     await prisma.therapyRoom.delete({ where: { id: sdRoom.id } });
