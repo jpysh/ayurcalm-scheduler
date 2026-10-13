@@ -108,6 +108,12 @@ async function main() {
     const course = await autoSchedule({ ...sdPayload, total_sessions: 4, preferred_time_range: { start: '09:00', end: '12:00' }, start_date: days[0], end_date: days[3] }, prisma) as any;
     if (course.appointments?.length !== 4) { console.error('A course stopped short:', course.appointments?.length, course.conflicts); process.exit(14); }
     await prisma.appointment.deleteMany({ where: { patient_id: sdPatient.id } });
+    // A stay that ends before the course does is the reason given, not a day skipped on the way (#788).
+    await prisma.patientStay.create({ data: { patient_id: sdPatient.id, start_date: new Date(days[0]), end_date: new Date(days[2]), duration_days: 3 } });
+    const short = await autoSchedule({ ...sdPayload, total_sessions: 4, preferred_time_range: { start: '09:00', end: '12:00' }, start_date: days[0], end_date: '2030-01-12' }, prisma) as any;
+    if (short.conflicts?.reason !== 'STAY_TOO_SHORT') { console.error('A course longer than the stay gave another reason:', short.conflicts?.reason); process.exit(15); }
+    await prisma.appointment.deleteMany({ where: { patient_id: sdPatient.id } });
+    await prisma.patientStay.deleteMany({ where: { patient_id: sdPatient.id } });
     await prisma.patient.delete({ where: { id: sdPatient.id } });
     await prisma.staff.delete({ where: { id: sdStaff.id } });
     await prisma.therapyRoom.delete({ where: { id: sdRoom.id } });

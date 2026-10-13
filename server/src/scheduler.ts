@@ -116,6 +116,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
   const conflicts: { reason: string; alternatives: { date: Date; start_time: string }[]; details?: Record<string, unknown> } = { reason: '', alternatives: [] };
 
   let sessionsScheduled = 0;
+  let pastStay = false;
   const currentDate = new Date(startDate);
   const overallDeadline = Date.now() + maxMs;
 
@@ -132,7 +133,8 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
 
   while (sessionsScheduled < input.total_sessions) {
     if (endDate && currentDate > endDate) {
-      conflicts.reason = conflicts.reason || 'OUT_OF_RANGE';
+      // A day skipped on the way (a closed Sunday) is not why it failed when the stay ran out (#788).
+      conflicts.reason = pastStay ? 'STAY_TOO_SHORT' : conflicts.reason || 'OUT_OF_RANGE';
       break;
     }
     if (Date.now() > overallDeadline) {
@@ -141,11 +143,12 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     }
     const nd = nextPreferredDate(currentDate);
     if (!nd) {
-      conflicts.reason = conflicts.reason || 'NO_MATCHING_TIME_SLOTS';
+      conflicts.reason = pastStay ? 'STAY_TOO_SHORT' : conflicts.reason || 'NO_MATCHING_TIME_SLOTS';
       break;
     }
     // A resident is booked only while they are staying.
     if (!mayTreatOn(stays, nd)) {
+      pastStay = true;
       currentDate.setDate(nd.getDate() + 1);
       continue;
     }
