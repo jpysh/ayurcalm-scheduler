@@ -28,7 +28,8 @@ assert.match(refuse([s('1', 'a'), s('1', 'b'), s('1', 'c')], [], { ip: '1', emai
 assert.equal(refuse([s('1', 'a'), s('1', 'b'), s('1', 'c', t0 - 2 * D)], [], { ip: '1', email: 'd' }, t0), null);
 assert.match(refuse([], [{ email: 'a' }], { ip: '2', email: 'a' }, t0), /already/);
 assert.match(refuse(Array.from({ length: 20 }, (_, i) => s(`ip${i}`, `e${i}`)), [], { ip: 'x', email: 'y' }, t0), /as many/);
-assert.equal(refuse([], Array.from({ length: 25 }, (_, i) => ({ email: `e${i}` })), { ip: 'x', email: 'y' }, t0), 'waitlist');
+assert.equal(refuse([], Array.from({ length: 10 }, (_, i) => ({ email: `e${i}` })), { ip: 'x', email: 'y' }, t0), 'waitlist');
+assert.equal(refuse([], Array.from({ length: 9 }, (_, i) => ({ email: `e${i}` })), { ip: 'x', email: 'y' }, t0), null);
 
 assert.equal(slugFor('Shanti Kutir Ayurveda!', []), 'shanti-kutir-ayurveda');
 assert.equal(slugFor('Demo', []), 'demo-2');

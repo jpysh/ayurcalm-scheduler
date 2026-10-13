@@ -18,13 +18,14 @@ export function next(c, now) {
 /** When a paused centre, or an ended trial, is deleted. */
 export const deletesAt = (c) => (c.paused_at ? c.paused_at + 14 * D : Date.parse(c.trial.ends_at) + 60 * D);
 
-/** Sign-up limits: 3 per address a day, one live centre per email, 20 a day, 25 live. */
+/** Sign-up limits: 3 per address a day, one live centre per email, 20 a day, 10 live. */
 export function refuse(signups, centres, { ip, email }, now) {
   const today = signups.filter((s) => now - s.at < D);
   if (today.filter((s) => s.ip === ip).length >= 3) return 'Too many sign-ups from this connection today. Try again tomorrow.';
   if (centres.some((c) => c.email === email) || today.some((s) => s.email === email && !s.used)) return 'This email already has a trial centre. Check your inbox for its link.';
   if (today.length >= 20) return 'We have opened as many centres as we can today. Try again tomorrow.';
-  if (centres.length >= 25) return 'waitlist';
+  // Ten trials beside the real centre while everything runs on the Mac (#816).
+  if (centres.length >= 10) return 'waitlist';
   return null;
 }
 
