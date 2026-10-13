@@ -101,6 +101,13 @@ async function main() {
       const at = (tzRes.suggestions || [])[0]?.start_time;
       if (!at || at < '09:30') { console.error('A course was offered before now on the centre clock:', at, tzRes.conflicts); process.exit(13); }
     }
+    // The first hour of every day is taken: each later day must still get its session (#780).
+    const days = ['2030-01-02', '2030-01-03', '2030-01-04', '2030-01-05'];
+    const other = (await prisma.therapy.findFirst({ where: { id: { not: sdTherapy.id } } }))!.id;
+    await prisma.appointment.createMany({ data: days.map((d) => ({ patient_id: sdPatient.id, therapy_id: other, staff_id: sdStaff.id, room_id: sdRoom.id, scheduled_date: new Date(d), start_time: '09:00', duration_minutes: 60, status: 'confirmed' as const, session_number: 1, total_sessions: 1, assignment_type: 'auto' as const })) });
+    const course = await autoSchedule({ ...sdPayload, total_sessions: 4, preferred_time_range: { start: '09:00', end: '12:00' }, start_date: days[0], end_date: days[3] }, prisma) as any;
+    if (course.appointments?.length !== 4) { console.error('A course stopped short:', course.appointments?.length, course.conflicts); process.exit(14); }
+    await prisma.appointment.deleteMany({ where: { patient_id: sdPatient.id } });
     await prisma.patient.delete({ where: { id: sdPatient.id } });
     await prisma.staff.delete({ where: { id: sdStaff.id } });
     await prisma.therapyRoom.delete({ where: { id: sdRoom.id } });
