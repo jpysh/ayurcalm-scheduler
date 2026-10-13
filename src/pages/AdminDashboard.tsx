@@ -107,8 +107,8 @@ const AdminDashboard = () => {
     fetch(`${API_BASE}/settings`)
       .then((r) => (r.ok ? r.json() : null))
       .then((s) => {
-        // Setup is a gate, not a suggestion (#60): an admin who never finished it goes back to it.
-        if (s?.setup_complete === false && localStorage.getItem("authRole") === "Admin") { navigate("/setup"); return; }
+        // Setup is a gate (#60) for an empty centre; one showing its example opens on the day, with Make it mine in the banner (#728).
+        if (s?.setup_complete === false && !s.demo_data && localStorage.getItem("authRole") === "Admin") { navigate("/setup"); return; }
         setCurrency(s?.currency);
         if (s?.opening_time && s?.closing_time) {
           setCentreHours({ opening_time: s.opening_time, closing_time: s.closing_time, slot_minutes: s.slot_minutes ?? 30, timezone: s.timezone || "Asia/Kolkata" });

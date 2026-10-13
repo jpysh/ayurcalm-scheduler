@@ -150,7 +150,7 @@ for (const [phone, starts] of [['Europe/Berlin', 'Europe/Berlin'], ['Pacific/Auc
       await page.route('**/api/settings', async (route) => {
         if (route.request().method() !== 'GET') return route.continue();
         const res = await route.fetch();
-        await route.fulfill({ response: res, json: { ...(await res.json()), setup_complete: false } });
+        await route.fulfill({ response: res, json: { ...(await res.json()), setup_complete: false, demo_data: false } });
       });
       await page.goto('/login');
       await page.getByLabel('Email').fill('admin@example.com');

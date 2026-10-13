@@ -371,6 +371,16 @@ test('@smoke an admin who never finished setup is sent back to it (#60)', async 
   const put = (setup_complete: boolean) => request.put('/api/settings', { headers, data: { centre_name, address, timezone, opening_time, closing_time, slot_minutes, working_days, logo, setup_complete } });
   expect((await put(false)).ok()).toBeTruthy();
   try {
+    // An example centre opens on its day, offering Make it mine (#728).
+    await signIn(page);
+    await page.waitForURL(/\/admin\/schedule/);
+    await expect(page.getByRole('link', { name: 'Make it mine' })).toBeVisible();
+    // An empty one is sent to setup and kept there.
+    await page.route('**/api/settings', async (route) => {
+      if (route.request().method() !== 'GET') return route.continue();
+      const res = await route.fetch();
+      await route.fulfill({ response: res, json: { ...(await res.json()), demo_data: false } });
+    });
     await signIn(page);
     await page.waitForURL(/\/setup/);
     // Straight to the day: the wizard used to be a suggestion, skipped by typing the address.

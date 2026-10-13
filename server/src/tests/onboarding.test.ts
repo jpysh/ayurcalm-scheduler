@@ -39,6 +39,9 @@ async function main() {
   });
 
   await requireDemoData(prisma);
+  // A centre showing its example offers Make it mine (#728); the public demo is the only exception.
+  const support = await (await fetch(`${API_BASE}/public/support`)).json();
+  assert.equal(support.example, process.env.DEMO_MODE !== 'true', 'An example centre does not say so to its admin');
   const before = await (await api('/settings')).json();
   try {
     // The wizard's own payload: step 1, step 2, then the demo-data choice.
