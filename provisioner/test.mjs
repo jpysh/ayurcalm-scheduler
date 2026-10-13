@@ -40,3 +40,17 @@ assert.equal(linkOpen(up, t0 + 29 * 60_000), true);
 assert.equal(linkOpen(up, t0 + 31 * 60_000), false);
 assert.equal(linkOpen({ state: 'building' }, t0), false);
 console.log('provisioner lifecycle ok');
+
+// Sign-up goes straight to the centre even when email is set up: nothing waits on an inbox (#727).
+{
+  const { mkdtempSync } = await import('node:fs');
+  process.env.RUTA_DATA = mkdtempSync('/tmp/ruta-test-');
+  process.env.CF_EMAIL_TOKEN = 'set';
+  const { server } = await import('./index.mjs');
+  await new Promise((ok) => server.listen(0, ok));
+  const r = await fetch(`http://localhost:${server.address().port}/signup`, { method: 'POST', redirect: 'manual', body: new URLSearchParams({ centre: 'Om', email: 'a@b.co' }) });
+  server.close();
+  assert.equal(r.status, 303);
+  assert.match(r.headers.get('location'), /^\/go\?k=/);
+  console.log('sign-up straight in ok');
+}

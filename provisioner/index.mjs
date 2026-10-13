@@ -1,7 +1,7 @@
 // Trial sign-up (#247): signup.jains.es. A visitor gives a centre name and an
 // email; the centre is created at <slug>.jains.es and an "Open your centre" link
-// on screen signs them into its setup wizard, where they choose a password. With
-// CF_EMAIL_TOKEN set, the link is emailed first instead, to prove the address.
+// on screen signs them in, where they choose a password. Nothing waits on the
+// email (#727): seeing their centre comes first; the email only says where it is.
 // Hourly, each centre moves through lifecycle.mjs; nothing about that is emailed.
 // Runs on the trial host next to Docker (hosting/centre.sh). No dependencies.
 //   node provisioner/index.mjs          (PORT 8200; env below)
@@ -87,6 +87,7 @@ function provision(s) {
       await route(slug, svc(port));
       db.centres.push({ slug, port, email: s.email, centre: s.centre, ref: s.ref, created: Date.now() });
       s.state = 'ready'; s.ready_at = Date.now(); s.slug = slug; s.used = true; save();
+      if (env.CF_EMAIL_TOKEN) await email(s.email, `${s.centre} is ready`, `Your centre is at https://${slug}.${DOMAIN}\n\nTo sign in on another phone, open ${SELF} and ask for a sign-in link.\n\nIf you did not ask for this, reply and we will delete it.`).catch((e) => console.error('ready email', e));
       await telegram(`New trial centre: ${s.centre} (${slug}.${DOMAIN}) by ${s.email}${s.ref ? `, invited by ${s.ref}` : ''}`);
     } catch (e) {
       console.error('provision failed', e); s.state = 'failed'; save();
@@ -197,9 +198,7 @@ export const server = http.createServer(async (req, res) => {
       const ref = /^[a-z0-9-]{1,40}$/.test(f.get('ref') || '') ? f.get('ref') : undefined;
       const s = { centre, email: to, ip, ref, at: Date.now(), key: randomBytes(18).toString('base64url') };
       db.signups.push(s); save();
-      if (!env.CF_EMAIL_TOKEN) return send(res, 303, '', { Location: `/go?k=${s.key}` });
-      await email(to, `Your Ruta link for ${centre}`, `Open this link to create ${centre}. It signs you straight in.\n\n${SELF}/go?k=${s.key}\n\nIf you did not ask for this, ignore this email.`);
-      return send(res, 200, page(`<h1>Check your email</h1><p>We sent a link to <b>${esc(to)}</b>. Open it on this phone or computer to create ${esc(centre)}.</p>`));
+      return send(res, 303, '', { Location: `/go?k=${s.key}` });
     }
     if (req.method === 'POST' && url.pathname === '/again' && env.CF_EMAIL_TOKEN) {
       const to = ((await body(req)).get('email') || '').trim().toLowerCase();
