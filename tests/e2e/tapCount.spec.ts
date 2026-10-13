@@ -53,6 +53,8 @@ const JOBS: [string, number][] = [
   ['Open the Log', 3],
   // Menu, Patients, the chip (#285 session 8, story 1): the same items the pill lists, as a list of patients.
   ['See who needs attention', 3],
+  // From the example day's banner (#729): one doctor, one therapist, one resident, a gender each, two Continues and Plan (#757).
+  ['Make it mine', 7],
 ];
 
 const ADMIN = { email: 'admin@example.com', password: 'demo1234' };
@@ -487,6 +489,25 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       const note = page.locator('[data-sonner-toast]').filter({ hasText: 'out of use' });
       await expect(note).toBeVisible({ timeout: 20000 });
       await note.getByRole('button', { name: 'Undo' }).click();
+    });
+
+    // Last, because it leaves the day for the setup screen. The final save is
+    // answered by the test, not the server: it would replace the example.
+    await job(page, rows, 'Make it mine', async (tap) => {
+      await tap(page.getByRole('link', { name: 'Make it mine' }));
+      await page.getByLabel('Centre name').fill('Tap Count Centre');
+      await page.getByLabel('Doctors').fill('Dr Asha');
+      await tap(page.getByRole('button', { name: 'Woman', exact: true }).first());
+      await page.getByLabel('Therapists').fill('Ravi');
+      await tap(page.getByRole('button', { name: 'Man', exact: true }).nth(1));
+      await tap(page.getByRole('button', { name: 'Continue' }));
+      await tap(page.getByRole('button', { name: 'Continue' }));
+      await page.getByLabel('Residents').fill('Meera');
+      await tap(page.getByRole('button', { name: 'Woman', exact: true }));
+      await page.route('**/api/settings/make-it-mine', (r) => r.fulfill({ status: 503, json: { error: 'Not saved by the tap count' } }));
+      await tap(page.getByRole('button', { name: /^Plan tomorrow for 1 resident/ }));
+      await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Not saved by the tap count' })).toBeVisible({ timeout: 15000 });
+      await page.unroute('**/api/settings/make-it-mine');
     });
   } finally {
     await restore();
