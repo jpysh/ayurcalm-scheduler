@@ -366,7 +366,9 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
         }
         if (chosen.room && chosen.staff && suggestions.length >= 3) break;
       }
-      if (suggestions.length >= 3) break;
+      // Enough suggestions, but a day stops only once it has a time: breaking on the
+      // count alone cut every course short after the third suggestion (#780).
+      if (chosen.room && suggestions.length >= 3) break;
     }
 
     if (!chosen.room || !chosen.staff || chosen.start === undefined) {
