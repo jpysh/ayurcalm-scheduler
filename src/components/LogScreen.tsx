@@ -24,7 +24,8 @@ export function LogScreen({ timezone, refresh }: { timezone: string; refresh: ()
   const ymd = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
   const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   const today = ymd(new Date());
-  const yesterday = ymd(new Date(Date.now() - 86400000));
+  // By date, not 24 hours back: the day the clocks change is 23 or 25 hours long (#784).
+  const yesterday = new Date(Date.parse(`${today}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
   const heading = (day: string) => day === today ? "Today" : day === yesterday ? "Yesterday"
     : dayText(day);
 
