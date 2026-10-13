@@ -5,6 +5,7 @@
  * opens the one Availability form (#695), already on the right kind of time, so
  * nothing moves until the admin says so. Details are one more row on the same sheet.
  */
+import { outNow } from "@/lib/outNow";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
@@ -98,7 +99,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   // A part of today that has ended is over, not out (#743).
   const roomsOff = new Map([...roomsAll].filter(([, e]) => !((e.end_date ?? e.date ?? "").slice(0, 10) === today && e.end_time && e.end_time <= nowHM)));
   const firstOut = (e: RoomOff) => (e.start_date ?? e.date ?? "").slice(0, 10);
-  const roomsOut = rooms.filter((r) => { const e = roomsOff.get(String(r.id)); return roomActive(r) && e && firstOut(e) <= today; }).length;
+  const roomsOut = rooms.filter((r) => { const e = roomsOff.get(String(r.id)); return roomActive(r) && e && outNow(e, today, nowHM); }).length;
 
   /** A room back in use deletes the day's entry; Undo puts the same entry back (#572). */
   async function backInUse(id: string, name: string, e: RoomOff) {
