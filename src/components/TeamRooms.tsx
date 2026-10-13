@@ -184,8 +184,8 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
         ) : pick ? (
           <ListGroup>
             <Row title={day === today ? "Not in from now" : "Not in that day"} facts="Choose what to do with what they miss" trailing="›" onClick={() => { close(); markOut(day === today ? { type: "Staff", entity: pick.id, mode: "now" } : { type: "Staff", entity: pick.id, mode: "days", date: day }); }} />
-            <Row title="In late" facts="Choose the time they start" trailing="›" onClick={() => { close(); markOut({ type: "Staff", entity: pick.id, mode: "part", date: day, startTime: sStart, endTime: day === today && nowHM > sStart ? nowHM : undefined, description: "In late" }); }} />
-            <Row title="Leaving early" facts="Choose the time they leave" trailing="›" onClick={() => { close(); markOut({ type: "Staff", entity: pick.id, mode: "part", date: day, endTime: sEnd, description: "Leaving early" }); }} />
+            <Row title="In late" facts="Choose the time they start" trailing="›" onClick={() => { close(); markOut({ type: "Staff", entity: pick.id, mode: "part", date: day, startTime: sStart, endTime: day === today && nowHM > sStart ? nowHM : shiftBy(sStart, 60), description: "In late" }); }} />
+            <Row title="Leaving early" facts="Choose the time they leave" trailing="›" onClick={() => { close(); markOut({ type: "Staff", entity: pick.id, mode: "part", date: day, startTime: shiftBy(sEnd, -60), endTime: sEnd, description: "Leaving early" }); }} />
             <Row title={day === today ? "Away another day" : "Away for days"} facts={nextOff(pick.id) ?? "Choose the days"} trailing="›" onClick={() => { close(); markOut({ type: "Staff", entity: pick.id, mode: "days", date: day === today ? nextDay(today) : day }); }} />
             <Row title="Share their link" facts="Their day on their own phone" trailing="›" onClick={() => { close(); link.share("staff", pick.id, pick.name); }} />
             <Row title="Make a new link" facts="The old one stops working" trailing="›" onClick={() => { close(); link.share("staff", pick.id, pick.name, true); }} />
@@ -197,6 +197,9 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
     </div>
   );
 }
+
+/** "13:00" moved by minutes; the form opens on an hour of their shift, never all of it (#747). */
+const shiftBy = (hm: string, by: number) => { const m = Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5)) + by; return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
 
 /** The day after a YYYY-MM-DD, as one. */
 const nextDay = (ymd: string) => new Date(Date.parse(ymd) + 86400000).toISOString().slice(0, 10);

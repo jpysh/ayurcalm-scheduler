@@ -50,7 +50,8 @@ const Login = () => {
         const settings = await fetch(`${API_BASE}/settings`, {
           headers: { Authorization: `Bearer ${data.token}` },
         }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-        if (settings && settings.setup_complete === false) {
+        // A trial's one-time link goes on to choose a password; an example centre otherwise opens on its day (#728).
+        if (settings && settings.setup_complete === false && (!settings.demo_data || path === "link")) {
           navigate("/setup");
           return;
         }

@@ -32,6 +32,8 @@ const SetupWizard = () => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { toast.error(data?.error || "Your password was not saved. Try again."); return; }
       localStorage.setItem("passwordChosen", "1");
+      // An example centre opens on its day first; Make it mine brings them back (#728).
+      if (hasDemo) { navigate("/admin/schedule"); return; }
       setStep(1);
     } catch { toast.error("Your password was not saved. Check the connection and try again."); } finally { setBusy(false); }
   };
@@ -100,7 +102,7 @@ const SetupWizard = () => {
     }
   };
 
-  const of = (hasDemo ? 3 : 2) + (trial ? 1 : 0);
+  const of = hasDemo ? 3 : 2 + (trial ? 1 : 0);
   const TITLES = ["Choose your password", "What is your centre called?", "When are you open?", "How do you want to start?"];
   const next = (to: number, ok: boolean, label = "Continue") => (
     <div className="mt-5 grid gap-1">
@@ -110,7 +112,7 @@ const SetupWizard = () => {
   );
 
   return (
-    <FullPage title={TITLES[step]} note={`Step ${step + (trial ? 1 : 0)} of ${of}. You can change all of this later in Settings.`}>
+    <FullPage title={TITLES[step]} note={step === 0 && hasDemo ? "Then your centre opens, with an example day to look around." : `Step ${step + (trial && !hasDemo ? 1 : 0)} of ${of}. You can change all of this later in Settings.`}>
       {step === 0 && (
         <form onSubmit={(e) => { e.preventDefault(); savePassword(); }}>
           <input type="email" autoComplete="username" value={localStorage.getItem("authUser") ?? ""} readOnly hidden />
