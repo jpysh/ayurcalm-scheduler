@@ -39,7 +39,8 @@
     "test:search": "tsx src/tests/search.test.ts",
     "test:resident-day": "tsx src/tests/residentDay.test.ts",
     "test:log": "tsx src/tests/changeLog.test.ts",
-    "test:delete": "tsx src/tests/deleteKeepsDone.test.ts"
+    "test:delete": "tsx src/tests/deleteKeepsDone.test.ts",
+    "test:resident-import": "tsx src/tests/residentImport.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "^2.0.2",

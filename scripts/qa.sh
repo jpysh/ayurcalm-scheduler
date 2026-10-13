@@ -58,6 +58,7 @@ run therapyLibrary     "The therapy library adds a therapy once, as edited, neve
 run printedSheets      "Printing a day keeps one copy of each sheet, replaced by the next print, and copies older than 90 days are removed"
 run transfer           "A centre exported to one file and imported again comes back whole; a file that is not an export, or from another version, changes nothing"
 run discharge          "A discharge summary is written from the doctor's link and the card, numbered once, closed to the link when final, and prints on two A4 pages"
+run residentImport     "Residents pasted or uploaded from a spreadsheet are read by their headers, and each row is ready or says what is wrong"
 run doctors            "A doctor and their consultations print on the doctor rota, not the therapist rota"
 run daySheet           "The day sheet lists every resident, treatment time and therapist, in its groups, with no empty boxes"
 run unstaffedSheets   "A treatment booked with a therapist who is off shows, marked, on both the patient sheet and the therapist rota"

@@ -27,6 +27,7 @@ import { requireAdmin } from './settings.js';
 import { attentionFor, changesSchema } from './attention.js';
 import { indiaHolidays } from './indiaHolidays.js';
 import { firstFreeRoom, guestRoomRefusal } from './guestRooms.js';
+import { checkResidentRows, patientSchema, staySchema } from './residentImport.js';
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:5433/ayurcalm_dev?schema=public';
@@ -377,11 +378,6 @@ app.delete('/therapies/:id', async (req: Request, res: Response) => {
   }
 });
 
-/** A stay is whole days: arriving and leaving dates, no times. */
-const staySchema = z.object({
-  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-}).refine((s) => s.end_date >= s.start_date, 'Leaving must be on or after arriving');
 const stayData = (s: z.infer<typeof staySchema>) => {
   const start_date = new Date(`${s.start_date}T00:00:00.000Z`);
   const end_date = new Date(`${s.end_date}T00:00:00.000Z`);
@@ -430,39 +426,15 @@ app.get('/patients/find', async (req: Request, res: Response) => {
   }; }) });
 });
 
+// Residents from a spreadsheet, checked before anything is saved (#741, #778).
+app.post('/patients/import/check', async (req: Request, res: Response) => {
+  const { text } = z.object({ text: z.string().min(1).max(500_000) }).parse(req.body);
+  const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  res.json(checkResidentRows(text, centreClock(settings?.timezone || 'Asia/Kolkata').date));
+});
+
 app.post('/patients', async (req: Request, res: Response) => {
-  const schema = z.object({
-    name: z.string(),
-    gender: z.enum(['male','female','other']),
-    phone: z.string().optional(),
-    email: z.string().optional(),
-    date_of_birth: z.string().optional(),
-    emergency_contact: z.string().optional(),
-    emergency_phone: z.string().optional(),
-    address: z.string().optional(),
-    country: z.string().optional(),
-    id_number: z.string().optional(),
-    visa_number: z.string().max(100).nullable().optional(),
-    visa_valid_until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).nullable().optional(),
-    registration_number: z.string().optional(),
-    medical_notes: z.string().optional(),
-    medication: z.string().max(2000).nullable().optional(),
-    before_treatment: z.string().max(2000).nullable().optional(),
-    after_treatment: z.string().max(2000).nullable().optional(),
-    preferred_staff_id: z.string().uuid().nullable().optional(),
-    requires_preferred_staff: z.boolean().optional(),
-    /** False for a day patient. */
-    on_site: z.boolean().default(true),
-    /** The consultation to book with them, as `/consultations/next` offered it; none if left out. */
-    consultation: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), start_time: z.string().regex(/^\d\d:\d\d$/), staff_id: z.string().uuid(), room_id: z.string().uuid() }).optional(),
-    /** Arriving and leaving. Without a stay a resident is never "in house" and never on the day sheet (#142). */
-    stay: staySchema.optional(),
-    /** The diet plan they follow for the whole stay. */
-    template_id: z.string().uuid().optional(),
-    /** The guest room the sheet preselected or the admin chose (#456); its type is their accommodation. */
-    guest_room_id: z.string().uuid().nullable().optional(),
-  });
-  const body = schema.parse(req.body);
+  const body = patientSchema.parse(req.body);
   const data: any = { name: body.name, gender: body.gender, phone: body.phone, email: body.email, emergency_contact: body.emergency_contact, emergency_phone: body.emergency_phone, address: body.address, country: body.country, id_number: body.id_number, visa_number: body.visa_number, visa_valid_until: body.visa_valid_until || null, registration_number: body.registration_number, medical_notes: body.medical_notes, preferred_staff_id: body.preferred_staff_id, requires_preferred_staff: body.requires_preferred_staff };
   if (body.date_of_birth) data.date_of_birth = new Date(body.date_of_birth);
   // The consultation goes through the same guard as any booking, before anything is saved.
