@@ -48,6 +48,11 @@ try {
   const day = await (await call(`/public/link/${t}?date=${DAY}`)).json();
   assert.equal(day.who.kind, 'therapist');
   assert.deepEqual(day.items.map((i: { id: string }) => i.id), [mineA.id], 'a therapist sees their own treatments only');
+  // Leaving early that day is on their link, as on the printed sheet (#745).
+  { const off = await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: therapist.id, date: new Date(DAY), start_date: new Date(DAY), end_date: new Date(DAY), start_time: '14:00', end_time: '18:00', description: 'Leaving early' } });
+    const d2 = await (await call(`/public/link/${t}?date=${DAY}`)).json();
+    await prisma.timeOff.delete({ where: { id: off.id } });
+    assert.deepEqual(d2.away, ['Not in 14:00–18:00 · Leaving early'], JSON.stringify(d2.away)); }
   assert.deepEqual(day.items[0].checklist, [{ text: 'Oil warmed', required: true, done: false }]);
   // A day off says so rather than "Nothing booked" (#424).
   await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: therapist.id, date: new Date('2030-03-14'), description: 'Family wedding' } });

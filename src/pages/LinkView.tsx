@@ -24,7 +24,7 @@ const ASK: [keyof Details, string, string?][] = [["phone", "Your phone", "tel"],
 // Only a foreign guest is asked for a visa (#576); the server's isForeign says the same.
 const foreign = (c: string | null | undefined) => !!c?.trim() && !/^(india|indian|bharat|in)$/i.test(c.trim());
 const asked = (d: Details) => ASK.filter(([k]) => !k.startsWith("visa") || foreign(d.country));
-type Day = { details?: Details; who: { kind: "therapist" | "doctor" | "patient"; name: string }; centre: string; date: string; today: string; now: string; arrives?: string | null; feedback?: { given: { rating: string; note: string } | null; visit?: boolean } | null; off?: string | null; meals?: { meal: string; text: string }[]; items: Item[] };
+type Day = { details?: Details; who: { kind: "therapist" | "doctor" | "patient"; name: string }; centre: string; date: string; today: string; now: string; arrives?: string | null; feedback?: { given: { rating: string; note: string } | null; visit?: boolean } | null; off?: string | null; away?: string[]; meals?: { meal: string; text: string }[]; items: Item[] };
 
 const VITAL: Record<string, string> = { bp: "BP", pulse: "Pulse", weight: "Weight (kg)", temp: "Temperature", spo2: "SpO₂", sugar: "Blood sugar" };
 const ISSUES: [string, string][] = [["room", "Room not usable"], ["co_therapist", "Co-therapist not here"], ["patient_absent", "Patient not here"], ["permission", "Need permission"], ["note", "A note for the admin"], ["sos", "SOS: need help now"]];
@@ -144,6 +144,7 @@ export default function LinkView() {
         </section>
       ) : null}
 
+      {day.away?.length ? <div className="mt-3"><ListGroup>{day.away.map((a) => <Row key={a} title={a} />)}</ListGroup></div> : null}
       <div className="mt-3">
         {day.items.length === 0 ? <ListGroup><Empty text={day.off ? `Day off${/day off/i.test(day.off) ? "" : ` · ${day.off}`}.` : "Nothing booked."} /></ListGroup> : <ListGroup>{day.items.map((it) => {
           const end = hm(toMin(it.start_time) + it.duration_minutes);
