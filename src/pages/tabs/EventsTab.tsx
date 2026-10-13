@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
 import PageHead from "@/components/PageHead";
-import { DateRow, Days, dayText, Dropdown, Empty, ListGroup, Row, Seg, SheetFoot, Text, TimeList, timesBetween, Group } from "@/components/kit";
+import { DateRow, Days, dayText, Dropdown, Empty, ListGroup, plural, Row, Seg, SheetFoot, Text, TimeList, timesBetween, Group } from "@/components/kit";
 import { API_TOKEN, type ApiProgramEvent, type UiStaff, type UiRoom } from "./shared";
 
 /**
@@ -102,7 +102,7 @@ export function useEventsScreen({ events, setEvents, roomsList, staff, staffName
 
   const tab = (
     <div>
-      <PageHead title="Events" note={`${events.length}`} />
+      <PageHead title="Events" note={plural(events.length, "event")} />
       {rows.length === 0 ? <Empty text={ql ? "No event matches." : "No classes or events yet. Tap + to add one."} /> : (
         <ListGroup>
           {rows.map((ev) => (
