@@ -94,7 +94,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   /** "6h 15m of 11h booked · table room", for the day chosen. */
   const roomLine = (r: UiRoom) => {
     const d = on < 0 ? undefined : week!.rooms.find((x) => x.id === String(r.id))?.days[on];
-    return d && d.capacity ? `${hrs(d.booked)} of ${hrs(d.capacity)} booked · ${roomKind(r)}` : roomKind(r);
+    return d && d.capacity ? `${booked(d.booked, d.capacity)} · ${roomKind(r)}` : roomKind(r);
   };
   // A part of today that has ended is over, not out (#743).
   const roomsOff = new Map([...roomsAll].filter(([, e]) => !((e.end_date ?? e.date ?? "").slice(0, 10) === today && e.end_time && e.end_time <= nowHM)));
@@ -213,6 +213,8 @@ export type MarkOut = { type: "Staff" | "Room" | "Therapy" | "GuestRoom" | "Pati
 type RoomOff = { id: string; date?: string | null; start_date?: string | null; end_date?: string | null; start_time: string | null; end_time: string | null; description?: string | null };
 type Day = { state: "in" | "part" | "away" | "off"; start?: string; end?: string; why?: string; booked: number; capacity: number };
 type Week = { start: string; days: string[]; rows: { id: string; name: string; role: string; days: Day[] }[]; gaps: { start: string; end: string; in: number }[][]; rooms: { id: string; days: { booked: number; capacity: number }[] }[] };
+/** "None of 8h booked" reads calmer than "0 min of 8h booked" (#806). */
+const booked = (b: number, cap: number) => `${b ? hrs(b) : "None"} of ${hrs(cap)} booked`;
 const hrs = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}`);
 /** Over 90% leaves no room for a swap, under 25% is someone free to take one (#351); words, not a flag, as neither needs doing now. */
 // "1h 20m of 6h booked" already says how light a day is; only a nearly full one is worth a word (#463, #635).
@@ -221,4 +223,4 @@ const load = (d: Day) => d.capacity && d.booked / d.capacity > 0.9 ? " · nearly
 const dayLine = (d?: Day) => !d ? undefined
   : d.state === "off" ? "Day off"
   : d.state === "away" ? `Away · ${d.why || "leave"}`
-  : `${d.start}–${d.end} · ${hrs(d.booked)} of ${hrs(d.capacity)} booked${load(d)}${d.state === "part" ? ` · ${(d.why || "part of the day").toLowerCase()}` : ""}`;
+  : `${d.start}–${d.end} · ${booked(d.booked, d.capacity)}${load(d)}${d.state === "part" ? ` · ${(d.why || "part of the day").toLowerCase()}` : ""}`;
