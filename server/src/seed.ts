@@ -69,18 +69,6 @@ async function ensureAdmin() {
 }
 
 async function main() {
-  // A new cloud trial (#247) starts empty: its admin, the starter diet plans,
-  // and the setup wizard. Seeding the demo only for the wizard to clear it
-  // took over two minutes of the sign-up. Safe to repeat on every boot.
-  if (process.env.ADMIN_EMAIL) {
-    await ensureAdmin();
-    await ensureStarterDietTemplates(prisma);
-    await ensureStarterCatalogues(prisma);
-    const support = process.env.DEFAULT_SUPPORT_WHATSAPP ?? '420777558262';
-    await prisma.settings.upsert({ where: { id: 'singleton' }, update: {}, create: { id: 'singleton', setup_complete: false, demo_data: false, support_whatsapp: support || null, patient_support_whatsapp: support || null, ...(process.env.CENTRE_NAME?.trim() ? { centre_name: process.env.CENTRE_NAME.trim().slice(0, 80) } : {}) } });
-    console.log('Trial centre ready for its setup wizard');
-    return;
-  }
   const existingCounts = await Promise.all([
     prisma.patient.count(),
     prisma.staff.count(),
@@ -99,7 +87,10 @@ async function main() {
   // Two sizes of one dataset (#348): the full one tests and CI run on, a centre
   // with about 45 in house; the lite one the public demo and a new install show,
   // about 12 in house, small enough for an admin to take in at a glance.
-  const LITE = process.env.DEMO_MODE === 'true' || process.env.SEED_SIZE === 'lite';
+  // A new cloud trial (#247) passes ADMIN_EMAIL and opens on the lite example
+  // under its own name (#728): seeing a working day comes before setting one up.
+  const TRIAL_SEED = Boolean(process.env.ADMIN_EMAIL);
+  const LITE = process.env.DEMO_MODE === 'true' || process.env.SEED_SIZE === 'lite' || TRIAL_SEED;
   // The first pilot's own instance (#658): their size, ten guest rooms a little under half full.
   const BABAJI = process.env.SEED_SIZE === 'babaji';
   const SIZE = BABAJI
@@ -656,9 +647,9 @@ async function main() {
     footer_line: 'Himalaya Ayurveda Retreat · a demo centre, not a real place', discharge_format: 'HAR/{YYYY}/{N}',
   };
   // Before the summaries, so their numbers follow the centre's format.
-  // The demo is one made-up centre whatever CENTRE_NAME says; the setup wizard renames a real one.
+  // The demo is one made-up centre whatever CENTRE_NAME says, except a trial's, which shows its own name (#728).
   const support = process.env.DEFAULT_SUPPORT_WHATSAPP ?? '420777558262';
-  const centre = { support_whatsapp: support || null, patient_support_whatsapp: support || null, centre_name: BABAJI ? 'Babaji Ayurveda' : 'Himalaya Ayurveda Retreat', address: 'Near the golf course, Ranikhet, Uttarakhand', logo: png('demo-logo.png') };
+  const centre = { support_whatsapp: support || null, patient_support_whatsapp: support || null, centre_name: (TRIAL_SEED && process.env.CENTRE_NAME?.trim().slice(0, 80)) || (BABAJI ? 'Babaji Ayurveda' : 'Himalaya Ayurveda Retreat'), address: 'Near the golf course, Ranikhet, Uttarakhand', logo: png('demo-logo.png') };
   // Nothing of the demo centre on the pilot's own papers (#682); the admin fills in the rest in Settings.
   if (BABAJI) Object.assign(letterhead, { name_local: '', email: '', phones: '+91 00000 00000', website: '', discharge_format: 'BA/{YYYY}/{N}', footer_line: 'Babaji Ayurveda · sample data, not real patients' });
   await prisma.settings.upsert({ where: { id: 'singleton' }, update: { letterhead, ...centre }, create: { id: 'singleton', letterhead, ...centre, opening_time: '09:00', closing_time: '20:00' } });
@@ -749,9 +740,11 @@ async function main() {
   // called, and sending it to the setup wizard asks for what it already has.
   await prisma.settings.upsert({
     where: { id: 'singleton' },
-    update: { demo_data: true, setup_complete: true },
+    // A trial is not set up until its admin says Make it mine, so the trial's
+    // 30 days do not start on the example (trial.ts).
+    update: { demo_data: true, setup_complete: !TRIAL_SEED },
     create: {
-      id: 'singleton', demo_data: true, setup_complete: true, ...centre,
+      id: 'singleton', demo_data: true, setup_complete: !TRIAL_SEED, ...centre,
       // The modelled centre treats into the evening, and the Schedule grid is
       // built from these, so a 19:00 treatment is invisible without them.
       opening_time: '09:00', closing_time: '20:00',

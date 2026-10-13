@@ -183,6 +183,8 @@ publicSettingsRouter.get('/support', async (_req: Request, res: Response) => {
     // Only the centre's own number: while it is still the maintainer's (the default), residents are not sent there (#273 M1).
     patient_support_whatsapp: settings.patient_support_whatsapp && settings.patient_support_whatsapp !== settings.support_whatsapp ? settings.patient_support_whatsapp : null,
     trial: await trialInfo(),
+    // An install still showing its example centre (#728): the admin is offered Make it mine. Not on the public demo.
+    example: settings.demo_data && !DEMO,
     made_with: madeWith(settings),
     ...(DEMO && { demo: { email: DEFAULT_ADMIN_EMAIL, password: DEFAULT_ADMIN_PASSWORD, next_reset: nextReset() } }),
   });

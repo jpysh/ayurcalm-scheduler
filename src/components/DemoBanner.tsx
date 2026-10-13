@@ -1,11 +1,22 @@
-import { useDemo, useTrial } from "@/lib/centreName";
+import { Link, useLocation } from "react-router-dom";
+import { useDemo, useExample, useTrial } from "@/lib/centreName";
 
 /** Tells a demo visitor why their changes will vanish (#84), and a trial centre how long it has (#247). */
 export function DemoBanner() {
   const demo = useDemo();
   const trial = useTrial();
+  const example = useExample();
+  const { pathname } = useLocation();
   // A private link belongs to a guest, a therapist or a doctor: the trial and plan notes are the admin's, never theirs (#618).
-  const onLink = window.location.pathname.startsWith("/l/");
+  const onLink = pathname.startsWith("/l/");
+  // The trial's days only start once it is the centre's own, so the example note comes first (#728).
+  if (example && !onLink && localStorage.getItem("authRole") === "Admin" && !pathname.startsWith("/setup") && pathname !== "/login") {
+    return (
+      <div role="status" className="bg-notice-bg px-4 py-2 text-center text-sm text-notice">
+        This is an example centre. <Link to="/setup" className="font-semibold underline">Make it mine</Link>
+      </div>
+    );
+  }
   if (!onLink && (trial?.ends_at || trial?.read_only)) {
     const days = Math.ceil((Date.parse(trial.ends_at) - Date.now()) / 86400000);
     return (

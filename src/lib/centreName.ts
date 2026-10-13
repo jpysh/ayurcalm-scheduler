@@ -5,7 +5,7 @@ import { PRODUCT } from "../../server/src/product";
 
 export type DemoInfo = { email: string; password: string; next_reset: string };
 export type TrialInfo = { started_at: string | null; ends_at: string | null; read_only: boolean; plan: string | null; paid_until: string | null };
-type Support = { centre_name?: string; patient_support_whatsapp?: string | null; demo?: DemoInfo; trial?: TrialInfo; made_with?: string };
+type Support = { centre_name?: string; example?: boolean; patient_support_whatsapp?: string | null; demo?: DemoInfo; trial?: TrialInfo; made_with?: string };
 
 // One request for the whole page: the login screen and the demo banner both read it.
 let support: Promise<Support | null> | null = null;
@@ -23,6 +23,13 @@ export function useDemo() {
   const [demo, setDemo] = useState<DemoInfo | null>(null);
   useEffect(() => { loadSupport().then((d) => setDemo(d?.demo ?? null)); }, []);
   return demo;
+}
+
+/** True while an install shows its example centre (#728), never on the public demo. */
+export function useExample() {
+  const [example, setExample] = useState(false);
+  useEffect(() => { loadSupport().then((d) => setExample(!!d?.example)); }, []);
+  return example;
 }
 
 /** Set only on a cloud trial (#247): when its 30 days end, and whether they have. */

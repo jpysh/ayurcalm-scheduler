@@ -74,7 +74,6 @@ const App = () => {
         <Sonner />
         <ConfirmHost />
         <div className="min-h-screen flex flex-col">
-          <DemoBanner />
           {!serverOk && (
             <div className="px-3 pt-2">
               <Callout tone="alert" title={isOnline ? "Changes may not save" : "You are offline"}>
@@ -83,6 +82,7 @@ const App = () => {
             </div>
           )}
           <BrowserRouter>
+            <DemoBanner />
             <Routes>
               <Route path="/" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
               <Route path="/login" element={<Login />} />

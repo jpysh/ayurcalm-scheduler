@@ -1,0 +1,5 @@
+# A new centre opens on a working example day, then Make it mine
+
+13 Oct 2026, #727–#730, decided by the maintainer.
+
+The goal is a stranger reaching a printed day sheet for their own centre in the fewest taps. Sign-up goes straight in, with no email to find first (#727). A trial, like a fresh self-host install, opens on today's example day of a residential wellness centre under the centre's own name, labelled as an example with one link, Make it mine (#728); the lite seed takes about 4 seconds, so the earlier reason for starting trials empty no longer holds. Make it mine is three steps: therapists, rooms and therapies, tomorrow's residents (typed or pasted), and one tap plans the day (#729). Step one offers setup by WhatsApp, free during the trial. Two timings per trial, to the example and to the first printed sheet, tell the maintainer whether it works (#730). The example never names the pilot centre. Left out: other kinds of example (spa, physio) until one signs up; onboarding tours; pricing in the first session.
