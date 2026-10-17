@@ -106,8 +106,10 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
         <nav aria-label="Main" data-kit="bar" className="pointer-events-none fixed inset-x-[var(--bar-gap)] bottom-[calc(var(--bar-gap)+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl justify-end gap-3">
           {/* The screen's one main action, beside the menu and only where it means something (#313). */}
           {plus ? <button type="button" aria-label={plus.adds} onClick={plus.run} className="pointer-events-auto grid h-[var(--bar-h)] w-[var(--bar-h)] place-items-center rounded-full bg-primary text-primary-foreground shadow-float active:bg-[hsl(var(--primary-hover))]"><Plus className="h-7 w-7" /></button> : null}
-          <button ref={menuBtn} type="button" aria-label="Menu" onClick={() => setSheet("menu")} className="pointer-events-auto relative grid h-[var(--bar-h)] w-[var(--bar-h)] place-items-center rounded-full bg-primary text-primary-foreground shadow-float active:bg-[hsl(var(--primary-hover))]">
+          <button ref={menuBtn} type="button" aria-label="Menu" aria-describedby={inbox ? "menu-count" : undefined} onClick={() => setSheet("menu")} className="pointer-events-auto relative grid h-[var(--bar-h)] w-[var(--bar-h)] place-items-center rounded-full bg-primary text-primary-foreground shadow-float active:bg-[hsl(var(--primary-hover))]">
             <Menu className="h-6 w-6" />
+            {/* The count is the button's description, so a screen reader hears what needs the admin (#843). */}
+            {inbox ? <span id="menu-count" className="sr-only">{inbox.need ? `${inbox.need} need you` : `${inbox.info} to know`}</span> : null}
             {inbox ? <span aria-hidden className={`absolute -right-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full border-2 border-background px-1 text-xs font-bold text-white ${inbox.need ? "bg-destructive" : "bg-muted-foreground"}`}>{inbox.need || inbox.info}</span> : null}
           </button>
         </nav>
