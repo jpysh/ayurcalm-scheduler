@@ -69,7 +69,7 @@ export default function MakeItMine() {
       setWhatsapp(s?.support_whatsapp || "");
     }).catch(() => {});
     fetch(`${API_BASE}/rooms`).then((r) => r.json()).then((l) => setRooms((Array.isArray(l) ? l : []).filter((r) => r.is_active !== false).map((r) => ({ id: r.id, name: r.name, on: true })))).catch(() => {});
-    fetch(`${API_BASE}/therapies`).then((r) => r.json()).then((l) => setTherapies((Array.isArray(l) ? l : []).filter((t) => t.is_active !== false && !t.is_consultation).map((t) => ({ id: t.id, name: t.name, on: true })))).catch(() => {});
+    fetch(`${API_BASE}/therapies`).then((r) => r.json()).then((l) => setTherapies((Array.isArray(l) ? l : []).filter((t) => t.is_active !== false && !t.is_consultation).map((t) => ({ id: t.id, name: t.name, on: true })).sort((a, b) => a.name.localeCompare(b.name)))).catch(() => {});
   }, []);
 
   const team = [...doctors.map((p) => ({ ...p, doctor: true })), ...therapists.map((p) => ({ ...p, doctor: false }))];
@@ -105,17 +105,19 @@ export default function MakeItMine() {
         if (r.ok) { added++; if (visit) booked++; }
       }
       toast.success(list.length === 0 ? `Welcome, ${centre.trim()}`
-        : added < list.length ? `${added} of ${list.length} residents added. Add the rest from Residents.`
-        : booked < added ? `${plural(added, "resident")} added; ${booked} consultations fit tomorrow. Book the rest from each card.`
-        : sheet.length ? `${plural(added, "resident")} added, each with a consultation on arrival.`
-        : `${plural(added, "resident")} arrive tomorrow, each with a consultation.`);
+        : added < list.length ? `${added} of ${list.length} patients added. Add the rest from Patients.`
+        : booked < added ? `${plural(added, "patient")} added; ${booked} consultations fit tomorrow. Book the rest from each card.`
+        : sheet.length ? `${plural(added, "patient")} added, each with a consultation on arrival.`
+        : `${plural(added, "patient")} arrive tomorrow, each with a consultation.`);
       navigate(`/admin/schedule?date=${tomorrow}`);
       setTimeout(() => window.location.reload(), 400);
     } finally { setBusy(false); }
   };
 
-  const foot = (ok: boolean, label: string, back?: number) => (
+  // A greyed button says what it waits for (#841).
+  const foot = (ok: boolean, label: string, back?: number, why?: string) => (
     <div className="mt-5 grid gap-1">
+      {!ok && why && !busy ? <p className={`${noteText} text-center`}>{why}</p> : null}
       <Btn kind="primary" type="submit" disabled={!ok || busy}>{label}</Btn>
       {back ? <Btn kind="quiet" disabled={busy} onClick={() => setStep(back)}>Back</Btn> : <Btn kind="quiet" disabled={busy} onClick={() => navigate("/admin/schedule")}>Not now</Btn>}
     </div>
@@ -128,13 +130,13 @@ export default function MakeItMine() {
         <form onSubmit={(e) => { e.preventDefault(); setStep(2); }}>
           {whatsapp ? <p className={`mt-3 ${noteText}`}>Rather we set it up? <a className="font-semibold underline" href={`https://wa.me/${whatsapp.replace(/\D/g, "")}`}>Send us your list on WhatsApp</a>, free during the trial.</p> : null}
           <Text label="Centre name" value={centre} onChange={(e) => setCentre(e.target.value)} note="On the app and the printed day sheet." />
-          <Area label="Doctors" rows={3} value={doctorsText} placeholder={"One name per line"} note="They see each new resident first."
+          <Area label="Doctors" rows={3} value={doctorsText} placeholder={"One name per line"} note="They see each new patient first."
             onChange={(e) => { setDoctorsText(e.target.value); setDoctors(names(e.target.value, doctors)); }} />
           <WhoIs people={doctors} set={setDoctors} />
           <Area label="Therapists" rows={10} value={therapistsText} placeholder={"One name per line, or paste a list"}
             onChange={(e) => { setTherapistsText(e.target.value); setTherapists(names(e.target.value, therapists)); }} />
           <WhoIs people={therapists} set={setTherapists} />
-          {foot(teamOk, "Continue")}
+          {foot(teamOk, "Continue", undefined, !centre.trim() ? "Add the centre's name." : !doctors.length ? "Add at least one doctor." : !therapists.length ? "Add at least one therapist." : "Choose Woman or Man for each person.")}
         </form>
       )}
 
@@ -152,18 +154,18 @@ export default function MakeItMine() {
           <Group label="Therapies you give" note={`${therapies.filter((t) => t.on).length} of ${therapies.length}. Untick any you do not give; lengths and prices are in Settings.`}>
             {therapies.map((t, i) => <Tick key={t.id} label={t.name} on={t.on} set={(on) => setTherapies((all) => all.map((x, j) => (j === i ? { ...x, on } : x)))} />)}
           </Group>
-          {foot(kitOk, "Continue", 1)}
+          {foot(kitOk, "Continue", 1, "Keep at least one room with a name and one therapy.")}
         </form>
       )}
 
       {step === 3 && (
         <form onSubmit={(e) => { e.preventDefault(); void finish(); }}>
-          <Area label="Residents" rows={8} value={residentsText} placeholder={"One name per line, or paste a list"}
+          <Area label="Patients" rows={8} value={residentsText} placeholder={"One name per line, or paste a list"}
             note="Each gets a consultation tomorrow and a two-week stay; change either on their card. Rows pasted from a spreadsheet keep their own dates."
             onChange={(e) => void readResidents(e.target.value)} />
           <FromFile onText={(t) => void readResidents(t)} />
           {sheet.length ? <ResidentRows rows={sheet} set={setSheet} /> : <WhoIs people={residents} set={setResidents} />}
-          {foot(residentsOk && !busy, busy ? "Setting up…" : arriving ? `Plan ${sheet.length ? "arrivals" : "tomorrow"} for ${plural(arriving, "resident")}` : "Finish without residents", 2)}
+          {foot(residentsOk && !busy, busy ? "Setting up…" : arriving ? `Plan ${sheet.length ? "arrivals" : "tomorrow"} for ${plural(arriving, "patient")}` : "Finish without patients", 2, sheet.length ? "Fix the rows in red first." : "Choose Woman or Man for each patient.")}
         </form>
       )}
     </FullPage>
