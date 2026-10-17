@@ -553,9 +553,19 @@ const btnKinds = { primary: "bg-primary text-primary-foreground", secondary: "bo
 const btnClass = (kind: keyof typeof btnKinds, inline?: boolean) => `inline-flex min-h-11 items-center justify-center rounded-full ${kind === "quiet" || kind === "destructive" ? "px-2" : "px-4"} font-semibold disabled:opacity-50 ${inline ? "" : "w-full"} ${btnKinds[kind]}`;
 
 /** A button that says its action: primary (fill), secondary (border), quiet (text) or destructive (alert text). One primary per view. `inline` gives it its own width, not the row's. */
-export const Btn = ({ kind = "secondary", inline, className = "", ...rest }: { kind?: keyof typeof btnKinds; inline?: boolean } & ButtonHTMLAttributes<HTMLButtonElement>) => (
-  <button type="button" {...rest} className={`${btnClass(kind, inline)} ${className}`} />
-);
+export const Btn = ({ kind = "secondary", inline, className = "", onClick, disabled, ...rest }: { kind?: keyof typeof btnKinds; inline?: boolean } & ButtonHTMLAttributes<HTMLButtonElement>) => {
+  // A save on a slow network is tapped again; while its promise is out, further taps do nothing (#849).
+  const [busy, setBusy] = useState(false);
+  const out = useRef(false);
+  return (
+    <button type="button" {...rest} disabled={disabled || busy} aria-busy={busy || undefined} className={`${btnClass(kind, inline)} ${className}`}
+      onClick={(e) => {
+        if (out.current) return;
+        const r: unknown = onClick?.(e);
+        if (r instanceof Promise) { out.current = true; setBusy(true); r.finally(() => { out.current = false; setBusy(false); }); }
+      }} />
+  );
+};
 
 /** A button that leaves the app (WhatsApp, a PDF): a link, so it opens in a new tab, in a button's look. */
 export const LinkBtn = ({ kind = "secondary", inline, className = "", ...rest }: { kind?: keyof typeof btnKinds; inline?: boolean } & AnchorHTMLAttributes<HTMLAnchorElement>) => (
