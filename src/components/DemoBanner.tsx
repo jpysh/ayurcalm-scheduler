@@ -25,7 +25,7 @@ export function DemoBanner() {
           ? "Payment is overdue, so the centre is read-only. Nothing is deleted: Settings → Plan to carry on."
           : trial.read_only
           ? "Your free trial has ended. Nothing is deleted: download everything from Settings, or choose a plan to keep going."
-          : `Free trial: ${days} ${days === 1 ? "day" : "days"} left.`}
+          : `Free trial: ${days} ${days === 1 ? "day" : "days"} left, to ${new Date(trial.ends_at).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }).replace(",", "")}.`}
       </div>
     );
   }
