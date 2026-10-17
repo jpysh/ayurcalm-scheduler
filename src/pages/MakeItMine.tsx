@@ -105,10 +105,10 @@ export default function MakeItMine() {
         if (r.ok) { added++; if (visit) booked++; }
       }
       toast.success(list.length === 0 ? `Welcome, ${centre.trim()}`
-        : added < list.length ? `${added} of ${list.length} residents added. Add the rest from Residents.`
-        : booked < added ? `${plural(added, "resident")} added; ${booked} consultations fit tomorrow. Book the rest from each card.`
-        : sheet.length ? `${plural(added, "resident")} added, each with a consultation on arrival.`
-        : `${plural(added, "resident")} arrive tomorrow, each with a consultation.`);
+        : added < list.length ? `${added} of ${list.length} patients added. Add the rest from Patients.`
+        : booked < added ? `${plural(added, "patient")} added; ${booked} consultations fit tomorrow. Book the rest from each card.`
+        : sheet.length ? `${plural(added, "patient")} added, each with a consultation on arrival.`
+        : `${plural(added, "patient")} arrive tomorrow, each with a consultation.`);
       navigate(`/admin/schedule?date=${tomorrow}`);
       setTimeout(() => window.location.reload(), 400);
     } finally { setBusy(false); }
@@ -128,7 +128,7 @@ export default function MakeItMine() {
         <form onSubmit={(e) => { e.preventDefault(); setStep(2); }}>
           {whatsapp ? <p className={`mt-3 ${noteText}`}>Rather we set it up? <a className="font-semibold underline" href={`https://wa.me/${whatsapp.replace(/\D/g, "")}`}>Send us your list on WhatsApp</a>, free during the trial.</p> : null}
           <Text label="Centre name" value={centre} onChange={(e) => setCentre(e.target.value)} note="On the app and the printed day sheet." />
-          <Area label="Doctors" rows={3} value={doctorsText} placeholder={"One name per line"} note="They see each new resident first."
+          <Area label="Doctors" rows={3} value={doctorsText} placeholder={"One name per line"} note="They see each new patient first."
             onChange={(e) => { setDoctorsText(e.target.value); setDoctors(names(e.target.value, doctors)); }} />
           <WhoIs people={doctors} set={setDoctors} />
           <Area label="Therapists" rows={10} value={therapistsText} placeholder={"One name per line, or paste a list"}
@@ -158,12 +158,12 @@ export default function MakeItMine() {
 
       {step === 3 && (
         <form onSubmit={(e) => { e.preventDefault(); void finish(); }}>
-          <Area label="Residents" rows={8} value={residentsText} placeholder={"One name per line, or paste a list"}
+          <Area label="Patients" rows={8} value={residentsText} placeholder={"One name per line, or paste a list"}
             note="Each gets a consultation tomorrow and a two-week stay; change either on their card. Rows pasted from a spreadsheet keep their own dates."
             onChange={(e) => void readResidents(e.target.value)} />
           <FromFile onText={(t) => void readResidents(t)} />
           {sheet.length ? <ResidentRows rows={sheet} set={setSheet} /> : <WhoIs people={residents} set={setResidents} />}
-          {foot(residentsOk && !busy, busy ? "Setting up…" : arriving ? `Plan ${sheet.length ? "arrivals" : "tomorrow"} for ${plural(arriving, "resident")}` : "Finish without residents", 2)}
+          {foot(residentsOk && !busy, busy ? "Setting up…" : arriving ? `Plan ${sheet.length ? "arrivals" : "tomorrow"} for ${plural(arriving, "patient")}` : "Finish without patients", 2)}
         </form>
       )}
     </FullPage>

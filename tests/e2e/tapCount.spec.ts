@@ -502,10 +502,10 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await tap(page.getByRole('button', { name: 'Man', exact: true }).nth(1));
       await tap(page.getByRole('button', { name: 'Continue' }));
       await tap(page.getByRole('button', { name: 'Continue' }));
-      await page.getByLabel('Residents').fill('Meera');
+      await page.getByLabel('Patients').fill('Meera');
       await tap(page.getByRole('button', { name: 'Woman', exact: true }));
       await page.route('**/api/settings/make-it-mine', (r) => r.fulfill({ status: 503, json: { error: 'Not saved by the tap count' } }));
-      await tap(page.getByRole('button', { name: /^Plan tomorrow for 1 resident/ }));
+      await tap(page.getByRole('button', { name: /^Plan tomorrow for 1 patient/ }));
       await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Not saved by the tap count' })).toBeVisible({ timeout: 15000 });
       await page.unroute('**/api/settings/make-it-mine');
     });

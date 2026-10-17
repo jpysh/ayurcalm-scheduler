@@ -85,15 +85,15 @@ export function ResidentsFromSheet({ open, onClose, onAdded }: { open: boolean; 
     }
     const added = created.length;
     setBusy(false);
-    if (added < rows.length) toast.error(`${added} of ${rows.length} residents added. Try the rest again.`); else toast.success(`${plural(added, "resident")} added`);
+    if (added < rows.length) toast.error(`${added} of ${rows.length} patients added. Try the rest again.`); else toast.success(`${plural(added, "patient")} added`);
     setRows([]);
     onAdded(created);
     onClose();
   };
   return (
-    <BottomSheet open={open} onOpenChange={(o) => { if (!o) { setRows([]); onClose(); } }} title="Residents from a spreadsheet"
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) { setRows([]); onClose(); } }} title="Patients from a spreadsheet"
       note="Name, gender, arriving, leaving and phone. Copy the rows from Excel or Google Sheets and paste them, or choose a CSV."
-      foot={<Btn kind="primary" disabled={!ready || busy} onClick={() => void save()}>{busy ? "Adding…" : rows.length ? `Add ${plural(rows.length, "resident")}` : "Add residents"}</Btn>}>
+      foot={<Btn kind="primary" disabled={!ready || busy} onClick={() => void save()}>{busy ? "Adding…" : rows.length ? `Add ${plural(rows.length, "patient")}` : "Add patients"}</Btn>}>
       <Area label="Rows" rows={4} placeholder="Paste here" onChange={(e) => void read(e.target.value)} />
       <FromFile onText={(t) => void read(t)} />
       {rows.length ? <ResidentRows rows={rows} set={setRows} /> : null}
