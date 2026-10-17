@@ -128,7 +128,8 @@ export default function MakeItMine() {
     <FullPage title={step === 3 && sheet.length ? "Who is arriving?" : TITLES[step]} note={`Step ${step} of 3. The example goes when you finish; hours and the rest are in Settings.`}>
       {step === 1 && (
         <form onSubmit={(e) => { e.preventDefault(); setStep(2); }}>
-          {whatsapp ? <p className={`mt-3 ${noteText}`}>Rather we set it up? <a className="font-semibold underline" href={`https://wa.me/${whatsapp.replace(/\D/g, "")}`}>Send us your list on WhatsApp</a>, free during the trial.</p> : null}
+          {/* The link's padding makes it 44 high to a thumb without spacing out the sentence's lines. */}
+          {whatsapp ? <p className={`mt-3 ${noteText}`}>Rather we set it up? <a className="py-3.5 font-semibold underline" href={`https://wa.me/${whatsapp.replace(/\D/g, "")}`}>Send us your list on WhatsApp</a>, free during the trial.</p> : null}
           <Text label="Centre name" value={centre} onChange={(e) => setCentre(e.target.value)} note="On the app and the printed day sheet." />
           <Area label="Doctors" rows={3} value={doctorsText} placeholder={"One name per line"} note="They see each new patient first."
             onChange={(e) => { setDoctorsText(e.target.value); setDoctors(names(e.target.value, doctors)); }} />
