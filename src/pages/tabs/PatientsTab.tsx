@@ -70,7 +70,9 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRule
     if (s.on_site === false && s.start_date.slice(0, 10) === s.end_date.slice(0, 10)) return 'Day patient';
     const n = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(s.start_date)) / DAY_MS) + 1;
     const of = Math.round((Date.parse(s.end_date) - Date.parse(s.start_date)) / DAY_MS) + 1;
-    return `Day ${n} of ${of} · leaves ${stayDay(s.end_date)}`;
+    // Under Leaving today a date is a puzzle; today and tomorrow are said in words (#836).
+    const left = of - n;
+    return `Day ${n} of ${of} · leaves ${left === 0 ? "today" : left === 1 ? "tomorrow" : stayDay(s.end_date)}`;
   };
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
   // Guests whose stay starts in the next week, nearest first.
