@@ -13,6 +13,9 @@ import { BottomSheet, Empty, ListGroup, Row, Seg, SheetFoot, Switch, Text, noteT
 type Role = "admin" | "staff";
 type User = { id: string; email: string; name: string | null; role: Role; is_active: boolean; last_login: string | null };
 
+const isMe = (u: User) => { try { return u.email === localStorage.getItem("authUser"); } catch { return false; } };
+const day = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+const signedIn = (iso: string) => (day(new Date(iso)) === day(new Date()) ? "today" : `on ${day(new Date(iso))}`);
 const blankDraft = { email: "", name: "", role: "staff" as Role, password: "" };
 const sent = (path: string, method: string, body?: unknown) => fetch(`${API_BASE}${path}`, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
 
@@ -83,10 +86,12 @@ export const UsersSection = ({ onCount }: { onCount?: (n: number) => void }) => 
       </BottomSheet>
 
       <BottomSheet open={!!one} onOpenChange={(o) => { if (!o) setOne(null); }} title={one?.name || one?.email || ""} note={one?.name ? one.email : undefined}
-        foot={one ? <SheetFoot save={() => remove(one)} label="Delete this person" tone="destructive" /> : undefined}>
-        {one ? (<>
+        foot={one && !isMe(one) ? <SheetFoot save={() => remove(one)} label="Delete this person" tone="destructive" /> : undefined}>
+        {/* The server refuses switching off or deleting yourself; the sheet says so first instead of offering it. */}
+        {one && isMe(one) ? <p className={`mt-1 ${noteText}`}>This is you. Change your own password from Your account; another administrator can change your role or switch you off.</p> : null}
+        {one && !isMe(one) ? (<>
           <div className="mt-1"><Seg<Role> options={[["staff", "Staff"], ["admin", "Admin"]]} value={one.role} onChange={(role) => patch(one, { role })} /></div>
-          <Switch label="Can sign in" note={one.last_login ? `Last signed in ${new Date(one.last_login).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : "Has not signed in yet"} on={one.is_active} set={(v) => patch(one, { is_active: v })} />
+          <Switch label="Can sign in" note={one.last_login ? `Last signed in ${signedIn(one.last_login)}` : "Has not signed in yet"} on={one.is_active} set={(v) => patch(one, { is_active: v })} />
           <Text label="New password" autoComplete="off" note="At least 8 characters." value={password} onChange={(e) => setPassword(e.target.value)} />
           <Btn kind="secondary" className="mt-2" disabled={busy || password.length < 8} onClick={() => setPass(one)}>Set their password</Btn>
         </>) : null}
