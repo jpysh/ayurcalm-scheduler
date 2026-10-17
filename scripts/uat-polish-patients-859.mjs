@@ -1,0 +1,23 @@
+// node scripts/uat-polish-patients-859.mjs before|after — #859 at 375x812 and 200%: a patient's treatments in Details, Plan next week's button.
+import { chromium } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';
+const WHEN = process.argv[2] || 'after';
+const OUT = 'docs/design/uat/polish-patients-859';
+mkdirSync(OUT, { recursive: true });
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+const p = await ctx.newPage();
+const dlg = () => p.getByRole('dialog').last();
+const shot = async (name) => { await p.waitForTimeout(700); await p.screenshot({ path: `${OUT}/${name}-${WHEN}.png` }); await p.evaluate(() => { document.documentElement.style.fontSize = '200%'; }); await p.waitForTimeout(400); await p.screenshot({ path: `${OUT}/${name}-${WHEN}-200.png` }); await p.evaluate(() => { document.documentElement.style.fontSize = ''; }); };
+const card = async () => { await p.goto(`${APP}/admin/patients`); await p.waitForTimeout(1800); await p.getByRole('button', { name: /^Riya Sharma/ }).first().click(); await p.waitForTimeout(1000); };
+await card();
+await dlg().getByRole('button', { name: /^Details/ }).click(); await p.waitForTimeout(1200);
+await dlg().getByText(/^Show all/).scrollIntoViewIfNeeded();
+await shot('details-treatments');
+await card();
+await dlg().getByRole('button', { name: 'Plan next week' }).click(); await p.waitForTimeout(1500);
+await shot('plan-next-week');
+await b.close();

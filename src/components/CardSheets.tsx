@@ -469,7 +469,7 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
   return (
     <BottomSheet open={!!patient} onOpenChange={(o) => { if (!o) onClose(); }} title={patient ? `Next week · ${first(patient.name)}` : "Next week"}
       note={plan?.lines.length ? `${dayText(plan.from)} to ${dayText(plan.to)}, as this week. Untick or swap a line; all of it is booked or none.` : starting && weekDays > 0 ? `Tick what they start with. Each is booked on every day, ${dayText(plan!.from)} to ${dayText(plan!.to)}; all of it or none.` : undefined}
-      foot={plan && (plan.lines.length || plan.review || (starting && therapies.length)) ? <Foot label={count ? `Book all ${count}` : "Nothing ticked"} ok={count > 0} busy={busy} save={bookAll} /> : undefined}>
+      foot={plan && (plan.lines.length || plan.review || (starting && therapies.length)) ? <Foot label={count > 1 ? `Book all ${count}` : count ? "Book it" : "Nothing ticked"} ok={count > 0} busy={busy} save={bookAll} /> : undefined}>
       {plan === null ? <Loading rows={3} /> : (<>
         {plan.brief ? <ListGroup title="Doctor's plan"><TextRow label="The brief for this week">{plan.brief}</TextRow></ListGroup> : null}
         <ListGroup title="Therapies">

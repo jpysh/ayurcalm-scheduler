@@ -18,8 +18,13 @@ import type { AttentionItem } from "@/lib/attention";
 
 type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; preferredStaffId?: string | null; requiresPreferredStaff?: boolean };
 
+/** Today and what is coming, soonest first, then what was given, latest first: nearest to today either way, but read as two runs instead of hopping between past and future. */
+const byNearest = (today: string) => (a: { scheduled_date: string; start_time: string }, b: { scheduled_date: string; start_time: string }) => {
+  const ka = `${a.scheduled_date.slice(0, 10)} ${a.start_time}`, kb = `${b.scheduled_date.slice(0, 10)} ${b.start_time}`;
+  const fa = ka >= today, fb = kb >= today;
+  return fa !== fb ? (fa ? -1 : 1) : fa ? ka.localeCompare(kb) : kb.localeCompare(ka);
+};
 /** "26 Sep": a stay is whole days, so no time. */
-const longDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const stayDay = (iso?: string) => (iso ? dayText(iso) : '');
 /** One day reads once: a day patient's visit is not 'Fri 9 Oct to Fri 9 Oct' (#720). */
 const stayRange = (s: { start_date: string; end_date: string }) => s.start_date.slice(0, 10) === s.end_date.slice(0, 10) ? stayDay(s.start_date) : `${stayDay(s.start_date)} to ${stayDay(s.end_date)}`;
@@ -669,7 +674,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           </ListGroup>
           {/* Nearest to today first: that is what is asked about; the rest is one tap away. */}
           <ListGroup title="Treatments" count={infoAppointments?.length}>
-            {infoAppointments === null ? <Loading rows={2} /> : infoAppointments.length ? [...infoAppointments].sort((a, b) => Math.abs(Date.parse(a.scheduled_date) - Date.parse(today)) - Math.abs(Date.parse(b.scheduled_date) - Date.parse(today))).slice(0, allTx ? undefined : 8).map((a) => <Row key={a.id} title={`${longDay(a.scheduled_date)} · ${a.start_time}`} facts={[therapyNameById[String(a.therapy_id)] || 'Treatment', recordLine(a)].filter(Boolean).join(' · ')} flag={a.status === 'cancelled' ? `Cancelled${a.cancel_reason ? `: ${a.cancel_reason}` : ''}` : undefined} />) : <Empty text="No treatments yet." />}
+            {infoAppointments === null ? <Loading rows={2} /> : infoAppointments.length ? [...infoAppointments].sort(byNearest(today)).slice(0, allTx ? undefined : 8).map((a) => <Row key={a.id} title={`${a.scheduled_date.slice(0, 4) === today.slice(0, 4) ? dayText(a.scheduled_date) : dayYear(a.scheduled_date)} · ${a.start_time}`} facts={[therapyNameById[String(a.therapy_id)] || 'Treatment', recordLine(a)].filter(Boolean).join(' · ')} flag={a.status === 'cancelled' ? `Cancelled${a.cancel_reason ? `: ${a.cancel_reason}` : ''}` : undefined} />) : <Empty text="No treatments yet." />}
           </ListGroup>
           {infoAppointments && infoAppointments.length > 8 && !allTx ? <Btn kind="quiet" inline className="-ml-1 mt-2" onClick={() => setAllTx(true)}>Show all {infoAppointments.length} ›</Btn> : null}
         </>) : null}
