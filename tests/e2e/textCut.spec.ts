@@ -51,3 +51,21 @@ test('At 200% text Guest rooms shows every word whole', async ({ page }) => {
   await page.waitForTimeout(800);
   expect(await page.evaluate(cutText), 'guest rooms').toEqual([]);
 });
+
+// A row's time or count squeezed its name to a few letters, and Search's segments overlapped (#855).
+test('At 200% text Events, Diet plans, Therapies and Search show every word whole', async ({ page }) => {
+  await signIn(page);
+  for (const tab of ['events', 'diet', 'therapies']) {
+    await page.goto(`/admin/${tab}`);
+    await big(page);
+    await page.waitForTimeout(800);
+    expect(await page.evaluate(cutText), tab).toEqual([]);
+  }
+  await page.goto('/admin/schedule');
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Search/ }).click();
+  await page.getByRole('navigation', { name: 'Search' }).getByRole('textbox').fill('anj');
+  await big(page);
+  await page.waitForTimeout(800);
+  expect(await page.evaluate(cutText), 'search').toEqual([]);
+});

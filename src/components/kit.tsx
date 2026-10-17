@@ -180,10 +180,11 @@ export const Tick = ({ label, on, set }: { label: ReactNode; on: boolean; set: (
 /** One of a few, all in view. */
 export function Seg<T extends string | number>({ options, value, onChange }: { options: [T, string][]; value: T; onChange: (v: T) => void }) {
   return (
-    <div className="grid gap-1 rounded-xl bg-secondary p-1" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
+    // Wraps to a second line at large text instead of drawing one label over the next.
+    <div className="flex flex-wrap gap-1 rounded-xl bg-secondary p-1">
       {options.map(([v, l]) => (
         <button key={String(v)} type="button" aria-pressed={value === v} onClick={() => onChange(v)}
-          className="min-h-11 min-w-0 rounded-lg border border-transparent text-base font-medium text-foreground/75 transition-colors aria-pressed:bg-card aria-pressed:font-semibold aria-pressed:text-foreground aria-pressed:border-input/40">{l}</button>
+          className="min-h-11 min-w-fit flex-[1_1_0] whitespace-nowrap rounded-lg border px-2 border-transparent text-base font-medium text-foreground/75 transition-colors aria-pressed:bg-card aria-pressed:font-semibold aria-pressed:text-foreground aria-pressed:border-input/40">{l}</button>
       ))}
     </div>
   );
@@ -266,9 +267,9 @@ export function BottomSearch({ value, onChange, onClose, placeholder, label }: {
   // After the menu's own focus handling has finished; a phone still counts it as the tap that opened search, so the keyboard rises.
   useEffect(() => { const t = setTimeout(() => input.current?.focus(), 30); return () => clearTimeout(t); }, []);
   return (
-  <nav aria-label="Search" data-kit="bar" onKeyDown={(e) => { if (e.key === "Escape") onClose(); }} className="fixed inset-x-[var(--bar-gap)] bottom-[calc(var(--bar-gap)+env(safe-area-inset-bottom))] z-40 mx-auto grid h-[var(--bar-h)] max-w-xl grid-cols-[auto_1fr_auto] items-center rounded-full border bg-card p-1 shadow-float">
-    <SearchIcon className="ml-3 h-5 w-5 text-muted-foreground" />
-    <input ref={input} autoFocus type="text" enterKeyHint="search" placeholder={placeholder} aria-label={label} autoComplete="off" className="h-12 min-w-0 bg-transparent px-2 text-base outline-none" value={value} onChange={(e) => onChange(e.target.value)} />
+  <nav aria-label="Search" data-kit="bar" onKeyDown={(e) => { if (e.key === "Escape") onClose(); }} className="fixed inset-x-[var(--bar-gap)] bottom-[calc(var(--bar-gap)+env(safe-area-inset-bottom))] z-40 mx-auto grid min-h-[var(--bar-h)] max-w-xl grid-cols-[auto_1fr_auto] items-center rounded-full border bg-card p-1 shadow-float">
+    <SearchIcon className="ml-3 h-5 w-5 flex-none text-muted-foreground" />
+    <input ref={input} autoFocus type="text" enterKeyHint="search" placeholder={placeholder} aria-label={label} autoComplete="off" className="min-h-12 min-w-0 bg-transparent px-2 text-base outline-none" value={value} onChange={(e) => onChange(e.target.value)} />
     <button type="button" className="min-h-12 rounded-full px-3.5 font-semibold text-primary" onClick={onClose}>Cancel</button>
   </nav>
   );
@@ -285,15 +286,16 @@ export const Tile = ({ title, facts, onClick, href }: { title: ReactNode; facts?
 export const Row = ({ title, facts, trailing, flag, onClick, href }: { title: ReactNode; facts?: ReactNode; trailing?: ReactNode; flag?: ReactNode; onClick?: () => void; /** A row that leaves the app (WhatsApp) is a link, so it can be opened in a new tab. */ href?: string }) => {
   const body = (
     <>
-      <span className="min-w-0 flex-1">
+      <span className="min-w-[min(100%,11rem)] flex-1">
         <span className="line-clamp-3 text-row font-semibold">{title}</span>
         {facts ? <span className="block text-sm text-muted-foreground">{facts}</span> : null}
         {flag ? <span className="block text-sm font-semibold text-destructive">{flag}</span> : null}
       </span>
-      {trailing ? <span className="flex-none text-sm text-muted-foreground">{trailing}</span> : null}
+      {trailing ? <span className="ml-auto flex-none text-sm text-muted-foreground">{trailing}</span> : null}
     </>
   );
-  const cls = "flex min-h-[56px] w-full items-center gap-3 border-b border-border px-3 py-2 text-left last:border-b-0";
+  // The name keeps 11rem; at large text the trailing fact goes under it rather than squeezing it to a few letters.
+  const cls = "flex min-h-[56px] w-full flex-wrap items-center gap-x-3 border-b border-border px-3 py-2 text-left last:border-b-0";
   if (href) return <a className={cls} href={href} target="_blank" rel="noopener noreferrer" onClick={onClick}>{body}</a>;
   return onClick ? <button type="button" className={cls} onClick={onClick}>{body}</button> : <div className={cls}>{body}</div>;
 };
@@ -423,11 +425,11 @@ export const SearchField = ({ value, onChange, placeholder }: { value: string; o
  * line changes in one tap. With no `onClick` and no `select` it only tells.
  */
 export const ChangeLine = ({ label, value, onClick, select, faint }: { label: string; value: ReactNode; onClick?: () => void; select?: ReactNode; faint?: boolean }) => {
-  const cls = "relative flex min-h-12 w-full items-center justify-between gap-3 border-b border-border py-2 text-left last:border-b-0";
+  const cls = "relative flex min-h-12 w-full flex-wrap items-center justify-between gap-x-3 border-b border-border py-2 text-left last:border-b-0";
   const inner = (
     <>
       <span className={noteText}>{label}</span>
-      <span className={`flex min-w-0 items-center gap-1 ${faint ? "text-muted-foreground" : "font-semibold"}`}><span className="line-clamp-3 text-right">{value}</span>{onClick || select ? <span aria-hidden className="text-muted-foreground">›</span> : null}</span>
+      <span className={`ml-auto flex min-w-[min(100%,11rem)] items-center justify-end gap-1 ${faint ? "text-muted-foreground" : "font-semibold"}`}><span className="line-clamp-3 text-right">{value}</span>{onClick || select ? <span aria-hidden className="text-muted-foreground">›</span> : null}</span>
       {select}
     </>
   );
