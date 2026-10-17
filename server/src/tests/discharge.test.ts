@@ -8,6 +8,7 @@
  */
 import 'dotenv/config';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 import { newLinkToken } from '../links.js';
 import { pageLine } from '../pdf/dischargePdf.js';
@@ -92,8 +93,16 @@ async function main() {
     // Signed out, nothing.
     assert.equal((await call('GET', `/patients/${p.id}/stays/${stay.id}/discharge`, undefined, false)).status, 401);
 
+    // A long email is printed whole, and a typed payment date reads like the others (#845).
+    const email = 'leela.menon.longname@a-long-example-domain.com';
+    await prisma.patient.update({ where: { id: p.id }, data: { email } });
+    await call('PUT', `/patients/${p.id}/stays/${stay.id}/discharge`, { payment_amount: 'Rs. 50,000', payment_mode: 'Cash', payment_date: '2030-03-30' });
+
     // Everything filled in, thirty days: still two pages.
     const pdf = Buffer.from(await (await call('GET', `/patients/${p.id}/stays/${stay.id}/discharge-pdf`)).arrayBuffer());
+    const words = execFileSync('pdftotext', ['-raw', '-', '-'], { input: pdf }).toString();
+    assert.ok(words.replace(/\n/g, '').includes(email), 'the email is printed whole, on two lines if it must');
+    assert.ok(words.includes('30 Mar 2030') && !words.includes('2030-03-30'), 'the payment date reads 30 Mar 2030');
     const pages = (pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length;
     assert.ok(pages >= 1 && pages <= 2, `the summary is ${pages} pages`);
     console.log(`discharge: number ${after.draft.no}, ${pages} page(s)`);
