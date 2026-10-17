@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { generateDailySchedulePdf } from '../pdf/dailySchedulePdf.js';
+import { generateGuestRoomsSheetPdf } from '../pdf/guestRoomsSheetPdf.js';
 import { requireDemoData } from './demoGuard.js';
 
 const API_BASE = process.env.API_BASE || `http://127.0.0.1:${process.env.PORT || 4100}/api`;
@@ -79,6 +80,17 @@ async function main() {
     const text = execFileSync('pdftotext', ['-raw', pdf, '-']).toString().replace(/\s+/g, ' ');
     assert.ok(text.includes(`${TAG} Asha ${TAG}2`), 'the day sheet prints the guest room under the name');
     assert.ok(text.includes(`${TAG} Chetan ${TAG}D`), 'and the couple\'s room');
+
+    // Three guests leaving on different days: the housekeeper's sheet prints every name and date, never an ellipsis.
+    await call('POST', '/guest-rooms', { name: `${TAG}F`, accommodation_id: house.id, beds: 3 });
+    for (const [n, end] of [['Gangadharan Venkataraman', '2030-04-08'], ['Parvathi Subramaniam', '2030-04-09'], ['Lakshminarayanan Iyer', '2030-04-10']]) {
+      assert.equal((await add(n, '2030-04-01', end, await room('F'))).status, 201);
+    }
+    const sheet = join(dir, 'rooms.pdf');
+    writeFileSync(sheet, await generateGuestRoomsSheetPdf('2030-04-03', prisma));
+    const rooms = execFileSync('pdftotext', ['-raw', sheet, '-']).toString().replace(/\s+/g, ' ');
+    assert.ok(rooms.includes(`${TAG} Lakshminarayanan Iyer until Wed 10 Apr`), `the guest rooms sheet prints the third guest whole: ${rooms}`);
+    assert.ok(!rooms.includes('…'), `and cuts no line: ${rooms}`);
     console.log('guest room stays: ok');
   } finally {
     await tidy(prisma).catch(() => {});

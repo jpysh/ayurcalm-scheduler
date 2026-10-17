@@ -97,15 +97,19 @@ export async function generateGuestRoomsSheetPdf(dateISO: string, prisma: Prisma
     if (doc.y + ROW * 3 > bottom) doc.addPage();
     head(g.type, false);
     for (const r of g.rows) {
+      const lineW = w - 20 - ROOM_W;
+      const lineFont = r.kind === 'free' || r.kind === 'staying' || r.kind === 'out' ? 'Helvetica' : 'Helvetica-Bold';
+      // A shared room's guests can outrun one line; the row grows rather than lose a name (#847).
+      const rowH = Math.max(ROW, doc.font(lineFont).fontSize(10.5).heightOfString(r.line, { width: lineW }) + 4);
       // PDFKit would carry text to a new page but leave the box behind: break before the row.
-      if (doc.y + ROW > bottom) { doc.addPage(); head(g.type, true); }
+      if (doc.y + rowH > bottom) { doc.addPage(); head(g.type, true); }
       const y = doc.y;
       if (r.kind === 'turnover' || r.kind === 'leaving' || r.kind === 'arriving') doc.rect(x + 2, y + 2, BOX, BOX).lineWidth(0.8).stroke();
       doc.font('Helvetica-Bold').fontSize(11).fillColor('#000').text(r.room, x + 20, y, { width: ROOM_W, lineBreak: false, ellipsis: true });
-      doc.font(r.kind === 'free' || r.kind === 'staying' || r.kind === 'out' ? 'Helvetica' : 'Helvetica-Bold').fontSize(10.5).fillColor(r.kind === 'free' || r.kind === 'out' ? '#666' : '#000')
-        .text(r.line, x + 20 + ROOM_W, y + 0.5, { width: w - 20 - ROOM_W, height: ROW - 2, lineBreak: false, ellipsis: true });
+      doc.font(lineFont).fontSize(10.5).fillColor(r.kind === 'free' || r.kind === 'out' ? '#666' : '#000')
+        .text(r.line, x + 20 + ROOM_W, y + 0.5, { width: lineW });
       doc.fillColor('#000');
-      doc.y = y + ROW;
+      doc.y = y + rowH;
     }
   }
 
