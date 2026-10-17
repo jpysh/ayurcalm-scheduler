@@ -67,6 +67,8 @@ test('a save refused for too many changes says so, not a guess', async ({ page }
   await sheet.getByRole('button', { name: 'Add E2E Too Many' }).click();
   await expect(page.getByText('Too many changes at once, so nothing was saved. Wait a few minutes and try again.')).toBeVisible();
   await expect(page.getByText(/consultation time|Could not save/)).toHaveCount(0);
+});
+
 test('a double tap on Add on a slow network adds the patient once', async ({ page, request }) => {
   const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
   const headers = { Authorization: `Bearer ${token}` };
