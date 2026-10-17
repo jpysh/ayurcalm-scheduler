@@ -13,7 +13,7 @@ export function DemoBanner() {
   if (example && !onLink && localStorage.getItem("authRole") === "Admin" && !pathname.startsWith("/setup") && pathname !== "/login") {
     return (
       <div role="status" className="bg-notice-bg px-4 py-2 text-center text-sm text-notice">
-        This is an example centre. <Link to="/setup/mine" className="font-semibold underline">Make it mine</Link>
+        This is an example centre. <Link to="/setup/mine" className="-my-3 inline-flex min-h-11 items-center align-middle font-semibold underline">Make it mine</Link>
       </div>
     );
   }
