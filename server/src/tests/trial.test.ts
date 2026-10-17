@@ -1,6 +1,6 @@
 // Trial clock (#247): 30 days from real use, then read-only.
 import assert from 'node:assert/strict';
-import { trialState } from '../trial.js';
+import { readOnlyRefusal, trialState } from '../trial.js';
 
 const start = new Date('2026-10-01T10:00:00Z');
 assert.equal(trialState(null).read_only, false);
@@ -12,4 +12,6 @@ const until = new Date('2026-12-01T00:00:00Z');
 assert.equal(trialState(start, Date.parse('2026-11-15T00:00:00Z'), { plan: 'founding', paid_until: until }).read_only, false);
 assert.equal(trialState(start, Date.parse('2026-12-14T23:59:00Z'), { plan: 'founding', paid_until: until }).read_only, false);
 assert.equal(trialState(start, Date.parse('2026-12-15T00:00:00Z'), { plan: 'founding', paid_until: until }).read_only, true);
+// The treatment card reads `message`: an ended trial's note said only "That could not be saved" (#869).
+for (const paying of [false, true]) { const r = readOnlyRefusal(paying); assert.ok(r.message.length > 20); assert.equal(r.message, r.error); }
 console.log('trial clock ok');

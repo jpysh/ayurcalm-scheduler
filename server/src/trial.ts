@@ -28,6 +28,12 @@ export async function trialInfo() {
   return trialState(s.trial_started_at, Date.now(), s);
 }
 
+/** Some screens show a refusal's `message`, others its `error`: both carry the reason, or a save says only "That could not be saved". */
+export function readOnlyRefusal(paying: boolean) {
+  const why = paying ? 'Payment is overdue, so the centre is read-only. Your data is safe; choose a plan in Settings to carry on.' : 'The 30-day trial has ended. Your data is safe: download everything from Settings, or choose a plan.';
+  return { error: why, message: why };
+}
+
 // POST /patients and the day sheet PDF are "real use"; the clock starts once they succeed.
 const STARTS = [/^\/patients$/, /^\/daily-schedule-pdf$/];
 
@@ -35,7 +41,7 @@ export async function trialGuard(req: Request, res: Response, next: NextFunction
   if (!TRIAL) return next();
   const s = await getSettings();
   if (req.method !== 'GET' && trialState(s.trial_started_at, Date.now(), s).read_only) {
-    res.status(403).json({ error: s.plan ? 'Payment is overdue, so the centre is read-only. Your data is safe; choose a plan in Settings to carry on.' : 'The 30-day trial has ended. Your data is safe: download everything from Settings, or choose a plan.' });
+    res.status(403).json(readOnlyRefusal(!!s.plan));
     return;
   }
   if (!s.trial_started_at && s.setup_complete && STARTS.some((r) => r.test(req.path)) && (req.method === 'POST' || req.path.endsWith('pdf'))) {
