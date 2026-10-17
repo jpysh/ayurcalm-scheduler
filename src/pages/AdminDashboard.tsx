@@ -24,7 +24,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout, API_TOKEN, type ApiAppointment, type ApiProgramEvent, type Patient, type UiRoom, type UiStaff, type UiTherapy, type UiTimeOff } from "./tabs/shared";
 import PageHead, { BackContext } from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
-import { Consequence, dayText, ListGroup, Row, SheetFoot, setCurrency } from "@/components/kit";
+import { Consequence, dayText, ListGroup, Row, SheetFoot, saveError, setCurrency } from "@/components/kit";
 
 /** Builds the schedule's time rows from the centre's opening hours. */
 const buildTimeSlots = (openingTime: string, closingTime: string, slotMinutes: number) => {
@@ -293,11 +293,14 @@ const AdminDashboard = () => {
   const executeDelete = async () => {
     if (!confirmDelete) return;
     const { kind, id } = confirmDelete;
+    // Closed on the first tap, so a second tap on a slow line cannot send a second delete (#876).
+    setConfirmDelete(null);
+    const headers = { ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) };
+    // A refused delete leaves everything as it was; the server removes the leave entries itself, in the same transaction.
+    const del = async (path: string) => { const res = await fetch(`${API_BASE}/${path}/${id}`, { method: 'DELETE', headers }); if (!res.ok) throw new Error(await saveError(res, 'That could not be deleted.')); };
     try {
       if (kind === 'staff') {
-        await fetch(`${API_BASE}/staff/${id}`, { method: 'DELETE', headers: { ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) } });
-        const all = await fetchJsonWithTimeout<ApiTimeOffSimple[]>(`${API_BASE}/timeoff`);
-        await Promise.all((all || []).filter(x => x.entity_type === 'staff' && x.entity_id === id).map(h => fetch(`${API_BASE}/timeoff/${h.id}`, { method: 'DELETE', headers: { ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) } })));
+        await del('staff');
         setStaff(prev => prev.filter(s => s.id !== id));
         setTimeOffs(prev => prev.filter(h => !(h.type === 'Staff' && h.entity === id)));
         setAppointmentsByDate(prev => {
@@ -308,9 +311,7 @@ const AdminDashboard = () => {
           return next;
         });
       } else if (kind === 'room') {
-        await fetch(`${API_BASE}/rooms/${id}`, { method: 'DELETE', headers: { ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) } });
-        const all = await fetchJsonWithTimeout<ApiTimeOffSimple[]>(`${API_BASE}/timeoff`);
-        await Promise.all((all || []).filter(x => x.entity_type === 'room' && x.entity_id === id).map(h => fetch(`${API_BASE}/timeoff/${h.id}`, { method: 'DELETE', headers: { ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) } })));
+        await del('rooms');
         setRoomsList(prev => prev.filter(r => r.id !== id));
         setTimeOffs(prev => prev.filter(h => !(h.type === 'Room' && h.entity === id)));
         setAppointmentsByDate(prev => {
@@ -321,17 +322,7 @@ const AdminDashboard = () => {
           return next;
         });
       } else if (kind === 'therapy') {
-        const res = await fetch(`${API_BASE}/therapies/${id}`, { method: 'DELETE', headers: { ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) } });
-        if (!res.ok) {
-          let msg = 'Failed to delete therapy';
-          try {
-            const body = await res.json();
-            if (body && body.error) msg = body.error;
-    } catch { return; }
-          throw new Error(msg);
-        }
-        const all = await fetchJsonWithTimeout<ApiTimeOffSimple[]>(`${API_BASE}/timeoff`);
-        await Promise.all((all || []).filter(x => x.entity_type === 'therapy' && x.entity_id === id).map(h => fetch(`${API_BASE}/timeoff/${h.id}`, { method: 'DELETE', headers: { ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) } })));
+        await del('therapies');
         setTimeOffs(prev => prev.filter(h => !(h.type === 'Therapy' && h.entity === id)));
         setAppointmentsByDate(prev => {
           const next: Record<string, ApiAppointment[]> = {};
@@ -345,7 +336,7 @@ const AdminDashboard = () => {
         const s2: (ApiStaff & { is_active?: boolean; status?: string })[] = await fetchJsonWithTimeout(`${API_BASE}/staff`);
         setStaff(s2.map((x) => ({ id: x.id, name: x.name, gender: x.gender === "male" ? "Male" : x.gender === "female" ? "Female" : "Other", specializations: x.specializations.map((tid) => t2.find((k) => k.id === tid)?.name).filter((n): n is string => !!n), phone: x.phone ?? "", schedule: "", hours: x.weekly_schedule, status: (typeof x.is_active === 'boolean' ? (x.is_active ? 'Active' : 'Inactive') : (x.status === 'Active' ? 'Active' : 'Inactive')) })));
       } else if (kind === 'patient') {
-        await fetch(`${API_BASE}/patients/${id}`, { method: 'DELETE', headers: { ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) } });
+        await del('patients');
         setPatients(prev => prev.filter(p => p.id !== id));
         setTimeOffs(prev => prev.filter(h => !(h.type === 'Patient' && h.entity === id)));
         setAppointmentsByDate(prev => {
@@ -358,13 +349,7 @@ const AdminDashboard = () => {
       }
       toast.success('Deleted');
     } catch (e) {
-      const msg = (e as { message?: string }).message || '';
-      if (msg && msg.includes('ERR_ABORTED')) {
-      } else {
-        toast.error('Failed to delete');
-      }
-    } finally {
-      setConfirmDelete(null);
+      toast.error((e as Error).message || 'That could not be deleted.');
     }
   };
 
