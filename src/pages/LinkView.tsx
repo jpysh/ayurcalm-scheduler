@@ -164,7 +164,7 @@ export default function LinkView() {
               {staff ? (
                 <>
                   {it.checklist?.map((c) => (
-                    <Tick key={c.text} label={<>{c.text}{c.required ? <span className="ml-2 text-sm text-muted-foreground">required</span> : null}</>} on={c.done}
+                    <Tick key={c.text} label={<>{c.text}{c.required ? <>{" "}<span className="ml-1 text-sm text-muted-foreground">required</span></> : null}</>} on={c.done}
                       set={(on) => save(it, { checklist: { [c.text]: on } }, { checklist: it.checklist!.map((x) => (x.text === c.text ? { ...x, done: on } : x)) })} />
                   ))}
                   {it.vitals?.length ? (
