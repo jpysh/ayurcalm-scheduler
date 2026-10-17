@@ -13,10 +13,13 @@ const SHORT: Record<string, string> = {
 };
 const flagsFor = (problems: { appointment_id: string | null; kind: string; problem_class: string; what?: string; start_time?: string | null }[], history: Record<string, string> = {}) =>
   Object.fromEntries([...Object.entries(history).map(([id, text]) => [id, { text, blocking: false, info: true }]), ...problems.filter((p) => p.appointment_id && p.kind !== "CONSULTED").map((p) => [p.appointment_id!, { text: partDay(p) || SHORT[p.kind] || "Needs a look", blocking: p.problem_class === "blocking" }])]);
-/** A therapist out for part of the day, said as when (#633): "Anjali leaves at 10:00", "Anjali away until 12:00". */
+/** A therapist out, by name as the menu says it (#829); part of the day said as when (#633): "Anjali leaves at 10:00", "Anjali away until 12:00". */
 const partDay = (p: { kind: string; what?: string; start_time?: string | null }) => {
-  const m = p.kind === "STAFF_OFF" ? p.what?.match(/^(\S+).* is not in from (\d\d:\d\d) to (\d\d:\d\d)/) : null;
-  return m ? (p.start_time && p.start_time < m[2] ? `${m[1]} leaves at ${m[2]}` : `${m[1]} away until ${m[3]}`) : null;
+  if (p.kind !== "STAFF_OFF") return null;
+  const m = p.what?.match(/^(\S+).* is not in from (\d\d:\d\d) to (\d\d:\d\d)/);
+  if (m) return p.start_time && p.start_time < m[2] ? `${m[1]} leaves at ${m[2]}` : `${m[1]} away until ${m[3]}`;
+  const who = p.what?.match(/^(\S+).* is not in/)?.[1];
+  return who ? `${who} not in` : null;
 };
 
 /** Minutes past midnight now, on the centre's clock. */
