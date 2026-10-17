@@ -7,9 +7,10 @@
 export function cutText() {
   const texts = [...document.querySelectorAll('body *')].filter((e) => [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()))
     // The words' own box, not the element's: a tall tap target around a short label is not text.
-    // A clamped description hides its later lines itself, so only what it shows can sit over anything.
-    .map((e) => { const g = document.createRange(); g.selectNodeContents(e); let r = g.getBoundingClientRect(); if (getComputedStyle(e).overflowY === 'hidden') { const o = e.getBoundingClientRect(); r = new DOMRect(r.left, r.top, r.width, Math.max(0, Math.min(r.bottom, o.bottom) - r.top)); } return { e, r }; })
-    .filter(({ e, r }) => r.width && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth && getComputedStyle(e).visibility !== 'hidden' && !e.closest('.sr-only'));
+    // Only the part a reader can see counts: a clamped description hides its later lines, and a
+    // sheet's list scrolls out of sight under its foot (#798).
+    .map((e) => { const g = document.createRange(); g.selectNodeContents(e); let r = g.getBoundingClientRect(); for (let a = e; a; a = a.parentElement) { if (getComputedStyle(a).overflowY === 'visible') continue; const o = a.getBoundingClientRect(); r = new DOMRect(r.left, Math.max(r.top, o.top), r.width, Math.max(0, Math.min(r.bottom, o.bottom) - Math.max(r.top, o.top))); } return { e, r }; })
+    .filter(({ e, r }) => r.width && r.height && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth && getComputedStyle(e).visibility !== 'hidden' && !e.closest('.sr-only'));
   const pinned = (e) => { for (let a = e; a; a = a.parentElement) if (['sticky', 'fixed'].includes(getComputedStyle(a).position)) return true; return false; };
   const out = new Set();
   for (const { e, r } of texts) {
