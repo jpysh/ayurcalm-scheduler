@@ -600,7 +600,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         {inline ? null : <Btn kind="quiet" inline className="-ml-1" onClick={() => { setShowAddPatient(false); setFromSheet(true); }}>Many at once? From a spreadsheet ›</Btn>}
         <Text label="Name" autoComplete="off" value={newPatient.name} valid={newPatient.name.trim().length > 1} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} />
         {/* Nothing chosen to start with (#283): a list that opened on Male made every resident one until corrected. */}
-        <Group label="Gender">
+        <Group label="Gender" note={newPatient.name.trim() && !newPatient.gender ? "Choose one to add them." : undefined}>
           <Seg options={[["Female", "Female"], ["Male", "Male"], ["Other", "Other"]]} value={newPatient.gender} onChange={(gender) => setNewPatient({ ...newPatient, gender })} />
         </Group>
         <div className={datePair}>
