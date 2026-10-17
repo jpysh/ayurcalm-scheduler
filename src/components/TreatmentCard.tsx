@@ -197,7 +197,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients
           <ChangeLine label="Treatment" value={`${say(therapyNameById[appt.therapy_id] || "Treatment")} · ${appt.duration_minutes} min`} onClick={locked || busy ? undefined : () => open("therapy")} />
           <ChangeLine label="With" value={team.map((id) => nameIn(staff, id)).join(" and ") || "No therapist"} onClick={locked || busy ? undefined : () => open("staff")} />
           <ChangeLine label="Room" value={nameIn(roomsList, appt.room_id) || "No room"} onClick={locked || busy ? undefined : () => open("room")} />
-          <ChangeLine label="Note" faint={!appt.notes} value={appt.notes || "Add a note"} onClick={locked || busy ? undefined : () => setPage("note")} />
+          <ChangeLine label="Note" faint={!appt.notes} value={appt.notes || (locked ? "None" : "Add a note")} onClick={locked || busy ? undefined : () => setPage("note")} />
           {recorded ? <ChangeLine label="Recorded" value={recorded} /> : null}
           {said ? <ChangeLine label="Patient said" value={said} /> : null}
           {locked || noShow ? null : <ChangeLine label="Something wrong?" value="Didn't come, late, cancel" onClick={() => setPage("wrong")} />}
@@ -212,7 +212,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients
     const items: [string, string, () => void][] = [
       [`${first} didn't come`, "", () => apply({ status: "no_show" }, `${first}: didn't come. Room and therapist are free.`)],
       [`${first} is running late`, "Start later ›", () => open("time")],
-      [`${first} wants to cancel`, "", () => apply({ status: "cancelled" }, `${first}'s ${say(therapyNameById[appt.therapy_id] || "treatment")} cancelled`)],
+      [`${first} wants to cancel`, "", () => apply({ status: "cancelled" }, `${first}'s ${appt.start_time} ${say(therapyNameById[appt.therapy_id] || "treatment")}${isToday ? "" : ` on ${dayText(appt.scheduled_date)}`} cancelled`)],
       ...team.map((id): [string, string, () => void] => [`${nameIn(staff, id)} is not in`, "From now", () => { onClose(); staffNotIn(id, nameIn(staff, id)); }]),
       ...(appt.room_id ? [[`${nameIn(roomsList, appt.room_id)} can't be used`, "From now", () => { onClose(); roomOut(appt.room_id!, nameIn(roomsList, appt.room_id)); }] as [string, string, () => void]] : []),
     ];
