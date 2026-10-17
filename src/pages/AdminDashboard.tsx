@@ -536,7 +536,7 @@ const AdminDashboard = () => {
   residentOpener.current = patientsScreen.openResident;
   patientAdder.current = (name, arriving, done) => patientsScreen.openAdd({ name, arriving, done });
   // The adaptive + (#285): it adds what the screen is about. A trial that has ended adds nothing and says so.
-  const guard = (adds: string, what: string, run: () => void) => ({ adds, run: () => { if (readOnly) { toast(`The free trial has ended, so nothing new can be ${what}. Nothing is deleted.`, { duration: 10000, action: { label: "Choose a plan", onClick: () => go('settings') } }); return; } run(); } });
+  const guard = (adds: string, what: string, run: () => void) => ({ adds, run: () => { if (readOnly) { toast(`The free trial has ended, so nothing new can be ${what}. Nothing is deleted.`, { duration: 10000, action: { label: "Choose a plan", onClick: () => { setSettingsSheet('help'); go('settings'); } } }); return; } run(); } });
   const dietScreen = useDietScreen({ active: activeTab === 'diet' });
   const plusFor = activeTab === 'schedule' ? guard('Book a treatment', 'booked', scheduleScreen.openBook)
     : activeTab === 'patients' ? guard('New patient', 'added', patientsScreen.openAdd)

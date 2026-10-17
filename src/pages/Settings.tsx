@@ -61,7 +61,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
 }) => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
-  const [sheet, setSheet] = useState<Sheet | null>(initialSheet === "packages" || initialSheet === "accommodation" ? "catalogues" : null);
+  const [sheet, setSheet] = useState<Sheet | null>(initialSheet === "packages" || initialSheet === "accommodation" ? "catalogues" : initialSheet === "help" ? "help" : null);
   useEffect(() => { if (initialSheet) sheetOpened?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const trial = useTrial();
   const isAdmin = typeof window !== "undefined" && localStorage.getItem("authRole") === "Admin";
