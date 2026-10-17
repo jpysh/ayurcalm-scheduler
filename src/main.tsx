@@ -24,7 +24,12 @@ if (typeof window !== "undefined") {
       window.location.assign("/login");
     }
     // The server counts calls per address; past the limit every screen would show an empty centre, with no word why (#578).
-    if (isApiCall && res.status === 429) toast.error("Too many requests at once. Wait a minute and it comes back.", { id: "too-many", duration: 10000 });
+    if (isApiCall && res.status === 429 && (init.method || "GET").toUpperCase() === "GET") toast.error("Too many requests at once. Wait a minute and it comes back.", { id: "too-many", duration: 10000 });
+    // A save shows the server's words or guesses its own ("That time has just gone"): a refused save gets the true one (#853).
+    if (isApiCall && res.status === 429 && (init.method || "GET").toUpperCase() !== "GET") {
+      const why = "Too many changes at once, so nothing was saved. Wait a few minutes and try again.";
+      return new Response(JSON.stringify({ error: why, message: why }), { status: 429, headers: { "Content-Type": "application/json" } });
+    }
     // Time off changes what is wrong with the day, wherever it was saved (#188).
     if (isApiCall && res.ok && /\/api\/(timeoff|holidays)/.test(url) && (init.method || "GET").toUpperCase() !== "GET") {
       window.dispatchEvent(new Event("timeoff-changed"));
