@@ -57,7 +57,12 @@ export async function generateDischargePdf(v: DischargeView, centre: { name: str
         const x = M + i * cell;
         doc.rect(x, y, cell, 17).lineWidth(0.5).strokeColor(LINE).stroke();
         doc.font('Helvetica').fontSize(7).fillColor('#555').text(k, x + 3, y + 5, { width: 62, height: 10, ellipsis: true, lineBreak: false });
-        doc.font('Helvetica-Bold').fontSize(8).fillColor('#000').text(val || '', x + 66, y + 4.5, { width: cell - 69, height: 10, ellipsis: true, lineBreak: false });
+        // A long email or address shrinks to fit before anything is cut: the guest takes this page home (#845).
+        const room = cell - 69;
+        doc.font('Helvetica-Bold').fontSize(8);
+        const size = Math.max(6, Math.min(8, (8 * room) / (doc.widthOfString(val || '') || 1)));
+        const two = doc.fontSize(size).widthOfString(val || '') > room;
+        doc.fillColor('#000').text(val || '', x + 66, two ? y + 1.5 : y + 4.5 + (8 - size) / 2, two ? { width: room, height: 15, lineGap: -1, ellipsis: true } : { width: room, height: 10, ellipsis: true, lineBreak: false });
       });
       doc.x = M; doc.y = y + 17;
     }
@@ -68,7 +73,7 @@ export async function generateDischargePdf(v: DischargeView, centre: { name: str
     [['Name', v.name], ['Age / gender', `${v.age ?? '—'} / ${v.gender}`], ['Admitted', when(v.from, d.admitted_time)]],
     [['Mobile', v.phone || ''], ['Email', v.email || ''], ['Discharged', when(v.to, d.discharged_time)]],
     [['Address', d.address], ['Country', d.country], ['Passport no.', d.passport]],
-    ...(d.payment_amount ? [[['Total payment', d.payment_amount], ['Mode', d.payment_mode], ['Date of payment', d.payment_date]] as [string, string][]] : []),
+    ...(d.payment_amount ? [[['Total payment', d.payment_amount], ['Mode', d.payment_mode], ['Date of payment', /^\d{4}-\d\d-\d\d$/.test(d.payment_date || '') ? nice(d.payment_date) : d.payment_date]] as [string, string][]] : []),
     [['Weight', d.weight], ['Blood pressure', d.bp], ['Bowel', d.bowel]],
     [['Appetite', d.appetite], ['Sleep', d.sleep], ['Menstrual cycle', d.menstrual]],
     [['Doshic dominance', d.dosha], ['Type of discharge', d.discharge_type], ['Doctor', v.doctor?.name || '']],
