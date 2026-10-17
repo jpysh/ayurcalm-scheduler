@@ -69,7 +69,7 @@ export default function MakeItMine() {
       setWhatsapp(s?.support_whatsapp || "");
     }).catch(() => {});
     fetch(`${API_BASE}/rooms`).then((r) => r.json()).then((l) => setRooms((Array.isArray(l) ? l : []).filter((r) => r.is_active !== false).map((r) => ({ id: r.id, name: r.name, on: true })))).catch(() => {});
-    fetch(`${API_BASE}/therapies`).then((r) => r.json()).then((l) => setTherapies((Array.isArray(l) ? l : []).filter((t) => t.is_active !== false && !t.is_consultation).map((t) => ({ id: t.id, name: t.name, on: true })))).catch(() => {});
+    fetch(`${API_BASE}/therapies`).then((r) => r.json()).then((l) => setTherapies((Array.isArray(l) ? l : []).filter((t) => t.is_active !== false && !t.is_consultation).map((t) => ({ id: t.id, name: t.name, on: true })).sort((a, b) => a.name.localeCompare(b.name)))).catch(() => {});
   }, []);
 
   const team = [...doctors.map((p) => ({ ...p, doctor: true })), ...therapists.map((p) => ({ ...p, doctor: false }))];
