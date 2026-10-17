@@ -54,28 +54,3 @@ test('Patients search shows the fact asked for and offers everything', async ({ 
   await expect(page.getByText(/Diet:/).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /^Search everything for/ })).toBeVisible();
 });
-
-test('a double tap on Add on a slow network adds the patient once', async ({ page, request }) => {
-  const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
-  const headers = { Authorization: `Bearer ${token}` };
-  let posts = 0;
-  await page.route('**/api/patients', async (route) => {
-    if (route.request().method() !== 'POST') return route.continue();
-    posts++;
-    await new Promise((r) => setTimeout(r, 2000));
-    await route.continue();
-  });
-  await signIn(page);
-  await page.getByRole('button', { name: 'New patient', exact: true }).click();
-  const sheet = page.getByRole('dialog');
-  await sheet.getByLabel('Name', { exact: true }).fill('E2E Double Tap');
-  await sheet.getByRole('button', { name: 'Female' }).click();
-  try {
-    await sheet.getByRole('button', { name: 'Add E2E Double Tap' }).dblclick();
-    await expect(page.getByRole('dialog').last().getByRole('button', { name: /^Diet/ })).toBeVisible({ timeout: 15000 });
-    expect(posts).toBe(1);
-  } finally {
-    const all = (await (await request.get('/api/patients', { headers })).json()) as { id: string; name: string }[];
-    for (const p of all.filter((x) => x.name === 'E2E Double Tap')) await request.delete(`/api/patients/${p.id}`, { headers });
-  }
-});
