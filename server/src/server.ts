@@ -85,22 +85,21 @@ app.get('/health', async (_req: Request, res: Response) => {
   res.status(statusCode).json(healthCheck);
 });
 
-// Client error capture and fetch
+// Client error capture and fetch. The row is the caller's, whatever the body says (#826).
+const short = z.string().max(500).optional();
+const clientErrorSchema = z.object({
+  message: z.string().max(2000), url: short, user_agent: short, platform: short, language: short, kind: short, time: short, connection: short,
+  online: z.boolean().optional(),
+  screen: z.object({ width: z.number().optional(), height: z.number().optional() }).optional(),
+  viewport: z.object({ width: z.number().optional(), height: z.number().optional() }).optional(),
+}).strip();
 app.post('/client-errors', async (req: Request, res: Response) => {
-  try {
-    const payload = req.body || {};
-    await prisma.auditLog.create({ data: {
-      admin_id: String((payload && (payload.user_id || payload.userId)) || 'admin'),
-      action: 'client_error',
-      entity_type: 'client',
-      entity_id: String((payload && (payload.session_id || payload.sessionId)) || 'web'),
-      old_value: payload as any,
-      new_value: Prisma.JsonNull,
-    } });
-    res.status(204).end();
-  } catch (e) {
-    res.status(500).json({ error: 'client error log failed' });
-  }
+  const payload = clientErrorSchema.parse(req.body);
+  await prisma.auditLog.create({ data: {
+    admin_id: req.user!.id, action: 'client_error', entity_type: 'client', entity_id: 'web',
+    old_value: payload, new_value: Prisma.JsonNull,
+  } });
+  res.status(204).end();
 });
 
 app.get('/client-errors', async (req: Request, res: Response) => {

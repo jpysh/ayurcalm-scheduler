@@ -88,6 +88,7 @@ run mcpPlan            "Claude's plan for a day is the one Verify shows, written
 run seedClock          "Nothing on the seeded day is marked 'didn't come' before it has started, on the centre's clock"
 run demo               "The public demo is put back to the seeded centre every six hours, on fixed hours a restart does not move"
 # Last: it locks the container's own address out of sign-in for 15 minutes.
+run clientErrors       "A browser error report is stored under whoever sent it and checked by shape"
 run signInLimit        "Ten wrong passwords and the address waits 15 minutes; every page carries a security policy"
 
 # Backups (#236): write one with the service's own script, restore the newest
