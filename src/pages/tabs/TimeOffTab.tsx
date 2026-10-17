@@ -19,7 +19,7 @@ const headers = { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-k
 
 /** Every kind in one list and one form (#695), each said in its own words. */
 const KINDS: Kind[] = ['Staff', 'Room', 'GuestRoom', 'Therapy', 'Patient'];
-const GROUP: Record<Kind, string> = { Staff: 'Staff', Room: 'Treatment rooms', GuestRoom: 'Guest rooms', Therapy: 'Therapies', Patient: 'Guests staying' };
+const GROUP: Record<Kind, string> = { Staff: 'Staff', Room: 'Treatment rooms', GuestRoom: 'Guest rooms', Therapy: 'Therapies', Patient: 'Guests staying or coming' };
 const ONE: Record<Kind, [string, string]> = { Staff: ['staff', 'staff'], Room: ['treatment room', 'treatment rooms'], GuestRoom: ['guest room', 'guest rooms'], Therapy: ['therapy', 'therapies'], Patient: ['guest', 'guests'] };
 /** What each kind's treatments will need once it is not available. */
 const NEEDS: Partial<Record<Kind, [string, string]>> = { Staff: ['treatment', 'another therapist'], Room: ['treatment', 'another room'], Therapy: ['booking', 'another day'], Patient: ['treatment', 'another time'] };
@@ -178,7 +178,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
     window.dispatchEvent(new Event('timeoff-changed'));
     const names = f.ids.map((id) => nameOf(f.kind, id)).join(', ');
     const when = s.start ? `${s.date === centreToday ? 'today' : dayText(s.date)} ${s.start}–${s.end}` : s.date === s.endDate ? dayText(s.date) : `${dayText(s.date)} to ${dayText(s.endDate)}`;
-    toast(`${names} not available ${when}${fixNow || f.kind === 'GuestRoom' ? '' : '. Anything it affects waits under "need you".'}`, { action: { label: 'Undo', onClick: async () => {
+    toast(`${names} not available ${when}${fixNow || f.kind === 'GuestRoom' ? '' : '. Anything it affects waits under "need you".'}`, { position: fixNow ? 'top-center' : undefined, action: { label: 'Undo', onClick: async () => {
       await Promise.all(made.map((h) => fetch(`${API_BASE}/timeoff/${h.id}`, { method: 'DELETE', headers })));
       setTimeOffs((prev) => prev.filter((x) => !made.some((h) => h.id === x.id)));
       window.dispatchEvent(new Event('timeoff-changed'));
