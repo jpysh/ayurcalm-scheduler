@@ -128,6 +128,8 @@ const cases: [string, () => void][] = [
     ]);
     assert.equal(lunch.total, 4);
     assert.deepEqual(lunch.counts.map((c) => [c.n, c.food]), [[2, 'Khichdi'], [1, 'Rice and dal']]);
+    // #832: the same plan twice in one meal says which side each line is.
+    assert.deepEqual(lunch.counts.map((c) => c.plan), ['Standard sattvic plan · treatment day', 'Standard sattvic plan · rest day']);
     assert.deepEqual(lunch.exceptions, [{ name: 'Dev', plan: 'Standard sattvic plan', food: 'Clear broth' }]);
   }],
 ];

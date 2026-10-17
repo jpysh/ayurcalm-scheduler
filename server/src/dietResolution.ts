@@ -52,6 +52,8 @@ export type ResolvedDiet = {
   medication: string;
   /** Meals written for this patient (an override or for this date), not the plan's: the kitchen's exceptions. */
   personal: MealKey[];
+  /** Which side of the plan this is: the kitchen names it when a plan prints twice in a meal (#832). */
+  treatmentDay: boolean;
 };
 
 export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
@@ -96,6 +98,7 @@ export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
     therapyNotes,
     medication,
     personal,
+    treatmentDay: input.hasTherapyToday,
   };
 }
 
@@ -161,7 +164,7 @@ export type KitchenMeal = {
  */
 export function kitchenMeals(people: { name: string; diet: ResolvedDiet }[]): KitchenMeal[] {
   return mealOrder.map((meal) => {
-    const counts = new Map<string, { plan: string; food: string; n: number }>();
+    const counts = new Map<string, { plan: string; food: string; n: number; treatmentDay: boolean }>();
     const exceptions: KitchenMeal['exceptions'] = [];
     for (const { name, diet } of people) {
       const plan = diet.planName || 'No diet plan';
@@ -169,11 +172,14 @@ export function kitchenMeals(people: { name: string; diet: ResolvedDiet }[]): Ki
       if (diet.personal.includes(meal)) { exceptions.push({ name, plan, food }); continue; }
       const key = `${plan}\u0000${food}`;
       const held = counts.get(key);
-      if (held) held.n++; else counts.set(key, { plan, food, n: 1 });
+      if (held) held.n++; else counts.set(key, { plan, food, n: 1, treatmentDay: diet.treatmentDay });
     }
+    // A plan on both sides at one meal reads as a mistake to the cook unless each line says its side (#832).
+    const lines = [...counts.values()];
+    const split = (plan: string) => lines.filter((o) => o.plan === plan).length > 1;
     return {
       meal,
-      counts: [...counts.values()].sort((a, b) => b.n - a.n || a.plan.localeCompare(b.plan)),
+      counts: lines.map(({ plan, food, n, treatmentDay }) => ({ plan: split(plan) ? `${plan} · ${treatmentDay ? 'treatment' : 'rest'} day` : plan, food, n })).sort((a, b) => b.n - a.n || a.plan.localeCompare(b.plan)),
       exceptions: exceptions.sort((a, b) => a.name.localeCompare(b.name)),
       total: people.length,
     };
