@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useCentreName, useDemo, useTrial } from "@/lib/centreName";
 import { useNavigate } from "react-router-dom";
 import { Btn, Callout, FullPage, More, QuietLink, Text } from "@/components/kit";
-import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 
 const Login = () => {
@@ -10,6 +9,7 @@ const Login = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
   const navigate = useNavigate();
   const demo = useDemo();
   const trial = useTrial();
@@ -30,6 +30,7 @@ const Login = () => {
 
   const signIn = async (path: "login" | "link", body: object) => {
     setIsLoading(true);
+    setError("");
     try {
       const res = await fetch(`${API_BASE}/auth/${path}`, {
         method: "POST",
@@ -38,7 +39,7 @@ const Login = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(res.status === 429 ? (data?.error || "Too many tries. Wait a few minutes and try again.") : (data?.error || "That email and password do not match."));
+        setError(res.status === 429 ? (data?.error || "Too many tries. Wait a few minutes and try again.") : res.status === 401 && path === "login" ? "That email and password do not match. Check both, or see Forgotten your password below." : (data?.error || "That email and password do not match."));
         return;
       }
       localStorage.setItem("authToken", data.token);
@@ -58,7 +59,7 @@ const Login = () => {
       }
       navigate(data.user?.role === "admin" ? "/admin/schedule" : "/staff/schedule");
     } catch {
-      toast.error("Could not reach the server. Check the connection and try again.");
+      setError("Could not reach the server. Check the connection and try again.");
     } finally {
       setIsLoading(false);
     }
@@ -74,8 +75,10 @@ const Login = () => {
         </div>
       )}
       <form onSubmit={handleLogin} className="mt-2">
-        <Text label="Email" type="email" inputMode="email" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
-        <Text label="Password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <Text label="Email" type="email" inputMode="email" autoComplete="username" value={username} onChange={(e) => { setUsername(e.target.value); setError(""); }} required />
+        <Text label="Password" type="password" autoComplete="current-password" value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }} required />
+        {/* Under the field it is about, never a toast at the far end of the screen. */}
+        {error ? <p role="alert" className="mt-2 text-sm font-semibold text-destructive">{error}</p> : null}
         <div className="mt-5"><Btn kind="primary" type="submit" disabled={isLoading}>{isLoading ? "Signing in…" : "Sign in"}</Btn></div>
       </form>
       {trial ? (
