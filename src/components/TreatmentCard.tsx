@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { BottomSheet, Btn, Callout, ChangeLine, Consequence, EntryRow, Area, Empty, Group, LineDate, LineSelect, ListGroup, Loading, Picker, Row, SearchField, SheetFoot, Seg, Tag, TwoFoot, WhoPicker, dayText, say } from "@/components/kit";
+import { BottomSheet, saveError, Btn, Callout, ChangeLine, Consequence, EntryRow, Area, Empty, Group, LineDate, LineSelect, ListGroup, Loading, Picker, Row, SearchField, SheetFoot, Seg, Tag, TwoFoot, WhoPicker, dayText, say } from "@/components/kit";
 import { API_BASE } from "@/lib/apiBase";
 import { StaySheet, type StayTarget } from "@/components/CardSheets";
 import { VITALS } from "@/components/SetupSheets";
@@ -369,7 +369,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
     else if (a.kind === "book_at" && a.date) { pendingAt.current = a.start_time; if (a.date === date) load(a.start_time); else setDate(a.date); }
     else if (a.kind === "other_therapy") { setTherapyId(""); setOpts(null); }
     else if (a.kind === "allow_any_gender" && a.therapy_id) {
-      void fetch(`${API_BASE}/therapies/${a.therapy_id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requires_gender_match: false }) }).then((r) => { if (r.ok) { toast(`${therapyName} can now be given by any therapist`); load(); } else toast.error("That could not be saved."); });
+      void fetch(`${API_BASE}/therapies/${a.therapy_id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requires_gender_match: false }) }).then(async (r) => { if (r.ok) { toast(`${therapyName} can now be given by any therapist`); load(); } else toast.error(await saveError(r)); });
     } else if (a.kind === "change_stay" && chosen) {
       void fetch(`${API_BASE}/patients/${chosen.id}/stays`).then((r) => (r.ok ? r.json() : [])).then((stays: ApiStay[]) => {
         const gap = (st: ApiStay) => Math.min(Math.abs(Date.parse(st.start_date) - Date.parse(date)), Math.abs(Date.parse(st.end_date) - Date.parse(date)));

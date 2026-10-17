@@ -608,3 +608,9 @@ export const FullPage = ({ title, note, children }: { title?: ReactNode; note?: 
 export const QuietLink = ({ className = "", ...rest }: AnchorHTMLAttributes<HTMLAnchorElement>) => (
   <a className={`inline-flex min-h-11 items-center text-sm font-semibold text-primary ${className}`} {...rest} />
 );
+
+/** A refused save says the server's reason (a closed day, a limit) rather than a bare failure (#874). */
+export async function saveError(res: Response, fallback = "That could not be saved."): Promise<string> {
+  const body = await res.clone().json().catch(() => null);
+  return body?.message || body?.error || fallback;
+}

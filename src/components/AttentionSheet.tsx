@@ -9,7 +9,7 @@
  * now. The sheet stays open and redraws as rows are dealt with.
  */
 import { useEffect, useState } from "react";
-import { InboxSheet, dayText, ItemRow, ListGroup, Row, Btn } from "@/components/kit";
+import { InboxSheet, saveError, dayText, ItemRow, ListGroup, Row, Btn } from "@/components/kit";
 import type { AttentionItem } from "@/lib/attention";
 
 export type Fix = {
@@ -193,7 +193,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
         setBusy(a.kind);
         try {
           const r = await fetch(`${apiBase}/therapies/${a.therapy_id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ staff_required: a.count }) });
-          if (!r.ok) { setError("That could not be saved."); return; }
+          if (!r.ok) { setError(await saveError(r)); return; }
           setDone({ text: `${a.label.replace(/^Let (.+) give (.+)$/, "$2 now needs $1")}.`, undo: null });
           await onChanged();
         } finally { setBusy(null); }

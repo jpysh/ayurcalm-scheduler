@@ -11,7 +11,7 @@ import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
 import PageHead from "@/components/PageHead";
 import { PhotoImg, shrinkPhoto } from "@/components/PassportPhoto";
-import { chip, Area, ChangeLine, TextRow, ChecklistBar, DateRow, datePair, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, money, Btn, LinkBtn } from "@/components/kit";
+import { chip, saveError, Area, ChangeLine, TextRow, ChecklistBar, DateRow, datePair, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, money, Btn, LinkBtn } from "@/components/kit";
 import { AccommodationSheet, DietSheet, DischargeSheet, NextWeekSheet, PackageSheet, StaySheet, takenBy, type CardStay, type GuestRoomNight, type StayTarget } from "@/components/CardSheets";
 import { marked } from "@/components/SearchScreen";
 import type { AttentionItem } from "@/lib/attention";
@@ -159,7 +159,7 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
     if (!d?.stay || !intake) return;
     const body = { vitals: intake.vitals.trim() || null, concerns: intake.concerns.trim() || null, tests: intake.tests.trim() || null };
     const res = await fetch(`${API_BASE}/patients/${d.id}/stays/${d.stay.id}/arrival`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (res.ok) { setD({ ...d, stay: { ...d.stay, ...body } }); setIntake(null); } else toast.error("That could not be saved.");
+    if (res.ok) { setD({ ...d, stay: { ...d.stay, ...body } }); setIntake(null); } else toast.error(await saveError(res));
   };
   const summary = async () => {
     if (!d?.stay) return;
@@ -223,7 +223,7 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
   useEffect(() => { if (startOn === 'followup' && d?.id === id && d?.follow_up) { setFollowUp(true); onStarted?.(); } }, [startOn, d?.id, d?.follow_up?.stay_id]); // eslint-disable-line react-hooks/exhaustive-deps
   const markFollowUp = async (done: boolean) => {
     const res = await fetch(`${API_BASE}/patients/${d!.id}/stays/${d!.follow_up!.stay_id}/follow-up`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ done }) });
-    if (!res.ok) { toast.error("That could not be saved."); return; }
+    if (!res.ok) { toast.error(await saveError(res)); return; }
     setFollowUp(false); load();
   };
   const copy = async (label: string, value: string) => {
@@ -231,7 +231,7 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
   };
   const fileFormC = async (filed: boolean) => {
     const res = await fetch(`${API_BASE}/patients/${d!.id}/stays/${up!.id}/form-c`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filed }) });
-    if (!res.ok) { toast.error("That could not be saved."); return; }
+    if (!res.ok) { toast.error(await saveError(res)); return; }
     setFormC(false); load();
   };
   // The week after the review: today's if the doctor saw them today, else the coming one, else (none booked yet, #523) today; next week repeats the week up to it and books the review.

@@ -12,7 +12,7 @@ import { API_BASE } from "@/lib/apiBase";
 import PageHead from "@/components/PageHead";
 import { BottomSheet, WeekStrip } from "@/components/BottomBar";
 import { useShareLink } from "@/components/ShareLink";
-import { Callout, ChangeLine, Empty, ListGroup, Row, dayText, plural } from "@/components/kit";
+import { Callout, saveError, ChangeLine, Empty, ListGroup, Row, dayText, plural } from "@/components/kit";
 import { roomKind } from "@/components/SetupSheets";
 import type { UiRoom, UiStaff } from "@/pages/tabs/shared";
 
@@ -105,7 +105,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   async function backInUse(id: string, name: string, e: RoomOff) {
     close();
     const res = await fetch(`${API_BASE}/timeoff/${e.id}`, { method: "DELETE" });
-    if (!res.ok) { toast.error("That could not be saved."); return; }
+    if (!res.ok) { toast.error(await saveError(res)); return; }
     await refresh();
     load();
     toast(`${name} back in use`, {
