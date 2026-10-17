@@ -7,7 +7,8 @@
 export function cutText() {
   const texts = [...document.querySelectorAll('body *')].filter((e) => [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()))
     // The words' own box, not the element's: a tall tap target around a short label is not text.
-    .map((e) => { const g = document.createRange(); g.selectNodeContents(e); return { e, r: g.getBoundingClientRect() }; })
+    // A clamped description hides its later lines itself, so only what it shows can sit over anything.
+    .map((e) => { const g = document.createRange(); g.selectNodeContents(e); let r = g.getBoundingClientRect(); if (getComputedStyle(e).overflowY === 'hidden') { const o = e.getBoundingClientRect(); r = new DOMRect(r.left, r.top, r.width, Math.max(0, Math.min(r.bottom, o.bottom) - r.top)); } return { e, r }; })
     .filter(({ e, r }) => r.width && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth && getComputedStyle(e).visibility !== 'hidden' && !e.closest('.sr-only'));
   const pinned = (e) => { for (let a = e; a; a = a.parentElement) if (['sticky', 'fixed'].includes(getComputedStyle(a).position)) return true; return false; };
   const out = new Set();
