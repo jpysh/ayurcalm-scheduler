@@ -114,8 +114,10 @@ export default function MakeItMine() {
     } finally { setBusy(false); }
   };
 
-  const foot = (ok: boolean, label: string, back?: number) => (
+  // A greyed button says what it waits for (#841).
+  const foot = (ok: boolean, label: string, back?: number, why?: string) => (
     <div className="mt-5 grid gap-1">
+      {!ok && why && !busy ? <p className={`${noteText} text-center`}>{why}</p> : null}
       <Btn kind="primary" type="submit" disabled={!ok || busy}>{label}</Btn>
       {back ? <Btn kind="quiet" disabled={busy} onClick={() => setStep(back)}>Back</Btn> : <Btn kind="quiet" disabled={busy} onClick={() => navigate("/admin/schedule")}>Not now</Btn>}
     </div>
@@ -134,7 +136,7 @@ export default function MakeItMine() {
           <Area label="Therapists" rows={10} value={therapistsText} placeholder={"One name per line, or paste a list"}
             onChange={(e) => { setTherapistsText(e.target.value); setTherapists(names(e.target.value, therapists)); }} />
           <WhoIs people={therapists} set={setTherapists} />
-          {foot(teamOk, "Continue")}
+          {foot(teamOk, "Continue", undefined, !centre.trim() ? "Add the centre's name." : !doctors.length ? "Add at least one doctor." : !therapists.length ? "Add at least one therapist." : "Choose Woman or Man for each person.")}
         </form>
       )}
 
@@ -152,7 +154,7 @@ export default function MakeItMine() {
           <Group label="Therapies you give" note={`${therapies.filter((t) => t.on).length} of ${therapies.length}. Untick any you do not give; lengths and prices are in Settings.`}>
             {therapies.map((t, i) => <Tick key={t.id} label={t.name} on={t.on} set={(on) => setTherapies((all) => all.map((x, j) => (j === i ? { ...x, on } : x)))} />)}
           </Group>
-          {foot(kitOk, "Continue", 1)}
+          {foot(kitOk, "Continue", 1, "Keep at least one room with a name and one therapy.")}
         </form>
       )}
 
@@ -163,7 +165,7 @@ export default function MakeItMine() {
             onChange={(e) => void readResidents(e.target.value)} />
           <FromFile onText={(t) => void readResidents(t)} />
           {sheet.length ? <ResidentRows rows={sheet} set={setSheet} /> : <WhoIs people={residents} set={setResidents} />}
-          {foot(residentsOk && !busy, busy ? "Setting up…" : arriving ? `Plan ${sheet.length ? "arrivals" : "tomorrow"} for ${plural(arriving, "patient")}` : "Finish without patients", 2)}
+          {foot(residentsOk && !busy, busy ? "Setting up…" : arriving ? `Plan ${sheet.length ? "arrivals" : "tomorrow"} for ${plural(arriving, "patient")}` : "Finish without patients", 2, sheet.length ? "Fix the rows in red first." : "Choose Woman or Man for each patient.")}
         </form>
       )}
     </FullPage>
