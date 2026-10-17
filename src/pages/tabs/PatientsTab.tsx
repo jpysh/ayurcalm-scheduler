@@ -471,7 +471,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     });
     if (!res.ok) {
       const why = await res.json().catch(() => ({}));
-      toast.error(why.reason === 'ROOM_TAKEN' ? why.message : why.message ? `${why.message} Choose another consultation time.` : 'Could not save the patient');
+      toast.error(why.reason === 'ROOM_TAKEN' || res.status === 429 ? why.message : why.message ? `${why.message} Choose another consultation time.` : 'Could not save the patient');
       return;
     }
     const created = await res.json();

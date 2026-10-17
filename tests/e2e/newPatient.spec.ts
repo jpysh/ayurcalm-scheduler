@@ -55,6 +55,20 @@ test('Patients search shows the fact asked for and offers everything', async ({ 
   await expect(page.getByRole('button', { name: /^Search everything for/ })).toBeVisible();
 });
 
+test('a save refused for too many changes says so, not a guess', async ({ page }) => {
+  await page.route('**/api/patients', (route) => route.request().method() === 'POST'
+    ? route.fulfill({ status: 429, contentType: 'application/json', body: JSON.stringify({ error: 'Too Many Requests' }) })
+    : route.continue());
+  await signIn(page);
+  await page.getByRole('button', { name: 'New patient', exact: true }).click();
+  const sheet = page.getByRole('dialog');
+  await sheet.getByLabel('Name', { exact: true }).fill('E2E Too Many');
+  await sheet.getByRole('button', { name: 'Female' }).click();
+  await sheet.getByRole('button', { name: 'Add E2E Too Many' }).click();
+  await expect(page.getByText('Too many changes at once, so nothing was saved. Wait a few minutes and try again.')).toBeVisible();
+  await expect(page.getByText(/consultation time|Could not save/)).toHaveCount(0);
+});
+
 test('a double tap on Add on a slow network adds the patient once', async ({ page, request }) => {
   const { token } = await (await request.post('/api/auth/login', { data: ADMIN })).json();
   const headers = { Authorization: `Bearer ${token}` };
