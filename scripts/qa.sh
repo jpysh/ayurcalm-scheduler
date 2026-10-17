@@ -8,6 +8,8 @@
 
 set -u
 cd "$(dirname "$0")/.."
+# From a worktree the folder name would start a second stack beside the one on :8080 (#824).
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-ayurcalm-scheduler}"
 PORT="${APP_PORT:-8080}"
 
 echo "Starting the app (or bringing it up to date)..."
