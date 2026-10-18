@@ -79,6 +79,9 @@ export type Item = {
 /** Form C reports where a foreigner sleeps, so a day patient (not on site) owes none (#719). */
 export const owesFormC = (country: string | null | undefined, stay: { on_site: boolean }) => stay.on_site && isForeign(country);
 /** A guest whose country is not India needs a Form C within 24 hours of arriving (#415). An empty country is not assumed foreign. */
+/** A one-day visit gets no discharge summary (#837): the doctor's note stays on the card. */
+export const owesDischarge = (stay: { start_date: Date; end_date: Date }) => ymd(stay.start_date) !== ymd(stay.end_date);
+
 export const isForeign = (country: string | null | undefined) => !!country?.trim() && !/^(india|indian|bharat|in)$/i.test(country.trim());
 /** The day it is due: the day after arrival, since the stay has no arrival hour. */
 export const formCDue = (start: Date) => ymd(new Date(start.getTime() + DAY_MS));
@@ -111,7 +114,7 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
   const formC = (s: { start_date: Date }) => { const due = formCDue(s.start_date); return `Form C ${due < today ? 'overdue since' : 'due by'} ${dayName(due).replace(',', '')}`; };
   for (const s of leftUnfiled) if (owesFormC(s.Patient.country, s)) add(rule('form_c'), s, formC(s), 'card');
   for (const s of stays) {
-    if (ymd(s.end_date) === today && !s.discharge) add(rule('leaves_today'), s, 'Leaves today, no discharge summary', 'summary');
+    if (ymd(s.end_date) === today && !s.discharge && owesDischarge(s)) add(rule('leaves_today'), s, 'Leaves today, no discharge summary', 'summary');
     // The notes, not the arrival checklist: the words say which (#812).
     if (hoursIn(s) >= (rule('arrival_open').hours ?? 24) && !s.vitals && !s.concerns && !s.tests) add(rule('arrival_open'), s, 'Arrival notes not written', 'card');
     if (owesFormC(s.Patient.country, s) && !s.form_c_filed) add(rule('form_c'), s, formC(s), 'card');
@@ -141,7 +144,7 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
   // What a guest told the centre on their leaving day (#509), for a week: good and fine in grey, not good counted.
   const told = await prisma.patientStay.findMany({ where: { feedback: { not: Prisma.DbNull }, end_date: { lte: day, gte: new Date(day.getTime() - 7 * DAY_MS) } }, include: { Patient: { select: { id: true, name: true } } } });
   for (const s of told) { const f = s.feedback as { rating: string; note: string }; add(rule(f.rating === 'poor' ? 'feedback_poor' : 'feedback'), s, `${RATING[f.rating] ?? f.rating}${f.note ? `: “${f.note}”` : ''}`, 'card'); }
-  for (const s of upcoming) if (!s.discharge) add(rule('leaves_tomorrow'), s, 'Leaves tomorrow, discharge summary not started', 'summary');
+  for (const s of upcoming) if (!s.discharge && owesDischarge(s)) add(rule('leaves_tomorrow'), s, 'Leaves tomorrow, discharge summary not started', 'summary');
 
   const ctx = await loadDay(day, prisma);
   const away = staffDay(ctx).filter((d) => d.off).map((d) => ({ id: d.staff_id, name: ctx.staff.find((x) => x.id === d.staff_id)?.name ?? '', why: d.off }));
