@@ -15,8 +15,8 @@ export function next(c, now) {
   return now >= deletesAt(c) ? { do: 'delete', why: 'trial ended 60 days ago' } : null;
 }
 
-/** When a paused centre, or an ended trial, is deleted. */
-export const deletesAt = (c) => (c.paused_at ? c.paused_at + 14 * D : Date.parse(c.trial.ends_at) + 60 * D);
+/** When a paused centre, or an ended trial, is deleted: never within 30 days of signing up (#920). */
+export const deletesAt = (c) => Math.max((c.signed_up ?? c.created) + 30 * D, c.paused_at ? c.paused_at + 14 * D : Date.parse(c.trial.ends_at) + 60 * D);
 
 /** Sign-up limits: 3 per address a day, one live centre per email, 20 a day, 10 live. */
 export function refuse(signups, centres, { ip, email }, now) {

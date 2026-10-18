@@ -86,7 +86,7 @@ function provision(s) {
       await centreSh({ ADMIN_EMAIL: s.email, CENTRE_NAME: s.centre }, 'up', slug, String(port));
       await up(port);
       await route(slug, svc(port));
-      db.centres.push({ slug, port, email: s.email, centre: s.centre, ref: s.ref, created: Date.now() });
+      db.centres.push({ slug, port, email: s.email, centre: s.centre, ref: s.ref, created: Date.now(), signed_up: s.at });
       s.state = 'ready'; s.ready_at = Date.now(); s.slug = slug; s.used = true; save();
       if (env.CF_EMAIL_TOKEN) await email(s.email, `${s.centre} is ready`, `Your centre is at https://${slug}.${DOMAIN}\n\nTo sign in on another phone, open ${SELF} and ask for a sign-in link.\n\nIf you did not ask for this, reply and we will delete it.`).catch((e) => console.error('ready email', e));
       await telegram(`New trial centre: ${s.centre} (${slug}.${DOMAIN}) by ${s.email}${s.ref ? `, invited by ${s.ref}` : ''}`);
@@ -125,13 +125,15 @@ export async function tick(now = Date.now()) {
   }
 }
 
-// ---- update, every ten minutes (#904): a new main is tested on a throwaway centre, then rolled out.
+// ---- update (#904): a new main is tested on a throwaway centre, then rolled out. Once a day, in the
+// 21:00 hour in India, after treatments (#920): one restart a night, not one per merge.
 // LIVE_CENTRES in provisioner.env lists the centres with real use, e.g. "babaji:8202".
 const LIVE = (env.LIVE_CENTRES || '').split(/\s+/).filter(Boolean).map((x) => ({ slug: x.split(':')[0], port: Number(x.split(':')[1]) }));
 const git = (...a) => run('git', ['-C', ROOT, ...a]).then((r) => r.stdout.trim());
 let updating = false;
+const indiaHour = (now = new Date()) => Number(now.toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false }));
 export async function update() {
-  if (updating) return;
+  if (updating || indiaHour() !== 21) return;
   updating = true;
   const gate = `${DATA}/gate`;
   try {
@@ -147,13 +149,31 @@ export async function update() {
     if (!qa) {
       await git('merge', '-q', '--ff-only', sha);
       const sites = [{ slug: 'demo', port: 8201 }, ...LIVE, ...db.centres.filter((c) => !c.paused_at)];
-      r = await rollout(sites, async (c) => { await centreSh({}, 'up', c.slug, String(c.port)); await up(c.port); if (!(await fetch(`http://localhost:${c.port}/api/health`).then((x) => x.ok, () => false))) throw new Error('did not come up'); });
+      r = await rollout(sites, async (c) => { await centreSh({}, 'backup', c.slug); await centreSh({}, 'up', c.slug, String(c.port)); await up(c.port); if (!(await fetch(`http://localhost:${c.port}/api/health`).then((x) => x.ok, () => false))) throw new Error('did not come up'); });
     }
     db.update = { sha: short, at: Date.now(), failed: r.failed, why: r.why, failed_sha: r.failed ? sha : null }; save();
     await telegram(r.failed ? `ALERT: update ${short} stopped at ${r.failed}: ${r.why}` : `Updated to ${short}: demo, live centres and trials`);
     if (!r.failed) process.exit(0); // launchd starts the service again on the new code
   } catch (e) { console.error('update', e); }
   finally { await run('git', ['-C', ROOT, 'worktree', 'remove', '-f', gate]).catch(() => {}); updating = false; }
+}
+
+// ---- tidy, nightly (#920): every update rebuilds every centre, and the build cache grew past 100 GB.
+// Only what nothing uses: build cache past 20 GB (by age, most builds are this week's), images over a week old, and this repo's throwaway stacks (a session's
+// check, a qa copy) left up a day, which are stopped with their data kept. Centres, the host and the
+// local copy are never touched.
+const KEEP = /^(ruta-.*|ayurcalm-scheduler)$/;
+export const stale = (rows, now) => [...new Set(rows.filter((r) => !KEEP.test(r.project) && /ayurcalm-scheduler/.test(r.dir) && now - Date.parse(r.created) > 24 * 3_600_000).map((r) => r.project))];
+export async function tidy(now = Date.now()) {
+  const before = await run('df', ['-P', DATA]).then((r) => r.stdout.trim().split('\n')[1].split(/\s+/)[4], () => '?');
+  await run('docker', ['builder', 'prune', '-af', '--max-used-space', '20gb']).catch(console.error);
+  await run('docker', ['image', 'prune', '-af', '--filter', 'until=168h']).catch(console.error);
+  const ps = await run('docker', ['ps', '--format', '{{.Label "com.docker.compose.project"}}\t{{.Label "com.docker.compose.project.working_dir"}}\t{{.CreatedAt}}']).then((r) => r.stdout.trim().split('\n').filter(Boolean), () => []);
+  const rows = ps.map((l) => { const [project, dir, at] = l.split('\t'); return { project, dir, created: at.split(' ').slice(0, 3).join(' ').replace(' ', 'T').replace(' ', '') }; });
+  const stopped = stale(rows, now);
+  for (const p of stopped) await run('docker', ['compose', '-p', p, 'stop']).catch(console.error);
+  const after = await run('df', ['-P', DATA]).then((r) => r.stdout.trim().split('\n')[1].split(/\s+/)[4], () => '?');
+  db.tidy = { at: now, before, after, stopped }; save();
 }
 
 // ---- watch, hourly (#248): the demo and every centre up, a backup in the last 26 h, disk not full.
@@ -196,7 +216,7 @@ async function wake(req, res, c) {
   const login = `https://${c.slug}.${DOMAIN}/login`;
   const opening = page(`<meta http-equiv="refresh" content="8;url=${login}"><h1>${esc(c.centre)} is back on</h1><p>Opening it in a few seconds. <a href="${login}">Open it now</a></p>`);
   if (!c.paused_at) return send(res, 200, opening); // switched on a moment ago; the tunnel is catching up
-  if (req.method !== 'POST') return send(res, 200, page(`<h1>${esc(c.centre)} is switched off</h1><p>Nobody used it for three days, so we switched it off to save space. Everything in it is kept until <b>${day(deletesAt(c))}</b>.</p>
+  if (req.method !== 'POST') return send(res, 200, page(`<h1>${esc(c.centre)} is switched off</h1><p>Nobody used it for three days, so we switched it off to save space. Everything in it is kept until <b>${day(deletesAt(c))}</b>.</p>${c.trial?.started_at ? '' : `<p>Only wanted a look around? <a href="https://demo.${DOMAIN}">The demo</a> is always on.</p>`}
 <form method="post"><button>Switch it back on</button></form><p style="font-size:.85rem;margin-top:2rem">Questions: <a href="https://wa.me/420777558262">WhatsApp</a></p>`));
   if (!c.waking) {
     c.waking = (async () => {
@@ -230,8 +250,8 @@ export const server = http.createServer(async (req, res) => {
       await telegram(`Feedback from ${item.centre} (${item.from}): ${item.text}`);
       return send(res, 200, '');
     }
-    // The maintainer's morning (#818): only with the key from provisioner.env; no key set, no page.
-    if (url.pathname === '/dashboard' && env.DASHBOARD_KEY && url.searchParams.get('key') === env.DASHBOARD_KEY) return send(res, 200, page(`<h1>Morning</h1><pre style="white-space:pre-wrap;font:inherit">${esc(morning(db, latest, Date.now(), db.feedback))}</pre>`), { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
+    // The maintainer's morning, on this Mac only (#920): the tunnel always adds cf-ray, so nothing from outside gets it.
+    if (url.pathname === '/dashboard' && !req.headers['cf-ray'] && /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || '')) return send(res, 200, page(`<h1>Morning</h1><pre style="white-space:pre-wrap;font:inherit">${esc(morning(db, latest, Date.now(), db.feedback))}</pre>`), { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
     // The landing page's "N of 10 founding places left" (#245). Founding centres not hosted here: FOUNDING_ELSEWHERE.
     if (url.pathname === '/founding') {
       const taken = db.centres.filter((c) => c.trial?.plan === 'founding').length + Number(env.FOUNDING_ELSEWHERE || 0);
@@ -279,12 +299,19 @@ export const server = http.createServer(async (req, res) => {
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {
   server.listen(Number(env.PORT || 8200), () => console.log(`provisioner on :${env.PORT || 8200}`));
-  // Hourly; the morning goes out on the first run in the 7 o'clock hour of the Mac's own clock (#818).
+  // Hourly; the morning goes out on the first run in the 7 o'clock hour of the Mac's own clock (#818), and the tidy at 03:00 in India.
   let sent = '';
   setInterval(async () => {
     await tick().catch(console.error); await watch().catch(console.error);
     const d = new Date();
-    if (d.getHours() === 7 && sent !== d.toDateString()) { sent = d.toDateString(); await telegram(morning(db, latest, Date.now(), db.feedback)); }
+    if (d.getHours() === 7 && sent !== d.toDateString()) {
+      sent = d.toDateString();
+      const text = morning(db, latest, Date.now(), db.feedback);
+      // Read on this Mac (#920): Telegram is optional.
+      writeFileSync(`${DATA}/MORNING.md`, `# Morning, ${d.toDateString()}\n\n${text.split('\n').map((l) => (l && !l.startsWith('  ') ? `- ${l}` : l)).join('\n')}\n\nAny time: http://localhost:${env.PORT || 8200}/dashboard\n`);
+      await telegram(text);
+    }
+    if (indiaHour(d) === 3) await tidy().catch(console.error);
   }, 3_600_000);
   setInterval(() => update(), 600_000);
   watch().catch(console.error);
