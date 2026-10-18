@@ -159,14 +159,14 @@ export async function update() {
 }
 
 // ---- tidy, nightly (#920): every update rebuilds every centre, and the build cache grew past 100 GB.
-// Only what nothing uses: cache and images over a week old, and this repo's throwaway stacks (a session's
+// Only what nothing uses: build cache past 20 GB (by age, most builds are this week's), images over a week old, and this repo's throwaway stacks (a session's
 // check, a qa copy) left up a day, which are stopped with their data kept. Centres, the host and the
 // local copy are never touched.
 const KEEP = /^(ruta-.*|ayurcalm-scheduler)$/;
 export const stale = (rows, now) => [...new Set(rows.filter((r) => !KEEP.test(r.project) && /ayurcalm-scheduler/.test(r.dir) && now - Date.parse(r.created) > 24 * 3_600_000).map((r) => r.project))];
 export async function tidy(now = Date.now()) {
   const before = await run('df', ['-P', DATA]).then((r) => r.stdout.trim().split('\n')[1].split(/\s+/)[4], () => '?');
-  await run('docker', ['builder', 'prune', '-f', '--filter', 'until=168h']).catch(console.error);
+  await run('docker', ['builder', 'prune', '-af', '--max-used-space', '20gb']).catch(console.error);
   await run('docker', ['image', 'prune', '-af', '--filter', 'until=168h']).catch(console.error);
   const ps = await run('docker', ['ps', '--format', '{{.Label "com.docker.compose.project"}}\t{{.Label "com.docker.compose.project.working_dir"}}\t{{.CreatedAt}}']).then((r) => r.stdout.trim().split('\n').filter(Boolean), () => []);
   const rows = ps.map((l) => { const [project, dir, at] = l.split('\t'); return { project, dir, created: at.split(' ').slice(0, 3).join(' ').replace(' ', 'T').replace(' ', '') }; });
