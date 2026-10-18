@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
-import { BottomSheet, DateRow, datePair, Empty, LinkRow, ListGroup, Row, SheetFoot, Text, Tick, dayText } from "@/components/kit";
+import { BottomSheet, Consequence, DateRow, datePair, Empty, LinkRow, ListGroup, plural, Row, SheetFoot, Text, Tick, TwoFoot, dayText } from "@/components/kit";
+import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 
 type Holiday = { date: string; name: string };
 export type ClosedDay = { id: string; date: string; endDate: string; description: string };
 
-const post = (date: string, endDate: string, description: string) => fetch(`${API_BASE}/timeoff`, {
+const post = (date: string, endDate: string, description: string, move = false) => fetch(`${API_BASE}/timeoff`, {
   method: "POST", headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ entity_type: "center", entity_id: null, date, start_date: date, end_date: endDate, start_time: null, end_time: null, description }),
+  body: JSON.stringify({ entity_type: "center", entity_id: null, date, start_date: date, end_date: endDate, start_time: null, end_time: null, description, move }),
 }).catch(() => null);
 
 /**
@@ -30,6 +31,18 @@ export function HolidaysSheet({ open, onOpenChange, closed, today, onChanged }: 
   const shut = new Set(closed.map((c) => c.date));
   const coming = closed.filter((c) => c.endDate >= today).sort((a, b) => a.date.localeCompare(b.date));
 
+  // The consequence, said before the tap: what is already booked on the days to close.
+  const [booked, setBooked] = useState<number | null>(null);
+  useEffect(() => {
+    setBooked(null);
+    if (!adding) return;
+    const to = adding.endDate < adding.date ? adding.date : adding.endDate;
+    let stale = false;
+    fetchJsonWithTimeout<{ treatments: number }>(`${API_BASE}/timeoff/impact?type=center&from=${adding.date}&to=${to}`)
+      .then((r) => { if (!stale && typeof r?.treatments === "number") setBooked(r.treatments); }).catch(() => {});
+    return () => { stale = true; };
+  }, [adding?.date, adding?.endDate]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!open) return;
     setList(null); setOff({}); setAdding(null);
@@ -50,13 +63,24 @@ export function HolidaysSheet({ open, onOpenChange, closed, today, onChanged }: 
     onChanged();
   }
 
-  async function addOwn() {
+  async function addOwn(move: boolean) {
     if (!adding) return;
     setBusy(true);
-    const r = await post(adding.date, adding.endDate < adding.date ? adding.date : adding.endDate, adding.description.trim() || "Closed");
+    // No reason is saved as none: "Closed" typed for the admin made the day check read "closed for Closed".
+    const r = await post(adding.date, adding.endDate < adding.date ? adding.date : adding.endDate, adding.description.trim(), move);
     setBusy(false);
     if (!r?.ok) { toast.error("Not saved. Try again."); return; }
-    toast.success(`Centre closed ${adding.endDate > adding.date ? `${dayText(adding.date)} to ${dayText(adding.endDate)}` : dayText(adding.date)}`);
+    const saved = await r.json().catch(() => null) as { id: string; moved: { moved: number; left: number; first: string | null; last: string | null } | null } | null;
+    const when = adding.endDate > adding.date ? `${dayText(adding.date)} to ${dayText(adding.endDate)}` : dayText(adding.date);
+    const m = saved?.moved;
+    const text = m && (m.moved || m.left)
+      ? `Centre closed ${when}. ${m.moved ? `${plural(m.moved, "treatment")} moved to ${m.first === m.last ? dayText(m.first!) : `${dayText(m.first!)} to ${dayText(m.last!)}`}.` : ""}${m.left ? ` ${m.left} could not be placed and wait under "need you".` : ""}`
+      : `Centre closed ${when}`;
+    // Undo reopens the day and puts the moved treatments back, in one go.
+    toast(text, { duration: 5000, action: saved?.id ? { label: "Undo", onClick: async () => {
+      await fetch(`${API_BASE}/timeoff/${saved.id}`, { method: "DELETE" }).catch(() => null);
+      onChanged();
+    } } : undefined });
     setAdding(null);
     onChanged();
   }
@@ -77,12 +101,14 @@ export function HolidaysSheet({ open, onOpenChange, closed, today, onChanged }: 
   if (adding) {
     return (
       <BottomSheet open={open} onOpenChange={onOpenChange} title="Close the centre" onBack={() => setAdding(null)}
-        foot={<SheetFoot busy={busy} ok={!!adding.date} save={addOwn} label="Close the centre" />}>
+        foot={booked ? <TwoFoot busy={busy} main="Close and move them" onMain={() => void addOwn(true)} alt="Close, leave them" onAlt={() => void addOwn(false)} />
+          : <SheetFoot busy={busy} ok={!!adding.date} save={() => void addOwn(false)} label="Close the centre" />}>
         <div className={datePair}>
           <DateRow label="From" value={adding.date} min={today} onChange={(v) => setAdding({ ...adding, date: v, endDate: adding.endDate < v ? v : adding.endDate })} />
           <DateRow label="Until" value={adding.endDate} min={adding.date} onChange={(v) => setAdding({ ...adding, endDate: v })} />
         </div>
-        <Text label="Reason" placeholder="Staff retreat" value={adding.description} onChange={(e) => setAdding({ ...adding, description: e.target.value })} />
+        <Text label="Reason (optional)" placeholder="Staff retreat" value={adding.description} onChange={(e) => setAdding({ ...adding, description: e.target.value })} />
+        {booked ? <Consequence>{`${plural(booked, "treatment")} ${booked === 1 ? "is" : "are"} booked then. "Close and move them" puts ${booked === 1 ? "it" : "them"} on the next open day; nothing moves until you tap.`}</Consequence> : null}
       </BottomSheet>
     );
   }

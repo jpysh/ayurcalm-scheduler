@@ -589,6 +589,7 @@ export async function planNextWeek(patientId: string, reviewISO: string, prisma:
   for (let d = first; d <= reviewDate && d <= last; d = shift(d, 1)) {
     const day = new Date(`${d}T00:00:00.000Z`);
     const ctx = await loadDay(day, prisma);
+    const shut = centreClosed(ctx.settings, ctx.timeOff, day);
     const open = toM(ctx.settings?.opening_time || '09:00');
     const close = toM(ctx.settings?.closing_time || '18:00');
     const place = (therapyId: string, at: string, pref: { staff_id: string | null; room_id: string | null }) => {
@@ -607,7 +608,7 @@ export async function planNextWeek(patientId: string, reviewISO: string, prisma:
     if (wantReview && d === reviewDate && !ctx.appointments.some((a) => a.patient_id === patientId && a.therapy_id === consult!.therapy_id)) {
       const a = place(consult!.therapy_id, consult!.start_time, consult!);
       if (a) reviewOut = { date: d, therapy_id: a.therapy_id, start_time: a.start_time, duration_minutes: a.duration_minutes, staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id, staff_name: a.staff_name };
-      else reviewMissing = 'No doctor is free that day';
+      else reviewMissing = shut ? `The centre is ${shut}` : 'No doctor is free that day';
     }
     for (const l of lines) {
       if (!l._dates.includes(d)) continue;
@@ -615,7 +616,7 @@ export async function planNextWeek(patientId: string, reviewISO: string, prisma:
       if (ctx.appointments.some((a) => a.patient_id === patientId && a.therapy_id === l.therapy_id)) continue;
       const a = place(l.therapy_id, l.start_time, l._pref);
       if (a) l.sessions.push({ date: d, start_time: a.start_time, duration_minutes: a.duration_minutes, staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id });
-      else l.missing.push({ date: d, why: 'No therapist or room is free that day' });
+      else l.missing.push({ date: d, why: shut ? `The centre is ${shut}` : 'No therapist or room is free that day' });
     }
   }
   return {
