@@ -224,7 +224,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     const holidays = await prisma.timeOff.findMany({ where: { OR: [ { date: nd }, { AND: [ { start_date: { lte: nd } }, { end_date: { gte: nd } } ] } ] } });
     if (centreClosed(settings, holidays, nd)) {
       conflicts.reason = 'CENTER_HOLIDAY';
-      conflicts.details = { ...(conflicts.details || {}), center_holiday: true };
+      conflicts.details = { ...(conflicts.details || {}), center_holiday: true, closed_day: nd.toISOString().slice(0, 10), closed_why: centreClosed(settings, holidays, nd) };
       currentDate.setDate(nd.getDate() + 1);
       continue;
     }

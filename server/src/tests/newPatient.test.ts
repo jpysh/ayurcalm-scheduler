@@ -26,6 +26,7 @@ async function tidy(prisma: PrismaClient) {
   await prisma.appointment.deleteMany({ where: { id: { in: appts } } });
   await prisma.patientStay.deleteMany({ where: { patient_id: { in: patients } } });
   await prisma.patient.deleteMany({ where: { id: { in: patients } } });
+  await prisma.timeOff.deleteMany({ where: { description: TAG } });
   await prisma.staff.deleteMany({ where: { name: { startsWith: TAG } } });
   await prisma.therapyRoom.deleteMany({ where: { name: { startsWith: TAG } } });
   await prisma.therapy.deleteMany({ where: { name: { startsWith: TAG } } });
@@ -106,6 +107,14 @@ async function main() {
     assert.ok(who.none.some((p: { id: string }) => p.id === ida.id), 'someone with nothing booked is offered');
     assert.ok(!who.none.some((p: { id: string }) => p.id === plain.id), 'someone already booked that day is not');
     assert.ok(who.all.some((p: { id: string }) => p.id === plain.id), 'search still reaches them');
+
+    // #935: a name is at most 80 letters, and a course the closed day stops says which day.
+    assert.equal((await raw('POST', '/patients', { name: 'x'.repeat(81), gender: 'female', stay })).status, 400, 'a name past 80 letters is refused');
+    await prisma.timeOff.create({ data: { entity_type: 'center', date: new Date('2030-05-08T00:00:00.000Z'), description: TAG } });
+    const course = await raw('POST', '/appointments', { patient_id: ida.id, therapy_id: therapy.id, total_sessions: 3, start_date: '2030-05-07', end_date: '2030-05-09', preferred_days: [], preferred_time_range: { start: '09:00', end: '12:00' } });
+    const refused = await course.json();
+    assert.equal(refused.conflicts?.reason, 'CENTER_HOLIDAY');
+    assert.equal(refused.conflicts.details.closed_day, '2030-05-08', 'the refusal names the closed day');
 
     // Story 6: search by name.
     const found = await call('GET', `/patients/find?q=${TAG.toLowerCase()}%20meer&date=${DAY}`);

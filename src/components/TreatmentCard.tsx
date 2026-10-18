@@ -431,7 +431,8 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
     const made: string[] = (body.appointments || []).map((a: { id: string }) => a.id);
     if (!res.ok) {
       await deleteAll(made.map((id) => `${API_BASE}/appointments/${id}`));
-      toast.error(`${COURSE_WHY[body.conflicts?.reason] || "That course could not be placed"}. Nothing was booked: try fewer days, another time or another therapist.`);
+      const closed = body.conflicts?.reason === "CENTER_HOLIDAY" && body.conflicts.details?.closed_day;
+      toast.error(`${closed ? `The centre is ${body.conflicts.details.closed_why || "closed"} on ${dayText(closed)}` : COURSE_WHY[body.conflicts?.reason] || "That course could not be placed"}. Nothing was booked: try fewer days, another time or another therapist.`);
       return;
     }
     // Days the resident or a room was not free are skipped, so the course can start later than asked (#789).

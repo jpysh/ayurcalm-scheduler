@@ -488,8 +488,11 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     const created = await res.json();
     setPatients((prev) => [...prev, toRow(created)]);
     // At the top, so it does not cover the card's Diet and Package rows; Undo takes the patient away again.
-    toast.success(`${created.name} added${visit ? `, consultation ${dayText(visit.date)} ${visit.start_time}` : ''}`, {
+    // Their room is named, so a preset hut is never a surprise (#935).
+    const room = freeRooms.find((x) => x.id === guestRoom);
+    toast.success(`${created.name} added${room && n.onSite ? `, ${room.name}` : ''}${visit ? `, consultation ${dayText(visit.date)} ${visit.start_time}` : ''}`, {
       position: 'top-center',
+      cancel: inline ? undefined : { label: 'Open card', onClick: () => setCardId(created.id) },
       action: { label: 'Undo', onClick: async () => {
         const r = await fetch(`${API_BASE}/patients/${created.id}`, { method: 'DELETE' });
         if (!r.ok) { toast.error('Could not undo. Open the patient to remove them.'); return; }
@@ -499,8 +502,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     setShowAddPatient(false);
     setNewPatient(blankNew());
     if (inline) { inline({ id: created.id, name: created.name }); setInline(null); return; }
-    // They land on their card, with everything else a row to fill in when it is decided.
-    setCardId(created.id);
+    // They stay on the list: the next arrival is one tap on + away, and the card is one tap on the toast (#935).
   };
 
   // The card's stay (story 10): one sheet to extend, shorten or end it, which says what follows before the tap.
@@ -602,9 +604,9 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
 
       <ResidentsFromSheet open={fromSheet} onClose={() => setFromSheet(false)} onAdded={(created) => setPatients((prev) => [...prev, ...created.map((c) => toRow(c as Parameters<typeof toRow>[0]))])} />
       <BottomSheet open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) { setNewPatient(blankNew()); setInline(null); setGuestRoom(''); } }} title="New patient" note="Only name and gender are needed. Everything else can wait."
-        foot={<Btn kind="primary" disabled={!newPatient.name.trim() || !newPatient.gender || newPatient.leaving < newPatient.arriving} onClick={saveNewPatient}>{newPatient.name.trim() ? `Add ${newPatient.name.trim()}` : 'Add patient'}</Btn>}>
+        foot={<Btn kind="primary" disabled={!newPatient.name.trim() || !newPatient.gender || newPatient.leaving < newPatient.arriving} onClick={saveNewPatient}>Add patient</Btn>}>
         {inline ? null : <Btn kind="quiet" inline className="-ml-1" onClick={() => { setShowAddPatient(false); setFromSheet(true); }}>Many at once? From a spreadsheet ›</Btn>}
-        <Text label="Name" autoComplete="off" value={newPatient.name} valid={newPatient.name.trim().length > 1} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} />
+        <Text label="Name" autoComplete="off" maxLength={80} note={newPatient.name.length >= 70 ? `${newPatient.name.length} of 80 letters` : undefined} value={newPatient.name} valid={newPatient.name.trim().length > 1} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} />
         {/* Nothing chosen to start with (#283): a list that opened on Male made every resident one until corrected. */}
         <Group label="Gender" note={newPatient.name.trim() && !newPatient.gender ? "Choose one to add them." : undefined}>
           <Seg options={[["Female", "Female"], ["Male", "Male"], ["Other", "Other"]]} value={newPatient.gender} onChange={(gender) => setNewPatient({ ...newPatient, gender })} />
