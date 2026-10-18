@@ -29,7 +29,20 @@ async function personOf(token: string): Promise<Person | null> {
   const s = await prisma.staff.findUnique({ where: { link_token: token } });
   if (s?.is_active) return { kind: s.role === 'doctor' ? 'doctor' : 'therapist', id: s.id, name: s.name };
   const p = await prisma.patient.findUnique({ where: { link_token: token } });
-  return p ? { kind: 'patient', id: p.id, name: p.name } : null;
+  return p && !(await linkLapsed(p.id, prisma)) ? { kind: 'patient', id: p.id, name: p.name } : null;
+}
+
+/**
+ * A guest's link stops 30 days after their last stay ends (#827): forwarded on
+ * WhatsApp it would otherwise show health details for ever. A guest with no
+ * stay yet keeps theirs, since they fill their details before arriving.
+ */
+export async function linkLapsed(patientId: string, db: PrismaClient): Promise<boolean> {
+  const last = await db.patientStay.findFirst({ where: { patient_id: patientId }, orderBy: { end_date: 'desc' }, select: { end_date: true } });
+  if (!last) return false;
+  const settings = await db.settings.findUnique({ where: { id: 'singleton' } });
+  const today = Date.parse(`${centreClock(settings?.timezone || 'Asia/Kolkata').date}T00:00:00.000Z`);
+  return last.end_date.getTime() + 30 * 86400000 < today;
 }
 
 const HAPPENING: Prisma.AppointmentWhereInput = { status: { notIn: ['cancelled'] } };

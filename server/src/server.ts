@@ -10,7 +10,7 @@ import { generateRecordsPdf } from './pdf/recordsPdf.js';
 import { renderDischarge } from './pdf/dischargePdf.js';
 import { dischargeOf, saveDischarge } from './discharge.js';
 import { staffWeek } from './staffWeek.js';
-import { newLinkToken } from './links.js';
+import { linkLapsed, newLinkToken } from './links.js';
 import { findConflict, HAPPENING, loadDay, nearestFreeTime, oncePerCourse, softWarnings, staffDay, type Action } from './appointmentGuard.js';
 import { replanRoomDay, replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
 import { dietTimeline, startDietFrom, extendDiet } from './patientDiet.js';
@@ -596,7 +596,10 @@ app.post('/patients/:id/stays', async (req: Request, res: Response) => {
     const conflict = findConflict({ scheduled_date: day, start_time: consultation.start_time, duration_minutes: consult.duration_minutes, staff_id: consultation.staff_id, co_staff_ids: [], room_id: consultation.room_id, patient_id: '', therapy_id: consult.id }, await loadDay(day, prisma));
     if (conflict) { res.status(409).json(conflict); return; }
   }
+  // A returning guest gets a fresh link, so the lapsed one forwarded last time stays dead (#827).
+  const lapsed = await linkLapsed(id, prisma);
   const created = await prisma.$transaction(async (tx) => {
+    if (lapsed) await tx.patient.update({ where: { id }, data: { link_token: null } });
     const made = await tx.patientStay.create({ data: { patient_id: id, package_id: package_id ?? null, ...stay } });
     if (consultation && consult) await tx.appointment.create({ data: { patient_id: id, therapy_id: consult.id, staff_id: consultation.staff_id, room_id: consultation.room_id, scheduled_date: new Date(`${consultation.date}T00:00:00.000Z`), start_time: consultation.start_time, duration_minutes: consult.duration_minutes, co_staff_ids: [], session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
     return made;
@@ -869,7 +872,7 @@ app.delete('/patients/:id/passport-photo', requireAdmin, async (req: Request, re
 });
 app.post('/patients/:id/link', requireAdmin, async (req: Request, res: Response) => {
   const p = await prisma.patient.findUniqueOrThrow({ where: { id: String(req.params.id) } });
-  const token = p.link_token && req.query.renew !== '1' ? p.link_token : (await prisma.patient.update({ where: { id: p.id }, data: { link_token: newLinkToken() } })).link_token;
+  const token = p.link_token && req.query.renew !== '1' && !(await linkLapsed(p.id, prisma)) ? p.link_token : (await prisma.patient.update({ where: { id: p.id }, data: { link_token: newLinkToken() } })).link_token;
   res.json({ token, phone: p.phone });
 });
 
