@@ -216,7 +216,13 @@ const AdminDashboard = () => {
       const wd = new Date(Date.UTC(cy, cm - 1, cd)).getUTCDay();
       const weekDates: string[] = Array.from({ length: 7 }).map((_, i) => shiftDay(ymdInTZ(currentDate), (wd === 0 ? -6 : 1 - wd) + i));
       // One call for the week, not seven: each is a round trip on a hill-station signal (#416).
-      const week = await fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?from=${weekDates[0]}&to=${weekDates[6]}`);
+      let week: ApiAppointment[];
+      try {
+        week = await fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?from=${weekDates[0]}&to=${weekDates[6]}`, 6000, true);
+      } catch {
+        // No signal: the days already on screen stay, the banner says so (#931).
+        return;
+      }
       const map: Record<string, ApiAppointment[]> = Object.fromEntries(weekDates.map((d) => [d, []]));
       for (const a of week) map[String(a.scheduled_date).slice(0, 10)]?.push(a);
       setAppointmentsByDate(map);
@@ -260,7 +266,7 @@ const AdminDashboard = () => {
 
   const refreshAppointmentsForDate = async (iso: string, silent?: boolean) => {
     try {
-      const list: ApiAppointment[] = await fetchJsonWithTimeout(`${API_BASE}/appointments?date=${iso}`, 6000);
+      const list: ApiAppointment[] = await fetchJsonWithTimeout(`${API_BASE}/appointments?date=${iso}`, 6000, true);
       setAppointmentsByDate((prev) => ({ ...prev, [iso]: list }));
     } catch {
       if (!silent) toast.error("Failed to refresh appointments");
@@ -392,11 +398,11 @@ const AdminDashboard = () => {
   // What is wrong with the day comes from the server, which is the same code
   // that refuses a booking. Two screens used to work this out in the browser and
   // both disagreed with it; #88 deleted them.
-  const [dayCheck, setDayCheck] = useState<{ problems: DayProblem[]; headline: string | null; history?: Record<string, string> }>({ problems: [], headline: null });
+  const [dayCheck, setDayCheck] = useState<{ problems: DayProblem[]; headline: string | null; history?: Record<string, string>; closed?: { name: string | null; time_off_id: string | null; booked: number } | null }>({ problems: [], headline: null });
   const loadDayCheck = useCallback(() => {
     fetch(`${API_BASE}/day-check?date=${exceptionDayKey}`)
       .then((r) => (r.ok ? r.json() : { problems: [], headline: null }))
-      .then((d) => setDayCheck({ problems: Array.isArray(d.problems) ? d.problems : [], headline: d.headline ?? null, history: d.history || {} }))
+      .then((d) => setDayCheck({ problems: Array.isArray(d.problems) ? d.problems : [], headline: d.headline ?? null, history: d.history || {}, closed: d.closed ?? null }))
       .catch(() => setDayCheck({ problems: [], headline: null }));
   }, [exceptionDayKey]);
   useEffect(() => { loadDayCheck(); }, [loadDayCheck, appointmentsByDate]);
@@ -498,7 +504,7 @@ const AdminDashboard = () => {
   useEffect(() => { const t = setInterval(() => setMinute((m) => m + 1), 60000); return () => clearInterval(t); }, []);
 
   // Each screen keeps its own state and dialogs in its own file (#147).
-  const scheduleScreen = useScheduleScreen({ openOut: (id: string) => timeOffScreen.openOne(id), ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), movedFrom, problems: dayCheck.problems, history: dayCheck.history, showDay: (iso: string) => { setCurrentDate(dayDate(iso)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id), staffCount: staff.length, addTherapist: (a: { gender?: string; therapy_id?: string }) => staffAdder.current?.(a), addRoom: (a: { amenities?: string[] }) => roomAdder.current?.(a), addPatient: (name: string, arriving: string, done: (p: { id: string; name: string }) => void) => patientAdder.current?.(name, arriving, done) });
+  const scheduleScreen = useScheduleScreen({ openOut: (id: string) => timeOffScreen.openOne(id), ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime: centreHours.closing_time, refreshDay: (iso: string) => refreshAppointmentsForDate(iso, true), movedFrom, problems: dayCheck.problems, history: dayCheck.history, closed: dayCheck.closed, openClosedDays: () => timeOffScreen.openHolidays(), showDay: (iso: string) => { setCurrentDate(dayDate(iso)); refreshAppointmentsForDate(iso, true); }, openResident: (id: string) => residentOpener.current?.(id), staffCount: staff.length, addTherapist: (a: { gender?: string; therapy_id?: string }) => staffAdder.current?.(a), addRoom: (a: { amenities?: string[] }) => roomAdder.current?.(a), addPatient: (name: string, arriving: string, done: (p: { id: string; name: string }) => void) => patientAdder.current?.(name, arriving, done) });
   const staffScreen = useStaffScreen({ staff, setStaff, therapies, requestDelete, centre: { opening: centreHours.opening_time, closing: centreHours.closing_time } });
   const roomsScreen = useRoomsScreen({ roomsList, setRoomsList, amenityOptions, requestDelete, out: (id) => timeOffScreen.outFor('Room', id) });
   const therapiesScreen = useTherapiesScreen({ therapies, setTherapies, amenityOptions, requestDelete, q: listQuery, out: (id) => timeOffScreen.outFor('Therapy', id), flag: (id) => notAvailable(timeOffs, 'Therapy', id, ymdInTZ(new Date())) });

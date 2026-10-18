@@ -481,7 +481,7 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
             return (
               <SwitchRow key={l.from_therapy_id} title={name} on={!off[l.from_therapy_id]} set={(v) => setOff({ ...off, [l.from_therapy_id]: !v })}
                 facts={done ? "Already booked next week" : swapped ? `Instead of ${l.therapy_name} · ${plural(l.sessions.length + l.missing.length, "day")}, times found on Book all` : `${l.start_time} · ${l.staff_name} · ${plural(l.sessions.length + l.missing.length, "day")}`}
-                flag={!swapped && l.missing.length ? `No free time on ${l.missing.map((m) => dayText(m.date)).join(", ")}. Swap it, or book its days from Next days` : undefined}>
+                flag={!swapped && l.missing.length ? `${l.missing.map((m) => (m.why.startsWith("The centre is") ? `${m.why} on ${dayText(m.date)}` : `No free time on ${dayText(m.date)}`)).join(". ")}. Swap it, or book its days from Next days` : undefined}>
                 {done ? null : <ChangeLine label="Swap" value={name} select={<LineSelect label={`Swap ${l.therapy_name}`} value={swapped || l.therapy_id} onChange={(v) => setSwaps({ ...swaps, [l.from_therapy_id]: v })} free={therapies} />} />}
               </SwitchRow>
             );

@@ -20,7 +20,7 @@
  * them, so it is put to the admin: only their Accept applies it.
  */
 import { PrismaClient, Prisma } from '@prisma/client';
-import { centreClock, gives, offOnDay, staffAwayOnDay, stayOn, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow, type OffRow } from './availability.js';
+import { centreClock, centreClosed, gives, offOnDay, staffAwayOnDay, stayOn, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow, type OffRow } from './availability.js';
 import { HAPPENING, findConflict, loadDay, type Action, type Conflict } from './appointmentGuard.js';
 
 /** Which of the tier 4 choices a move is. */
@@ -44,6 +44,8 @@ export type Move = {
   to: { staff_id: string | null; co_staff_ids: string[]; staff_name: string; start_time: string; date: string; room_id: string | null; room_name: string };
   /** True when the admin chose this row themselves and the plan must keep it. */
   pinned?: boolean;
+  /** A later day past the end of the resident's stay: offered, never taken for them. */
+  beyond_stay?: boolean;
 };
 
 /** A row the admin has decided for themselves. The plan fits around it. */
@@ -134,6 +136,8 @@ export async function planDay(
   // that already happened, and never moves one to a time already gone.
   const cutoff = startedBefore(opts.now ?? centreClock(settings?.timezone || 'Asia/Kolkata'), date);
   const firstSlot = cutoff > open ? open + Math.ceil((cutoff - open) / 30) * 30 : open;
+  // The guard refuses a closed day, so no tier may offer one: not this day, not a later one.
+  const closedOn = (d: Date) => centreClosed(settings, timeOff, d) !== null;
   const therapyById = new Map(therapies.map((t) => [t.id, t]));
   const patientById = new Map(patients.map((p) => [p.id, p]));
   const staffById = new Map(staff.map((s) => [s.id, s]));
@@ -319,6 +323,7 @@ export async function planDay(
     type Slot = { team: string[]; start: number; room: string; tier: 1 | 2 | 3; date: string };
     /** Tier 1, else tier 2: this day, first the same time and then any time. */
     const sameDay = (relax: boolean): Slot | null => {
+      if (closedOn(date)) return null;
       const team = !shut(date, start, start + duration) && teamFor((sid) => canTake(sid, start, start + duration), true, relax);
       const room = team && roomFor(start, start + duration);
       if (team && room) return { team, start, room, tier: 1, date: ymd(date) };
@@ -342,6 +347,7 @@ export async function planDay(
         const other = new Date(date);
         other.setDate(date.getDate() + i);
         if (inStay && stayEnds && other > stayEnds) return null;
+        if (closedOn(other)) continue;
         const key = ymd(other);
         const otherDay = (laterDays[key] ??= await prisma.appointment.findMany({ where: { scheduled_date: other, ...HAPPENING } }));
         const taken = laterTaken.filter((x) => x.date === key);
@@ -431,7 +437,7 @@ export async function planDay(
     const inStay = next && (!stayEnds || new Date(`${next.date}T00:00:00.000Z`) <= stayEnds);
     if (next) {
       const n = daysLater(next.date);
-      choices.push(moveOf(next, { choice: 'next_free_day', note: `${n} day${n === 1 ? '' : 's'} later${inStay ? '' : ', after their stay ends'}` }));
+      choices.push(moveOf(next, { choice: 'next_free_day', note: `${n} day${n === 1 ? '' : 's'} later${inStay ? '' : ', after their stay ends'}`, beyond_stay: !inStay || undefined }));
     }
     choices.push({
       appointment_id: appt.id,
@@ -537,6 +543,7 @@ export async function planDay(
 export async function applyPlan(
   moves: { appointment_id: string; staff_id: string | null; co_staff_ids?: string[]; room_id: string | null; start_time: string; date: string; cancel?: boolean; /** Why it was cancelled, kept on the treatment. */ reason?: string }[],
   prisma: PrismaClient,
+  opts: { timeOffId?: string } = {},
 ): Promise<{ batch_id: string; applied: number }> {
   const writes: { appointment_id: string; before: Record<string, unknown>; after: Record<string, unknown> }[] = [];
   for (const m of moves) {
@@ -563,7 +570,7 @@ export async function applyPlan(
       action: 'dayfix',
       entity_type: 'appointment',
       entity_id: writes[0]?.appointment_id || '',
-      old_value: { writes, date: moves[0]?.date ?? null } as unknown as Prisma.InputJsonValue,
+      old_value: { writes, date: moves[0]?.date ?? null, time_off_id: opts.timeOffId ?? null } as unknown as Prisma.InputJsonValue,
       new_value: { applied: writes.length } as unknown as Prisma.InputJsonValue,
     },
   });
@@ -578,6 +585,7 @@ export async function applyPlan(
 export async function acceptPlan(
   moves: Pin[],
   prisma: PrismaClient,
+  opts: { timeOffId?: string } = {},
 ): Promise<{ batch_id: string; applied: number } | { missing: string } | { conflict: Conflict & { appointment_id: string } }> {
   for (const m of moves) {
     // Cancelling frees a slot; there is nothing for the guard to refuse.
@@ -598,7 +606,7 @@ export async function acceptPlan(
     }, ctx);
     if (conflict) return { conflict: { ...conflict, appointment_id: m.appointment_id } };
   }
-  return applyPlan(moves, prisma);
+  return applyPlan(moves, prisma, opts);
 }
 
 /**
@@ -628,6 +636,44 @@ export async function replanRoomDay(
     .filter((a) => hours.some((b) => overlaps(b.s, b.e, toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes)))
     .map((a) => a.id);
   return planDay(null, date, prisma, { ...opts, apply: true, timeOffId: off.id, appointmentIds: ids });
+}
+
+/**
+ * Closing the centre with treatments booked (#933): each closed day's treatments
+ * move to the next open day, planned in one pass per day by `planDay`, which
+ * knows closed days are not on offer. Days go in order and each is written
+ * before the next is planned, so a move from one day cannot meet a move from
+ * another on the same minute. Written through the guard as one batch a day,
+ * recorded against the closure so deleting it puts the treatments back.
+ *
+ * Only a move to a later day inside the resident's stay is taken. What cannot
+ * be placed there stays where it is and is counted in `left`, for the admin.
+ */
+export async function moveOffClosedDays(from: string, to: string, prisma: PrismaClient, opts: { timeOffId?: string; now?: Clock } = {}) {
+  let moved = 0;
+  let left = 0;
+  const landed: string[] = [];
+  const batches: string[] = [];
+  // ponytail: capped at 31 days, as one plan; a longer closure moves its first month.
+  for (let d = new Date(`${from}T00:00:00.000Z`), n = 0; ymd(d) <= to && n < 31; d.setUTCDate(d.getUTCDate() + 1), n++) {
+    const day = new Date(d);
+    const ctx = await loadDay(day, prisma);
+    if (!ctx.appointments.length || !centreClosed(ctx.settings, ctx.timeOff, day)) continue;
+    const plan = await planDay(null, day, prisma, { appointmentIds: ctx.appointments.map((a) => a.id), now: opts.now });
+    const taken: Pin[] = [];
+    for (const m of [...plan.moved, ...plan.proposed]) {
+      const pick = m.to.date !== ymd(day) && !m.cancel && !m.beyond_stay ? m : m.choices?.find((c) => c.choice === 'next_free_day' && !c.beyond_stay);
+      if (pick) taken.push({ appointment_id: pick.appointment_id, staff_id: pick.to.staff_id, co_staff_ids: pick.to.co_staff_ids, room_id: pick.to.room_id, start_time: pick.to.start_time, date: pick.to.date });
+    }
+    // Only treatments that have not started are the plan's to move.
+    const movable = new Set([...plan.moved, ...plan.proposed, ...plan.unplaced].map((x) => x.appointment_id));
+    const written = taken.length ? await acceptPlan(taken, prisma, { timeOffId: opts.timeOffId }) : null;
+    const ok = written && 'batch_id' in written;
+    if (ok) { batches.push(written.batch_id); moved += taken.length; landed.push(...taken.map((t) => t.date)); }
+    left += movable.size - (ok ? taken.length : 0);
+  }
+  landed.sort();
+  return { moved, left, batches, first: landed[0] ?? null, last: landed[landed.length - 1] ?? null };
 }
 
 /** Put a replan back exactly as it was. */

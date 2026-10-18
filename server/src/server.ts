@@ -12,13 +12,14 @@ import { dischargeOf, saveDischarge } from './discharge.js';
 import { staffWeek } from './staffWeek.js';
 import { linkLapsed, newLinkToken } from './links.js';
 import { findConflict, HAPPENING, loadDay, nearestFreeTime, oncePerCourse, softWarnings, staffDay, type Action } from './appointmentGuard.js';
-import { replanRoomDay, replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
+import { moveOffClosedDays, replanRoomDay, replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
 import { dietTimeline, startDietFrom, extendDiet } from './patientDiet.js';
 import { checkDay, headlineFor, planRange, rowOptions } from './dayCheck.js';
 import { centreClock, eventClashes, outsideHours, type EventRow } from './availability.js';
 import { loadDietsForDay } from './dietResolution.js';
 import { bookingOptions, bookingSuggestions, bookingWho, cardChoices, nextConsultations, notStaying, planNextWeek, therapyFacts, whyNoConsultation, whyNoTime } from './cardChoices.js';
 import { historyOf } from './history.js';
+import { patientMatches } from './patientMatch.js';
 import { searchOut, searchPatients, searchTreatments } from './search.js';
 import { residentDay } from './residentDay.js';
 import { changeLog } from './changeLog.js';
@@ -401,16 +402,15 @@ app.get('/patients', async (req: Request, res: Response) => {
   res.json(data);
 });
 
-// The Patients search (#285 story 6): by name or by the diet plan they are on, each with the facts a decision needs.
+// The Patients search (#285 story 6, #934): by name in any order, phone number, or the diet plan they are on, each with the facts a decision needs.
 app.get('/patients/find', async (req: Request, res: Response) => {
   const q = z.object({ q: z.string().trim().min(1).max(100), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
   const day = new Date(`${q.date}T00:00:00.000Z`);
   const [patients, diets] = await Promise.all([prisma.patient.findMany({ include: { Stays: { orderBy: { start_date: 'desc' } } } }), loadDietsForDay(day, prisma)]);
-  const ql = q.q.toLowerCase();
   const found = patients.map((p) => {
     const stay = p.Stays.find((s) => s.start_date <= day && s.end_date >= day);
     return { p, stay, plan: stay ? diets.dietFor(p, false).planName || '' : '' };
-  }).filter((x) => x.p.name.toLowerCase().includes(ql) || x.plan.toLowerCase().includes(ql)).sort((a, b) => Number(!!b.stay) - Number(!!a.stay) || a.p.name.localeCompare(b.p.name)).slice(0, 40);
+  }).filter((x) => patientMatches(x.p, q.q, x.plan)).sort((a, b) => Number(!!b.stay) - Number(!!a.stay) || a.p.name.localeCompare(b.p.name)).slice(0, 40);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   res.json({ patients: found.map(({ p, stay, plan }) => {
     // Stays come newest first, so the next one ahead is the last of those that start after the day.
@@ -711,6 +711,8 @@ const timeoffSchema = z.object({
   description: z.string().optional().nullable(),
   /** False records the leave and leaves the day for the admin to plan (#285 story 9); absent plans it, as the assistant expects. */
   plan: z.boolean().optional(),
+  /** A centre closure only: move that day's treatments to the next open day (#933). */
+  move: z.boolean().optional(),
 });
 
 const getTimeOffHandler = async (req: Request, res: Response) => {
@@ -735,7 +737,7 @@ const getTimeOffHandler = async (req: Request, res: Response) => {
 const createTimeOffHandler = async (req: Request, res: Response) => {
   try {
     // A part-day leave that ends where it starts covers nothing yet looks saved (#571).
-    const { plan, ...body } = timeoffSchema.refine((b) => !b.start_time || !b.end_time || b.start_time < b.end_time, 'The leave must end after it starts.').parse(req.body);
+    const { plan, move, ...body } = timeoffSchema.refine((b) => !b.start_time || !b.end_time || b.start_time < b.end_time, 'The leave must end after it starts.').parse(req.body);
     const data: any = { ...body };
     if (body.date) data.date = new Date(body.date);
     if (body.start_date) data.start_date = new Date(body.start_date);
@@ -763,7 +765,13 @@ const createTimeOffHandler = async (req: Request, res: Response) => {
       for (const d of datesCovered(h)) results.push(await replanRoomDay(h, d, prisma));
       replan = results.filter((r) => r.moved.length || r.proposed.length || r.unplaced.length);
     }
-    res.status(201).json({ ...h, replan });
+    // A closed day with treatments booked (#933): they move to the next open day, once.
+    let moved = null;
+    if (h.entity_type === 'center' && move) {
+      const first = (h.start_date ?? h.date)!.toISOString().slice(0, 10);
+      moved = await moveOffClosedDays(first, (h.end_date ?? h.date)!.toISOString().slice(0, 10), prisma, { timeOffId: h.id });
+    }
+    res.status(201).json({ ...h, replan, moved });
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : 'TimeOff creation failed' });
   }
@@ -774,7 +782,7 @@ const deleteTimeOffHandler = async (req: Request, res: Response) => {
   try {
     // Deleting the absence undoes what recording it did: the therapist is
     // coming in after all, so their day goes back as it was.
-    const batches = await prisma.auditLog.findMany({ where: { action: 'replan' }, orderBy: { timestamp: 'desc' }, take: 50 });
+    const batches = await prisma.auditLog.findMany({ where: { action: { in: ['replan', 'dayfix'] } }, orderBy: { timestamp: 'desc' }, take: 50 });
     for (const b of batches) {
       if ((b.old_value as { time_off_id?: string } | null)?.time_off_id === id) await undoReplan(b.id, prisma);
     }
@@ -790,7 +798,7 @@ const deleteTimeOffHandler = async (req: Request, res: Response) => {
 const updateTimeOffHandler = async (req: Request, res: Response) => {
   const id = req.params.id;
   try {
-    const { plan: _plan, ...body } = timeoffSchema.partial().parse(req.body);
+    const { plan: _plan, move: _move, ...body } = timeoffSchema.partial().parse(req.body);
     const data: any = { ...body };
     if (body.date) data.date = new Date(body.date);
     if (body.start_date) data.start_date = new Date(body.start_date);
@@ -943,6 +951,12 @@ app.get('/day-check/range', async (req: Request, res: Response) => {
   res.json(await planRange(q.data.from, q.data.to, prisma));
 });
 
+/** The admin's answer to "N treatments are booked on a closed day": move them to the next open day (#940). One Undo per batch, through /replan/undo. */
+app.post('/day-check/move-closed', async (req: Request, res: Response) => {
+  const body = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.body);
+  res.json(await moveOffClosedDays(body.date, body.date, prisma));
+});
+
 /** Other ways to place one treatment, when the admin does not like the row. */
 app.get('/day-check/options', async (req: Request, res: Response) => {
   const date = String(req.query.date || '').slice(0, 10);
@@ -994,12 +1008,14 @@ app.get('/holidays/india', (_req: Request, res: Response) => { res.json(indiaHol
 app.get('/timeoff/impact', async (req: Request, res: Response) => {
   const hm = z.string().regex(/^\d{2}:\d{2}$/);
   const q = z.object({
-    type: z.enum(['staff', 'room', 'therapy', 'patient']),
-    ids: z.string().transform((v) => v.split(',')).pipe(z.array(z.string().uuid()).min(1).max(100)),
+    type: z.enum(['staff', 'room', 'therapy', 'patient', 'center']),
+    ids: z.string().transform((v) => v.split(',')).pipe(z.array(z.string().uuid()).min(1).max(100)).optional(),
     from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), after: hm.optional(), before: hm.optional(),
   }).parse(req.query);
-  const who: Prisma.AppointmentWhereInput = q.type === 'staff' ? { OR: [{ staff_id: { in: q.ids } }, { co_staff_ids: { hasSome: q.ids } }] }
-    : q.type === 'room' ? { room_id: { in: q.ids } } : q.type === 'therapy' ? { therapy_id: { in: q.ids } } : { patient_id: { in: q.ids } };
+  if (q.type !== 'center' && !q.ids) { res.status(400).json({ error: 'ids required' }); return; }
+  const ids = q.ids ?? [];
+  const who: Prisma.AppointmentWhereInput = q.type === 'center' ? {} : q.type === 'staff' ? { OR: [{ staff_id: { in: ids } }, { co_staff_ids: { hasSome: ids } }] }
+    : q.type === 'room' ? { room_id: { in: ids } } : q.type === 'therapy' ? { therapy_id: { in: ids } } : { patient_id: { in: ids } };
   const rows = await prisma.appointment.findMany({
     where: { ...HAPPENING, scheduled_date: { gte: new Date(`${q.from}T00:00:00.000Z`), lte: new Date(`${q.to}T00:00:00.000Z`) }, ...who },
     select: { start_time: true, duration_minutes: true },
