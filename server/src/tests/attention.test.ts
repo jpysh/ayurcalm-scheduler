@@ -16,6 +16,7 @@ const at = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 
 async function tidy(prisma: PrismaClient) {
   const patients = (await prisma.patient.findMany({ where: { name: { startsWith: TAG } }, select: { id: true } })).map((p) => p.id);
+  await prisma.appointment.deleteMany({ where: { patient_id: { in: patients } } });
   await prisma.patientStay.deleteMany({ where: { patient_id: { in: patients } } });
   await prisma.patient.deleteMany({ where: { id: { in: patients } } });
   await prisma.$executeRaw`UPDATE "Settings" SET attention_rules = NULL`;
@@ -98,6 +99,24 @@ async function main() {
     await call('PATCH', `/patients/${esha.id}/stays/${eshaStay.id}/follow-up`, { done: true });
     o = await read();
     assert.deepEqual(mine('follow_up'), [], 'done, it is no longer raised');
+
+    // Next week not planned (#805): reviewed yesterday, nothing in the week after; one treatment there clears it.
+    const kiran = await prisma.patient.create({ data: { name: `${TAG} Kiran`, gender: 'male' } });
+    await prisma.patientStay.create({ data: { patient_id: kiran.id, start_date: at('2030-08-12'), end_date: at('2030-08-30'), duration_days: 19 } });
+    const consult = await prisma.therapy.findFirstOrThrow({ where: { is_consultation: true } });
+    const plain = await prisma.therapy.findFirstOrThrow({ where: { is_consultation: false } });
+    const appt = (therapy_id: string, date: string) => prisma.appointment.create({ data: { patient_id: kiran.id, therapy_id, scheduled_date: at(date), start_time: '09:00', duration_minutes: 30, session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
+    await appt(consult.id, '2030-08-19');
+    await appt(plain.id, '2030-08-18');
+    o = await read();
+    assert.deepEqual(o.items.filter((i) => i.rule === 'next_week' && i.who === `${TAG} Kiran`).map((i) => [i.what, (i as { action?: string }).action]), [['Next week not planned', 'week']], 'the row opens Plan next week');
+    assert.deepEqual(mine('next_week'), [`${TAG} Kiran`], 'no review, no line');
+    await appt(plain.id, '2030-08-23');
+    o = await read();
+    assert.deepEqual(mine('next_week'), [], 'one treatment booked in the week clears it');
+    await prisma.appointment.deleteMany({ where: { patient_id: kiran.id } });
+    await prisma.patientStay.deleteMany({ where: { patient_id: kiran.id } });
+    await prisma.patient.delete({ where: { id: kiran.id } });
 
     // A later "when": Bela arrived the day before, 36 hours at midday; Aarav 60. 48 leaves only Aarav.
     await call('PUT', '/attention/rules', { arrival_open: { hours: 48 }, leaves_tomorrow: { on: true }, no_diet: { on: false }, day: { on: false } });

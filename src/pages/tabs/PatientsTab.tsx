@@ -144,7 +144,7 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
   out: (id: string) => React.ReactNode;
   id: string | null; today: string; onClose: () => void;
   /** The inbox opens the card already on its follow-up message (#603); asked once the card has loaded. */
-  startOn?: 'followup' | null; onStarted?: () => void;
+  startOn?: 'followup' | 'week' | null; onStarted?: () => void;
   openTreatment: (a: CardAppt) => void; changeMeals: (p: { id: string; name: string }) => void;
   changePackage: (p: ResidentDay) => void; changeHouse: (p: ResidentDay) => void;
   changeStay: (p: ResidentDay) => void; book: (p: { id: string; name: string; consult?: boolean; date?: string }) => void; details: (id: string) => void;
@@ -236,7 +236,10 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
     setFormC(false); load();
   };
   // The week after the review: today's if the doctor saw them today, else the coming one, else (none booked yet, #523) today; next week repeats the week up to it and books the review.
-  const weekFrom = d ? (d.last_consultation?.date.slice(0, 10) === today ? today : (d.next_consultation || d.last_consultation)?.date.slice(0, 10) ?? today) : undefined;
+  // From "Next week not planned" (#805) the week is the past review's, which the rule found unbooked.
+  const [fromReview, setFromReview] = useState(false);
+  useEffect(() => { if (startOn === 'week' && d?.id === id && d.last_consultation) { setFromReview(true); setWeek(true); onStarted?.(); } }, [startOn, d?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const weekFrom = d ? (fromReview && d.last_consultation ? d.last_consultation.date.slice(0, 10) : d.last_consultation?.date.slice(0, 10) === today ? today : (d.next_consultation || d.last_consultation)?.date.slice(0, 10) ?? today) : undefined;
   const startIntake = (x: ResidentDay) => ({ vitals: x.stay!.vitals || '', concerns: x.stay!.concerns || '', tests: x.stay!.tests || '' });
   const visit = (v: Visit, withTime: boolean) => `${dayText(v.date)}${withTime ? ` ${v.start_time}` : ''}${v.doctor ? ` · ${v.doctor}` : ''}`;
   // On the last day the discharge comes first and nothing more is booked (#406).
@@ -381,7 +384,7 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
           {steps?.map(([label, done, fact, open]) => <Row key={label} title={label} facts={done ? fact ?? 'Done' : undefined} flag={done ? undefined : 'Not done yet'} trailing={done ? '✓' : undefined} onClick={() => { setArrival(false); open(); }} />)}
         </ListGroup>
       </BottomSheet>
-      {d && weekFrom ? <NextWeekSheet patient={week ? d : null} review={weekFrom} onClose={() => setWeek(false)} onBooked={load}
+      {d && weekFrom ? <NextWeekSheet patient={week ? d : null} review={weekFrom} onClose={() => { setWeek(false); setFromReview(false); }} onBooked={load}
         firstDay={d.week.find((w) => !w.treatments.length && w.date !== d.stay?.end_date)?.date ?? today}
         bookDay={(date) => { setWeek(false); book({ id: d.id, name: d.name, date }); }} /> : null}
       {checklist && d ? <DischargeSheet patient={d} stay={d.stay} onClose={() => setChecklist(false)} print={summary}
@@ -554,7 +557,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [cardId, setCardId] = useState<string | null>(null);
-  const [startOn, setStartOn] = useState<'followup' | null>(null);
+  const [startOn, setStartOn] = useState<'followup' | 'week' | null>(null);
   const [dietFor, setDietFor] = useState<{ id: string; name: string } | null>(null);
   const [dayMealsFor, setDayMealsFor] = useState<{ id: string; name: string } | null>(null);
   const [packFor, setPackFor] = useState<{ patient: { id: string; name: string }; stay: CardStay } | null>(null);
@@ -565,7 +568,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const backToCard = (close: () => void) => () => { close(); if (back) { setCardId(back); setBack(null); } };
   const tab = (
     <>
-      <ResidentsList patients={patients} today={today} onOpen={setCardId} onAdd={() => setShowAddPatient(true)} q={query} everything={searchEverything} openRules={openRules} needs={needs} away={away} onNeed={(i) => (i.action === 'diet' ? setDietFor({ id: i.patient_id!, name: i.who }) : setCardId(i.patient_id!))} />
+      <ResidentsList patients={patients} today={today} onOpen={setCardId} onAdd={() => setShowAddPatient(true)} q={query} everything={searchEverything} openRules={openRules} needs={needs} away={away} onNeed={(i) => (i.action === 'diet' ? setDietFor({ id: i.patient_id!, name: i.who }) : i.action === 'week' ? (setStartOn('week'), setCardId(i.patient_id!)) : setCardId(i.patient_id!))} />
     </>
   );
 
@@ -683,7 +686,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     </>
   );
 
-  return { tab, dialogs, openResident: setCardId, openFollowUp: (id: string) => { setStartOn('followup'); setCardId(id); }, openMeals: setDietFor, openAdd: (from?: { name?: string; arriving: string; leaving?: string; room?: string; done?: (p: { id: string; name: string }) => void }) => {
+  return { tab, dialogs, openResident: setCardId, openFollowUp: (id: string) => { setStartOn('followup'); setCardId(id); }, openWeek: (id: string) => { setStartOn('week'); setCardId(id); }, openMeals: setDietFor, openAdd: (from?: { name?: string; arriving: string; leaving?: string; room?: string; done?: (p: { id: string; name: string }) => void }) => {
     if (from) { setNewPatient({ ...blankNew(), name: from.name ?? '', arriving: from.arriving, leaving: from.leaving ?? addDays(from.arriving, 13) }); if (from.done) setInline(() => from.done); }
     // From Guest rooms (#456): the room tapped stays chosen while it is free for the dates.
     if (from?.room) setGuestRoom(from.room);

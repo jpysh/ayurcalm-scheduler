@@ -41,6 +41,7 @@ export const RULES: Rule[] = [
   { id: 'room_out', section: 'Patients', kind: 'action', on: true, name: "A guest's room is out of use" },
   { id: 'form_c', section: 'Patients', kind: 'action', on: true, name: 'Form C for a foreign guest, due a day after arriving' },
   { id: 'follow_up', section: 'Patients', kind: 'action', on: true, name: 'Follow-up due after discharge' },
+  { id: 'next_week', section: 'Patients', kind: 'action', on: true, name: 'Reviewed, and the week after the review is not booked' },
   { id: 'leaves_tomorrow', section: 'Patients', kind: 'action', on: false, name: 'Leaves tomorrow and the discharge summary is not started' },
   { id: 'vitals', section: 'Team', kind: 'action', on: true, hours: 4, from: 'after the treatment starts', waiting: 'Starts when therapists record readings', name: 'Vitals not recorded' },
   { id: 'feedback', section: 'Patients', kind: 'information', on: true, name: 'A guest said their stay was good or fine' },
@@ -71,7 +72,7 @@ export type Item = {
   what: string;
   patient_id?: string;
   /** What the one tap does: open their card, their meals, their discharge summary, their follow-up message. */
-  action?: 'card' | 'diet' | 'summary' | 'followup' | 'move';
+  action?: 'card' | 'diet' | 'summary' | 'followup' | 'move' | 'week';
   /** action 'move' (#695): the room free on every night left, applied only when tapped. */
   move?: { patient_id: string; stay_id: string; room_id: string; room_name: string; from_room_id: string };
 };
@@ -119,6 +120,21 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
     if (hoursIn(s) >= (rule('arrival_open').hours ?? 24) && !s.vitals && !s.concerns && !s.tests) add(rule('arrival_open'), s, 'Arrival notes not written', 'card');
     if (owesFormC(s.Patient.country, s) && !s.form_c_filed) add(rule('form_c'), s, formC(s), 'card');
     if (hoursIn(s) >= (rule('no_diet').hours ?? 24) && !diets.dietFor(s.Patient, true).planName) add(rule('no_diet'), s, 'No diet plan', 'diet');
+  }
+  // Reviewed and the week after not booked (#805): the one tap opens Plan next week.
+  // The week is the review's next seven days, inside the stay and from today on.
+  if (stays.length) {
+    const ids = stays.map((s) => s.Patient.id);
+    const visits = await prisma.appointment.findMany({ where: { patient_id: { in: ids }, status: { notIn: ['cancelled'] }, scheduled_date: { gte: new Date(day.getTime() - 30 * DAY_MS), lte: day }, Therapy: { is_consultation: true } }, select: { patient_id: true, scheduled_date: true } });
+    const booked = await prisma.appointment.findMany({ where: { patient_id: { in: ids }, status: { notIn: ['cancelled'] }, scheduled_date: { gte: day, lte: new Date(day.getTime() + 7 * DAY_MS) }, Therapy: { is_consultation: false } }, select: { patient_id: true, scheduled_date: true } });
+    for (const s of stays) {
+      const review = visits.filter((v) => v.patient_id === s.Patient.id && v.scheduled_date >= s.start_date).reduce<Date | null>((a, v) => (!a || v.scheduled_date > a ? v.scheduled_date : a), null);
+      if (!review) continue;
+      const from = Math.max(review.getTime() + DAY_MS, day.getTime());
+      const to = Math.min(review.getTime() + 7 * DAY_MS, s.end_date.getTime() - DAY_MS);
+      if (from > to) continue;
+      if (!booked.some((b) => b.patient_id === s.Patient.id && b.scheduled_date.getTime() >= from && b.scheduled_date.getTime() <= to)) add(rule('next_week'), s, 'Next week not planned', 'week');
+    }
   }
   // A room taken out of use (#563) with a guest already in it, now or booked: they need another room.
   const inRooms = await prisma.patientStay.findMany({ where: { guest_room_id: { not: null }, on_site: true, end_date: { gte: day } }, include: { Patient: { select: { id: true, name: true } }, GuestRoom: { select: { name: true } } } });

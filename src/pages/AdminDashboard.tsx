@@ -714,6 +714,7 @@ const AdminDashboard = () => {
           if (i.move) { void moveGuest(i.who, i.move); return; }
           if (i.action === 'diet') patientsScreen.openMeals({ id: i.patient_id!, name: i.who });
           else if (i.action === 'followup') patientsScreen.openFollowUp(i.patient_id!);
+          else if (i.action === 'week') patientsScreen.openWeek(i.patient_id!);
           else patientsScreen.openResident(i.patient_id!);
         }}
         afterConsultation={(p, what) => {
