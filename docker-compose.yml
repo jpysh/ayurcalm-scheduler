@@ -60,6 +60,8 @@ services:
       # Hosted centres only (#818): feedback goes on to the sign-up service on the same host.
       FEEDBACK_URL: ${FEEDBACK_URL:-}
       FEEDBACK_KEY: ${FEEDBACK_KEY:-}
+      # Hosted centres only (#907): the host updates them, so Settings never offers an update.
+      HOSTED: ${HOSTED:-}
       # Writes per address in 5 minutes. Unset in a real install (40); qa raises it.
       RATE_LIMIT_WRITES: ${RATE_LIMIT_WRITES:-}
       RATE_LIMIT_CALLS: ${RATE_LIMIT_CALLS:-}

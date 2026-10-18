@@ -15,6 +15,7 @@ import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'node:url';
 import { DEMO, nextReset } from './demo.js';
 import { trialInfo } from './trial.js';
+import { updateInfo } from './update.js';
 import { madeWith } from './product.js';
 import { DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD } from './auth.js';
 
@@ -205,6 +206,10 @@ publicSettingsRouter.get('/support', async (_req: Request, res: Response) => {
     made_with: madeWith(settings),
     ...(DEMO && { demo: { email: DEFAULT_ADMIN_EMAIL, password: DEFAULT_ADMIN_PASSWORD, next_reset: nextReset() } }),
   });
+});
+
+settingsRouter.get('/update', requireAdmin, async (_req: Request, res: Response) => {
+  res.json({ update: await updateInfo() });
 });
 
 // Backups (#236): the backup service writes into /backups; the admin sees the
