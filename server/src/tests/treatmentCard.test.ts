@@ -130,6 +130,23 @@ async function main() {
     const booked = await call('POST', '/appointments/one', { ...two, co_staff_ids: together[0].co_staff_ids });
     assert.deepEqual(booked.co_staff_ids, together[0].co_staff_ids, 'the second therapist was not saved on the booking');
 
+    // One of the two changes, the other stays (#873): only the seat tapped is replaced.
+    const chitra = await call('POST', '/staff', { name: `${TAG} Chitra`, gender: 'female', specializations: [pair.id], weekly_schedule: allWeek });
+    const seatOf = async (seat: string) => (await call('GET', `/appointments/${booked.id}/choices?kind=staff&seat=${seat}`)).choices as { label: string; now?: boolean; change: Record<string, unknown> }[];
+    const second = booked.co_staff_ids[0] as string;
+    const swapIn = (await seatOf(second)).find((c) => c.label === chitra.name);
+    assert.deepEqual(swapIn?.change, { co_staff_ids: [chitra.id] }, `the second seat was not offered alone: ${JSON.stringify(swapIn)}`);
+    const leadIn = (await seatOf(booked.staff_id)).find((c) => c.label === chitra.name);
+    assert.deepEqual(leadIn?.change, { staff_id: chitra.id }, 'the lead seat was not offered alone');
+    const swapped = await call('PUT', `/appointments/${booked.id}`, swapIn!.change);
+    assert.deepEqual([swapped.staff_id, swapped.co_staff_ids], [booked.staff_id, [chitra.id]], 'the partner did not stay');
+    await call('PUT', `/appointments/${booked.id}`, { co_staff_ids: booked.co_staff_ids });
+    // Nobody else trained: no swap is offered, only another time or cancel, and nothing has moved.
+    await call('PUT', `/staff/${chitra.id}`, { specializations: [therapy.id] });
+    const none = await seatOf(second);
+    assert.ok(none.filter((c) => !c.now).every((c) => 'start_time' in c.change || 'status' in c.change), `a swap was offered with nobody free: ${JSON.stringify(none)}`);
+    assert.deepEqual(none[none.length - 1].change, { status: 'cancelled' }, 'cancel is the last choice');
+
     // With only one of them trained for it there is no time, and the answer says why instead of "no free time".
     await call('PUT', `/staff/${bina.id}`, { specializations: [therapy.id] });
     const short = await call('GET', `/appointments/suggest?date=${DAY}&patient_id=${sita.id}&therapy_id=${pair.id}`);
