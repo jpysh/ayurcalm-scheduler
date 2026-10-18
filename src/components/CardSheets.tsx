@@ -96,18 +96,15 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
       foot={line ? <Foot label={plan ? `Start this plan on ${dayText(from)}` : "Choose a plan"} ok={!!plan} busy={busy} save={start} /> : undefined}>
       {line === null ? <Loading rows={3} /> : (<>
         <Timeline items={line.entries.map((e) => {
-          const p = plans.find((x) => x.id === e.template_id);
           return {
             key: e.id || "gap", from: dayText(e.from), title: e.name,
-            note: e.id ? [e.changed_for_patient ? "Changed for this patient" : "", e.patients > 1 ? `Used by ${e.patients} patients` : "", p ? "Edit ›" : ""].filter(Boolean).join(" · ") : "Choose a plan below",
-            // The plan already running is edited where it shows (#355).
-            onClick: p ? () => setEditing(p) : undefined,
+            note: e.id ? [e.changed_for_patient ? "Changed for this patient" : "", e.patients > 1 ? `Used by ${e.patients} patients` : ""].filter(Boolean).join(" · ") : "Choose a plan below",
           };
         })} />
         <div className="mt-4 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">Change to</div>
         <div className="mt-2">
           <Picker value={chosen} onChange={setChosen}
-            options={plans.filter((p) => p.is_active || p.id === chosen).map((p) => ({ id: p.id, name: p.name, note: p.description ? String(p.description) : undefined, fact: p.patients ? plural(p.patients, "patient") : undefined }))} />
+            options={plans.filter((p) => p.is_active || p.id === chosen).map((p) => ({ id: p.id, name: p.name, note: p.id === chosen && p.description ? String(p.description) : undefined, fact: p.patients ? plural(p.patients, "patient") : undefined }))} />
         </div>
         <QuickDates label="Starts" value={from} today={today} min={line.stay.start} max={line.stay.end} onChange={setFrom} />
         {plan && patient ? <Consequence>{`${first(patient.name)} eats ${plan.name} from ${dayText(from)} to ${dayText(line.stay.end)}. What ran before ends the day before.`}</Consequence> : null}
