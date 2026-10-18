@@ -166,6 +166,15 @@ async function main() {
     assert.ok(!forMassage.includes(`${TAG} Doctor`), `the doctor was offered a massage: ${forMassage}`);
     assert.ok(forMassage.includes(`${TAG} Asha`), `a trained therapist was not offered it: ${forMassage}`);
 
+    // Undo after the other phone changed it (#900): refused with the reason, then done when asked again without the check.
+    const seen = (await call('PUT', `/appointments/${mine.id}`, { notes: 'phone A' })).updated_at as string;
+    await call('PUT', `/appointments/${mine.id}`, { notes: 'phone B' });
+    const stale = await fetch(`${API_BASE}/appointments/${mine.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ notes: '', if_unchanged_since: seen }) });
+    assert.equal(stale.status, 409, 'Undo over the other phone\'s change was not asked about');
+    assert.equal((await stale.json()).reason, 'CHANGED_SINCE');
+    const now = (await call('PUT', `/appointments/${mine.id}`, { notes: 'phone A again' })).updated_at as string;
+    assert.equal((await call('PUT', `/appointments/${mine.id}`, { notes: '', if_unchanged_since: now })).notes, '', 'an Undo with nothing changed since was refused');
+
     // Two phones on one login book the same slot at the same moment (#896): one is refused.
     const race = await Promise.all([rekha, sita].map((r) => fetch(`${API_BASE}/appointments/one`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ patient_id: r.id, therapy_id: therapy.id, date: '2030-04-18', start_time: '15:00', staff_id: asha.id, room_id: roomA.id, confirm: true }) }).then((x) => x.status)));

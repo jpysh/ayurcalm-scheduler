@@ -109,13 +109,18 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients
         toast.error(refusal.message || "That could not be saved.", refusal.alternative_start_time ? { duration: 8000, action: { label: `Move to ${refusal.alternative_start_time}`, onClick: () => { void apply({ ...change, start_time: refusal.alternative_start_time }, message); } } } : undefined);
         return;
       }
+      const saved = await res.json().catch(() => ({}));
       onClose();
       await refresh();
-      toast(message, { action: { label: "Undo", onClick: async () => {
-        const back = await fetch(`${API_BASE}/appointments/${appt.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(before) }).catch(() => null);
-        if (!back?.ok) toast.error(back ? await saveError(back, "That could not be undone.") : "That could not be undone.");
+      const putBack = async (check: boolean) => {
+        const back = await fetch(`${API_BASE}/appointments/${appt.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(check && saved.updated_at ? { ...before, if_unchanged_since: saved.updated_at } : before) }).catch(() => null);
+        const why = back && !back.ok ? await back.clone().json().catch(() => ({})) : null;
+        // The other phone of a shared login changed it since: say so, and let the admin choose (#900).
+        if (why?.reason === "CHANGED_SINCE") toast.error(why.message, { duration: 8000, action: { label: "Undo anyway", onClick: () => { void putBack(false); } } });
+        else if (!back?.ok) toast.error(back ? await saveError(back, "That could not be undone.") : "That could not be undone.");
         await refresh();
-      } } });
+      };
+      toast(message, { action: { label: "Undo", onClick: () => putBack(true) } });
     } finally {
       setBusy(false);
     }
