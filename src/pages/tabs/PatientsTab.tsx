@@ -61,7 +61,7 @@ type Visit = { id: string; date: string; start_time: string; doctor: string | nu
 const DAY_MS = 86400000;
 
 /**
- * Residents (#63, docs/design/phone.html): who is in house today, arriving,
+ * Residents (#63, docs/design/DESIGN.md): who is in house today, arriving,
  * staying and leaving, from their stays. Search finds anyone, in house or not.
  */
 function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRules, needs, onNeed, away }: { patients: Patient[]; today: string; onOpen: (id: string) => void; onAdd: () => void; q: string; everything: (q: string) => void; openRules: () => void; /** What the rules in Settings say needs doing for a patient (#288), and what tapping one opens. */ needs: AttentionItem[]; onNeed: (i: AttentionItem) => void; away: (id: string) => string | undefined }) {

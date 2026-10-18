@@ -1,5 +1,5 @@
 /**
- * Team, and Rooms: two screens from one component since #328, each with its own + (#137, docs/design/phone.html; rebuilt from the kit in #285 session 6):
+ * Team, and Rooms: two screens from one component since #328, each with its own + (#137, docs/design/DESIGN.md; rebuilt from the kit in #285 session 6):
  * who is working today and which rooms there are, and the one thing each is asked
  * most: a therapist not in, in late or leaving early; a room not available. Each
  * opens the one Availability form (#695), already on the right kind of time, so

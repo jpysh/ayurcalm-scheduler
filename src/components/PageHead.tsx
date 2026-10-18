@@ -4,7 +4,7 @@ import { createContext, useContext, type ReactNode } from "react";
 /** Where ‹ goes (#313): the screen the admin came from, the day if they came from nowhere. Set by the dashboard. */
 export const BackContext = createContext<{ label: string; run: () => void } | null>(null);
 
-/** A page's one header line, as docs/design/phone.html's .pagehead: the name, and a short count beside it. `gear` opens the rules for what this screen raises on the pill (#288). */
+/** A page's one header line, as docs/design/DESIGN.md's .pagehead: the name, and a short count beside it. `gear` opens the rules for what this screen raises on the pill (#288). */
 export default function PageHead({ title, note, gear }: { title: string; note?: ReactNode; gear?: { label: string; run: () => void } }) {
   const back = useContext(BackContext);
   return (

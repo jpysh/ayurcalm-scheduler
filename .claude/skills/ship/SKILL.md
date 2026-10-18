@@ -8,4 +8,4 @@ description: Take one change from issue to merged on AyurCalm Scheduler. Use for
 4. **Record**: a decision goes in its own `docs/design/decisions/<date>-<slug>.md`; a story change in `docs/design/STORIES.md`.
 5. **Open the PR** (body under 3,000 characters: what changed, why, verified, skipped; end with the attribution line from the session) and **turn auto-merge on** (`gh pr merge N --auto --squash`). Do not wait for CI; start the next issue.
 6. A conflict or red check comes back as an event: `git merge origin/main` into the branch (never rebase a pushed branch), keep both sides of any appended doc line, fix, push. After a squash merge never rebase onto the old branch; `git rebase --onto`.
-7. When a theme ends, write the next-session prompt (under 15 lines) on the maintainer's list (#439).
+7. When a theme ends, write the next-session prompt (under 15 lines) in chat only.

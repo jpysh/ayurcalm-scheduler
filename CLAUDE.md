@@ -127,7 +127,7 @@ every merge; other pull requests get the builds and the database-free tests only
 
 - **Blocks a merge:** builds, `tsc` at 0 errors (`npx tsc -p tsconfig.app.json --noEmit`), `npm run qa` (server rule tests) and the ten `@smoke` browser tests. Nothing else blocks.
 - **Advisory, nightly (issue "Nightly browser tests"):** every other browser test and the tap-count report. Never fixed inside a feature PR; one weekly "test repair" PR clears them.
-- Screens are checked by a screenshot UAT (`node scripts/uat.mjs <date-slug>`, committed to `docs/design/uat/`), not new browser tests. Run it for a big or visual change.
+- Screens are checked by a screenshot UAT (`node scripts/uat.mjs <date-slug>`, committed to `docs/design/uat/`; folders older than a week are deleted), not new browser tests. Run it for a big or visual change.
 - Locally run only the smoke set and the server tests for the area changed. A bug fix always leaves one test. Dates in tests are a fixed day in 2030, never `new Date()`.
 - Start a local stack for browser tests with `RATE_LIMIT_WRITES=1000 RATE_LIMIT_CALLS=10000`. After `docker compose up --wait`, also wait on `/api/health` (the first start is still seeding).
 - Scheduler, planner or day-sheet change: `npm run qa` and read the PDF (`pdftotext -layout`).
@@ -147,12 +147,19 @@ every merge; other pull requests get the builds and the database-free tests only
 
 ## How a session works here
 
-Sessions are driven from GitHub issues: **#439 is the maintainer's short list (#70 is the
-history), and the milestone "Polish week" holds the current work.** "Work on #N" is the whole brief —
-read that issue, do it, close it, and tick it off in #439. Never re-open or redo a closed session issue; if it
-needs more, open a new one that builds on it.
+**Open issues are only work in flight.** Since 18 Oct there are no milestones, short
+lists or history issues. What stays open long-term is #267 (launch: the maintainer's
+tasks first, then Claude's) and #100 (MCP: later, not needed for launch). Every
+other open issue is something a session is doing now, or a question waiting on the
+maintainer.
 
-Everything below applies to every session without being restated.
+- "Work on #N" is the whole brief: read it, do it, and close it with the PR. Never
+  reopen a closed issue. If it needs more, open a new one.
+- A finding outside the issue gets its own small issue. Fix it within the week or
+  close it as not planned. Nothing sits in a backlog: a closed issue can still be found.
+- A question for the maintainer is a comment on the issue it blocks, one line, ending
+  in a question mark. Work on something else until it is answered.
+- When the session ends, give the next prompt in chat only (under 15 lines, one code block).
 
 **Guardrails.**
 - Two strikes: if the same fix fails twice, stop and tell the maintainer what you
@@ -160,13 +167,9 @@ Everything below applies to every session without being restated.
 - A slow build or test run is fine. Re-running a check without changing
   anything is a loop: stop.
 - A large issue goes in parts merged in order; never stack more than one open dependent PR. A failure unrelated to the change: fix it in the same PR if it blocks the merge and takes under 15 minutes, else open a small issue.
-- Found something outside the issue? Open a small issue, place it in #70's
-  order, and leave it out of this PR.
 - Open the PR with auto-merge on (the `main needs CI` ruleset requires `fast`, `scope`
-  and `full`); GitHub merges it when they pass, so go on to the next issue and do not
-  wait. A conflict or a red check wakes the session: merge `main` in, fix, push. Tick
-  the maintainer's list (#439; #70 is the history) and write the next-session prompt
-  (under 15 lines, one code block) when a session ends.
+  and `full`). GitHub merges it when they pass, so move on and do not wait. Merge
+  `main` in before pushing: a PR with conflicts never starts CI.
 - **Create the issue first and use the number it returns** in code comments, docs and
   the PR; a guessed number (#522, #561) was wrong twice and had to be rewritten.
 
@@ -194,21 +197,19 @@ Leave the app open in the browser pane, signed in by API token, phone size, on t
 
 **Count the taps.** `tests/e2e/tapCount.spec.ts` prints each job's taps against the design's target (a report, not a gate); a session that changes a job states before and after in the PR.
 
-**Record every decision, keep sessions focused** (6 Oct, revised 9 Oct). A decision made in chat becomes a GitHub issue plus **its own file** in `docs/design/decisions/` (see its README) before the session ends; `DESIGN.md` keeps the rules and the decisions up to 9 Oct. Before asking, grep issues, `DESIGN.md` and `decisions/`. One theme per session; with auto-merge on there is no PR count to stop at: stop when the theme is finished or a decision is the maintainer's, log the decisions on the maintainer's list, and write the next prompt there (under 15 lines), not only in chat. Run `npx prisma generate` in `server/` before `tsc` after a pull, or the stale client prints dozens of false errors.
+**Record every decision, keep sessions focused.** A decision made in chat gets **its own file** in `docs/design/decisions/` (see its README) before the session ends; `DESIGN.md` keeps the rules and the decisions up to 9 Oct. Before asking, grep closed issues, `DESIGN.md` and `decisions/`. One theme per session: stop when the theme is finished or the next decision is the maintainer's. Run `npx prisma generate` in `server/` before `tsc` after a pull, or the stale client prints dozens of false errors.
 
 **Design for the admin's phone.** One operator, one centre, and they may never
 open a desktop after setup.
 
-**Design system and stories (#285).** Before touching any screen read
+**Design system and stories.** Before touching any screen read
 `docs/design/DESIGN.md` (rules, kit, 18-line checklist) and the story it serves in
 `docs/design/STORIES.md`. Start from the story's outcome, never from the current
 screen; build only from `src/components/kit.tsx`, and extend it rather than write
-a one-off. Until the closing session of #285 only `qa` and the tap-count check
-block a merge; the rest of e2e is advisory.
+a one-off.
 
 **Build to the design system.** `docs/design/DESIGN.md` is the authority (the bar, the menu, headers
-and the kit have moved on from the mock-up). `docs/design/phone.html`, approved in #144, is history
-only. Phone is the primary layout; a desktop only widens it. The old desktop screens are not a
+and the kit have moved on from the mock-up). Phone is the primary layout; a desktop only widens it. The old desktop screens are not a
 reference.
 
 **The printed day sheet is the product.** A screen change either improves it or
@@ -217,7 +218,7 @@ leaves it alone.
 **The app first, the AI second.** Every admin job must work in the app on a
 phone with no AI. MCP (#100) is an optional second door onto the same server
 rules, built after the job's screen, and waits until a real centre is live on
-the app and has given feedback (#194).
+the app and has given feedback (#100).
 
 **Out of scope, settled:** patient self-booking, payments, marketplace,
 marketing and loyalty, multi-location, payroll, GST billing. The reasoning is in

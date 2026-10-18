@@ -1,5 +1,5 @@
 /**
- * The pill's sheet (#164, docs/design/phone.html): what needs the admin today,
+ * The pill's sheet (#164, docs/design/DESIGN.md): what needs the admin today,
  * in two sections. "For your action" is what the server would refuse, each with
  * the one move that fixes it or the choices it is asking about. "For your
  * information" is what the app already did (a therapist's day moved) and notes.

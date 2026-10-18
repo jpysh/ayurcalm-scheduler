@@ -6,7 +6,7 @@ import { Menu, Plus } from "lucide-react";
 import { BottomSearch, BottomSheet, DateRow, dayText, Group, ListGroup, plural, Row, Seg, Btn, Tile } from "@/components/kit";
 
 /**
- * The phone frame from docs/design/phone.html (#66): one bar at the bottom, in
+ * The phone frame from docs/design/DESIGN.md (#66): one bar at the bottom, in
  * reach of the thumb, and everything else opens as a sheet from it. On a desktop
  * the bar is the same, only centred.
  */
