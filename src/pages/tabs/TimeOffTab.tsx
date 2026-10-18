@@ -1,4 +1,4 @@
-import { Btn, Consequence, DateRow, datePair, dayText, Empty, Foot, LinkRow, ListGroup, plural, Row, SearchField, Seg, SheetNote, Text, Tick, TimeList, TwoFoot } from "@/components/kit";
+import { Btn, Consequence, deleteAll, DateRow, datePair, dayText, Empty, Foot, LinkRow, ListGroup, plural, Row, SearchField, Seg, SheetNote, Text, Tick, TimeList, TwoFoot } from "@/components/kit";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
@@ -170,7 +170,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
         made.push(toUi(await res.json(), f.kind));
       }
     } catch (e) {
-      await Promise.all(made.map((h) => fetch(`${API_BASE}/timeoff/${h.id}`, { method: 'DELETE', headers })));
+      await deleteAll(made.map((h) => `${API_BASE}/timeoff/${h.id}`), { headers });
       toast.error(`Not saved: ${(e as Error).message}. Try again.`);
       return;
     }
@@ -179,7 +179,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
     const names = f.ids.map((id) => nameOf(f.kind, id)).join(', ');
     const when = s.start ? `${s.date === centreToday ? 'today' : dayText(s.date)} ${s.start}–${s.end}` : s.date === s.endDate ? dayText(s.date) : `${dayText(s.date)} to ${dayText(s.endDate)}`;
     toast(`${names} not available ${when}${fixNow || f.kind === 'GuestRoom' ? '' : '. Anything it affects waits under "need you".'}`, { position: fixNow ? 'top-center' : undefined, action: { label: 'Undo', onClick: async () => {
-      await Promise.all(made.map((h) => fetch(`${API_BASE}/timeoff/${h.id}`, { method: 'DELETE', headers })));
+      if (!(await deleteAll(made.map((h) => `${API_BASE}/timeoff/${h.id}`), { headers }))) return;
       setTimeOffs((prev) => prev.filter((x) => !made.some((h) => h.id === x.id)));
       window.dispatchEvent(new Event('timeoff-changed'));
     } } });

@@ -11,7 +11,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import {
   Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, LineSelect, Picker, QuickDates, Row, Seg, SwitchRow, Text, TextRow, Timeline,
-  dayText, noteText, money, toastUndo, Btn, saveError } from "@/components/kit";
+  dayText, noteText, money, toastUndo, Btn, saveError, deleteAll } from "@/components/kit";
 
 const DAY_MS = 86400000;
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
@@ -461,7 +461,7 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
     setBusy(false);
     if (!res.ok) { toast.error(body.message || "Nothing was booked. Try again."); return; }
     toastUndo(`Booked ${plural(body.count, "treatment")} for ${first(patient.name)}, ${dayText(plan.from)} to ${dayText(plan.to)}`, async () => {
-      await Promise.all((body.ids as string[]).map((id) => fetch(`${API_BASE}/appointments/${id}`, { method: "DELETE" })));
+      await deleteAll((body.ids as string[]).map((id) => `${API_BASE}/appointments/${id}`));
       onBooked();
     });
     onBooked();

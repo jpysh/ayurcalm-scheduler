@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { BottomSheet, saveError, Btn, Callout, ChangeLine, Consequence, EntryRow, Area, Empty, Group, LineDate, LineSelect, ListGroup, Loading, Picker, Row, SearchField, SheetFoot, Seg, Tag, TwoFoot, WhoPicker, dayText, say } from "@/components/kit";
+import { BottomSheet, saveError, deleteAll, Btn, Callout, ChangeLine, Consequence, EntryRow, Area, Empty, Group, LineDate, LineSelect, ListGroup, Loading, Picker, Row, SearchField, SheetFoot, Seg, Tag, TwoFoot, WhoPicker, dayText, say } from "@/components/kit";
 import { API_BASE } from "@/lib/apiBase";
 import { StaySheet, type StayTarget } from "@/components/CardSheets";
 import { VITALS } from "@/components/SetupSheets";
@@ -417,7 +417,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
     const body = await res.json().catch(() => ({}));
     const made: string[] = (body.appointments || []).map((a: { id: string }) => a.id);
     if (!res.ok) {
-      await Promise.all(made.map((id) => fetch(`${API_BASE}/appointments/${id}`, { method: "DELETE" })));
+      await deleteAll(made.map((id) => `${API_BASE}/appointments/${id}`));
       toast.error(`${COURSE_WHY[body.conflicts?.reason] || "That course could not be placed"}. Nothing was booked: try fewer days, another time or another therapist.`);
       return;
     }
@@ -430,7 +430,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   /** The sheet stays on Booked, so the note with Undo comes when it closes: at the bottom it would cover the buttons. */
   const close = () => {
     if (booked) toast(booked.note, { action: { label: "Undo", onClick: async () => {
-      await Promise.all(booked.ids.map((id) => fetch(`${API_BASE}/appointments/${id}`, { method: "DELETE" })));
+      await deleteAll(booked.ids.map((id) => `${API_BASE}/appointments/${id}`));
       await refresh();
     } } });
     // A booking on another day than the one on screen: go there, so the admin sees what they did (#553).
@@ -441,7 +441,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
     if (!booked) return;
     setBusy(true);
     try {
-      await Promise.all(booked.ids.map((id) => fetch(`${API_BASE}/appointments/${id}`, { method: "DELETE" })));
+      await deleteAll(booked.ids.map((id) => `${API_BASE}/appointments/${id}`));
       await refresh();
       setBooked(null); setTherapyId(""); setOpts(null); setRound((n) => n + 1);
     } finally { setBusy(false); }
