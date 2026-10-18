@@ -60,6 +60,18 @@ async function main() {
     assert.deepEqual(mine('leaves_tomorrow'), [], 'off by default, so it raises nothing');
     assert.equal(rule(o, 'vitals').count, 0, 'vitals wait for data');
 
+    // One plan for everyone the rule names (#942): both guests get it, the rule clears, Undo puts it back, nobody outside the rule is touched.
+    assert.deepEqual(mine('no_diet').sort(), [`${TAG} Aarav`, `${TAG} Bela`]);
+    const plan = (await call('GET', '/diet-templates'))[0];
+    const set = await call('POST', '/attention/diet', { date: DAY, template_id: plan.id });
+    assert.equal(set.count, 2);
+    o = await read();
+    assert.deepEqual(mine('no_diet'), [], 'every named guest now has a plan');
+    await call('POST', '/attention/diet/undo', { segment_ids: set.segment_ids });
+    o = await read();
+    assert.equal(mine('no_diet').length, 2, 'Undo puts the day back as it was');
+    assert.equal((await send('POST', '/attention/diet', { date: DAY, template_id: '00000000-0000-4000-8000-000000000000' })).status, 400);
+
     // Form C (#415): a guest from Germany who arrives today is due tomorrow; one with no country is not asked; filed, it goes.
     const clara = await prisma.patient.create({ data: { name: `${TAG} Clara`, gender: 'female', country: 'Germany' } });
     const claraStay = await prisma.patientStay.create({ data: { patient_id: clara.id, start_date: at(DAY), end_date: at('2030-08-25'), duration_days: 6 } });

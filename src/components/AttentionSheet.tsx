@@ -9,7 +9,7 @@
  * now. The sheet stays open and redraws as rows are dealt with.
  */
 import { useEffect, useState } from "react";
-import { InboxSheet, saveError, dayText, ItemRow, ListGroup, Row, Btn, undoBatch } from "@/components/kit";
+import { InboxSheet, saveError, dayText, ItemRow, ListGroup, Row, Btn, undoBatch, toastUndo } from "@/components/kit";
 import type { AttentionItem } from "@/lib/attention";
 
 export type Fix = {
@@ -60,7 +60,7 @@ type Done = { text: string; undo: (() => Promise<boolean>) | null };
 const listed = (names: string[]) => names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 const first = (name: string) => name.split(" ")[0];
 
-export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, tomorrow, coming, replans, dismissed, dismiss, undoReplan, onChanged, seeIt, afterConsultation, items, onItem, openRules, addStaff, dayOver, roomOut }: {
+export function AttentionSheet({ open, onOpenChange, apiBase, day, today, problems, tomorrow, coming, replans, dismissed, dismiss, undoReplan, onChanged, seeIt, afterConsultation, items, onItem, openRules, addStaff, dayOver, roomOut, reloadItems }: {
   open: boolean;
   /** A dead end's fix (#368): the add-a-therapist sheet, with the therapy ticked. */
   addStaff: (a: { gender?: string; therapy_id?: string }) => void;
@@ -91,13 +91,19 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   dayOver?: boolean;
   /** The Availability form on a room, from now, with the therapist's reason (#695). */
   roomOut: (roomId: string, reason: string | null) => void;
+  /** Reads the patient items again after a bulk change. */
+  reloadItems: () => void;
 }) {
   const [done, setDone] = useState<Done | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // A cause opened to choose row by row (#418).
   const [opened, setOpened] = useState<string[]>([]);
-  useEffect(() => { if (open) { setDone(null); setError(null); setOpened([]); } }, [open]);
+  // Many guests with the same problem are one row (#942); "Show" opens them one by one, so nobody is hidden.
+  const [shown, setShown] = useState<string[]>([]);
+  const [plans, setPlans] = useState<{ id: string; name: string }[]>([]);
+  const [plan, setPlan] = useState("");
+  useEffect(() => { if (open) { setDone(null); setError(null); setOpened([]); setShown([]); setPlan(""); fetch(`${apiBase}/diet-templates`).then((r) => r.json()).then((d) => setPlans(Array.isArray(d) ? d : [])).catch(() => setPlans([])); } }, [open, apiBase]);
 
   const act = problems.filter((p) => p.problem_class === "blocking");
   // Only rows with one answer: a row asking the admin to choose is never chosen for them.
@@ -105,7 +111,10 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   // A resident with nothing booked is a rest day, not a note (#144).
   const urgent = problems.filter((p) => p.urgent && !dismissed.includes(p.id));
   const notes = problems.filter((p) => p.problem_class === "worth_knowing" && p.kind !== "IDLE_RESIDENT" && !p.urgent && !dismissed.includes(p.id) && !(dayOver && p.kind === "CONSULTED"));
-  const patientAct = items.filter((i) => i.section === "Patients" && i.kind === "action");
+  const patientAll = items.filter((i) => i.section === "Patients" && i.kind === "action");
+  const GROUPED = ["no_diet", "arrival_open"];
+  const groups = GROUPED.map((r) => ({ rule: r, list: patientAll.filter((i) => i.rule === r) })).filter((g) => g.list.length >= 3 && !shown.includes(g.rule));
+  const patientAct = patientAll.filter((i) => !groups.some((g) => g.rule === i.rule));
   const patientRows = Object.values(patientAct.reduce<Record<string, AttentionItem[]>>((by, i) => { (by[i.patient_id ?? i.who] ??= []).push(i); return by; }, {}));
   const teamAct = items.filter((i) => i.section === "Team" && i.kind === "action");
   const didForYou = replans.filter((b) => !dismissed.includes(b.batch_id));
@@ -113,7 +122,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   const teamInfo = items.filter((i) => i.kind === "information" && i.section === "Team" && !didForYou.some((b) => b.staff_name === i.who));
   // What a guest said on leaving, when it was good or fine (#509): grey, under Patients.
   const patientInfo = items.filter((i) => i.kind === "information" && i.section === "Patients");
-  const empty = act.length + urgent.length + notes.length + didForYou.length + patientAct.length + patientInfo.length + teamAct.length + teamInfo.length + (tomorrow?.count ?? 0) + (coming?.length ?? 0) === 0;
+  const empty = act.length + urgent.length + notes.length + didForYou.length + patientAct.length + groups.length + patientInfo.length + teamAct.length + teamInfo.length + (tomorrow?.count ?? 0) + (coming?.length ?? 0) === 0;
 
   // Nothing left: say so, then get out of the way, as the design does. Not
   // while an Undo is showing: with the pill gone it could not be reached again.
@@ -151,6 +160,22 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
     } finally {
       setBusy(null);
     }
+  }
+
+  async function setDietForAll() {
+    setBusy("diet");
+    setError(null);
+    try {
+      const res = await fetch(`${apiBase}/attention/diet`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: day, template_id: plan }) });
+      if (!res.ok) { setError(await saveError(res)); return; }
+      const out = await res.json() as { count: number; segment_ids: string[] };
+      toastUndo(`Diet set for ${out.count} guests`, async () => {
+        await fetch(`${apiBase}/attention/diet/undo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ segment_ids: out.segment_ids }) });
+        reloadItems();
+      });
+      setPlan("");
+      reloadItems();
+    } finally { setBusy(null); }
   }
 
   async function undoDone() {
@@ -238,16 +263,27 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
         name: "Coming days", count: 0,
         body: coming?.length ? <ListGroup>{coming.map((c) => <Row key={c.date} title={`${dayText(c.date)} · ${c.count} to fix`} facts={c.headline ?? "Open the day to fix it before it starts"} trailing="Open ›" onClick={c.open} />)}</ListGroup> : null,
       }, {
+        name: "Staff", count: teamAct.length,
+        body: teamAct.length + teamInfo.length ? <ListGroup>{[...teamAct, ...teamInfo].map((i) => <Row key={i.id} title={i.kind === "information" ? i.what : i.who} facts={i.kind === "information" ? "Information · not counted" : i.what} />)}</ListGroup> : null,
+      }, {
         // Patients and Team are always today's: on a sheet headed with another day they say so (#663).
-        name: day === today ? "Patients" : "Today's patients", count: patientRows.length,
-        body: patientRows.length + patientInfo.length ? <ListGroup>{patientRows.map((g) => {
+        name: day === today ? "Patients" : "Today's patients", count: new Set(patientAll.map((i) => i.patient_id ?? i.id)).size,
+        body: patientRows.length + patientInfo.length + groups.length ? <ListGroup>{groups.map((g) => {
+          const n = new Set(g.list.map((i) => i.patient_id)).size;
+          const showBtn = <button type="button" className={tb()} onClick={() => setShown([...shown, g.rule])}>Show the {n}</button>;
+          return g.rule === "no_diet" ? item(g.rule, `No diet plan · ${n} guests`, "One plan for all of them, or show them to choose one by one.", <>
+            <select aria-label="Diet plan" className="min-h-11 rounded-xl border bg-card px-2 text-sm" value={plan} onChange={(e) => setPlan(e.target.value)}>
+              <option value="">Choose a plan</option>
+              {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <button type="button" data-main className={tb(true)} disabled={!plan || busy !== null} onClick={() => setDietForAll()}>{busy === "diet" ? "Setting…" : `Set diet for ${n}`}</button>
+            {showBtn}
+          </>, true) : item(g.rule, `Arrival notes not written · ${n} guests`, null, showBtn);
+        })}{patientRows.map((g) => {
           // Two things for one patient are one row; their card reaches both.
           const i = g.length > 1 ? { ...g[0], action: "card" as const, move: undefined } : g[0];
           return <Row key={i.id} title={i.who} facts={g.map((x) => x.what).join(" · ")} trailing={i.move ? `Move to ${i.move.room_name} ›` : { card: "Open card ›", diet: "Choose diet ›", summary: "Summary ›", followup: "Follow up ›", move: "Open card ›", week: "Plan next week ›" }[i.action ?? "card"]} onClick={() => onItem(i)} />;
         })}{patientInfo.map((i) => <Row key={i.id} title={i.who} facts={`${i.what} · information, not counted`} trailing="Open card ›" onClick={() => onItem(i)} />)}</ListGroup> : null,
-      }, {
-        name: "Staff", count: teamAct.length,
-        body: teamAct.length + teamInfo.length ? <ListGroup>{[...teamAct, ...teamInfo].map((i) => <Row key={i.id} title={i.kind === "information" ? i.what : i.who} facts={i.kind === "information" ? "Information · not counted" : i.what} />)}</ListGroup> : null,
       }, {
         // What counts comes first on the sheet; the day's information follows everything (#661).
         name: "Information · not counted", count: 0,
