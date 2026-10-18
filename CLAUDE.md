@@ -197,7 +197,7 @@ Leave the app open in the browser pane, signed in by API token, phone size, on t
 
 **Count the taps.** `tests/e2e/tapCount.spec.ts` prints each job's taps against the design's target (a report, not a gate); a session that changes a job states before and after in the PR.
 
-**Record every decision, keep sessions focused.** A decision made in chat gets **its own file** in `docs/design/decisions/` (see its README) before the session ends; `DESIGN.md` keeps the rules and the decisions up to 9 Oct. Before asking, grep closed issues, `DESIGN.md` and `decisions/`. One theme per session: stop when the theme is finished or the next decision is the maintainer's. Run `npx prisma generate` in `server/` before `tsc` after a pull, or the stale client prints dozens of false errors.
+**Record every decision, keep sessions focused.** A decision made in chat gets **its own file** in `docs/design/decisions/` (see its README) before the session ends; `DESIGN.md` keeps the rules; decisions up to 9 Oct are in `decisions/2026-10-09-earlier-decisions.md`. Before asking, grep closed issues, `DESIGN.md` and `decisions/`. One theme per session: stop when the theme is finished or the next decision is the maintainer's. Run `npx prisma generate` in `server/` before `tsc` after a pull, or the stale client prints dozens of false errors.
 
 **Design for the admin's phone.** One operator, one centre, and they may never
 open a desktop after setup.
