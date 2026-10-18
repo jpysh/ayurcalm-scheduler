@@ -1,0 +1,3 @@
+# Patients list gets a Search chip beside In house / Needs attention; matching lives on the server
+18 Oct 2026, #934, decided by Claude, to confirm.
+DESIGN.md says "no search box at the top of a screen" (the field sits above the keyboard), so the list gets a one-tap Search chip that opens the bar's search instead. Find a patient is now 2 taps (Search, the person) from the list; was 3 from the list, 4 from elsewhere. The server (`patientMatch.ts`) matches every typed word anywhere in the name ("das aarohi") and, for text that is only digits and number punctuation, the last 10 digits against the patient's or emergency phone (3 digits to start). The same rule serves Search everything. Left out: matching phone numbers by what the browser guesses; email search.
