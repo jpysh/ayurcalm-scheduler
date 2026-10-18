@@ -3,6 +3,7 @@ import { BookSheet, TreatmentCard, type CardAppt } from "@/components/TreatmentC
 import { SearchScreen } from "@/components/SearchScreen";
 import { useState } from "react";
 import { toast } from "sonner";
+import { saveError } from "@/components/kit";
 import { API_BASE } from "@/lib/apiBase";
 
 // A problem on a row, in a few words: the pill's sheet says the rest.
@@ -102,7 +103,12 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
     await refreshDay(dayKeyMemo);
     const moved = (body.replan || []).reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0);
     toast(`${name} ${entity_type === "staff" ? "not in" : "out of use"} ${from ? `from ${from}` : "all day"}${moved ? ` · ${moved} moved` : ""}`, {
-      action: { label: "Undo", onClick: async () => { await fetch(`${API_BASE}/timeoff/${body.id}`, { method: "DELETE" }); await refreshDay(dayKeyMemo); } },
+      action: { label: "Undo", onClick: async () => {
+        // A refused Undo leaves them out; say so, or the admin believes the day is back (#878).
+        const undo = await fetch(`${API_BASE}/timeoff/${body.id}`, { method: "DELETE" }).catch(() => null);
+        if (!undo?.ok) toast.error(undo ? await saveError(undo, "That could not be undone.") : "That could not be undone.");
+        await refreshDay(dayKeyMemo);
+      } },
     });
   };
   const notIn = (staffId: string, name: string) => takeOut("staff", staffId, name);

@@ -216,7 +216,8 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
   };
   const dropPhoto = async () => {
     if (!d) return;
-    await fetch(`${API_BASE}/patients/${d.id}/passport-photo`, { method: "DELETE" });
+    const res = await fetch(`${API_BASE}/patients/${d.id}/passport-photo`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) { toast.error(res ? await saveError(res, "The photo could not be removed.") : "The photo could not be removed."); return; }
     setPhotoOpen(false); load();
   };
   const [followUp, setFollowUp] = useState(false);
