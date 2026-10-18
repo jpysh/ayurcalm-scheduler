@@ -166,6 +166,11 @@ async function main() {
     assert.ok(!forMassage.includes(`${TAG} Doctor`), `the doctor was offered a massage: ${forMassage}`);
     assert.ok(forMassage.includes(`${TAG} Asha`), `a trained therapist was not offered it: ${forMassage}`);
 
+    // Two phones on one login book the same slot at the same moment (#896): one is refused.
+    const race = await Promise.all([rekha, sita].map((r) => fetch(`${API_BASE}/appointments/one`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ patient_id: r.id, therapy_id: therapy.id, date: '2030-04-18', start_time: '15:00', staff_id: asha.id, room_id: roomA.id, confirm: true }) }).then((x) => x.status)));
+    assert.deepEqual(race.sort(), [201, 409], `both phones booked Asha at 15:00: ${race}`);
+
     console.log("Treatment card: every time and room offered saves, a busy therapist isn't offered, a no-show frees theirs, and History says what changed; a suggested booking saves once and not twice; a chosen resident gets three free times; a two-therapist therapy books with both.");
   } finally {
     await tidy(prisma).catch(() => {});

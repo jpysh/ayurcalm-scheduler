@@ -166,6 +166,16 @@ expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
   }
   next();
 });
+// Writes take turns (#896): every booking path checks who is free and then saves,
+// so two phones on one login booking the same slot at once both got in. One
+// process per centre, so a queue here covers every path.
+// ponytail: in-process queue; a second app process would need a database lock.
+let writing: Promise<void> = Promise.resolve();
+expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS' || req.path === '/day-check') return next();
+  const before = writing;
+  writing = new Promise<void>((done) => { before.then(() => { res.on('close', () => done()); next(); }); });
+});
 expressApp.use('/api', demoGuard);
 expressApp.use('/api', trialGuard);
 expressApp.post('/api/appointments', apptPostLimiter);
