@@ -200,10 +200,18 @@ export const staffAwayOnDay = (rows: OffRow[], person: { id: string; weekly_sche
  * the next-free-day search all ask this, so none offers what another refuses.
  */
 export function centreClosed(settings: { working_days?: string[] } | null | undefined, rows: OffRow[], day: Date): string | null {
+  return closureOn(settings, rows, day)?.why ?? null;
+}
+
+/** The same question with the closure's own name and row, for the Day screen's "Closed: Dussehra" and the way to edit it (#940). */
+export function closureOn(settings: { working_days?: string[] } | null | undefined, rows: (OffRow & { id?: string })[], day: Date): { why: string; name: string | null; id: string | null } | null {
   const weekday = WEEKDAYS[day.getUTCDay()];
-  if (settings?.working_days?.length && !settings.working_days.includes(weekday)) return `closed on ${weekday[0].toUpperCase()}${weekday.slice(1)}s`;
+  if (settings?.working_days?.length && !settings.working_days.includes(weekday)) {
+    const why = `closed on ${weekday[0].toUpperCase()}${weekday.slice(1)}s`;
+    return { why, name: why[0].toUpperCase() + why.slice(1), id: null };
+  }
   const shut = rows.find((h) => h.entity_type === 'center' && eventHitsDay(h as unknown as EventRow, day));
-  return shut ? `closed${shut.description ? ` for ${shut.description}` : ' that day'}` : null;
+  return shut ? { why: `closed${shut.description ? ` for ${shut.description}` : ' that day'}`, name: shut.description || null, id: shut.id ?? null } : null;
 }
 
 /** The bookings a weekly pattern would leave outside a person's hours (#380), so the Hours page can say so before saving. */

@@ -3,7 +3,7 @@ import { BookSheet, TreatmentCard, type CardAppt } from "@/components/TreatmentC
 import { SearchScreen } from "@/components/SearchScreen";
 import { useState } from "react";
 import { toast } from "sonner";
-import { saveError } from "@/components/kit";
+import { dayText, plural, saveError, undoBatch } from "@/components/kit";
 import { API_BASE } from "@/lib/apiBase";
 
 // A problem on a row, in a few words: the pill's sheet says the rest.
@@ -34,7 +34,7 @@ const nowInTZ = (timeZone: string) => {
 };
 
 /** The Schedule screen, and the day sheets the bottom bar prints for the day it is on. */
-export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime, refreshDay, movedFrom, problems, history, showDay, openResident, openOut, staffCount, addTherapist, addRoom, addPatient }: Record<string, any>) {
+export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime, refreshDay, movedFrom, problems, history, closed, openClosedDays, showDay, openResident, openOut, staffCount, addTherapist, addRoom, addPatient }: Record<string, any>) {
   const [view, setView] = useState<DayView>("time");
   const [query, setQuery] = useState("");
   // Search is its own screen over every day (#165); the day list does not filter.
@@ -113,6 +113,18 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
   };
   const notIn = (staffId: string, name: string) => takeOut("staff", staffId, name);
 
+  // Booked before the centre closed (#940): the server moves them to the next open day, and each batch has its Undo.
+  const moveClosed = async () => {
+    const res = await fetch(`${API_BASE}/day-check/move-closed`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: dayKeyMemo }) }).catch(() => null);
+    if (!res?.ok) { toast.error("They could not be moved. Try again."); return; }
+    const r = await res.json() as { moved: number; left: number; batches: string[]; first: string | null; last: string | null };
+    await refreshDay(dayKeyMemo);
+    toast(r.moved ? `${plural(r.moved, "treatment")} moved to ${r.first === r.last ? dayText(r.first!) : `${dayText(r.first!)} to ${dayText(r.last!)}`}${r.left ? `. ${r.left} wait under "need you".` : ""}` : `Nothing could be moved. ${r.left} wait under "need you".`, {
+      duration: 5000,
+      action: r.batches.length ? { label: "Undo", onClick: async () => { for (const b of r.batches) await undoBatch(b, async () => {}); await refreshDay(dayKeyMemo); } } : undefined,
+    });
+  };
+
   // The day, the print buttons, booking and search are on the bottom bar (#66, #62).
   const todayISO = ymdInTZ(new Date());
   const tab = searching ? (
@@ -146,6 +158,9 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
       roomCount={roomsList.filter((r: { is_active?: boolean }) => r.is_active !== false).length}
       flags={flagsFor(problems || [], history)}
       comings={comings}
+      closed={closed}
+      onEditClosed={openClosedDays}
+      onMoveClosed={moveClosed}
     />
   );
 

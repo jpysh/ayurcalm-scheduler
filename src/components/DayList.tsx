@@ -56,12 +56,16 @@ type Props = {
   flags?: Record<string, { text: string; blocking: boolean; info?: boolean }>;
   /** First names of the guests whose stay starts or ends on this day (#583); past: the day is behind us. */
   comings?: { in: string[]; out: string[]; past: boolean };
+  /** The centre is shut this day (#940): the server says so, and nothing else is shown. */
+  closed?: { name: string | null; time_off_id: string | null; booked: number } | null;
+  onEditClosed?: () => void;
+  onMoveClosed?: () => void;
 };
 
 /** Up to three first names, then how many more. */
 const namesOf = (l: string[]) => (l.length > 3 ? `${l.slice(0, 3).join(", ")} and ${l.length - 3} more` : l.join(", "));
 
-export default function DayList({ appointments, isToday, nowMinutes: NOW, view, setView, query, patients, roomsList, staff, therapyNameById, onOpen, onNotIn, headerAction, movedFrom = {}, roomCount, flags = {}, comings }: Props) {
+export default function DayList({ appointments, isToday, nowMinutes: NOW, view, setView, query, patients, roomsList, staff, therapyNameById, onOpen, onNotIn, headerAction, movedFrom = {}, roomCount, flags = {}, comings, closed, onEditClosed, onMoveClosed }: Props) {
   const [pickView, setPickView] = useState(false);
   const name = (list: Named[], id: string | null) => list.find((x) => String(x.id) === String(id))?.name || "";
   const colourOf = (id: string) => COLOURS[Math.max(0, staff.findIndex((s) => String(s.id) === id)) % COLOURS.length];
@@ -200,6 +204,25 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
         </section>
       );
     });
+  }
+
+  if (closed) {
+    return (
+      <div className="flex flex-col gap-3 pb-20">
+        <button type="button" disabled={!closed.time_off_id} onClick={onEditClosed}
+          className="flex min-h-14 items-center justify-between rounded-xl bg-card px-4 py-3 text-left disabled:opacity-100">
+          <span className="text-base font-semibold">Closed{closed.name ? `: ${closed.name}` : ""}</span>
+          {closed.time_off_id ? <span className="text-sm font-semibold text-primary">Change ›</span> : null}
+        </button>
+        {closed.booked ? (
+          <div className="rounded-xl bg-card px-4 py-3">
+            <p className="text-base font-semibold">{plural(closed.booked, "treatment")} {closed.booked === 1 ? "was" : "were"} booked before the centre closed</p>
+            <p className="mb-2 text-sm text-muted-foreground">Hidden here until they are moved.</p>
+            <Btn kind="primary" onClick={onMoveClosed}>Move them to the next open day</Btn>
+          </div>
+        ) : <p className="px-1 text-sm text-muted-foreground">Nothing is booked.</p>}
+      </div>
+    );
   }
 
   return (
