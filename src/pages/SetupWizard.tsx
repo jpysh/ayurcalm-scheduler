@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Area, Btn, Days, Dropdown, FullPage, Group, Seg, Text, TimeList, timesBetween } from "@/components/kit";
+import { pair, Area, Btn, Days, Dropdown, FullPage, Group, Seg, Text, TimeList, timesBetween } from "@/components/kit";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { useTrial } from "@/lib/centreName";
@@ -115,7 +115,7 @@ const SetupWizard = () => {
 
       {step === 2 && (
         <form onSubmit={(e) => { e.preventDefault(); void finish(); }}>
-          <div className="grid grid-cols-2 gap-3">
+          <div className={pair}>
             <TimeList label="Opens" value={form.opening_time} onChange={(t) => set("opening_time", t)} times={timesBetween("04:00", "14:00", 30)} />
             <TimeList label="Closes" value={form.closing_time} onChange={(t) => set("closing_time", t)} times={timesBetween("12:00", "23:30", 30)} after={form.opening_time} />
           </div>

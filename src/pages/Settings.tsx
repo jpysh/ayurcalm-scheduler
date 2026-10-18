@@ -15,7 +15,7 @@ import { BackupsSheet, HelpSheet, PrintedSheet, ago, type Backups } from "@/comp
 import { ChangePasswordCard, UsersSection } from "@/components/UsersSection";
 import PageHead from "@/components/PageHead";
 import type { Attention } from "@/lib/attention";
-import {
+import { pair,
   Area, BottomSheet, ChecklistBar, Days, Dropdown, Group, ListGroup, Loading, PickPhoto, Row, Seg, SectionHead, SheetFoot, Switch, Text, TimeList, WEEK, noteText, timesBetween, Btn, dayText, setCurrency } from "@/components/kit";
 
 const DAY_TIMES = timesBetween("00:00", "23:30", 30);
@@ -249,7 +249,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
       <BottomSheet open={sheet === "hours"} onOpenChange={(o) => { if (!o) setSheet(null); }} title="Opening hours and holidays" note="The times the day shows, and the days that can be booked."
         foot={isAdmin ? <SheetFoot busy={saving} save={save} /> : undefined}>
         <fieldset disabled={!isAdmin} className="m-0 min-w-0 border-0 p-0">
-          <div className="grid grid-cols-2 gap-3">
+          <div className={pair}>
             <TimeList label="Opens" times={DAY_TIMES} value={settings.opening_time} onChange={(t) => update("opening_time", t)} />
             <TimeList label="Closes" times={DAY_TIMES} after={settings.opening_time} value={settings.closing_time} onChange={(t) => update("closing_time", t)} />
           </div>

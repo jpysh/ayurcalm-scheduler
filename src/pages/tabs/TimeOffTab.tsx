@@ -1,4 +1,4 @@
-import { Btn, Consequence, deleteAll, DateRow, datePair, dayText, Empty, Foot, LinkRow, ListGroup, plural, Row, SearchField, Seg, SheetNote, Text, Tick, TimeList, TwoFoot } from "@/components/kit";
+import { pair, Btn, Consequence, deleteAll, DateRow, datePair, dayText, Empty, Foot, LinkRow, ListGroup, plural, Row, SearchField, Seg, SheetNote, Text, Tick, TimeList, TwoFoot } from "@/components/kit";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
@@ -314,13 +314,13 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
           {f.kind === 'GuestRoom' ? <SheetNote>Whole nights only: a guest sleeps there.</SheetNote>
             : <Seg<Mode> value={f.mode} onChange={(mode) => set({ mode })} options={[['now', 'From now'], ['part', 'Part of a day'], ['days', 'Some days']]} />}
           {f.mode === 'now' ? (
-            <div className="grid grid-cols-2 gap-3">
+            <div className={pair}>
               <Row title="From" facts={`Now, ${hm}`} />
               <TimeList label="Until" times={[...timeSlots, closingTime]} after={hm} value={f.endTime && f.endTime > hm ? f.endTime : closingTime} onChange={(t) => set({ endTime: t })} />
             </div>
           ) : f.mode === 'part' ? <>
             <DateRow label="Day" value={f.date} min={centreToday} onChange={(v) => set({ date: v, endDate: v })} />
-            <div className="grid grid-cols-2 gap-3">
+            <div className={pair}>
               <TimeList label="From" times={timeSlots} value={f.startTime || timeSlots[0] || '09:00'} onChange={(t) => set({ startTime: t })} />
               <TimeList label="Until" times={[...timeSlots, closingTime]} after={f.startTime || timeSlots[0]} value={f.endTime || closingTime} onChange={(t) => set({ endTime: t })} />
             </div>
