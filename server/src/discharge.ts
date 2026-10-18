@@ -7,6 +7,7 @@
  */
 import { z } from 'zod';
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { centreClock } from './availability.js';
 
 const DAY_MS = 86400000;
 const line = z.string().trim().max(200).default('');
@@ -58,7 +59,7 @@ const fromVitals = (vitals: string | null, key: 'bp' | 'weight') => {
 };
 
 /** Everything the summary needs, the stored draft filled in with what the app knows. */
-export async function dischargeOf(stayId: string, prisma: PrismaClient) {
+export async function dischargeOf(stayId: string, prisma: PrismaClient, now = new Date()) {
   const stay = await prisma.patientStay.findUnique({ where: { id: stayId }, include: { Patient: true } });
   if (!stay) return null;
   const appts = await prisma.appointment.findMany({
@@ -78,19 +79,25 @@ export async function dischargeOf(stayId: string, prisma: PrismaClient) {
   });
   const consultations = appts.filter((a) => a.Therapy.is_consultation);
   const stored = (stay.discharge || {}) as Partial<Discharge>;
+  // A paper that is signed must not carry a time nobody recorded: the real time of leaving is
+  // the centre's clock when the draft is made on the leaving day, otherwise left for the doctor.
+  const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  const clock = centreClock(settings?.timezone || 'Asia/Kolkata', now);
+  const leavingNow = ymd(stay.end_date) === clock.date;
+
   const recordedBp = table.map((r) => r.bp).filter(Boolean);
   const draft: Discharge = {
     ...dischargeSchema.parse({
-      admitted_time: '09:00', discharged_time: '11:00',
+      discharged_time: leavingNow ? clock.time : '',
       bp: recordedBp[recordedBp.length - 1] || fromVitals(stay.vitals, 'bp'),
       weight: fromVitals(stay.vitals, 'weight'),
       discharge_type: 'Normal',
       condition: '',
       reason: stay.concerns || '',
       investigations: stay.tests || '',
-      instructions: stay.Patient.doctor_plan || '',
+      instructions: '',
       doctor_id: consultations[consultations.length - 1]?.staff_id ?? null,
-      signed_at: `${ymd(stay.end_date)} 11:00`,
+      signed_at: `${ymd(stay.end_date)}${leavingNow ? ` ${clock.time}` : ''}`,
     }),
     no: '', final: false,
     ...stored,
