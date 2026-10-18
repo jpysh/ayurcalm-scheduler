@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet, DateRow, datePair, Empty, LinkRow, ListGroup, Row, SheetFoot, Text, Tick, dayText } from "@/components/kit";
@@ -62,8 +62,13 @@ export function HolidaysSheet({ open, onOpenChange, closed, today, onChanged }: 
   }
 
   // Open after all: removed at once, Undo closes it again as it was.
+  // A second tap on a slow line would send a second delete and a second Undo, which closes the day twice (#879).
+  const reopening = useRef(new Set<string>());
   async function reopen(c: ClosedDay) {
+    if (reopening.current.has(c.id)) return;
+    reopening.current.add(c.id);
     const r = await fetch(`${API_BASE}/timeoff/${c.id}`, { method: "DELETE" }).catch(() => null);
+    reopening.current.delete(c.id);
     if (!r?.ok) { toast.error("Not changed. Try again."); return; }
     onChanged();
     toast(`Open on ${dayText(c.date)}`, { action: { label: "Undo", onClick: async () => { await post(c.date, c.endDate, c.description); onChanged(); } } });
