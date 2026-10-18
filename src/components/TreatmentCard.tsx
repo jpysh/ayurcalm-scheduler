@@ -110,7 +110,8 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients
       onClose();
       await refresh();
       toast(message, { action: { label: "Undo", onClick: async () => {
-        await fetch(`${API_BASE}/appointments/${appt.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(before) });
+        const back = await fetch(`${API_BASE}/appointments/${appt.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(before) }).catch(() => null);
+        if (!back?.ok) toast.error(back ? await saveError(back, "That could not be undone.") : "That could not be undone.");
         await refresh();
       } } });
     } finally {
@@ -140,7 +141,8 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients
       onClose();
       await refresh();
       toast(`${first}: ${f.label}`, { duration: 8000, action: body.batch_id ? { label: "Undo", onClick: async () => {
-        await fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batch_id: body.batch_id }) });
+        const back = await fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batch_id: body.batch_id }) }).catch(() => null);
+        if (!back?.ok) toast.error(back ? await saveError(back, "That could not be undone.") : "That could not be undone.");
         await refresh();
       } } : undefined });
     } finally {

@@ -11,7 +11,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import {
   Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, LineSelect, Picker, QuickDates, Row, Seg, SwitchRow, Text, TextRow, Timeline,
-  dayText, noteText, money, toastUndo, Btn, deleteAll } from "@/components/kit";
+  dayText, noteText, money, toastUndo, Btn, saveError, deleteAll } from "@/components/kit";
 
 const DAY_MS = 86400000;
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
@@ -364,8 +364,9 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The stay was not saved. Try again."); return; }
     const out = await res.json().catch(() => ({}));
     const undo = target.id ? async () => {
-      await saveStay(patient.id, target.id!, { start_date: target.start, end_date: target.end, ...(room ? { guest_room_id: target.accommodation?.room?.id ?? null } : {}) });
-      if (out.batch_id) await fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: json, body: JSON.stringify({ batch_id: out.batch_id }) });
+      const back = await saveStay(patient.id, target.id!, { start_date: target.start, end_date: target.end, ...(room ? { guest_room_id: target.accommodation?.room?.id ?? null } : {}) }).catch(() => null);
+      const undone = back?.ok && out.batch_id ? await fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: json, body: JSON.stringify({ batch_id: out.batch_id }) }).catch(() => null) : back;
+      if (!undone?.ok) toast.error(undone ? await saveError(undone, "That could not be undone.") : "That could not be undone.");
       onSaved();
     } : null;
     const text = target.id
