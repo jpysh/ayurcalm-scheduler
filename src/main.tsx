@@ -3,11 +3,13 @@ import App from "./App.tsx";
 import { toast } from "sonner";
 import "./index.css";
 import { API_BASE } from "@/lib/apiBase";
+import { readStale, writeStale } from "@/lib/staleCache";
 
 // Attach the session token to every API call from one place, so the ~15 call
 // sites across the app stay plain `fetch`. A 401 means the session is gone:
 // clear it and bounce to the login screen.
 if (typeof window !== "undefined") {
+  let lastFresh = Date.now();
   const nativeFetch = window.fetch.bind(window);
   window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -16,7 +18,35 @@ if (typeof window !== "undefined") {
     if (isApiCall && token && !url.includes("/api/auth/login")) {
       init = { ...init, headers: { ...(init.headers || {}), Authorization: `Bearer ${token}` } };
     }
-    const res = await nativeFetch(input, init);
+    const method = (init.method || (typeof input === "object" && "method" in input ? input.method : "GET") || "GET").toUpperCase();
+    const cacheable = isApiCall && method === "GET" && !/\/api\/(health|client-errors|auth)/.test(url);
+    let res: Response;
+    try {
+      res = await nativeFetch(input, init);
+    } catch (err) {
+      if ((err as { name?: string })?.name === "AbortError" || !isApiCall) throw err;
+      // No signal (#931): a read keeps the last good answer on screen, marked stale, so a lost connection never reads as an empty centre.
+      if (cacheable) {
+        const hit = readStale(url);
+        window.dispatchEvent(new CustomEvent("stale-data", { detail: hit?.at ?? lastFresh }));
+        if (hit) {
+          return new Response(hit.body, { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        throw err;
+      }
+      // A write that never left the phone: one visible message, not a hidden "Failed to fetch" per attempt.
+      if (method !== "GET") {
+        const why = "No signal, so nothing was saved. Try again when the connection is back.";
+        toast.error(why, { id: "not-saved", duration: 10000 });
+        return new Response(JSON.stringify({ error: why, message: why }), { status: 503, headers: { "Content-Type": "application/json" } });
+      }
+      throw err;
+    }
+    if (cacheable && res.ok) {
+      lastFresh = Date.now();
+      window.dispatchEvent(new Event("fresh-data"));
+      res.clone().text().then((body) => writeStale(url, body)).catch(() => {});
+    }
     if (isApiCall && res.status === 401 && window.location.pathname !== "/login") {
       localStorage.removeItem("authToken");
       localStorage.removeItem("authRole");

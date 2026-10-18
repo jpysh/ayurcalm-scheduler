@@ -26,6 +26,15 @@ const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
 const App = () => {
   const [serverOk, setServerOk] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
+  const [staleAt, setStaleAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    const stale = (e: Event) => setStaleAt((e as CustomEvent<number>).detail);
+    const fresh = () => setStaleAt(null);
+    window.addEventListener("stale-data", stale);
+    window.addEventListener("fresh-data", fresh);
+    return () => { window.removeEventListener("stale-data", stale); window.removeEventListener("fresh-data", fresh); };
+  }, []);
 
 
   useEffect(() => {
@@ -75,10 +84,11 @@ const App = () => {
         <Sonner />
         <ConfirmHost />
         <div className="min-h-screen flex flex-col">
-          {!serverOk && (
-            <div className="px-3 pt-2">
-              <Callout tone="alert" title={isOnline ? "Changes may not save" : "You are offline"}>
-                {isOnline ? "The centre's database is not answering." : "Check your phone's connection."}
+          {(!serverOk || staleAt) && (
+            <div className="px-3 py-2 sticky top-0 z-50 bg-background">
+              <Callout tone="alert" title={staleAt ? "No signal" : isOnline ? "Changes may not save" : "You are offline"}>
+                {!staleAt && (isOnline ? "The centre's database is not answering." : "Check your phone's connection.")}
+                {staleAt && `Offline, showing as of ${new Date(staleAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}. Nothing you see is lost.`}
               </Callout>
             </div>
           )}
