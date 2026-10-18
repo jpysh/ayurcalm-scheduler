@@ -16,6 +16,8 @@ const growing = field.replace("h-11", "min-h-11 py-2");
 const chevron = <svg aria-hidden viewBox="0 0 16 16" className="pointer-events-none h-4 w-4 flex-none text-muted-foreground"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 const lbl = "mt-3 mb-1 block text-sm font-semibold text-muted-foreground";
 export const noteText = "text-sm text-muted-foreground";
+/** Two short fields side by side (From and Until), one above the other when large text would clip them. */
+export const pair = "grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-3";
 export const chip = "min-h-11 rounded-full border border-[hsl(var(--input)/0.45)] px-3.5 text-sm font-semibold aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground";
 export const wide = "min-h-11 w-full rounded-full font-semibold";
 // Seeded names are stored as massage_table; the admin reads "massage table".
@@ -251,7 +253,7 @@ export function BottomSheet({ open, onOpenChange, title, label, note, children, 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
           {onBack ? <BackLink onBack={onBack} /> : null}
           {/* A sheet with no title in the design still names itself to a screen reader (#590). */}
-          <SheetTitle className={title ? "mb-3 text-xl font-bold" : "sr-only"}>{title || label || "Dialog"}</SheetTitle>
+          <SheetTitle className={title ? "mb-3 hyphens-auto break-words text-xl font-bold" : "sr-only"}>{title || label || "Dialog"}</SheetTitle>
           {note ? <p className={`-mt-2 mb-3 ${noteText}`}>{note}</p> : null}
           {children}
         </div>

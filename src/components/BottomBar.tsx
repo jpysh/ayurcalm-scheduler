@@ -128,7 +128,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
         </div>
         <div className="mt-3 pb-3">
           <div className="mb-1 pt-2 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">Go to</div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-2">
             {MENU.filter(([key]) => !(onDay && key === "schedule") && (key !== "guestrooms" || hints.guestrooms)).flatMap(([key, name]) => [
               <Tile key={key} title={name} facts={hints[key]} onClick={() => { go(key); setSheet(null); }} />,
               key === "settings" && helpWa ? <Tile key="help" title="Help · WhatsApp" facts="Ask us anything" href={`https://wa.me/${helpWa}`} onClick={() => setSheet(null)} /> : null,
