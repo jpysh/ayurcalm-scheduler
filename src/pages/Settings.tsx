@@ -12,11 +12,11 @@ import { ZoneOptions } from "@/pages/SetupWizard";
 import { AssistantSection } from "@/components/AssistantSection";
 import { AccommodationEditor, PackagesEditor } from "@/components/Catalogues";
 import { BackupsSheet, HelpSheet, PrintedSheet, ago, type Backups } from "@/components/SettingsMore";
-import { ChangePasswordCard, UsersSection } from "@/components/UsersSection";
+import { ChangeEmailCard, ChangePasswordCard, UsersSection } from "@/components/UsersSection";
 import PageHead from "@/components/PageHead";
 import type { Attention } from "@/lib/attention";
 import { pair,
-  Area, BottomSheet, ChecklistBar, Days, Dropdown, Group, ListGroup, Loading, PickPhoto, Row, Seg, SectionHead, SheetFoot, Switch, Text, TimeList, WEEK, noteText, timesBetween, Btn, dayText, setCurrency } from "@/components/kit";
+  Area, BottomSheet, Callout, ChecklistBar, Days, Dropdown, Group, ListGroup, Loading, PickPhoto, Row, Seg, SectionHead, SheetFoot, Switch, Text, TimeList, WEEK, noteText, timesBetween, Btn, dayText, setCurrency } from "@/components/kit";
 
 const DAY_TIMES = timesBetween("00:00", "23:30", 30);
 const SLOT_OPTIONS = [15, 20, 30, 60];
@@ -66,6 +66,9 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
   const trial = useTrial();
   const isAdmin = typeof window !== "undefined" && localStorage.getItem("authRole") === "Admin";
 
+  const [account, setAccount] = useState<{ email: string; demo_password: boolean } | null>(null);
+  const loadAccount = useCallback(() => { fetch(`${API_BASE}/account`).then((r) => (r.ok ? r.json() : null)).then(setAccount).catch(() => setAccount(null)); }, []);
+  useEffect(loadAccount, [loadAccount]);
   useEffect(() => {
     fetch(`${API_BASE}/settings`).then((r) => r.json()).then(setSettings).catch(() => toast.error("Could not load settings"));
   }, []);
@@ -182,7 +185,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
       </ListGroup>
 
       <ListGroup title="You and the app">
-        <Row title="Your account" facts={isAdmin ? "Password and your AI assistant" : "Password"} trailing="›" onClick={() => setSheet("account")} />
+        <Row title="Your account" facts={isAdmin ? "Email, password and your AI assistant" : "Email and password"} flag={account?.demo_password ? "Change the demo password" : undefined} trailing="›" onClick={() => setSheet("account")} />
         <Row title="Help and plan" facts={trial && isAdmin ? "Report a problem, invite a centre, plan" : "Report a problem"} trailing="›" onClick={() => setSheet("help")} />
       </ListGroup>
       {signOut ? <Btn kind="secondary" className="mt-4" onClick={signOut}>Sign out</Btn> : null}
@@ -280,8 +283,11 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
       </BottomSheet>
 
       <BottomSheet open={sheet === "account"} onOpenChange={(o) => { if (!o) setSheet(null); }} title="Your account">
+        {account?.demo_password ? <div className="mt-2"><Callout tone="alert" title="Change the demo password">Anyone who has seen the demo knows demo1234. Choose your own below.</Callout></div> : null}
+        <SectionHead>Sign-in email</SectionHead>
+        <ChangeEmailCard email={account?.email ?? ""} onChanged={loadAccount} />
         <SectionHead>Password</SectionHead>
-        <ChangePasswordCard />
+        <ChangePasswordCard onChanged={loadAccount} />
         {isAdmin ? <><SectionHead>Your AI assistant</SectionHead><AssistantSection /></> : null}
       </BottomSheet>
 
