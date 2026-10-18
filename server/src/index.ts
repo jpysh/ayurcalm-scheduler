@@ -20,6 +20,7 @@ import { packagesRouter, accommodationsRouter, guestRoomsRouter } from './catalo
 import { mcpRouter, mcpKeyRouter } from './mcp.js';
 import { logWrites } from './changeLog.js';
 import { ZodError } from 'zod';
+import { firstRefusal } from './plainErrors.js';
 import path from 'path';
 import fs from 'fs';
 import zlib from 'zlib';
@@ -250,7 +251,7 @@ server.headersTimeout = HEADERS_TIMEOUT;
 expressApp.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ZodError) {
     res.status(400).json({
-      error: 'Invalid request',
+      ...firstRefusal(err),
       details: err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
     });
     return;

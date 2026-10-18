@@ -39,10 +39,18 @@ export const dischargeSchema = z.object({
 });
 export type Discharge = z.infer<typeof dischargeSchema> & { no: string; final: boolean };
 
+/** Printed on every sheet, so an address that is not one is refused rather than printed. */
+const email = z.string().trim().max(200).refine((v) => !v || z.email().safeParse(v).success, 'Enter a valid email address, such as care@yourcentre.in.').default('');
+/** Shown to guests as text and perhaps a link: a bare domain is fine, any scheme but http(s) is not (javascript:, data:). */
+const website = z.string().trim().max(200).refine(
+  (v) => !v || (!/\s/.test(v) && (/^https?:\/\/\S+$/i.test(v) || !/^[a-z][a-z0-9+.-]*:/i.test(v))),
+  'Website must start with http:// or https://, or be just the address, like yourcentre.in.',
+).default('');
+
 export const letterheadSchema = z.object({
   seal_logo: z.string().max(1_400_000).refine((v) => !v || v.startsWith('data:image/'), 'Seal must be an image').default(''),
   name_local: line, registration_line: line, accreditation_line: line,
-  phones: line, email: line, website: line, footer_line: z.string().trim().max(300).default(''),
+  phones: line, email: email, website: website, footer_line: z.string().trim().max(300).default(''),
   // {YYYY} is the year of discharge, {N} counts discharges.
   discharge_format: z.string().trim().max(40).default('DS/{YYYY}/{N}'),
 });

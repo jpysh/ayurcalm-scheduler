@@ -28,11 +28,12 @@ export const say = (s: string) => s.replace(/_/g, " ");
 export const SheetNote = ({ children }: { children: ReactNode }) => <p className={noteText}>{children}</p>;
 
 /** A label over one control. */
-const Field = ({ label, note, children }: { label: string; note?: ReactNode; children: ReactNode }) => (
+const Field = ({ label, note, error, children }: { label: string; note?: ReactNode; error?: string; children: ReactNode }) => (
   <label className="block min-w-0">
     <span className={lbl}>{label}</span>
     {note ? <span className={`-mt-1 mb-2 block font-normal ${noteText}`}>{note}</span> : null}
     {children}
+    {error ? <span role="alert" className="-mt-1 mb-3 block text-sm font-semibold text-destructive">{error}</span> : null}
   </label>
 );
 
@@ -46,8 +47,8 @@ export const Group = ({ label, note, children }: { label: string; note?: ReactNo
 );
 
 /** `valid` puts the green check at the end of the box: the field is right, nothing more to do here. */
-export const Text = ({ label, note, valid, className = "", ...rest }: { label: string; note?: ReactNode; valid?: boolean } & InputHTMLAttributes<HTMLInputElement>) => (
-  <Field label={label} note={note}>
+export const Text = ({ label, note, valid, error, className = "", ...rest }: { label: string; note?: ReactNode; valid?: boolean; error?: string } & InputHTMLAttributes<HTMLInputElement>) => (
+  <Field label={label} note={note} error={error}>
     <span className="relative block">
       <input className={`${field} ${valid ? "pr-10" : ""} ${className}`} {...rest} />
       {valid ? <span aria-hidden className="absolute inset-y-0 right-3.5 flex items-center font-bold text-primary">✓</span> : null}
@@ -56,8 +57,8 @@ export const Text = ({ label, note, valid, className = "", ...rest }: { label: s
 );
 
 /** A few lines of free text, in the same box as Text. */
-export const Area = ({ label, note, rows = 3, className = "", ...rest }: { label: string; note?: ReactNode; rows?: number } & TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-  <Field label={label} note={note}>
+export const Area = ({ label, note, rows = 3, error, className = "", ...rest }: { label: string; note?: ReactNode; rows?: number; error?: string } & TextareaHTMLAttributes<HTMLTextAreaElement>) => (
+  <Field label={label} note={note} error={error}>
     <textarea rows={rows} className={`${field} h-auto py-2.5 leading-snug ${className}`} {...rest} />
   </Field>
 );

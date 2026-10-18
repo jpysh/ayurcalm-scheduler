@@ -9,9 +9,9 @@ type Sex = "" | "female" | "male";
 type Named = { name: string; gender: Sex };
 type Item = { id: string; name: string; on: boolean };
 
-/** One name per line, as typed or pasted from WhatsApp or a spreadsheet; a gender already chosen survives an edit. */
-const names = (text: string, before: Named[]): Named[] =>
-  [...new Set(text.split(/\r?\n/).map((l) => l.replace(/^[\s\d.)-]+/, "").trim()).filter(Boolean))]
+/** One name per line, or between commas for the team (#952; a patient may be written "Surname, First"), as typed or pasted from WhatsApp or a spreadsheet; a gender already chosen survives an edit. */
+const names = (text: string, before: Named[], commas = true): Named[] =>
+  [...new Set(text.split(commas ? /[\r\n,]+/ : /\r?\n/).map((l) => l.replace(/^[\s\d.)-]+/, "").trim()).filter(Boolean))]
     .map((name) => ({ name, gender: before.find((b) => b.name === name)?.gender ?? "" }));
 
 const centreDay = (tz: string, plusDays = 0) => {
@@ -58,7 +58,7 @@ export default function MakeItMine() {
   const [sheet, setSheet] = useState<Resident[]>([]);
   const readResidents = async (text: string) => {
     setResidentsText(text);
-    if (text.includes("\t")) { setResidents([]); setSheet(await checkResidents(text)); } else { setSheet([]); setResidents(names(text, residents)); }
+    if (text.includes("\t")) { setResidents([]); setSheet(await checkResidents(text)); } else { setSheet([]); setResidents(names(text, residents, false)); }
   };
 
   useEffect(() => {
@@ -134,7 +134,8 @@ export default function MakeItMine() {
           <Area label="Doctors" rows={3} value={doctorsText} placeholder={"One name per line"} note="They see each new patient first."
             onChange={(e) => { setDoctorsText(e.target.value); setDoctors(names(e.target.value, doctors)); }} />
           <WhoIs people={doctors} set={setDoctors} />
-          <Area label="Therapists" rows={10} value={therapistsText} placeholder={"One name per line, or paste a list"}
+          <Area label="Therapists" rows={10} value={therapistsText} placeholder={"One name per line, or Asha, Ravi, Meera"}
+            note="Each name below gets its own Woman or Man choice."
             onChange={(e) => { setTherapistsText(e.target.value); setTherapists(names(e.target.value, therapists)); }} />
           <WhoIs people={therapists} set={setTherapists} />
           {foot(teamOk, "Continue", undefined, !centre.trim() ? "Add the centre's name." : !doctors.length ? "Add at least one doctor." : !therapists.length ? "Add at least one therapist." : "Choose Woman or Man for each person.")}
