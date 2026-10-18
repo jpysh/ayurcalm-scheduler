@@ -111,11 +111,13 @@ const AdminDashboard = () => {
         if (s?.setup_complete === false && !s.demo_data && localStorage.getItem("authRole") === "Admin") { navigate("/setup"); return; }
         setCurrency(s?.currency);
         if (s?.opening_time && s?.closing_time) {
+          setHoursLoaded(true);
           setCentreHours({ opening_time: s.opening_time, closing_time: s.closing_time, slot_minutes: s.slot_minutes ?? 30, timezone: s.timezone || "Asia/Kolkata" });
         }
       })
       .catch(() => { /* falls back to the defaults above */ });
   }, []);
+  const [hoursLoaded, setHoursLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState("schedule");
   const [showAttention, setShowAttention] = useState(false);
   const [addingRooms, setAddingRooms] = useState(false);
@@ -188,6 +190,8 @@ const AdminDashboard = () => {
   // A day named in the address (?date=YYYY-MM-DD) opens on that day, e.g. tomorrow after Make it mine (#755).
   const dateParam = new URLSearchParams(window.location.search).get('date');
   useEffect(() => { if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) setCurrentDate(dayDate(dateParam)); }, [ADMIN_TZ]); // eslint-disable-line react-hooks/exhaustive-deps
+  // After the centre closes, Day opens on the day Staff, link pages and Print use (#951); once, and never over a day named in the address.
+  useEffect(() => { if (hoursLoaded && !dateParam) setCurrentDate(dayDate(planningDay(ymdInTZ(new Date()), centreHours.closing_time, ADMIN_TZ))); }, [hoursLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
   const shiftDay = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 
   // The bar's search on the Team, Therapies and Events lists: it filters the list on screen.
