@@ -247,6 +247,22 @@ const breakable = (t: string) => t.replace(/\p{L}{13,}/gu, (w) => w.replace(/([a
  */
 export function BottomSheet({ open, onOpenChange, title, label, note, children, foot, onBack }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; /** The name a screen reader hears when the sheet shows no title. */ label?: string; note?: ReactNode; children: ReactNode; foot?: ReactNode; /** A sheet's second page: Back above the title. */ onBack?: () => void }) {
   const opener = useRef<HTMLElement | null>(null);
+  const close = useRef(onOpenChange); close.current = onOpenChange;
+  // Back is how a thumb dismisses a sheet on Android: an open sheet owns one history entry, and Back pops it and closes the sheet (#936).
+  useEffect(() => {
+    if (!open) return;
+    const mark = `sheet-${Math.random().toString(36).slice(2)}`;
+    window.history.pushState({ ...window.history.state, sheet: mark }, "");
+    let popped = false;
+    // Back lands on the entry below ours; a sheet underneath sees its own mark and stays open.
+    const onPop = () => { if (window.history.state?.sheet === mark) return; popped = true; close.current(false); };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      // Closed by a tap: drop our entry, unless a sheet that replaced this one in the same moment, or a page move, has since taken the top (Back would undo it).
+      if (!popped) setTimeout(() => { if (window.history.state?.sheet === mark) window.history.back(); }, 0);
+    };
+  }, [open]);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="mx-auto flex max-h-[88dvh] max-w-xl flex-col rounded-t-sheet bg-card p-0 outline-none"

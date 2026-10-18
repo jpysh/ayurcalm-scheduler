@@ -107,3 +107,13 @@ test('a long name stops at 80 letters and counts from 70', async ({ page }) => {
   await expect(page.getByText('80 of 80 letters')).toBeVisible();
   await expect(page.getByRole('dialog').getByRole('button', { name: 'Add patient' })).toBeVisible();
 });
+
+/** #936: the phone's Back closes an open sheet instead of stranding it over the screen. */
+test('Back closes the New patient sheet', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('button', { name: 'New patient', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page).toHaveURL(/\/admin\/patients/);
+});
