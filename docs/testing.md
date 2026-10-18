@@ -38,11 +38,11 @@ users). CI from a fresh database is the gate; don't repeat it locally.
   problem on its own day. One that did broke CI for every pull request after 15:00 (#173).
 - A large issue (a screen plus new server endpoints) goes in parts, merged in
   order: server with its test, then the screen with its tap counts, then any
-  leftovers. The issue is ticked in #70 when its last part merges. Merge a part
+  leftovers. The issue closes when its last part merges. Merge a part
   before building on it; never stack more than one open PR.
 - A failure unrelated to the change: fix it in the same PR if it blocks the merge
-  and takes under 15 minutes; otherwise note it in the PR and open a small issue
-  in #70's order.
+  and takes under 15 minutes; otherwise note it in the PR and open a small issue.
+.
 
 A test that needs a date builds its own fixed day in 2030, as `daySheet.test.ts`
 does, never `new Date()` or the seeded day, which moves with today.

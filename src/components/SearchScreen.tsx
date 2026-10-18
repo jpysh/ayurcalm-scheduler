@@ -1,5 +1,5 @@
 /**
- * Search, as a phone's calendar does it (#165, docs/design/phone.html): every
+ * Search, as a phone's calendar does it (#165, docs/design/DESIGN.md): every
  * treatment past and future, grouped by day, Upcoming / Past / All, the words
  * that matched marked. Empty, it offers something to start from: recent
  * searches, the residents on the day, the therapists.

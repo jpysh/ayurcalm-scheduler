@@ -1,6 +1,6 @@
 import { BottomSheet, Btn, plural, Seg } from "@/components/kit";
 /**
- * The day as one list (#62), built to docs/design/phone.html: hour groups with
+ * The day as one list (#62), built to docs/design/DESIGN.md: hour groups with
  * sticky headers, finished treatments dimmed above, a line at now, and the
  * screen opening there. The same rows regroup by therapist, room or resident.
  * Everything shown comes from the server's appointments; the list only sorts.

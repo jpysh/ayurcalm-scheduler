@@ -1,7 +1,7 @@
 # ENGINEERING.md — what keeps a live centre safe
 
 Claude's list, ranked by harm to a live centre (Task A, 6 Oct; audited in Task B on a throwaway stack,
-7 Oct, approved by the maintainer). Evidence is what was run and read. Fixes are the Audit track in #70.
+7 Oct, approved by the maintainer). Evidence is what was run and read.
 
 | # | Check | Verdict | Fix |
 |---|---|---|---|

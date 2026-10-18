@@ -1,5 +1,5 @@
 /**
- * One resident's day, for the resident card (#63, docs/design/phone.html): the
+ * One resident's day, for the resident card (#63, docs/design/DESIGN.md): the
  * stay it falls in, today's treatments, the week ahead (#350), and what they eat today with the plan
  * it comes from. Meals resolve through the same code as the day sheet, so the
  * card and the notice board cannot disagree.

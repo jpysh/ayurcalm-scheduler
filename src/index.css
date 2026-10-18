@@ -9,7 +9,7 @@
 
 @layer base {
   :root {
-    /* The phone design's tokens (#143, docs/design/phone.html). Colour means
+    /* The phone design's tokens (#143, docs/design/DESIGN.md). Colour means
        state only: orange is now, red must be fixed, amber was changed by the app. */
     --background: 96 24% 96%;
     --foreground: 201 22% 15%;
