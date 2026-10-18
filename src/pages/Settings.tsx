@@ -16,7 +16,7 @@ import { ChangePasswordCard, UsersSection } from "@/components/UsersSection";
 import PageHead from "@/components/PageHead";
 import type { Attention } from "@/lib/attention";
 import { pair,
-  Area, BottomSheet, ChecklistBar, Days, Dropdown, Group, ListGroup, Loading, PickPhoto, Row, Seg, SectionHead, SheetFoot, Switch, Text, TimeList, WEEK, noteText, timesBetween, Btn, dayText, setCurrency } from "@/components/kit";
+  Area, BottomSheet, ChecklistBar, Days, Dropdown, Group, ListGroup, Loading, PickPhoto, Row, Seg, SectionHead, SheetFoot, Switch, Text, TimeList, WEEK, noteText, timesBetween, Btn, Callout, dayText, setCurrency } from "@/components/kit";
 
 const DAY_TIMES = timesBetween("00:00", "23:30", 30);
 const SLOT_OPTIONS = [15, 20, 30, 60];
@@ -72,6 +72,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) => setSettings((s) => (s ? { ...s, [key]: value } : s));
 
   const [backups, setBackups] = useState<Backups | null>(null);
+  const [newVersion, setNewVersion] = useState<{ latest: string; line: string } | null>(null);
   const [people, setPeople] = useState<number | null>(null);
   const [lastPrint, setLastPrint] = useState<string | null>(null);
   const [lastChange, setLastChange] = useState<string | null>(null);
@@ -81,6 +82,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
   useEffect(() => {
     if (!isAdmin) return;
     fetch(`${API_BASE}/settings/backups`).then((r) => (r.ok ? r.json() : null)).then(setBackups).catch(() => setBackups(null));
+    fetch(`${API_BASE}/settings/update`).then((r) => (r.ok ? r.json() : null)).then((d) => setNewVersion(d?.update ?? null)).catch(() => setNewVersion(null));
     fetch(`${API_BASE}/printed-sheets`).then((r) => (r.ok ? r.json() : [])).then((l: { date: string }[]) => setLastPrint(l[0]?.date ?? null)).catch(() => setLastPrint(null));
   }, [isAdmin]);
 
@@ -168,6 +170,15 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
           <Row title="Printed sheets" facts={lastPrint ? `Last printed for ${dayText(lastPrint)}` : "Nothing printed yet"} trailing="›" onClick={() => setSheet("printed")} />
           <Row title="People with access" facts={people === null ? "Who can sign in" : `${people} ${people === 1 ? "person" : "people"} can sign in`} trailing="›" onClick={() => show("people")} />
         </ListGroup>
+      ) : null}
+
+      {newVersion ? (
+        <div className="mb-3">
+          <Callout tone="notice" title="A new version is ready" actions={<Btn kind="quiet" inline onClick={() => navigator.clipboard.writeText(newVersion.line).then(() => toast.success("Copied"), () => toast.error("Could not copy. Press and hold the line instead."))}>Copy the line</Btn>}>
+            Version {newVersion.latest}. Take a backup, then run this on the computer the app runs on:
+            <code className="mt-1 block select-all break-all rounded bg-background px-2 py-1 text-xs">{newVersion.line}</code>
+          </Callout>
+        </div>
       ) : null}
 
       <ListGroup title="Your centre">
