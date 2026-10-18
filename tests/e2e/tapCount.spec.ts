@@ -31,8 +31,8 @@ const JOBS: [string, number][] = [
   ["Print today's sheets", 2], // Print moved into the Menu (5 Oct): the bar keeps room for the date
   // From the Patients screen. Story 4 says 2; the gender is one tap because nothing is chosen for them (#283).
   ['Add an arriving patient', 3], // 6 Oct (#313): +, gender, Add
-  // From the Patients screen: Search, then the person (typing is not counted).
-  ['Find a patient', 3],
+  // From the Patients screen: Search on the list (#934), then the person (typing is not counted).
+  ['Find a patient', 2],
   // Story 14 (#354): from the Patients screen, the card, Plan next week, Book all (was 10, a booking per day).
   ["Plan a patient's next week", 3],
   // Stories 7 to 12 (#285), from the patient's card already open, as the design counts them.
@@ -324,8 +324,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
 
     await job(page, rows, 'Find a patient', async (tap) => {
       await page.goto('/admin/patients');
-      await tap(page.getByRole('button', { name: 'Menu', exact: true }));
-      await tap(page.getByRole('dialog').getByRole('button', { name: /^Search patients/ }));
+      await tap(page.getByRole('button', { name: 'Search patients', exact: true }));
       await expect(page.getByPlaceholder('Search patients')).toBeFocused();
       await page.keyboard.type('sha');
       await tap(page.getByText(/Diet:/).first());

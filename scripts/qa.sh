@@ -77,7 +77,7 @@ run newPatient       "A new patient is saved with their details and a consultati
 run historyTeam "A treatment's History names the whole team when a pair lost one therapist and gained another"
 run treatmentCard    "Every time and room a treatment card offers saves, a busy therapist is not offered, a no-show frees theirs, and History says what changed"
 run bookingRules    "Booking from +: a repeated therapy or a long day is asked about and books on Book anyway, and every dead end carries a way forward"
-run search           "Search finds a resident's treatments on every day in the window, in order, by name, room or any therapist, and leaves out cancelled ones"
+run search           "Search finds a resident's treatments on every day in the window, in order, by name, room or any therapist, and leaves out cancelled ones; the Patients list finds a person by phone number in any format or by surname first"
 run residentDay      "A resident's card shows which day of their stay it is, today's treatments without cancelled ones, and meals as the day sheet prints them"
 run attention       "What needs you: patient items follow the rules, a changed 'when' or an off switch changes them, the locked rule stays on, and Reset restores the defaults"
 run fastOpen        "A fast first open: the script is compressed and cached for a year, and the week comes in one call"

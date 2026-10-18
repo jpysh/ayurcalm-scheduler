@@ -19,6 +19,7 @@ import { centreClock, eventClashes, outsideHours, type EventRow } from './availa
 import { loadDietsForDay } from './dietResolution.js';
 import { bookingOptions, bookingSuggestions, bookingWho, cardChoices, nextConsultations, notStaying, planNextWeek, therapyFacts, whyNoConsultation, whyNoTime } from './cardChoices.js';
 import { historyOf } from './history.js';
+import { patientMatches } from './patientMatch.js';
 import { searchOut, searchPatients, searchTreatments } from './search.js';
 import { residentDay } from './residentDay.js';
 import { changeLog } from './changeLog.js';
@@ -401,16 +402,15 @@ app.get('/patients', async (req: Request, res: Response) => {
   res.json(data);
 });
 
-// The Patients search (#285 story 6): by name or by the diet plan they are on, each with the facts a decision needs.
+// The Patients search (#285 story 6, #934): by name in any order, phone number, or the diet plan they are on, each with the facts a decision needs.
 app.get('/patients/find', async (req: Request, res: Response) => {
   const q = z.object({ q: z.string().trim().min(1).max(100), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
   const day = new Date(`${q.date}T00:00:00.000Z`);
   const [patients, diets] = await Promise.all([prisma.patient.findMany({ include: { Stays: { orderBy: { start_date: 'desc' } } } }), loadDietsForDay(day, prisma)]);
-  const ql = q.q.toLowerCase();
   const found = patients.map((p) => {
     const stay = p.Stays.find((s) => s.start_date <= day && s.end_date >= day);
     return { p, stay, plan: stay ? diets.dietFor(p, false).planName || '' : '' };
-  }).filter((x) => x.p.name.toLowerCase().includes(ql) || x.plan.toLowerCase().includes(ql)).sort((a, b) => Number(!!b.stay) - Number(!!a.stay) || a.p.name.localeCompare(b.p.name)).slice(0, 40);
+  }).filter((x) => patientMatches(x.p, q.q, x.plan)).sort((a, b) => Number(!!b.stay) - Number(!!a.stay) || a.p.name.localeCompare(b.p.name)).slice(0, 40);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   res.json({ patients: found.map(({ p, stay, plan }) => {
     // Stays come newest first, so the next one ahead is the last of those that start after the day.
