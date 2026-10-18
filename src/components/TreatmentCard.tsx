@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { BottomSheet, saveError, deleteAll, Btn, Callout, ChangeLine, Consequence, EntryRow, Area, Empty, Group, LineDate, LineSelect, ListGroup, Loading, Picker, Row, SearchField, SheetFoot, Seg, Tag, TwoFoot, WhoPicker, dayText, say } from "@/components/kit";
+import { BottomSheet, saveError, deleteAll, Btn, Callout, ChangeLine, Consequence, EntryRow, Area, Empty, Group, LineDate, LineSelect, ListGroup, Loading, Picker, Row, SearchField, SheetFoot, Seg, Tag, TwoFoot, WhoPicker, dayText, say, undoBatch } from "@/components/kit";
 import { API_BASE } from "@/lib/apiBase";
 import { StaySheet, type StayTarget } from "@/components/CardSheets";
 import { VITALS } from "@/components/SetupSheets";
@@ -147,11 +147,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients
       if (!res.ok) { toast.error(body.message || "The day changed; open the card again for a new answer."); return; }
       onClose();
       await refresh();
-      toast(`${first}: ${f.label}`, { duration: 8000, action: body.batch_id ? { label: "Undo", onClick: async () => {
-        const back = await fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batch_id: body.batch_id }) }).catch(() => null);
-        if (!back?.ok) toast.error(back ? await saveError(back, "That could not be undone.") : "That could not be undone.");
-        await refresh();
-      } } : undefined });
+      toast(`${first}: ${f.label}`, { duration: 8000, action: body.batch_id ? { label: "Undo", onClick: () => { void undoBatch(body.batch_id, refresh); } } : undefined });
     } finally {
       setBusy(false);
     }

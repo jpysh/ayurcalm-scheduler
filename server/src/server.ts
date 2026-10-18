@@ -635,6 +635,7 @@ app.get('/patients/:id/stays/:stayId/preview', async (req: Request, res: Respons
   });
 });
 
+const CHANGED_SINCE = { reason: 'CHANGED_SINCE', message: 'It was changed since, on another phone or link.' };
 const stayExtras = z.object({
   package_id: z.string().uuid().nullable().optional(),
   accommodation_id: z.string().uuid().nullable().optional(),
@@ -642,6 +643,8 @@ const stayExtras = z.object({
   guest_room_id: z.string().uuid().nullable().optional(),
   /** Mark the treatments left after a shortened stay cancelled, "stay shortened", as one batch with one Undo. */
   cancel_after: z.boolean().optional(),
+  /** Undo sends the stay as its save left it: changed since on another phone, it asks first (#911). */
+  if_still: z.object({ start_date: z.string(), end_date: z.string(), package_id: z.string().nullable(), accommodation_id: z.string().nullable(), guest_room_id: z.string().nullable() }).partial().optional(),
 });
 
 /**
@@ -655,6 +658,8 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
   const stay = await stayOf(req);
   if (!stay) { res.status(404).json({ error: 'Stay not found' }); return; }
   const extras = stayExtras.parse(req.body);
+  const now = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : (v as string | null) ?? null);
+  if (extras.if_still && Object.entries(extras.if_still).some(([k, v]) => now(stay[k as keyof typeof extras.if_still]) !== v)) { res.status(409).json(CHANGED_SINCE); return; }
   const dates = req.body.start_date || req.body.end_date ? stayData(staySchema.parse(req.body)) : { start_date: stay.start_date, end_date: stay.end_date, duration_days: stay.duration_days };
   // The room is checked on every night of the stay as it will be, whether the room or the dates changed.
   const roomId = extras.guest_room_id !== undefined ? extras.guest_room_id : stay.guest_room_id;
@@ -966,9 +971,10 @@ app.post('/replan', async (req: Request, res: Response) => {
 });
 
 app.post('/replan/undo', async (req: Request, res: Response) => {
-  const body = z.object({ batch_id: z.string().uuid() }).parse(req.body);
-  const result = await undoReplan(body.batch_id, prisma);
+  const body = z.object({ batch_id: z.string().uuid(), anyway: z.boolean().optional() }).parse(req.body);
+  const result = await undoReplan(body.batch_id, prisma, { anyway: body.anyway });
   if (!result) { res.status(404).json({ error: 'Nothing to undo' }); return; }
+  if ('changed_since' in result) { res.status(409).json(CHANGED_SINCE); return; }
   res.json(result);
 });
 
@@ -1428,7 +1434,7 @@ app.put('/appointments/:id', async (req: Request, res: Response) => {
   const existing = await prisma.appointment.findUnique({ where: { id: String(id) } });
   if (!existing) { res.status(404).json({ error: 'Appointment not found' }); return; }
   if (if_unchanged_since && existing.updated_at.toISOString() !== if_unchanged_since) {
-    res.status(409).json({ reason: 'CHANGED_SINCE', message: 'It was changed since, on another phone or link.' });
+    res.status(409).json(CHANGED_SINCE);
     return;
   }
 
