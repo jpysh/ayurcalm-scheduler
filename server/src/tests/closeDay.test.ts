@@ -58,6 +58,9 @@ async function main() {
     assert.equal(before.groups.filter((g) => g.key === 'CENTER_HOLIDAY').length, 1, 'one heading for the whole closed day');
     assert.ok(!before.problems.some((p) => p.kind === 'IDLE_RESIDENT'), 'nothing booked on a closed day is not a failure');
 
+    // The Day screen is told it is closed, by what name, which row to edit, and what is still booked (#940).
+    assert.deepEqual(before.closed, { name: null, time_off_id: closure.id, booked: 3 });
+
     // The plan never offers a closed day: not the same day (a no-op), not Thursday.
     const moved = await moveOffClosedDays('2030-01-16', '2030-01-16', prisma, { timeOffId: closure.id, now: { date: '2030-01-15', time: '17:00' } });
     assert.equal(moved.moved, 3, `all three should move, got ${JSON.stringify(moved)}`);

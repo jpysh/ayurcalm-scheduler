@@ -951,6 +951,12 @@ app.get('/day-check/range', async (req: Request, res: Response) => {
   res.json(await planRange(q.data.from, q.data.to, prisma));
 });
 
+/** The admin's answer to "N treatments are booked on a closed day": move them to the next open day (#940). One Undo per batch, through /replan/undo. */
+app.post('/day-check/move-closed', async (req: Request, res: Response) => {
+  const body = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.body);
+  res.json(await moveOffClosedDays(body.date, body.date, prisma));
+});
+
 /** Other ways to place one treatment, when the admin does not like the row. */
 app.get('/day-check/options', async (req: Request, res: Response) => {
   const date = String(req.query.date || '').slice(0, 10);

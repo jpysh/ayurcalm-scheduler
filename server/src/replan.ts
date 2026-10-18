@@ -653,6 +653,7 @@ export async function moveOffClosedDays(from: string, to: string, prisma: Prisma
   let moved = 0;
   let left = 0;
   const landed: string[] = [];
+  const batches: string[] = [];
   // ponytail: capped at 31 days, as one plan; a longer closure moves its first month.
   for (let d = new Date(`${from}T00:00:00.000Z`), n = 0; ymd(d) <= to && n < 31; d.setUTCDate(d.getUTCDate() + 1), n++) {
     const day = new Date(d);
@@ -668,11 +669,11 @@ export async function moveOffClosedDays(from: string, to: string, prisma: Prisma
     const movable = new Set([...plan.moved, ...plan.proposed, ...plan.unplaced].map((x) => x.appointment_id));
     const written = taken.length ? await acceptPlan(taken, prisma, { timeOffId: opts.timeOffId }) : null;
     const ok = written && 'batch_id' in written;
-    if (ok) { moved += taken.length; landed.push(...taken.map((t) => t.date)); }
+    if (ok) { batches.push(written.batch_id); moved += taken.length; landed.push(...taken.map((t) => t.date)); }
     left += movable.size - (ok ? taken.length : 0);
   }
   landed.sort();
-  return { moved, left, first: landed[0] ?? null, last: landed[landed.length - 1] ?? null };
+  return { moved, left, batches, first: landed[0] ?? null, last: landed[landed.length - 1] ?? null };
 }
 
 /** Put a replan back exactly as it was. */

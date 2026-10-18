@@ -29,7 +29,7 @@
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_MAX_PER_DAY, findConflict, loadDay, type Action, type Candidate, type DayContext } from './appointmentGuard.js';
 import { planDay, type Move, type Pin } from './replan.js';
-import { centreClock, centreClosed, startedBefore, toMinutes, type Clock } from './availability.js';
+import { centreClock, closureOn, startedBefore, toMinutes, type Clock } from './availability.js';
 
 export type Fix = {
   label: string;
@@ -102,6 +102,8 @@ export type DayCheck = {
   headline: string | null;
   /** Finished treatments whose therapist or room was not there: id → "Ravi was not in". Information, never counted (#394). */
   history: Record<string, string>;
+  /** Set when the centre is shut that day (#940): the name to show, the closure to edit (null for a weekly closed day), and what is still booked on it. */
+  closed: { name: string | null; time_off_id: string | null; booked: number } | null;
 };
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
@@ -348,7 +350,8 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
   // failure the centre hears about from the resident.
   const booked = new Set(appointments.map((a) => a.patient_id));
   // On a closed day nothing booked is the point, not a failure.
-  const shutToday = centreClosed(ctx.settings, ctx.timeOff, day) !== null;
+  const closure = closureOn(ctx.settings, ctx.timeOff, day);
+  const shutToday = closure !== null;
   for (const stay of shutToday ? [] : stays) {
     if (booked.has(stay.patient_id)) continue;
     raw.push({
@@ -457,7 +460,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
   }
 
   const problems: DayProblem[] = raw.map(({ cost: _cost, group_label: _label, ...p }) => p);
-  return { date: ymd(day), problems, groups, plan, headline: headlineFor(problems), history };
+  return { date: ymd(day), problems, groups, plan, headline: headlineFor(problems), history, closed: closure ? { name: closure.name, time_off_id: closure.id, booked: appointments.length } : null };
 }
 
 /**
