@@ -102,7 +102,10 @@ function createRateLimiter(windowMs: number, max: number) {
       return;
     }
     if (entry.count >= max) {
-      res.status(429).json({ error: 'Too Many Requests' });
+      // Say how long, so the form stays open and the admin knows when to tap again (#935).
+      const wait = Math.max(1, Math.ceil((entry.resetAt - now) / 1000));
+      res.setHeader('Retry-After', String(wait));
+      res.status(429).json({ error: 'Too Many Requests', retry_after: wait });
       return;
     }
     entry.count += 1;
@@ -118,10 +121,10 @@ const globalLimiter = rateLimit({
   keyGenerator: clientIp, skip: (req) => req.path === '/health', validate: false,
   handler: (_req, res) => { res.status(429).json({ error: 'Too Many Requests' }); },
 });
-// 40 writes per address in 5 minutes guards the admin's screens; the test
-// suite, which writes far more from one address, raises it (scripts/qa.sh).
-const writeLimiter = createRateLimiter(5 * 60 * 1000, Number(process.env.RATE_LIMIT_WRITES) || 40);
-const apptPostLimiter = createRateLimiter(60 * 1000, 10);
+// 300 writes per address in 5 minutes: a 20-arrival morning adds a patient, a package and a few bookings each (#935),
+// and it is still a stop for a runaway script. The test suite raises it (scripts/qa.sh).
+const writeLimiter = createRateLimiter(5 * 60 * 1000, Number(process.env.RATE_LIMIT_WRITES) || 300);
+const apptPostLimiter = createRateLimiter(60 * 1000, Number(process.env.RATE_LIMIT_WRITES) || 60);
 
 expressApp.use('/api', globalLimiter);
 // The AI assistant's door (#119). It carries its own key rather than a login

@@ -8,7 +8,7 @@ export const staySchema = z.object({
 
 /** A new patient, as `POST /patients` takes one and as an imported row is checked (#741, #778). */
 export const patientSchema = z.object({
-  name: z.string(),
+  name: z.string().max(80, 'A name can be at most 80 characters'),
   gender: z.enum(['male','female','other']),
   phone: z.string().optional(),
   email: z.string().optional(),

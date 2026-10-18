@@ -314,12 +314,13 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await tap(page.getByRole('button', { name: 'New patient', exact: true }));
       await page.getByRole('dialog').getByLabel('Name', { exact: true }).fill('Tapcount Meera');
       await tap(page.getByRole('dialog').getByRole('button', { name: 'Female' }));
-      await tap(page.getByRole('dialog').getByRole('button', { name: 'Add Tapcount Meera' }));
-      await expect(page.getByRole('dialog').last().getByRole('button', { name: /^Diet/ })).toBeVisible({ timeout: 15000 });
+      await tap(page.getByRole('dialog').getByRole('button', { name: 'Add patient' }));
+      // They stay on the list (#935): the next arrival is the next + tap.
+      await expect(page.getByText('Tapcount Meera added')).toBeVisible({ timeout: 15000 });
+      await expect(page.getByRole('dialog')).toHaveCount(0);
       const mine = ((await call.get('/patients')) as { id: string; name: string }[]).filter((p) => p.name === 'Tapcount Meera');
       for (const p of mine) await must(`DELETE /patients/${p.id}`, await call.del(`/patients/${p.id}`));
-      await page.keyboard.press('Escape');
-      return 'from the Patients screen; the consultation is pre-booked';
+      return 'from the Patients screen; the consultation is pre-booked, the list stays (8 arrivals: 8 x 3, was 8 x 4 with the card closed)';
     });
 
     await job(page, rows, 'Find a patient', async (tap) => {
