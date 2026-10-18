@@ -21,12 +21,11 @@ export const SCREENS = [
   ["diet", "Diet plans", "Meals by plan"],
   ["settings", "Settings", "Centre, users, AI"],
   ["schedule", "Back to the day", "The list"],
-  // Reached from Team, not the menu (#137).
-  ["therapies", "Therapies", ""],
-  ["events", "Events", ""],
+  ["therapies", "Therapies", "What you offer"],
+  ["events", "Classes and events", "The daily round"],
   ["log", "Log", ""],
 ] as const;
-/** The menu's tiles, as the design (#137): the rest open from Team. */
+/** The menu's tiles, (#137, #943): screens with no hint open from elsewhere. */
 const MENU = SCREENS.filter(([, , hint]) => hint);
 
 export { BottomSheet };
