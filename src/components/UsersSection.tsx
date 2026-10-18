@@ -112,6 +112,8 @@ export const ChangeEmailCard = ({ email, onChanged }: { email: string; onChanged
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { toast.error(data?.error || "Could not change your email"); return; }
       toast.success(`You now sign in as ${data.email}`);
+      // People with access tells your own row by this, so it must follow the change (#927).
+      try { localStorage.setItem("authUser", data.email); } catch { /* private window: the next sign-in sets it */ }
       setNext(""); setCurrent(""); onChanged();
     } finally { setBusy(false); }
   };
