@@ -122,6 +122,26 @@ async function main() {
         await prisma.user.deleteMany({ where: { email } });
       }
     }],
+    ['an administrator cannot switch off their own sign-in, even with another administrator (#928)', async () => {
+      const email = 'validation-admin2@example.com';
+      await prisma.user.deleteMany({ where: { email } });
+      const made = await post('/users', { email, role: 'admin', password: 'adminpass123' });
+      if (made.status !== 201) throw new Error(`creating admin returned ${made.status}: ${await made.text()}`);
+      const me = await prisma.user.findUniqueOrThrow({ where: { email: ADMIN_EMAIL } });
+      try {
+        const res = await fetch(`${API_BASE}/users/${me.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ is_active: false }),
+        });
+        const after = await prisma.user.findUniqueOrThrow({ where: { id: me.id } });
+        if (!after.is_active) throw new Error('the account was switched off');
+        if (res.status !== 400) throw new Error(`expected 400, got ${res.status}`);
+      } finally {
+        await prisma.user.update({ where: { id: me.id }, data: { is_active: true } });
+        await prisma.user.deleteMany({ where: { email } });
+      }
+    }],
     ['a person switched off, or gone from the centre, is signed out at once (#574)', async () => {
       const email = 'validation-gone@example.com';
       await prisma.user.deleteMany({ where: { email } });
