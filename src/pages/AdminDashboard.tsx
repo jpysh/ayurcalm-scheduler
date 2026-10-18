@@ -708,6 +708,7 @@ const AdminDashboard = () => {
       />
 
             <AttentionSheet
+        reloadItems={attention.reload}
         roomOut={(id, reason) => timeOffScreen.openAdd({ type: 'Room', entity: id, mode: 'now', description: reason ? `Not usable: ${reason}` : 'Not usable' })}
         open={showAttention}
         onOpenChange={setShowAttention}

@@ -902,6 +902,24 @@ app.get('/attention', async (req: Request, res: Response) => {
   res.json(await attentionFor(prisma, date));
 });
 /** Only what the admin changed is kept; `{}` puts every rule back to its default (Reset). */
+/**
+ * "Set diet for 41 arriving today" (#942): the plan goes to every guest the rule
+ * "No diet plan" names for that day, worked out here and not by the screen.
+ * Returns the new segment ids; Undo deletes exactly those.
+ */
+app.post('/attention/diet', async (req: Request, res: Response) => {
+  const body = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), template_id: z.string().uuid() }).parse(req.body);
+  if (!(await prisma.dietTemplate.findUnique({ where: { id: body.template_id } }))) { res.status(400).json({ error: 'That plan does not exist.' }); return; }
+  const ids = [...new Set((await attentionFor(prisma, body.date)).items.filter((i) => i.rule === 'no_diet' && i.patient_id).map((i) => i.patient_id!))];
+  let count = 0;
+  for (const id of ids) if ('ok' in await startDietFrom(id, body.date, body.template_id, prisma)) count++;
+  const segs = await prisma.dietPlanSegment.findMany({ where: { patient_id: { in: ids }, start_date: new Date(`${body.date}T00:00:00.000Z`), template_id: body.template_id }, select: { id: true } });
+  res.json({ count, segment_ids: segs.map((x) => x.id) });
+});
+app.post('/attention/diet/undo', async (req: Request, res: Response) => {
+  const body = z.object({ segment_ids: z.array(z.string().uuid()).max(500) }).parse(req.body);
+  res.json({ removed: (await prisma.dietPlanSegment.deleteMany({ where: { id: { in: body.segment_ids } } })).count });
+});
 app.put('/attention/rules', requireAdmin, async (req: Request, res: Response) => {
   const parsed = changesSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid rules' }); return; }
