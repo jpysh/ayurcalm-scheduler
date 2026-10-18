@@ -216,7 +216,13 @@ const AdminDashboard = () => {
       const wd = new Date(Date.UTC(cy, cm - 1, cd)).getUTCDay();
       const weekDates: string[] = Array.from({ length: 7 }).map((_, i) => shiftDay(ymdInTZ(currentDate), (wd === 0 ? -6 : 1 - wd) + i));
       // One call for the week, not seven: each is a round trip on a hill-station signal (#416).
-      const week = await fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?from=${weekDates[0]}&to=${weekDates[6]}`);
+      let week: ApiAppointment[];
+      try {
+        week = await fetchJsonWithTimeout<ApiAppointment[]>(`${API_BASE}/appointments?from=${weekDates[0]}&to=${weekDates[6]}`, 6000, true);
+      } catch {
+        // No signal: the days already on screen stay, the banner says so (#931).
+        return;
+      }
       const map: Record<string, ApiAppointment[]> = Object.fromEntries(weekDates.map((d) => [d, []]));
       for (const a of week) map[String(a.scheduled_date).slice(0, 10)]?.push(a);
       setAppointmentsByDate(map);
@@ -260,7 +266,7 @@ const AdminDashboard = () => {
 
   const refreshAppointmentsForDate = async (iso: string, silent?: boolean) => {
     try {
-      const list: ApiAppointment[] = await fetchJsonWithTimeout(`${API_BASE}/appointments?date=${iso}`, 6000);
+      const list: ApiAppointment[] = await fetchJsonWithTimeout(`${API_BASE}/appointments?date=${iso}`, 6000, true);
       setAppointmentsByDate((prev) => ({ ...prev, [iso]: list }));
     } catch {
       if (!silent) toast.error("Failed to refresh appointments");

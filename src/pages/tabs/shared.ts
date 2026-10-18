@@ -35,7 +35,7 @@ export const blankPatient = (): Patient => ({ id: '', name: '', phone: '', email
 
 export const API_TOKEN = (import.meta as any).env?.VITE_API_TOKEN || '';
 
-export const fetchJsonWithTimeout = async <T = unknown>(url: string, ms = 6000): Promise<T> => {
+export const fetchJsonWithTimeout = async <T = unknown>(url: string, ms = 6000, strict = false): Promise<T> => {
   const attempt = async () => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), ms);
@@ -53,7 +53,9 @@ export const fetchJsonWithTimeout = async <T = unknown>(url: string, ms = 6000):
     await new Promise((r) => setTimeout(r, 300));
     try {
       return await attempt();
-    } catch {
+    } catch (e) {
+      // strict: a screen that already has data keeps it rather than being handed an empty list (#931).
+      if (strict) throw e;
       return [] as T;
     }
   }
