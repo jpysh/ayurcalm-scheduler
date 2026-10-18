@@ -27,7 +27,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast:
-            "group toast group-[.toaster]:bg-foreground group-[.toaster]:text-card group-[.toaster]:border-border group-[.toaster]:shadow-lg group-[.toaster]:rounded-xl group-[.toaster]:text-base",
+            "group toast group-[.toaster]:bg-foreground group-[.toaster]:text-card group-[.toaster]:border-border group-[.toaster]:shadow-lg group-[.toaster]:rounded-xl group-[.toaster]:text-base group-[.toaster]:flex-wrap",
+          // At large text a long action (Undo anyway) would squeeze the words to a few letters a line; it goes under them instead (#902).
+          content: "group-[.toast]:min-w-[10rem] group-[.toast]:flex-1",
           description: "group-[.toast]:text-muted-foreground",
           // The design's Undo: pale green text on the dark bar, not a filled button.
           actionButton: "group-[.toast]:!bg-transparent group-[.toast]:!text-on-dark group-[.toast]:!font-bold group-[.toast]:!text-base",
