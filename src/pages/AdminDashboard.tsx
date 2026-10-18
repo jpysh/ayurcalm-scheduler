@@ -421,6 +421,16 @@ const AdminDashboard = () => {
 
   // The centre's timezone arrives after the first draw (#477): the day is read again then.
   const dayKeyMemo = useMemo(() => ymdInTZ(currentDate), [currentDate, ADMIN_TZ]);
+  // The day itself too: a treatment cancelled or moved on the other phone of a shared login
+  // still showed here after coming back to the app (#898).
+  const refreshDay = useRef(refreshAppointmentsForDate);
+  refreshDay.current = refreshAppointmentsForDate;
+  useEffect(() => {
+    const back = () => { if (document.visibilityState === 'visible') void refreshDay.current(dayKeyMemo, true); };
+    window.addEventListener('focus', back);
+    document.addEventListener('visibilitychange', back);
+    return () => { window.removeEventListener('focus', back); document.removeEventListener('visibilitychange', back); };
+  }, [dayKeyMemo]);
 
   // After closing, the admin is checking tomorrow (#458): its things to fix count
   // too, so a treatment with no therapist does not wait for the morning to be seen.
