@@ -29,7 +29,7 @@
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_MAX_PER_DAY, findConflict, loadDay, type Action, type Candidate, type DayContext } from './appointmentGuard.js';
 import { planDay, type Move, type Pin } from './replan.js';
-import { centreClock, startedBefore, toMinutes, type Clock } from './availability.js';
+import { centreClock, centreClosed, startedBefore, toMinutes, type Clock } from './availability.js';
 
 export type Fix = {
   label: string;
@@ -238,7 +238,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
         kind: conflict.reason,
         problem_class: 'blocking',
         what: underWay ? `${nameOfPatient(a.patient_id).split(' ')[0]} is waiting: ${conflict.message}` : conflict.message,
-        group_key: `${conflict.reason}:${conflict.reason === 'ROOM_BUSY' || conflict.reason === 'ROOM_OFF' ? a.room_id : conflict.reason === 'THERAPY_OFF' ? a.therapy_id : conflict.reason === 'PATIENT_OFF' ? a.patient_id : culprit}`,
+        group_key: conflict.reason === 'CENTER_HOLIDAY' ? 'CENTER_HOLIDAY' : `${conflict.reason}:${conflict.reason === 'ROOM_BUSY' || conflict.reason === 'ROOM_OFF' ? a.room_id : conflict.reason === 'THERAPY_OFF' ? a.therapy_id : conflict.reason === 'PATIENT_OFF' ? a.patient_id : culprit}`,
         group_label: conflict.message,
         staff_id: culprit,
         cost: COST[conflict.reason] ?? 9,
@@ -347,7 +347,9 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
   // A resident is paying to be treated. A day with nothing booked is the
   // failure the centre hears about from the resident.
   const booked = new Set(appointments.map((a) => a.patient_id));
-  for (const stay of stays) {
+  // On a closed day nothing booked is the point, not a failure.
+  const shutToday = centreClosed(ctx.settings, ctx.timeOff, day) !== null;
+  for (const stay of shutToday ? [] : stays) {
     if (booked.has(stay.patient_id)) continue;
     raw.push({
       id: `IDLE_RESIDENT:${stay.patient_id}`,
@@ -507,7 +509,9 @@ export function headlineFor(all: DayProblem[]): string | null {
   const rest = problems.length - sameKind.length;
   const tail = rest > 0 ? `, and ${rest} more to fix` : '';
 
-  const head = worst.kind === 'IDLE_RESIDENT'
+  const head = worst.kind === 'CENTER_HOLIDAY'
+    ? `${worst.what} ${sameKind.length} treatment${sameKind.length === 1 ? ' is' : 's are'} booked on it`
+    : worst.kind === 'IDLE_RESIDENT'
     ? `${names.length} patient${names.length === 1 ? '' : 's'} in house with nothing booked: ${who}`
     : worst.kind === 'NO_THERAPIST'
       ? `${sameKind.length} treatment${sameKind.length === 1 ? '' : 's'} with no therapist: ${who}`

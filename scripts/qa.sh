@@ -54,6 +54,7 @@ run links              "A private link shows a person their own day only, record
 run replanSimulation   "When a therapist is absent, their day moves to others without clashes, and Undo restores it"
 run dayCheckParity     "Verify flags exactly the treatments the app would refuse to save, co-therapists included"
 run coTherapist        "A treatment worked by two books both therapists: neither can be booked elsewhere in that hour, and it is never booked short-handed"
+run closeDay           "Closing a day with bookings moves them to the next open day in one pass, and Undo puts them back"
 run dayPlan            "Verify's fix for a day is one plan with no clashes, and accepting then undoing it restores the day"
 run ownTherapist       "A resident kept to their own therapist goes to that therapist's next free day when it is soon, and otherwise the admin is asked with three choices"
 run therapyLibrary     "The therapy library adds a therapy once, as edited, never twice under the same name"

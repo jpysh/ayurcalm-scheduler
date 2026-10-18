@@ -12,7 +12,7 @@ import { dischargeOf, saveDischarge } from './discharge.js';
 import { staffWeek } from './staffWeek.js';
 import { linkLapsed, newLinkToken } from './links.js';
 import { findConflict, HAPPENING, loadDay, nearestFreeTime, oncePerCourse, softWarnings, staffDay, type Action } from './appointmentGuard.js';
-import { replanRoomDay, replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
+import { moveOffClosedDays, replanRoomDay, replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
 import { dietTimeline, startDietFrom, extendDiet } from './patientDiet.js';
 import { checkDay, headlineFor, planRange, rowOptions } from './dayCheck.js';
 import { centreClock, eventClashes, outsideHours, type EventRow } from './availability.js';
@@ -711,6 +711,8 @@ const timeoffSchema = z.object({
   description: z.string().optional().nullable(),
   /** False records the leave and leaves the day for the admin to plan (#285 story 9); absent plans it, as the assistant expects. */
   plan: z.boolean().optional(),
+  /** A centre closure only: move that day's treatments to the next open day (#933). */
+  move: z.boolean().optional(),
 });
 
 const getTimeOffHandler = async (req: Request, res: Response) => {
@@ -735,7 +737,7 @@ const getTimeOffHandler = async (req: Request, res: Response) => {
 const createTimeOffHandler = async (req: Request, res: Response) => {
   try {
     // A part-day leave that ends where it starts covers nothing yet looks saved (#571).
-    const { plan, ...body } = timeoffSchema.refine((b) => !b.start_time || !b.end_time || b.start_time < b.end_time, 'The leave must end after it starts.').parse(req.body);
+    const { plan, move, ...body } = timeoffSchema.refine((b) => !b.start_time || !b.end_time || b.start_time < b.end_time, 'The leave must end after it starts.').parse(req.body);
     const data: any = { ...body };
     if (body.date) data.date = new Date(body.date);
     if (body.start_date) data.start_date = new Date(body.start_date);
@@ -763,7 +765,13 @@ const createTimeOffHandler = async (req: Request, res: Response) => {
       for (const d of datesCovered(h)) results.push(await replanRoomDay(h, d, prisma));
       replan = results.filter((r) => r.moved.length || r.proposed.length || r.unplaced.length);
     }
-    res.status(201).json({ ...h, replan });
+    // A closed day with treatments booked (#933): they move to the next open day, once.
+    let moved = null;
+    if (h.entity_type === 'center' && move) {
+      const first = (h.start_date ?? h.date)!.toISOString().slice(0, 10);
+      moved = await moveOffClosedDays(first, (h.end_date ?? h.date)!.toISOString().slice(0, 10), prisma, { timeOffId: h.id });
+    }
+    res.status(201).json({ ...h, replan, moved });
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : 'TimeOff creation failed' });
   }
@@ -774,7 +782,7 @@ const deleteTimeOffHandler = async (req: Request, res: Response) => {
   try {
     // Deleting the absence undoes what recording it did: the therapist is
     // coming in after all, so their day goes back as it was.
-    const batches = await prisma.auditLog.findMany({ where: { action: 'replan' }, orderBy: { timestamp: 'desc' }, take: 50 });
+    const batches = await prisma.auditLog.findMany({ where: { action: { in: ['replan', 'dayfix'] } }, orderBy: { timestamp: 'desc' }, take: 50 });
     for (const b of batches) {
       if ((b.old_value as { time_off_id?: string } | null)?.time_off_id === id) await undoReplan(b.id, prisma);
     }
@@ -790,7 +798,7 @@ const deleteTimeOffHandler = async (req: Request, res: Response) => {
 const updateTimeOffHandler = async (req: Request, res: Response) => {
   const id = req.params.id;
   try {
-    const { plan: _plan, ...body } = timeoffSchema.partial().parse(req.body);
+    const { plan: _plan, move: _move, ...body } = timeoffSchema.partial().parse(req.body);
     const data: any = { ...body };
     if (body.date) data.date = new Date(body.date);
     if (body.start_date) data.start_date = new Date(body.start_date);
@@ -994,12 +1002,14 @@ app.get('/holidays/india', (_req: Request, res: Response) => { res.json(indiaHol
 app.get('/timeoff/impact', async (req: Request, res: Response) => {
   const hm = z.string().regex(/^\d{2}:\d{2}$/);
   const q = z.object({
-    type: z.enum(['staff', 'room', 'therapy', 'patient']),
-    ids: z.string().transform((v) => v.split(',')).pipe(z.array(z.string().uuid()).min(1).max(100)),
+    type: z.enum(['staff', 'room', 'therapy', 'patient', 'center']),
+    ids: z.string().transform((v) => v.split(',')).pipe(z.array(z.string().uuid()).min(1).max(100)).optional(),
     from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), after: hm.optional(), before: hm.optional(),
   }).parse(req.query);
-  const who: Prisma.AppointmentWhereInput = q.type === 'staff' ? { OR: [{ staff_id: { in: q.ids } }, { co_staff_ids: { hasSome: q.ids } }] }
-    : q.type === 'room' ? { room_id: { in: q.ids } } : q.type === 'therapy' ? { therapy_id: { in: q.ids } } : { patient_id: { in: q.ids } };
+  if (q.type !== 'center' && !q.ids) { res.status(400).json({ error: 'ids required' }); return; }
+  const ids = q.ids ?? [];
+  const who: Prisma.AppointmentWhereInput = q.type === 'center' ? {} : q.type === 'staff' ? { OR: [{ staff_id: { in: ids } }, { co_staff_ids: { hasSome: ids } }] }
+    : q.type === 'room' ? { room_id: { in: ids } } : q.type === 'therapy' ? { therapy_id: { in: ids } } : { patient_id: { in: ids } };
   const rows = await prisma.appointment.findMany({
     where: { ...HAPPENING, scheduled_date: { gte: new Date(`${q.from}T00:00:00.000Z`), lte: new Date(`${q.to}T00:00:00.000Z`) }, ...who },
     select: { start_time: true, duration_minutes: true },
