@@ -81,7 +81,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
       setHints({
         patients: inHouseNote((residents as { Stays: { start_date: string; end_date: string; on_site?: boolean }[] }[]).flatMap((p) => p.Stays.filter((s) => s.start_date.slice(0, 10) <= today && s.end_date.slice(0, 10) >= today).slice(0, 1))),
         rooms: `${plural(rooms.length, "room")}${roomsOut ? ` · ${roomsOut} out` : ""}`,
-        team: out.length === 0 ? "Everyone in" : out.length === 1 ? `${out[0]} not in` : `${out.length} not in`,
+        team: !staff.length ? "No staff yet" : out.length === 0 ? "Everyone in" : out.length === 1 ? `${out[0]} not in` : `${out.length} not in`,
         schedule: dayText(day),
         ...(guestRooms.length ? { guestrooms: `${guestRooms.filter((r) => r.free).length} free tonight` } : {}),
       });
