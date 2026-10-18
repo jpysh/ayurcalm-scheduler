@@ -237,6 +237,9 @@ export function Foot({ busy, save, label = "Save", remove, removeLabel = "Remove
 
 /* ---- Navigation and feedback (#285, DESIGN.md §7). Colours, radii and the one shadow come from the tokens in index.css. ---- */
 
+/** Long first names ("Lakshminarayanan") are in no hyphenation dictionary, so at 200% text the browser cut them bare; a soft hyphen after each vowel that precedes a consonant gives it syllable-ish places to break with a hyphen (#918). */
+const breakable = (t: string) => t.replace(/\p{L}{13,}/gu, (w) => w.replace(/([aeiou])(?=[^aeiou]\p{L}{2})/giu, "$1\u00AD"));
+
 /**
  * A sheet: grab handle, title, one line saying what it is for, body, and a foot
  * that stays in view however long the body. Scrolls inside itself.
@@ -254,7 +257,7 @@ export function BottomSheet({ open, onOpenChange, title, label, note, children, 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
           {onBack ? <BackLink onBack={onBack} /> : null}
           {/* A sheet with no title in the design still names itself to a screen reader (#590). */}
-          <SheetTitle className={title ? "mb-3 hyphens-auto break-words text-xl font-bold" : "sr-only"}>{title || label || "Dialog"}</SheetTitle>
+          <SheetTitle className={title ? "mb-3 hyphens-auto break-words text-xl font-bold" : "sr-only"}>{title ? breakable(title) : label || "Dialog"}</SheetTitle>
           {note ? <p className={`-mt-2 mb-3 ${noteText}`}>{note}</p> : null}
           {children}
         </div>
