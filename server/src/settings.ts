@@ -2,6 +2,7 @@ import express, { Router, type Request, type Response, type NextFunction } from 
 import { centreClock } from './availability.js';
 import { exportCentre, importCentre, ImportRefused } from './transfer.js';
 import { z } from 'zod';
+import { firstRefusal } from './plainErrors.js';
 import { Prisma } from '@prisma/client';
 import { prisma } from './server.js';
 import { wipeDemo, makeItMine, KEEPABLE, type Keep } from './demoData.js';
@@ -52,7 +53,7 @@ const settingsSchema = z.object({
   centre_name: z.string().trim().min(1).max(120),
   address: z.string().trim().max(400).nullish(),
   timezone: z.string().trim().min(1).max(64).refine(isRealTimezone, 'Expected an IANA timezone name, such as Asia/Kolkata'),
-  currency: z.string().trim().min(1).max(4).optional(),
+  currency: z.string().trim().min(1, 'Currency symbol cannot be empty.').max(4, 'Currency symbol is too long: 4 characters at most, like Rs or $.').optional(),
   opening_time: timeString,
   closing_time: timeString,
   slot_minutes: z.number().int().refine(n => [15, 20, 30, 60].includes(n), 'Expected 15, 20, 30 or 60'),
@@ -113,7 +114,7 @@ settingsRouter.get('/', async (_req: Request, res: Response) => {
 settingsRouter.put('/', requireAdmin, async (req: Request, res: Response) => {
   const parsed = settingsSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid settings' });
+    res.status(400).json(firstRefusal(parsed.error));
     return;
   }
   await getSettings();

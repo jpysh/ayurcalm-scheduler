@@ -61,6 +61,9 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
 }) => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
+  // The server's refusal, kept beside the box it is about (#949); the toast alone is gone before it is read.
+  const [refused, setRefused] = useState<{ field: string; error: string } | null>(null);
+  const why = (field: string) => (refused?.field === field ? refused.error : undefined);
   const [sheet, setSheet] = useState<Sheet | null>(initialSheet === "packages" || initialSheet === "accommodation" ? "catalogues" : initialSheet === "help" ? "help" : null);
   useEffect(() => { if (initialSheet) sheetOpened?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const trial = useTrial();
@@ -116,7 +119,8 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { toast.error(data?.error || "Could not save settings"); return; }
+      if (!res.ok) { setRefused(data?.field ? { field: data.field, error: data.error } : null); toast.error(data?.error || "Could not save settings"); return; }
+      setRefused(null);
       setSettings(data);
       toast.success("Settings saved");
       // The schedule grid is built from opening hours, so reload to apply them.
@@ -214,9 +218,9 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
       <BottomSheet open={sheet === "centre"} onOpenChange={(o) => { if (!o) setSheet(null); }} title="Centre and letterhead" note="Printed at the top of every sheet, and on each discharge summary."
         foot={isAdmin ? <SheetFoot busy={saving} save={save} label="Save" /> : undefined}>
         <fieldset disabled={!isAdmin} className="m-0 min-w-0 border-0 p-0">
-          <Text label="Centre name" id="centre_name" value={settings.centre_name} onChange={(e) => update("centre_name", e.target.value)} />
-          <Text label="Currency symbol" id="currency" maxLength={4} note="Shown before the prices of packages and rooms, for reference. For example Rs, $, €." value={settings.currency ?? "Rs"} onChange={(e) => { update("currency", e.target.value); setCurrency(e.target.value); }} />
-          <Area label="Address (optional)" id="address" rows={2} value={settings.address ?? ""} onChange={(e) => update("address", e.target.value)} />
+          <Text label="Centre name" id="centre_name" error={why("centre_name")} value={settings.centre_name} onChange={(e) => update("centre_name", e.target.value)} />
+          <Text label="Currency symbol" id="currency" error={why("currency")} note="Shown before the prices of packages and rooms, for reference. For example Rs, $, €." value={settings.currency ?? "Rs"} onChange={(e) => { update("currency", e.target.value); setCurrency(e.target.value); }} />
+          <Area label="Address (optional)" id="address" error={why("address")} rows={2} value={settings.address ?? ""} onChange={(e) => update("address", e.target.value)} />
           <Group label="Logo (optional)" note="PNG or JPG, under 500KB.">
             <div className="flex items-center gap-3">
               {settings.logo ? <img src={settings.logo} alt="Centre logo" className="h-10 w-auto rounded border" /> : null}
@@ -234,7 +238,7 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
               {lh.seal_logo && isAdmin ? <Btn kind="destructive" inline onClick={() => setLh("seal_logo", "")}>Remove</Btn> : null}
             </div>
           </Group>
-          {LETTERHEAD.map(([k, label, hint]) => <Text key={k} label={`${label} (optional)`} id={`lh_${k}`} placeholder={hint} value={lh[k] ?? ""} onChange={(e) => setLh(k, e.target.value)} />)}
+          {LETTERHEAD.map(([k, label, hint]) => <Text key={k} label={`${label} (optional)`} id={`lh_${k}`} error={why(`letterhead.${k}`)} placeholder={hint} value={lh[k] ?? ""} onChange={(e) => setLh(k, e.target.value)} />)}
 
           {doctors.length ? <SectionHead>Doctors under their signature</SectionHead> : null}
           {doctors.map((d) => (

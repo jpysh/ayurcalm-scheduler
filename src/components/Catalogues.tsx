@@ -28,7 +28,7 @@ function CatalogueEditor({ path, noun, fields, facts, trailing, extra }: { path:
     const body = Object.fromEntries(fields.map((f) => [f.key, f.number ? Number(edit.v[f.key]) : edit.v[f.key].trim() || (f.optional ? null : "")]));
     const res = await fetch(`${API_BASE}/${path}${edit.id ? `/${edit.id}` : ""}`, { method: edit.id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     setBusy(false);
-    if (!res.ok) { toast.error(res.status === 409 ? `There is already a ${noun} with that name.` : `The ${noun} was not saved. Check the numbers and try again.`); return; }
+    if (!res.ok) { toast.error(res.status === 409 ? `There is already a ${noun} with that name.` : res.status === 400 ? (await res.json().catch(() => ({})))?.error || `The ${noun} was not saved. Check the numbers and try again.` : `The ${noun} was not saved. Try again.`); return; }
     toast.success(`${String(body.name)} saved`);
     setEdit(null);
     load();

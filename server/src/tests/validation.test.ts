@@ -190,6 +190,37 @@ async function main() {
       const after = await prisma.appointment.count();
       if (res.status !== 404 || after !== before) throw new Error(`answered ${res.status}; ${before - after} treatments deleted`);
     }],
+
+    // #949: a refusal is one plain sentence, with the field it belongs to, never a raw Zod message.
+    ['settings, packages and people refuse bad free text in plain words, and save nothing', async () => {
+      const put = (path: string, body: unknown) => fetch(`${API_BASE}${path}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+      const current = await (await fetch(`${API_BASE}/settings`, { headers: { Authorization: `Bearer ${token}` } })).json();
+      const full = { centre_name: current.centre_name, timezone: current.timezone, opening_time: current.opening_time, closing_time: current.closing_time, slot_minutes: current.slot_minutes, working_days: current.working_days };
+      const refused = async (res: Response, mention: RegExp, field?: string) => {
+        const b = await res.json();
+        if (res.status !== 400) throw new Error(`expected 400, got ${res.status}`);
+        if (!mention.test(b.error) || /expected|Too big|Invalid (input|request)|<=/.test(b.error)) throw new Error(`not a plain sentence: ${b.error}`);
+        if (field && b.field !== field) throw new Error(`field was ${b.field}, wanted ${field}`);
+      };
+      await refused(await put('/settings', { ...full, centre_name: 'x'.repeat(400) }), /too long/, 'centre_name');
+      await refused(await put('/settings', { ...full, currency: 'RUPEES' }), /Currency symbol/, 'currency');
+      await refused(await put('/settings', { ...full, letterhead: { email: 'not-an-email' } }), /valid email/, 'letterhead.email');
+      for (const site of ['javascript:alert(1)', 'data:text/html,hi', 'ftp://x.in', 'JaVaScRiPt:alert(1)', 'two words.in']) {
+        await refused(await put('/settings', { ...full, letterhead: { website: site } }), /Website/, 'letterhead.website');
+      }
+      await refused(await put('/settings', { ...full, letterhead: { footer_line: 'x'.repeat(301) } }), /too long/, 'letterhead.footer_line');
+      for (const site of ['yourcentre.in', 'https://yourcentre.in/care', '']) {
+        const ok = await put('/settings', { ...full, letterhead: { website: site, email: 'care@yourcentre.in' } });
+        if (ok.status !== 200) throw new Error(`"${site}" refused: ${await ok.text()}`);
+      }
+      await put('/settings', { ...full, letterhead: { website: '', email: '' } });
+      const after = await (await fetch(`${API_BASE}/settings`, { headers: { Authorization: `Bearer ${token}` } })).json();
+      if (after.centre_name !== current.centre_name || after.currency !== current.currency) throw new Error('a refused save changed the centre');
+      await refused(await post('/packages', { name: 'x'.repeat(200), days: 7, price: 1000 }), /too long/, 'name');
+      await refused(await post('/packages', { name: 'Ok', days: 7, price: 1000, notes: 'x'.repeat(501) }), /too long/, 'notes');
+      await refused(await post('/users', { email: 'nope', role: 'staff', password: 'staffpass123' }), /valid email/);
+      await refused(await post('/users', { email: 'long-name@example.com', name: 'x'.repeat(200), role: 'staff', password: 'staffpass123' }), /too long/);
+    }],
   ];
 
   let failed = 0;
