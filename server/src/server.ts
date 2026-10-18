@@ -1421,10 +1421,16 @@ app.put('/appointments/:id', async (req: Request, res: Response) => {
     notes: z.string().optional(),
     patient_id: z.string().uuid().optional(),
     therapy_id: z.string().uuid().optional(),
+    /** Undo sends the time it last saw: changed since on another phone, it asks first (#900). */
+    if_unchanged_since: z.string().optional(),
   });
-  const body = schema.parse(req.body);
+  const { if_unchanged_since, ...body } = schema.parse(req.body);
   const existing = await prisma.appointment.findUnique({ where: { id: String(id) } });
   if (!existing) { res.status(404).json({ error: 'Appointment not found' }); return; }
+  if (if_unchanged_since && existing.updated_at.toISOString() !== if_unchanged_since) {
+    res.status(409).json({ reason: 'CHANGED_SINCE', message: 'It was changed since, on another phone or link.' });
+    return;
+  }
 
   const candidate = {
     id: String(id),
