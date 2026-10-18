@@ -7,7 +7,7 @@ const H = 3_600_000, D = 24 * H, t0 = Date.parse('2026-10-01T00:00:00Z');
 const idle = { created: t0 };
 assert.equal(next(idle, t0 + 71 * H), null);
 assert.equal(next(idle, t0 + 72 * H).do, 'pause');
-const paused = { created: t0, paused_at: t0 + 72 * H };
+const paused = { created: t0 - 30 * D, paused_at: t0 + 72 * H }; // signed up long ago: the 30-day floor (#920) is checked below
 assert.equal(next(paused, paused.paused_at + 14 * D - 1), null);
 assert.equal(deletesAt(paused), paused.paused_at + 14 * D);
 assert.equal(next(paused, paused.paused_at + 14 * D).do, 'delete');
@@ -80,3 +80,19 @@ assert.equal(r.failed, 'demo');
 const all = [];
 assert.equal((await rollout([{ slug: 'demo' }, { slug: 'babaji' }], async (x) => { all.push(x.slug); })).failed, null);
 assert.deepEqual(all, ['demo', 'babaji']);
+
+// Nothing is deleted within 30 days of signing up (#920), even a centre paused on day 3.
+assert.equal(deletesAt({ created: t0, signed_up: t0, paused_at: t0 + 3 * D }), t0 + 30 * D);
+assert.equal(next({ created: t0 + 10 * D, signed_up: t0, paused_at: t0 + 13 * D }, t0 + 29 * D), null, 'switched back on resets created, not the sign-up');
+assert.equal(deletesAt({ created: t0, paused_at: t0 + 20 * D }), t0 + 34 * D);
+// The nightly tidy stops only this repo's throwaway stacks left up a day (#920).
+{
+  const { stale } = await import('./index.mjs');
+  const now = Date.parse('2030-04-10T07:00:00Z'), old = '2030-04-08T07:00:00+0000', fresh = '2030-04-10T06:00:00+0000', dir = '/u/code/ayurcalm-scheduler/.claude/worktrees/x';
+  assert.deepEqual(stale([
+    { project: 'qa906', dir, created: old }, { project: 'qa906', dir, created: old },
+    { project: 'audit911', dir, created: fresh }, { project: 'ruta-babaji', dir, created: old },
+    { project: 'ayurcalm-scheduler', dir, created: old }, { project: 'other-app', dir: '/u/code/other', created: old },
+  ], now), ['qa906']);
+  console.log('tidy ok');
+}
