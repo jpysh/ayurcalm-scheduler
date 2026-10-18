@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import PageHead from "@/components/PageHead";
-import { Empty, EntryRow, dayText, ErrorLine, ListGroup, Loading } from "@/components/kit";
+import { Empty, EntryRow, dayText, ErrorLine, ListGroup, Loading, undoBatch } from "@/components/kit";
 
 type Entry = { id: string; at: string; who: "you" | "the app" | "the guest"; text: string; undo: string | null; undone: boolean };
 
@@ -36,11 +36,7 @@ export function LogScreen({ timezone, refresh }: { timezone: string; refresh: ()
   }
 
   const undo = async (e: Entry) => {
-    const res = await fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batch_id: e.undo }) });
-    if (!res.ok) { toast.error("That could not be undone."); return; }
-    toast("Put back as it was");
-    await refresh();
-    load();
+    if (await undoBatch(e.undo!, async () => { await refresh(); load(); })) toast("Put back as it was");
   };
 
   return (

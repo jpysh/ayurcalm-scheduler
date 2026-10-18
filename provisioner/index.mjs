@@ -10,7 +10,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHmac, randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync, renameSync, appendFileSync, existsSync } from 'node:fs';
-import { next, deletesAt, refuse, slugFor, linkOpen, took } from './lifecycle.mjs';
+import { next, deletesAt, refuse, slugFor, linkOpen, took, rollout } from './lifecycle.mjs';
 import { morning } from './morning.mjs';
 
 const run = promisify(execFile);
@@ -125,6 +125,37 @@ export async function tick(now = Date.now()) {
   }
 }
 
+// ---- update, every ten minutes (#904): a new main is tested on a throwaway centre, then rolled out.
+// LIVE_CENTRES in provisioner.env lists the centres with real use, e.g. "babaji:8202".
+const LIVE = (env.LIVE_CENTRES || '').split(/\s+/).filter(Boolean).map((x) => ({ slug: x.split(':')[0], port: Number(x.split(':')[1]) }));
+const git = (...a) => run('git', ['-C', ROOT, ...a]).then((r) => r.stdout.trim());
+let updating = false;
+export async function update() {
+  if (updating) return;
+  updating = true;
+  const gate = `${DATA}/gate`;
+  try {
+    await git('fetch', '-q', 'origin', 'main');
+    const sha = await git('rev-parse', 'origin/main');
+    if (sha === (await git('rev-parse', 'HEAD')) || sha === db.update?.failed_sha) return;
+    const short = sha.slice(0, 7);
+    // The tests write far more than a centre's limits allow, so they run on their own fresh copy, never on the demo.
+    await run('git', ['-C', ROOT, 'worktree', 'add', '-f', '--detach', gate, sha]);
+    const qa = await run('sh', [`${gate}/scripts/qa.sh`], { env: { ...env, COMPOSE_PROJECT_NAME: 'ruta-gate', APP_PORT: '8199' }, maxBuffer: 1 << 26 }).then(() => null, (e) => (e.stdout || '').split('\n').find((l) => l.includes('FAIL'))?.trim() || 'qa did not finish');
+    await run('docker', ['compose', '-p', 'ruta-gate', 'down', '-v'], { cwd: gate }).catch(() => {});
+    let r = { failed: qa ? 'tests' : null, why: qa };
+    if (!qa) {
+      await git('merge', '-q', '--ff-only', sha);
+      const sites = [{ slug: 'demo', port: 8201 }, ...LIVE, ...db.centres.filter((c) => !c.paused_at)];
+      r = await rollout(sites, async (c) => { await centreSh({}, 'up', c.slug, String(c.port)); await up(c.port); if (!(await fetch(`http://localhost:${c.port}/api/health`).then((x) => x.ok, () => false))) throw new Error('did not come up'); });
+    }
+    db.update = { sha: short, at: Date.now(), failed: r.failed, why: r.why, failed_sha: r.failed ? sha : null }; save();
+    await telegram(r.failed ? `ALERT: update ${short} stopped at ${r.failed}: ${r.why}` : `Updated to ${short}: demo, live centres and trials`);
+    if (!r.failed) process.exit(0); // launchd starts the service again on the new code
+  } catch (e) { console.error('update', e); }
+  finally { await run('git', ['-C', ROOT, 'worktree', 'remove', '-f', gate]).catch(() => {}); updating = false; }
+}
+
 // ---- watch, hourly (#248): the demo and every centre up, a backup in the last 26 h, disk not full.
 // Each problem is told once on Telegram, and once more when it clears. All clear pings HEALTHCHECKS_URL,
 // so a silent host (provisioner or Mac down) raises Healthchecks.io's own alarm.
@@ -132,7 +163,7 @@ const open = new Set();
 let latest = [];
 export async function watch(now = Date.now()) {
   const problems = [];
-  const sites = [{ slug: 'demo', port: 8201 }, ...db.centres.filter((c) => !c.paused_at)];
+  const sites = [{ slug: 'demo', port: 8201 }, ...LIVE, ...db.centres.filter((c) => !c.paused_at)];
   for (const c of sites) {
     if (!(await fetch(`http://localhost:${c.port}/api/health`).then((r) => r.ok, () => false))) problems.push(`${c.slug}.${DOMAIN} is down`);
     const newest = await run('sh', ['-c', `ls -1t "${DATA}/${c.slug}/backups"/ayurcalm-*.sql.gz 2>/dev/null | head -1`]).then((r) => r.stdout.trim(), () => '');
@@ -255,5 +286,6 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
     const d = new Date();
     if (d.getHours() === 7 && sent !== d.toDateString()) { sent = d.toDateString(); await telegram(morning(db, latest, Date.now(), db.feedback)); }
   }, 3_600_000);
+  setInterval(() => update(), 600_000);
   watch().catch(console.error);
 }

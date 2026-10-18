@@ -1,4 +1,4 @@
-import { pair, Btn, Consequence, deleteAll, DateRow, datePair, dayText, Empty, Foot, LinkRow, ListGroup, plural, Row, SearchField, Seg, SheetNote, Text, Tick, TimeList, TwoFoot } from "@/components/kit";
+import { pair, Btn, Consequence, deleteAll, DateRow, datePair, dayText, Empty, Foot, LinkRow, ListGroup, plural, Row, SearchField, Seg, SheetNote, Text, Tick, TimeList, TwoFoot, undoBatch } from "@/components/kit";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
@@ -204,11 +204,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
     if (!res.ok) { toast.error('The days changed while this was open. Nothing was moved; it waits under "need you".'); return; }
     const batch = (await res.json()).batch_id as string | null;
     window.dispatchEvent(new Event('timeoff-changed'));
-    toast(`${plural(p.rows.length, 'treatment')} fixed${p.left ? `. ${p.left} wait${p.left === 1 ? 's' : ''} under "need you".` : '.'}`, { action: batch ? { label: 'Undo', onClick: async () => {
-      const u = await fetch(`${API_BASE}/replan/undo`, { method: 'POST', headers, body: JSON.stringify({ batch_id: batch }) });
-      if (!u.ok) toast.error('That could not be undone.');
-      window.dispatchEvent(new Event('timeoff-changed'));
-    } } : undefined });
+    toast(`${plural(p.rows.length, 'treatment')} fixed${p.left ? `. ${p.left} wait${p.left === 1 ? 's' : ''} under "need you".` : '.'}`, { action: batch ? { label: 'Undo', onClick: () => { void undoBatch(batch, () => window.dispatchEvent(new Event('timeoff-changed'))); } } : undefined });
   };
 
   const saveEdit = async () => {

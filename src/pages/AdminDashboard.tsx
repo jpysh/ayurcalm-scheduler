@@ -24,7 +24,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout, API_TOKEN, type ApiAppointment, type ApiProgramEvent, type Patient, type UiRoom, type UiStaff, type UiTherapy, type UiTimeOff } from "./tabs/shared";
 import PageHead, { BackContext } from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
-import { Consequence, dayText, ListGroup, Row, SheetFoot, saveError, setCurrency } from "@/components/kit";
+import { Consequence, dayText, ListGroup, Row, SheetFoot, saveError, setCurrency, undoBatch } from "@/components/kit";
 
 /** Builds the schedule's time rows from the centre's opening hours. */
 const buildTimeSlots = (openingTime: string, closingTime: string, slotMinutes: number) => {
@@ -385,11 +385,7 @@ const AdminDashboard = () => {
     try { localStorage.setItem(`attentionDismissed:${exceptionDayKey}`, JSON.stringify(next)); } catch { /* private window */ }
   };
   const undoReplanBatch = async (batch: ReplanBatch) => {
-    const res = await fetch(`${API_BASE}/replan/undo`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batch_id: batch.batch_id }) });
-    if (!res.ok) return false;
-    loadReplans();
-    await refreshAppointmentsForDate(todayKey, true);
-    return true;
+    return undoBatch(batch.batch_id, async () => { loadReplans(); await refreshAppointmentsForDate(todayKey, true); });
   };
   const visibleReplans = replans.filter((r) => !dismissed.includes(r.batch_id));
 

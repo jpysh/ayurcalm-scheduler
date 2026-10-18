@@ -150,9 +150,20 @@ const main = async () => {
       const distinct = new Set((byDay.get(today) || []).map((a) => a.patient_id));
       // The lite demo seed models a small centre (#376): 10, not the full seed's 30.
       const lite = process.env.DEMO_MODE === 'true' || process.env.SEED_SIZE === 'lite';
-      const least = lite ? 10 : 30;
+      const least = lite ? 10 : process.env.SEED_SIZE === 'babaji' ? 15 : 30;
       assert.ok(distinct.size >= least, `only ${distinct.size} patients booked today (want ${least}${lite ? ', lite seed' : ''})`);
     }],
+
+    // #905: the pilot's own instance reads like a running centre.
+    ...(process.env.SEED_SIZE === 'babaji' ? [['babaji has about 20 in house and ten therapists, half of them men', () => {
+      const tz = process.env.ADMIN_TZ || 'Asia/Kolkata';
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      const inHouse = new Set((byDay.get(today) || []).map((a) => a.patient_id)).size;
+      assert.ok(inHouse >= 15 && inHouse <= 28, `${inHouse} residents treated today, want about 20`);
+      const team = staff.filter((s) => s.role === 'therapist');
+      assert.equal(team.length, 10);
+      assert.equal(team.filter((s) => s.gender === 'male').length, 5);
+    }] as [string, () => void]] : []),
 
     ['today has a therapist off with treatments still on their name', () => {
       // The demo opens on this, and every walk through Verify tests against it

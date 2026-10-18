@@ -1,6 +1,6 @@
 // Fake-clock checks for the trial lifecycle and sign-up limits (#247).
 import assert from 'node:assert/strict';
-import { next, deletesAt, refuse, slugFor, linkOpen, took } from './lifecycle.mjs';
+import { next, deletesAt, refuse, slugFor, linkOpen, took, rollout } from './lifecycle.mjs';
 const H = 3_600_000, D = 24 * H, t0 = Date.parse('2026-10-01T00:00:00Z');
 
 // Level 1 idle 72 h -> paused; paused 14 days -> deleted. No warnings: nothing is emailed.
@@ -71,3 +71,12 @@ console.log('provisioner lifecycle ok');
   assert.match(morning(db, [], now), /Sign-ups: 1 yesterday, 1 this week/);
   console.log('morning ok');
 }
+
+// A failed step stops the rollout: a demo that fails means no live centre is updated (#904).
+const done = [];
+const r = await rollout([{ slug: 'demo' }, { slug: 'babaji' }, { slug: 't1' }], async (x) => { if (x.slug === 'demo') throw new Error('demo did not come up'); done.push(x.slug); });
+assert.deepEqual(done, []);
+assert.equal(r.failed, 'demo');
+const all = [];
+assert.equal((await rollout([{ slug: 'demo' }, { slug: 'babaji' }], async (x) => { all.push(x.slug); })).failed, null);
+assert.deepEqual(all, ['demo', 'babaji']);

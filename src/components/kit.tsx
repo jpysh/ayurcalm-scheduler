@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type AnchorHTMLAttributes, type ButtonHTML
 import { Lock, Search as SearchIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { API_BASE } from "@/lib/apiBase";
 
 /**
  * The form kit (#283): every form is built from these parts, so a field has one
@@ -356,8 +357,9 @@ export function Picker<T extends string>({ options, value, onChange, onEdit }: {
     <div ref={box} className="grid gap-2">
       {options.map((o) => (
         <button key={o.id} type="button" aria-pressed={value === o.id} onClick={() => onChange(o.id)}
-          className={`flex min-h-14 items-center gap-3 rounded-xl border-[1.5px] border-border px-3 py-2 text-left aria-pressed:border-primary aria-pressed:bg-secondary ${o.faint ? "opacity-60" : ""}`}>
-          <span className="min-w-0 flex-1"><b className="block text-base">{o.name}</b>{o.note ? <span className={`block ${noteText}`}>{o.note}</span> : null}</span>
+          className={`flex min-h-14 flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border-[1.5px] border-border px-3 py-2 text-left aria-pressed:border-primary aria-pressed:bg-secondary ${o.faint ? "opacity-60" : ""}`}>
+          {/* At large text the price goes under the name rather than squeezing its line to a word a row (#903). */}
+          <span className="min-w-[min(10rem,100%)] flex-1"><b className="block text-base">{o.name}</b>{o.note ? <span className={`block ${noteText}`}>{o.note}</span> : null}</span>
           {o.fact ? <span className="flex-none text-sm text-muted-foreground">{o.fact}</span> : null}
           {value === o.id ? <span aria-hidden className="flex-none font-bold text-primary">✓</span> : null}
         </button>
@@ -376,7 +378,24 @@ export const TwoFoot = ({ main, onMain, alt, onAlt, busy, ok = true }: { main: s
 );
 
 /** Done, with a way back: one line, one Undo, five seconds. */
-export const toastUndo = (text: string, undo: () => void | Promise<void>) => toast(text, { duration: 5000, action: { label: "Undo", onClick: () => { void undo(); } } });
+/**
+ * An Undo's write: when the other phone of a shared login changed it since, the
+ * server refuses and the admin chooses (#900, #911). `send(true)` writes regardless.
+ */
+export async function undoWrite(send: (anyway: boolean) => Promise<Response | null>, after?: () => unknown, anyway = false): Promise<boolean> {
+  const res = await send(anyway).catch(() => null);
+  const why = res && !res.ok ? await res.clone().json().catch(() => ({})) : null;
+  if (why?.reason === "CHANGED_SINCE") toast.error(why.message, { duration: 8000, action: { label: "Undo anyway", onClick: () => { void undoWrite(send, after, true); } } });
+  else if (!res?.ok) toast.error(res ? await saveError(res, "That could not be undone.") : "That could not be undone.");
+  await after?.();
+  return !!res?.ok;
+}
+
+/** Undo a batch of moves (leave, "Not in", fix-it, Log), asking first when changed since. */
+export const undoBatch = (batchId: string, after?: () => unknown) =>
+  undoWrite((anyway) => fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batch_id: batchId, anyway }) }), after);
+
+export const toastUndo = (text: string, undo: () => unknown) => toast(text, { duration: 5000, action: { label: "Undo", onClick: () => { void undo(); } } });
 
 /** Empty: one line saying why, and the action if there is one. */
 export const Empty = ({ text, action }: { text: string; action?: ReactNode }) => (

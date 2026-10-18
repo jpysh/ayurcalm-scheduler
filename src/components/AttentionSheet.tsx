@@ -9,7 +9,7 @@
  * now. The sheet stays open and redraws as rows are dealt with.
  */
 import { useEffect, useState } from "react";
-import { InboxSheet, saveError, dayText, ItemRow, ListGroup, Row, Btn } from "@/components/kit";
+import { InboxSheet, saveError, dayText, ItemRow, ListGroup, Row, Btn, undoBatch } from "@/components/kit";
 import type { AttentionItem } from "@/lib/attention";
 
 export type Fix = {
@@ -145,9 +145,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
       const f = fixes[0];
       setDone({
         text: !p ? `${fixes.length} treatments fixed as shown.` : f.cancel ? `${p.patient_name}'s treatment at ${p.start_time} cancelled.` : `${p.patient_name}: ${f.label}.`,
-        undo: batch ? async () => (await fetch(`${apiBase}/replan/undo`, {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batch_id: batch }),
-        })).ok : null,
+        undo: batch ? () => undoBatch(batch, onChanged) : null,
       });
       await onChanged();
     } finally {
@@ -159,8 +157,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
     if (!done?.undo) return;
     setBusy("undo");
     try {
-      if (await done.undo()) { setDone({ text: "Put back as it was.", undo: null }); await onChanged(); }
-      else setError("That could not be undone.");
+      if (await done.undo()) setDone({ text: "Put back as it was.", undo: null });
     } finally {
       setBusy(null);
     }
