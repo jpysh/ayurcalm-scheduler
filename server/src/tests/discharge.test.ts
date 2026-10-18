@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 import { newLinkToken } from '../links.js';
+import { dischargeOf } from '../discharge.js';
 import { pageLine } from '../pdf/dischargePdf.js';
 import { requireDemoData } from './demoGuard.js';
 
@@ -48,6 +49,20 @@ async function main() {
       await prisma.appointment.create({ data: { patient_id: p.id, therapy_id: therapy.id, staff_id: therapist.id, room_id: room.id, scheduled_date: day, start_time: '10:00', duration_minutes: 60, session_number: 1, total_sessions: 1, status: 'completed', assignment_type: 'manual', record: { vitals: { bp: `12${i % 10}/80` } } } });
       if (i % 7 === 0) await prisma.appointment.create({ data: { patient_id: p.id, therapy_id: consult.id, staff_id: doctor.id, room_id: room.id, scheduled_date: day, start_time: '09:00', duration_minutes: 20, session_number: 1, total_sessions: 1, status: 'completed', assignment_type: 'manual' } });
     }
+
+    // #937: an unsaved draft on the leaving day carries the centre's real time (19:37 in Kolkata), never a made-up 11:00,
+    // and the doctor's last visit note is not copied into the instructions.
+    await prisma.patient.update({ where: { id: p.id }, data: { doctor_plan: 'Add Kati Vasti for 5 days' } });
+    const out = await prisma.patientStay.create({ data: { patient_id: p.id, start_date: new Date('2030-04-01T00:00:00Z'), end_date: new Date('2030-04-02T00:00:00Z'), duration_days: 2 } });
+    const live = (await dischargeOf(out.id, prisma, new Date('2030-04-02T14:07:00Z')))!.draft;
+    assert.equal(live.discharged_time, '19:37');
+    assert.equal(live.signed_at, '2030-04-02 19:37');
+    assert.equal(live.admitted_time, '', 'an arrival time nobody recorded is not invented');
+    assert.equal(live.instructions, '', 'the last visit note is not a discharge instruction');
+    const early = (await dischargeOf(out.id, prisma, new Date('2030-04-01T14:07:00Z')))!.draft;
+    assert.equal(early.discharged_time, '', 'not the leaving day: no time is invented');
+    assert.equal(early.signed_at, '2030-04-02');
+    await prisma.patientStay.delete({ where: { id: out.id } });
 
     assert.equal(pageLine('Leela Menon', '', 1, 1), 'Leela Menon · page 1 of 1', 'no number, no empty separator (#542)');
     assert.equal(pageLine('Leela Menon', 'DS/2030/0001', 2, 2), 'Leela Menon · DS/2030/0001 · page 2 of 2');
