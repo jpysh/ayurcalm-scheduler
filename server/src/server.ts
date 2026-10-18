@@ -1469,7 +1469,8 @@ app.put('/appointments/:id', async (req: Request, res: Response) => {
 app.get('/appointments/:id/choices', async (req: Request, res: Response) => {
   const kind = z.enum(['time', 'staff', 'room', 'therapy']).parse(req.query.kind);
   const now = typeof req.query.now === 'string' && /^\d\d:\d\d$/.test(req.query.now) ? Number(req.query.now.slice(0, 2)) * 60 + Number(req.query.now.slice(3)) : null;
-  const choices = await cardChoices(req.params.id, kind, now, prisma);
+  const seat = typeof req.query.seat === 'string' ? req.query.seat : undefined;
+  const choices = await cardChoices(req.params.id, kind, now, prisma, seat);
   if (!choices) { res.status(404).json({ error: 'Appointment not found' }); return; }
   res.json({ choices });
 });

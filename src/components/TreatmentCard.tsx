@@ -69,6 +69,8 @@ type Props = {
 export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients, staff, roomsList, therapyNameById, refresh, staffNotIn, roomOut, onShowDay, openResident, problem }: Props) {
   const [page, setPage] = useState<Page>("card");
   const [choices, setChoices] = useState<Choice[] | null>(null);
+  /** Of two therapists, the one being replaced (#873); null lists the two. */
+  const [seat, setSeat] = useState<string | null>(null);
   const [history, setHistory] = useState<Entry[] | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -150,10 +152,13 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients
     }
   };
 
-  const open = async (kind: "time" | "staff" | "room" | "therapy") => {
+  const open = async (kind: "time" | "staff" | "room" | "therapy", one?: string) => {
     setChoices(null);
     setPage(kind);
-    const res = await fetch(`${API_BASE}/appointments/${appt.id}/choices?kind=${kind}${isToday ? `&now=${hm(nowMinutes)}` : ""}`);
+    setSeat(one ?? null);
+    // Two therapists: first say which one is changing, so the other stays (#873).
+    if (kind === "staff" && team.length > 1 && !one) return;
+    const res = await fetch(`${API_BASE}/appointments/${appt.id}/choices?kind=${kind}${isToday ? `&now=${hm(nowMinutes)}` : ""}${one ? `&seat=${one}` : ""}`);
     setChoices(res.ok ? (await res.json()).choices : []);
   };
 
@@ -227,15 +232,22 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients
     title = "Note";
     foot = <SheetFoot busy={busy} ok={note.trim() !== (appt.notes || "").trim()} label={!note.trim() && appt.notes ? "Remove the note" : "Save the note"} save={() => apply({ notes: note.trim() }, note.trim() ? "Note saved" : "Note removed")} />;
     body = <><Area label="Note (optional)" note="Prints on the therapist's sheet" autoFocus rows={4} value={note} onChange={(e) => setNote(e.target.value)} /></>;
+  } else if (page === "staff" && team.length > 1 && !seat) {
+    title = "Therapists";
+    note$ = "Tap the one to change; the other stays.";
+    body = <ListGroup>{team.map((id) => <Row key={id} title={nameIn(staff, id)} trailing="Change ›" onClick={busy ? undefined : () => void open("staff", id)} />)}</ListGroup>;
   } else {
     [title, note$] = TITLES[page];
+    // Nobody to swap in: the list holds other times and cancel, so the line under the title says so.
+    const noSwap = seat && choices?.some((c) => !c.now) && choices.every((c) => c.now || "start_time" in c.change || "status" in c.change);
+    if (seat) [title, note$] = [`Instead of ${nameIn(staff, seat)}`, noSwap ? `No one else is free at ${appt.start_time}. Nothing moves until you choose.` : "Free for the whole treatment, and trained for it"];
     const shown = choices?.map((c, i) => ({ id: String(i), name: say(c.label), note: c.best ? "Suggested" : undefined, fact: c.now ? undefined : c.hint, c })) ?? [];
     const current = shown.find((o) => o.c.now);
     body = (
       <>
         {choices === null ? <Loading rows={4} /> : (
           <>
-            <Picker options={shown} value={current?.id ?? ""} onChange={(id) => { const o = shown[Number(id)]; if (!o.c.now && !busy) void apply(o.c.change, `${NAMES[page]} ${page === "time" ? o.c.label.replace(/ to \d\d:\d\d$/, "") : say(o.c.label)}`); }} />
+            <Picker options={shown} value={current?.id ?? ""} onChange={(id) => { const o = shown[Number(id)]; if (!o.c.now && !busy) void apply(o.c.change, "status" in o.c.change ? `${first}'s ${appt.start_time} treatment cancelled` : `${"start_time" in o.c.change ? "Moved to" : NAMES[page]} ${page === "time" ? o.c.label.replace(/ to \d\d:\d\d$/, "") : say(o.c.label)}`); }} />
             {!choices.some((c) => !c.now) ? <p className="mt-2 text-sm text-muted-foreground">Nothing else fits.</p> : null}
           </>
         )}

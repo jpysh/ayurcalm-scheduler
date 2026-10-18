@@ -29,7 +29,7 @@ const DAY_MS = 86400000;
 /** "Tue 29 Sep", for an option on another day. */
 const dayLabel = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
 
-export async function cardChoices(appointmentId: string, kind: Kind, nowMinutes: number | null, prisma: PrismaClient): Promise<Choice[] | null> {
+export async function cardChoices(appointmentId: string, kind: Kind, nowMinutes: number | null, prisma: PrismaClient, seat?: string): Promise<Choice[] | null> {
   const a = await prisma.appointment.findUnique({ where: { id: appointmentId } });
   if (!a) return null;
   const ctx = await loadDay(a.scheduled_date, prisma);
@@ -101,6 +101,51 @@ export async function cardChoices(appointmentId: string, kind: Kind, nowMinutes:
     out.push({ label: `${t?.name || 'Treatment'} · ${a.duration_minutes} min`, now: true, change: {} });
   }
   const offered = () => out.length - 1;
+
+  // One of two (#873): replace only `seat`, the partner stays. Nobody free then: another
+  // time today or the next free day with the partner, or cancel; nothing moves until tapped.
+  const team = [a.staff_id, ...a.co_staff_ids].filter((x): x is string => Boolean(x));
+  if (kind === 'staff' && seat && team.length > 1 && team.includes(seat)) {
+    const held = ctx.therapies.find((x) => x.id === a.therapy_id);
+    const swap = (sid: string) => (a.staff_id === seat ? { staff_id: sid } : { co_staff_ids: a.co_staff_ids.map((id) => (id === seat ? sid : id)) });
+    const partners = team.filter((id) => id !== seat).map((id) => nameOf(ctx.staff, id)).join(' and ');
+    out[0] = { label: nameOf(ctx.staff, seat), now: true, change: {} };
+    const able = (dayCtx: typeof ctx) => dayCtx.staff.filter((s) => s.is_active && !team.includes(s.id) && held && gives(s, held));
+    for (const s of able(ctx)) {
+      if (!works(s.weekly_schedule, a.scheduled_date, start, a.duration_minutes)) continue;
+      if (fits(swap(s.id))) out.push({ label: s.name, best: offered() === 0, change: swap(s.id) });
+      if (offered() >= MAX) break;
+    }
+    if (offered()) return out;
+    const close = toM(ctx.settings?.closing_time || '18:00');
+    const open = toM(ctx.settings?.opening_time || '09:00');
+    const rooms = [a.room_id, ...ctx.rooms.filter((r) => r.is_active && r.id !== a.room_id).map((r) => r.id)];
+    /** The first time on `day` from `from` where the partner, someone trained and a room are free. */
+    const first = (day: Date, dayCtx: typeof ctx, from: number) => {
+      for (let t = Math.ceil(from / 15) * 15; t + a.duration_minutes <= close; t += 15) {
+        if (day.getTime() === a.scheduled_date.getTime() && t === start) continue;
+        for (const s of able(dayCtx)) {
+          if (!works(s.weekly_schedule, day, t, a.duration_minutes)) continue;
+          for (const room of rooms) {
+            const c = { start_time: hm(t), room_id: room, ...swap(s.id) };
+            if (!findConflict({ ...base, scheduled_date: day, ...c }, dayCtx)) return { t, s, c };
+          }
+        }
+      }
+      return null;
+    };
+    const today = first(a.scheduled_date, ctx, Math.max(open, nowMinutes ?? open));
+    if (today) out.push({ label: `Today ${hm(today.t)}, with ${partners} and ${today.s.name}`, best: true, change: today.c });
+    const stays = await prisma.patientStay.findMany({ where: { patient_id: a.patient_id } });
+    for (let d = 1; d <= 7; d++) {
+      const day = new Date(a.scheduled_date.getTime() + d * DAY_MS);
+      if (stays.length && !stays.some((x) => x.start_date <= day && day <= x.end_date)) continue;
+      const next = first(day, await loadDay(day, prisma), open);
+      if (next) { out.push({ label: `${dayLabel(day)} ${hm(next.t)}, with ${partners} and ${next.s.name}`, best: !today, change: { ...next.c, scheduled_date: day.toISOString().slice(0, 10) } }); break; }
+    }
+    out.push({ label: 'Cancel this treatment', hint: 'Kept as cancelled, can be undone', change: { status: 'cancelled' } });
+    return out;
+  }
 
   if (kind === 'staff') {
     const held = ctx.therapies.find((x) => x.id === a.therapy_id);
