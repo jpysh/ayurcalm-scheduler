@@ -254,12 +254,13 @@ export function BottomSheet({ open, onOpenChange, title, label, note, children, 
     const mark = `sheet-${Math.random().toString(36).slice(2)}`;
     window.history.pushState({ ...window.history.state, sheet: mark }, "");
     let popped = false;
-    const onPop = () => { popped = true; close.current(false); };
-    window.addEventListener("popstate", onPop, { once: true });
+    // Back lands on the entry below ours; a sheet underneath sees its own mark and stays open.
+    const onPop = () => { if (window.history.state?.sheet === mark) return; popped = true; close.current(false); };
+    window.addEventListener("popstate", onPop);
     return () => {
       window.removeEventListener("popstate", onPop);
-      // Closed by a tap: drop our entry, unless the page has since moved on (then Back would undo that move).
-      if (!popped && window.history.state?.sheet === mark) window.history.back();
+      // Closed by a tap: drop our entry, unless a sheet that replaced this one in the same moment, or a page move, has since taken the top (Back would undo it).
+      if (!popped) setTimeout(() => { if (window.history.state?.sheet === mark) window.history.back(); }, 0);
     };
   }, [open]);
   return (
