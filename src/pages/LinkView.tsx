@@ -4,10 +4,10 @@
  * treatment as a record for the patient's log; nothing here changes the plan.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
-import { useMadeWith, useReception } from "@/lib/centreName";
+import { useCentreName, useMadeWith, useReception } from "@/lib/centreName";
 import { Area, BottomSheet, Btn, Empty, Foot, FullPage, ItemRow, LinkBtn, ListGroup, Loading, QuietLink, Row, Seg, Text, TextRow, Tick, dayText } from "@/components/kit";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 
@@ -20,7 +20,7 @@ type Item = {
 };
 type Details = { phone: string | null; email: string | null; date_of_birth: string | null; address: string | null; country: string | null; id_number: string | null; emergency_contact: string | null; emergency_phone: string | null; visa_number: string | null; visa_valid_until: string | null };
 // What a patient fills before arriving (#489), the card's More details in their words.
-const ASK: [keyof Details, string, string?][] = [["phone", "Your phone", "tel"], ["email", "Email (optional)", "email"], ["date_of_birth", "Date of birth (yyyy-mm-dd)"], ["country", "Nationality"], ["id_number", "Passport or ID number"], ["address", "Home address"], ["emergency_contact", "Someone to call in an emergency"], ["emergency_phone", "Their phone", "tel"], ["visa_number", "Visa number"], ["visa_valid_until", "Visa valid until (yyyy-mm-dd)"]];
+const ASK: [keyof Details, string, string?][] = [["phone", "Your phone", "tel"], ["email", "Email (optional)", "email"], ["date_of_birth", "Date of birth", "date"], ["country", "Nationality"], ["id_number", "Passport or ID number"], ["address", "Home address"], ["emergency_contact", "Someone to call in an emergency"], ["emergency_phone", "Their phone", "tel"], ["visa_number", "Visa number"], ["visa_valid_until", "Visa valid until", "date"]];
 // Only a foreign guest is asked for a visa (#576); the server's isForeign says the same.
 const foreign = (c: string | null | undefined) => !!c?.trim() && !/^(india|indian|bharat|in)$/i.test(c.trim());
 const asked = (d: Details) => ASK.filter(([k]) => !k.startsWith("visa") || foreign(d.country));
@@ -36,7 +36,10 @@ export default function LinkView() {
   const made = useMadeWith();
   const reception = useReception();
   const { token = "" } = useParams();
-  const [date, setDate] = useState<string | null>(null);
+  // A forwarded link can name its day: /l/<token>?date=2030-03-04.
+  const [params] = useSearchParams();
+  const [date, setDate] = useState<string | null>(() => (/^\d{4}-\d{2}-\d{2}$/.test(params.get("date") ?? "") ? params.get("date") : null));
+  const centreName = useCentreName("");
   const [day, setDay] = useState<Day | null>(null);
   const [unfolded, setUnfolded] = useState<string[]>([]);
   const [gone, setGone] = useState(false);
@@ -107,27 +110,49 @@ export default function LinkView() {
     const body = Object.fromEntries(asked(mine!).map(([k]) => [k, mine![k] ?? ""]));
     const res = await fetch(`${API_BASE}/public/link/${token}/details`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
     setBusy(false);
-    if (!res?.ok) { toast.error("Not saved. Check what you typed and try again."); return; }
+    if (!res?.ok) {
+      const bad = res ? ((await res.json().catch(() => null))?.details as { path: string }[] | undefined)?.map((d) => ASK.find(([k]) => k === d.path)?.[1]).find(Boolean) : null;
+      toast.error(bad ? `Not saved. Check "${bad}" and try again.` : "Not saved. Check the connection and try again.");
+      return;
+    }
     toast.success("Thank you. The centre has your details."); setMine(null); load();
   };
-  const sendIssue = async (kind: string) => {
+  const [kind, setKind] = useState("");
+  const sendIssue = async () => {
     const res = await fetch(`${API_BASE}/public/link/${token}/issues`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, note: issueNote || undefined, appointment_id: raise?.appointment_id }) }).catch(() => null);
-    if (res?.ok) { toast.success(kind === "sos" ? "The centre has been told. Stay where you are." : "Sent to the centre"); setRaise(null); setIssueNote(""); }
+    if (res?.ok) { toast.success(kind === "sos" ? "The centre has been told. Stay where you are." : "Sent to the centre"); setRaise(null); setIssueNote(""); setKind(""); }
     else toast.error("Not sent. Phone the centre.");
   };
 
-  if (gone) return <FullPage><Empty text="This link is no longer valid. Ask the centre for a new one." /></FullPage>;
+  if (gone) return (
+    <FullPage title={centreName || undefined}>
+      <div className="mt-3"><ListGroup><Empty text="This link is no longer valid. Ask the centre for a new one." /></ListGroup></div>
+      <div className="mt-4">{reception ? <LinkBtn href={`https://wa.me/${reception}`}>WhatsApp the centre</LinkBtn> : <p className="text-center text-sm text-muted-foreground">Phone or message the centre for a new link.</p>}</div>
+    </FullPage>
+  );
   if (!day) return <FullPage><Loading rows={3} /></FullPage>;
 
   const staff = day.who.kind !== "patient";
+  // Monday to Sunday around the day shown: seven days, one tap each.
+  const mondayOffset = (new Date(`${day.date}T00:00:00Z`).getUTCDay() + 6) % 7;
+  const week = Array.from({ length: 7 }, (_, i) => shift(day.date, i - mondayOffset));
   const label = new Date(`${day.date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
 
   return (
     <FullPage title={day.who.name} note={day.centre}>
-      <div className="mt-2 grid grid-cols-[auto_1fr_auto] items-center gap-2">
-        <Btn inline aria-label="Day before" onClick={() => setDate(shift(day.date, -1))}>‹</Btn>
+      <div className="mt-2 grid grid-cols-[auto_1fr_auto] items-center gap-2 print:grid-cols-1">
+        <Btn inline className="print:hidden" aria-label="Day before" onClick={() => setDate(shift(day.date, -1))}>‹</Btn>
         <div className="text-center"><div className="font-semibold">{label}</div>{day.date === day.today ? <div className="text-sm font-semibold text-primary">Today</div> : <Btn kind="quiet" inline className="min-h-0 py-1 text-sm" onClick={() => setDate(day.today)}>Back to today</Btn>}</div>
-        <Btn inline aria-label="Day after" onClick={() => setDate(shift(day.date, 1))}>›</Btn>
+        <Btn inline className="print:hidden" aria-label="Day after" onClick={() => setDate(shift(day.date, 1))}>›</Btn>
+      </div>
+
+      <div className="mt-2 grid grid-cols-7 gap-1 print:hidden" role="group" aria-label="Week">
+        {week.map((d) => (
+          <Btn key={d} inline kind={d === day.date ? "primary" : "secondary"} className="min-h-11 flex-col px-0 text-sm leading-tight" aria-current={d === day.date ? "date" : undefined} aria-label={dayText(d)} onClick={() => setDate(d)}>
+            <span>{new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" })}</span>
+            <span className={d === day.today ? "underline" : ""}>{Number(d.slice(8))}</span>
+          </Btn>
+        ))}
       </div>
 
       {day.arrives ? <p className="mt-2 text-center text-sm text-muted-foreground">Your stay starts {new Date(`${day.arrives}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}.</p> : null}
@@ -240,21 +265,22 @@ export default function LinkView() {
         {discharge ? <DischargeForm view={discharge} admin={false} onSave={saveDischarge} onPdf={() => window.open(`${API_BASE}/public/link/${token}/discharges/${discharge.stay_id}/pdf`, "_blank")} /> : null}
       </BottomSheet>
 
-      <div className="mt-4 grid gap-1">
+      <div className={staff ? "sticky bottom-0 -mx-4 mt-4 border-t border-border bg-background px-4 py-2 print:hidden" : "mt-4 grid gap-1"}>
         {staff ? <Btn kind="destructive" className="border-[1.5px] border-destructive" onClick={() => setRaise({})}>Raise an issue or SOS</Btn> : null}
         {/* A patient's way to the centre (#273 M1): reception on WhatsApp, once the centre has set its own number. */}
         {!staff && reception ? <LinkBtn href={`https://wa.me/${reception}?text=${encodeURIComponent(`${day.who.name}: `)}`}>WhatsApp reception</LinkBtn> : null}
       </div>
 
-      <BottomSheet open={!!raise} onOpenChange={(o) => { if (!o) setRaise(null); }} title="Tell the centre" note="Pick what fits. It goes to the centre at once.">
+      <BottomSheet open={!!raise} onOpenChange={(o) => { if (!o) { setRaise(null); setKind(""); } }} title="Tell the centre" note="Pick what fits, add a few words, then send.">
         <Text label="A few words (optional)" value={issueNote} onChange={(e) => setIssueNote(e.target.value)} />
         <div className="mt-3">
           <ListGroup>
             {ISSUES.filter(([k]) => raise?.appointment_id || !["room", "co_therapist", "patient_absent"].includes(k)).map(([k, t]) => (
-              <Row key={k} title={<span className={k === "sos" ? "text-destructive" : ""}>{t}</span>} trailing="Send ›" onClick={() => sendIssue(k)} />
+              <Row key={k} title={<span className={k === "sos" ? "text-destructive" : ""}>{t}</span>} trailing={kind === k ? "✓" : undefined} onClick={() => setKind(k)} />
             ))}
           </ListGroup>
         </div>
+        <Btn kind={kind === "sos" ? "destructive" : "primary"} className="mt-3" disabled={!kind || (kind === "note" && !issueNote.trim())} onClick={sendIssue}>{kind === "sos" ? "Send SOS now" : kind === "note" && !issueNote.trim() ? "Type your note first" : "Send to the centre"}</Btn>
       </BottomSheet>
       {made && <p className="mt-6 text-center"><QuietLink href="https://jains.es/ruta">{made}</QuietLink></p>}
     </FullPage>
