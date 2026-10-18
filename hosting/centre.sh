@@ -21,7 +21,7 @@ set -a; . "$dir/env"; set +a
 # Feedback from a hosted centre reaches the maintainer's morning (#818); the key is the sign-up service's.
 FEEDBACK_KEY=$(sed -n 's/^FEEDBACK_KEY=//p' "$DATA/provisioner.env" 2>/dev/null || true)
 [ -n "$FEEDBACK_KEY" ] && export FEEDBACK_KEY FEEDBACK_URL="http://host.docker.internal:${PROVISIONER_PORT:-8200}/feedback"
-export BACKUP_DIR="$dir/backups" BEHIND_CLOUDFLARE=true
+export BACKUP_DIR="$dir/backups" BEHIND_CLOUDFLARE=true HOSTED=true
 if [ "$slug" = demo ]; then export DEMO_MODE=true DEMO_RESET_MINUTES=60; fi
 case $cmd in
   up)   APP_PORT=${3:?port} docker compose -p "ruta-$slug" up -d --build ;;
