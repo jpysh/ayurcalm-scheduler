@@ -746,7 +746,9 @@ const createTimeOffHandler = async (req: Request, res: Response) => {
       if (data.start_date) data.date = new Date(data.start_date);
       else if (data.end_date) data.date = new Date(data.end_date);
     }
-    const h = await prisma.timeOff.create({ data });
+    // The same absence for the same person and days is one row: a double tap or a retry after an interrupted plan finds the first (#936).
+    const same = { entity_type: data.entity_type, entity_id: data.entity_id ?? null, date: data.date ?? null, start_date: data.start_date ?? null, end_date: data.end_date ?? null, start_time: data.start_time ?? null, end_time: data.end_time ?? null };
+    const h = (await prisma.timeOff.findFirst({ where: same })) ?? (await prisma.timeOff.create({ data }));
 
     // Recording an absence is the moment the day has to be rebuilt: the admin
     // is the only person here, and a treatment left on the name of someone who

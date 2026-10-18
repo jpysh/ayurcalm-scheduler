@@ -247,6 +247,21 @@ const breakable = (t: string) => t.replace(/\p{L}{13,}/gu, (w) => w.replace(/([a
  */
 export function BottomSheet({ open, onOpenChange, title, label, note, children, foot, onBack }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; /** The name a screen reader hears when the sheet shows no title. */ label?: string; note?: ReactNode; children: ReactNode; foot?: ReactNode; /** A sheet's second page: Back above the title. */ onBack?: () => void }) {
   const opener = useRef<HTMLElement | null>(null);
+  const close = useRef(onOpenChange); close.current = onOpenChange;
+  // Back is how a thumb dismisses a sheet on Android: an open sheet owns one history entry, and Back pops it and closes the sheet (#936).
+  useEffect(() => {
+    if (!open) return;
+    const mark = `sheet-${Math.random().toString(36).slice(2)}`;
+    window.history.pushState({ ...window.history.state, sheet: mark }, "");
+    let popped = false;
+    const onPop = () => { popped = true; close.current(false); };
+    window.addEventListener("popstate", onPop, { once: true });
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      // Closed by a tap: drop our entry, unless the page has since moved on (then Back would undo that move).
+      if (!popped && window.history.state?.sheet === mark) window.history.back();
+    };
+  }, [open]);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="mx-auto flex max-h-[88dvh] max-w-xl flex-col rounded-t-sheet bg-card p-0 outline-none"
