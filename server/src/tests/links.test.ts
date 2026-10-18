@@ -195,6 +195,18 @@ try {
   assert.deepEqual([given.rating, given.note], ['fine', 'Lovely food'], 'kept, and the link then says thank you');
   const info = ((await (await call(`/attention?date=${today}`, undefined, admin)).json()).items as { who: string; rule: string; kind: string; what: string }[]).find((i) => i.who === leaver.name && i.rule === 'feedback');
   assert.ok(info && info.kind === 'information' && /Stay was fine: “Lovely food”/.test(info.what), `What needs you says it: ${JSON.stringify(info)}`);
+  // A guest's link stops 30 days after their last stay (#827); a new stay brings a fresh one.
+  const lapsed = await prisma.patient.create({ data: { name: `Lapsed ${tag}`, gender: 'female' } }); leavers.push(lapsed.id);
+  stays.push((await prisma.patientStay.create({ data: { patient_id: lapsed.id, start_date: iso(-40), end_date: iso(-31), duration_days: 10 } })).id);
+  const oldTok = await issue('patients', lapsed.id);
+  assert.equal((await call(`/public/link/${oldTok}`)).status, 404, '31 days after the stay, the link is gone');
+  await prisma.patientStay.update({ where: { id: stays[stays.length - 1] }, data: { end_date: iso(-30) } });
+  assert.equal((await call(`/public/link/${oldTok}`)).status, 200, '30 days after, it still opens');
+  await prisma.patientStay.update({ where: { id: stays[stays.length - 1] }, data: { end_date: iso(-31) } });
+  const back = await (await call(`/patients/${lapsed.id}/stays`, { start_date: iso(2).toISOString().slice(0, 10), end_date: iso(5).toISOString().slice(0, 10) }, admin)).json(); stays.push(back.id);
+  assert.equal((await call(`/public/link/${oldTok}`)).status, 404, 'the old link stays dead when they come back');
+  const fresh = await shared('patients', lapsed.id);
+  assert.ok(fresh !== oldTok && (await call(`/public/link/${fresh}`)).status === 200, 'Send link gives the returning guest a new one');
   console.log('links: ok');
 } finally {
   await prisma.timeOff.deleteMany({ where: { entity_type: 'staff', entity_id: therapist.id } });
