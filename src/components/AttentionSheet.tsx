@@ -246,7 +246,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
         body: patientRows.length + patientInfo.length ? <ListGroup>{patientRows.map((g) => {
           // Two things for one patient are one row; their card reaches both.
           const i = g.length > 1 ? { ...g[0], action: "card" as const, move: undefined } : g[0];
-          return <Row key={i.id} title={i.who} facts={g.map((x) => x.what).join(" · ")} trailing={i.move ? `Move to ${i.move.room_name} ›` : { card: "Open card ›", diet: "Choose diet ›", summary: "Summary ›", followup: "Follow up ›", move: "Open card ›" }[i.action ?? "card"]} onClick={() => onItem(i)} />;
+          return <Row key={i.id} title={i.who} facts={g.map((x) => x.what).join(" · ")} trailing={i.move ? `Move to ${i.move.room_name} ›` : { card: "Open card ›", diet: "Choose diet ›", summary: "Summary ›", followup: "Follow up ›", move: "Open card ›", week: "Plan next week ›" }[i.action ?? "card"]} onClick={() => onItem(i)} />;
         })}{patientInfo.map((i) => <Row key={i.id} title={i.who} facts={`${i.what} · information, not counted`} trailing="Open card ›" onClick={() => onItem(i)} />)}</ListGroup> : null,
       }, {
         name: day === today ? "Staff" : "Today's staff", count: teamAct.length,
