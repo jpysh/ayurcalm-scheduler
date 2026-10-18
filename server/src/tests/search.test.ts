@@ -89,6 +89,15 @@ async function main() {
       await prisma.therapyRoom.delete({ where: { id: shut.id } });
     }
 
+    // Find a patient from the list (#934): a number in any format, and a name surname first.
+    await prisma.patient.update({ where: { id: rekha.id }, data: { phone: '+99-55512 34567' } });
+    const find = async (q: string) => ((await (await fetch(`${API_BASE}/patients/find?q=${encodeURIComponent(q)}&date=2030-05-15`, { headers: { Authorization: `Bearer ${token}` } })).json()).patients as { id: string }[]).map((p) => p.id);
+    for (const q of ['5551234567', '+99-5551234567', '55512', '+99 55512 34567', '34567']) assert.deepEqual(await find(q), [rekha.id], `the number typed as '${q}' should find her`);
+    assert.deepEqual(await find('zorawar rekha'), [rekha.id], 'surname first should find her');
+    assert.deepEqual(await find('rek zor'), [rekha.id], 'every word may match anywhere in the name');
+    assert.deepEqual(await find('92'), [], 'two digits are too few to be a number');
+    assert.deepEqual((await (await fetch(`${API_BASE}/appointments/search?q=5551234567&from=2030-05-01&to=2030-05-31`, { headers: { Authorization: `Bearer ${token}` } })).json()).hits.map((h: { id: string }) => h.id), [earlier.id, later.id], 'Search everything finds her treatments by number');
+
     console.log('Search: a name finds every day in the window, in order; rooms and assisting therapists count; cancelled and out-of-window do not.');
   } finally {
     await tidy(prisma).catch(() => {});

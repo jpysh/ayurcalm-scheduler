@@ -13,6 +13,7 @@ import PageHead from "@/components/PageHead";
 import { PhotoImg, shrinkPhoto } from "@/components/PassportPhoto";
 import { chip, saveError, Area, ChangeLine, TextRow, ChecklistBar, DateRow, datePair, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, money, Btn, LinkBtn } from "@/components/kit";
 import { AccommodationSheet, DietSheet, DischargeSheet, NextWeekSheet, PackageSheet, StaySheet, takenBy, type CardStay, type GuestRoomNight, type StayTarget } from "@/components/CardSheets";
+import { Search } from "lucide-react";
 import { marked } from "@/components/SearchScreen";
 import type { AttentionItem } from "@/lib/attention";
 
@@ -64,7 +65,7 @@ const DAY_MS = 86400000;
  * Residents (#63, docs/design/DESIGN.md): who is in house today, arriving,
  * staying and leaving, from their stays. Search finds anyone, in house or not.
  */
-function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRules, needs, onNeed, away }: { patients: Patient[]; today: string; onOpen: (id: string) => void; onAdd: () => void; q: string; everything: (q: string) => void; openRules: () => void; /** What the rules in Settings say needs doing for a patient (#288), and what tapping one opens. */ needs: AttentionItem[]; onNeed: (i: AttentionItem) => void; away: (id: string) => string | undefined }) {
+function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything, openRules, needs, onNeed, away }: { patients: Patient[]; today: string; onOpen: (id: string) => void; onAdd: () => void; q: string; /** Opens the bar's search (#934): one tap from the list. */ onSearch: () => void; everything: (q: string) => void; openRules: () => void; /** What the rules in Settings say needs doing for a patient (#288), and what tapping one opens. */ needs: AttentionItem[]; onNeed: (i: AttentionItem) => void; away: (id: string) => string | undefined }) {
   const [onlyNeeds, setOnlyNeeds] = useState(false);
   const [inHouse, setInHouse] = useState<InHouse[] | null>(null);
   useEffect(() => {
@@ -125,6 +126,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, everything, openRule
         <div className="flex gap-1.5 px-1 pb-1">
           <button type="button" className={chip} aria-pressed={!onlyNeeds} onClick={() => setOnlyNeeds(false)}>In house</button>
           <button type="button" className={chip} aria-pressed={onlyNeeds} onClick={() => setOnlyNeeds(true)}>Needs attention{needy.length ? ` · ${needy.length}` : ""}</button>
+          <button type="button" className={`${chip} ml-auto grid w-11 place-items-center !px-0`} aria-label="Search patients" onClick={onSearch}><Search className="h-5 w-5" /></button>
         </div>
         {onlyNeeds ? (
           <ListGroup>{needy.length ? needy.map((i) => <Row key={i.id} title={i.who} flag={flagOf(i.patient_id!)} trailing="›" onClick={() => onNeed(i)} />) : <Empty text="Nothing needs attention. The rules are in the gear above." />}</ListGroup>
@@ -568,7 +570,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   const backToCard = (close: () => void) => () => { close(); if (back) { setCardId(back); setBack(null); } };
   const tab = (
     <>
-      <ResidentsList patients={patients} today={today} onOpen={setCardId} onAdd={() => setShowAddPatient(true)} q={query} everything={searchEverything} openRules={openRules} needs={needs} away={away} onNeed={(i) => (i.action === 'diet' ? setDietFor({ id: i.patient_id!, name: i.who }) : i.action === 'week' ? (setStartOn('week'), setCardId(i.patient_id!)) : setCardId(i.patient_id!))} />
+      <ResidentsList patients={patients} today={today} onOpen={setCardId} onAdd={() => setShowAddPatient(true)} q={query} onSearch={() => setSearching(true)} everything={searchEverything} openRules={openRules} needs={needs} away={away} onNeed={(i) => (i.action === 'diet' ? setDietFor({ id: i.patient_id!, name: i.who }) : i.action === 'week' ? (setStartOn('week'), setCardId(i.patient_id!)) : setCardId(i.patient_id!))} />
     </>
   );
 

@@ -4,6 +4,10 @@
  * of days, nearest first in each direction.
  */
 import type { PrismaClient } from '@prisma/client';
+import { patientMatches } from './patientMatch.js';
+
+const patientIds = async (q: string, prisma: PrismaClient) =>
+  (await prisma.patient.findMany({ select: { id: true, name: true, phone: true, emergency_phone: true } })).filter((p) => patientMatches(p, q)).map((p) => p.id);
 
 /** The appointment as the treatment card reads it, with the names the list shows. */
 export type Hit = Record<string, unknown> & {
@@ -15,7 +19,7 @@ export async function searchTreatments(q: string, from: Date, to: Date, prisma: 
   const like = { contains: q, mode: 'insensitive' as const };
   const ids = async (rows: Promise<{ id: string }[]>) => (await rows).map((r) => r.id);
   const [patients, therapies, rooms, staff] = await Promise.all([
-    ids(prisma.patient.findMany({ where: { name: like }, select: { id: true } })),
+    patientIds(q, prisma),
     ids(prisma.therapy.findMany({ where: { name: like }, select: { id: true } })),
     ids(prisma.therapyRoom.findMany({ where: { name: like }, select: { id: true } })),
     ids(prisma.staff.findMany({ where: { name: like }, select: { id: true } })),
@@ -56,9 +60,10 @@ export type PatientHit = { id: string; name: string; when: 'in' | 'arriving' | '
 
 export async function searchPatients(q: string, today: Date, prisma: PrismaClient): Promise<PatientHit[]> {
   const like = { contains: q, mode: 'insensitive' as const };
+  const byName = await patientIds(q, prisma);
   const found = await prisma.patient.findMany({
     // A desk question is as often 'who is in T2' or 'the German guest' as a name (#525).
-    where: { OR: [{ name: like }, { country: like }, { Stays: { some: { GuestRoom: { name: like } } } }] },
+    where: { OR: [{ id: { in: byName } }, { country: like }, { Stays: { some: { GuestRoom: { name: like } } } }] },
     select: {
       id: true, name: true,
       Stays: { orderBy: { end_date: 'desc' }, take: 1, select: { start_date: true, end_date: true, GuestRoom: { select: { name: true } }, Accommodation: { select: { name: true } } } },
