@@ -14,6 +14,7 @@ import { loadDay, staffDay } from './appointmentGuard.js';
 import { loadDietsForDay, mealLabel, mealOrder } from './dietResolution.js';
 import { lastReadings } from './residentDay.js';
 import { dischargeOf, saveDischarge } from './discharge.js';
+import { owesDischarge } from './attention.js';
 import { renderDischarge } from './pdf/dischargePdf.js';
 
 const prisma = new PrismaClient();
@@ -220,7 +221,7 @@ linkRouter.get('/:token/discharges', async (req: Request, res: Response) => {
     where: { end_date: { gte: new Date(today.getTime() - 3 * DAY_MS), lte: new Date(today.getTime() + 3 * DAY_MS) } },
     orderBy: { end_date: 'asc' }, include: { Patient: { select: { name: true } } },
   });
-  res.json(stays.map((s) => ({ stay_id: s.id, name: s.Patient.name, to: s.end_date.toISOString().slice(0, 10), saved: !!s.discharge, final: !!(s.discharge as { final?: boolean } | null)?.final })));
+  res.json(stays.filter(owesDischarge).map((s) => ({ stay_id: s.id, name: s.Patient.name, to: s.end_date.toISOString().slice(0, 10), saved: !!s.discharge, final: !!(s.discharge as { final?: boolean } | null)?.final })));
 });
 linkRouter.get('/:token/discharges/:stayId', async (req: Request, res: Response) => {
   if (!(await doctorOf(req, res))) return;

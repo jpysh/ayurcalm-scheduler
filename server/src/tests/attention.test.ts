@@ -86,6 +86,7 @@ async function main() {
     o = await read();
     assert.deepEqual(o.items.filter((i) => i.rule === 'form_c' && i.who === `${TAG} Juno`), [], 'a day patient owes no Form C');
     assert.ok(!(await call('GET', `/patients/${juno.id}/day?date=${DAY}`)).form_c, 'and her card has no Form C row');
+    assert.deepEqual(mine('leaves_today').filter((w) => w === `${TAG} Juno`), [], 'a one-day visit owes no discharge summary (#837)');
 
     // Follow-up (#487): the discharge asked for today, so it is due; marked done, it goes; the card says so.
     const esha = await prisma.patient.create({ data: { name: `${TAG} Esha`, gender: 'female' } });
