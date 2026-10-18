@@ -92,6 +92,8 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
     // A long treatment that began well before now must not push the line off
     // the screen: the line stays in the top 60% whatever is above it.
     const y = (el: Element | null) => (el ? el.getBoundingClientRect().top + window.scrollY : null);
+    // Before the first treatment or after the last, "now" is not on the day: open at the top, where the arrivals line and summary are (#951).
+    if (!rows.length || !isToday || NOW < Math.min(...rows.map((r) => r.st)) || NOW >= Math.max(...rows.map((r) => r.en))) { window.scrollTo({ top: 0 }); return; }
     const first = y(document.querySelector("[data-now]")), line = y(document.getElementById("nowline"));
     const top = first ?? line;
     window.scrollTo({ top: top === null ? 0 : Math.max(0, top - 130, line === null ? 0 : line - window.innerHeight * 0.6) });
@@ -139,7 +141,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
     <b className="ml-2 rounded-md bg-now px-1.5 text-xs font-bold text-white tabular-nums">{hm(NOW)}</b>
   </div>;
   const group = "rounded-xl overflow-hidden bg-card";
-  const sticky = "sticky top-[var(--strip-h,104px)] z-[2] bg-background flex items-baseline gap-2 px-1 pt-3 pb-1.5";
+  const sticky = "sticky top-[calc(var(--strip-h,104px)+2.75rem)] z-[2] bg-background flex items-baseline gap-2 px-1 pt-3 pb-1.5";
 
   let body: React.ReactNode;
   if (view === "time") {
@@ -181,7 +183,10 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
     }
     body = [...groups.values()].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true })).map((g) => {
       const left = g.rows.filter((r) => !past(r));
-      const summary = `${left.length ? `${left.length} to go` : "all done"}${left[0] ? ` · next ${hm(left[0].st)}` : ""}`;
+      // A therapist who was not in has nothing "done": their treatments went uncovered (#938).
+      const uncovered = g.rows.filter((r) => /was not in$/.test(flags[r.a.id]?.text ?? "")).length;
+      const finished = uncovered ? `${uncovered === g.rows.length ? "was not in" : "all done"} · ${uncovered} uncovered` : "all done";
+      const summary = `${left.length ? `${left.length} to go` : finished}${left[0] ? ` · next ${hm(left[0].st)}` : ""}`;
       return (
         <section key={g.label}>
           <div className={`${sticky} justify-between text-sm font-bold`}>
@@ -227,7 +232,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-center justify-between px-1 pb-1 text-sm text-muted-foreground">
+      <div className="sticky top-[var(--strip-h,104px)] z-[3] flex h-11 items-center justify-between bg-background px-1 text-sm text-muted-foreground">
         <span className="flex items-center gap-2">{rows.length} {rows.length === 1 ? "treatment" : "treatments"}{roomCount ? ` · ${plural(roomCount, "room")}` : ""}{headerAction}</span>
         <button type="button" aria-label={`Show the day by, now ${VIEW_NAMES[view]}`} onClick={() => setPickView(true)} className="-my-1.5 min-h-11 rounded-full px-3 font-semibold text-primary active:bg-secondary">By {VIEW_NAMES[view].toLowerCase()} ▾</button>
       </div>

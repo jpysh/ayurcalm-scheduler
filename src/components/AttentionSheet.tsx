@@ -246,7 +246,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
           return <Row key={i.id} title={i.who} facts={g.map((x) => x.what).join(" · ")} trailing={i.move ? `Move to ${i.move.room_name} ›` : { card: "Open card ›", diet: "Choose diet ›", summary: "Summary ›", followup: "Follow up ›", move: "Open card ›", week: "Plan next week ›" }[i.action ?? "card"]} onClick={() => onItem(i)} />;
         })}{patientInfo.map((i) => <Row key={i.id} title={i.who} facts={`${i.what} · information, not counted`} trailing="Open card ›" onClick={() => onItem(i)} />)}</ListGroup> : null,
       }, {
-        name: day === today ? "Staff" : "Today's staff", count: teamAct.length,
+        name: "Staff", count: teamAct.length,
         body: teamAct.length + teamInfo.length ? <ListGroup>{[...teamAct, ...teamInfo].map((i) => <Row key={i.id} title={i.kind === "information" ? i.what : i.who} facts={i.kind === "information" ? "Information · not counted" : i.what} />)}</ListGroup> : null,
       }, {
         // What counts comes first on the sheet; the day's information follows everything (#661).
