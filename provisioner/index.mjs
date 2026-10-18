@@ -9,7 +9,7 @@ import http from 'node:http';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHmac, randomBytes } from 'node:crypto';
-import { readFileSync, writeFileSync, renameSync, appendFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync, appendFileSync, existsSync, rmSync } from 'node:fs';
 import { next, deletesAt, refuse, slugFor, linkOpen, took, rollout } from './lifecycle.mjs';
 import { morning } from './morning.mjs';
 
@@ -132,26 +132,29 @@ const LIVE = (env.LIVE_CENTRES || '').split(/\s+/).filter(Boolean).map((x) => ({
 const git = (...a) => run('git', ['-C', ROOT, ...a]).then((r) => r.stdout.trim());
 let updating = false;
 const indiaHour = (now = new Date()) => Number(now.toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false }));
-export async function update() {
-  if (updating || indiaHour() !== 21) return;
+export async function update(now = false) {
+  if (updating || (!now && indiaHour() !== 21)) return;
   updating = true;
   const gate = `${DATA}/gate`;
   try {
     await git('fetch', '-q', 'origin', 'main');
     const sha = await git('rev-parse', 'origin/main');
-    if (sha === (await git('rev-parse', 'HEAD')) || sha === db.update?.failed_sha) return;
+    // What the centres run, not what the clone says: a hand-moved clone must not skip a rollout (#924).
+    if (sha === db.update?.deployed || sha === db.update?.failed_sha) return;
     const short = sha.slice(0, 7);
     // The tests write far more than a centre's limits allow, so they run on their own fresh copy, never on the demo.
     await run('git', ['-C', ROOT, 'worktree', 'add', '-f', '--detach', gate, sha]);
+    // A bare worktree has no packages, and the browser walk in qa needs Playwright (#924).
+    await run('npm', ['ci', '--no-audit', '--no-fund'], { cwd: gate, maxBuffer: 1 << 26 });
     const qa = await run('sh', [`${gate}/scripts/qa.sh`], { env: { ...env, COMPOSE_PROJECT_NAME: 'ruta-gate', APP_PORT: '8199' }, maxBuffer: 1 << 26 }).then(() => null, (e) => (e.stdout || '').split('\n').find((l) => l.includes('FAIL'))?.trim() || 'qa did not finish');
     await run('docker', ['compose', '-p', 'ruta-gate', 'down', '-v'], { cwd: gate }).catch(() => {});
     let r = { failed: qa ? 'tests' : null, why: qa };
     if (!qa) {
-      await git('merge', '-q', '--ff-only', sha);
+      if (sha !== (await git('rev-parse', 'HEAD'))) await git('merge', '-q', '--ff-only', sha);
       const sites = [{ slug: 'demo', port: 8201 }, ...LIVE, ...db.centres.filter((c) => !c.paused_at)];
       r = await rollout(sites, async (c) => { await centreSh({}, 'backup', c.slug); await centreSh({}, 'up', c.slug, String(c.port)); await up(c.port); if (!(await fetch(`http://localhost:${c.port}/api/health`).then((x) => x.ok, () => false))) throw new Error('did not come up'); });
     }
-    db.update = { sha: short, at: Date.now(), failed: r.failed, why: r.why, failed_sha: r.failed ? sha : null }; save();
+    db.update = { sha: short, at: Date.now(), failed: r.failed, why: r.why, failed_sha: r.failed ? sha : null, deployed: r.failed ? db.update?.deployed : sha }; save();
     await telegram(r.failed ? `ALERT: update ${short} stopped at ${r.failed}: ${r.why}` : `Updated to ${short}: demo, live centres and trials`);
     if (!r.failed) process.exit(0); // launchd starts the service again on the new code
   } catch (e) { console.error('update', e); }
@@ -315,4 +318,6 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
   }, 3_600_000);
   setInterval(() => update(), 600_000);
   watch().catch(console.error);
+  // `touch ~/ruta-data/update-now` asks for one update now, outside the 21:00 hour (#924).
+  setInterval(() => { if (existsSync(`${DATA}/update-now`)) { rmSync(`${DATA}/update-now`); update(true); } }, 60_000);
 }
