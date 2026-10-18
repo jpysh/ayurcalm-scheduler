@@ -3,6 +3,8 @@ import bcrypt from 'bcrypt';
 import { z } from 'zod';
 import { prisma } from './server.js';
 import { requireAdmin } from './settings.js';
+import { DEFAULT_ADMIN_PASSWORD } from './auth.js';
+import { DEMO } from './demo.js';
 
 const BCRYPT_ROUNDS = 10;
 const MIN_PASSWORD = 8;
@@ -143,8 +145,42 @@ usersRouter.delete('/:id', requireAdmin, async (req: Request, res: Response) => 
   res.json({ ok: true });
 });
 
-/** Any signed-in user changing their own password. */
+/** Any signed-in user changing their own sign-in email or password. */
 export const accountRouter = Router();
+
+// Whether the password is still the seeded one, so Settings can say so (#906). The public demo cannot change it, so it is not nagged.
+accountRouter.get('/', async (req: Request, res: Response) => {
+  const me = await prisma.user.findUnique({ where: { id: req.user?.id ?? '' } });
+  if (!me) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+  res.json({ email: me.email, demo_password: !DEMO && await bcrypt.compare(DEFAULT_ADMIN_PASSWORD, me.password_hash) });
+});
+
+accountRouter.post('/change-email', async (req: Request, res: Response) => {
+  const parsed = z.object({ current_password: z.string().min(1), email: z.string().trim().toLowerCase().pipe(z.string().email('Enter a valid email')) }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request' });
+    return;
+  }
+  const me = await prisma.user.findUnique({ where: { id: req.user?.id ?? '' } });
+  if (!me) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+  if (!(await bcrypt.compare(parsed.data.current_password, me.password_hash))) {
+    res.status(400).json({ error: 'Current password is incorrect' });
+    return;
+  }
+  const { email } = parsed.data;
+  const other = await prisma.user.findUnique({ where: { email } });
+  if (other && other.id !== me.id) {
+    res.status(409).json({ error: 'A user with that email already exists' });
+    return;
+  }
+  res.json(await prisma.user.update({ where: { id: me.id }, data: { email }, select: publicFields }));
+});
 
 accountRouter.post('/change-password', async (req: Request, res: Response) => {
   const parsed = changePasswordSchema.safeParse(req.body);
