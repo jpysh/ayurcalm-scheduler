@@ -91,10 +91,11 @@ async function main() {
   // under its own name (#728): seeing a working day comes before setting one up.
   const TRIAL_SEED = Boolean(process.env.ADMIN_EMAIL);
   const LITE = process.env.DEMO_MODE === 'true' || process.env.SEED_SIZE === 'lite' || TRIAL_SEED;
-  // The first pilot's own instance (#658): their size, ten guest rooms a little under half full.
+  // The first pilot's own instance (#658), as a running centre (#905): about 20 in house,
+  // ten therapists, five men and five women (staffNames alternates).
   const BABAJI = process.env.SEED_SIZE === 'babaji';
   const SIZE = BABAJI
-    ? { therapists: 8, rooms: 6, doctors: 1, history: 3, arrivals: [0, 1] }
+    ? { therapists: 10, rooms: 6, doctors: 1, history: 3, arrivals: [1, 2, 2] }
     : LITE
     ? { therapists: 6, rooms: 5, doctors: 1, history: 3, arrivals: [0, 1, 1, 2] }
     : { therapists: 16, rooms: 12, doctors: 2, history: 14, arrivals: [2, 3, 3, 4] };
@@ -529,7 +530,7 @@ async function main() {
   // Guest rooms (#456), numbered by house, and everyone staying put in the first room of
   // their house free for all their nights, two to a two-bed room: a couple shares one.
   // A house that fills leaves the rest without a room, as a full centre would.
-  const roomPlan: Record<string, [string, number]> = BABAJI ? { 'Trishul House': ['T1–T4', 1], 'Nanda House': ['N1–N3', 1], 'Special Apartments': ['A1', 2], Huts: ['H1–H2', 1] } : { 'Trishul House': ['T1–T12', 1], 'Nanda House': ['N1–N10', 1], 'Special Apartments': ['A1–A4', 2], Huts: ['H1–H6', 1] };
+  const roomPlan: Record<string, [string, number]> = BABAJI ? { 'Trishul House': ['T1–T8', 1], 'Nanda House': ['N1–N6', 1], 'Special Apartments': ['A1–A2', 2], Huts: ['H1–H2', 1] } : { 'Trishul House': ['T1–T12', 1], 'Nanda House': ['N1–N10', 1], 'Special Apartments': ['A1–A4', 2], Huts: ['H1–H6', 1] };
   for (const h of houses) {
     const [names, beds] = roomPlan[h.name] ?? [];
     if (names) await prisma.guestRoom.createMany({ data: expandRoomNames(names).map((name) => ({ name, accommodation_id: h.id, beds })), skipDuplicates: true });
