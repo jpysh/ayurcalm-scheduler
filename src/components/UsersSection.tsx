@@ -101,7 +101,30 @@ export const UsersSection = ({ onCount }: { onCount?: (n: number) => void }) => 
 };
 
 /** Available to every signed-in user, including staff. */
-export const ChangePasswordCard = () => {
+export const ChangeEmailCard = ({ email, onChanged }: { email: string; onChanged: () => void }) => {
+  const [next, setNext] = useState("");
+  const [current, setCurrent] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const res = await sent("/account/change-email", "POST", { email: next, current_password: current });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(data?.error || "Could not change your email"); return; }
+      toast.success(`You now sign in as ${data.email}`);
+      setNext(""); setCurrent(""); onChanged();
+    } finally { setBusy(false); }
+  };
+  return (
+    <div>
+      <Text label="New email" type="email" inputMode="email" autoComplete="email" note={email ? `Now: ${email}` : undefined} value={next} onChange={(e) => setNext(e.target.value)} />
+      <Text label="Current password" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+      <Btn kind="primary" className="mt-4" disabled={busy || !next.includes("@") || !current} onClick={submit}>{busy ? "Changing…" : "Change my email"}</Btn>
+    </div>
+  );
+};
+
+export const ChangePasswordCard = ({ onChanged }: { onChanged?: () => void }) => {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -114,7 +137,7 @@ export const ChangePasswordCard = () => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { toast.error(data?.error || "Could not change your password"); return; }
       toast.success("Password changed");
-      setCurrent(""); setNext(""); setConfirm("");
+      setCurrent(""); setNext(""); setConfirm(""); onChanged?.();
     } finally { setBusy(false); }
   };
   return (

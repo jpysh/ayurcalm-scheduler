@@ -140,6 +140,30 @@ async function main() {
         await prisma.user.deleteMany({ where: { email } });
       }
     }],
+    ['a person changes their own sign-in email, and Settings knows a demo password (#906)', async () => {
+      const email = 'validation-email@example.com';
+      const moved = 'validation-email-new@example.com';
+      await prisma.user.deleteMany({ where: { email: { in: [email, moved] } } });
+      const made = await post('/users', { email, role: 'staff', password: 'demo1234' });
+      if (made.status !== 201) throw new Error(`creating staff returned ${made.status}`);
+      try {
+        const login = await fetch(`${API_BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: 'demo1234' }) });
+        const { token: t } = await login.json();
+        const as = (path: string, body?: unknown) => fetch(`${API_BASE}${path}`, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` }, body: body ? JSON.stringify(body) : undefined });
+        if (!(await (await as('/account')).json()).demo_password) throw new Error('the demo password was not noticed');
+        if ((await as('/account/change-email', { email: moved, current_password: 'wrong' })).status !== 400) throw new Error('a wrong password changed the email');
+        if ((await as('/account/change-email', { email: ADMIN_EMAIL, current_password: 'demo1234' })).status !== 409) throw new Error("took another person's email");
+        const ok = await as('/account/change-email', { email: ` ${moved.toUpperCase()} `, current_password: 'demo1234' });
+        const body = await ok.json();
+        if (ok.status !== 200 || body.email !== moved || 'password_hash' in body) throw new Error(`change answered ${ok.status} ${JSON.stringify(body)}`);
+        const again = await fetch(`${API_BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: moved, password: 'demo1234' }) });
+        if (again.status !== 200) throw new Error('cannot sign in with the new email');
+        await as('/account/change-password', { current_password: 'demo1234', new_password: 'another-pass-1' });
+        if ((await (await as('/account')).json()).demo_password) throw new Error('still nagged after changing the password');
+      } finally {
+        await prisma.user.deleteMany({ where: { email: { in: [email, moved] } } });
+      }
+    }],
     ['there is no route that deletes every treatment at once (#410)', async () => {
       const before = await prisma.appointment.count();
       const res = await fetch(`${API_BASE}/appointments`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });

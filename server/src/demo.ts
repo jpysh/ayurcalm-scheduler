@@ -13,7 +13,7 @@ const EVERY = (Number(process.env.DEMO_RESET_MINUTES) || 360) * 60 * 1000;
 export const nextReset = (now = Date.now(), every = EVERY) => new Date(Math.floor(now / every) * every + every);
 
 // What a visitor could use to lock the next one out, or to load their own data.
-const BLOCKED = [/^\/users(\/|$)/, /^\/account\/change-password$/, /^\/settings\/(import|clear-demo-data)$/];
+const BLOCKED = [/^\/users(\/|$)/, /^\/account\/change-(password|email)$/, /^\/settings\/(import|clear-demo-data)$/];
 
 export function demoGuard(req: Request, res: Response, next: NextFunction) {
   if (DEMO && req.method !== 'GET' && BLOCKED.some((r) => r.test(req.path))) {

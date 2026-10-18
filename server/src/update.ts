@@ -9,7 +9,8 @@ import { TRIAL } from './trial.js';
 
 export const RUNNING = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version as string;
 export const UPDATE_LINE = 'cd ~/ayurcalm && git pull && docker compose up -d --build';
-const HOSTED = DEMO || TRIAL || process.env.HOSTED === 'true';
+// Read on call: trial.ts imports settings.ts, which imports this file, so TRIAL is not yet set at load time.
+const hosted = () => DEMO || TRIAL || process.env.HOSTED === 'true';
 const RELEASES = 'https://api.github.com/repos/jpysh/ayurcalm-scheduler/releases/latest';
 
 /** "v0.10.0" is newer than "0.9.2": compared part by part, as numbers. */
@@ -32,7 +33,7 @@ async function latestRelease() {
 
 /** null when there is nothing to say: hosted, offline, or already up to date. */
 export async function updateInfo(latest?: string | null) {
-  if (HOSTED) return null;
+  if (hosted()) return null;
   const tag = latest === undefined ? await latestRelease() : latest;
   return tag && isNewer(tag, RUNNING) ? { running: RUNNING, latest: tag.replace(/^v/, ''), line: UPDATE_LINE } : null;
 }
