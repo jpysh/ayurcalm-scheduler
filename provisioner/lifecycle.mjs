@@ -47,3 +47,11 @@ export function took(ms) {
 
 /** A sign-up's page may be handed a sign-in link while its centre is ready and the link would still live (30 minutes, #588). */
 export const linkOpen = (s, now) => s.state === 'ready' && now - (s.ready_at ?? s.at) < 30 * 60_000;
+
+// A merge to main goes out in order (#904): demo, then live centres, then trials; the first failure stops it.
+export async function rollout(sites, up) {
+  for (const s of sites) {
+    try { await up(s); } catch (e) { return { failed: s.slug, why: String(e.message || e).split('\n')[0].slice(0, 200) }; }
+  }
+  return { failed: null };
+}
