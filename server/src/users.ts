@@ -96,6 +96,11 @@ usersRouter.put('/:id', requireAdmin, async (req: Request, res: Response) => {
     res.status(404).json({ error: 'User not found' });
     return;
   }
+  // Another administrator does not make this safe: the sender is locked out at once (#928).
+  if (target.id === req.user?.id && parsed.data.is_active === false) {
+    res.status(400).json({ error: 'You cannot switch off your own sign-in' });
+    return;
+  }
   const losesAdmin = parsed.data.role === 'staff' || parsed.data.is_active === false;
   if (losesAdmin && await wouldRemoveLastAdmin(target.id)) {
     res.status(400).json({ error: 'This is the only administrator — promote another user first' });
