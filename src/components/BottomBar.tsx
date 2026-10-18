@@ -203,9 +203,9 @@ export function WeekStrip({ day, today, setDay, moves }: { day: string; today: s
     <div ref={bar} className="sticky top-0 z-[4] -mx-1 border-b bg-background px-1 pt-2">
       <div className="flex min-h-6 items-center justify-between px-1 text-sm">
         {compact
-          ? <button type="button" className="-my-2.5 min-h-11 text-left text-base font-bold" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>{dayName}<span className="ml-1 font-normal text-muted-foreground">· week ›</span></button>
+          ? <button type="button" className="-my-[10px] min-h-11 text-left text-base font-bold" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}><span className="whitespace-nowrap">{dayName}</span> <span className="whitespace-nowrap font-normal text-muted-foreground">· week ›</span></button>
           : <b className="text-base">{month}</b>}
-        {day !== today ? <button type="button" className="min-h-11 px-2 font-semibold text-primary -my-2.5" onClick={() => setDay(today)}>Today</button> : null}
+        {day !== today ? <button type="button" className="-my-[10px] min-h-11 px-2 font-semibold text-primary" onClick={() => setDay(today)}>Today</button> : null}
       </div>
       <div ref={box} aria-label="Week" onScroll={(e) => { const el = e.currentTarget; const w = weeks[Math.round(el.scrollLeft / el.clientWidth)]; if (w && w !== shown) setShown(w); }} className={`${compact ? "hidden" : "flex"} snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}>
         {weeks.map((w) => (
