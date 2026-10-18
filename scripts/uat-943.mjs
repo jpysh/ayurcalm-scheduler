@@ -1,0 +1,20 @@
+// node scripts/uat-943.mjs — Menu has Therapies and Classes and events (#943). Needs E2E_BASE_URL and a seeded stack.
+import { chromium } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';
+const OUT = process.env.OUT || 'docs/design/uat/2026-10-18-menu-943';
+mkdirSync(OUT, { recursive: true });
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); }, token);
+const p = await ctx.newPage();
+await p.goto(`${APP}/admin/schedule`); await p.waitForTimeout(2000);
+await p.getByRole('button', { name: 'Menu', exact: true }).click(); await p.waitForTimeout(800);
+await p.screenshot({ path: `${OUT}/menu.png` });
+await p.getByRole('dialog').getByRole('button', { name: /^Classes and events/ }).click(); await p.waitForTimeout(1000);
+await p.screenshot({ path: `${OUT}/events.png` });
+await p.getByRole('button', { name: 'Menu', exact: true }).click(); await p.waitForTimeout(500);
+await p.getByRole('dialog').getByRole('button', { name: /^Therapies/ }).click(); await p.waitForTimeout(1000);
+await p.screenshot({ path: `${OUT}/therapies.png` });
+await b.close();
