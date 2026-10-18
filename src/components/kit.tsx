@@ -614,3 +614,12 @@ export async function saveError(res: Response, fallback = "That could not be sav
   const body = await res.clone().json().catch(() => null);
   return body?.message || body?.error || fallback;
 }
+
+/** Deletes that take something back; a refused one says the server's reason, or the admin believes it is gone (#882). */
+export async function deleteAll(urls: string[], init: RequestInit = {}): Promise<boolean> {
+  const answers = await Promise.all(urls.map((u) => fetch(u, { ...init, method: "DELETE" }).catch(() => null)));
+  const bad = answers.find((r) => !r?.ok);
+  if (bad === undefined) return true;
+  toast.error(bad ? await saveError(bad, "That could not be undone.") : "That could not be undone.");
+  return false;
+}

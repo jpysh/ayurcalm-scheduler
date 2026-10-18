@@ -110,8 +110,9 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
     load();
     toast(`${name} back in use`, {
       action: { label: "Undo", onClick: async () => {
-        await fetch(`${API_BASE}/timeoff`, { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ entity_type: "room", entity_id: id, date: e.date?.slice(0, 10), start_date: e.start_date?.slice(0, 10) ?? null, end_date: e.end_date?.slice(0, 10) ?? null, start_time: e.start_time, end_time: e.end_time, description: e.description }) });
+        const back = await fetch(`${API_BASE}/timeoff`, { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entity_type: "room", entity_id: id, date: e.date?.slice(0, 10), start_date: e.start_date?.slice(0, 10) ?? null, end_date: e.end_date?.slice(0, 10) ?? null, start_time: e.start_time, end_time: e.end_time, description: e.description }) }).catch(() => null);
+        if (!back?.ok) toast.error(back ? await saveError(back, "That could not be undone.") : "That could not be undone.");
         await refresh(); load();
       } },
     });
