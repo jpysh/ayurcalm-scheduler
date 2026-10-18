@@ -11,7 +11,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import {
   Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, LineSelect, Picker, QuickDates, Row, Seg, SwitchRow, Text, TextRow, Timeline,
-  dayText, noteText, money, toastUndo, Btn, saveError, deleteAll } from "@/components/kit";
+  dayText, noteText, money, toastUndo, Btn, saveError, deleteAll, undoWrite } from "@/components/kit";
 
 const DAY_MS = 86400000;
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
@@ -223,7 +223,7 @@ export function PackageSheet({ patient, stay, onClose, onSaved, editList, matchS
     const res = await saveStay(patient.id, stay.id, { package_id: next });
     setBusy(false);
     if (!res.ok) { toast.error("The package was not saved. Try again."); return; }
-    toastUndo(chosen ? `${first(patient.name)}: ${chosen.name}` : `${first(patient.name)}: no package yet`, async () => { await saveStay(patient.id, stay.id, { package_id: before }); onSaved(); });
+    toastUndo(chosen ? `${first(patient.name)}: ${chosen.name}` : `${first(patient.name)}: no package yet`, () => undoWrite((anyway) => saveStay(patient.id, stay.id, { package_id: before, ...(anyway ? {} : { if_still: { package_id: next } }) }), onSaved));
     onSaved();
     onClose();
   };
@@ -281,7 +281,9 @@ export function AccommodationSheet({ patient, stay, onClose, onSaved, editList }
     const res = await saveStay(patient.id, stay.id, chosen ? { accommodation_id: chosen.id, guest_room_id: room || null } : { accommodation_id: null, guest_room_id: null });
     setBusy(false);
     if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The accommodation was not saved. Try again."); return; }
-    toastUndo(chosen ? `${first(patient.name)}: ${chosen.name}${chosenRoom ? ` · ${chosenRoom.name}` : ""}` : `${first(patient.name)}: no accommodation`, async () => { await saveStay(patient.id, stay.id, before); onSaved(); });
+    const saved = (await res.json().catch(() => ({}))).stay;
+    const still = saved ? { if_still: { accommodation_id: saved.accommodation_id, guest_room_id: saved.guest_room_id } } : {};
+    toastUndo(chosen ? `${first(patient.name)}: ${chosen.name}${chosenRoom ? ` · ${chosenRoom.name}` : ""}` : `${first(patient.name)}: no accommodation`, () => undoWrite((anyway) => saveStay(patient.id, stay.id, { ...before, ...(anyway ? {} : still) }), onSaved));
     onSaved();
     onClose();
   };
@@ -363,12 +365,10 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     setBusy(false);
     if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The stay was not saved. Try again."); return; }
     const out = await res.json().catch(() => ({}));
-    const undo = target.id ? async () => {
-      const back = await saveStay(patient.id, target.id!, { start_date: target.start, end_date: target.end, ...(room ? { guest_room_id: target.accommodation?.room?.id ?? null } : {}) }).catch(() => null);
-      const undone = back?.ok && out.batch_id ? await fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: json, body: JSON.stringify({ batch_id: out.batch_id }) }).catch(() => null) : back;
-      if (!undone?.ok) toast.error(undone ? await saveError(undone, "That could not be undone.") : "That could not be undone.");
-      onSaved();
-    } : null;
+    const undo = target.id ? () => undoWrite(async (anyway) => {
+      const back = await saveStay(patient.id, target.id!, { start_date: target.start, end_date: target.end, ...(room ? { guest_room_id: target.accommodation?.room?.id ?? null } : {}), ...(anyway ? {} : { if_still: { start_date: start, end_date: end } }) });
+      return back.ok && out.batch_id ? fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: json, body: JSON.stringify({ batch_id: out.batch_id, anyway }) }) : back;
+    }, onSaved) : null;
     const text = target.id
       ? `${first(patient.name)}: ${dayText(start)} to ${dayText(end)}${out.cancelled ? `, ${plural(out.cancelled, "treatment")} cancelled` : ""}`
       : `Stay added for ${first(patient.name)}: ${dayText(start)} to ${dayText(end)}${visit ? `, consultation ${dayText(visit.date)} ${visit.start_time}` : ""}`;

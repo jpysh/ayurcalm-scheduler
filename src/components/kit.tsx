@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type AnchorHTMLAttributes, type ButtonHTML
 import { Lock, Search as SearchIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { API_BASE } from "@/lib/apiBase";
 
 /**
  * The form kit (#283): every form is built from these parts, so a field has one
@@ -377,7 +378,24 @@ export const TwoFoot = ({ main, onMain, alt, onAlt, busy, ok = true }: { main: s
 );
 
 /** Done, with a way back: one line, one Undo, five seconds. */
-export const toastUndo = (text: string, undo: () => void | Promise<void>) => toast(text, { duration: 5000, action: { label: "Undo", onClick: () => { void undo(); } } });
+/**
+ * An Undo's write: when the other phone of a shared login changed it since, the
+ * server refuses and the admin chooses (#900, #911). `send(true)` writes regardless.
+ */
+export async function undoWrite(send: (anyway: boolean) => Promise<Response | null>, after?: () => unknown, anyway = false): Promise<boolean> {
+  const res = await send(anyway).catch(() => null);
+  const why = res && !res.ok ? await res.clone().json().catch(() => ({})) : null;
+  if (why?.reason === "CHANGED_SINCE") toast.error(why.message, { duration: 8000, action: { label: "Undo anyway", onClick: () => { void undoWrite(send, after, true); } } });
+  else if (!res?.ok) toast.error(res ? await saveError(res, "That could not be undone.") : "That could not be undone.");
+  await after?.();
+  return !!res?.ok;
+}
+
+/** Undo a batch of moves (leave, "Not in", fix-it, Log), asking first when changed since. */
+export const undoBatch = (batchId: string, after?: () => unknown) =>
+  undoWrite((anyway) => fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batch_id: batchId, anyway }) }), after);
+
+export const toastUndo = (text: string, undo: () => unknown) => toast(text, { duration: 5000, action: { label: "Undo", onClick: () => { void undo(); } } });
 
 /** Empty: one line saying why, and the action if there is one. */
 export const Empty = ({ text, action }: { text: string; action?: ReactNode }) => (

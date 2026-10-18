@@ -631,10 +631,14 @@ export async function replanRoomDay(
 }
 
 /** Put a replan back exactly as it was. */
-export async function undoReplan(batchId: string, prisma: PrismaClient) {
+export async function undoReplan(batchId: string, prisma: PrismaClient, opts: { anyway?: boolean } = {}) {
   const row = await prisma.auditLog.findUnique({ where: { id: batchId } });
   if (!row || (row.action !== 'replan' && row.action !== 'dayfix')) return null;
   const payload = row.old_value as unknown as { writes: { appointment_id: string; before: Record<string, unknown> }[] };
+  // The batch is logged after its writes, so a row touched later was changed by someone else since (#911).
+  if (!opts.anyway && await prisma.appointment.count({ where: { id: { in: (payload.writes || []).map((w) => w.appointment_id) }, updated_at: { gt: row.timestamp } } })) {
+    return { changed_since: true as const };
+  }
   for (const w of payload.writes || []) {
     await prisma.appointment.update({
       where: { id: w.appointment_id },

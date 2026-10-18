@@ -76,8 +76,18 @@ async function main() {
     const cancelled = await call('POST', '/day-check/accept', { date: '2030-02-14', moves: [{ appointment_id: after.id, staff_id: null, co_staff_ids: [], room_id: null, start_time: '10:00', date: '2030-02-14', cancel: true }] });
     assert.equal((await prisma.appointment.findUnique({ where: { id: after.id } }))?.status, 'cancelled', 'cancel should keep the treatment, as cancelled');
     assert.equal((await prisma.appointment.findUnique({ where: { id: kept.id } }))?.status, 'pending');
-    await call('POST', '/replan/undo', { batch_id: cancelled.batch_id });
+    // Changed since on another phone (#911): the batch Undo and the stay Undo ask first, then do it when told anyway.
+    await prisma.appointment.update({ where: { id: after.id }, data: { notes: 'other phone' } });
+    const raw = (path: string, method: string, body: unknown) => fetch(`${API_BASE}${path}`, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+    const blind = await raw('/replan/undo', 'POST', { batch_id: cancelled.batch_id });
+    assert.equal(blind.status, 409, 'a batch Undo over a later change was not asked about');
+    assert.equal((await blind.json()).reason, 'CHANGED_SINCE');
+    await call('POST', '/replan/undo', { batch_id: cancelled.batch_id, anyway: true });
     assert.equal((await prisma.appointment.findUnique({ where: { id: after.id } }))?.status, 'pending', 'Undo should put the treatment back');
+    const stayUrl = `/patients/${created.id}/stays/${created.Stays[0].id}`;
+    const stale = await raw(stayUrl, 'PUT', { start_date: '2030-02-10', end_date: '2030-02-14', if_still: { end_date: '2030-02-13' } });
+    assert.equal(stale.status, 409, 'a stay Undo over a later change was not asked about');
+    assert.equal((await call('PUT', stayUrl, { start_date: '2030-02-10', end_date: '2030-02-14', if_still: { end_date: '2030-02-12', package_id: out.stay.package_id } })).stay.duration_days, 5, 'a stay Undo with nothing changed since was refused');
 
     // A resident with a plan can still be deleted: the plan goes with them.
     await prisma.appointment.deleteMany({ where: { patient_id: created.id } });

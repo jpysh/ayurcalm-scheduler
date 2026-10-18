@@ -574,11 +574,12 @@ export function buildServer() {
     {
       title: 'Undo',
       description: '"undo": put back everything one applied plan changed. batch_id comes from plan/apply.',
-      inputSchema: z.object({ action: z.enum(['undo']), batch_id: z.string() }),
+      inputSchema: z.object({ action: z.enum(['undo']), batch_id: z.string(), anyway: z.boolean().optional().describe('Put it back even though a treatment was changed since.') }),
       annotations: WRITE,
     },
-    async ({ batch_id }) => {
-      const undone = await undoReplan(batch_id, prisma);
+    async ({ batch_id, anyway }) => {
+      const undone = await undoReplan(batch_id, prisma, { anyway });
+      if (undone && 'changed_since' in undone) return refuse('A treatment in that plan was changed since. Ask the admin, then send anyway: true to undo it regardless.');
       return undone ? reply('Undone: the day is as it was before that plan.', { undone: true, batch_id }) : refuse('Nothing to undo with that id, or it is already undone.');
     },
   );
