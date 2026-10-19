@@ -1673,6 +1673,27 @@ app.post('/patients/:id/next-week', async (req: Request, res: Response) => {
   res.status(201).json({ ids: made.map((a) => a.id), count: made.length });
 });
 
+/**
+ * A first week by complaint until the centre saves its own (#1015): an admin adds the
+ * therapies they offer, not the ailments they treat, so each default keeps only the
+ * therapies this centre has, and one left with fewer than two is not offered.
+ */
+const DEFAULT_STARTERS: [string, [string, number][]][] = [
+  ['Stress and sleep', [['Abhyanga', 7], ['Shirodhara', 5], ['Padabhyanga', 2]]],
+  ['Back pain', [['Abhyanga', 5], ['Kati Vasti', 5], ['Elakizhi', 3]]],
+  ['Knees and joints', [['Abhyanga', 5], ['Janu Vasti', 5], ['Podikizhi', 3]]],
+  ['Eyes', [['Netra Tarpana', 5], ['Nasya', 5], ['Mukhabhyanga', 2]]],
+];
+app.get('/starter-courses', async (_req: Request, res: Response) => {
+  const [settings, therapies] = await Promise.all([prisma.settings.findUnique({ where: { id: 'singleton' } }), prisma.therapy.findMany({ where: { is_active: true } })]);
+  const saved = settings?.starter_courses as { name: string; lines: { therapy_id: string; sessions: number }[] }[] | null | undefined;
+  // A therapy retired since a starter was saved drops out of it.
+  const courses = saved
+    ? saved.map((c) => ({ ...c, lines: c.lines.filter((l) => therapies.some((t) => t.id === l.therapy_id)) }))
+    : DEFAULT_STARTERS.map(([name, lines]) => ({ name, lines: lines.flatMap(([n, sessions]) => { const t = therapies.find((x) => x.name.toLowerCase() === n.toLowerCase()); return t ? [{ therapy_id: t.id, sessions }] : []; }) })).filter((c) => c.lines.length >= 2);
+  res.json(courses.filter((c) => c.lines.length));
+});
+
 /** The starter courses offered for a new guest's first week (#984), replaced whole. */
 app.put('/starter-courses', requireAdmin, async (req: Request, res: Response) => {
   const courses = z.array(z.object({ name: z.string().trim().min(1).max(60), lines: z.array(z.object({ therapy_id: z.string().uuid(), sessions: z.number().int().min(1).max(14) })).min(1).max(12) })).max(20).parse(req.body);
