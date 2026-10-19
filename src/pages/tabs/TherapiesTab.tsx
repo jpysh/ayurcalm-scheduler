@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { API_BASE } from "@/lib/apiBase";
-import { Empty, LinkRow, ListGroup, Row } from "@/components/kit";
+import { Btn, Empty, LinkRow, ListGroup, Row } from "@/components/kit";
 import PageHead from "@/components/PageHead";
 import { TherapySheet, therapySub } from "@/components/SetupSheets";
 import { TherapyLibrarySheet } from "@/components/TherapyLibrarySheet";
@@ -27,8 +27,8 @@ export function useTherapiesScreen({ therapies, setTherapies, amenityOptions, re
   const tab = (
     <div>
       <PageHead title="Therapies" note={`${therapies.length} ${therapies.length === 1 ? "therapy" : "therapies"}`} />
-      <ListGroup><LinkRow label="Standard therapies" value="Add from the library" onClick={() => setShowLibrary(true)} /></ListGroup>
-      {rows.length === 0 ? <Empty text={ql ? "No therapy matches." : "No therapies yet. Add from the library, or tap + to add one."} /> : (
+      {rows.length || ql ? <ListGroup><LinkRow label="Standard therapies" value="Add from the library" onClick={() => setShowLibrary(true)} /></ListGroup> : null}
+      {rows.length === 0 ? (ql ? <Empty text="No therapy matches." /> : <Empty text="No therapies yet. Most centres start from the common ones and change what differs." action={<Btn kind="primary" onClick={() => setShowLibrary(true)}>Add the common therapies</Btn>} />) : (
         <ListGroup title="Therapies" count={rows.length}>{rows.map((t) => <Row key={t.id} title={t.name} facts={therapySub(t)} flag={flag(String(t.id))} trailing="›" onClick={() => setOpen(t)} />)}</ListGroup>
       )}
     </div>

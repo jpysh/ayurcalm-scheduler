@@ -23,7 +23,7 @@ import { patientMatches } from './patientMatch.js';
 import { searchOut, searchPatients, searchTreatments } from './search.js';
 import { residentDay } from './residentDay.js';
 import { changeLog } from './changeLog.js';
-import { therapyLibrary } from './therapyLibrary.js';
+import { COMMON, therapyLibrary } from './therapyLibrary.js';
 import { requireAdmin } from './settings.js';
 import { attentionFor, changesSchema } from './attention.js';
 import { indiaHolidays } from './indiaHolidays.js';
@@ -309,7 +309,8 @@ app.post('/therapies', async (req: Request, res: Response) => {
 // that name, so Therapies → Add from library offers only what is missing.
 app.get('/therapy-library', async (_req: Request, res: Response) => {
   const have = new Set((await prisma.therapy.findMany({ where: { is_active: true }, select: { name: true } })).map((t) => t.name.toLowerCase()));
-  res.json(therapyLibrary.map((t) => ({ ...t, added: have.has(t.name.toLowerCase()) })));
+  const rank = (n: string) => { const i = COMMON.indexOf(n); return i < 0 ? COMMON.length : i; };
+  res.json([...therapyLibrary].sort((a, b) => rank(a.name) - rank(b.name)).map((t) => ({ ...t, common: COMMON.includes(t.name), added: have.has(t.name.toLowerCase()) })));
 });
 
 // Imports the ticked library therapies as the admin edited them. A name the

@@ -58,3 +58,9 @@ export const therapyLibrary: LibraryTherapy[] = [
   T('Mukhabhyanga', 'Face and head massage with oil.', 40, 1, table, ['Kumkumadi oil']),
   { ...T('Consultation', 'Pulse, BP and a talk with the doctor; the plan is reviewed.', 20, 1, ['bp_monitor', 'examination_bed'], []), consultation: true },
 ];
+
+/**
+ * What most centres offer (#1020), Consultation first: a new centre gets these
+ * ticked, edits them, and adds the rest only if it gives them.
+ */
+export const COMMON = ['Consultation', 'Abhyanga', 'Shirodhara', 'Pizhichil', 'Njavarakizhi', 'Elakizhi', 'Podikizhi', 'Udvartana', 'Bashpa Sweda', 'Kati Vasti', 'Greeva Vasti', 'Janu Vasti', 'Nasya', 'Netra Tarpana', 'Padabhyanga'];

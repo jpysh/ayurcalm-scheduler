@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
-import { Empty, ListGroup, Loading, Text, noteText, Btn } from "@/components/kit";
+import { Empty, ListGroup, Loading, Text, Tick, noteText, Btn } from "@/components/kit";
 
 type Item = {
   name: string; description: string; minutes: number; staff: number;
-  amenities: string[]; products: string[]; gender: boolean; consultation?: boolean; once?: boolean; before?: boolean; added: boolean;
+  amenities: string[]; products: string[]; gender: boolean; consultation?: boolean; once?: boolean; before?: boolean; added: boolean; common?: boolean;
   /** The library's own name: the row's identity while the admin renames it. */
   key: string;
 };
@@ -29,7 +29,12 @@ export function TherapyLibrarySheet({ open, onOpenChange, onImported, onOwn }: {
   useEffect(() => {
     if (!open) return;
     setItems(null); setPicked({}); setEditing(null);
-    fetch(`${API_BASE}/therapy-library`).then((r) => r.json()).then((d) => setItems(Array.isArray(d) ? d.filter((x: Item) => !x.added).map((x: Item) => ({ ...x, key: x.name })) : [])).catch(() => setItems([]));
+    fetch(`${API_BASE}/therapy-library`).then((r) => r.json()).then((d: Item[]) => {
+      const list = Array.isArray(d) ? d : [];
+      setItems(list.filter((x) => !x.added).map((x) => ({ ...x, key: x.name })));
+      // A centre with no therapies yet starts from what most centres offer, ticked (#1020): edit, untick, add.
+      if (!list.some((x) => x.added)) setPicked(Object.fromEntries(list.filter((x) => x.common).map((x) => [x.name, true])));
+    }).catch(() => setItems([]));
   }, [open]);
 
   // Editing a row ticks it: the admin is changing it to add it.
@@ -60,7 +65,7 @@ export function TherapyLibrarySheet({ open, onOpenChange, onImported, onOwn }: {
   }
 
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange} title="Add from library" note="Tick what the centre offers. Tap a therapy to change its name or minutes first."
+    <BottomSheet open={open} onOpenChange={onOpenChange} title="Add from library" note={chosen.length ? "Untick what the centre does not give; Change sets a name or the minutes." : "Tick what the centre offers; Change sets a name or the minutes."}
       foot={items && items.length ? (
         <Btn kind="primary" disabled={!chosen.length || busy} onClick={add}>
           {busy ? "Adding…" : chosen.length ? `Add ${chosen.length} therap${chosen.length === 1 ? "y" : "ies"}` : "Tick the therapies to add"}
@@ -72,28 +77,29 @@ export function TherapyLibrarySheet({ open, onOpenChange, onImported, onOwn }: {
           onClick={() => setPicked(chosen.length === items.length ? {} : Object.fromEntries(items.map((x) => [x.key, true])))}>
           {chosen.length === items.length ? "Untick all" : `Tick all ${items.length}`}
         </Btn>
-        <ListGroup>
-          {items.map((x) => (
-            <div key={x.key} className="border-b border-border px-3 py-1 last:border-b-0">
-              <div className="flex items-start gap-1">
-                <input type="checkbox" aria-label={`Add ${x.key}`} className="mt-3.5 h-6 min-h-0 w-6 min-w-0 flex-none accent-[hsl(var(--primary))]"
-                  checked={!!picked[x.key]} onChange={(e) => setPicked((p) => ({ ...p, [x.key]: e.target.checked }))} />
-                <button type="button" aria-expanded={editing === x.key} className="min-h-12 min-w-0 flex-1 py-2 pl-2 text-left" onClick={() => setEditing(editing === x.key ? null : x.key)}>
-                  <span className="block text-base font-semibold">{x.name}</span>
-                  <span className={`block ${noteText}`}>{x.minutes} min · {x.consultation ? "doctor" : `${x.staff} therapist${x.staff === 1 ? "" : "s"}`}{x.gender ? " · same gender" : ""}</span>
-                  <span className={`block ${noteText}`}>{x.description}</span>
-                  {x.products.length ? <span className={`block ${noteText}`}>Brings: {x.products.join(", ")}</span> : null}
-                </button>
-              </div>
-              {editing === x.key ? (
-                <div className="grid grid-cols-[1fr_7rem] gap-3 pb-2 pl-9">
-                  <Text label="Name" value={x.name} onChange={(e) => change(x.key, { name: e.target.value })} />
-                  <Text label="Minutes" type="number" inputMode="numeric" min={5} max={480} value={x.minutes} onChange={(e) => change(x.key, { minutes: Number(e.target.value) || 0 })} />
+        {[["Most centres offer", items.filter((x) => x.common)], ["More", items.filter((x) => !x.common)]].map(([title, list]) => (list as Item[]).length ? (
+          <div key={title as string} className="mb-3"><ListGroup title={title as string} count={(list as Item[]).length}>
+            {(list as Item[]).map((x) => (
+              <div key={x.key} className="border-b border-border px-3 last:border-b-0">
+                <div className="flex items-center justify-between gap-2">
+                  {/* One line a row (#1020): forty rows of four lines was thirteen screens. What it is shows on Change. */}
+                  <Tick on={!!picked[x.key]} set={(v) => setPicked((p) => ({ ...p, [x.key]: v }))}
+                    label={<span className="grid py-1.5"><span className="font-semibold">{x.name}</span><span className={noteText}>{x.minutes} min · {x.consultation ? "doctor" : `${x.staff} therapist${x.staff === 1 ? "" : "s"}`}{x.gender ? " · same gender" : ""}</span></span>} />
+                  <button type="button" aria-expanded={editing === x.key} aria-label={`Change ${x.key}`} className="min-h-11 flex-none px-1 text-sm font-semibold text-primary" onClick={() => setEditing(editing === x.key ? null : x.key)}>{editing === x.key ? "Done" : "Change"}</button>
                 </div>
-              ) : null}
-            </div>
-          ))}
-        </ListGroup>
+                {editing === x.key ? (
+                  <div className="pb-3 pl-9">
+                    <p className={noteText}>{x.description}{x.products.length ? ` Brings: ${x.products.join(", ")}.` : ""}</p>
+                    <div className="mt-2 grid grid-cols-[1fr_7rem] gap-3">
+                      <Text label="Name" value={x.name} onChange={(e) => change(x.key, { name: e.target.value })} />
+                      <Text label="Minutes" type="number" inputMode="numeric" min={5} max={480} value={x.minutes} onChange={(e) => change(x.key, { minutes: Number(e.target.value) || 0 })} />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </ListGroup></div>
+        ) : null)}
       </>)}
     </BottomSheet>
   );
