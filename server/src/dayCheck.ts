@@ -318,13 +318,15 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
   const key = day.toISOString().slice(0, 10);
   // A day either side in UTC covers the centre's day in any time zone; the date check below picks it out.
   const issues = await prisma.linkIssue.findMany({ where: { seen: false, OR: [{ appointment_id: { in: appointments.map((a) => a.id) } }, { appointment_id: null, created_at: { gte: new Date(day.getTime() - 86400000), lt: new Date(day.getTime() + 2 * 86400000) } }] }, orderBy: { created_at: 'asc' } });
-  const ISSUE: Record<string, string> = { room: 'Room not usable', co_therapist: 'Co-therapist not here', patient_absent: 'Patient not here', permission: 'Needs permission', note: 'A note', sos: 'SOS: needs help now' };
+  const ISSUE: Record<string, string> = { room: 'Room not usable', co_therapist: 'Co-therapist not here', patient_absent: 'Patient not here', permission: 'Needs permission', note: 'A note', sos: 'SOS: needs help now', missing: 'Something is missing', unwell: 'Guest unwell' };
+  // These wait on the admin before the treatment can go ahead (#978): counted and first, like an SOS.
+  const COUNTS = ['sos', 'missing', 'unwell'];
   for (const i of issues) {
     const a = i.appointment_id ? appointments.find((x) => x.id === i.appointment_id) : null;
     // Raised on the centre's day, for that day's treatment, or with none: the one the admin is looking at.
     if (i.appointment_id ? !a : centreClock(ctx.settings?.timezone || 'Asia/Kolkata', i.created_at).date !== key) continue;
     raw.push({
-      id: `ISSUE:${i.id}`, kind: 'ISSUE', problem_class: 'worth_knowing', urgent: i.kind === 'sos',
+      id: `ISSUE:${i.id}`, kind: 'ISSUE', problem_class: 'worth_knowing', urgent: COUNTS.includes(i.kind),
       who: a ? `${nameOfStaff(i.staff_id)} — ${nameOfPatient(a.patient_id)}` : nameOfStaff(i.staff_id), start_time: a?.start_time ?? null,
       what: [ISSUE[i.kind] || i.kind, i.note].filter(Boolean).join(': '),
       group_key: 'ISSUE', group_label: 'Raised by staff',
