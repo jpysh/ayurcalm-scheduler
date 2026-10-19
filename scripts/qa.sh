@@ -39,6 +39,7 @@ run() { # script, what it checks
 
 echo ""
 echo "Checking the app:"
+run courseDiet        "A booked purification course turns into its three diets in one tap, dated from Snehapana and Virechana, and Undo puts back the old one"
 run dietResolution     "Each resident gets the right meals for their diet plan on a given day"
 run shortenWords       "Long names are shortened sensibly to fit the day sheet"
 run availability       "A therapist counts as busy during their absences and the centre's events"
