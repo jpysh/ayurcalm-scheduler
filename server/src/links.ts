@@ -204,7 +204,7 @@ linkRouter.post('/:token/feedback', async (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-export const ISSUE_KINDS = ['room', 'co_therapist', 'patient_absent', 'sos', 'permission', 'note'] as const;
+export const ISSUE_KINDS = ['room', 'co_therapist', 'patient_absent', 'sos', 'permission', 'note', 'missing', 'unwell'] as const;
 linkRouter.post('/:token/issues', async (req: Request, res: Response) => {
   const who = await personOf(String(req.params.token));
   if (!who) return gone(res);

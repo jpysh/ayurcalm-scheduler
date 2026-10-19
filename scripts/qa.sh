@@ -72,6 +72,7 @@ run guestRoomRange    "Is a room free: a guest room is free over a range only wi
 run nextWeek          "Plan next week repeats this week a week on, a swap changes one line, and Book all books every line and the review or nothing; a once-a-course therapy is left out, and a second one is asked about"
 run kitchenDayPatient "The kitchen counts only the patients who stay on site; a day patient goes home"
 run kitchenAway       "A guest away for some hours or all day keeps their meals; the kitchen sheet and their meals sheet mark them AWAY"
+run foodLimits        "A guest's food limit prints bold on the day sheet and by name on the kitchen sheet"
 run residentStay     "A resident added in the app, with a stay and a diet plan, is on the day sheet; leaving early cancels what is left, and Undo restores it"
 run didNotArrive      "A guest who never arrives loses the stay, room, meals and treatments in one tap, and Undo puts them all back"
 run patientStories   "Meals by date, what a discharge summary lacks, package and accommodation, a shortened stay cancelled with its reason and undone, a leave planned later"

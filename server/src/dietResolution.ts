@@ -37,7 +37,7 @@ export type ResolveDietInput = {
   /** Names a bespoke plan that follows no template. */
   segmentLabel?: string | null;
   /** The patient's own medication and how they eat around treatment (#355): never the plan's. */
-  patient?: { medication?: string | null; before_treatment?: string | null; after_treatment?: string | null };
+  patient?: { food_limits?: string | null; medication?: string | null; before_treatment?: string | null; after_treatment?: string | null };
 };
 
 export type ResolvedDiet = {
@@ -50,6 +50,8 @@ export type ResolvedDiet = {
   therapyNotes: string;
   /** The patient's medication alone, so the sheet can print it on their own line. */
   medication: string;
+  /** What this guest must not eat (#977): bold on the day sheet, listed on the kitchen sheet. */
+  foodLimits: string;
   /** Meals written for this patient (an override or for this date), not the plan's: the kitchen's exceptions. */
   personal: MealKey[];
   /** Which side of the plan this is: the kitchen names it when a plan prints twice in a meal (#832). */
@@ -97,6 +99,7 @@ export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
     planName: label,
     therapyNotes,
     medication,
+    foodLimits: own(input.patient?.food_limits),
     personal,
     treatmentDay: input.hasTherapyToday,
   };
@@ -131,7 +134,7 @@ export async function loadDietsForDay(day: Date, prisma: PrismaClient) {
   }
   // Meals no longer take columns on the sheet, so every meal resolves as text.
   const mealsWithColumn = new Set<MealKey>();
-  const dietFor = (patient: { id: string; medication?: string | null; before_treatment?: string | null; after_treatment?: string | null }, hasTherapyToday: boolean) => {
+  const dietFor = (patient: { id: string; food_limits?: string | null; medication?: string | null; before_treatment?: string | null; after_treatment?: string | null }, hasTherapyToday: boolean) => {
     const seg = segmentByPatient.get(patient.id);
     return resolveDiet({
       template: seg?.Template ?? null,

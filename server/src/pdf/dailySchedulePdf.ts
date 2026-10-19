@@ -227,7 +227,10 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   // Sorted last by planRank below, so the values only have to be distinct.
   const NO_PLAN = '\uffff1';
   const OUTPATIENT = '\uffff2';
-  type Group = { key: string; ids: string[]; plan: string; qualifier: string; title: string; body: string };
+  type Group = { key: string; ids: string[]; plan: string; qualifier: string; title: string; body: string; limits: string };
+  // Food limits print bold on a line of their own (#977): inside the plan's food they were read past.
+  const limitsOf = (ids: string[]) => ids.filter((id) => dietByPatient.get(id)?.foodLimits)
+    .map((id) => `${patientById[id] || id}: ${dietByPatient.get(id)!.foodLimits}`).join('; ');
   // The same note for several patients prints once, after all their names.
   const ownLines = (ids: string[]) => {
     const byNote = new Map<string, string[]>();
@@ -236,8 +239,8 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   };
   const describe = ([key, ids]: [string, string[]]): Group => {
     const n = ids.length;
-    if (key === '\u0000resident') return { key, ids, plan: NO_PLAN, qualifier: '', body: ownLines(ids), title: `No diet plan \u2014 ${n} patient${n === 1 ? '' : 's'}` };
-    if (key === '\u0000outpatient') return { key, ids, plan: OUTPATIENT, qualifier: '', body: ownLines(ids), title: `Outpatients \u2014 not staying \u2014 ${n} ${n === 1 ? 'person' : 'people'}` };
+    if (key === '\u0000resident') return { key, ids, plan: NO_PLAN, qualifier: '', body: ownLines(ids), limits: limitsOf(ids), title: `No diet plan \u2014 ${n} patient${n === 1 ? '' : 's'}` };
+    if (key === '\u0000outpatient') return { key, ids, plan: OUTPATIENT, qualifier: '', body: ownLines(ids), limits: limitsOf(ids), title: `Outpatients \u2014 not staying \u2014 ${n} ${n === 1 ? 'person' : 'people'}` };
     const plan = dietByPatient.get(ids[0])?.planName || '';
     // Each meal with the window it is served in, from the centre's own meal events.
     const body = (plan && key.startsWith(`${plan}: `) ? key.slice(plan.length + 2) : key)
@@ -251,7 +254,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
       : '';
     const label = plan || 'Individual instructions';
     return {
-      key, ids, plan: label, qualifier, body,
+      key, ids, plan: label, qualifier, body, limits: limitsOf(ids),
       title: `${label}${qualifier ? ` \u2014 ${qualifier}` : ''} \u2014 ${ids.length} patient${ids.length === 1 ? '' : 's'}`,
     };
   };
@@ -281,11 +284,11 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   /** A line inside a time cell. Treatments are bold; food and events are not. */
   type Line = { t: string; text: string; bold: boolean };
   type Row = { kind: 'row'; name: string; cells: Line[][]; group: number };
-  type Heading = { kind: 'heading'; title: string; body: string; group: number };
+  type Heading = { kind: 'heading'; title: string; body: string; limits: string; group: number };
   const items: (Row | Heading)[] = [];
-  for (const { ids, title, body } of groupOrder) {
+  for (const { ids, title, body, limits } of groupOrder) {
     const group = items.length;
-    items.push({ kind: 'heading', title, body, group });
+    items.push({ kind: 'heading', title, body, limits, group });
     for (const id of ids) {
       const apptList = apptsByPatient.get(id) || [];
       const cells = timeSlots.map((slot) => {
@@ -383,10 +386,12 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   };
   const cellHeight = (cell: Line[], colW: number) =>
     cell.reduce((sum, l) => sum + lineHeight(l, colW), 0);
-  const headingHeight = (title: string, body: string) => {
+  const limitsText = (limits: string) => `Food limits \u2014 ${limits}`;
+  const headingHeight = (title: string, body: string, limits = '') => {
     useHeadFont();
     doc.fontSize(cellFont + 1);
     let h = doc.heightOfString(title, { width: w - 8 });
+    if (limits) h += doc.font('Helvetica-Bold').fontSize(cellFont).heightOfString(limitsText(limits), { width: w - 8 });
     if (body) {
       useCellFont();
       h += doc.heightOfString(body, { width: w - 8 });
@@ -394,7 +399,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     return h + 8;
   };
   const itemHeight = (it: Row | Heading) => {
-    if (it.kind === 'heading') return headingHeight(it.title, it.body);
+    if (it.kind === 'heading') return headingHeight(it.title, it.body, it.limits);
     // The name is printed bold in a fixed column and can take two lines of its
     // own, so it is measured with the rest: a long name was drawing over the
     // resident below it.
@@ -411,7 +416,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   // the repeated heading when the page opens in the middle of a group.
   const overheadAt = (start: number) => {
     const it = items[start];
-    const repeated = it.kind === 'row' ? headingHeight(continuedTitle(headingOf(it)), headingOf(it).body) : 0;
+    const repeated = it.kind === 'row' ? headingHeight(continuedTitle(headingOf(it)), headingOf(it).body, headingOf(it).limits) : 0;
     return headerH + repeated;
   };
   const pageStarts = new Set<number>([0]);
@@ -459,13 +464,14 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     drawHeaderRow();
   };
 
-  const drawHeading = (title: string, body: string) => {
-    const h = headingHeight(title, body);
+  const drawHeading = (title: string, body: string, limits: string) => {
+    const h = headingHeight(title, body, limits);
     doc.save();
     doc.rect(x, yy, w, h).fillOpacity(0.07).fill('#000');
     doc.restore();
     doc.rect(x, yy, w, h).stroke();
     doc.font('Helvetica-Bold').fontSize(cellFont + 1).text(title, x + 4, yy + 3, { width: w - 8 });
+    if (limits) doc.font('Helvetica-Bold').fontSize(cellFont).text(limitsText(limits), x + 4, doc.y, { width: w - 8 });
     if (body) {
       useCellFont();
       doc.text(body, x + 4, doc.y, { width: w - 8 });
@@ -480,11 +486,11 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
       startPage(false);
       if (it.kind === 'row') {
         const h = headingOf(it);
-        drawHeading(continuedTitle(h), h.body);
+        drawHeading(continuedTitle(h), h.body, h.limits);
       }
     }
     if (it.kind === 'heading') {
-      drawHeading(it.title, it.body);
+      drawHeading(it.title, it.body, it.limits);
       continue;
     }
     const rowH = heights[r];

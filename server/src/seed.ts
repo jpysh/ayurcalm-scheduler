@@ -520,6 +520,8 @@ async function main() {
       const purifying = purge && shiftISO(purge, 4) >= today.toISOString().slice(0, 10);
       const told = purifying ? { medication: 'Set each morning by the physician through the purification', before_treatment: "Confirm today's dose or diet step with the physician", after_treatment: 'Report nausea, heaviness or no appetite the same day' } : stayCount % 3 === 0 ? { medication: usualNotes[usual[stayCount % usual.length].name]?.medication } : null;
       if (told) await prisma.patient.update({ where: { id: patient_id }, data: told });
+      // A few guests carry a food limit (#977), so the kitchen sheet's list is never empty in the demo.
+      if (stayCount % 7 === 2) await prisma.patient.update({ where: { id: patient_id }, data: { food_limits: stayCount % 2 ? 'No dairy (lactose intolerant)' : 'Diabetic: no sugar or jaggery' } });
     }
     if (planned && start_date <= today && today <= end_date) residents.push({ id: patient_id });
   };
