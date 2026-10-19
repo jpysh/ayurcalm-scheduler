@@ -198,19 +198,25 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
 
   // Save and fix (#695): one plan over every day in the range, shown before anything moves, accepted once.
   type RangeRow = { date: string; who: string; start_time: string | null; fix: { label: string; appointment_id: string; staff_id: string | null; co_staff_ids: string[]; room_id: string | null; start_time: string; date: string; cancel?: boolean } };
-  type Waiting = { date: string; who: string; start_time: string | null; what: string };
-  const [plan, setPlan] = useState<{ rows: RangeRow[]; left: number; waiting: Waiting[]; leave: Leave } | null>(null);
+  type Waiting = { date: string; who: string; start_time: string | null; what: string; later: RangeRow['fix'] | null };
+  const [plan, setPlan] = useState<{ rows: RangeRow[]; left: number; waiting: Waiting[]; why: string | null; leave: Leave } | null>(null);
   // Closing the sheet without accepting still owes the leave its toast.
   const closePlan = () => { if (plan) leaveToast(plan.leave, `${plural(plan.rows.length, 'treatment')} still to move; ${plan.rows.length === 1 ? 'it waits' : 'they wait'} under "need you".`); setPlan(null); };
   const planRange = async (from: string, to: string, leave: Leave) => {
-    const r = await fetchJsonWithTimeout<{ rows: RangeRow[]; left: number; waiting: Waiting[] }>(`${API_BASE}/day-check/range?from=${from}&to=${to}`).catch(() => null);
+    const r = await fetchJsonWithTimeout<{ rows: RangeRow[]; left: number; waiting: Waiting[]; why: string | null }>(`${API_BASE}/day-check/range?from=${from}&to=${to}`).catch(() => null);
     if (!r) { leaveToast(leave, 'The plan could not be worked out; it waits under "need you".'); return; }
-    if (!r.rows.length) { leaveToast(leave, r.left ? `${plural(r.left, 'treatment')} need${r.left === 1 ? 's' : ''} you to choose; ${r.left === 1 ? 'it waits' : 'they wait'} under "need you".` : 'Nothing needed moving.'); return; }
+    // Something waiting with a later day to go to is worth the sheet (#987): the one tap that moves them is there.
+    if (!r.rows.length && !r.waiting.some((w) => w.later)) { leaveToast(leave, r.left ? `${plural(r.left, 'treatment')} need${r.left === 1 ? 's' : ''} you to choose; ${r.left === 1 ? 'it waits' : 'they wait'} under "need you".` : 'Nothing needed moving.'); return; }
     setPlan({ ...r, leave });
   };
+  // Everything waiting goes to its own next free day (#987): added to the plan, so one Accept and one Undo cover it.
+  const moveLater = () => setPlan((p) => p && ({ ...p,
+    rows: [...p.rows, ...p.waiting.filter((w) => w.later).map((w) => ({ date: w.date, who: w.who, start_time: w.start_time, fix: w.later! }))],
+    waiting: p.waiting.filter((w) => !w.later), left: p.waiting.filter((w) => !w.later).length }));
   const acceptPlan = async () => {
     if (!plan) return;
     const p = plan;
+    if (!p.rows.length) { closePlan(); return; }
     setPlan(null);
     const res = await fetch(`${API_BASE}/day-check/accept`, { method: 'POST', headers, body: JSON.stringify({ date: p.rows[0].date, moves: p.rows.map((r) => ({ ...r.fix, co_staff_ids: r.fix.co_staff_ids || [] })) }) });
     if (!res.ok) { leaveToast(p.leave, 'The days changed while this was open, so nothing was moved; it waits under "need you".'); return; }
@@ -351,9 +357,13 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
           </ListGroup>
         )) : null}
         {plan?.waiting?.length ? (
-          <ListGroup title="Waiting for you" count={plan.waiting.length}>
-            {plan.waiting.map((w, i) => <Row key={i} title={[w.date === centreToday ? null : dayText(w.date), w.start_time, w.who].filter(Boolean).join(' · ')} facts={w.what} />)}
-          </ListGroup>
+          <div className="mt-3">
+            {plan.why ? <Consequence>{plan.why}</Consequence> : null}
+            <ListGroup title="Waiting for you" count={plan.waiting.length}>
+              {plan.waiting.map((w, i) => <Row key={i} title={[w.date === centreToday ? null : dayText(w.date), w.start_time, w.who].filter(Boolean).join(' · ')} facts={w.later ? `Next free: ${w.later.label}` : w.what} />)}
+            </ListGroup>
+            {plan.waiting.some((w) => w.later) ? <Btn className="mt-2" onClick={moveLater}>{`Move ${plan.waiting.filter((w) => w.later).length === 1 ? 'it' : `these ${plan.waiting.filter((w) => w.later).length}`} to their next free day`}</Btn> : null}
+          </div>
         ) : null}
       </BottomSheet>
     </>

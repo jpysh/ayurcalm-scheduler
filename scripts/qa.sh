@@ -59,6 +59,7 @@ run coTherapist        "A treatment worked by two books both therapists: neither
 run closeDay           "Closing a day with bookings moves them to the next open day in one pass, and Undo puts them back"
 run dayPlan            "Verify's fix for a day is one plan with no clashes, and accepting then undoing it restores the day"
 run dayFull           "A day with no therapist free for an hour says it is full, and from when"
+run planWhy           "What a plan leaves for the admin is explained in one line and can go to its next free day"
 run ownTherapist       "A resident kept to their own therapist goes to that therapist's next free day when it is soon, and otherwise the admin is asked with three choices"
 run therapyLibrary     "The therapy library adds a therapy once, as edited, never twice under the same name"
 run printedSheets      "Printing a day keeps one copy of each sheet, replaced by the next print, and copies older than 90 days are removed"

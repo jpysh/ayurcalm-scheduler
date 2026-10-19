@@ -1,0 +1,34 @@
+// node scripts/uat-987.mjs — the plan after a therapist is out tomorrow: one reason line for what waits, and "Move these to their next free day", at 375x812 (#987).
+// Picks the therapist with the most two-therapist treatments tomorrow. E2E_BASE_URL picks the stack.
+import { chromium } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';
+const OUT = 'docs/design/uat/2026-10-19-plan-why-987';
+mkdirSync(OUT, { recursive: true });
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const api = (path) => fetch(`${APP}/api${path}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json());
+const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+const appts = await api(`/appointments?date=${tomorrow}`);
+const count = new Map();
+for (const a of appts) if (a.co_staff_ids?.length) for (const id of [a.staff_id, ...a.co_staff_ids]) count.set(id, (count.get(id) || 0) + 1);
+const staff = await api('/staff');
+const who = staff.find((s) => s.id === [...count].sort((x, y) => y[1] - x[1])[0][0]);
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+const p = await ctx.newPage();
+await p.goto(`${APP}/admin/timeoff`); await p.waitForTimeout(2500);
+await p.getByRole('button', { name: 'Mark not available', exact: true }).click();
+const picker = p.getByRole('dialog').last();
+await picker.getByRole('button', { name: 'Show staff' }).click();
+await picker.getByRole('checkbox', { name: who.name, exact: true }).check();
+await picker.getByRole('button', { name: /^Next/ }).click();
+const form = p.getByRole('dialog').last();
+await form.getByRole('button', { name: 'Some days', exact: true }).click();
+await form.locator('input[type=date]').nth(0).fill(tomorrow);
+await form.locator('input[type=date]').nth(1).fill(tomorrow);
+await form.getByRole('button', { name: /^Save and fix/ }).click();
+await p.getByText('Waiting for you').waitFor({ timeout: 30000 });
+await p.getByText('Waiting for you').scrollIntoViewIfNeeded(); await p.waitForTimeout(800);
+await p.screenshot({ path: `${OUT}/after-plan-why-375.png` });
+await b.close();
