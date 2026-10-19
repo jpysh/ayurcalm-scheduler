@@ -643,7 +643,7 @@ const AdminDashboard = () => {
           </TabsContent>
 
           <TabsContent value="settings" data-testid="tabpanel-settings">
-            <Settings signOut={signOut} openLog={() => go("log")} initialSheet={settingsSheet} sheetOpened={() => setSettingsSheet(null)}
+            <Settings signOut={signOut} openLog={() => go("log")} openScreen={go} initialSheet={settingsSheet} sheetOpened={() => setSettingsSheet(null)}
               attention={attention} openRules={() => setRules({ section: null })} openHolidays={timeOffScreen.openHolidays} />
           </TabsContent>
 

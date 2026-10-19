@@ -53,8 +53,8 @@ type Sheet = "centre" | "hours" | "catalogues" | "people" | "account" | "backups
 /** Opening a sheet counts as looking at its setup items; one sheet can cover two. */
 const REVIEWS: Partial<Record<Sheet, string>> = { centre: "centre", hours: "hours", catalogues: "catalogues", people: "people" };
 
-const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, openRules, openHolidays }: {
-  signOut?: () => void; openLog?: () => void;
+const Settings = ({ signOut, openLog, openScreen, initialSheet, sheetOpened, attention, openRules, openHolidays }: {
+  signOut?: () => void; openLog?: () => void; openScreen?: (screen: string) => void;
   /** A sheet to open at once, from a link on another screen ("Edit the list"). */
   initialSheet?: string | null; sheetOpened?: () => void;
   attention: Attention; openRules: () => void; openHolidays: () => void;
@@ -191,6 +191,8 @@ const Settings = ({ signOut, openLog, initialSheet, sheetOpened, attention, open
       <ListGroup title="Your centre">
         <Row title="Centre and letterhead" facts={settings.centre_name} trailing="›" onClick={() => show("centre")} />
         <Row title="Opening hours and holidays" facts={hoursFact} trailing="›" onClick={() => show("hours")} />
+        {openScreen ? <Row title="Therapies" facts="What the centre offers" trailing="›" onClick={() => openScreen("therapies")} /> : null}
+        {openScreen ? <Row title="Classes and events" facts="The daily round" trailing="›" onClick={() => openScreen("events")} /> : null}
         {isAdmin ? <Row title="Packages and accommodation" facts="The lists a patient's card picks from" trailing="›" onClick={() => show("catalogues")} /> : null}
       </ListGroup>
 
