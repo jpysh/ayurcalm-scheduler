@@ -605,7 +605,7 @@ const AdminDashboard = () => {
                     </ListGroup>
                   </div>
                 ) : null}
-                {loaded && (ready || !show) && !scheduleScreen.searching ? <WeekStrip day={dayKeyMemo} today={ymdInTZ(new Date())} moves={moves} setDay={(iso) => setCurrentDate(dayDate(iso))} /> : null}
+                {loaded && (ready || !show) && !scheduleScreen.searching ? <WeekStrip day={dayKeyMemo} today={ymdInTZ(new Date())} moves={moves} stamp={appointmentsByDate[dayKeyMemo]} setDay={(iso) => setCurrentDate(dayDate(iso))} /> : null}
                 {loaded && (ready || !show) ? scheduleScreen.tab : null}
               </>);
             })()}

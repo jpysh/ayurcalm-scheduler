@@ -276,7 +276,7 @@ type TherapyFact = { id: string; name: string; duration_minutes: number; is_cons
 
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 /** Why a course could not be placed, in the admin's words. */
-const COURSE_WHY: Record<string, string> = { OUT_OF_RANGE: "The days ran out", STAY_TOO_SHORT: "Their stay ends before the last day", NO_MATCHING_TIME_SLOTS: "No free time on those days", NO_ROOM_AVAILABLE: "No room is free", NO_STAFF_AVAILABLE: "No therapist is free", CENTER_HOLIDAY: "The centre is closed", STAFF_IN_EVENT: "The therapist is in an event", WINDOW_TOO_NARROW: "The time is too short" };
+const COURSE_WHY: Record<string, string> = { OUT_OF_RANGE: "No free time on any of those days", STAY_TOO_SHORT: "Their stay ends before the last day", NO_MATCHING_TIME_SLOTS: "No free time on those days", NO_ROOM_AVAILABLE: "No room is free", NO_STAFF_AVAILABLE: "No therapist is free", CENTER_HOLIDAY: "The centre is closed", STAFF_IN_EVENT: "The therapist is in an event", WINDOW_TOO_NARROW: "The time is too short" };
 const COURSE_DAYS = [1, 3, 5, 7, 14];
 /** "Mon 5 to Fri 9 Oct": the month once when both days share it. */
 const span = (from: string, to: string) => {
