@@ -330,7 +330,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
     raw.push({
       id: `ISSUE:${i.id}`, kind: 'ISSUE', problem_class: 'worth_knowing', urgent: COUNTS.includes(i.kind), sos: i.kind === 'sos' || undefined,
       who: a ? `${nameOfStaff(i.staff_id)} — ${nameOfPatient(a.patient_id)}` : nameOfStaff(i.staff_id), start_time: a?.start_time ?? null,
-      what: [ISSUE[i.kind] || i.kind, i.note].filter(Boolean).join(': '),
+      what: [ISSUE[i.kind] || i.kind, i.note].filter(Boolean).join(' · '),
       group_key: 'ISSUE', group_label: 'Raised by staff',
       ...(i.kind === 'room' && a?.room_id ? { room_out: { room_id: a.room_id, reason: i.note ?? null } } : {}),
       appointment_id: null, patient_id: a?.patient_id ?? null, patient_name: a ? nameOfPatient(a.patient_id) : '', staff_id: i.staff_id,
