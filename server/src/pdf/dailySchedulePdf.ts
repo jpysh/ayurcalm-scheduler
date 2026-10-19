@@ -150,8 +150,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   // column to white space the time columns needed.
   doc.font('Helvetica').fontSize(9);
   // Capped, because one unusually long name should not take width from every
-  // time column on the sheet: a name past the cap is shortened with '..' the
-  // way an overlong therapy name already is.
+  // time column on the sheet: a name past the cap wraps instead (#967).
   const PATIENT_W = Math.min(104, Math.max(58, ...displayPatients.map((p) => doc.widthOfString(`${patientById[p.id] || p.id} `) + 10)));
   const hourShare = (size: number) => (pageW - PATIENT_W) / Math.max(1, bucketsFor(size).size);
   const bucket = [60, 120, 180, 240].find((size) => hourShare(size) >= HOUR_MIN_W) ?? 240;
@@ -345,17 +344,16 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
       headFont = Math.min(11, size + 2);
       useCellFont();
       const fits = rowItems.every((r) =>
-        r.name.split(/\s+/).every((word) => fitsWord(word, colWidths[0]))
-        && r.cells.every((cell, c) => cell.every((l) =>
+        r.cells.every((cell, c) => cell.every((l) =>
           lineText(l).split(/\s+/).every((word) => fitsWord(word, colWidths[c + 1])))));
       if (fits) return;
     }
   };
   fitTypeSize();
   // At the smallest type some words still do not fit: shorten those instead.
+  // Never the name: it wraps, because a cut surname is the wrong guest (#967).
   const widthOfWord = (str: string) => doc.widthOfString(`${str} `);
   for (const r of rowItems) {
-    r.name = shortenWords(r.name, colWidths[0] - 10, widthOfWord);
     // Shortened as the line is printed — with its start time — then the time is
     // taken back off, so a word is measured against the width it really has.
     r.cells.forEach((cell, c) => cell.forEach((l) => {
