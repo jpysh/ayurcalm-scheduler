@@ -35,8 +35,10 @@ export type Rule = {
 
 export const RULES: Rule[] = [
   { id: 'day', section: 'Day', kind: 'action', locked: true, on: true, name: 'A therapist is not in, a room is out, or treatments clash' },
+  // Grey before midday (#983): the summary is written during the leaving day, so a morning count is noise.
   { id: 'leaves_today', section: 'Patients', kind: 'action', on: true, name: 'Leaves today and has no discharge summary' },
-  { id: 'arrival_open', section: 'Patients', kind: 'action', on: true, hours: 24, from: 'of arriving', name: 'Arrival notes not written' },
+  // Off by default (#983): true of nearly every guest every day, so it turned the pill red on a normal day.
+  { id: 'arrival_open', section: 'Patients', kind: 'action', on: false, hours: 24, from: 'of arriving', name: 'Arrival notes not written' },
   { id: 'no_diet', section: 'Patients', kind: 'action', on: true, hours: 24, from: 'of arriving', name: 'No diet plan' },
   { id: 'room_out', section: 'Patients', kind: 'action', on: true, name: "A guest's room is out of use" },
   { id: 'form_c', section: 'Patients', kind: 'action', on: true, name: 'Form C for a foreign guest, due a day after arriving' },
@@ -108,17 +110,18 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
   const hoursIn = (s: { start_date: Date }) => Math.round((day.getTime() - s.start_date.getTime()) / DAY_MS) * 24 + hourNow;
 
   const found: Item[] = [];
-  const add = (r: Rule, s: { Patient: { id: string; name: string } }, what: string, action: Item['action']) =>
-    found.push({ id: `${r.id}:${s.Patient.id}`, rule: r.id, section: r.section as 'Patients', kind: r.kind, who: s.Patient.name, what, patient_id: s.Patient.id, action });
+  const add = (r: Rule, s: { Patient: { id: string; name: string } }, what: string, action: Item['action'], kind = r.kind) =>
+    found.push({ id: `${r.id}:${s.Patient.id}`, rule: r.id, section: r.section as 'Patients', kind, who: s.Patient.name, what, patient_id: s.Patient.id, action });
   // Form C is owed even after the guest has gone, so a stay that ended in the last fortnight unfiled still asks.
   const leftUnfiled = await prisma.patientStay.findMany({ where: { form_c_filed: null, end_date: { lt: day, gte: new Date(day.getTime() - 14 * DAY_MS) } }, include: { Patient: { select: { id: true, name: true, country: true } } } });
   // Overdue from the day after it was due, whether or not the guest is still here (#664).
   const formC = (s: { start_date: Date }) => { const due = formCDue(s.start_date); return `Form C ${due < today ? 'overdue since' : 'due by'} ${dayName(due).replace(',', '')}`; };
   for (const s of leftUnfiled) if (owesFormC(s.Patient.country, s)) add(rule('form_c'), s, formC(s), 'card');
   for (const s of stays) {
-    if (ymd(s.end_date) === today && !s.discharge && owesDischarge(s)) add(rule('leaves_today'), s, 'Leaves today, no discharge summary', 'summary');
+    if (ymd(s.end_date) === today && !s.discharge && owesDischarge(s)) add(rule('leaves_today'), s, 'Leaves today, no discharge summary', 'summary', hourNow < 12 ? 'information' : undefined);
     // The notes, not the arrival checklist: the words say which (#812).
-    if (hoursIn(s) >= (rule('arrival_open').hours ?? 24) && !s.vitals && !s.concerns && !s.tests) add(rule('arrival_open'), s, 'Arrival notes not written', 'card');
+    // A guest leaving today is past needing arrival notes.
+    if (ymd(s.end_date) !== today && hoursIn(s) >= (rule('arrival_open').hours ?? 24) && !s.vitals && !s.concerns && !s.tests) add(rule('arrival_open'), s, 'Arrival notes not written', 'card');
     if (owesFormC(s.Patient.country, s) && !s.form_c_filed) add(rule('form_c'), s, formC(s), 'card');
     if (hoursIn(s) >= (rule('no_diet').hours ?? 24) && !diets.dietFor(s.Patient, true).planName) add(rule('no_diet'), s, 'No diet plan', 'diet');
   }

@@ -55,7 +55,11 @@ async function main() {
     let o = await read();
     const mine = (r: string) => o.items.filter((i) => i.rule === r && i.who.startsWith(TAG)).map((i) => i.who);
     assert.deepEqual(mine('leaves_today'), [`${TAG} Aarav`]);
-    assert.deepEqual(mine('arrival_open').sort(), [`${TAG} Aarav`, `${TAG} Bela`], 'both are past 24 hours with no intake');
+    // Off by default (#983); its count still says Bela, past 24 hours with no notes. Aarav leaves today, past needing them.
+    assert.deepEqual(mine('arrival_open'), [], 'arrival notes are off by default');
+    assert.ok(rule(o, 'arrival_open').count >= 1);
+    // A leaving-day item is grey before midday and counts from it (#983); an asked day reads at midday.
+    assert.deepEqual(o.items.filter((i) => i.rule === 'leaves_today' && i.who === `${TAG} Aarav`).map((i) => (i as { kind?: string }).kind), ['action']);
     assert.equal(rule(o, 'leaves_tomorrow').count >= 1, true, 'the count says what the rule would raise');
     assert.deepEqual(mine('leaves_tomorrow'), [], 'off by default, so it raises nothing');
     assert.equal(rule(o, 'vitals').count, 0, 'vitals wait for data');
@@ -134,16 +138,16 @@ async function main() {
     await prisma.patientStay.deleteMany({ where: { patient_id: kiran.id } });
     await prisma.patient.delete({ where: { id: kiran.id } });
 
-    // A later "when": Bela arrived the day before, 36 hours at midday; Aarav 60. 48 leaves only Aarav.
-    await call('PUT', '/attention/rules', { arrival_open: { hours: 48 }, leaves_tomorrow: { on: true }, no_diet: { on: false }, day: { on: false } });
+    // A later "when": Bela arrived the day before, 36 hours at midday. 36 names her; Aarav, leaving today, is never named (#983).
+    await call('PUT', '/attention/rules', { arrival_open: { on: true, hours: 36 }, leaves_tomorrow: { on: true }, no_diet: { on: false }, day: { on: false } });
     o = await read();
-    assert.deepEqual(mine('arrival_open'), [`${TAG} Aarav`]);
+    assert.deepEqual(mine('arrival_open'), [`${TAG} Bela`]);
     assert.deepEqual(mine('leaves_tomorrow'), [`${TAG} Bela`]);
     assert.deepEqual(mine('no_diet'), []);
     assert.equal(rule(o, 'no_diet').on, false);
     assert.ok(rule(o, 'no_diet').count >= 2, 'a rule that is off still says what it would raise');
     assert.equal(rule(o, 'day').on, true, 'the locked rule stays on');
-    assert.equal(rule(o, 'arrival_open').hours, 48);
+    assert.equal(rule(o, 'arrival_open').hours, 36);
 
     assert.equal((await send('PUT', '/attention/rules', { nonsense: { on: true } })).status, 400);
     assert.equal((await send('PUT', '/attention/rules', { arrival_open: { hours: 0 } })).status, 400);
