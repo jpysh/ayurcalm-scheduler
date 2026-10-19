@@ -134,6 +134,19 @@ async function main() {
     await appt(plain.id, '2030-08-23');
     o = await read();
     assert.deepEqual(mine('next_week'), [], 'one treatment booked in the week clears it');
+    // Review due (#981): a 7-night guest seen on arrival is due on day 5, and a consultation booked ahead clears it.
+    const lata = await prisma.patient.create({ data: { name: `${TAG} Lata`, gender: 'female' } });
+    await prisma.patientStay.create({ data: { patient_id: lata.id, start_date: at('2030-08-16'), end_date: at('2030-08-23'), duration_days: 8 } });
+    const seen = (date: string) => prisma.appointment.create({ data: { patient_id: lata.id, therapy_id: consult.id, scheduled_date: at(date), start_time: '09:00', duration_minutes: 30, session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
+    await seen('2030-08-16');
+    o = await read();
+    assert.deepEqual(mine('review_due'), [`${TAG} Lata`], 'day 5 of a 7-night stay is due a review');
+    await seen('2030-08-21');
+    o = await read();
+    assert.deepEqual(mine('review_due'), [], 'a review booked ahead clears it');
+    await prisma.appointment.deleteMany({ where: { patient_id: lata.id } });
+    await prisma.patientStay.deleteMany({ where: { patient_id: lata.id } });
+    await prisma.patient.delete({ where: { id: lata.id } });
     await prisma.appointment.deleteMany({ where: { patient_id: kiran.id } });
     await prisma.patientStay.deleteMany({ where: { patient_id: kiran.id } });
     await prisma.patient.delete({ where: { id: kiran.id } });
