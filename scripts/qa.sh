@@ -45,6 +45,7 @@ run availability       "A therapist counts as busy during their absences and the
 run offHours         "A therapist out for some hours, or a room out of use, is refused only in those hours"
 run offDays          "A therapy or patient marked off is refused, raised by the day check, and never offered back by the plan"
 run roomOut          "A room taken out of use for days has its treatments moved, and Undo puts them back"
+run dietRange         "One meal changed from a day until leaving changes every day in between, and Undo can put back what was there"
 run leaveTwice         "The same leave saved twice is one leave"
 run therapistRota     "The therapist rota shows who works when, and why someone is away"
 run centreDay          "Nothing on the server reads the machine's date as the centre's today"
