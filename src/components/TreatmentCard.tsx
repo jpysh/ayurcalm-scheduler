@@ -337,6 +337,14 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
     setQ(""); setChosen(null); setOpts(null); setDate(day); setWho(null); setSessions(1); setOtherDays(false); setTherapyId(""); setFacts(null); setBooked(null);
     fetch(`${API_BASE}/appointments/who?date=${day}`).then((r) => (r.ok ? r.json() : { none: [], recent: [], all: [] })).then(setWho).catch(() => setWho({ none: [], recent: [], all: [] }));
   }, [open, day]);
+  // The day's fullness, as under the week (#1014), said before the admin looks for a time that is not there.
+  const [full, setFull] = useState<string | null>(null);
+  useEffect(() => {
+    setFull(null);
+    if (!open) return;
+    fetch(`${API_BASE}/day-full?from=${date}`).then((r) => (r.ok ? r.json() : { days: [] }))
+      .then((b: { days: { date: string; full_from: string }[] }) => setFull(b.days.find((d) => d.date === date)?.full_from ?? null)).catch(() => {});
+  }, [open, date]);
 
   /** The new patient is in the list the server gave, so ask again and choose them. */
   const addInline = (name: string) => onAddPatient?.(name, day, async (p) => {
@@ -483,7 +491,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   return (
     <>
     <BottomSheet open={open} onOpenChange={(o) => { if (!o) close(); }} title={booked ? "Booked" : chosen ? chosen.name : "Book a treatment"}
-      note={booked ? chosen?.name : chosen ? chosen.note : `Who is it for, ${date === today ? "today" : dayText(date)}?`}
+      note={booked ? chosen?.name : `${chosen ? chosen.note ?? "" : `Who is it for, ${date === today ? "today" : dayText(date)}?`}${full ? ` Full from ${full}.` : ""}`.trim() || undefined}
       foot={booked ? undefined
         : chosen
         ? <SheetFoot busy={busy} ok={!!slot} save={book} label={label} />
