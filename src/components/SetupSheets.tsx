@@ -27,7 +27,7 @@ const savedWithUndo = <T,>(text: string, path: string, before: unknown, old: T, 
 // ---- Rooms ----
 /** What kind of room, in two words, from what it has (#573): the row's short fact; Details keeps the full list. */
 export const roomKind = (r: UiRoom) => r.amenities.includes("examination_bed") || r.amenities.includes("bp_monitor") ? "doctor's room"
-  : r.amenities.some((x) => x.includes("dhara")) ? "dhara room" : r.amenities.includes("massage_table") ? "table room" : "room";
+  : r.amenities.some((x) => x.includes("dhara")) ? "dhara room" : r.amenities.includes("massage_table") ? "table room" : r.amenities.length ? "room" : "nothing ticked yet";
 
 export function RoomSheet({ room, preset = [], open, onClose, amenityOptions, onSaved, remove, out }: {
   out?: (id: string) => React.ReactNode;
