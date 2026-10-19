@@ -222,6 +222,12 @@ async function main() {
     };
     assert.deepEqual(after, before, 'reading through the assistant changed the database');
 
+    // The key acts as an admin: made staff, it stops until they are admin again.
+    const owner = stored!.mcp_key_user_id!;
+    await prisma.user.update({ where: { id: owner }, data: { role: 'staff' } });
+    try { assert.equal((await rpc(key, 'tools/list')).status, 401, 'a demoted admin\'s key still works'); }
+    finally { await prisma.user.update({ where: { id: owner }, data: { role: 'admin' } }); }
+
     // Disconnecting in Settings shuts the door at once.
     const revoke = await fetch(`${API_BASE}/mcp-key`, { method: 'DELETE', headers: admin });
     assert.equal(revoke.status, 200);

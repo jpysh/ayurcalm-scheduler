@@ -52,8 +52,9 @@ async function requireMcpKey(req: Request, res: Response, next: NextFunction) {
     return;
   }
   const user = row!.mcp_key_user_id ? await prisma.user.findUnique({ where: { id: row!.mcp_key_user_id } }) : null;
-  if (!user || !user.is_active) {
-    res.status(401).json({ error: 'The admin who connected this assistant no longer exists.' });
+  // Made staff since: the key acts as an admin, so it stops with their rights.
+  if (!user || !user.is_active || user.role !== 'admin') {
+    res.status(401).json({ error: 'The admin who connected this assistant is no longer an admin.' });
     return;
   }
   await prisma.serverSecret.update({ where: { id: 'singleton' }, data: { mcp_key_last_used_at: new Date() } });

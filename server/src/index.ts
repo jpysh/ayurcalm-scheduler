@@ -133,21 +133,26 @@ expressApp.use('/mcp', globalLimiter, mcpRouter);
 // Login and health are the only unauthenticated API routes. Everything else
 // requires a valid session token, reads included — appointment and patient
 // data is not public.
-// Ten wrong passwords per address in 15 minutes, then a wait (#417). Only failures count, so the test suite's many sign-ins pass.
+// Ten wrong passwords per address in 15 minutes, then a wait (#417, #1002). Only failures count, so the test suite's many sign-ins pass.
+// An address is whatever X-Forwarded-For says when the port is reached directly, so one account also stops
+// after thirty, whichever address they come from: higher, so a stranger cannot lock the admin out with ten.
 const failedSignIns = new Map<string, { count: number; resetAt: number }>();
 expressApp.post('/api/auth/login', (req: Request, res: Response, next: NextFunction) => {
   const ip = String((process.env.BEHIND_CLOUDFLARE === 'true' ? req.headers['cf-connecting-ip'] : '') || req.ip || '');
+  const keys: [string, number][] = [[`ip:${ip}`, 10], [`email:${String(req.body?.email || '').trim().toLowerCase()}`, 30]];
   const now = Date.now();
-  const entry = failedSignIns.get(ip);
-  if (entry && entry.resetAt > now && entry.count >= 10) {
+  for (const k of failedSignIns.keys()) if (failedSignIns.get(k)!.resetAt <= now) failedSignIns.delete(k);
+  if (keys.some(([k, max]) => (failedSignIns.get(k)?.count ?? 0) >= max)) {
     res.status(429).json({ error: 'Too many wrong passwords. Try again in 15 minutes.' });
     return;
   }
   res.on('finish', () => {
     if (res.statusCode !== 401) return;
-    const e = failedSignIns.get(ip);
-    if (!e || e.resetAt <= Date.now()) failedSignIns.set(ip, { count: 1, resetAt: Date.now() + 15 * 60 * 1000 });
-    else e.count += 1;
+    for (const [k] of keys) {
+      const e = failedSignIns.get(k);
+      if (!e || e.resetAt <= Date.now()) failedSignIns.set(k, { count: 1, resetAt: Date.now() + 15 * 60 * 1000 });
+      else e.count += 1;
+    }
   });
   next();
 });

@@ -18,7 +18,11 @@ async function main() {
   const eleventh = await login('wrong10');
   assert.equal(eleventh.status, 429);
   assert.match((await eleventh.json()).error, /15 minutes/);
-  console.log('Sign-in: ten wrong passwords, then the address waits 15 minutes; pages carry a CSP.');
+  // A made-up X-Forwarded-For is a fresh address each time; the account still stops at thirty.
+  const spoofed = (i: number) => fetch(`${API_BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': `203.0.113.${i}` }, body: JSON.stringify({ email: 'target@example.com', password: `wrong${i}` }) });
+  for (let i = 0; i < 30; i++) assert.equal((await spoofed(i)).status, 401, `spoofed try ${i + 1} is an ordinary wrong password`);
+  assert.equal((await spoofed(30)).status, 429, 'a thirty-first try on one account waits, whatever address it claims');
+  console.log('Sign-in: ten wrong passwords per address, thirty per account, then a 15-minute wait; pages carry a CSP.');
 }
 
 main().catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); });
