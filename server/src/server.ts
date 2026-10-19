@@ -434,7 +434,7 @@ app.post('/patients/import/check', async (req: Request, res: Response) => {
 
 app.post('/patients', async (req: Request, res: Response) => {
   const body = patientSchema.parse(req.body);
-  const data: any = { name: body.name, gender: body.gender, phone: body.phone, email: body.email, emergency_contact: body.emergency_contact, emergency_phone: body.emergency_phone, address: body.address, country: body.country, id_number: body.id_number, visa_number: body.visa_number, visa_valid_until: body.visa_valid_until || null, registration_number: body.registration_number, medical_notes: body.medical_notes, preferred_staff_id: body.preferred_staff_id, requires_preferred_staff: body.requires_preferred_staff };
+  const data: any = { name: body.name, gender: body.gender, phone: body.phone, email: body.email, emergency_contact: body.emergency_contact, emergency_phone: body.emergency_phone, address: body.address, country: body.country, id_number: body.id_number, visa_number: body.visa_number, visa_valid_until: body.visa_valid_until || null, registration_number: body.registration_number, medical_notes: body.medical_notes, food_limits: body.food_limits, preferred_staff_id: body.preferred_staff_id, requires_preferred_staff: body.requires_preferred_staff };
   if (body.date_of_birth) data.date_of_birth = new Date(body.date_of_birth);
   // The consultation goes through the same guard as any booking, before anything is saved.
   const visit = body.consultation && body.stay ? body.consultation : null;
@@ -483,6 +483,7 @@ app.put('/patients/:id', async (req: Request, res: Response) => {
     registration_number: z.string().optional(),
     medical_notes: z.string().optional(),
     medication: z.string().max(2000).nullable().optional(),
+    food_limits: z.string().max(500).nullable().optional(),
     before_treatment: z.string().max(2000).nullable().optional(),
     after_treatment: z.string().max(2000).nullable().optional(),
     preferred_staff_id: z.string().uuid().nullable().optional(),
@@ -689,7 +690,7 @@ app.get('/patients/:id/diet', async (req: Request, res: Response) => {
   const out = await dietTimeline(String(req.params.id), date, prisma);
   if (!out) { res.status(404).json({ error: 'No stay to plan meals for' }); return; }
   // The patient's own lines beside the plan (#355), edited in the same sheet.
-  const own = await prisma.patient.findUnique({ where: { id: String(req.params.id) }, select: { medication: true, before_treatment: true, after_treatment: true } });
+  const own = await prisma.patient.findUnique({ where: { id: String(req.params.id) }, select: { food_limits: true, medication: true, before_treatment: true, after_treatment: true } });
   res.json({ ...out, own });
 });
 app.post('/patients/:id/diet', async (req: Request, res: Response) => {
