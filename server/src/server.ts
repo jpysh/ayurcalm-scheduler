@@ -1625,11 +1625,12 @@ app.get('/patients/:id/next-week', async (req: Request, res: Response) => {
 app.post('/patients/:id/next-week', async (req: Request, res: Response) => {
   const b = z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    lines: z.array(z.object({ from_therapy_id: z.string().uuid(), therapy_id: z.string().uuid() })).max(12),
+    lines: z.array(z.object({ from_therapy_id: z.string().uuid(), therapy_id: z.string().uuid(), sessions: z.number().int().min(1).max(14).optional() })).max(12),
     review: z.boolean().default(true),
   }).parse(req.body);
   const id = String(req.params.id);
-  const plan = await planNextWeek(id, b.date, prisma, { only: b.lines.map((l) => l.from_therapy_id), swaps: Object.fromEntries(b.lines.map((l) => [l.from_therapy_id, l.therapy_id])), review: b.review });
+  const sessions = Object.fromEntries(b.lines.filter((l) => l.sessions).map((l) => [l.from_therapy_id, l.sessions!]));
+  const plan = await planNextWeek(id, b.date, prisma, { only: b.lines.map((l) => l.from_therapy_id), swaps: Object.fromEntries(b.lines.map((l) => [l.from_therapy_id, l.therapy_id])), review: b.review, sessions });
   if (!plan) { res.status(404).json({ error: 'Patient not found' }); return; }
   const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
   const missing = plan.lines.flatMap((l) => l.missing.map((m) => `${l.therapy_name} on ${day(m.date)}`));
@@ -1644,6 +1645,13 @@ app.post('/patients/:id/next-week', async (req: Request, res: Response) => {
     data: { patient_id: id, therapy_id: r.therapy_id, scheduled_date: new Date(`${date}T00:00:00.000Z`), start_time: r.start_time, duration_minutes: r.duration_minutes, staff_id: r.staff_id, co_staff_ids: r.co_staff_ids, room_id: r.room_id, session_number: r.session_number, total_sessions: r.total_sessions, status: 'confirmed', assignment_type: 'auto' },
   })));
   res.status(201).json({ ids: made.map((a) => a.id), count: made.length });
+});
+
+/** The starter courses offered for a new guest's first week (#984), replaced whole. */
+app.put('/starter-courses', requireAdmin, async (req: Request, res: Response) => {
+  const courses = z.array(z.object({ name: z.string().trim().min(1).max(60), lines: z.array(z.object({ therapy_id: z.string().uuid(), sessions: z.number().int().min(1).max(14) })).min(1).max(12) })).max(20).parse(req.body);
+  await prisma.settings.update({ where: { id: 'singleton' }, data: { starter_courses: courses } });
+  res.json(courses);
 });
 
 // The consultation a new patient is pre-booked into (#285 story 4): the next free doctor and room.

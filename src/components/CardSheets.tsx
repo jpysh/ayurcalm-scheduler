@@ -435,6 +435,7 @@ export function DischargeSheet({ patient, stay, onClose, openField, write, print
 /* ------------------------------ Story 14: plan next week (#354) ------------------------------ */
 
 type WeekLine = { from_therapy_id: string; therapy_id: string; therapy_name: string; start_time: string; staff_name: string; sessions: { date: string }[]; missing: { date: string; why: string }[] };
+type Starter = { name: string; lines: { therapy_id: string; sessions: number }[] };
 type WeekPlan = { from: string; to: string; brief: string | null; lines: WeekLine[]; review: { date: string; start_time: string; staff_name: string } | null; review_missing?: string };
 
 /** This week, a week on: each line ticked and swappable, the next review ticked; Book all books everything or nothing (the server decides the times). */
@@ -447,9 +448,15 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
   const [busy, setBusy] = useState(false);
   // A patient's first days: nothing to repeat, so the therapies are ticked from the centre's own list (#611).
   const [starts, setStarts] = useState<Record<string, boolean>>({});
+  // How many of the week's days each starts on (#984), and the centre's starter courses that fill both.
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [starters, setStarters] = useState<Starter[]>([]);
+  const [naming, setNaming] = useState("");
+  const [pruning, setPruning] = useState(false);
   useEffect(() => {
     if (!patient) return;
-    setPlan(null); setSwaps({}); setWithReview(true); setStarts({});
+    setPlan(null); setSwaps({}); setWithReview(true); setStarts({}); setCounts({}); setNaming(""); setPruning(false);
+    fetchJsonWithTimeout<{ starter_courses?: Starter[] | null }>(`${API_BASE}/settings`).then((x) => setStarters(x.starter_courses || [])).catch(() => setStarters([]));
     fetchJsonWithTimeout<WeekPlan>(`${API_BASE}/patients/${patient.id}/next-week?date=${review}`).then((p) => {
       setPlan(p); setWithReview(!!p.review);
       // A line with nothing left to book, or a day with no free time, starts unticked, so Book all works as it opens.
@@ -462,11 +469,12 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
   const starting = !!plan && !plan.lines.length;
   const startIds = starting ? therapies.filter((t) => starts[t.id]).map((t) => t.id) : [];
   const weekDays = plan ? Math.round((Date.parse(plan.to) - Date.parse(plan.from)) / 86400000) + 1 : 0;
-  const count = starting ? startIds.length * Math.max(weekDays, 0) : ticked.reduce((n, l) => n + l.sessions.length + l.missing.length, 0) + (withReview && plan?.review ? 1 : 0);
+  const sessionsOf = (id: string) => Math.min(counts[id] || weekDays, weekDays);
+  const count = starting ? startIds.reduce((n, id) => n + sessionsOf(id), 0) : ticked.reduce((n, l) => n + l.sessions.length + l.missing.length, 0) + (withReview && plan?.review ? 1 : 0);
   const bookAll = async () => {
     if (!patient || !plan) return;
     setBusy(true);
-    const res = await fetch(`${API_BASE}/patients/${patient.id}/next-week`, { method: "POST", headers: json, body: JSON.stringify({ date: review, review: withReview, lines: starting ? startIds.map((id) => ({ from_therapy_id: id, therapy_id: id })) : ticked.map((l) => ({ from_therapy_id: l.from_therapy_id, therapy_id: swaps[l.from_therapy_id] || l.therapy_id })) }) });
+    const res = await fetch(`${API_BASE}/patients/${patient.id}/next-week`, { method: "POST", headers: json, body: JSON.stringify({ date: review, review: withReview, lines: starting ? startIds.map((id) => ({ from_therapy_id: id, therapy_id: id, sessions: sessionsOf(id) })) : ticked.map((l) => ({ from_therapy_id: l.from_therapy_id, therapy_id: swaps[l.from_therapy_id] || l.therapy_id })) }) });
     const body = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) { toast.error(body.message || "Nothing was booked. Try again."); return; }
@@ -477,12 +485,38 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
     onBooked();
     onClose();
   };
+  const useStarter = (c: Starter) => {
+    setStarts(Object.fromEntries(c.lines.map((l) => [l.therapy_id, true])));
+    setCounts(Object.fromEntries(c.lines.map((l) => [l.therapy_id, l.sessions])));
+  };
+  // Saved under a name already there, it replaces that starter.
+  const saveStarter = async () => {
+    const course = { name: naming.trim(), lines: startIds.map((id) => ({ therapy_id: id, sessions: sessionsOf(id) })) };
+    const next = [...starters.filter((c) => c.name !== course.name), course];
+    const res = await fetch(`${API_BASE}/starter-courses`, { method: "PUT", headers: json, body: JSON.stringify(next) });
+    if (!res.ok) { toast.error(await saveError(res, "The starter was not saved.")); return; }
+    setStarters(next); setNaming("");
+    toast(`Saved "${course.name}" as a starter`);
+  };
+  const removeStarter = async (name: string) => {
+    const next = starters.filter((c) => c.name !== name);
+    const res = await fetch(`${API_BASE}/starter-courses`, { method: "PUT", headers: json, body: JSON.stringify(next) });
+    if (res.ok) setStarters(next);
+  };
+  // What a starter ticked comes first, so a 40-therapy list does not hide it.
+  const listed = [...therapies].sort((a, b) => Number(!!starts[b.id]) - Number(!!starts[a.id]));
+  const dayChoices = Array.from({ length: Math.max(weekDays, 0) }, (_, i) => ({ id: String(i + 1), name: `${i + 1} of ${weekDays} days` }));
   return (
     <BottomSheet open={!!patient} onOpenChange={(o) => { if (!o) onClose(); }} title={patient ? `Next week · ${first(patient.name)}` : "Next week"}
-      note={plan?.lines.length ? `${dayText(plan.from)} to ${dayText(plan.to)}, as this week. Untick or swap a line; all of it is booked or none.` : starting && weekDays > 0 ? `Tick what they start with. Each is booked on every day, ${dayText(plan!.from)} to ${dayText(plan!.to)}; all of it or none.` : undefined}
+      note={plan?.lines.length ? `${dayText(plan.from)} to ${dayText(plan.to)}, as this week. Untick or swap a line; all of it is booked or none.` : starting && weekDays > 0 ? `Pick a starter or tick what they start with, ${dayText(plan!.from)} to ${dayText(plan!.to)}; all of it is booked or none.` : undefined}
       foot={plan && (plan.lines.length || plan.review || (starting && therapies.length)) ? <Foot label={count > 1 ? `Book all ${count}` : count ? "Book it" : "Nothing ticked"} ok={count > 0} busy={busy} save={bookAll} /> : undefined}>
       {plan === null ? <Loading rows={3} /> : (<>
         {plan.brief ? <ListGroup title="Doctor's plan"><TextRow label="The brief for this week">{plan.brief}</TextRow></ListGroup> : null}
+        {starting && starters.length && therapies.length ? (
+          <ListGroup title="Starters">
+            {starters.map((c) => <Row key={c.name} title={c.name} facts={c.lines.map((l) => `${therapies.find((t) => t.id === l.therapy_id)?.name ?? "?"} ×${l.sessions}`).join(" · ")} trailing="Use ›" onClick={() => useStarter(c)} />)}
+          </ListGroup>
+        ) : null}
         <ListGroup title="Therapies">
           {plan.lines.length ? plan.lines.map((l) => {
             const swapped = swaps[l.from_therapy_id];
@@ -496,10 +530,23 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
               </SwitchRow>
             );
           }) : therapies.length ? <>
-            {therapies.map((t) => <SwitchRow key={t.id} title={t.name} on={!!starts[t.id]} set={(v) => setStarts({ ...starts, [t.id]: v })} facts={`${plural(Math.max(weekDays, 0), "day")}, times found on Book all`} />)}
+            {listed.map((t) => (
+              <SwitchRow key={t.id} title={t.name} on={!!starts[t.id]} set={(v) => setStarts({ ...starts, [t.id]: v })} facts={`${sessionsOf(t.id)} of ${plural(Math.max(weekDays, 0), "day")}, times found on Book all`}>
+                {starts[t.id] && weekDays > 1 ? <ChangeLine label="Sessions" value={`${sessionsOf(t.id)} of ${weekDays} days`} select={<LineSelect label={`Sessions of ${t.name}`} value={String(sessionsOf(t.id))} onChange={(v) => setCounts({ ...counts, [t.id]: Number(v) })} free={dayChoices} />} /> : null}
+              </SwitchRow>
+            ))}
             <Row title="Book one by hand" trailing="›" onClick={() => bookDay(firstDay)} />
           </> : <Empty text="Nothing given yet to repeat. Book their first days; after the review, this repeats them." action={<Btn kind="primary" onClick={() => bookDay(firstDay)}>Book {dayText(firstDay)}</Btn>} />}
         </ListGroup>
+        {starting && startIds.length ? (
+          <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-2">
+            <Text label="Save these as a starter" value={naming} maxLength={60} placeholder={starters.length ? "A name, e.g. Shoulder pain" : "A name, e.g. Back pain"} onChange={(e) => setNaming(e.target.value)} />
+            <Btn inline disabled={!naming.trim()} onClick={saveStarter}>Save</Btn>
+          </div>
+        ) : null}
+        {starting && starters.length ? (pruning
+          ? <ListGroup title="Remove a starter">{starters.map((c) => <Row key={c.name} title={c.name} trailing="Remove" onClick={() => removeStarter(c.name)} />)}</ListGroup>
+          : <Btn kind="quiet" inline className="-ml-2 mt-2" onClick={() => setPruning(true)}>Remove a starter</Btn>) : null}
         {plan.review || plan.review_missing ? (
           <ListGroup title="Next review">
             {plan.review ? <SwitchRow title={`${dayText(plan.review.date)} · ${plan.review.start_time}`} facts={plan.review.staff_name} on={withReview} set={setWithReview} />
