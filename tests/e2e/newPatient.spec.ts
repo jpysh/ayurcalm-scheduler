@@ -117,3 +117,18 @@ test('Back closes the New patient sheet', async ({ page }) => {
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page).toHaveURL(/\/admin\/patients/);
 });
+
+/** #965: a sheet opened as another closes (Share their link waits for the link first) stays open, and Back still closes it. */
+test('Share their link stays open until Back', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/admin/team');
+  await page.getByText('Neha Singh', { exact: true }).click();
+  await page.getByText('Share their link').click();
+  const sheet = page.getByRole('dialog').filter({ hasText: 'Copy link' });
+  await expect(sheet).toBeVisible();
+  await page.waitForTimeout(1500);
+  await expect(sheet).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page).toHaveURL(/\/admin\/team/);
+});
