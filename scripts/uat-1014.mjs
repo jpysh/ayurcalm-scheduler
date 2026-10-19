@@ -1,4 +1,4 @@
-// node scripts/uat-979.mjs — the booking sheet on a full day at 375x812 (#1014).
+// node scripts/uat-1014.mjs — the booking sheet on a full day at 375x812 (#1014).
 // Puts every therapist away from 12:00 three days ahead, so that day is full. Run on a throwaway stack (E2E_BASE_URL).
 // Writes as the demo admin, so the stack needs ALLOW_DEMO_PASSWORD=true (#1005).
 import { chromium } from '@playwright/test';
