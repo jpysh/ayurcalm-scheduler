@@ -29,7 +29,7 @@ const byNearest = (today: string) => (a: { scheduled_date: string; start_time: s
 const stayDay = (iso?: string) => (iso ? dayText(iso) : '');
 /** One day reads once: a day patient's visit is not 'Fri 9 Oct to Fri 9 Oct' (#720). */
 const stayRange = (s: { start_date: string; end_date: string }) => s.start_date.slice(0, 10) === s.end_date.slice(0, 10) ? stayDay(s.start_date) : `${stayDay(s.start_date)} to ${stayDay(s.end_date)}`;
-const blankNew = () => ({ name: '', gender: '' as '' | 'Female' | 'Male' | 'Other', arriving: '', leaving: '', onSite: true, phone: '', emergencyContact: '', emergencyPhone: '', address: '', country: '', idNumber: '', registrationNumber: '' });
+const blankNew = () => ({ name: '', gender: '' as '' | 'Female' | 'Male' | 'Other', arriving: '', leaving: '', onSite: true, phone: '', emergencyContact: '', emergencyPhone: '', address: '', country: '', idNumber: '', registrationNumber: '', foodLimits: '' });
 type Slot = { date: string; start_time: string; staff_id: string; staff_name: string; room_id: string; room_name: string };
 const clock = (timeZone: string) => new Date().toLocaleTimeString('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
 
@@ -475,7 +475,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
       body: JSON.stringify({
         name: n.name.trim(), gender: n.gender.toLowerCase(), on_site: n.onSite,
         phone: blank(n.phone), emergency_contact: blank(n.emergencyContact), emergency_phone: blank(n.emergencyPhone),
-        address: blank(n.address), country: blank(n.country), id_number: blank(n.idNumber), registration_number: blank(n.registrationNumber),
+        address: blank(n.address), country: blank(n.country), id_number: blank(n.idNumber), registration_number: blank(n.registrationNumber), food_limits: blank(n.foodLimits),
         stay: { start_date: n.arriving, end_date: n.leaving }, guest_room_id: n.onSite && guestRoom ? guestRoom : undefined,
         consultation: visit ? { date: visit.date, start_time: visit.start_time, staff_id: visit.staff_id, room_id: visit.room_id } : undefined,
       }),
@@ -646,6 +646,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           </div>
         )}
         <More hint="phone, passport… (optional)">
+          <Text label="Food limits (optional)" placeholder="No dairy, diabetic, Jain…" autoComplete="off" value={newPatient.foodLimits} onChange={(e) => setNewPatient({ ...newPatient, foodLimits: e.target.value })} />
           <Text label="Phone (optional)" type="tel" inputMode="tel" autoComplete="off" value={newPatient.phone} onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })} />
           <Text label="Emergency contact (optional)" autoComplete="off" value={newPatient.emergencyContact} onChange={(e) => setNewPatient({ ...newPatient, emergencyContact: e.target.value })} />
           <Text label="Emergency phone (optional)" type="tel" inputMode="tel" autoComplete="off" value={newPatient.emergencyPhone} onChange={(e) => setNewPatient({ ...newPatient, emergencyPhone: e.target.value })} />

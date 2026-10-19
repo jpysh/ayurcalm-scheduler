@@ -23,6 +23,7 @@ export const patientSchema = z.object({
   registration_number: z.string().optional(),
   medical_notes: z.string().optional(),
   medication: z.string().max(2000).nullable().optional(),
+  food_limits: z.string().max(500).nullable().optional(),
   before_treatment: z.string().max(2000).nullable().optional(),
   after_treatment: z.string().max(2000).nullable().optional(),
   preferred_staff_id: z.string().uuid().nullable().optional(),
