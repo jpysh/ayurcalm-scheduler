@@ -97,7 +97,8 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
   const day = new Date(`${today}T00:00:00.000Z`);
   const tomorrow = ymd(new Date(day.getTime() + DAY_MS));
   // A day asked for that is not today reads at midday, so the answer does not depend on the hour.
-  const hourNow = today === clock.date ? Number(clock.time.slice(0, 2)) : 12;
+  const timeNow = today === clock.date ? clock.time.slice(0, 5) : '12:00';
+  const hourNow = Number(timeNow.slice(0, 2));
   const rules = rulesWith(settings?.attention_rules);
   const rule = (id: string) => rules.find((r) => r.id === id)!;
 
@@ -125,10 +126,11 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
   // The week is the review's next seven days, inside the stay and from today on.
   if (stays.length) {
     const ids = stays.map((s) => s.Patient.id);
-    const visits = await prisma.appointment.findMany({ where: { patient_id: { in: ids }, status: { notIn: ['cancelled'] }, scheduled_date: { gte: new Date(day.getTime() - 30 * DAY_MS), lte: day }, Therapy: { is_consultation: true } }, select: { patient_id: true, scheduled_date: true } });
+    const visits = await prisma.appointment.findMany({ where: { patient_id: { in: ids }, status: { notIn: ['cancelled'] }, scheduled_date: { gte: new Date(day.getTime() - 30 * DAY_MS), lte: day }, Therapy: { is_consultation: true } }, select: { patient_id: true, scheduled_date: true, start_time: true } });
     const booked = await prisma.appointment.findMany({ where: { patient_id: { in: ids }, status: { notIn: ['cancelled'] }, scheduled_date: { gte: day, lte: new Date(day.getTime() + 7 * DAY_MS) }, Therapy: { is_consultation: false } }, select: { patient_id: true, scheduled_date: true } });
     for (const s of stays) {
-      const review = visits.filter((v) => v.patient_id === s.Patient.id && v.scheduled_date >= s.start_date).reduce<Date | null>((a, v) => (!a || v.scheduled_date > a ? v.scheduled_date : a), null);
+      // A consultation later today has not happened yet, so it is not the review (#966).
+      const review = visits.filter((v) => v.patient_id === s.Patient.id && v.scheduled_date >= s.start_date && !(ymd(v.scheduled_date) === today && v.start_time > timeNow)).reduce<Date | null>((a, v) => (!a || v.scheduled_date > a ? v.scheduled_date : a), null);
       if (!review) continue;
       const from = Math.max(review.getTime() + DAY_MS, day.getTime());
       const to = Math.min(review.getTime() + 7 * DAY_MS, s.end_date.getTime() - DAY_MS);

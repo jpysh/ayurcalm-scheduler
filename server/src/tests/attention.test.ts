@@ -117,7 +117,11 @@ async function main() {
     await prisma.patientStay.create({ data: { patient_id: kiran.id, start_date: at('2030-08-12'), end_date: at('2030-08-30'), duration_days: 19 } });
     const consult = await prisma.therapy.findFirstOrThrow({ where: { is_consultation: true } });
     const plain = await prisma.therapy.findFirstOrThrow({ where: { is_consultation: false } });
-    const appt = (therapy_id: string, date: string) => prisma.appointment.create({ data: { patient_id: kiran.id, therapy_id, scheduled_date: at(date), start_time: '09:00', duration_minutes: 30, session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
+    const appt = (therapy_id: string, date: string, start_time = '09:00') => prisma.appointment.create({ data: { patient_id: kiran.id, therapy_id, scheduled_date: at(date), start_time, duration_minutes: 30, session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
+    // A first consultation later today (15:00; an asked day reads at midday) is not a review yet (#966).
+    await appt(consult.id, DAY, '15:00');
+    o = await read();
+    assert.deepEqual(mine('next_week'), [], 'a consultation still ahead is not the review');
     await appt(consult.id, '2030-08-19');
     await appt(plain.id, '2030-08-18');
     o = await read();
