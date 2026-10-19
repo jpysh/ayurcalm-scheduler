@@ -154,6 +154,8 @@ async function main() {
   })));
 
   for (const h of indiaHolidays) {
+    // The seeded day is the demo, and after closing the app shows tomorrow: a holiday on either emptied it (Dussehra, 20 Oct 2026).
+    if ([0, 1].some((n) => h.date === centreYmd(new Date(Date.now() + n * 86400000)))) continue;
     await prisma.timeOff.create({ data: { entity_type: "center", date: new Date(h.date), description: h.name } });
   }
   // staff holidays (5 random business days within next 3 months per staff)

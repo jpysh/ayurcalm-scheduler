@@ -1123,24 +1123,23 @@ app.post('/dietplans', async (req: Request, res: Response) => {
   const schema = z.object({
     patient_id: z.string().uuid(),
     date: dietDate,
+    /** The same meal on every day up to this one (#982); the answer then lists what was there, for Undo. */
+    until: dietDate.optional(),
     meal_time: z.enum(['breakfast','lunch','dinner','snacks']),
     description: z.string().trim().max(500),
     instructions: z.string().trim().max(500).optional(),
   });
   const body = schema.parse(req.body);
-  const key = { patient_id: body.patient_id, date: new Date(body.date), meal_time: body.meal_time };
-  if (!body.description) {
-    await prisma.dietPlan.deleteMany({ where: key });
-    res.status(204).end();
-    return;
-  }
+  const days: Date[] = [];
+  for (let d = new Date(body.date); d <= new Date(body.until ?? body.date) && days.length < 62; d = new Date(d.getTime() + 86400000)) days.push(d);
+  const where = { patient_id: body.patient_id, meal_time: body.meal_time, date: { in: days } };
+  const previous = (await prisma.dietPlan.findMany({ where })).map((r) => ({ date: r.date.toISOString().slice(0, 10), description: r.description, instructions: r.instructions }));
   const fields = { description: body.description, instructions: body.instructions || null, created_by: req.user!.id };
-  const dp = await prisma.dietPlan.upsert({
-    where: { patient_id_date_meal_time: key },
-    create: { ...key, ...fields },
-    update: fields,
+  await prisma.$transaction(async (tx) => {
+    await tx.dietPlan.deleteMany({ where });
+    if (body.description) await tx.dietPlan.createMany({ data: days.map((date) => ({ patient_id: body.patient_id, meal_time: body.meal_time, date, ...fields })) });
   });
-  res.status(201).json(dp);
+  res.status(201).json({ days: days.length, previous });
 });
 
 // Diet Plan Segments

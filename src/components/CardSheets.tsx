@@ -111,7 +111,7 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
         {plan ? <ChangeLine label="Edit this plan" value={running ? `${plural(plan.patients, "patient")} on it` : plan.name} onClick={() => setEditing(plan)} /> : null}
         <div className="mt-3"><TextRow label="Food limits and medication" faint={!ownText} onClick={() => setOwn(Object.fromEntries(OWN.map(([k]) => [k, line.own?.[k] ?? ""])) as Record<keyof Own, string>)}>{ownText || "None yet"}</TextRow></div>
         {meals.length ? <ListGroup title="Meals today">{meals.map((m) => <TextRow key={m.meal} label={m.meal}>{m.text}</TextRow>)}</ListGroup> : null}
-        <Btn kind="quiet" inline className="-ml-2 mt-2" onClick={() => patient && onDayMeals(patient)}>Change one day's meals</Btn>
+        <Btn kind="quiet" inline className="-ml-2 mt-2" onClick={() => patient && onDayMeals(patient)}>Change meals for some days</Btn>
       </>)}
       {editing && patient ? <PlanEditor plan={editing} patient={patient} segmentId={line?.entries.find((e) => e.template_id === editing.id && e.id)?.id || ""} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); onChanged(); }} /> : null}
     </BottomSheet>
