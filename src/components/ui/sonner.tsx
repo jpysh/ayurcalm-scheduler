@@ -15,8 +15,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
       theme="light"
       className="toaster group"
       // Just above the bottom bar, full width on a phone, as the design puts it.
-      // Four seconds, and only the latest shows: Undo applies to the last change alone.
-      duration={4000}
+      // Six seconds so Undo can be reached (#988), and only the latest shows: Undo applies to the last change alone.
+      duration={6000}
       visibleToasts={1}
       position="bottom-center"
       offset="84px"

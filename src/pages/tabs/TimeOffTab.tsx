@@ -178,33 +178,45 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
     window.dispatchEvent(new Event('timeoff-changed'));
     const names = f.ids.map((id) => nameOf(f.kind, id)).join(', ');
     const when = s.start ? `${s.date === centreToday ? 'today' : dayText(s.date)} ${s.start}–${s.end}` : s.date === s.endDate ? dayText(s.date) : `${dayText(s.date)} to ${dayText(s.endDate)}`;
-    toast(`${names} not available ${when}${fixNow || f.kind === 'GuestRoom' ? '' : '. Anything it affects waits under "need you".'}`, { position: fixNow ? 'top-center' : undefined, action: { label: 'Undo', onClick: async () => {
-      if (!(await deleteAll(made.map((h) => `${API_BASE}/timeoff/${h.id}`), { headers }))) return;
+    const undoLeave = async () => {
+      if (!(await deleteAll(made.map((h) => `${API_BASE}/timeoff/${h.id}`), { headers }))) return false;
       setTimeOffs((prev) => prev.filter((x) => !made.some((h) => h.id === x.id)));
       window.dispatchEvent(new Event('timeoff-changed'));
-    } } });
-    if (fixNow) void planRange(s.date, s.endDate);
+      return true;
+    };
+    const text = `${names} not available ${when}`;
+    if (!fixNow) { toast(`${text}${f.kind === 'GuestRoom' ? '' : '. Anything it affects waits under "need you".'}`, { action: { label: 'Undo', onClick: () => { void undoLeave(); } } }); return; }
+    void planRange(s.date, s.endDate, { text, undo: undoLeave });
   };
+
+  // One leave is one toast, raised once the planning has settled, with one Undo for all it did.
+  type Leave = { text: string; undo: () => Promise<boolean> };
+  const leaveToast = (l: Leave, tail: string, batch?: string | null) => toast(`${l.text}. ${tail}`, { action: { label: 'Undo', onClick: async () => {
+    if (batch) await undoBatch(batch, () => window.dispatchEvent(new Event('timeoff-changed')));
+    await l.undo();
+  } } });
 
   // Save and fix (#695): one plan over every day in the range, shown before anything moves, accepted once.
   type RangeRow = { date: string; who: string; start_time: string | null; fix: { label: string; appointment_id: string; staff_id: string | null; co_staff_ids: string[]; room_id: string | null; start_time: string; date: string; cancel?: boolean } };
   type Waiting = { date: string; who: string; start_time: string | null; what: string };
-  const [plan, setPlan] = useState<{ rows: RangeRow[]; left: number; waiting: Waiting[] } | null>(null);
-  const planRange = async (from: string, to: string) => {
+  const [plan, setPlan] = useState<{ rows: RangeRow[]; left: number; waiting: Waiting[]; leave: Leave } | null>(null);
+  // Closing the sheet without accepting still owes the leave its toast.
+  const closePlan = () => { if (plan) leaveToast(plan.leave, `${plural(plan.rows.length, 'treatment')} still to move; ${plan.rows.length === 1 ? 'it waits' : 'they wait'} under "need you".`); setPlan(null); };
+  const planRange = async (from: string, to: string, leave: Leave) => {
     const r = await fetchJsonWithTimeout<{ rows: RangeRow[]; left: number; waiting: Waiting[] }>(`${API_BASE}/day-check/range?from=${from}&to=${to}`).catch(() => null);
-    if (!r) { toast.error('The plan could not be worked out. It waits under "need you".'); return; }
-    if (!r.rows.length) { toast(r.left ? `${plural(r.left, 'treatment')} need${r.left === 1 ? 's' : ''} you to choose; ${r.left === 1 ? 'it waits' : 'they wait'} under "need you".` : 'Nothing needed moving.'); return; }
-    setPlan(r);
+    if (!r) { leaveToast(leave, 'The plan could not be worked out; it waits under "need you".'); return; }
+    if (!r.rows.length) { leaveToast(leave, r.left ? `${plural(r.left, 'treatment')} need${r.left === 1 ? 's' : ''} you to choose; ${r.left === 1 ? 'it waits' : 'they wait'} under "need you".` : 'Nothing needed moving.'); return; }
+    setPlan({ ...r, leave });
   };
   const acceptPlan = async () => {
     if (!plan) return;
     const p = plan;
     setPlan(null);
     const res = await fetch(`${API_BASE}/day-check/accept`, { method: 'POST', headers, body: JSON.stringify({ date: p.rows[0].date, moves: p.rows.map((r) => ({ ...r.fix, co_staff_ids: r.fix.co_staff_ids || [] })) }) });
-    if (!res.ok) { toast.error('The days changed while this was open. Nothing was moved; it waits under "need you".'); return; }
+    if (!res.ok) { leaveToast(p.leave, 'The days changed while this was open, so nothing was moved; it waits under "need you".'); return; }
     const batch = (await res.json()).batch_id as string | null;
     window.dispatchEvent(new Event('timeoff-changed'));
-    toast(`${plural(p.rows.length, 'treatment')} fixed${p.left ? `. ${p.left} wait${p.left === 1 ? 's' : ''} under "need you".` : '.'}`, { action: batch ? { label: 'Undo', onClick: () => { void undoBatch(batch, () => window.dispatchEvent(new Event('timeoff-changed'))); } } : undefined });
+    leaveToast(p.leave, `${plural(p.rows.length, 'treatment')} moved${p.left ? `; ${p.left} wait${p.left === 1 ? 's' : ''} under "need you"` : ''}.`, batch);
   };
 
   const saveEdit = async () => {
@@ -330,9 +342,9 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
           {impact ? <Consequence>{impact}</Consequence> : null}
         </> : null}
       </BottomSheet>
-      <BottomSheet open={!!plan} onOpenChange={(o) => { if (!o) setPlan(null); }} title="The plan"
+      <BottomSheet open={!!plan} onOpenChange={(o) => { if (!o) closePlan(); }} title="The plan"
         note={plan ? `${plural(plan.rows.length, 'treatment')} to move${plan.left ? `; ${plan.left} more wait${plan.left === 1 ? 's' : ''} for you under "need you"` : ''}. Nothing moves until you accept.` : undefined}
-        foot={<TwoFoot main="Accept the plan" onMain={acceptPlan} alt="Not now" onAlt={() => setPlan(null)} />}>
+        foot={<TwoFoot main="Accept the plan" onMain={acceptPlan} alt="Not now" onAlt={closePlan} />}>
         {plan ? Object.entries(plan.rows.reduce<Record<string, RangeRow[]>>((by, r) => { (by[r.date] ??= []).push(r); return by; }, {})).map(([date, rows]) => (
           <ListGroup key={date} title={date === centreToday ? 'Today' : dayText(date)} count={rows.length}>
             {rows.map((r) => <Row key={r.fix.appointment_id} title={[r.start_time, r.who].filter(Boolean).join(' · ')} facts={r.fix.label} />)}
