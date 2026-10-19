@@ -1,4 +1,4 @@
-import { Router, type Request, type Response } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
 import { prisma } from './server.js';
@@ -150,6 +150,28 @@ usersRouter.delete('/:id', requireAdmin, async (req: Request, res: Response) => 
   res.json({ ok: true });
 });
 
+// One bcrypt per stored hash, not per request: the write guard asks on every write.
+const seeded = new Map<string, Promise<boolean>>();
+export function usesDemoPassword(hash: string): Promise<boolean> {
+  if (!seeded.has(hash)) seeded.set(hash, bcrypt.compare(DEFAULT_ADMIN_PASSWORD, hash));
+  return seeded.get(hash)!;
+}
+
+/**
+ * Everyone who has seen the demo knows demo1234 (#1004), so an install still on it saves
+ * nothing until the password is changed. The public demo resets itself and is exempt;
+ * the test stacks set ALLOW_DEMO_PASSWORD because they sign in with it throughout.
+ */
+export async function demoPasswordGuard(req: Request, res: Response, next: NextFunction) {
+  if (DEMO || process.env.ALLOW_DEMO_PASSWORD === 'true' || req.method === 'GET' || req.path === '/account/change-password' || req.path === '/client-errors') return next();
+  const me = await prisma.user.findUnique({ where: { id: req.user?.id ?? '' }, select: { password_hash: true } });
+  if (me && await usesDemoPassword(me.password_hash)) {
+    res.status(403).json({ error: 'Choose your own password first: Settings › Your account. Everyone who has seen the demo knows demo1234.' });
+    return;
+  }
+  next();
+}
+
 /** Any signed-in user changing their own sign-in email or password. */
 export const accountRouter = Router();
 
@@ -160,7 +182,7 @@ accountRouter.get('/', async (req: Request, res: Response) => {
     res.status(401).json({ error: 'Authentication required' });
     return;
   }
-  res.json({ email: me.email, demo_password: !DEMO && await bcrypt.compare(DEFAULT_ADMIN_PASSWORD, me.password_hash) });
+  res.json({ email: me.email, demo_password: !DEMO && await usesDemoPassword(me.password_hash) });
 });
 
 accountRouter.post('/change-email', async (req: Request, res: Response) => {

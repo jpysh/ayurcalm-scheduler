@@ -13,7 +13,7 @@ export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-ayurcalm-scheduler}"
 PORT="${APP_PORT:-8080}"
 
 echo "Starting the app (or bringing it up to date)..."
-up=$(RATE_LIMIT_WRITES=1000 RATE_LIMIT_CALLS=10000 docker compose up -d --build 2>&1) || { echo "Could not start the app with Docker. Is Docker running?"; echo "$up" | tail -25; exit 1; }
+up=$(ALLOW_DEMO_PASSWORD=true RATE_LIMIT_WRITES=1000 RATE_LIMIT_CALLS=10000 docker compose up -d --build 2>&1) || { echo "Could not start the app with Docker. Is Docker running?"; echo "$up" | tail -25; exit 1; }
 i=0
 until curl -sf "http://localhost:$PORT/api/health" >/dev/null; do
   i=$((i + 1))
@@ -92,6 +92,7 @@ run onboarding         "After the setup wizard, the centre has its hours, timezo
 run mcp                "Claude reads the centre only with the current key: the day, residents, who is free and the day sheet, and reading changes nothing"
 run mcpPlan            "Claude's plan for a day is the one Verify shows, written only on a yes, undone exactly; stale and expired plans write nothing"
 run seedClock          "Nothing on the seeded day is marked 'didn't come' before it has started, on the centre's clock"
+run demoPassword       "An install still on demo1234 saves nothing until the password is changed"
 run demo               "The public demo is put back to the seeded centre every six hours, on fixed hours a restart does not move"
 # Last: it locks the container's own address out of sign-in for 15 minutes.
 run clientErrors       "A browser error report is stored under whoever sent it and checked by shape"

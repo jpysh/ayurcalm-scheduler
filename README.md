@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/jpysh/ayurcalm-scheduler/actions/workflows/ci.yml/badge.svg)](https://github.com/jpysh/ayurcalm-scheduler/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/jpysh/ayurcalm-scheduler/badge)](https://scorecard.dev/viewer/?uri=github.com/jpysh/ayurcalm-scheduler)
+[![Security](https://img.shields.io/badge/security-policy-blue.svg)](SECURITY.md)
 
 **Your centre's day, printed and ready by 7 am.** Open-source scheduling for Ayurveda centres, therapy studios and wellness retreats.
 

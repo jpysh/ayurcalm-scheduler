@@ -203,6 +203,7 @@ const Settings = ({ signOut, openLog, openScreen, initialSheet, sheetOpened, att
 
       <ListGroup title="You and the app">
         <Row title="Your account" facts={isAdmin ? "Email, password and your AI assistant" : "Email and password"} flag={account?.demo_password ? "Change the demo password" : undefined} trailing="›" onClick={() => setSheet("account")} />
+        <Row title="Security" facts="How your centre's data is kept safe" trailing="›" onClick={() => window.open("https://github.com/jpysh/ayurcalm-scheduler/blob/main/SECURITY.md", "_blank", "noopener")} />
         <Row title="Help and plan" facts={trial && isAdmin ? "Report a problem, invite a centre, plan" : "Report a problem"} trailing="›" onClick={() => setSheet("help")} />
       </ListGroup>
       {signOut ? <Btn kind="secondary" className="mt-4" onClick={signOut}>Sign out</Btn> : null}

@@ -65,6 +65,8 @@ services:
       # Writes per address in 5 minutes. Unset in a real install (40); qa raises it.
       RATE_LIMIT_WRITES: ${RATE_LIMIT_WRITES:-}
       RATE_LIMIT_CALLS: ${RATE_LIMIT_CALLS:-}
+      # Test stacks only: lets demo1234 save. Never set in a real install.
+      ALLOW_DEMO_PASSWORD: ${ALLOW_DEMO_PASSWORD:-}
       NODE_ENV: production
     volumes:
       # Read-only: Settings shows the last backup and offers it for download.

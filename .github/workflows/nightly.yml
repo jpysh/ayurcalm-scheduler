@@ -22,7 +22,7 @@ jobs:
           node-version: 24
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: RATE_LIMIT_WRITES=1000 docker compose up -d --build --wait
+      - run: ALLOW_DEMO_PASSWORD=true RATE_LIMIT_WRITES=1000 docker compose up -d --build --wait
       # --wait returns when the container is healthy; the first seed can still be running.
       - run: until curl -sf http://localhost:8080/api/health >/dev/null; do sleep 3; done
       - id: run
