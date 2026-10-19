@@ -15,6 +15,8 @@ model Patient {
   name              String
   /// Printed in their own row of the day sheet; with the two notes, on treatment days (#355).
   medication        String?
+  /// What they must not eat: allergy, intolerance, diabetic, Jain (#977). Bold on the day sheet, named on the kitchen sheet.
+  food_limits       String?
   before_treatment  String?
   after_treatment   String?
   gender            Gender

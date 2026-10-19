@@ -33,9 +33,9 @@ type Who = { id: string; name: string };
 
 export type Plan = { id: string; name: string; description?: string | null; is_active: boolean; patients: number } & Record<string, unknown>;
 type DietLine = { id: string; from: string; to: string; template_id: string | null; name: string; patients: number; changed_for_patient: boolean };
-type Own = { medication: string | null; before_treatment: string | null; after_treatment: string | null };
+type Own = { food_limits: string | null; medication: string | null; before_treatment: string | null; after_treatment: string | null };
 type Line = { stay: { id: string; start: string; end: string }; entries: DietLine[]; own?: Own | null };
-const OWN: [keyof Own, string][] = [["medication", "Medication"], ["before_treatment", "Before treatment"], ["after_treatment", "After treatment"]];
+const OWN: [keyof Own, string][] = [["food_limits", "Food limits"], ["medication", "Medication"], ["before_treatment", "Before treatment"], ["after_treatment", "After treatment"]];
 
 const MEALS: [string, string][] = [["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"], ["snacks", "Snacks"]];
 
@@ -84,8 +84,8 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
   };
   const ownText = line?.own ? OWN.map(([k]) => line.own![k]).filter(Boolean).join(" · ") : "";
   if (own && patient) return (
-    <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} onBack={() => setOwn(null)} title={`${first(patient.name)}'s medication and notes`}
-      note="Printed in their own row of the day sheet. The two notes print only on a day they have treatment."
+    <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} onBack={() => setOwn(null)} title={`${first(patient.name)}'s food limits and medication`}
+      note="Food limits print bold on the day sheet and by name on the kitchen sheet. The two treatment notes print only on a day they have treatment."
       foot={<Foot label={`Save for ${first(patient.name)}`} busy={busy} save={saveOwn} />}>
       <div className="grid gap-4">{OWN.map(([k, t]) => <Area key={k} label={`${t} (optional)`} rows={2} maxLength={2000} value={own[k]} onChange={(e) => setOwn({ ...own, [k]: e.target.value })} />)}</div>
     </BottomSheet>
@@ -109,7 +109,7 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
         <QuickDates label="Starts" value={from} today={today} min={line.stay.start} max={line.stay.end} onChange={setFrom} />
         {plan && patient ? <Consequence>{`${first(patient.name)} eats ${plan.name} from ${dayText(from)} to ${dayText(line.stay.end)}. What ran before ends the day before.`}</Consequence> : null}
         {plan ? <ChangeLine label="Edit this plan" value={running ? `${plural(plan.patients, "patient")} on it` : plan.name} onClick={() => setEditing(plan)} /> : null}
-        <div className="mt-3"><TextRow label="Medication and notes" faint={!ownText} onClick={() => setOwn(Object.fromEntries(OWN.map(([k]) => [k, line.own?.[k] ?? ""])) as Record<keyof Own, string>)}>{ownText || "None yet"}</TextRow></div>
+        <div className="mt-3"><TextRow label="Food limits and medication" faint={!ownText} onClick={() => setOwn(Object.fromEntries(OWN.map(([k]) => [k, line.own?.[k] ?? ""])) as Record<keyof Own, string>)}>{ownText || "None yet"}</TextRow></div>
         {meals.length ? <ListGroup title="Meals today">{meals.map((m) => <TextRow key={m.meal} label={m.meal}>{m.text}</TextRow>)}</ListGroup> : null}
         <Btn kind="quiet" inline className="-ml-2 mt-2" onClick={() => patient && onDayMeals(patient)}>Change one day's meals</Btn>
       </>)}

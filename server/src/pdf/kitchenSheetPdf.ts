@@ -53,6 +53,13 @@ export async function generateKitchenSheetPdf(dateISO: string, prisma: PrismaCli
     for (const p of away) doc.font('Helvetica-Bold').fontSize(10).text(p.name, x + COUNT_W, doc.y, { width: w - COUNT_W, continued: true }).font('Helvetica').text(`  ${p.away}`);
     doc.moveDown(0.6);
   }
+  // Named, before the counts (#977): a limit inside a plan's count is a plate the cook gets wrong.
+  const limited = people.filter((p) => p.diet.foodLimits).sort((a, b) => a.name.localeCompare(b.name));
+  if (limited.length) {
+    doc.font('Helvetica-Bold').fontSize(11).text('Food limits', x, doc.y, { width: w });
+    for (const p of limited) doc.font('Helvetica-Bold').fontSize(10).text(p.name, x + COUNT_W, doc.y, { width: w - COUNT_W, continued: true }).font('Helvetica').text(`  ${p.diet.foodLimits}`);
+    doc.moveDown(0.6);
+  }
   for (const m of people.length ? meals : []) {
     if (!m.counts.length && !m.exceptions.length) continue;
     doc.font('Helvetica-Bold').fontSize(12).text(`${mealLabel[m.meal]}${windowOf(mealLabel[m.meal])} — ${m.total}`, x, doc.y + 4, { width: w });
