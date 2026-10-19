@@ -14,7 +14,7 @@ import { loadDay, staffDay } from './appointmentGuard.js';
 import { loadDietsForDay, mealLabel, mealOrder } from './dietResolution.js';
 import { lastReadings } from './residentDay.js';
 import { dischargeOf, saveDischarge } from './discharge.js';
-import { owesDischarge } from './attention.js';
+import { owesDischarge, reviewGap } from './attention.js';
 import { renderDischarge } from './pdf/dischargePdf.js';
 
 const prisma = new PrismaClient();
@@ -259,7 +259,7 @@ linkRouter.get('/:token/discharges/:stayId/pdf', async (req: Request, res: Respo
 });
 
 // The doctor's round (#423): patients in house today whose review is due — a
-// consultation booked today, or none in the last seven days and none ahead —
+// consultation booked today, or none for reviewGap days and none ahead —
 // each with the last note. The plan the doctor writes here is the patient's
 // plan the admin books from (Plan next week shows it as the doctor's plan).
 linkRouter.get('/:token/round', async (req: Request, res: Response) => {
@@ -272,14 +272,13 @@ linkRouter.get('/:token/round', async (req: Request, res: Response) => {
     where: { patient_id: { in: stays.map((s) => s.patient_id) }, ...HAPPENING, Therapy: { is_consultation: true } },
     orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }], include: { Staff: { select: { name: true } } },
   });
-  const weekAgo = new Date(today.getTime() - 7 * DAY_MS);
   const round = stays.flatMap((s) => {
     const mineAll = consults.filter((c) => c.patient_id === s.patient_id);
     const booked = mineAll.find((c) => c.scheduled_date.getTime() === today.getTime());
     const before = mineAll.filter((c) => c.scheduled_date < today);
     const last = before[before.length - 1];
     const ahead = mineAll.some((c) => c.scheduled_date > today);
-    if (!booked && (ahead || (last && last.scheduled_date > weekAgo))) return [];
+    if (!booked && (ahead || (last && today.getTime() - last.scheduled_date.getTime() < reviewGap(s) * DAY_MS))) return [];
     const noted = [...before].reverse().find((c) => c.notes?.trim());
     return [{
       patient_id: s.patient_id, name: s.Patient.name,

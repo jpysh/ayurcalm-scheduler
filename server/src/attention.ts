@@ -43,6 +43,7 @@ export const RULES: Rule[] = [
   { id: 'room_out', section: 'Patients', kind: 'action', on: true, name: "A guest's room is out of use" },
   { id: 'form_c', section: 'Patients', kind: 'action', on: true, name: 'Form C for a foreign guest, due a day after arriving' },
   { id: 'follow_up', section: 'Patients', kind: 'action', on: true, name: 'Follow-up due after discharge' },
+  { id: 'review_due', section: 'Patients', kind: 'action', on: true, name: "A doctor's review is due and not booked" },
   { id: 'next_week', section: 'Patients', kind: 'action', on: true, name: 'Reviewed, and the week after the review is not booked' },
   { id: 'leaves_tomorrow', section: 'Patients', kind: 'action', on: false, name: 'Leaves tomorrow and the discharge summary is not started' },
   { id: 'vitals', section: 'Team', kind: 'action', on: true, hours: 4, from: 'after the treatment starts', waiting: 'Starts when therapists record readings', name: 'Vitals not recorded' },
@@ -84,6 +85,9 @@ export const owesFormC = (country: string | null | undefined, stay: { on_site: b
 /** A guest whose country is not India needs a Form C within 24 hours of arriving (#415). An empty country is not assumed foreign. */
 /** A one-day visit gets no discharge summary (#837): the doctor's note stays on the card. */
 export const owesDischarge = (stay: { start_date: Date; end_date: Date }) => ymd(stay.start_date) !== ymd(stay.end_date);
+
+/** Days between doctor's reviews (#981): a stay of ten nights or fewer is seen mid-stay, so a 7-night guest gets one on day 5. */
+export const reviewGap = (stay: { start_date: Date; end_date: Date }) => ((stay.end_date.getTime() - stay.start_date.getTime()) / DAY_MS <= 10 ? 4 : 7);
 
 export const isForeign = (country: string | null | undefined) => !!country?.trim() && !/^(india|indian|bharat|in)$/i.test(country.trim());
 /** The day it is due: the day after arrival, since the stay has no arrival hour. */
@@ -130,6 +134,13 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
   if (stays.length) {
     const ids = stays.map((s) => s.Patient.id);
     const visits = await prisma.appointment.findMany({ where: { patient_id: { in: ids }, status: { notIn: ['cancelled'] }, scheduled_date: { gte: new Date(day.getTime() - 30 * DAY_MS), lte: day }, Therapy: { is_consultation: true } }, select: { patient_id: true, scheduled_date: true, start_time: true } });
+    // A review due and none booked (#981), counted from the last consultation, or from arriving when there was none; the doctor's link raises the same guests.
+    const ahead = new Set((await prisma.appointment.findMany({ where: { patient_id: { in: ids }, status: { notIn: ['cancelled'] }, scheduled_date: { gte: day }, Therapy: { is_consultation: true } }, select: { patient_id: true } })).map((a) => a.patient_id));
+    for (const s of stays) {
+      if (ahead.has(s.Patient.id) || ymd(s.end_date) === today) continue;
+      const last = visits.filter((v) => v.patient_id === s.Patient.id && v.scheduled_date >= s.start_date).reduce((a, v) => (v.scheduled_date > a ? v.scheduled_date : a), s.start_date);
+      if (day.getTime() - last.getTime() >= reviewGap(s) * DAY_MS) add(rule('review_due'), s, "Doctor's review due, none booked", 'card');
+    }
     const booked = await prisma.appointment.findMany({ where: { patient_id: { in: ids }, status: { notIn: ['cancelled'] }, scheduled_date: { gte: day, lte: new Date(day.getTime() + 7 * DAY_MS) }, Therapy: { is_consultation: false } }, select: { patient_id: true, scheduled_date: true } });
     for (const s of stays) {
       // A consultation later today has not happened yet, so it is not the review (#966).
