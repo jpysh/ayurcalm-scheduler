@@ -474,7 +474,7 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
   useEffect(() => {
     if (!patient) return;
     setPlan(null); setSwaps({}); setWithReview(true); setStarts({}); setCounts({}); setNaming(""); setPruning(false);
-    fetchJsonWithTimeout<{ starter_courses?: Starter[] | null }>(`${API_BASE}/settings`).then((x) => setStarters(x.starter_courses || [])).catch(() => setStarters([]));
+    fetchJsonWithTimeout<Starter[]>(`${API_BASE}/starter-courses`).then((x) => setStarters(Array.isArray(x) ? x : [])).catch(() => setStarters([]));
     fetchJsonWithTimeout<WeekPlan>(`${API_BASE}/patients/${patient.id}/next-week?date=${review}`).then((p) => {
       setPlan(p); setWithReview(!!p.review);
       // A line with nothing left to book, or a day with no free time, starts unticked, so Book all works as it opens.
