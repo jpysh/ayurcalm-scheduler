@@ -487,11 +487,10 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     }
     const created = await res.json();
     setPatients((prev) => [...prev, toRow(created)]);
-    // At the top, so it does not cover the card's Diet and Package rows; Undo takes the patient away again.
+    // Undo takes the patient away again.
     // Their room is named, so a preset hut is never a surprise (#935).
     const room = freeRooms.find((x) => x.id === guestRoom);
     toast.success(`${created.name} added${room && n.onSite ? `, ${room.name}` : ''}${visit ? `, consultation ${dayText(visit.date)} ${visit.start_time}` : ''}`, {
-      position: 'top-center',
       cancel: inline ? undefined : { label: 'Open card', onClick: () => setCardId(created.id) },
       action: { label: 'Undo', onClick: async () => {
         const r = await fetch(`${API_BASE}/patients/${created.id}`, { method: 'DELETE' });
