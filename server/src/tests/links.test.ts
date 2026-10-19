@@ -130,6 +130,8 @@ try {
   // the pill and the Day section read `urgent`, a room issue does not.
   const flagged = check.problems.filter((p: { urgent?: boolean }) => p.urgent).map((p: { what: string }) => p.what);
   assert.deepEqual(flagged, ['SOS: needs help now', 'Something is missing: Ksheerabala oil finished', 'Guest unwell'], 'the SOS, the missing supply and the unwell guest count');
+  // Only the SOS is red (#1012).
+  assert.deepEqual(check.problems.filter((p: { sos?: boolean }) => p.sos).map((p: { what: string }) => p.what), ['SOS: needs help now'], 'only the SOS is red');
 
   assert.equal(await shared('staff', therapist.id), t, 'sharing again sends the same link');
   const t2 = await issue('staff', therapist.id);
