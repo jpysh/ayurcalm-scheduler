@@ -11,7 +11,7 @@ import { renderDischarge } from './pdf/dischargePdf.js';
 import { dischargeOf, saveDischarge } from './discharge.js';
 import { staffWeek } from './staffWeek.js';
 import { linkLapsed, newLinkToken } from './links.js';
-import { findConflict, HAPPENING, loadDay, nearestFreeTime, oncePerCourse, softWarnings, staffDay, type Action } from './appointmentGuard.js';
+import { findConflict, HAPPENING, loadDay, nearestFreeTime, oncePerCourse, softWarnings, staffDay, fullFrom, type Action } from './appointmentGuard.js';
 import { moveOffClosedDays, replanRoomDay, replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
 import { dietTimeline, startDietFrom, extendDiet } from './patientDiet.js';
 import { checkDay, headlineFor, planRange, rowOptions } from './dayCheck.js';
@@ -981,6 +981,20 @@ app.get('/staff-day', async (req: Request, res: Response) => {
   const date = String(req.query.date || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { res.status(400).json({ error: 'date=YYYY-MM-DD required' }); return; }
   res.json(staffDay(await loadDay(new Date(date), prisma)));
+});
+
+/** Which days of a week are full, and from when (#979), for the line under the week. */
+app.get('/day-full', async (req: Request, res: Response) => {
+  const from = String(req.query.from || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) { res.status(400).json({ error: 'from=YYYY-MM-DD required' }); return; }
+  const out: { date: string; full_from: string }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(`${from}T00:00:00.000Z`);
+    d.setUTCDate(d.getUTCDate() + i);
+    const full = fullFrom(await loadDay(d, prisma));
+    if (full) out.push({ date: d.toISOString().slice(0, 10), full_from: full });
+  }
+  res.json({ days: out });
 });
 
 /** The same thing for the first load, where nothing has been decided yet. */

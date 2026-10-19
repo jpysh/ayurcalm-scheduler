@@ -293,3 +293,23 @@ export async function oncePerCourse(c: { id?: string; patient_id: string; therap
   const day = dayOf(had.scheduled_date);
   return { reason: 'ONCE_PER_COURSE', message: `${therapy.name} is given once a stay, and ${first}'s is on ${day}.`, actions: [{ kind: 'book_anyway', label: 'Book anyway' }] };
 }
+
+/**
+ * When the day stops having room (#979): the first hour from which no therapist
+ * on shift has a free hour left. A screen shows it; it never works it out.
+ * Rooms and skills are left out: at a full centre the hands run out first.
+ */
+export function fullFrom(ctx: DayContext): string | null {
+  if (centreClosed(ctx.settings, ctx.timeOff, ctx.day)) return null;
+  const open = toMinutes(ctx.settings?.opening_time || '09:00');
+  const close = toMinutes(ctx.settings?.closing_time || '18:00');
+  const therapists = new Set(ctx.staff.filter((s) => s.role !== 'doctor').map((s) => s.id));
+  const working = staffDay(ctx).filter((w) => therapists.has(w.staff_id) && !w.off);
+  const freeAt = (m: number) => working.some((w) => !w.busy.some((b) => overlaps(b.s, b.e, m, m + 60)));
+  let last = -1;
+  for (let m = open; m + 60 <= close; m += 15) if (freeAt(m)) last = m;
+  const from = last < 0 ? Math.floor(open / 60) * 60 : Math.ceil((last + 1) / 60) * 60;
+  // A last hour that is taken is an ordinary day, not a full one.
+  if (from + 120 > close) return null;
+  return `${String(from / 60).padStart(2, '0')}:00`;
+}

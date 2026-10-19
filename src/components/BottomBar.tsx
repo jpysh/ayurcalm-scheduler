@@ -152,7 +152,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
  * The day, as Apple Calendar draws it (5 Oct): one week across, swipe for the next or last, tap a day.
  * Today carries a ring, the chosen day is filled. Far-off dates are in the Menu's Change day.
  */
-export function WeekStrip({ day, today, setDay, moves }: { day: string; today: string; setDay: (iso: string) => void; moves?: Map<string, { in: number; out: number }> }) {
+export function WeekStrip({ day, today, setDay, moves, stamp }: { day: string; today: string; setDay: (iso: string) => void; moves?: Map<string, { in: number; out: number }>; stamp?: unknown }) {
   const dow = (iso: string) => new Date(`${iso}T00:00:00Z`).getUTCDay();
   const weekOf = (iso: string) => shift(iso, -dow(iso));
   const weeksBetween = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / (7 * 86400000));
@@ -202,6 +202,13 @@ export function WeekStrip({ day, today, setDay, moves }: { day: string; today: s
     return () => { ro.disconnect(); document.documentElement.style.removeProperty("--strip-h"); };
   }, []);
   const dayName = dayText(day);
+  // The server says which days have no therapist free for an hour (#979); stamp changes when the day's bookings do.
+  const [full, setFull] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    fetch(`${API_BASE}/day-full?from=${weekOf(day)}`).then((r) => (r.ok ? r.json() : { days: [] }))
+      .then((b: { days: { date: string; full_from: string }[] }) => setFull(new Map(b.days.map((d) => [d.date, d.full_from])))).catch(() => {});
+  }, [day, stamp]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fullFrom = full.get(day);
   return (
     <div ref={bar} className="sticky top-0 z-[4] -mx-1 border-b bg-background px-1 pt-2">
       <div className="flex min-h-6 items-center justify-between px-1 text-sm">
@@ -227,6 +234,7 @@ export function WeekStrip({ day, today, setDay, moves }: { day: string; today: s
           </div>
         ))}
       </div>
+      {fullFrom && !compact ? <p className="px-1 pb-2 text-sm font-semibold">Full from {fullFrom}: no therapist has a free hour.</p> : null}
     </div>
   );
 }
