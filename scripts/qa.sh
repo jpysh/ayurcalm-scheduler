@@ -74,6 +74,7 @@ run kitchenDayPatient "The kitchen counts only the patients who stay on site; a 
 run kitchenAway       "A guest away for some hours or all day keeps their meals; the kitchen sheet and their meals sheet mark them AWAY"
 run foodLimits        "A guest's food limit prints bold on the day sheet and by name on the kitchen sheet"
 run residentStay     "A resident added in the app, with a stay and a diet plan, is on the day sheet; leaving early cancels what is left, and Undo restores it"
+run didNotArrive      "A guest who never arrives loses the stay, room, meals and treatments in one tap, and Undo puts them all back"
 run patientStories   "Meals by date, what a discharge summary lacks, package and accommodation, a shortened stay cancelled with its reason and undone, a leave planned later"
 run newPatient       "A new patient is saved with their details and a consultation booked through the guard, the booking sheet lists free therapists and rooms first, and patient search finds by name"
 run historyTeam "A treatment's History names the whole team when a pair lost one therapist and gained another"
