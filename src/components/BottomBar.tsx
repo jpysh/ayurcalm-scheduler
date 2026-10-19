@@ -177,8 +177,12 @@ export function WeekStrip({ day, today, setDay, moves }: { day: string; today: s
   // It unfolds only at the very top: the strip is taller than any gap between two thresholds, so unfolding
   // lower pushed the page back past the fold point and it flickered (#332). The list is moved by exactly what the strip lost so nothing jumps.
   const bar = useRef<HTMLDivElement>(null);
+  // Picking a day (Today above all) makes the list scroll itself to the now line; that is not the reader scrolling,
+  // so for a moment after a pick the strip stays open and the week they just chose from stays in view.
+  const holdUntil = useRef(0);
+  useEffect(() => { holdUntil.current = Date.now() + 1500; }, [day]);
   useEffect(() => {
-    const on = () => setCompact((c) => (c ? window.scrollY > 0 : window.scrollY > 140));
+    const on = () => setCompact((c) => (c ? window.scrollY > 0 : window.scrollY > 140 && Date.now() > holdUntil.current));
     window.addEventListener("scroll", on, { passive: true });
     return () => window.removeEventListener("scroll", on);
   }, []);
