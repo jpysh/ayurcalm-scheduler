@@ -506,7 +506,10 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
   const useStarter = (c: Starter) => {
     setStarts(Object.fromEntries(c.lines.map((l) => [l.therapy_id, true])));
     setCounts(Object.fromEntries(c.lines.map((l) => [l.therapy_id, l.sessions])));
+    // Changing a count and saving updates this starter (#1016): its name is already there.
+    setNaming(c.name);
   };
+  const updating = starters.some((c) => c.name === naming.trim());
   // Saved under a name already there, it replaces that starter.
   const saveStarter = async () => {
     const course = { name: naming.trim(), lines: startIds.map((id) => ({ therapy_id: id, sessions: sessionsOf(id) })) };
@@ -514,7 +517,7 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
     const res = await fetch(`${API_BASE}/starter-courses`, { method: "PUT", headers: json, body: JSON.stringify(next) });
     if (!res.ok) { toast.error(await saveError(res, "The starter was not saved.")); return; }
     setStarters(next); setNaming("");
-    toast(`Saved "${course.name}" as a starter`);
+    toast(updating ? `Updated "${course.name}"` : `Saved "${course.name}" as a starter`);
   };
   const removeStarter = async (name: string) => {
     const next = starters.filter((c) => c.name !== name);
@@ -558,8 +561,8 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
         </ListGroup>
         {starting && startIds.length ? (
           <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-2">
-            <Text label="Save these as a starter" value={naming} maxLength={60} placeholder={starters.length ? "A name, e.g. Shoulder pain" : "A name, e.g. Back pain"} onChange={(e) => setNaming(e.target.value)} />
-            <Btn inline disabled={!naming.trim()} onClick={saveStarter}>Save</Btn>
+            <Text label={updating ? `Update the starter ${naming.trim()}, or type a new name` : "Save these as a starter"} value={naming} maxLength={60} placeholder={starters.length ? "A name, e.g. Shoulder pain" : "A name, e.g. Back pain"} onChange={(e) => setNaming(e.target.value)} />
+            <Btn inline disabled={!naming.trim()} onClick={saveStarter}>{updating ? `Update` : "Save"}</Btn>
           </div>
         ) : null}
         {starting && starters.length ? (pruning
