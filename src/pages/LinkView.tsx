@@ -133,6 +133,14 @@ export default function LinkView() {
   if (!day) return <FullPage><Loading rows={3} /></FullPage>;
 
   const staff = day.who.kind !== "patient";
+  const due = round.filter((r) => !r.booked);
+  const booked = round.filter((r) => r.booked);
+  const theirs = (r: RoundRow) => !!r.booked?.doctor && r.booked.doctor !== day.who.name;
+  const roundRow = (r: RoundRow) => (
+    <Row key={r.patient_id} title={<span className={theirs(r) ? "text-muted-foreground" : ""}>{r.name}</span>} onClick={() => { setSeeing(r); setPlan(r.plan || ""); }}
+      facts={`Day ${r.day} of ${r.days}${r.booked ? ` · ${r.booked.start_time}${theirs(r) ? ` · ${r.booked.doctor}'s guest` : ""}` : ""}`}
+      trailing={r.plan ? "Plan ›" : "›"} />
+  );
   // Monday to Sunday around the day shown: seven days, one tap each.
   const mondayOffset = (new Date(`${day.date}T00:00:00Z`).getUTCDay() + 6) % 7;
   const week = Array.from({ length: 7 }, (_, i) => shift(day.date, i - mondayOffset));
@@ -159,13 +167,11 @@ export default function LinkView() {
 
       {isDoctor && day.date === day.today ? (
         <section className="mt-3" aria-label="Round">
-          <ListGroup title="Round" count={round.length}>
-            {round.length ? round.map((r) => (
-              <Row key={r.patient_id} title={r.name} onClick={() => { setSeeing(r); setPlan(r.plan || ""); }}
-                facts={`Day ${r.day} of ${r.days} · ${r.booked ? `${r.booked.start_time}${r.booked.doctor && r.booked.doctor !== day.who.name ? ` with ${r.booked.doctor}` : ""}` : "review due, not booked"}`}
-                trailing={r.plan ? "Plan ›" : "›"} />
-            )) : <Empty text="No reviews due today." />}
-          </ListGroup>
+          {/* What needs the doctor's decision comes first (#990); another doctor's guest is muted, there to know, not to see. */}
+          {due.length ? <ListGroup title="Reviews due, not booked" count={due.length}>{due.map(roundRow)}</ListGroup> : null}
+          <div className={due.length ? "mt-3" : ""}><ListGroup title="Round" count={booked.length}>
+            {booked.length ? booked.map(roundRow) : <Empty text={due.length ? "No other reviews today." : "No reviews due today."} />}
+          </ListGroup></div>
         </section>
       ) : null}
 
