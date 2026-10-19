@@ -7,6 +7,17 @@ export const BackContext = createContext<{ label: string; run: () => void } | nu
 /** A page's one header line, as docs/design/DESIGN.md's .pagehead: the name, and a short count beside it. `gear` opens the rules for what this screen raises on the pill (#288). */
 export default function PageHead({ title, note, gear }: { title: string; note?: ReactNode; gear?: { label: string; run: () => void } }) {
   const back = useContext(BackContext);
+  // With Back the title is centred between Back and the count (#975); without it the title leads, as a root tab.
+  if (back) return (
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 px-1 pb-2 pt-1.5">
+      <button type="button" aria-label={`Back to ${back.label}`} onClick={back.run} className="-ml-2 min-h-11 min-w-0 justify-self-start truncate rounded-full px-2 text-base font-semibold text-primary active:bg-secondary">‹ {back.label}</button>
+      <h1 className="m-0 break-words text-center text-lg font-semibold">{title}</h1>
+      <span className="flex min-w-0 items-center justify-end gap-1">
+        {note ? <span className="text-right text-sm text-muted-foreground">{note}</span> : null}
+        {gear ? <button type="button" aria-label={gear.label} onClick={gear.run} className="-my-2 -mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground active:bg-secondary"><Settings2 className="h-5 w-5" /></button> : null}
+      </span>
+    </div>
+  );
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-2 px-1 pb-2 pt-1.5">
       <span className="flex min-w-0 items-center gap-1">
