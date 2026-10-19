@@ -71,7 +71,7 @@ test('signed-out visit to a tab goes to login', async ({ page }) => {
 test('@smoke admin signs in with Enter and every tab shows its content', async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  for (const [tab, text] of [
+  for (const [tab, text] of <[string, string | RegExp][]>[
     ['Staff', 'Therapists'],
     ['Rooms', ' rooms'],
     ['Therapies', 'Therapies'],
@@ -80,7 +80,8 @@ test('@smoke admin signs in with Enter and every tab shows its content', async (
     ['Events', 'Events'],
     ['Patients', 'in house'],
     ['Settings', 'Centre and letterhead'],
-    ['Back to the day', 'treatments'],
+    // The day the app opens on may be one of the centre's closed days (Dussehra, 20 Oct 2026).
+    ['Back to the day', /treatments|Closed: /],
   ]) {
     await openTab(page, tab);
     await expect(activePanel(page)).toContainText(text, { timeout: 15000 });
