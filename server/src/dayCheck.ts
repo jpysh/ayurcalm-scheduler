@@ -536,7 +536,7 @@ export type RangeRow = { date: string; who: string; start_time: string | null; f
 export async function planRange(from: string, to: string, prisma: PrismaClient, opts: { now?: Clock } = {}) {
   const rows: RangeRow[] = [];
   /** What waits for the admin, named, so the plan says what it leaves (#706). */
-  const waiting: { date: string; who: string; start_time: string | null; what: string }[] = [];
+  const waiting: { date: string; who: string; start_time: string | null; what: string; appointment_id: string | null; later: Fix | null }[] = [];
   // ponytail: capped at 31 days, as one plan; a longer absence plans its first month.
   for (let d = new Date(`${from}T00:00:00.000Z`), n = 0; ymd(d) <= to && n < 31; d.setUTCDate(d.getUTCDate() + 1), n++) {
     const day = new Date(d);
@@ -544,16 +544,44 @@ export async function planRange(from: string, to: string, prisma: PrismaClient, 
     // around it: its slot was counted as free once the planner moved it away.
     const pins: Pin[] = [];
     let check = await checkDay(day, prisma, { now: opts.now });
+    // Pinned, a row is planned around and loses its choices, so its next free day is kept from before (#987).
+    const later = new Map<string, Fix>();
+    const keep = (c: DayCheck) => { for (const p of c.problems) { const f = p.choices.find((x) => x.choice === 'next_free_day'); if (p.appointment_id && f && !later.has(p.appointment_id)) later.set(p.appointment_id, f); } };
+    keep(check);
     const waits = (c: DayCheck) => c.problems.filter((p) => p.problem_class === 'blocking' && p.appointment_id && !(p.fix && p.choices.length <= 1 && p.fix.date === c.date) && !pins.some((x) => x.appointment_id === p.appointment_id));
     for (let more = waits(check); more.length && pins.length < 200; more = waits(check)) {
       const held = await prisma.appointment.findMany({ where: { id: { in: more.map((p) => p.appointment_id!) } } });
       pins.push(...held.map((a) => ({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id, start_time: a.start_time, date: check.date })));
       check = await checkDay(day, prisma, { now: opts.now, pins });
+      keep(check);
     }
     for (const p of check.problems.filter((x) => x.problem_class === 'blocking')) {
       if (p.fix && !p.fix.pinned && p.choices.length <= 1 && p.fix.date === check.date) rows.push({ date: check.date, who: p.who, start_time: p.start_time, fix: p.fix });
-      else waiting.push({ date: check.date, who: p.who, start_time: p.start_time, what: p.what });
+      else waiting.push({ date: check.date, who: p.who, start_time: p.start_time, what: p.what, appointment_id: p.appointment_id, later: (p.appointment_id && later.get(p.appointment_id)) || null });
     }
   }
-  return { rows, left: waiting.length, waiting };
+  return { rows, left: waiting.length, waiting, why: await whyWaiting(waiting, prisma) };
+}
+
+/**
+ * One line for everything that waits (#987), in place of the same sentence on
+ * each row: nobody free, and which therapies need a pair or the guest's gender.
+ */
+async function whyWaiting(waiting: { appointment_id: string | null }[], prisma: PrismaClient): Promise<string | null> {
+  const ids = waiting.map((w) => w.appointment_id).filter((x): x is string => !!x);
+  if (!ids.length) return null;
+  const appts = await prisma.appointment.findMany({ where: { id: { in: ids } }, include: { Therapy: true } });
+  const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  const gendered = settings?.enforce_gender_match !== false;
+  const list = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}` : xs[0]);
+  const names = (pick: (t: NonNullable<(typeof appts)[number]['Therapy']>) => boolean) => [...new Set(appts.filter((a) => a.Therapy && pick(a.Therapy)).map((a) => a.Therapy!.name.replace(/_/g, ' ')))];
+  const pair = names((t) => (t.staff_required ?? 1) > 1 && gendered && t.requires_gender_match);
+  const two = names((t) => (t.staff_required ?? 1) > 1 && !(gendered && t.requires_gender_match));
+  const same = names((t) => (t.staff_required ?? 1) <= 1 && gendered && t.requires_gender_match);
+  const needs = [
+    pair.length ? `${list(pair)} need${pair.length === 1 ? 's' : ''} two trained therapists of the guest's gender` : '',
+    two.length ? `${list(two)} need${two.length === 1 ? 's' : ''} two trained therapists together` : '',
+    same.length ? `${list(same)} need${same.length === 1 ? 's' : ''} a therapist of the guest's gender` : '',
+  ].filter(Boolean);
+  return `No other trained therapist is free for ${waiting.length === 1 ? 'it' : `these ${waiting.length}`} that day${needs.length ? `: ${needs.join('; ')}` : ''}.`;
 }
