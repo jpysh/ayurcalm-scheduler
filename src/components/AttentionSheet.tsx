@@ -31,6 +31,7 @@ export type DayProblem = {
   problem_class: "blocking" | "worth_knowing";
   /** A therapist's SOS (#521): counts on the pill and heads the Day section. */
   urgent?: boolean;
+  sos?: boolean;
   who: string;
   start_time: string | null;
   what: string;
@@ -250,7 +251,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
           <div className="space-y-3">
             {fixable.length > 1 && causes.length > 1 ? <Btn kind="primary" disabled={busy !== null} onClick={() => apply(null, ...fixable.map((p) => p.fix!))}>{busy === "all" ? "Fixing…" : `Fix all ${fixable.length} as shown`}</Btn> : null}
             {urgent.length ? <ListGroup>{urgent.map((p) => item(p.id, [p.start_time, p.who].filter(Boolean).join(" · "), null, <>
-              <span className="mr-auto self-center text-base font-semibold text-destructive">{p.what}</span>
+              <span className={`mr-auto self-center text-base font-semibold ${p.sos ? "text-destructive" : ""}`}>{p.what}</span>
               <button type="button" className={tb()} onClick={() => dismiss(p.id)}>Dismiss</button>
             </>))}</ListGroup> : null}
             {act.length ? <ListGroup>{causes.flatMap(causeRow)}</ListGroup> : null}
