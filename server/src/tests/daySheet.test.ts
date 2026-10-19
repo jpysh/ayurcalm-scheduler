@@ -103,7 +103,8 @@ async function main() {
     const expected: Expected[] = [];
     for (let i = 0; i < 40; i++) {
       const group = i < 24 ? 'plan' : i < 34 ? 'none' : 'outpatient';
-      const patient = await prisma.patient.create({ data: { name: `${TAG} ${suffix(i)}`, gender: 'female' } });
+      // The last one's surname is too long for its column: it wraps, never cut to 'Subraman..' (#967).
+      const patient = await prisma.patient.create({ data: { name: `${TAG} ${suffix(i)}${i === 39 ? ' Priyamvada Raghunathan-Subramanian' : ''}`, gender: 'female' } });
       if (group !== 'outpatient') {
         await prisma.patientStay.create({ data: { patient_id: patient.id, start_date: day, end_date: day, duration_days: 1 } });
       }
@@ -165,7 +166,8 @@ async function main() {
 
     // Text in the order it is drawn, so a treatment wrapped onto two lines of
     // its cell still reads as one run of words.
-    const text = execFileSync('pdftotext', ['-raw', pdfPath, '-']).toString().replace(/\s+/g, ' ');
+    // A name wrapped at its hyphen is rejoined, so it is found whole.
+    const text = execFileSync('pdftotext', ['-raw', pdfPath, '-']).toString().replace(/-\s+/g, '-').replace(/\s+/g, ' ');
 
     assert.ok(!text.includes('Nasyacancel'), 'A cancelled treatment printed on the day sheet');
     assert.ok(text.indexOf(`${TAG} B short 08:30`) < text.indexOf(`${TAG} A long 08:30`), 'Events starting together are not in end-time order');
