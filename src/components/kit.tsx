@@ -241,6 +241,11 @@ export function Foot({ busy, save, label = "Save", remove, removeLabel = "Remove
 /** Long first names ("Lakshminarayanan") are in no hyphenation dictionary, so at 200% text the browser cut them bare; a soft hyphen after each vowel that precedes a consonant gives it syllable-ish places to break with a hyphen (#918). */
 const breakable = (t: string) => t.replace(/\p{L}{13,}/gu, (w) => w.replace(/([aeiou])(?=[^aeiou]\p{L}{2})/giu, "$1\u00AD"));
 
+// A closed sheet drops its history entry with history.back(), which lands later. A sheet opened in between (after a fetch, as Share their link does) must not read that landing as the phone's Back (#965).
+let backsInFlight = 0;
+let popIsOurs = false;
+if (typeof window !== "undefined") window.addEventListener("popstate", () => { popIsOurs = backsInFlight > 0; if (popIsOurs) backsInFlight--; });
+
 /**
  * A sheet: grab handle, title, one line saying what it is for, body, and a foot
  * that stays in view however long the body. Scrolls inside itself.
@@ -255,12 +260,17 @@ export function BottomSheet({ open, onOpenChange, title, label, note, children, 
     window.history.pushState({ ...window.history.state, sheet: mark }, "");
     let popped = false;
     // Back lands on the entry below ours; a sheet underneath sees its own mark and stays open.
-    const onPop = () => { if (window.history.state?.sheet === mark) return; popped = true; close.current(false); };
+    const onPop = () => {
+      if (window.history.state?.sheet === mark) return;
+      // Our own back took this sheet's entry with it: put the entry back so the phone's Back still closes the sheet.
+      if (popIsOurs) { window.history.pushState({ ...window.history.state, sheet: mark }, ""); return; }
+      popped = true; close.current(false);
+    };
     window.addEventListener("popstate", onPop);
     return () => {
       window.removeEventListener("popstate", onPop);
       // Closed by a tap: drop our entry, unless a sheet that replaced this one in the same moment, or a page move, has since taken the top (Back would undo it).
-      if (!popped) setTimeout(() => { if (window.history.state?.sheet === mark) window.history.back(); }, 0);
+      if (!popped) setTimeout(() => { if (window.history.state?.sheet === mark) { backsInFlight++; window.history.back(); } }, 0);
     };
   }, [open]);
   return (
