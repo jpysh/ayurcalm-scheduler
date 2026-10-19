@@ -810,14 +810,15 @@ const createTimeOffHandler = async (req: Request, res: Response) => {
     }
     // A room out of use is the same moment (#659): each day it covers is planned
     // once, so its treatments cannot be sent to the same other room at the same minute.
-    if (h.entity_type === 'room' && h.entity_id && plan !== false) {
+    // The centre shut for some hours (#985) moves what falls in them the same way, all rooms at once.
+    if (((h.entity_type === 'room' && h.entity_id) || (h.entity_type === 'center' && h.start_time && move)) && plan !== false) {
       const results = [];
       for (const d of datesCovered(h)) results.push(await replanRoomDay(h, d, prisma));
       replan = results.filter((r) => r.moved.length || r.proposed.length || r.unplaced.length);
     }
     // A closed day with treatments booked (#933): they move to the next open day, once.
     let moved = null;
-    if (h.entity_type === 'center' && move) {
+    if (h.entity_type === 'center' && !h.start_time && move) {
       const first = (h.start_date ?? h.date)!.toISOString().slice(0, 10);
       moved = await moveOffClosedDays(first, (h.end_date ?? h.date)!.toISOString().slice(0, 10), prisma, { timeOffId: h.id });
     }

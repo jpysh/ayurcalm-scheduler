@@ -65,7 +65,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
 }) {
   const [showHolidays, setShowHolidays] = useState(false);
   const [showLater, setShowLater] = useState(false);
-  const closedDays = useMemo(() => timeOffs.filter((h) => h.type === "Center").map((h) => ({ id: h.id, date: sortKey(h).slice(0, 10), endDate: (h.endDate || h.date || '').slice(0, 10), description: h.description })), [timeOffs]);
+  const closedDays = useMemo(() => timeOffs.filter((h) => h.type === "Center").map((h) => ({ id: h.id, date: sortKey(h).slice(0, 10), endDate: (h.endDate || h.date || '').slice(0, 10), description: h.description, hours: h.startTime && h.endTime ? `${h.startTime.slice(0, 5)}–${h.endTime.slice(0, 5)}` : undefined })), [timeOffs]);
   /** After the closed-days sheet changes something: the centre's rows read again from the server. */
   const reloadClosed = async () => {
     const all = await fetchJsonWithTimeout<{ id: string; entity_type: string; date: string | null; start_date: string | null; end_date: string | null; description: string | null }[]>(`${API_BASE}/timeoff`).catch(() => null);

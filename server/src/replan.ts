@@ -632,7 +632,7 @@ export async function replanRoomDay(
   opts: { now?: Clock } = {},
 ) {
   const hours = offOnDay([off], 'room', off.entity_id ?? '', date);
-  const ids = (await prisma.appointment.findMany({ where: { ...HAPPENING, scheduled_date: date, room_id: off.entity_id }, select: { id: true, start_time: true, duration_minutes: true } }))
+  const ids = (await prisma.appointment.findMany({ where: { ...HAPPENING, scheduled_date: date, ...(off.entity_type === 'center' ? {} : { room_id: off.entity_id }) }, select: { id: true, start_time: true, duration_minutes: true } }))
     .filter((a) => hours.some((b) => overlaps(b.s, b.e, toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes)))
     .map((a) => a.id);
   return planDay(null, date, prisma, { ...opts, apply: true, timeOffId: off.id, appointmentIds: ids });

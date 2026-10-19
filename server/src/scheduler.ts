@@ -1,6 +1,6 @@
 import { PrismaClient, Appointment, Staff, TherapyRoom } from '@prisma/client';
 import { z } from 'zod';
-import { gives, staffEventBusy, eventBlocking, teamOf, mayTreatOn, centreClosed, centreClock, type EventRow } from './availability.js';
+import { gives, offOnDay, staffEventBusy, eventBlocking, teamOf, mayTreatOn, centreClosed, centreClock, type EventRow } from './availability.js';
 import { HAPPENING } from './appointmentGuard.js';
 
 const inputSchema = z.object({
@@ -329,6 +329,8 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
           return true; // default to full-day block for ranges spanning the day
         });
         if (roomConflict) continue;
+        // The centre shut for some hours (#985) shuts every room then.
+        if (offOnDay(holidays, 'room', r.id, nd).some((b) => overlaps(b.s, b.e, slotStart, slotEnd))) continue;
         const staffFree = (s: Staff) => {
           const sDay = staffDay(s.weekly_schedule, weekday);
           if (!sDay) return false;

@@ -169,7 +169,8 @@ export type OffRow = {
  */
 export const offOnDay = (rows: OffRow[], type: 'staff' | 'room' | 'therapy' | 'patient', id: string, day: Date): (Busy & { whole: boolean })[] =>
   rows
-    .filter((h) => h.entity_type === type && h.entity_id === id && eventHitsDay(h as unknown as EventRow, day))
+    // The centre shut for some hours (#985) is every therapist and room out then, so the guard, the planner and Team all see it.
+    .filter((h) => ((h.entity_type === type && h.entity_id === id) || (h.entity_type === 'center' && h.start_time && h.end_time && (type === 'staff' || type === 'room'))) && eventHitsDay(h as unknown as EventRow, day))
     .map((h) => {
       const whole = !h.start_time || !h.end_time;
       return { s: whole ? 0 : toMinutes(h.start_time!), e: whole ? 24 * 60 : toMinutes(h.end_time!), label: h.description || 'time off', whole };
@@ -210,7 +211,7 @@ export function closureOn(settings: { working_days?: string[] } | null | undefin
     const why = `closed on ${weekday[0].toUpperCase()}${weekday.slice(1)}s`;
     return { why, name: why[0].toUpperCase() + why.slice(1), id: null };
   }
-  const shut = rows.find((h) => h.entity_type === 'center' && eventHitsDay(h as unknown as EventRow, day));
+  const shut = rows.find((h) => h.entity_type === 'center' && !(h.start_time && h.end_time) && eventHitsDay(h as unknown as EventRow, day));
   return shut ? { why: `closed${shut.description ? ` for ${shut.description}` : ' that day'}`, name: shut.description || null, id: shut.id ?? null } : null;
 }
 

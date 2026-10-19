@@ -10,6 +10,8 @@ import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
 import { acceptPlan, replanRoomDay, undoReplan } from '../replan.js';
 import { planRange } from '../dayCheck.js';
+import { findConflict, loadDay } from '../appointmentGuard.js';
+import { centreClosed } from '../availability.js';
 import { requireDemoData } from './demoGuard.js';
 
 const allDay = Object.fromEntries(
@@ -68,6 +70,25 @@ async function main() {
     await undoReplan(done.batch_id, prisma);
     for (const a of appts) assert.equal((await prisma.appointment.findUniqueOrThrow({ where: { id: a.id } })).room_id, shut.id, 'one Undo puts both days back');
     batches.push(done.batch_id);
+
+    // The centre shut for some hours (#985): not a closed day, every room and therapist out then, and the same plan moves what falls in them.
+    await prisma.timeOff.delete({ where: { id: off.id } });
+    made.splice(made.findIndex((m) => m.id === off.id), 1);
+    const cut = await prisma.timeOff.create({ data: { entity_type: 'center', date: days[0], start_date: days[0], end_date: days[0], start_time: '09:30', end_time: '11:30', description: 'Power cut' } });
+    made.push({ table: 'timeOff', id: cut.id });
+    const ctx = await loadDay(days[0], prisma);
+    assert.equal(centreClosed(ctx.settings, ctx.timeOff, days[0]), null, 'the day stays open');
+    assert.equal(findConflict({ ...appts[0], scheduled_date: days[0], staff_id: staff.id, room_id: open.id, start_time: '10:00', duration_minutes: 60, patient_id: patient.id }, ctx)?.reason, 'STAFF_OFF', 'refused in those hours');
+    assert.equal(findConflict({ ...appts[0], scheduled_date: days[0], staff_id: staff.id, room_id: open.id, start_time: '12:00', duration_minutes: 60, patient_id: patient.id }, ctx), null, 'free after them');
+    const fixed = await replanRoomDay(cut, days[0], prisma, { now });
+    assert.equal(fixed.moved.length, 1, 'the treatment in those hours is moved');
+    const after = await prisma.appointment.findUniqueOrThrow({ where: { id: appts[0].id } });
+    assert.ok(after.start_time >= '11:30' || after.start_time < '08:30', `moved out of 09:30-11:30, to ${after.start_time}`);
+    await undoReplan(fixed.batch_id!, prisma);
+    assert.equal((await prisma.appointment.findUniqueOrThrow({ where: { id: appts[0].id } })).start_time, '10:00', 'Undo puts it back');
+    batches.push(fixed.batch_id!);
+    await prisma.timeOff.delete({ where: { id: cut.id } });
+    made.splice(made.findIndex((m) => m.id === cut.id), 1);
 
     // A row left for the admin keeps its slot: the rest of the plan must not take it, or
     // the whole plan is refused. The demo centre's next week, with whatever it holds.
