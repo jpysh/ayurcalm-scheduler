@@ -110,6 +110,7 @@ const AdminDashboard = () => {
         // Setup is a gate (#60) for an empty centre; one showing its example opens on the day, with Make it mine in the banner (#728).
         if (s?.setup_complete === false && !s.demo_data && localStorage.getItem("authRole") === "Admin") { navigate("/setup"); return; }
         setCurrency(s?.currency);
+        setDemo(!!s?.demo_data);
         if (s?.opening_time && s?.closing_time) {
           setHoursLoaded(true);
           setCentreHours({ opening_time: s.opening_time, closing_time: s.closing_time, slot_minutes: s.slot_minutes ?? 30, timezone: s.timezone || "Asia/Kolkata" });
@@ -118,6 +119,7 @@ const AdminDashboard = () => {
       .catch(() => { /* falls back to the defaults above */ });
   }, []);
   const [hoursLoaded, setHoursLoaded] = useState(false);
+  const [demo, setDemo] = useState(false);
   const [activeTab, setActiveTab] = useState("schedule");
   const [showAttention, setShowAttention] = useState(false);
   const [addingRooms, setAddingRooms] = useState(false);
@@ -584,20 +586,29 @@ const AdminDashboard = () => {
               }
             }}>
             {/* A new centre's first steps, until it can book (#60): each row opens the screen that adds it. */}
-            {!loaded || readOnly ? null : therapies.length === 0 || staff.length === 0 || roomsList.length === 0 || patients.length === 0 ? (
-              <div aria-label="Get started">
-                {/* Therapies first (#273 U1): a new trial has none, and nothing can be booked or given without them. */}
-                <ListGroup title="Get started">
-                  {([["therapies", "Add your therapies", therapies.length], ["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first patient", patients.length]] as const).map(([tab, label, n]) => (
-                    <Row key={tab} title={label} facts={n ? `${n} added` : "Not yet"} trailing={n ? "✓" : "Add ›"}
-                      onClick={() => { if (tab === "rooms") { go("rooms"); roomsScreen.openAdd(); } else if (tab === "staff") { go("team"); staffScreen.openAdd(); } else if (tab === "patients") { go("patients"); patientsScreen.openAdd(); } else { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); } }} />
-                  ))}
-                </ListGroup>
-                <p className="px-1 pt-2 text-sm text-muted-foreground">Then tap + to book the first treatment.</p>
-              </div>
-            ) : null}
-            {loaded && !scheduleScreen.searching ? <WeekStrip day={dayKeyMemo} today={ymdInTZ(new Date())} moves={moves} setDay={(iso) => setCurrentDate(dayDate(iso))} /> : null}
-            {loaded && scheduleScreen.tab}
+            {/* The checklist is the screen until the centre can book (#972): no date bar over an empty day. It stays until the first treatment is booked, and the example centre has Make it mine instead. */}
+            {(() => {
+              const basics = [["therapies", "Add your therapies", therapies.length], ["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first patient", patients.length]] as const;
+              const ready = basics.every(([, , n]) => n > 0);
+              const booked = Object.values(appointmentsByDate).some((l) => l.length > 0);
+              const show = loaded && !readOnly && !demo && !booked;
+              const open = (tab: string, n: number) => { if (tab === "rooms") { go("rooms"); roomsScreen.openAdd(); } else if (tab === "staff") { go("team"); staffScreen.openAdd(); } else if (tab === "patients") { go("patients"); patientsScreen.openAdd(); } else { go(tab); if (tab === "therapies" && !n) therapiesScreen.openLibrary(); } };
+              const next = basics.find(([, , n]) => n === 0)?.[0];
+              return (<>
+                {show ? (
+                  <div aria-label="Get started">
+                    <ListGroup title="Get started">
+                      {ready ? null : basics.map(([tab, label, n]) => (
+                        <Row key={tab} title={label} facts={n ? `${n} added` : "Not yet"} trailing={n ? "✓" : tab === next ? <span className="font-bold text-primary">Add ›</span> : "Add ›"} onClick={() => open(tab, n)} />
+                      ))}
+                      {ready ? <Row title="Book your first treatment" facts="Not yet" trailing={<span className="font-bold text-primary">Book ›</span>} onClick={() => scheduleScreen.openBook()} /> : null}
+                    </ListGroup>
+                  </div>
+                ) : null}
+                {loaded && (ready || !show) && !scheduleScreen.searching ? <WeekStrip day={dayKeyMemo} today={ymdInTZ(new Date())} moves={moves} setDay={(iso) => setCurrentDate(dayDate(iso))} /> : null}
+                {loaded && (ready || !show) ? scheduleScreen.tab : null}
+              </>);
+            })()}
           </TabsContent>
 
           {eventsScreen.dialogs}
