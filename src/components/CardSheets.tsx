@@ -373,6 +373,18 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     onSaved();
     onClose();
   };
+  // A guest who never came (#980): the stay goes, with its room, meals and treatments, and Undo brings it all back.
+  const didNotArrive = async () => {
+    setBusy(true);
+    const res = await fetch(`${API_BASE}/patients/${patient.id}/stays/${target.id}/did-not-arrive`, { method: "POST", headers: json }).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) { const why = await res?.json().catch(() => ({})); toast.error(why?.message || "That was not saved. Try again."); return; }
+    const out = await res.json();
+    toastUndo(`${first(patient.name)} did not arrive: stay removed${out.cancelled ? `, ${plural(out.cancelled, "treatment")} cancelled` : ""}`,
+      () => undoWrite(() => fetch(`${API_BASE}/stays/did-not-arrive/undo`, { method: "POST", headers: json, body: JSON.stringify({ undo_id: out.undo_id }) }), onSaved));
+    onSaved();
+    onClose();
+  };
   const label = !target.id ? "Add the stay" : delta < 0 ? `Leave on ${dayText(end)}` : delta > 0 ? `Stay until ${dayText(end)}` : "Save the stay";
   return (
     <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} title={target.id ? `Stay for ${first(patient.name)}` : "New stay"}
@@ -383,6 +395,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
         <ChangeLine label="Leaving" value={dayText(end)} select={<LineDate label="Leaving" value={end} min={start} onChange={setEnd} />} />
       </div>
       {target.id && start <= today && end > today ? <Btn kind="quiet" inline className="-ml-2 mt-1" onClick={() => setEnd(today)}>Leaves today</Btn> : null}
+      {target.id && target.start <= today && target.end >= today ? <Btn kind="quiet" inline className="-ml-2 mt-1" disabled={busy} onClick={didNotArrive}>Did not arrive</Btn> : null}
       {!target.id && slots.length ? (
         <div className="mt-3 rounded-xl border p-3">
           <div className="flex items-center justify-between gap-3">

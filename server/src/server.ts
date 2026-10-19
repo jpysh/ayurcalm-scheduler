@@ -684,6 +684,53 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
   res.json({ stay: updated, left_over: extras.cancel_after ? [] : left.map(({ Therapy, ...a }) => a), cancelled, batch_id });
 });
 
+/**
+ * A guest who never came (#980). The stay goes, so the room, the meals, Form C and the
+ * records no longer count it; its treatments are cancelled "did not arrive" in one
+ * batch. What was removed is kept in the audit row, so Undo puts all of it back.
+ * Refused once a treatment in the stay was given: then they did arrive.
+ */
+app.post('/patients/:id/stays/:stayId/did-not-arrive', async (req: Request, res: Response) => {
+  const stay = await stayOf(req);
+  if (!stay) { res.status(404).json({ error: 'Stay not found' }); return; }
+  const inStay = { patient_id: stay.patient_id, scheduled_date: { gte: stay.start_date, lte: stay.end_date } };
+  if (await prisma.appointment.count({ where: { ...inStay, status: 'completed' } })) { res.status(409).json({ reason: 'ARRIVED', message: 'A treatment in this stay was given, so they did arrive.' }); return; }
+  const [booked, segments, meals] = await Promise.all([
+    prisma.appointment.findMany({ where: { ...inStay, ...HAPPENING } }),
+    prisma.dietPlanSegment.findMany({ where: { patient_id: stay.patient_id, start_date: { lte: stay.end_date }, end_date: { gte: stay.start_date } } }),
+    prisma.dietPlan.findMany({ where: { patient_id: stay.patient_id, date: { gte: stay.start_date, lte: stay.end_date } } }),
+  ]);
+  const batch = booked.length ? await applyPlan(booked.map((a) => ({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id, start_time: a.start_time, date: a.scheduled_date.toISOString().slice(0, 10), cancel: true, reason: 'did not arrive' })), prisma) : null;
+  // A diet segment past the stay belongs to the next one; only what lies inside this stay goes.
+  const ours = segments.filter((g) => g.start_date >= stay.start_date && g.end_date <= stay.end_date);
+  const log = await prisma.$transaction(async (tx) => {
+    await tx.dietPlan.deleteMany({ where: { id: { in: meals.map((m) => m.id) } } });
+    await tx.dietPlanSegment.deleteMany({ where: { id: { in: ours.map((g) => g.id) } } });
+    await tx.patientStay.delete({ where: { id: stay.id } });
+    return tx.auditLog.create({ data: { admin_id: req.user?.email || 'admin', action: 'did_not_arrive', entity_type: 'stay', entity_id: stay.id, old_value: { stay, segments: ours, meals, batch_id: batch?.batch_id ?? null } as any } });
+  });
+  res.json({ undo_id: log.id, cancelled: batch?.applied ?? 0 });
+});
+app.post('/stays/did-not-arrive/undo', async (req: Request, res: Response) => {
+  const { undo_id } = z.object({ undo_id: z.string().uuid() }).parse(req.body);
+  const row = await prisma.auditLog.findUnique({ where: { id: undo_id } });
+  if (!row || row.action !== 'did_not_arrive') { res.status(404).json({ error: 'Nothing to undo' }); return; }
+  const was = row.old_value as any;
+  // Nulls are left out: they are the default, and Prisma refuses a bare null for a Json field.
+  const set = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null)) as any;
+  const stay = set(was.stay);
+  // The room may have been given to someone else meanwhile: the stay comes back without it rather than not at all.
+  const refused = stay.guest_room_id && stay.on_site ? await guestRoomRefusal(prisma, stay.guest_room_id, new Date(stay.start_date), new Date(stay.end_date)) : null;
+  await prisma.$transaction(async (tx) => {
+    await tx.patientStay.create({ data: { ...stay, ...(refused ? { guest_room_id: null } : {}) } });
+    if (was.segments.length) await tx.dietPlanSegment.createMany({ data: was.segments.map(set) });
+    if (was.meals.length) await tx.dietPlan.createMany({ data: was.meals.map(set) });
+    await tx.auditLog.update({ where: { id: row.id }, data: { action: 'did_not_arrive_undone' } });
+  });
+  if (was.batch_id) await undoReplan(was.batch_id, prisma, { anyway: true });
+  res.json({ ok: true, room_lost: !!refused });
+});
+
 // Meals by date (#285 story 7).
 app.get('/patients/:id/diet', async (req: Request, res: Response) => {
   const { date } = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
