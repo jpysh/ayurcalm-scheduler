@@ -124,12 +124,12 @@ try {
   // The admin reads both on the day, as notes: the room issue and the 👎.
   const check = await (await call(`/day-check?date=${DAY}`, undefined, admin)).json();
   const kinds = check.problems.filter((p: { problem_class: string }) => p.problem_class === 'worth_knowing').map((p: { id: string; what: string }) => `${p.id.split(':')[0]} ${p.what}`);
-  assert.ok(kinds.includes('ISSUE Room not usable: Steam not working'), `the issue is on the day: ${kinds}`);
+  assert.ok(kinds.includes('ISSUE Room not usable · Steam not working'), `the issue is on the day: ${kinds}`);
   assert.ok(kinds.includes('FEEDBACK 👎 Too hot'), 'and the 👎 with its note');
   // An SOS is a note that counts (#521), and so are a missing supply and an unwell guest (#978):
   // the pill and the Day section read `urgent`, a room issue does not.
   const flagged = check.problems.filter((p: { urgent?: boolean }) => p.urgent).map((p: { what: string }) => p.what);
-  assert.deepEqual(flagged, ['SOS: needs help now', 'Something is missing: Ksheerabala oil finished', 'Guest unwell'], 'the SOS, the missing supply and the unwell guest count');
+  assert.deepEqual(flagged, ['SOS: needs help now', 'Something is missing · Ksheerabala oil finished', 'Guest unwell'], 'the SOS, the missing supply and the unwell guest count');
   // Only the SOS is red (#1012).
   assert.deepEqual(check.problems.filter((p: { sos?: boolean }) => p.sos).map((p: { what: string }) => p.what), ['SOS: needs help now'], 'only the SOS is red');
 
@@ -163,7 +163,7 @@ try {
   extra.push(weekAgo.id);
   const again = (await (await call(`/public/link/${d}/round`)).json()).find((r: { patient_id: string }) => r.patient_id === guest.id);
   assert.equal(again.facts.treatments, therapy.name, 'one treatment this week');
-  assert.match(again.facts.readings[0], /^BP 124\/82 · \d{4}-\d\d-\d\d$/, 'the reading the therapist recorded');
+  assert.match(again.facts.readings[0], /^BP 124\/82 on \w{3} \d{1,2} \w{3}$/, 'the reading the therapist recorded');
   assert.equal(row.day, 11); assert.equal(row.booked, null); assert.equal(row.last.note, 'Start Abhyanga daily');
   const put = (token: string, id: string) => fetch(`${API}/public/link/${token}/round/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: 'Shirodhara alternate days' }) });
   assert.equal((await put(d, guest.id)).status, 200);

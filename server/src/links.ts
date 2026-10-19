@@ -13,6 +13,7 @@ import { centreClock, hoursOn, offOnDay, teamOf, toMinutes } from './availabilit
 import { loadDay, staffDay } from './appointmentGuard.js';
 import { loadDietsForDay, mealLabel, mealOrder } from './dietResolution.js';
 import { lastReadings } from './residentDay.js';
+import { dayName } from './dayCheck.js';
 import { dischargeOf, saveDischarge } from './discharge.js';
 import { owesDischarge, reviewGap } from './attention.js';
 import { renderDischarge } from './pdf/dischargePdf.js';
@@ -301,7 +302,7 @@ linkRouter.get('/:token/round', async (req: Request, res: Response) => {
     const counts = new Map<string, number>();
     for (const a of given) if (a.patient_id === r.patient_id) counts.set(a.Therapy.name, (counts.get(a.Therapy.name) ?? 0) + 1);
     return [r.patient_id, {
-      readings: (await lastReadings(r.patient_id, today, prisma)).map((x) => `${x.text} · ${x.date}`),
+      readings: (await lastReadings(r.patient_id, today, prisma)).map((x) => `${x.text} on ${dayName(x.date)}`),
       treatments: [...counts].map(([n, c]) => (c > 1 ? `${n} ×${c}` : n)).join(', '),
       diet: diets.dietFor(patients.get(r.patient_id)!, true).planName || null,
     }] as const;
