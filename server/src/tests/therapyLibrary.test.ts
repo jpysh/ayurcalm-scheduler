@@ -31,6 +31,10 @@ try {
   assert.deepEqual(saved?.products, ['Sesame oil']);
   const list = await (await call('/therapy-library')).json();
   assert.ok(list.every((t: { added: boolean }) => typeof t.added === 'boolean'));
+  // A new centre starts from what most centres offer (#1020): those first, Consultation at the top.
+  assert.equal(list[0].name, 'Consultation');
+  assert.equal(list.filter((t: { common?: boolean }) => t.common).length, 15);
+  assert.ok(list.slice(0, 15).every((t: { common?: boolean }) => t.common), 'the common ones lead');
   console.log('therapy library: ok');
 } finally {
   await prisma.therapy.deleteMany({ where: { name } });
