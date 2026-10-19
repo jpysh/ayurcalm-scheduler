@@ -3,7 +3,7 @@
  * starting where the last ended and the last running to the leaving date. Storage is the
  * DietPlanSegment table the day sheet already reads; this only keeps the segments tidy.
  */
-import type { PrismaClient } from '@prisma/client';
+import type { AppointmentStatus, PrismaClient } from '@prisma/client';
 
 const DAY_MS = 86400000;
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
@@ -77,4 +77,64 @@ export async function startDietFrom(patientId: string, from: string, templateId:
 export async function extendDiet(patientId: string, oldEnd: Date, newEnd: Date, prisma: PrismaClient) {
   if (newEnd <= oldEnd) return;
   await prisma.dietPlanSegment.updateMany({ where: { patient_id: patientId, end_date: oldEnd }, data: { end_date: newEnd } });
+}
+
+const PURIFICATION = ['Before purification', 'Internal oleation', 'After purification'];
+const shiftISO = (iso: string, n: number) => ymd(new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY_MS));
+
+/**
+ * The diets a booked purification course asks for (#986): internal oleation from
+ * the first Snehapana (else three days before), after-purification for five days
+ * from Virechana, then the usual plan. Null when no course is booked, the centre
+ * lacks those plans, or the stay already follows them.
+ */
+export async function courseDiet(patientId: string, date: string, prisma: PrismaClient) {
+  const stay = await stayFor(patientId, date, prisma);
+  if (!stay) return null;
+  const inStay = { patient_id: patientId, status: { notIn: ['cancelled', 'no_show'] as AppointmentStatus[] }, scheduled_date: { gte: stay.start_date, lte: stay.end_date } };
+  const purge = await prisma.appointment.findFirst({ where: { ...inStay, Therapy: { once_per_course: true, before_purification: false } }, orderBy: { scheduled_date: 'asc' } });
+  if (!purge) return null;
+  const v = ymd(purge.scheduled_date);
+  const oil = await prisma.appointment.findFirst({ where: { ...inStay, scheduled_date: { gte: stay.start_date, lt: purge.scheduled_date }, Therapy: { before_purification: true } }, orderBy: { scheduled_date: 'asc' } });
+  const templates = await prisma.dietTemplate.findMany({ orderBy: { name: 'asc' } });
+  const named = (p: string) => templates.find((t) => t.name.startsWith(p));
+  const oleation = named('Internal oleation'), after = named('After purification');
+  if (!oleation || !after) return null;
+  const segs = await prisma.dietPlanSegment.findMany({ where: { patient_id: patientId, start_date: { lte: stay.end_date }, end_date: { gte: stay.start_date } }, orderBy: { start_date: 'asc' } });
+  const own = templates.find((t) => t.id === segs[0]?.template_id && !PURIFICATION.some((p) => t.name.startsWith(p)));
+  const usual = own ?? templates.find((t) => !PURIFICATION.some((p) => t.name.startsWith(p)));
+  const start = ymd(stay.start_date), end = ymd(stay.end_date);
+  const o = oil ? ymd(oil.scheduled_date) : shiftISO(v, -3);
+  const prep = named('Before purification');
+  const parts = [
+    { from: o < start ? start : o, template_id: oleation.id, name: oleation.name },
+    { from: v, template_id: after.id, name: after.name },
+    ...(usual && shiftISO(v, 5) <= end ? [{ from: shiftISO(v, 5), template_id: usual.id, name: usual.name }] : []),
+  ];
+  // The plan after is a suggestion; a stay already on the two course diets on their days is following it.
+  const follows = parts.slice(0, 2).every((p) => segs.some((s) => s.template_id === p.template_id && ymd(s.start_date) === p.from));
+  // Days before oleation with no plan at all get the preparation diet.
+  const undecided = !segs.length || ymd(segs[0].start_date) > start;
+  if (prep && undecided && parts[0].from > start) parts.unshift({ from: start, template_id: prep.id, name: prep.name });
+  return follows ? null : { parts };
+}
+
+/** Write the course's diets in one go; the answer is what was there, for Undo. */
+export async function applyCourseDiet(patientId: string, date: string, prisma: PrismaClient) {
+  const course = await courseDiet(patientId, date, prisma);
+  if (!course) return null;
+  const stay = (await stayFor(patientId, date, prisma))!;
+  const previous = await prisma.dietPlanSegment.findMany({ where: { patient_id: patientId, start_date: { lte: stay.end_date }, end_date: { gte: stay.start_date } } });
+  for (const p of course.parts) await startDietFrom(patientId, p.from, p.template_id, prisma);
+  return { parts: course.parts, previous };
+}
+
+/** Undo: the stay's segments as they were. */
+export async function restoreDiet(patientId: string, date: string, previous: { id: string; start_date: string; end_date: string; template_id: string | null; overrides?: unknown; template_label?: string | null; therapy_ids?: string[]; description?: string | null }[], prisma: PrismaClient) {
+  const stay = await stayFor(patientId, date, prisma);
+  if (!stay) return;
+  await prisma.$transaction([
+    prisma.dietPlanSegment.deleteMany({ where: { patient_id: patientId, start_date: { lte: stay.end_date }, end_date: { gte: stay.start_date } } }),
+    prisma.dietPlanSegment.createMany({ data: previous.map((s) => ({ id: s.id, patient_id: patientId, start_date: new Date(s.start_date), end_date: new Date(s.end_date), template_id: s.template_id, overrides: (s.overrides ?? undefined) as never, template_label: s.template_label ?? null, therapy_ids: s.therapy_ids ?? [], description: s.description ?? null })) }),
+  ]);
 }

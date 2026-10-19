@@ -13,7 +13,7 @@ import { staffWeek } from './staffWeek.js';
 import { linkLapsed, newLinkToken } from './links.js';
 import { findConflict, HAPPENING, loadDay, nearestFreeTime, oncePerCourse, softWarnings, staffDay, fullFrom, type Action } from './appointmentGuard.js';
 import { moveOffClosedDays, replanRoomDay, replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
-import { dietTimeline, startDietFrom, extendDiet } from './patientDiet.js';
+import { applyCourseDiet, courseDiet, dietTimeline, restoreDiet, startDietFrom, extendDiet } from './patientDiet.js';
 import { checkDay, headlineFor, planRange, rowOptions } from './dayCheck.js';
 import { centreClock, eventClashes, outsideHours, type EventRow } from './availability.js';
 import { loadDietsForDay } from './dietResolution.js';
@@ -738,7 +738,19 @@ app.get('/patients/:id/diet', async (req: Request, res: Response) => {
   if (!out) { res.status(404).json({ error: 'No stay to plan meals for' }); return; }
   // The patient's own lines beside the plan (#355), edited in the same sheet.
   const own = await prisma.patient.findUnique({ where: { id: String(req.params.id) }, select: { food_limits: true, medication: true, before_treatment: true, after_treatment: true } });
-  res.json({ ...out, own });
+  res.json({ ...out, own, course: await courseDiet(String(req.params.id), date, prisma) });
+});
+/** The purification course's three diets in one tap (#986), and its Undo. */
+app.post('/patients/:id/diet/course', async (req: Request, res: Response) => {
+  const { date } = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.body);
+  const out = await applyCourseDiet(String(req.params.id), date, prisma);
+  if (!out) { res.status(409).json({ error: 'No purification course to follow, or it is already followed.' }); return; }
+  res.json(out);
+});
+app.post('/patients/:id/diet/course/undo', async (req: Request, res: Response) => {
+  const body = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), previous: z.array(z.object({ id: z.string().uuid(), start_date: z.string(), end_date: z.string(), template_id: z.string().uuid().nullable(), overrides: z.unknown().optional(), template_label: z.string().nullable().optional(), therapy_ids: z.array(z.string()).optional(), description: z.string().nullable().optional() })).max(50) }).parse(req.body);
+  await restoreDiet(String(req.params.id), body.date, body.previous, prisma);
+  res.json({ ok: true });
 });
 app.post('/patients/:id/diet', async (req: Request, res: Response) => {
   const body = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), template_id: z.string().uuid() }).parse(req.body);

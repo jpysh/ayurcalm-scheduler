@@ -34,7 +34,7 @@ type Who = { id: string; name: string };
 export type Plan = { id: string; name: string; description?: string | null; is_active: boolean; patients: number } & Record<string, unknown>;
 type DietLine = { id: string; from: string; to: string; template_id: string | null; name: string; patients: number; changed_for_patient: boolean };
 type Own = { food_limits: string | null; medication: string | null; before_treatment: string | null; after_treatment: string | null };
-type Line = { stay: { id: string; start: string; end: string }; entries: DietLine[]; own?: Own | null };
+type Line = { stay: { id: string; start: string; end: string }; entries: DietLine[]; own?: Own | null; course?: { parts: { from: string; template_id: string; name: string }[] } | null };
 const OWN: [keyof Own, string][] = [["food_limits", "Food limits"], ["medication", "Medication"], ["before_treatment", "Before treatment"], ["after_treatment", "After treatment"]];
 
 const MEALS: [string, string][] = [["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"], ["snacks", "Snacks"]];
@@ -73,6 +73,20 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
     onClose();
   };
   const running = line?.entries.find((e) => e.template_id === chosen);
+  // A purification course booked (#986): its three diets, dated from its own sessions, in one tap.
+  const followCourse = async () => {
+    if (!patient) return;
+    setBusy(true);
+    const res = await fetch(`${API_BASE}/patients/${patient.id}/diet/course`, { method: "POST", headers: json, body: JSON.stringify({ date: today }) });
+    const body = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) { toast.error(body.error || "The diets were not changed. Try again."); return; }
+    toast(`${first(patient.name)}'s diet now follows the course`, { action: { label: "Undo", onClick: async () => {
+      await fetch(`${API_BASE}/patients/${patient.id}/diet/course/undo`, { method: "POST", headers: json, body: JSON.stringify({ date: today, previous: body.previous }) });
+      load(); onChanged();
+    } } });
+    load(); onChanged();
+  };
   const saveOwn = async () => {
     if (!patient || !own) return;
     setBusy(true);
@@ -101,6 +115,10 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
             note: e.id ? [e.changed_for_patient ? "Changed for this patient" : "", e.patients > 1 ? `Used by ${e.patients} patients` : ""].filter(Boolean).join(" · ") : "Choose a plan below",
           };
         })} />
+        {line.course ? <>
+          <Consequence>{`The purification course asks for ${line.course.parts.map((p) => `${p.name} from ${dayText(p.from)}`).join(", then ")}.`}</Consequence>
+          <Btn kind="primary" className="mt-2" disabled={busy} onClick={followCourse}>Follow the course</Btn>
+        </> : null}
         <div className="mt-4 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">Change to</div>
         <div className="mt-2">
           <Picker value={chosen} onChange={setChosen}
