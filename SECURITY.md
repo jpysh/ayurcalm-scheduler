@@ -8,7 +8,7 @@
 - **Wrong passwords are limited**: ten per address and thirty per account in 15 minutes.
 - **Admin and staff roles.** Staff cannot change settings, users, backups or the AI key.
 - **Nightly backups** on your own machine, downloadable from Settings.
-- **Checked on every change and every week**: automated tests, GitHub code scanning (CodeQL), secret scanning, Dependabot security updates, and the [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/jpysh/ayurcalm-scheduler).
+- **Checked on every change and every week**: automated tests, GitHub code scanning (CodeQL), secret scanning, Dependabot security updates, the [OpenSSF Best Practices badge](https://www.bestpractices.dev/projects/15691) (passing), and the [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/jpysh/ayurcalm-scheduler).
 - **Open source (MIT)**: anyone can read exactly what the code does.
 
 Put a self-hosted install behind HTTPS (the Cloudflare Tunnel in the [self-host guide](docs/self-host.md) does this) and keep a backup off the machine.
