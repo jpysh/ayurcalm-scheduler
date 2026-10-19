@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BottomSheet, Btn, DateRow, SheetFoot, Text } from "@/components/kit";
+import { BottomSheet, Btn, DateRow, SheetFoot, Text, dayText } from "@/components/kit";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 
@@ -17,13 +17,17 @@ const empty: Texts = { breakfast: "", lunch: "", dinner: "", snacks: "" };
 export default function DayDietDialog({ patient, day, onClose, onChangePlan }: { patient: { id: string; name: string } | null; day: string; onClose: () => void; onChangePlan?: () => void }) {
   const [date, setDate] = useState(day);
   // The centre's day, not the phone's: today, or tomorrow after closing (#586).
-  useEffect(() => { if (patient && day) setDate(day); }, [patient?.id, day]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (patient && day) { setDate(day); setUntil(day); } }, [patient?.id, day]); // eslint-disable-line react-hooks/exhaustive-deps
   const [saved, setSaved] = useState<Texts>(empty);
   const [texts, setTexts] = useState<Texts>(empty);
   const [busy, setBusy] = useState(false);
   // What the plan gives that day, shown in each empty box so the admin sees the meals, not "As plan" (#265 H2).
   const [plan, setPlan] = useState<Partial<Record<string, string>>>({});
   const [away, setAway] = useState<string | null>(null);
+  // The same change on the days after too, up to leaving (#982).
+  const [until, setUntil] = useState(day);
+  const [leaves, setLeaves] = useState<string | null>(null);
+  useEffect(() => { setUntil((u) => (u < date ? date : u)); }, [date]);
 
   useEffect(() => {
     if (!patient || !date) return;
@@ -34,7 +38,7 @@ export default function DayDietDialog({ patient, day, onClose, onChangePlan }: {
     setAway(null);
     fetch(`${API_BASE}/patients/${patient.id}/day?date=${date}`).then((r) => (r.ok ? r.json() : null))
       
-      .then((d: { away?: string | null; meals?: { meal: string; text: string }[] } | null) => { if (!stale) setAway(d?.away ?? null); if (!stale && d?.meals) setPlan(Object.fromEntries(d.meals.map((m) => [m.meal, m.text]))); })
+      .then((d: { away?: string | null; meals?: { meal: string; text: string }[]; stay?: { end_date: string } | null } | null) => { if (!stale) { setAway(d?.away ?? null); setLeaves(d?.stay?.end_date ?? null); } if (!stale && d?.meals) setPlan(Object.fromEntries(d.meals.map((m) => [m.meal, m.text]))); })
       .catch(() => {});
     fetch(`${API_BASE}/dietplans?patient_id=${patient.id}&date=${date}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
@@ -54,17 +58,23 @@ export default function DayDietDialog({ patient, day, onClose, onChangePlan }: {
   const save = async () => {
     if (!patient) return;
     setBusy(true);
+    const undo: { meal: Meal; previous: { date: string; description: string; instructions: string | null }[] }[] = [];
+    const post = (body: object) => fetch(`${API_BASE}/dietplans`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patient_id: patient.id, ...body }) });
     try {
       for (const meal of meals) {
-        if (texts[meal].trim() === saved[meal].trim()) continue;
-        const res = await fetch(`${API_BASE}/dietplans`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ patient_id: patient.id, date, meal_time: meal, description: texts[meal] }),
-        });
+        if (texts[meal].trim() === saved[meal].trim() && until === date) continue;
+        const res = await post({ date, until, meal_time: meal, description: texts[meal] });
         if (!res.ok) throw new Error(String(res.status));
+        undo.push({ meal, previous: (await res.json()).previous });
       }
-      toast.success("Meals saved");
+      // Undo empties the days changed, then writes back what each had (#982).
+      toast(until === date ? "Meals saved" : `Meals saved until ${dayText(until)}`, { action: { label: "Undo", onClick: async () => {
+        for (const u of undo) {
+          await post({ date, until, meal_time: u.meal, description: "" });
+          for (const p of u.previous) await post({ date: p.date, meal_time: u.meal, description: p.description, instructions: p.instructions ?? undefined });
+        }
+        toast("Meals put back");
+      } } });
       onClose();
     } catch {
       toast.error("Could not save — nothing after the failed meal was saved");
@@ -74,10 +84,12 @@ export default function DayDietDialog({ patient, day, onClose, onChangePlan }: {
   };
 
   return (
-    <BottomSheet open={!!patient} onOpenChange={(v: boolean) => { if (!v) { setDate(day); onClose(); } }} title={`${patient?.name ?? ''}'s meals`}
-      note="Type in a meal to change it for this day only. Leave it empty to follow the plan."
+    <BottomSheet open={!!patient} onOpenChange={(v: boolean) => { if (!v) { setDate(day); setUntil(day); onClose(); } }} title={`${patient?.name ?? ''}'s meals`}
+      note="Type in a meal to change it on these days only. Leave it empty to follow the plan."
       foot={<SheetFoot busy={busy} ok={!!date} save={save} label="Save the meals" />}>
-      <DateRow label="Day" value={date} onChange={setDate} />
+      <DateRow label="From" value={date} onChange={setDate} />
+      <DateRow label="Until" value={until} min={date} max={leaves ?? undefined} onChange={setUntil} />
+      {leaves && until !== leaves ? <Btn kind="quiet" inline className="-ml-2" onClick={() => setUntil(leaves)}>Until leaving</Btn> : null}
       {/* Away is said, never a dropped meal: the kitchen keeps it aside (#695). */}
       {away ? <p className="mt-2 text-sm font-semibold">{away}</p> : null}
       {meals.map((meal) => (
