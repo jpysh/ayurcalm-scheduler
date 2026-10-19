@@ -113,6 +113,11 @@ async function main() {
     const start = await call('POST', `/patients/${fresh.id}/next-week`, { date: REVIEW, review: false, lines: [{ from_therapy_id: kati.id, therapy_id: kati.id }, { from_therapy_id: shiro.id, therapy_id: shiro.id }] });
     assert.equal(start.count, 14, 'two therapies on each of the seven days, from the day after the review');
     assert.equal(await prisma.appointment.count({ where: { patient_id: fresh.id, therapy_id: kati.id } }), 7);
+    // A course shape (#984): 3 of 7 days is spread over the week, not the first three.
+    const shaped = await call('POST', '/patients', { name: `${TAG} Shaped`, gender: 'female', stay: { start_date: REVIEW, end_date: day(12) } });
+    assert.equal((await call('POST', `/patients/${shaped.id}/next-week`, { date: REVIEW, review: false, lines: [{ from_therapy_id: kati.id, therapy_id: kati.id, sessions: 3 }] })).count, 3);
+    const when = (await prisma.appointment.findMany({ where: { patient_id: shaped.id }, orderBy: { scheduled_date: 'asc' } })).map((a) => a.scheduled_date.toISOString().slice(0, 10));
+    assert.deepEqual(when, [day(1), day(3), day(5)], 'every other day or so');
     const noConsult = await raw('POST', `/patients/${fresh.id}/next-week`, { date: REVIEW, review: false, lines: [{ from_therapy_id: consult.id, therapy_id: consult.id }] });
     assert.equal((await noConsult.json()).count, 0, 'a consultation is never a line of the week');
 

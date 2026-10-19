@@ -533,7 +533,7 @@ const shift = (iso: string, n: number) => isoOf(new Date(Date.parse(`${iso}T00:0
  * therapy; `only` keeps just the ticked lines. Proposing and booking both call
  * this, so the sheet never shows what Book all would refuse.
  */
-export async function planNextWeek(patientId: string, reviewISO: string, prisma: PrismaClient, opts: { swaps?: Record<string, string>; only?: string[]; review?: boolean } = {}): Promise<WeekPlan | null> {
+export async function planNextWeek(patientId: string, reviewISO: string, prisma: PrismaClient, opts: { swaps?: Record<string, string>; only?: string[]; review?: boolean; sessions?: Record<string, number> } = {}): Promise<WeekPlan | null> {
   const review = new Date(`${reviewISO}T00:00:00.000Z`);
   const patient = await prisma.patient.findUnique({ where: { id: patientId } });
   if (!patient) return null;
@@ -576,8 +576,11 @@ export async function planNextWeek(patientId: string, reviewISO: string, prisma:
     // A therapy ticked that this week never had (a patient's first days, #611): every day of the week, from the centre's opening time.
     .concat((opts.only || []).filter((id) => !byTherapy.has(id) && therapies.some((t) => t.id === (opts.swaps?.[id] || id) && !t.is_consultation)).map((id) => {
       const t = therapies.find((x) => x.id === (opts.swaps?.[id] || id))!;
-      const days: string[] = [];
-      for (let d = first; d <= to; d = shift(d, 1)) days.push(d);
+      const all: string[] = [];
+      for (let d = first; d <= to; d = shift(d, 1)) all.push(d);
+      // A count shapes the course (#984): 3 of 7 days is every other day or so, spread from the first.
+      const n = Math.min(opts.sessions?.[id] ?? all.length, all.length);
+      const days = [...new Set(Array.from({ length: n }, (_, i) => all[Math.floor((i * all.length) / n)]))];
       return { from_therapy_id: id, therapy_id: t.id, therapy_name: t.name, start_time: settings?.opening_time || '09:00', staff_name: '', sessions: [], missing: [], _pref: { staff_id: null, room_id: null } as Pref, _dates: days };
     }))
     .sort((a, b) => a.start_time.localeCompare(b.start_time)) as (WeekLine & { _pref: Pref; _dates: string[] })[];

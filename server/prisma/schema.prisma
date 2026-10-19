@@ -432,6 +432,8 @@ model Settings {
   show_footer              Boolean  @default(true)
   /// What needs the admin (#288): only the rules the admin changed, `{ rule_id: { on?, hours? } }`. Defaults live in src/attention.ts.
   attention_rules          Json?
+  /// Starter courses for a new guest's first week (#984): `[{ name, lines: [{ therapy_id, sessions }] }]`, edited from Plan next week.
+  starter_courses          Json?
   /// The setup card's items the admin has looked at ("Set up your centre · 3 of 7 reviewed").
   setup_reviewed           String[] @default([])
   updated_at               DateTime @updatedAt

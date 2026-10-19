@@ -759,6 +759,15 @@ async function main() {
       opening_time: '09:00', closing_time: '20:00',
     },
   });
+  // A first week by complaint (#984), sessions out of seven days; the centre edits them from Plan next week.
+  const byName = (n: string) => allTherapies.find((t) => t.name === n)!.id;
+  const starter = (name: string, lines: [string, number][]) => ({ name, lines: lines.map(([t, sessions]) => ({ therapy_id: byName(t), sessions })) });
+  await prisma.settings.update({ where: { id: 'singleton' }, data: { starter_courses: [
+    starter('Stress and sleep', [['Abhyanga', 7], ['Shirodhara', 5], ['Padabhyanga', 2]]),
+    starter('Back pain', [['Abhyanga', 5], ['Kati Vasti', 5], ['Elakizhi', 3]]),
+    starter('Knees and joints', [['Abhyanga', 5], ['Janu Vasti', 5], ['Podikizhi', 3]]),
+    starter('Eyes', [['Netra Tarpana', 5], ['Nasya', 5], ['Mukhabhyanga', 2]]),
+  ] } });
 
   console.log('Seeded extended AyurCalm dataset successfully');
 }
