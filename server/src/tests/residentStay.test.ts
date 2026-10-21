@@ -72,6 +72,9 @@ async function main() {
     const out = await call('PUT', `/patients/${created.id}/stays/${created.Stays[0].id}`, { start_date: '2030-02-10', end_date: '2030-02-12' });
     assert.equal(out.stay.duration_days, 3);
     assert.deepEqual(out.left_over.map((a: { id: string }) => a.id), [after.id], 'only treatments after the new last day are left over');
+    // Kept rather than cancelled, the day check says so (#1044).
+    const leftDay = await call('POST', '/day-check', { date: '2030-02-14' });
+    assert.ok(leftDay.problems.some((p: { kind: string; appointment_id: string }) => p.kind === 'NOT_STAYING' && p.appointment_id === after.id), 'a treatment after the guest has left is not flagged');
 
     const cancelled = await call('POST', '/day-check/accept', { date: '2030-02-14', moves: [{ appointment_id: after.id, staff_id: null, co_staff_ids: [], room_id: null, start_time: '10:00', date: '2030-02-14', cancel: true }] });
     assert.equal((await prisma.appointment.findUnique({ where: { id: after.id } }))?.status, 'cancelled', 'cancel should keep the treatment, as cancelled');

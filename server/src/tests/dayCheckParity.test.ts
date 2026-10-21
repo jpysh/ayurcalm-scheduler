@@ -64,6 +64,11 @@ async function main() {
     const four = await prisma.patient.create({ data: { name: 'Parity Four', gender: 'female' } });
     const five = await prisma.patient.create({ data: { name: 'Parity Five', gender: 'female' } });
     [one, two, three, four, five].forEach((p) => made.push({ table: 'patient', id: p.id }));
+    // Staying that day, or each would be flagged NOT_STAYING (#1044).
+    for (const p of [one, two, three, four, five]) {
+      const stay = await prisma.patientStay.create({ data: { patient_id: p.id, start_date: day, end_date: day, duration_days: 1 } });
+      made.push({ table: 'patientStay', id: stay.id });
+    }
 
     const book = async (patientId: string, therapyId: string, staffId: string, roomId: string, start: string, co: string[] = []) => {
       const a = await prisma.appointment.create({
@@ -190,6 +195,7 @@ async function main() {
       try {
         if (m.table === 'appointment') await prisma.appointment.delete({ where: { id: m.id } });
         if (m.table === 'timeOff') await prisma.timeOff.delete({ where: { id: m.id } });
+        if (m.table === 'patientStay') await prisma.patientStay.delete({ where: { id: m.id } });
         if (m.table === 'patient') await prisma.patient.delete({ where: { id: m.id } });
         if (m.table === 'staff') await prisma.staff.delete({ where: { id: m.id } });
         if (m.table === 'therapyRoom') await prisma.therapyRoom.delete({ where: { id: m.id } });
