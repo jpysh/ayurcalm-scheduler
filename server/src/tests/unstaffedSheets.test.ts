@@ -61,6 +61,10 @@ async function main() {
 
     const rota = pdfText(dir, 'rota.pdf', await generateTherapistRotaPdf(DAY, prisma));
     assert.ok(rota.includes('Needs a therapist'), 'The rota has no "Needs a therapist" group');
+    // Under the title, what was still wrong when it was printed (#1030).
+    assert.ok(patientSheet.includes(`NOT FIXED WHEN PRINTED: ${TAG} Kriti is off`), `The patient sheet does not say what was not fixed: ${patientSheet.slice(0, 400)}`);
+    assert.ok(rota.includes(`NOT FIXED WHEN PRINTED: ${TAG} Kriti is off`), 'The rota does not say what was not fixed');
+    assert.ok(!pdfText(dir, 'own.pdf', await generateTherapistRotaPdf(DAY, prisma, kriti.id)).includes('NOT FIXED'), "A therapist's own rota carries the centre's problems");
     assert.ok(rota.includes(`14:00 NO THERAPIST · ${TAG} Sweda 60m · ${TAG} Aarav`), 'The rota drops the treatment booked with a therapist who is off');
 
     // A room out of use for part of the day is marked too, as the day check calls it blocking (#758).

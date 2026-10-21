@@ -4,6 +4,7 @@ import PDFDocument from 'pdfkit';
 import { madeWith } from '../product.js';
 import { loadDietsForDay, mealLabel, mealOrder } from '../dietResolution.js';
 import { PrismaClient } from '@prisma/client';
+import { checkDay } from '../dayCheck.js';
 
 // The sheet's date is a calendar day; read in the centre's zone it would be the day before west of UTC (#723).
 export const fmtLong = (isoDate: string) => {
@@ -11,7 +12,16 @@ export const fmtLong = (isoDate: string) => {
   return new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(d);
 };
 
-export const addHeader = (doc: any, dateStr: string, centreName: string, everyone = '') => {
+/**
+ * What was still wrong when the sheet was printed (#1030), so the paper says so
+ * instead of a note on the phone: "Bhavna Mishra is off — 4 treatments".
+ */
+export const notFixedLine = async (dateISO: string, prisma: PrismaClient) => {
+  const check = await checkDay(new Date(dateISO), prisma, { withFixes: false });
+  return check.groups.filter((g) => g.problem_class === 'blocking').map((g) => g.label).join('; ');
+};
+
+export const addHeader = (doc: any, dateStr: string, centreName: string, everyone = '', notFixed = '') => {
   const w = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const x = doc.page.margins.left;
   const top = doc.page.margins.top;
@@ -20,6 +30,7 @@ export const addHeader = (doc: any, dateStr: string, centreName: string, everyon
   // Events for everyone are the same in every row, so they print once here
   // instead of taking a column each.
   if (everyone) doc.font('Helvetica').fontSize(9).text(`For everyone: ${everyone}`, x, doc.y + 2, { align: 'center', width: w });
+  if (notFixed) doc.font('Helvetica-Bold').fontSize(10).text(`NOT FIXED WHEN PRINTED: ${notFixed}`, x, doc.y + 2, { align: 'center', width: w });
   doc.moveDown(0.5);
 };
 
@@ -192,7 +203,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   const useHeadFont = () => doc.font('Helvetica-Bold').fontSize(headFont);
   useCellFont();
 
-  addHeader(doc, dateISO, centreName, everyoneLine);
+  addHeader(doc, dateISO, centreName, everyoneLine, await notFixedLine(dateISO, prisma));
   const startY = doc.y + 2;
 
   if (displayPatients.length === 0) {
