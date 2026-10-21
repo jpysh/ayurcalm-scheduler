@@ -482,8 +482,8 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   const nameOf = (l: Option[] | undefined, id: string) => l?.find((o) => o.id === id)?.name || "";
   const weekday = new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
   const long = (facts?.length ?? 0) > 12;
-  // The last one had comes first; what is already booked that day stays in view, greyed, so a repeat is seen before it is chosen.
-  const listed = (facts || []).filter((t) => !long || t.repeat || t.taken).sort((a, b) => Number(b.repeat) - Number(a.repeat));
+  // The last one had comes first; what is already booked that day drops to the end, greyed and still bookable (#1028).
+  const listed = (facts || []).filter((t) => !long || t.repeat || t.taken).sort((a, b) => Number(b.repeat) - Number(a.repeat) || Number(a.taken) - Number(b.taken));
   const matching = (facts || []).filter((t) => say(t.name).toLowerCase().includes(tq.trim().toLowerCase()));
   const when = `${date === today ? "" : `${weekday} `}${time}`;
   const label = !therapyId ? "Choose a therapy" : !slot ? `Book ${first}` : warnings.length ? `Book anyway, ${sessions > 1 ? `${sessions} days from ` : ""}${when}` : `Book ${first}, ${sessions > 1 ? `${sessions} days from ` : ""}${when}`;

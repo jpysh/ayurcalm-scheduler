@@ -416,8 +416,9 @@ export async function therapyFacts(dayISO: string, patientId: string, prisma: Pr
     const had = mine.find((a) => a.therapy_id === t.id && a.scheduled_date < day);
     return {
       id: t.id, name: t.name, duration_minutes: t.duration_minutes, is_consultation: t.is_consultation,
-      taken: !!same, repeat: t.id === repeat,
-      fact: same ? `already at ${same.start_time}` : had ? `had ${dayLabel(had.scheduled_date)}` : undefined,
+      // Booked that day is never 'Same as last time' (#1028): it is said, not offered first.
+      taken: !!same, repeat: !same && t.id === repeat,
+      fact: same ? `Booked ${same.start_time}` : had ? `had ${dayLabel(had.scheduled_date)}` : undefined,
     };
   });
 }
