@@ -18,10 +18,13 @@ const day = (appointments: ReturnType<typeof appt>[]) => ({
 }) as unknown as DayContext;
 
 assert.equal(fullFrom(day([])), null, 'an empty day is not full');
-assert.equal(fullFrom(day([appt('a', '09:00', 540), appt('b', '09:00', 360)])), '09:00', 'booked solid is full all day');
+assert.deepEqual(fullFrom(day([appt('a', '09:00', 540), appt('b', '09:00', 360)])), { from: '09:00', why: 'no therapist has a free hour' }, 'booked solid is full all day');
 // a is booked from 12:00 to closing; b goes home at 15:00 and is booked 11:30-15:00. The doctor's free time does not count.
 const full = fullFrom(day([appt('a', '12:00', 360), appt('b', '11:30', 210)]));
-assert.equal(full, '12:00');
+assert.equal(full?.from, '12:00');
 // One free hour at 16:00 for a: not full.
 assert.equal(fullFrom(day([appt('a', '09:00', 420), appt('a', '17:00', 60), appt('b', '09:00', 360)])), null);
+// A centre with no therapist in is not booked up, and says so (#1023).
+const noOne = { ...day([]), staff: staff.filter((s) => s.role === 'doctor') } as unknown as DayContext;
+assert.deepEqual(fullFrom(noOne), { from: '09:00', why: 'no therapist is in' });
 console.log('PASS dayFull');

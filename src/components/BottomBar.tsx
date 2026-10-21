@@ -217,11 +217,11 @@ export function WeekStrip({ day, today, setDay, moves, stamp }: { day: string; t
     return () => { ro.disconnect(); document.documentElement.style.removeProperty("--strip-h"); };
   }, []);
   const dayName = dayText(day);
-  // The server says which days have no therapist free for an hour (#979); stamp changes when the day's bookings do.
-  const [full, setFull] = useState<Map<string, string>>(new Map());
+  // The server says which days have no therapist free for an hour, and why (#979, #1023); stamp changes when the day's bookings or staff do.
+  const [full, setFull] = useState<Map<string, { from: string; why: string }>>(new Map());
   useEffect(() => {
     fetch(`${API_BASE}/day-full?from=${weekOf(day)}`).then((r) => (r.ok ? r.json() : { days: [] }))
-      .then((b: { days: { date: string; full_from: string }[] }) => setFull(new Map(b.days.map((d) => [d.date, d.full_from])))).catch(() => {});
+      .then((b: { days: { date: string; full_from: string; why: string }[] }) => setFull(new Map(b.days.map((d) => [d.date, { from: d.full_from, why: d.why }])))).catch(() => {});
   }, [day, stamp]); // eslint-disable-line react-hooks/exhaustive-deps
   const fullFrom = full.get(day);
   return (
@@ -249,7 +249,7 @@ export function WeekStrip({ day, today, setDay, moves, stamp }: { day: string; t
           </div>
         ))}
       </div>
-      {fullFrom && !compact ? <p className="px-1 pb-2 text-sm font-semibold">Full from {fullFrom}: no therapist has a free hour.</p> : null}
+      {fullFrom && !compact ? <p className="px-1 pb-2 text-sm font-semibold">Full from {fullFrom.from}: {fullFrom.why}.</p> : null}
     </div>
   );
 }

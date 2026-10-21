@@ -298,8 +298,9 @@ export async function oncePerCourse(c: { id?: string; patient_id: string; therap
  * When the day stops having room (#979): the first hour from which no therapist
  * on shift has a free hour left. A screen shows it; it never works it out.
  * Rooms and skills are left out: at a full centre the hands run out first.
+ * The reason is the server's too (#1023): a day with nobody in is not a busy one.
  */
-export function fullFrom(ctx: DayContext): string | null {
+export function fullFrom(ctx: DayContext): { from: string; why: string } | null {
   if (centreClosed(ctx.settings, ctx.timeOff, ctx.day)) return null;
   const open = toMinutes(ctx.settings?.opening_time || '09:00');
   const close = toMinutes(ctx.settings?.closing_time || '18:00');
@@ -311,5 +312,5 @@ export function fullFrom(ctx: DayContext): string | null {
   const from = last < 0 ? Math.floor(open / 60) * 60 : Math.ceil((last + 1) / 60) * 60;
   // A last hour that is taken is an ordinary day, not a full one.
   if (from + 120 > close) return null;
-  return `${String(from / 60).padStart(2, '0')}:00`;
+  return { from: `${String(from / 60).padStart(2, '0')}:00`, why: working.length ? 'no therapist has a free hour' : 'no therapist is in' };
 }

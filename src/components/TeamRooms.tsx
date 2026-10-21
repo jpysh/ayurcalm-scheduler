@@ -139,7 +139,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
     <div>
       {isTeam ? <>
         <PageHead title="Staff" note={day === today ? `${staff.filter(staffActive).length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}` : `${on < 0 ? "…" : inOn} in on ${dayText(day)}`} gear={{ label: "What needs you: staff rules", run: openRules }} />
-        <WeekStrip day={day} today={today} setDay={setDay} />
+        <WeekStrip day={day} today={today} setDay={setDay} stamp={staff} />
       </> : <PageHead title="Rooms" note={`${plural(rooms.filter(roomActive).length, "room")}${roomsOut ? ` · ${roomsOut} out` : ""}`} />}
       {/* With nobody on the list yet, "No staff yet" below already says it. */}
       {isTeam && on >= 0 && week!.gaps[on].length && !ql && staff.some(staffActive) ? (

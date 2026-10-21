@@ -1002,12 +1002,12 @@ app.get('/staff-day', async (req: Request, res: Response) => {
 app.get('/day-full', async (req: Request, res: Response) => {
   const from = String(req.query.from || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) { res.status(400).json({ error: 'from=YYYY-MM-DD required' }); return; }
-  const out: { date: string; full_from: string }[] = [];
+  const out: { date: string; full_from: string; why: string }[] = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(`${from}T00:00:00.000Z`);
     d.setUTCDate(d.getUTCDate() + i);
     const full = fullFrom(await loadDay(d, prisma));
-    if (full) out.push({ date: d.toISOString().slice(0, 10), full_from: full });
+    if (full) out.push({ date: d.toISOString().slice(0, 10), full_from: full.from, why: full.why });
   }
   res.json({ days: out });
 });
