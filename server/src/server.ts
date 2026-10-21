@@ -16,7 +16,7 @@ import { findConflict, HAPPENING, loadDay, nearestFreeTime, oncePerCourse, softW
 import { moveOffClosedDays, replanRoomDay, replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
 import { applyCourseDiet, courseDiet, dietTimeline, restoreDiet, startDietFrom, extendDiet } from './patientDiet.js';
 import { checkDay, headlineFor, planRange, rowOptions } from './dayCheck.js';
-import { centreClock, eventClashes, outsideHours, type EventRow } from './availability.js';
+import { centreClock, eventClashes, gives, outsideHours, type EventRow } from './availability.js';
 import { loadDietsForDay } from './dietResolution.js';
 import { bookingOptions, bookingSuggestions, bookingWho, cardChoices, nextConsultations, notStaying, planNextWeek, therapyFacts, whyNoConsultation, whyNoTime } from './cardChoices.js';
 import { historyOf } from './history.js';
@@ -1675,7 +1675,12 @@ app.post('/patients/:id/next-week', async (req: Request, res: Response) => {
   const plan = await planNextWeek(id, b.date, prisma, { only: b.lines.map((l) => l.from_therapy_id), swaps: Object.fromEntries(b.lines.map((l) => [l.from_therapy_id, l.therapy_id])), review: b.review, sessions });
   if (!plan) { res.status(404).json({ error: 'Patient not found' }); return; }
   const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
-  const missing = plan.lines.flatMap((l) => l.missing.map((m) => `${l.therapy_name} on ${day(m.date)}`));
+  // One line, never a day-by-day list (#1022): the team's reason when that is the cause, else one entry per therapy.
+  const short = plan.lines.filter((l) => l.missing.length);
+  let team: string | undefined;
+  for (const l of short) if (!team) team = await whyNoTime(b.date, { patient_id: id, therapy_id: l.therapy_id }, prisma);
+  if (team) { res.status(409).json({ message: `Nothing was booked: ${team}`, plan }); return; }
+  const missing = short.map((l) => l.missing.length === 1 ? `${l.therapy_name} on ${day(l.missing[0].date)}` : `${l.therapy_name} on ${l.missing.length} days`);
   if (b.review && plan.review_missing) missing.push('the next review');
   if (missing.length) { res.status(409).json({ message: `Nothing was booked: no free time for ${missing.join(', ')}. Untick or swap it and try again.`, plan }); return; }
   const rows = [
@@ -1701,13 +1706,21 @@ const DEFAULT_STARTERS: [string, [string, number][]][] = [
   ['Eyes', [['Netra Tarpana', 5], ['Nasya', 5], ['Mukhabhyanga', 2]]],
 ];
 app.get('/starter-courses', async (_req: Request, res: Response) => {
-  const [settings, therapies] = await Promise.all([prisma.settings.findUnique({ where: { id: 'singleton' } }), prisma.therapy.findMany({ where: { is_active: true } })]);
+  const [settings, therapies, staff, rooms] = await Promise.all([prisma.settings.findUnique({ where: { id: 'singleton' } }), prisma.therapy.findMany({ where: { is_active: true } }), prisma.staff.findMany({ where: { is_active: true } }), prisma.therapyRoom.findMany({ where: { is_active: true } })]);
+  // A starter the centre cannot give stays listed with every reason, so the admin sees what to add (#1022).
+  const why = (id: string) => {
+    const t = therapies.find((x) => x.id === id)!;
+    const needed = t.staff_required ?? 1;
+    const out = staff.filter((s) => gives(s, t)).length < needed ? [`${t.name} needs ${needed > 1 ? `${needed} trained therapists` : 'a trained therapist'}`] : [];
+    if (!rooms.some((r) => t.required_amenities.every((a) => r.amenities.includes(a)))) out.push(`${t.name} needs a room${t.required_amenities.length ? ` with ${t.required_amenities.map((a) => a.replace(/_/g, ' ')).join(' and ')}` : ''}`);
+    return out;
+  };
   const saved = settings?.starter_courses as { name: string; lines: { therapy_id: string; sessions: number }[] }[] | null | undefined;
   // A therapy retired since a starter was saved drops out of it.
   const courses = saved
     ? saved.map((c) => ({ ...c, lines: c.lines.filter((l) => therapies.some((t) => t.id === l.therapy_id)) }))
     : DEFAULT_STARTERS.map(([name, lines]) => ({ name, lines: lines.flatMap(([n, sessions]) => { const t = therapies.find((x) => x.name.toLowerCase() === n.toLowerCase()); return t ? [{ therapy_id: t.id, sessions }] : []; }) })).filter((c) => c.lines.length >= 2);
-  res.json(courses.filter((c) => c.lines.length));
+  res.json(courses.filter((c) => c.lines.length).map((c) => ({ ...c, blocked: [...new Set(c.lines.flatMap((l) => why(l.therapy_id)))] })));
 });
 
 /** The starter courses offered for a new guest's first week (#984), replaced whole. */

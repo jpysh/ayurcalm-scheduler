@@ -317,7 +317,7 @@ export const Tile = ({ title, facts, onClick, href }: { title: ReactNode; facts?
 };
 
 /** One row: title, up to two facts, one trailing fact, and a flag line only when something needs doing. */
-export const Row = ({ title, facts, trailing, flag, onClick, href }: { title: ReactNode; facts?: ReactNode; trailing?: ReactNode; flag?: ReactNode; onClick?: () => void; /** A row that leaves the app (WhatsApp) is a link, so it can be opened in a new tab. */ href?: string }) => {
+export const Row = ({ title, facts, trailing, flag, onClick, href, faint }: { title: ReactNode; facts?: ReactNode; trailing?: ReactNode; flag?: ReactNode; onClick?: () => void; /** A row that leaves the app (WhatsApp) is a link, so it can be opened in a new tab. */ href?: string; /** Listed but not available: greyed out, and with no onClick it cannot be tapped. */ faint?: boolean }) => {
   const body = (
     <>
       <span className="min-w-[min(100%,11rem)] flex-1">
@@ -329,7 +329,7 @@ export const Row = ({ title, facts, trailing, flag, onClick, href }: { title: Re
     </>
   );
   // The name keeps 11rem; at large text the trailing fact goes under it rather than squeezing it to a few letters.
-  const cls = "flex min-h-[56px] w-full flex-wrap items-center gap-x-3 border-b border-border px-3 py-2 text-left last:border-b-0";
+  const cls = `flex min-h-[56px] w-full flex-wrap items-center gap-x-3 border-b border-border px-3 py-2 text-left last:border-b-0${faint ? " opacity-60" : ""}`;
   if (href) return <a className={cls} href={href} target="_blank" rel="noopener noreferrer" onClick={onClick}>{body}</a>;
   return onClick ? <button type="button" className={cls} onClick={onClick}>{body}</button> : <div className={cls}>{body}</div>;
 };
