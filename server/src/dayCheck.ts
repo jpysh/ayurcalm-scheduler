@@ -28,7 +28,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_MAX_PER_DAY, findConflict, loadDay, type Action, type Candidate, type DayContext } from './appointmentGuard.js';
-import { planDay, type Move, type Pin } from './replan.js';
+import { planDay, offClosedDay, type Move, type Pin } from './replan.js';
 import { centreClock, closureOn, startedBefore, toMinutes, type Clock } from './availability.js';
 
 export type Fix = {
@@ -105,7 +105,7 @@ export type DayCheck = {
   /** Finished treatments whose therapist or room was not there: id → "Ravi was not in". Information, never counted (#394). */
   history: Record<string, string>;
   /** Set when the centre is shut that day (#940): the name to show, the closure to edit (null for a weekly closed day), and what is still booked on it. */
-  closed: { name: string | null; time_off_id: string | null; booked: number } | null;
+  closed: { name: string | null; time_off_id: string | null; booked: number; movable: number } | null;
 };
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
@@ -417,6 +417,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
   // One plan for everything that can move, worked out together so that no two
   // answers take the same room at the same minute.
   const plan: Fix[] = [];
+  let canLeave = 0;
   if (withFixes) {
     // A consultation note points at an appointment that is over and fine, and a guest not staying
     // has no day to move to: nothing to plan.
@@ -429,6 +430,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
         relaxPreferredStaff: opts.relaxPreferredStaff,
         now,
       });
+      canLeave = [...result.moved, ...result.proposed].filter((m) => offClosedDay(m, day)).length;
       const byAppointment = new Map<string, Fix>();
       for (const m of [...result.moved, ...result.proposed]) {
         byAppointment.set(m.appointment_id, fixFromMove(m, m.to.date === ymd(day)));
@@ -483,7 +485,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
   }
 
   const problems: DayProblem[] = raw.map(({ cost: _cost, group_label: _label, ...p }) => p);
-  return { date: ymd(day), problems, groups, plan, headline: headlineFor(problems), history, closed: closure ? { name: closure.name, time_off_id: closure.id, booked: appointments.length } : null };
+  return { date: ymd(day), problems, groups, plan, headline: headlineFor(problems), history, closed: closure ? { name: closure.name, time_off_id: closure.id, booked: appointments.length, movable: canLeave } : null };
 }
 
 /**

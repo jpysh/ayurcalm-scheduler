@@ -404,7 +404,7 @@ const AdminDashboard = () => {
   // What is wrong with the day comes from the server, which is the same code
   // that refuses a booking. Two screens used to work this out in the browser and
   // both disagreed with it; #88 deleted them.
-  const [dayCheck, setDayCheck] = useState<{ problems: DayProblem[]; headline: string | null; history?: Record<string, string>; closed?: { name: string | null; time_off_id: string | null; booked: number } | null }>({ problems: [], headline: null });
+  const [dayCheck, setDayCheck] = useState<{ problems: DayProblem[]; headline: string | null; history?: Record<string, string>; closed?: { name: string | null; time_off_id: string | null; booked: number; movable: number } | null }>({ problems: [], headline: null });
   const loadDayCheck = useCallback(() => {
     fetch(`${API_BASE}/day-check?date=${exceptionDayKey}`)
       .then((r) => (r.ok ? r.json() : { problems: [], headline: null }))

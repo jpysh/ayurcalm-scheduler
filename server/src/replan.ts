@@ -649,6 +649,11 @@ export async function replanRoomDay(
  * Only a move to a later day inside the resident's stay is taken. What cannot
  * be placed there stays where it is and is counted in `left`, for the admin.
  */
+/** Where a treatment on a closed day can go: a later day inside the stay, or nowhere. The day check counts with it (#1048). */
+export function offClosedDay(m: Move, day: Date): Move | undefined {
+  return m.to.date !== ymd(day) && !m.cancel && !m.beyond_stay ? m : m.choices?.find((c) => c.choice === 'next_free_day' && !c.beyond_stay);
+}
+
 export async function moveOffClosedDays(from: string, to: string, prisma: PrismaClient, opts: { timeOffId?: string; now?: Clock } = {}) {
   let moved = 0;
   let left = 0;
@@ -662,7 +667,7 @@ export async function moveOffClosedDays(from: string, to: string, prisma: Prisma
     const plan = await planDay(null, day, prisma, { appointmentIds: ctx.appointments.map((a) => a.id), now: opts.now });
     const taken: Pin[] = [];
     for (const m of [...plan.moved, ...plan.proposed]) {
-      const pick = m.to.date !== ymd(day) && !m.cancel && !m.beyond_stay ? m : m.choices?.find((c) => c.choice === 'next_free_day' && !c.beyond_stay);
+      const pick = offClosedDay(m, day);
       if (pick) taken.push({ appointment_id: pick.appointment_id, staff_id: pick.to.staff_id, co_staff_ids: pick.to.co_staff_ids, room_id: pick.to.room_id, start_time: pick.to.start_time, date: pick.to.date });
     }
     // Only treatments that have not started are the plan's to move.

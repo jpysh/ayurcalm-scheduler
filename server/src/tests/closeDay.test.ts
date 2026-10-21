@@ -59,7 +59,7 @@ async function main() {
     assert.ok(!before.problems.some((p) => p.kind === 'IDLE_RESIDENT'), 'nothing booked on a closed day is not a failure');
 
     // The Day screen is told it is closed, by what name, which row to edit, and what is still booked (#940).
-    assert.deepEqual(before.closed, { name: null, time_off_id: closure.id, booked: 3 });
+    assert.deepEqual(before.closed, { name: null, time_off_id: closure.id, booked: 3, movable: 3 });
 
     // The plan never offers a closed day: not the same day (a no-op), not Thursday.
     const moved = await moveOffClosedDays('2030-01-16', '2030-01-16', prisma, { timeOffId: closure.id, now: { date: '2030-01-15', time: '17:00' } });
@@ -82,10 +82,20 @@ async function main() {
     assert.deepEqual(back.map((a) => [ymd(a.scheduled_date), a.start_time]), [['2030-01-16', '09:00'], ['2030-01-16', '10:00'], ['2030-01-16', '11:00']]);
     await prisma.auditLog.deleteMany({ where: { id: { in: mine.map((b) => b.id) } } });
 
+    // Leaving that day, none can go to a later day of the stay: the day check says so, and Move would move none (#1048).
+    for (const a of appts) {
+      const st = await prisma.patientStay.create({ data: { patient_id: a.patient_id, start_date: new Date('2030-01-14T00:00:00.000Z'), end_date: shut, duration_days: 3 } });
+      made.push({ table: 'patientStay', id: st.id });
+    }
+    const leaving = await checkDay(shut, prisma, { now: { date: '2030-01-15', time: '17:00' } });
+    assert.equal(leaving.closed?.movable, 0, `none can move on their leaving day, got ${JSON.stringify(leaving.closed)}`);
+    assert.equal((await moveOffClosedDays('2030-01-16', '2030-01-16', prisma, { now: { date: '2030-01-15', time: '17:00' } })).moved, 0, 'the day check and Move disagree');
+
     console.log('closeDay: ok');
   } finally {
     for (const m of [...made].reverse()) {
       try {
+        if (m.table === 'patientStay') await prisma.patientStay.delete({ where: { id: m.id } });
         if (m.table === 'appointment') await prisma.appointment.delete({ where: { id: m.id } });
         if (m.table === 'timeOff') await prisma.timeOff.delete({ where: { id: m.id } });
         if (m.table === 'patient') await prisma.patient.delete({ where: { id: m.id } });
