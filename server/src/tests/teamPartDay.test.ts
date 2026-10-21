@@ -2,6 +2,9 @@
  * Leaving early or in late narrows the hours Team shows for that day (#570),
  * so "09:00–15:00" and "of 6h booked" agree.
  *
+ * And a gap is only fewer in than usual (#1029): with everyone at work there is none,
+ * however small the team, and each one's time off is exactly where Team says too few.
+ *
  * A fixed day in 2030, tidied afterwards. Needs the database only.
  */
 import 'dotenv/config';
@@ -24,9 +27,11 @@ async function main() {
   try {
     await tidy();
     const [early, late] = await Promise.all(['Early', 'Late'].map((n) => prisma.staff.create({ data: { name: `${TAG} ${n}`, gender: 'female', specializations: [], weekly_schedule: allWeek } })));
+    assert.deepEqual((await staffWeek(DAY, prisma)).gaps[0], [], 'everyone in is never too few');
     await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: early.id, date, start_time: '15:00', end_time: '18:00', description: 'Leaving early' } });
     await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: late.id, date, start_time: '09:00', end_time: '11:00', description: 'In late' } });
-    const { rows } = await staffWeek(DAY, prisma);
+    const { rows, gaps } = await staffWeek(DAY, prisma);
+    assert.deepEqual(gaps[0].map((g) => `${g.start}–${g.end}`), ['09:00–11:00', '15:00–18:00']);
     const day = (id: string) => rows.find((r) => r.id === id)!.days[0];
     assert.deepEqual([day(early.id).state, day(early.id).start, day(early.id).end, day(early.id).capacity], ['part', '09:00', '15:00', 360]);
     assert.deepEqual([day(late.id).start, day(late.id).end, day(late.id).capacity], ['11:00', '18:00', 420]);
