@@ -11,7 +11,7 @@ import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
 import { requireDemoData } from './demoGuard.js';
-import { bookingWho } from '../cardChoices.js';
+import { bookingWho, therapyFacts } from '../cardChoices.js';
 
 const API_BASE = process.env.API_BASE || `http://127.0.0.1:${process.env.PORT || 4100}/api`;
 const TAG = 'Cardtest';
@@ -179,6 +179,12 @@ async function main() {
     const race = await Promise.all([rekha, sita].map((r) => fetch(`${API_BASE}/appointments/one`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ patient_id: r.id, therapy_id: therapy.id, date: '2030-04-18', start_time: '15:00', staff_id: asha.id, room_id: roomA.id, confirm: true }) }).then((x) => x.status)));
     assert.deepEqual(race.sort(), [201, 409], `both phones booked Asha at 15:00: ${race}`);
+
+    // Had yesterday and booked again today (#1028): not 'Same as last time', said as booked at its time.
+    await prisma.appointment.create({ data: { patient_id: rekha.id, therapy_id: therapy.id, staff_id: asha.id, room_id: roomA.id, scheduled_date: new Date('2030-04-16T00:00:00.000Z'),
+      start_time: '10:00', duration_minutes: 60, session_number: 1, total_sessions: 1, status: 'completed', assignment_type: 'manual' } });
+    const sameDay = (await therapyFacts(DAY, rekha.id, prisma)).find((t) => t.id === therapy.id)!;
+    assert.deepEqual([sameDay.repeat, sameDay.taken, sameDay.fact], [false, true, 'Booked 10:00'], `a therapy booked that day was offered first: ${JSON.stringify(sameDay)}`);
 
     console.log("Treatment card: every time and room offered saves, a busy therapist isn't offered, a no-show frees theirs, and History says what changed; a suggested booking saves once and not twice; a chosen resident gets three free times; a two-therapist therapy books with both.");
   } finally {
