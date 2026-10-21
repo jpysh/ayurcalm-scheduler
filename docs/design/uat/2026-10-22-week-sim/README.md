@@ -19,8 +19,8 @@ the centre closed on Mon 26 Oct with "move", 2 stays shortened, 3 cancellations 
 |---|---|---|---|
 | Booking a course ignores "only treated by their own therapist": 11 of Sim Anya G's 12 treatments went to other therapists, and /day-check said nothing | #1043 | #1046: the course scheduler books only their own therapist | auto-merge on; #1043 stays open for the question below |
 | Treatments kept after a stay is shortened stay on the day list and the printed sheets, and nothing flags them | #1044 | #1047: /day-check flags NOT_STAYING ("Cancel it, or change their stay"); shows on the printed sheet too | auto-merge on |
+| A closed day where nothing can move still offers a Move button that moves nothing | #1048 | #1049: the day check counts what can move; with none, the card says so and offers no button | auto-merge on |
 
 ## For the maintainer
 
 - #1043, one question: may a hand-picked booking ("Book a treatment") still put such a resident with another therapist, or should it be refused?
-- #1048 (polish, for the next day-screen batch): on a closed day where nothing can move, the card still says "Hidden here until they are moved" above a Move button that moves nothing. The toast then says what happened.
