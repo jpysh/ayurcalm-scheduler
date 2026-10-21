@@ -57,7 +57,7 @@ type Props = {
   /** First names of the guests whose stay starts or ends on this day (#583); past: the day is behind us. */
   comings?: { in: string[]; out: string[]; past: boolean };
   /** The centre is shut this day (#940): the server says so, and nothing else is shown. */
-  closed?: { name: string | null; time_off_id: string | null; booked: number } | null;
+  closed?: { name: string | null; time_off_id: string | null; booked: number; movable: number } | null;
   onEditClosed?: () => void;
   onMoveClosed?: () => void;
 };
@@ -222,8 +222,11 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
         {closed.booked ? (
           <div className="rounded-xl bg-card px-4 py-3">
             <p className="text-base font-semibold">{plural(closed.booked, "treatment")} {closed.booked === 1 ? "was" : "were"} booked before the centre closed</p>
-            <p className="mb-2 text-sm text-muted-foreground">Hidden here until they are moved.</p>
-            <Btn kind="primary" onClick={onMoveClosed}>Move them to the next open day</Btn>
+            {/* The server knows what can go (#1048): a Move that moves nothing is not offered. */}
+            {closed.movable ? <>
+              <p className="mb-2 text-sm text-muted-foreground">{closed.movable < closed.booked ? `${closed.movable} can move to a later day of their stay; the rest wait under "need you".` : "Hidden here until they are moved."}</p>
+              <Btn kind="primary" onClick={onMoveClosed}>{closed.movable < closed.booked ? `Move ${closed.movable} to the next open day` : "Move them to the next open day"}</Btn>
+            </> : <p className="text-sm text-muted-foreground">None can move to a later day of their stay. They wait under "need you" to cancel or change.</p>}
           </div>
         ) : <p className="px-1 text-sm text-muted-foreground">Nothing is booked.</p>}
       </div>
