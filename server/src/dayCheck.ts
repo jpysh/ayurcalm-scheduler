@@ -127,6 +127,7 @@ const COST: Record<string, number> = {
   PATIENT_BUSY: 3,
   ROOM_BUSY: 4,
   AMENITIES_MISSING: 5,
+  NOT_STAYING: 0,
   NO_THERAPIST: 6,
   IDLE_RESIDENT: 7,
   EVENT_OVERLAP: 8,
@@ -246,6 +247,23 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
         group_label: conflict.message,
         staff_id: culprit,
         cost: COST[conflict.reason] ?? 9,
+      });
+      continue;
+    }
+
+    // A stay shortened without cancelling keeps its treatments (#1044); booking one is refused NOT_STAYING.
+    if (!stays.some((st) => st.patient_id === a.patient_id)) {
+      raw.push({
+        ...common,
+        id: `NOT_STAYING:${a.id}`,
+        kind: 'NOT_STAYING',
+        problem_class: 'blocking',
+        what: `${nameOfPatient(a.patient_id).split(' ')[0]} is not staying this day.`,
+        group_key: 'NOT_STAYING',
+        group_label: 'Treatments for guests not staying this day',
+        staff_id: a.staff_id,
+        no_fix_reason: 'Not staying this day. Cancel it, or change their stay.',
+        cost: COST.NOT_STAYING,
       });
       continue;
     }
@@ -400,8 +418,9 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
   // answers take the same room at the same minute.
   const plan: Fix[] = [];
   if (withFixes) {
-    // A consultation note points at an appointment that is over and fine: nothing to move.
-    const toPlan = raw.filter((p) => p.appointment_id && p.kind !== 'CONSULTED');
+    // A consultation note points at an appointment that is over and fine, and a guest not staying
+    // has no day to move to: nothing to plan.
+    const toPlan = raw.filter((p) => p.appointment_id && p.kind !== 'CONSULTED' && p.kind !== 'NOT_STAYING');
     const movable = toPlan.map((p) => p.appointment_id as string);
     if (movable.length > 0) {
       const result = await planDay(null, day, prisma, {
