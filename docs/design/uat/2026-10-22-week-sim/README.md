@@ -23,4 +23,4 @@ the centre closed on Mon 26 Oct with "move", 2 stays shortened, 3 cancellations 
 ## For the maintainer
 
 - #1043, one question: may a hand-picked booking ("Book a treatment") still put such a resident with another therapist, or should it be refused?
-- Seen, not filed: on a closed day where nothing can move, the card still says "Hidden here until they are moved" above a Move button that moves nothing. The toast then says what happened. A wording point for the next polish batch on the day screen.
+- #1048 (polish, for the next day-screen batch): on a closed day where nothing can move, the card still says "Hidden here until they are moved" above a Move button that moves nothing. The toast then says what happened.
