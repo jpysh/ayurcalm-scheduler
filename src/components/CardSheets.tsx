@@ -453,7 +453,7 @@ export function DischargeSheet({ patient, stay, onClose, openField, write, print
 /* ------------------------------ Story 14: plan next week (#354) ------------------------------ */
 
 type WeekLine = { from_therapy_id: string; therapy_id: string; therapy_name: string; start_time: string; staff_name: string; sessions: { date: string }[]; missing: { date: string; why: string }[] };
-type Starter = { name: string; lines: { therapy_id: string; sessions: number }[] };
+type Starter = { name: string; lines: { therapy_id: string; sessions: number }[]; blocked?: string[] };
 type WeekPlan = { from: string; to: string; brief: string | null; lines: WeekLine[]; review: { date: string; start_time: string; staff_name: string } | null; review_missing?: string };
 
 /** This week, a week on: each line ticked and swappable, the next review ticked; Book all books everything or nothing (the server decides the times). */
@@ -535,7 +535,10 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
         {plan.brief ? <ListGroup title="Doctor's plan"><TextRow label="The brief for this week">{plan.brief}</TextRow></ListGroup> : null}
         {starting && starters.length && therapies.length ? (
           <ListGroup title="Starters">
-            {starters.map((c) => <Row key={c.name} title={c.name} facts={c.lines.map((l) => `${therapies.find((t) => t.id === l.therapy_id)?.name ?? "?"} ×${l.sessions}`).join(" · ")} trailing="Use ›" onClick={() => useStarter(c)} />)}
+            {starters.map((c) => c.blocked?.length
+              ? <Row key={c.name} faint title={c.name} facts={c.blocked.join(" · ")} />
+              : <Row key={c.name} title={c.name} facts={c.lines.map((l) => `${therapies.find((t) => t.id === l.therapy_id)?.name ?? "?"} ×${l.sessions}`).join(" · ")} trailing="Use ›" onClick={() => useStarter(c)} />)}
+            {starters.every((c) => c.blocked?.length) ? <TextRow label="None of these can be given yet" faint>{[...new Set(starters.flatMap((c) => c.blocked!))].join(" · ")}. Add it in Staff or Rooms.</TextRow> : null}
           </ListGroup>
         ) : null}
         <ListGroup title="Therapies">
