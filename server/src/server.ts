@@ -6,6 +6,7 @@ import { generateDailySchedulePdf } from './pdf/dailySchedulePdf.js';
 import { generateTherapistRotaPdf } from './pdf/therapistRotaPdf.js';
 import { generateKitchenSheetPdf } from './pdf/kitchenSheetPdf.js';
 import { generateGuestRoomsSheetPdf } from './pdf/guestRoomsSheetPdf.js';
+import { PDFDocument as PDFLib } from 'pdf-lib';
 import { generateRecordsPdf } from './pdf/recordsPdf.js';
 import { renderDischarge } from './pdf/dischargePdf.js';
 import { dischargeOf, saveDischarge } from './discharge.js';
@@ -1423,27 +1424,42 @@ app.delete('/program-events/:id', async (req: Request, res: Response) => {
 app.get('/daily-schedule-pdf', async (req: Request, res: Response) => {
   const date = req.query.date as string | undefined;
   const staffId = typeof req.query.staff_id === 'string' && req.query.staff_id ? req.query.staff_id : undefined;
-  const doctors = req.query.view === 'doctor';
-  const kitchen = req.query.view === 'kitchen';
-  const guestRooms = req.query.view === 'rooms';
-  const rota = staffId != null || req.query.view === 'therapist' || doctors;
+  const view = staffId ? 'therapist' : String(req.query.view ?? 'residents');
   if (!date) { res.status(400).json({ error: 'Missing date' }); return; }
+  type Kind = 'residents' | 'therapist' | 'doctor' | 'kitchen' | 'rooms';
+  const make = (kind: Kind) => kind === 'rooms' ? generateGuestRoomsSheetPdf(date, prisma)
+    : kind === 'kitchen' ? generateKitchenSheetPdf(date, prisma)
+    : kind === 'therapist' || kind === 'doctor' ? generateTherapistRotaPdf(date, prisma, staffId, kind)
+    : generateDailySchedulePdf(date, prisma);
+  const file: Record<Kind | 'all', string> = { residents: 'daily-schedule', therapist: 'therapist-rota', doctor: 'doctor-rota', kitchen: 'kitchen-sheet', rooms: 'guest-rooms', all: 'all-sheets' };
   try {
-    const pdf = guestRooms ? await generateGuestRoomsSheetPdf(date, prisma)
-      : kitchen ? await generateKitchenSheetPdf(date, prisma)
-      : rota ? await generateTherapistRotaPdf(date, prisma, staffId, doctors ? 'doctor' : 'therapist')
-      : await generateDailySchedulePdf(date, prisma);
-    const kind = guestRooms ? 'rooms' : kitchen ? 'kitchen' : doctors ? 'doctor' : rota ? 'therapist' : 'residents';
+    // "Print all sheets" (#1030): one PDF, each sheet from its own first page; guest rooms only where the centre has them.
+    const kinds: Kind[] = view === 'all'
+      ? ['residents', 'therapist', 'doctor', 'kitchen', ...(await prisma.guestRoom.count() ? ['rooms' as const] : [])]
+      : [(view === 'patient' ? 'residents' : view) as Kind].filter((k) => k in file);
+    if (!kinds.length) kinds.push('residents');
+    const made = await Promise.all(kinds.map(make));
     // The centre's own sheets are kept as printed, replacing that day's earlier copy.
     if (!staffId && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      const data = { pdf: Buffer.from(pdf), printed_at: new Date() };
-      await prisma.printedSheet.upsert({ where: { date_kind: { date, kind } }, update: data, create: { date, kind, ...data } });
-      if (kind === 'residents') await prisma.settings.updateMany({ where: { first_sheet_at: null, demo_data: false }, data: { first_sheet_at: new Date() } });
+      for (const [i, kind] of kinds.entries()) {
+        const data = { pdf: Buffer.from(made[i]), printed_at: new Date() };
+        await prisma.printedSheet.upsert({ where: { date_kind: { date, kind } }, update: data, create: { date, kind, ...data } });
+      }
+      if (kinds.includes('residents')) await prisma.settings.updateMany({ where: { first_sheet_at: null, demo_data: false }, data: { first_sheet_at: new Date() } });
       const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
       await prisma.printedSheet.deleteMany({ where: { date: { lt: cutoff } } });
     }
+    let pdf = made[0];
+    if (made.length > 1) {
+      const all = await PDFLib.create();
+      for (const one of made) {
+        const src = await PDFLib.load(one);
+        for (const page of await all.copyPages(src, src.getPageIndices())) all.addPage(page);
+      }
+      pdf = Buffer.from(await all.save());
+    }
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="ayurcalm-${guestRooms ? 'guest-rooms' : kitchen ? 'kitchen-sheet' : doctors ? 'doctor-rota' : rota ? 'therapist-rota' : 'daily-schedule'}-${date}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="ayurcalm-${file[view === 'all' ? 'all' : kinds[0]]}-${date}.pdf"`);
     res.send(pdf);
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Failed to generate PDF';
@@ -1451,7 +1467,6 @@ app.get('/daily-schedule-pdf', async (req: Request, res: Response) => {
   }
 });
 
-// Records for a month (#488): one PDF an inspector can read.
 app.get('/records-pdf', async (req: Request, res: Response) => {
   const { month } = z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }).parse(req.query);
   const pdf = await generateRecordsPdf(month, prisma);

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/apiBase";
+import type { PrintKind } from "@/pages/tabs/ScheduleTab";
 import { inHouseNote } from "@/lib/inHouse";
 import { outNow } from "@/lib/outNow";
 import { Menu, Plus } from "lucide-react";
@@ -39,7 +40,10 @@ type Props = {
   /** "14:35" on the centre's clock. */
   now: string;
   setDay: (iso: string) => void;
-  print: () => void;
+  print: (kind: PrintKind) => void;
+  /** Blocking problems on the printed day, and where Fix first goes. */
+  printProblems: { count: number; fix: () => void };
+  hasGuestRooms: boolean;
   /** The day Print gives: tomorrow once today is closed (#459). */
   printDay: string;
   printing: boolean;
@@ -53,8 +57,8 @@ type Props = {
 
 const shift = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
 
-export function BottomBar({ activeTab, go, day, today, now, setDay, print, printDay, printing, plus, search, attention }: Props) {
-  const [sheet, setSheet] = useState<"menu" | "day" | null>(null);
+export function BottomBar({ activeTab, go, day, today, now, setDay, print, printProblems, hasGuestRooms, printDay, printing, plus, search, attention }: Props) {
+  const [sheet, setSheet] = useState<"menu" | "day" | "print" | null>(null);
   // Leaving Search brings the bar back; the keyboard's place goes to the menu button (#311).
   const menuBtn = useRef<HTMLButtonElement>(null);
   const wasSearching = useRef(false);
@@ -122,7 +126,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
             {inbox && !inbox.need ? <Row key="inbox" title={`${inbox.info} to know`} trailing="›" onClick={close(attention!.open)} /> : null}
             <Row key="search" title={search.label} facts={search.hint} trailing="›" onClick={close(search.start)} />
             {onDay ? <Row key="day" title="Change day" facts={`${dayText(day)} · ${when}`} trailing="›" onClick={() => setSheet("day")} /> : null}
-            {onDay ? <Row key="print" title={printDay === day ? "Print the day's sheets" : "Print tomorrow's sheets"} facts={printing ? "Making the PDF…" : printDay === day ? undefined : dayText(printDay)} trailing="›" onClick={() => { setSheet(null); if (!printing) print(); }} /> : null}
+            {onDay ? <Row key="print" title={printDay === day ? "Print the day's sheets" : "Print tomorrow's sheets"} facts={printing ? "Making the PDF…" : printDay === day ? undefined : dayText(printDay)} trailing="›" onClick={() => setSheet("print")} /> : null}
           </ListGroup>
         </div>
         <div className="mt-3 pb-3">
@@ -135,6 +139,17 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
           </div>
         </div>
       </BottomSheet> : null}
+
+      {/* One sheet for every printout (#1030): all of them as one PDF, or one at a time. Each row is its own tap, so the phone never blocks a second PDF tab. */}
+      <BottomSheet open={sheet === "print"} onOpenChange={(o) => setSheet(o ? "print" : null)} title={`Print · ${dayText(printDay)}`} onBack={() => setSheet("menu")}
+        foot={<Btn kind="primary" onClick={close(() => { if (!printing) print("all"); })}>Print all sheets</Btn>}>
+        {printProblems.count ? <div className="mb-3"><ListGroup><Row title={`⚠ ${plural(printProblems.count, "problem")} on the day`} trailing="Fix first ›" onClick={close(printProblems.fix)} /></ListGroup></div> : null}
+        <ListGroup title="One sheet">
+          {([["patient", "Patient sheet"], ["therapist", "Therapist sheet"], ["doctor", "Doctor sheet"], ["kitchen", "Kitchen sheet"], ...(hasGuestRooms ? [["rooms", "Guest rooms sheet"]] : [])] as [PrintKind, string][]).map(([kind, name]) => (
+            <Row key={kind} title={name} trailing="›" onClick={close(() => { if (!printing) print(kind); })} />
+          ))}
+        </ListGroup>
+      </BottomSheet>
 
       <BottomSheet open={sheet === "day"} onOpenChange={(o) => setSheet(o ? "day" : null)} title={dayText(day)}>
         <div className="grid grid-cols-[1.25fr_1fr_1.25fr] gap-2 [&>button]:whitespace-nowrap [&>button]:px-2">

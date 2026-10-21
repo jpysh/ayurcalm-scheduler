@@ -89,14 +89,16 @@ test('O1: Leave has Upcoming · Past · All, not a Filter popover', async ({ pag
   await expect(panel.getByRole('button', { name: 'Filter' })).toHaveCount(0);
 });
 
-test('O2: the print note keeps its words on one line, the other sheets under them', async ({ page }) => {
+test('Print opens one sheet: all sheets as one PDF, or each on its own row (#1030)', async ({ page }) => {
   await signIn(page);
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: /^Print (the day's|tomorrow's) sheets/ }).click();
-  const words = page.locator('[data-sonner-toast]').getByText(/^Patient sheet for .+ printed/);
-  await expect(words).toBeVisible({ timeout: 20000 });
-  expect((await words.boundingBox())!.width).toBeGreaterThan(180);
-  await expect(page.locator('[data-sonner-toast]').getByRole('button', { name: 'Doctor sheet' })).toBeVisible();
+  const sheet = page.getByRole('dialog');
+  for (const name of ['Patient sheet', 'Therapist sheet', 'Doctor sheet', 'Kitchen sheet']) await expect(sheet.getByRole('button', { name: new RegExp(`^${name}`) })).toBeVisible();
+  const download = page.waitForEvent('download');
+  await sheet.getByRole('button', { name: 'Print all sheets' }).click();
+  expect((await download).suggestedFilename()).toMatch(/all-sheets.*\.pdf$/);
+  await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
 });
 
 test("M1: a resident's link offers WhatsApp reception once the centre sets its own number", async ({ page, request }) => {

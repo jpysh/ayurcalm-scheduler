@@ -679,27 +679,10 @@ const AdminDashboard = () => {
         printing={!!scheduleScreen.pdfLoading}
         // After closing on today the evening job is tomorrow's sheet (#459), so Print gives that day and says so.
         printDay={evening ? tomorrowKey : dayKeyMemo}
-        print={async () => {
-          const iso = evening ? tomorrowKey : dayKeyMemo;
-          if (!(await scheduleScreen.printSheet('patient', iso))) return;
-          // Still prints with problems open: the admin may be printing on purpose.
-          // It just says so (#134). The rota is a second tap, a fresh gesture, so
-          // the phone does not block its tab as a popup.
-          const open = evening ? tomorrowFix : dayCheck.problems.filter((p) => p.problem_class === 'blocking').length;
-          const fixFirst = () => { if (evening) setCurrentDate(dayDate(tomorrowKey)); setShowAttention(true); };
-          // The two other sheets under the words, not beside them: two buttons in a row squeezed the text to a word a line (#273 O2).
-          const more = "min-h-11 rounded-full px-1 text-base font-bold text-on-dark";
-          toast(<div className="w-full">
-            <div>Patient sheet for {dayText(iso)} printed{open ? ` · ${open} still to fix` : ''}</div>
-            <div className="mt-1 flex flex-wrap gap-x-4">
-              {open ? <button type="button" className={more} onClick={fixFirst}>Fix {open} first</button> : null}
-              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('therapist', iso)}>Therapist sheet</button>
-              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('doctor', iso)}>Doctor sheet</button>
-              <button type="button" className={more} onClick={() => scheduleScreen.printSheet('kitchen', iso)}>Kitchen sheet</button>
-              {hasGuestRooms ? <button type="button" className={more} onClick={() => scheduleScreen.printSheet('rooms', iso)}>Guest rooms sheet</button> : null}
-            </div>
-          </div>, { duration: 10000 });
-        }}
+        print={(kind) => scheduleScreen.printSheet(kind, evening ? tomorrowKey : dayKeyMemo)}
+        // Still prints with problems open: the admin may be printing on purpose, so the sheet only says so (#134, #1030).
+        printProblems={{ count: evening ? tomorrowFix : dayCheck.problems.filter((p) => p.problem_class === 'blocking').length, fix: () => { if (evening) setCurrentDate(dayDate(tomorrowKey)); setShowAttention(true); } }}
+        hasGuestRooms={hasGuestRooms}
         plus={plusFor}
         // One search: on Patients it filters that list, anywhere else it searches the day.
         search={['team', 'rooms', 'therapies', 'events'].includes(activeTab)
