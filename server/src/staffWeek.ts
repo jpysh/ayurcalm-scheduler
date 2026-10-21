@@ -44,26 +44,34 @@ export async function staffWeek(start: string, prisma: PrismaClient) {
     const booked = ctx.appointments.filter((a) => a.room_id === r.id).reduce((n, a) => n + a.duration_minutes, 0);
     return { booked, capacity: close - open - out };
   }) }));
-  return { start, days: days.map((d) => d.toISOString().slice(0, 10)), rows, rooms, gaps: ctxs.map((ctx, i) => gapsOn(ctx, rows, i)) };
+  return { start, days: days.map((d) => d.toISOString().slice(0, 10)), rows, rooms, gaps: ctxs.map((ctx, i) => gapsOn(ctx, rows, i, staff, days[i])) };
 }
 
-/** Fewer than this many therapists in for an hour is a gap (#351; decided by Claude, to confirm): one in cannot cover a two-therapist therapy or a swap. */
-const FEWEST = 2;
 const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
-/** The centre's opening hours on day i, an hour at a time, merged into runs that have the same too-few count: "18:00–20:00 · 1 in". */
-function gapsOn(ctx: Awaited<ReturnType<typeof loadDay>>, rows: { id: string; role: string; days: { state: string; start?: string; end?: string }[] }[], i: number) {
+/**
+ * Hours with fewer therapists in than the centre usually has then (#1029): "usual" is every active
+ * therapist whose weekly hours cover that hour, so only leave, time off or an event makes a gap and a
+ * one-therapist centre is never short. A two-therapist treatment booked in an hour with fewer than two in is one too.
+ */
+function gapsOn(ctx: Awaited<ReturnType<typeof loadDay>>, rows: { id: string; role: string; days: { state: string; start?: string; end?: string }[] }[], i: number, staff: { id: string; role: string; weekly_schedule: unknown }[], date: Date) {
   const open = toMinutes(ctx.settings?.opening_time || '09:00'), close = toMinutes(ctx.settings?.closing_time || '18:00');
   const therapists = rows.filter((r) => r.role !== 'doctor');
   const out: { start: string; end: string; in: number }[] = [];
   for (let h = open; h < close; h += 60) {
     const e = Math.min(h + 60, close);
+    const usual = staff.filter((s) => {
+      if (s.role === 'doctor') return false;
+      const w = hoursOn(s.weekly_schedule as never, date);
+      return w !== null && (w ? w.s <= h && w.e >= e : true);
+    }).length;
     const n = therapists.filter((r) => {
       const d = r.days[i];
       if ((d.state !== 'in' && d.state !== 'part') || toMinutes(d.start!) > h || toMinutes(d.end!) < e) return false;
       return !offOnDay(ctx.timeOff, 'staff', r.id, ctx.day).some((o) => o.s < e && o.e > h);
     }).length;
-    if (n >= FEWEST) continue;
+    const pair = ctx.appointments.some((a) => teamOf(a).length > 1 && toMinutes(a.start_time) < e && toMinutes(a.start_time) + a.duration_minutes > h);
+    if (n >= usual && !(pair && n < 2)) continue;
     const last = out[out.length - 1];
     if (last && last.end === hm(h) && last.in === n) last.end = hm(e);
     else out.push({ start: hm(h), end: hm(e), in: n });
