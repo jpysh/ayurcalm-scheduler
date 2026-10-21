@@ -133,7 +133,7 @@ Every list, sheet and button has all of these designed, not left to default.
 - **Starter kit.** The last setup step offers the kit first and ticked ("Residential Ayurveda starter kit", what it holds, counted from the centre), then "Keep the example data", then "Start completely empty" (asks, as it deletes).
 - **Kit first.** Before writing markup for any of the above, use or extend `src/components/kit.tsx`. A one-off size, colour, radius or shadow in a screen file is a defect: a button is `Btn`, never a styled `<button>`; a left-aligned text button (`quiet`, `destructive`) carries `-ml-2` so its words sit on the gutter while its 44px target keeps 8px either side.
 - **Chips and segments.** Chips: filters and multi-choice. Segments: one of 2–4 in view.
-- **Toast (#988).** Always at the bottom, above the bar; no screen picks another position. Dark, one action (Undo). One action of the admin raises one toast, after the work has settled, saying everything it did, with one Undo that puts all of it back; no toast while a review sheet is open, it appears when the sheet closes. A sheet that stays open after Save confirms inside itself. 6 seconds; a tap elsewhere clears it.
+- **Toast (#988).** Always at the bottom, above the bar; no screen picks another position. Dark, at most two actions, Undo always last, each at least 44px high (#1024). One action of the admin raises one toast, after the work has settled, saying everything it did, with one Undo that puts all of it back; no toast while a review sheet is open, it appears when the sheet closes. A sheet that stays open after Save confirms inside itself. 6 seconds; a tap elsewhere clears it.
 - **Pill.** Floats above the bar only while something is waiting; says how many and what kind.
 
 ## 8. Patterns
