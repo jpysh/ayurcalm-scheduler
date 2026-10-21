@@ -3,7 +3,7 @@ import { hoursOn, teamOf, offOnDay, overlaps } from '../availability.js';
 import PDFDocument from 'pdfkit';
 import { madeWith } from '../product.js';
 import { PrismaClient } from '@prisma/client';
-import { addHeader, shortenWords, toMinutes, eventWindow } from './dailySchedulePdf.js';
+import { addHeader, notFixedLine, shortenWords, toMinutes, eventWindow } from './dailySchedulePdf.js';
 
 const MIDDAY = 12 * 60;
 const AFTERNOON_END = 16 * 60;
@@ -287,7 +287,8 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
     onlyStaffId: staffId,
   });
 
-  addHeader(doc, dateISO, `${centreName} — ${Person} rota`);
+  // A therapist's own rota is their day, not the centre's problems.
+  addHeader(doc, dateISO, `${centreName} — ${Person} rota`, '', staffId ? '' : await notFixedLine(dateISO, prisma));
   const startY = doc.y + 2;
 
   if (rota.rows.length === 0) {
