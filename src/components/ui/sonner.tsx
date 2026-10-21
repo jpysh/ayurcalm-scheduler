@@ -32,9 +32,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
           content: "group-[.toast]:min-w-[min(10rem,100%)] group-[.toast]:flex-1",
           description: "group-[.toast]:text-muted-foreground",
           // The design's Undo: pale green text on the dark bar, not a filled button.
-          actionButton: "group-[.toast]:!bg-transparent group-[.toast]:!text-on-dark group-[.toast]:!font-bold group-[.toast]:!text-base",
-          // A second action (the doctors' sheet) reads like the first, not dark on dark (#265 P3).
-          cancelButton: "group-[.toast]:!bg-transparent group-[.toast]:!text-on-dark group-[.toast]:!font-bold group-[.toast]:!text-base",
+          actionButton: "group-[.toast]:!bg-transparent group-[.toast]:!text-on-dark group-[.toast]:!font-bold group-[.toast]:!text-base group-[.toast]:!h-11",
+          // A second action (Open card) reads like the first, not dark on dark (#265 P3); Sonner puts it before Undo, which stays last (#1024).
+          // Sonner draws both 24px high; 44px is the tap target (#1024).
+          cancelButton: "group-[.toast]:!bg-transparent group-[.toast]:!text-on-dark group-[.toast]:!font-bold group-[.toast]:!text-base group-[.toast]:!h-11",
         },
       }}
       {...props}
