@@ -28,7 +28,7 @@ const JOBS: [string, number][] = [
   // Who, then Book: one tap more than the old suggestion, bought by a choice of who, therapist, room and time (story 5, accepted).
   ['Book one treatment', 4], // #330: no therapy is chosen for the admin, so +, who, a therapy, Book
   ["A patient's meals today", 3], // #353: meals live in the Diet sheet so the card leads with the week (decided 6 Oct)
-  ["Print today's sheets", 2], // Print moved into the Menu (5 Oct): the bar keeps room for the date
+  ["Print today's sheets", 3], // Menu, Print, Print all sheets: all five in one PDF (#1030)
   // From the Patients screen. Story 4 says 2; the gender is one tap because nothing is chosen for them (#283).
   ['Add an arriving patient', 3], // 6 Oct (#313): +, gender, Add
   // From the Patients screen: Search on the list (#934), then the person (typing is not counted).
@@ -241,8 +241,9 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       const download = page.waitForEvent('download');
       await tap(page.getByRole('button', { name: 'Menu', exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Print (the day's|tomorrow's) sheets/ }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: 'Print all sheets' }));
       expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
-      return 'the therapist rota is a second tap, on the note that follows';
+      return 'all five sheets in one PDF (#1030); was 2 taps for the patient sheet and 4 more for the rest';
     });
 
     // + asks who, then fills the rest in with a free time, therapist and room (#285 story 5).
