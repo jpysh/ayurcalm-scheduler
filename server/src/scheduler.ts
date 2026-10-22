@@ -92,6 +92,8 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
 
   const patient = await withTimeout(prisma.patient.findUnique({ where: { id: input.patient_id } }), maxMs, 'PATIENT');
   if (!patient) throw new Error('Patient not found');
+  // A resident only their own therapist may treat is booked with no one else (#1043).
+  if (patient.requires_preferred_staff && patient.preferred_staff_id) input.preferred_staff_id = patient.preferred_staff_id;
   const stays = await withTimeout(prisma.patientStay.findMany({ where: { patient_id: patient.id } }), maxMs, 'STAYS');
 
   // The whole table: a centre's programme is a handful of rows, and which of

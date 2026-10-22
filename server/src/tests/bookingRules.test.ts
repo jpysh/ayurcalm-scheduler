@@ -187,7 +187,13 @@ async function main() {
       await prisma.staff.updateMany({ where: { id: { in: doctors } }, data: { is_active: true } });
     }
 
-    console.log('Booking from +: a repeated therapy or a fifth treatment is asked about and books on Book anyway; the day check notes it; each dead end (not staying, no free time, hours over, gender short) carries an action.');
+    // A course for a resident only their own therapist may treat goes to them alone (#1043).
+    const loyal = await call('POST', '/patients', { name: `${TAG} Loyal`, gender: 'female', stay: { start_date: '2030-04-10', end_date: '2030-04-20' }, preferred_staff_id: bina.id, requires_preferred_staff: true });
+    const course = await call('POST', '/appointments', { patient_id: loyal.id, therapy_id: abhyanga.id, total_sessions: 3, preferred_days: [], preferred_time_range: { start: '09:00', end: '18:00' }, start_date: '2030-04-11', end_date: '2030-04-16' });
+    assert.ok(course.appointments.length > 0, 'the course booked nothing');
+    assert.ok(course.appointments.every((a: { staff_id: string }) => a.staff_id === bina.id), 'a course went to another therapist than the resident\'s own');
+
+    console.log('Booking from +: a course for a resident with their own therapist goes to them alone; a repeated therapy or a fifth treatment is asked about and books on Book anyway; the day check notes it; each dead end (not staying, no free time, hours over, gender short) carries an action.');
   } finally {
     await tidy(prisma).catch(() => {});
     await prisma.$disconnect();
