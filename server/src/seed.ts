@@ -440,13 +440,28 @@ async function main() {
     return n >= 3 && n <= 4 && (!evening || [...own, ...moved].some((a) => a.start_time >= '18:00'));
   };
   // Someone with an evening one first: on some days the first who fits had nothing after 18:00 (#717).
-  const absent = candidates.find((c) => fits(c, true)) ?? candidates.find((c) => fits(c, false));
+  const evenings = (c: (typeof staff)[number]) => inHours(c, todayKey, 18 * 60, 19 * 60);
+  const absent = candidates.find((c) => fits(c, true)) ?? candidates.find((c) => fits(c, false) && evenings(c)) ?? candidates.find((c) => fits(c, false));
   if (absent) {
     if (absent.id !== onLeaveToday.id) {
       await prisma.timeOff.updateMany({ where: { entity_type: 'staff', entity_id: onLeaveToday.id, date: centreToday() }, data: { entity_id: absent.id } });
     }
-    for (const a of movableTo(absent).moved) {
+    const { own, moved } = movableTo(absent);
+    for (const a of moved) {
       await prisma.appointment.update({ where: { id: a.id }, data: { staff_id: absent.id } });
+    }
+    // A day with almost nothing booked after 18:00 left no evening one to hand them (23 Oct 2026):
+    // their latest single-handed treatment moves to the first evening time its room, its patient and they have free.
+    const theirs = [...own, ...moved].filter((a) => a.co_staff_ids.length === 0).sort((a, b) => b.start_time.localeCompare(a.start_time));
+    const late = theirs[0];
+    if (late && !theirs.some((a) => a.start_time >= '18:00')) {
+      const busy = (a: (typeof todays)[number], t: number) => a.id !== late.id && overlaps(mins(a.start_time), mins(a.start_time) + a.duration_minutes, t, t + late.duration_minutes)
+        && (a.room_id === late.room_id || a.patient_id === late.patient_id || a.staff_id === absent.id || a.co_staff_ids.includes(absent.id) || theirs.includes(a));
+      for (let t = 18 * 60; t + late.duration_minutes <= 20 * 60; t += 30) {
+        if (!inHours(absent, todayKey, t, t + late.duration_minutes) || todays.some((a) => busy(a, t))) continue;
+        await prisma.appointment.update({ where: { id: late.id }, data: { start_time: `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}` } });
+        break;
+      }
     }
   }
 
