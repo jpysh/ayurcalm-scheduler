@@ -35,7 +35,7 @@ async function email(to, subject, text) {
     if (!r.ok) throw new Error(`email ${r.status}`);
   } else console.log(`[email to ${to}] ${subject}\n${text}\n`); // until an email provider is set up
 }
-// Every notice goes to the log and, once CF_EMAIL_TOKEN is set, to ALERT_EMAIL (no Telegram, #2026-10-09 decision).
+// Every notice goes to the log and, once CF_EMAIL_TOKEN is set, to ALERT_EMAIL (alerts are email only, never Telegram).
 async function notify(text) {
   console.log(`[notify] ${text}`);
   await email(env.ALERT_EMAIL || 'helloayursen@gmail.com', text.split('\n')[0].slice(0, 80), text).catch(() => {});
