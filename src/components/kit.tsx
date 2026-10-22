@@ -338,7 +338,8 @@ export const Row = ({ title, facts, trailing, flag, onClick, href, faint }: { ti
 export const ListGroup = ({ title, count, children }: { title?: string; /** A bare number, or words when a number alone would not say what it counts ('4 free'). */ count?: number | string; children: ReactNode }) => (
   <section>
     {title ? <div className="flex justify-between px-1 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{title}{count !== undefined ? <span className="font-normal normal-case tracking-normal">{count}</span> : null}</div> : null}
-    <div className="overflow-hidden rounded-xl bg-card">{children}</div>
+    {/* A change line is flush on its own; inside a group it lines up with the rows. */}
+    <div className="overflow-hidden rounded-xl bg-card [&>.change-line]:px-3">{children}</div>
   </section>
 );
 
@@ -357,10 +358,16 @@ export function InboxSheet({ open, onOpenChange, title, sections, empty = "Nothi
 export const Consequence = ({ children }: { children: ReactNode }) => <p role="status" className="mt-2 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-primary">{children}</p>;
 
 /** "Discharge summary · 5 of 8 ready", with a slim line. Informs, never blocks. */
-export const ChecklistBar = ({ label, done, total, onClick, unit = "ready" }: { label: string; done: number; total: number; onClick: () => void; unit?: string }) => (
+export const ChecklistBar = ({ label, done, total, onClick, unit = "ready", missing }: { label: string; done: number; total: number; onClick: () => void; unit?: string; /** What is left, named, so the admin need not open it to know. */ missing?: string[] }) => done >= total ? (
+  // Finished, it only confirms: one quiet line, so the top of the card goes to what still needs doing.
+  <button type="button" onClick={onClick} className="flex min-h-11 w-full items-center justify-between text-left text-sm">
+    <span className="font-semibold">{label}</span><span className="text-muted-foreground">✓ All {total} {unit} ›</span>
+  </button>
+) : (
   <button type="button" onClick={onClick} className="block w-full rounded-xl border bg-card px-3 py-2.5 text-left">
     <span className="flex justify-between text-sm font-semibold"><span>{label}</span><span className="text-muted-foreground">{done} of {total} {unit}</span></span>
     <span className="mt-2 block h-1 overflow-hidden rounded-full bg-secondary"><span className="block h-full rounded-full bg-primary" style={{ width: `${total ? (done / total) * 100 : 0}%` }} /></span>
+    {missing?.length ? <span className="mt-1.5 block text-sm text-muted-foreground">Still to do: {missing.join(", ")}</span> : null}
   </button>
 );
 
@@ -477,7 +484,7 @@ export const SearchField = ({ value, onChange, placeholder }: { value: string; o
  * line changes in one tap. With no `onClick` and no `select` it only tells.
  */
 export const ChangeLine = ({ label, value, onClick, select, faint }: { label: string; value: ReactNode; onClick?: () => void; select?: ReactNode; faint?: boolean }) => {
-  const cls = "relative flex min-h-12 w-full flex-wrap items-center justify-between gap-x-3 border-b border-border py-2 text-left last:border-b-0";
+  const cls = "change-line relative flex min-h-12 w-full flex-wrap items-center justify-between gap-x-3 border-b border-border py-2 text-left last:border-b-0";
   const inner = (
     <>
       <span className={noteText}>{label}</span>
@@ -517,7 +524,8 @@ let currency = "Rs";
 /** The centre's symbol, read from Settings when the app opens (#609). */
 export const setCurrency = (symbol?: string | null) => { currency = symbol?.trim() || "Rs"; };
 /** "Rs 70,750" or "$1,600": whole units, reference figures, never an invoice (#53). Rupees group the Indian way; a letter symbol gets a space. */
-export const money = (n: number) => `${currency}${/[A-Za-z]$/.test(currency) ? " " : ""}${n.toLocaleString(currency === "Rs" || currency === "₹" ? "en-IN" : "en-GB")}`;
+// A non-breaking space, so a wrapped line never leaves "Rs" at the end and the number under it.
+export const money = (n: number) => `${currency}${/[A-Za-z]$/.test(currency) ? "\u00a0" : ""}${n.toLocaleString(currency === "Rs" || currency === "₹" ? "en-IN" : "en-GB")}`;
 
 /**
  * Today and Tomorrow above the phone's own calendar: most changes start on one of them.
