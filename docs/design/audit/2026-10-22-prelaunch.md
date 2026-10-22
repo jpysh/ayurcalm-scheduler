@@ -16,23 +16,23 @@ After #1043 (#1050, #1051) and #1053 merged. Throwaway stack `review` on :8097, 
 
 | Finding | Issue | Status |
 |---|---|---|
-| Card of a guest arriving later shows no diet and none of their booked treatments | #1068 | open, fix next |
-| Plan next week at the first review ignores treatments already booked | #1069 | open |
-| One closed day switches a whole Plan next week line off | #1070 | open |
-| What needs you on another day lists today's leave and patients | #1071 | open |
-| Leave and close-day sheets start on today, not the day on screen | #1072 | open |
-| An expired sign-in throws away what was typed | #1073 | open |
-| A closed day offers a move to after the guest has left | #1075 | open |
-| Polish: the day, What needs you, list screens | #1076 | open, polish-batch |
-| Polish: the patient card and its sheets | #1077 | open, polish-batch |
-| Polish: Settings, catalogues, Availability | #1078 | open, polish-batch |
-| Booked sessions and a therapy's new length | #1079 | question for the maintainer |
-| A therapist leaving for good | #1080 | question for the maintainer |
-| Steam right after massage | #1081 | question for the maintainer |
-| Per-day steps inside a diet plan | #1082 | question for the maintainer |
+| Card of a guest arriving later shows no diet and none of their booked treatments | #1068 | fixed, #1096 |
+| Plan next week at the first review ignores treatments already booked | #1069 | fixed, #1093 |
+| One closed day switches a whole Plan next week line off | #1070 | fixed, #1103 |
+| What needs you on another day lists today's leave and patients | #1071 | fixed, #1098 |
+| Leave and close-day sheets start on today, not the day on screen | #1072 | fixed, #1098 |
+| An expired sign-in throws away what was typed | #1073 | fixed, #1102 (reverted by accident, restored in #1113) |
+| A closed day offers a move to after the guest has left | #1075 | fixed, #1092; its sheet wording #1106, #1107 |
+| Polish: the day, What needs you, list screens | #1076 | done, #1118 |
+| Polish: the patient card and its sheets | #1077 | done, #1111 and #1119 |
+| Polish: Settings, catalogues, Availability | #1078 | done, #1120 |
+| Booked sessions and a therapy's new length | #1079 | built, #1105 |
+| A therapist leaving for good | #1080 | built, #1108 |
+| Steam right after massage | #1081 | not planned: a centre makes a combined therapy in Therapies |
+| Per-day steps inside a diet plan | #1082 | built, #1109 (server and sheets) and #1116 (editing in the app) |
 
-Not filed yet, to check by hand first: a late patient's "Suggested" time on today (on a future day it suggests earlier), and one swapped line that came out switched off in Plan next week. Tap count unchanged except "Warning → fixed day", which broke twice: nightly, for the weekly test repair.
+The two "check by hand" items: the move sheet's first choice is now named "Best fit" and says how much earlier or later it is (#1118); the swapped line that came out switched off was not checked by hand; it goes to the final check.
 
 ## For the maintainer
 
-Four one-line questions: #1079, #1080, #1081, #1082. Nothing else needs you.
+All four questions were answered on 22 Oct and built (or closed, #1081). Nothing from this audit needs you.
