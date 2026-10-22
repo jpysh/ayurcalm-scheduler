@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChangeLine, Consequence, Days, TimeList, WEEK, Chips, chip, dayText, timesBetween, Dropdown, Group, More, Seg, SheetFoot, Switch, Text, noteText, say, field, Btn, toastUndo, TwoFoot, plural } from "@/components/kit";
+import { ChangeLine, Consequence, Days, TimeList, WEEK, Chips, chip, dayText, timesBetween, Dropdown, Group, More, Seg, SheetFoot, Switch, Text, noteText, say, field, Btn, toastUndo, TwoFoot, plural, Area } from "@/components/kit";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
@@ -18,6 +18,9 @@ async function send(path: string, method: string, body: unknown) {
   return out;
 }
 
+/** Several names typed or pasted, one a line (#973): blank lines and repeats dropped. */
+const linesOf = (text: string) => [...new Set(text.split("\n").map((l) => l.trim()).filter(Boolean))];
+
 /** Saved, with a way back: Undo sends what the thing held before and puts the old row back on screen. */
 const savedWithUndo = <T,>(text: string, path: string, before: unknown, old: T, onSaved: (x: T) => void) =>
   toastUndo(text, async () => {
@@ -34,8 +37,24 @@ export function RoomSheet({ room, preset = [], open, onClose, amenityOptions, on
   room: UiRoom | null; /** What a new room starts ticked with, when a booking found no room that has it (#544). */ preset?: string[]; open: boolean; onClose: () => void; amenityOptions: string[]; onSaved: (r: UiRoom) => void; remove: (r: UiRoom) => void;
 }) {
   const [name, setName] = useState(""); const [has, setHas] = useState<string[]>([]); const [busy, setBusy] = useState(false);
+  const [many, setMany] = useState<string | null>(null);
+  const names = many === null ? [] : linesOf(many);
   // A new room starts with nothing ticked: a consultation needs a BP monitor and an examination bed, which a therapy room does not have, so ticking everything would send doctors into it. "Something else…" adds equipment the list lacks.
-  useEffect(() => { if (open) { setName(room?.name ?? ""); setHas(room?.amenities ?? preset); } }, [open, room]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open) { setName(room?.name ?? ""); setHas(room?.amenities ?? preset); setMany(null); } }, [open, room]); // eslint-disable-line react-hooks/exhaustive-deps
+  // One request each, in order: a failure says how many were added before it, and those stay.
+  const saveMany = async () => {
+    setBusy(true);
+    let done = 0;
+    try {
+      for (const n of names) {
+        const x = await send("/rooms", "POST", { name: n, amenities: has, weekly_schedule: {} });
+        onSaved({ id: x.id, name: x.name, amenities: x.amenities || has, schedule: "", status: "Active" });
+        done++;
+      }
+      toast(`${plural(done, "room")} added`);
+      onClose();
+    } catch (e) { toast.error(`${done ? `${plural(done, "room")} added, then: ` : ""}${(e as Error).message}`); } finally { setBusy(false); }
+  };
   const save = async () => {
     setBusy(true);
     try {
@@ -48,9 +67,11 @@ export function RoomSheet({ room, preset = [], open, onClose, amenityOptions, on
   };
   return (
     <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={room ? room.name : "Add room"} note={room ? "Change anything, then save." : "Give it a name and tick what it has."}
-      foot={<SheetFoot busy={busy} ok={!!name.trim()} save={save} label={room ? "Save the room" : "Add the room"} remove={room ? () => { onClose(); remove(room); } : undefined} removeLabel="Delete this room" />}>
-      <Text label="Name" id="room-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Room 4 or Dhanvantari" />
-      <Group label="What it has" note="A therapy that needs something is only booked into a room that has it.">
+      foot={<SheetFoot busy={busy} ok={many !== null ? names.length > 0 : !!name.trim()} save={many !== null ? saveMany : save} label={room ? "Save the room" : many !== null ? (names.length ? `Add ${plural(names.length, "room")}` : "Type their names first") : "Add the room"} remove={room ? () => { onClose(); remove(room); } : undefined} removeLabel="Delete this room" />}>
+      {many !== null ? <Area label="Names, one a line" id="room-names" rows={6} autoFocus value={many} onChange={(e) => setMany(e.target.value)} placeholder={"Room 1\nRoom 2\nDhanvantari"} />
+        : <Text label="Name" id="room-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Room 4 or Dhanvantari" />}
+      {room ? null : <Btn kind="quiet" inline className="-ml-2" onClick={() => setMany(many === null ? (name.trim() ? `${name.trim()}\n` : "") : null)}>{many === null ? "Add several at once" : "Add one"}</Btn>}
+      <Group label={many !== null ? "What they all have" : "What it has"} note="A therapy that needs something is only booked into a room that has it.">
         <Chips options={[...new Set([...amenityOptions, ...has])]} value={has} onChange={setHas} addLabel="Something else…" />
       </Group>
       {room && out ? out(String(room.id)) : null}
@@ -89,6 +110,9 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
   const [name, setName] = useState(""); const [role, setRole] = useState<"therapist" | "doctor">("therapist");
   const [gender, setGender] = useState<"Female" | "Male" | "">(""); const [gives, setGives] = useState<string[]>([]);
   const [phone, setPhone] = useState(""); const [busy, setBusy] = useState(false);
+  // Several at once (#973): the names, and each one's gender, which the server needs and a guess would get wrong (#568).
+  const [many, setMany] = useState<string | null>(null); const [genders, setGenders] = useState<Record<string, "Female" | "Male">>({});
+  const names = many === null ? [] : linesOf(many);
   const full = `${centre.opening}-${centre.closing}`;
   const [week, setWeek] = useState<Week>({}); const [hoursPage, setHoursPage] = useState(false); const [touched, setTouched] = useState(false);
   const [edit, setEdit] = useState<Edit | null>(null);
@@ -96,7 +120,7 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
     if (!open) return;
     const h = person?.hours && Object.keys(person.hours).length ? person.hours : null;
     setWeek(Object.fromEntries(WEEK.map((d) => [d, h ? (h[d] ? `${h[d]!.start}-${h[d]!.end}` : "") : full])));
-    setHoursPage(false); setTouched(false); setEdit(null);
+    setHoursPage(false); setTouched(false); setEdit(null); setMany(null); setGenders({});
     setName(person?.name ?? ""); setRole(person?.role ?? preset?.role ?? "therapist"); // A new person starts with no gender: a silent default sent same-gender therapies to the wrong therapist (#568).
     setGender(person ? (person.gender === "Male" ? "Male" : "Female") : preset?.gender ?? "");
     setGives(person?.specializations ?? preset?.gives ?? []); setPhone(person?.phone ?? "");
@@ -129,6 +153,23 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
       onClose();
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
+  const saveMany = async () => {
+    setBusy(true);
+    let done = 0;
+    try {
+      const ids = gives.map((n) => therapies.find((t) => t.name === n)?.id).filter(Boolean);
+      for (const n of names) {
+        const x = await send("/staff", "POST", { name: n, role, gender: genders[n].toLowerCase(), specializations: ids, ...(touched ? { weekly_schedule: hoursOf(week) } : { weekly_schedule: {} }) });
+        onSaved({ id: x.id, name: x.name, role: x.role ?? role, gender: x.gender === "male" ? "Male" : "Female",
+          specializations: (x.specializations || []).map((id: string) => therapies.find((t) => String(t.id) === String(id))?.name).filter(Boolean),
+          phone: "", schedule: "", hours: x.weekly_schedule, status: "Active" });
+        done++;
+      }
+      toast(`${plural(done, role === "doctor" ? "doctor" : "therapist")} added${role === "therapist" && !ids.length ? ". They can give every therapy; open a card to limit that." : ""}`);
+      onClose();
+    } catch (e) { toast.error(`${done ? `${done} added, then: ` : ""}${(e as Error).message}`); } finally { setBusy(false); }
+  };
+  const manyOk = names.length > 0 && names.every((n) => genders[n]);
   // Shortcuts that fill the two fields, drawn from the centre's own hours (#564); the fields stay the source of truth.
   const span = Math.round((minsOf(centre.closing) - minsOf(centre.opening)) * 0.55 / 30) * 30;
   const quick: [string, string, string][] = [["Centre hours", centre.opening, centre.closing],
@@ -141,7 +182,7 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
     <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={edit ? (edit.bulk ? "Several days" : edit.days[0][0].toUpperCase() + edit.days[0].slice(1)) : hoursPage ? `${name.trim() || "Their"} hours` : person ? person.name : "Add therapist or doctor"}
       note={edit ? (edit.bulk ? "Pick the days, then their hours." : "The same every week on this day.") : hoursPage ? "The same every week. A one-off change is leave for part of the day." : person ? "Change anything, then save." : "Name, role and gender are needed. The rest can wait."}
       onBack={edit ? () => setEdit(null) : hoursPage ? () => setHoursPage(false) : undefined}
-      foot={<SheetFoot busy={busy} ok={edit ? editOk : !!name.trim() && !!gender} save={edit ? apply : save} label={edit ? "Apply" : hoursPage && person ? "Save the hours" : person ? "Save" : `Add ${name.trim() || "them"}`} remove={person && !hoursPage ? () => { onClose(); remove(person); } : undefined} removeLabel="Delete this person" />}>
+      foot={<SheetFoot busy={busy} ok={edit ? editOk : many !== null && !hoursPage ? manyOk : !!name.trim() && !!gender} save={edit ? apply : many !== null && !hoursPage ? saveMany : save} label={edit ? "Apply" : hoursPage && person ? "Save the hours" : person ? "Save" : many !== null && !hoursPage ? (!names.length ? "Type their names first" : !manyOk ? "Choose each one's gender" : `Add ${plural(names.length, role === "doctor" ? "doctor" : "therapist")}`) : `Add ${name.trim() || "them"}`} remove={person && !hoursPage ? () => { onClose(); remove(person); } : undefined} removeLabel="Delete this person" />}>
       {edit ? <div>
         {edit.bulk ? <>
           <Group label="Days"><Days value={edit.days} onChange={(days) => setEdit({ ...edit, days })} /></Group>
@@ -164,16 +205,21 @@ export function PersonSheet({ person, open, onClose, therapies, onSaved, remove,
         {outside ? <Consequence>{outside.length === 0 ? "Nothing booked falls outside these hours."
           : `${outside.length} booked treatment${outside.length === 1 ? " falls" : "s fall"} outside these hours: ${outside.slice(0, 3).map((a) => `${dayText(a.date)} ${a.start_time} ${a.patient_name}`).join(", ")}${outside.length > 3 ? ` and ${outside.length - 3} more` : ""}. What needs you will offer a new therapist or time.`}</Consequence> : null}
       </div> : <>
-      <Text label="Name" id="person-name" value={name} onChange={(e) => setName(e.target.value)} />
+      {many !== null ? <Area label="Names, one a line" id="person-names" rows={6} autoFocus value={many} onChange={(e) => setMany(e.target.value)} />
+        : <Text label="Name" id="person-name" value={name} onChange={(e) => setName(e.target.value)} />}
+      {person ? null : <Btn kind="quiet" inline className="-ml-2" onClick={() => setMany(many === null ? (name.trim() ? `${name.trim()}\n` : "") : null)}>{many === null ? "Add several at once" : "Add one"}</Btn>}
       <Group label="Role"><Seg<"therapist" | "doctor"> options={[["therapist", "Therapist"], ["doctor", "Doctor"]]} value={role} onChange={setRole} /></Group>
-      <Group label="Gender" note={gender ? "Used when a therapy needs a therapist of the patient's gender." : "Choose their gender. A therapy that needs the patient's gender uses it."}><Seg<"Female" | "Male" | ""> options={[["Female", "Female"], ["Male", "Male"]]} value={gender} onChange={setGender} /></Group>
+      {many !== null ? (names.length ? <Group label="Gender" note="Used when a therapy needs a therapist of the patient's gender.">
+        <div className="grid gap-2">{names.map((n) => <div key={n} role="group" aria-label={n} className="grid grid-cols-[1fr_auto] items-center gap-2"><span className="min-w-0 truncate font-semibold">{n}</span>
+          <Seg<"Female" | "Male" | ""> options={[["Female", "Female"], ["Male", "Male"]]} value={genders[n] ?? ""} onChange={(g) => g && setGenders({ ...genders, [n]: g })} /></div>)}</div>
+      </Group> : null) : <Group label="Gender" note={gender ? "Used when a therapy needs a therapist of the patient's gender." : "Choose their gender. A therapy that needs the patient's gender uses it."}><Seg<"Female" | "Male" | ""> options={[["Female", "Female"], ["Male", "Male"]]} value={gender} onChange={setGender} /></Group>}
       <div className="mt-3"><ChangeLine label="Hours" value={weekText(week)} onClick={() => setHoursPage(true)} /></div>
       {role === "therapist" ? (
         <Group label="Therapies they give (optional)" note={therapies.length ? "None ticked means they can give every therapy." : undefined}>
           {therapies.length ? <Chips options={therapies.map((t) => t.name)} value={gives} onChange={setGives} /> : <p className={noteText}>Add therapies first, then tick the ones they give.</p>}
         </Group>
       ) : null}
-      <Text label="Phone (optional)" id="person-phone" type="tel" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      {many !== null ? null : <Text label="Phone (optional)" id="person-phone" type="tel" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} />}
       </>}
     </BottomSheet>
   );
