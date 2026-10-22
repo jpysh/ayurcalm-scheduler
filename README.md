@@ -22,6 +22,8 @@ Made for the admin's phone. A desktop only widens it.
 <img src="docs/guide/3-book.png" width="200" alt="Book a treatment: the next free slot, best resident first">
 </p>
 
+Every morning it prints these, from the example centre: [day sheet](docs/guide/sheets/sheet-day.pdf) · [therapist sheets](docs/guide/sheets/sheet-therapist.pdf) · [kitchen](docs/guide/sheets/sheet-kitchen.pdf) · [doctor](docs/guide/sheets/sheet-doctor.pdf).
+
 ## Three ways in
 
 1. **Look around:** the [live demo](https://demo.jains.es), a busy example centre. Nothing to install.
@@ -40,6 +42,10 @@ Same app, same features. The difference is who runs it.
 | Setup help with your therapies, rooms and rota | No | Included |
 
 You can move between them at any time and always leave with your data.
+
+## Set it up for centres near you
+
+IT firms and consultants can install, support and resell Ruta for centres in their region. Partners get a margin on Ruta Cloud, a commercial licence where needed, and a listing on the website. [Tell us about your region](https://github.com/jpysh/ayurcalm-scheduler/discussions/1058) or write via [jains.es/ruta](https://jains.es/ruta).
 
 ## Quick start
 
@@ -61,7 +67,7 @@ React, Vite and TypeScript front end; Express, Prisma and PostgreSQL 16 API; Pla
 
 ## Contributing
 
-Issues, ideas and pull requests welcome: [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md). Not sure if it's a bug? Ask in [Discussions](https://github.com/jpysh/ayurcalm-scheduler/discussions).
+Issues and pull requests welcome. Have an idea for your centre? [Propose it in Ideas](https://github.com/jpysh/ayurcalm-scheduler/discussions/categories/ideas); ideas with a real centre behind them go first. Guide: [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md). Not sure if it's a bug? Ask in [Discussions](https://github.com/jpysh/ayurcalm-scheduler/discussions).
 
 ## License
 
