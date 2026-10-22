@@ -106,10 +106,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
   const startForm = (kind: Kind, ids: string[], p: Partial<MarkOut> = {}) => {
     setPicking(false);
     // A guest room is let by the night, so it is only ever whole days.
-    // Opened while a later day is on screen, the form starts on that day, never silently on today (#1072).
-    const later = todayKey > centreToday;
-    const date = p.date ?? (later ? todayKey : centreToday);
-    setForm({ ...blank, mode: kind === 'GuestRoom' ? 'days' : p.mode ?? (later && !p.date ? 'days' : 'now'), date, endDate: date, startTime: p.startTime ?? '', endTime: p.endTime ?? '', description: p.description ?? '', kind, ids });
+    const date = p.date ?? centreToday;
+    setForm({ ...blank, mode: kind === 'GuestRoom' ? 'days' : p.mode ?? 'now', date, endDate: date, startTime: p.startTime ?? '', endTime: p.endTime ?? '', description: p.description ?? '', kind, ids });
   };
   const openEdit = (h: UiTimeOff) => {
     if (h.type === 'Center') return;
@@ -303,7 +301,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
   const fixLabel = !s ? '' : s.date === s.endDate ? (s.date === centreToday ? 'Save and fix the day' : 'Save and fix that day') : 'Save and fix those days';
   const dialogs = (
     <>
-      <HolidaysSheet open={showHolidays} onOpenChange={setShowHolidays} closed={closedDays} today={centreToday} shown={todayKey} onChanged={reloadClosed} />
+      <HolidaysSheet open={showHolidays} onOpenChange={setShowHolidays} closed={closedDays} today={centreToday} onChanged={reloadClosed} />
       <BottomSheet open={picking} onOpenChange={setPicking} title="What is not available?" note="Choose one or several of the same kind."
         foot={<>
           <SearchField value={q} onChange={setQ} placeholder="Type a name" />

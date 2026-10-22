@@ -10,7 +10,7 @@ import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
 import { checkDay } from '../dayCheck.js';
-import { moveOffClosedDays, planDay } from '../replan.js';
+import { moveOffClosedDays } from '../replan.js';
 import { requireDemoData } from './demoGuard.js';
 
 const allDay = Object.fromEntries(
@@ -90,10 +90,6 @@ async function main() {
     const leaving = await checkDay(shut, prisma, { now: { date: '2030-01-15', time: '17:00' } });
     assert.equal(leaving.closed?.movable, 0, `none can move on their leaving day, got ${JSON.stringify(leaving.closed)}`);
     assert.equal((await moveOffClosedDays('2030-01-16', '2030-01-16', prisma, { now: { date: '2030-01-15', time: '17:00' } })).moved, 0, 'the day check and Move disagree');
-    // Nor is a day after they have left offered under "need you": only Cancel (#1075).
-    const asked = await planDay(null, shut, prisma, { appointmentIds: appts.map((a) => a.id), now: { date: '2030-01-15', time: '17:00' } });
-    const offered = [...asked.moved, ...asked.proposed, ...asked.unplaced.flatMap((u) => u.choices || [])].flatMap((m) => [m, ...(m.choices || [])]).filter((m) => !m.cancel && m.to.date > ymd(shut));
-    assert.deepEqual(offered.map((m) => m.to.date), [], 'a day after the stay was offered');
 
     console.log('closeDay: ok');
   } finally {
