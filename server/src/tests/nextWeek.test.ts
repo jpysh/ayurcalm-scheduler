@@ -66,6 +66,14 @@ async function main() {
     assert.ok(line(abhy.id).sessions.every((s: { start_time: string }) => s.start_time === '09:00'), 'Abhyanga keeps its time');
     assert.deepEqual(line(shiro.id).sessions.map((s: { date: string }) => s.date), [day(3), day(5)], 'Shirodhara on the same weekdays');
     assert.equal(plan.review?.date, day(7)); assert.equal(plan.review?.start_time, '10:00');
+    // A closed day is skipped and named, and the line still books its open days (#1070).
+    const shut = await prisma.timeOff.create({ data: { entity_type: 'center', date: at(day(4)), start_date: at(day(4)), end_date: at(day(4)), description: `${TAG} Holiday` } });
+    try {
+      const closed = (await call('GET', `/patients/${p.id}/next-week?date=${REVIEW}`)).lines.find((l: { from_therapy_id: string }) => l.from_therapy_id === abhy.id);
+      assert.equal(closed.missing.length, 0, 'a closed day should not count as missing');
+      assert.deepEqual(closed.skipped.map((m: { date: string }) => m.date), [day(4)]);
+      assert.equal(closed.sessions.length, 6, 'the open days are still booked');
+    } finally { await prisma.timeOff.delete({ where: { id: shut.id } }); }
 
     const mine = () => prisma.appointment.count({ where: { patient_id: p.id, scheduled_date: { gt: at(REVIEW) } } });
     // A line that cannot be placed refuses the whole week: nothing is booked.
