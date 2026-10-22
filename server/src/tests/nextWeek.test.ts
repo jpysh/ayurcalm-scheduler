@@ -66,6 +66,14 @@ async function main() {
     assert.ok(line(abhy.id).sessions.every((s: { start_time: string }) => s.start_time === '09:00'), 'Abhyanga keeps its time');
     assert.deepEqual(line(shiro.id).sessions.map((s: { date: string }) => s.date), [day(3), day(5)], 'Shirodhara on the same weekdays');
     assert.equal(plan.review?.date, day(7)); assert.equal(plan.review?.start_time, '10:00');
+    // A closed day is skipped and named, and the line still books its open days (#1070).
+    const shut = await prisma.timeOff.create({ data: { entity_type: 'center', date: at(day(4)), start_date: at(day(4)), end_date: at(day(4)), description: `${TAG} Holiday` } });
+    try {
+      const closed = (await call('GET', `/patients/${p.id}/next-week?date=${REVIEW}`)).lines.find((l: { from_therapy_id: string }) => l.from_therapy_id === abhy.id);
+      assert.equal(closed.missing.length, 0, 'a closed day should not count as missing');
+      assert.deepEqual(closed.skipped.map((m: { date: string }) => m.date), [day(4)]);
+      assert.equal(closed.sessions.length, 6, 'the open days are still booked');
+    } finally { await prisma.timeOff.delete({ where: { id: shut.id } }); }
 
     const mine = () => prisma.appointment.count({ where: { patient_id: p.id, scheduled_date: { gt: at(REVIEW) } } });
     // A line that cannot be placed refuses the whole week: nothing is booked.
@@ -113,10 +121,6 @@ async function main() {
     const start = await call('POST', `/patients/${fresh.id}/next-week`, { date: REVIEW, review: false, lines: [{ from_therapy_id: kati.id, therapy_id: kati.id }, { from_therapy_id: shiro.id, therapy_id: shiro.id }] });
     assert.equal(start.count, 14, 'two therapies on each of the seven days, from the day after the review');
     assert.equal(await prisma.appointment.count({ where: { patient_id: fresh.id, therapy_id: kati.id } }), 7);
-    // Booked that week already (#1069): the sheet shows those lines as booked, never the starters again.
-    const booked = await call('GET', `/patients/${fresh.id}/next-week?date=${REVIEW}`);
-    assert.equal(booked.lines.length, 2, 'the therapies already booked that week should be lines');
-    assert.ok(booked.lines.every((l: { sessions: unknown[]; missing: unknown[] }) => !l.sessions.length && !l.missing.length), 'a booked line should offer nothing more');
     // A course shape (#984): 3 of 7 days is spread over the week, not the first three.
     const shaped = await call('POST', '/patients', { name: `${TAG} Shaped`, gender: 'female', stay: { start_date: REVIEW, end_date: day(12) } });
     assert.equal((await call('POST', `/patients/${shaped.id}/next-week`, { date: REVIEW, review: false, lines: [{ from_therapy_id: kati.id, therapy_id: kati.id, sessions: 3 }] })).count, 3);

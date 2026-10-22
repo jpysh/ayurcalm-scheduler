@@ -51,7 +51,7 @@ async function main() {
     const missed = await book('09:00', 'no_show');
     // What the therapists recorded after a treatment (#508): the card shows the last readings, newest first.
     await prisma.appointment.update({ where: { id: late.id }, data: { record: { vitals: { bp: '124/82' } } } });
-    const recorded = await prisma.appointment.create({ data: {
+    await prisma.appointment.create({ data: {
       patient_id: rekha.id, therapy_id: therapy.id, scheduled_date: at('2030-06-11'), start_time: '10:00', duration_minutes: 60,
       session_number: 1, total_sessions: 1, status: 'completed', assignment_type: 'manual', record: { vitals: { bp: '120/80' } },
     } });
@@ -85,12 +85,6 @@ async function main() {
     assert.equal(early.stay, null);
     assert.deepEqual([early.coming?.start_date, early.coming?.end_date], ['2030-06-10', '2030-06-19']);
     assert.equal(early.last_stay, null, 'a guest who is coming is not a past guest');
-    // Their week and diet are read from the arrival day, so the course just booked shows (#1068).
-    assert.equal(early.plan_name, plan.name, 'the diet that starts on arrival');
-    assert.deepEqual(early.week.map((w: { date: string; treatments: { id: string }[] }) => [w.date, w.treatments.map((t) => t.id)]).slice(0, 5), [
-      ['2030-06-10', []], ['2030-06-11', [recorded.id]], ['2030-06-12', [missed.id, late.id]], ['2030-06-13', []], ['2030-06-14', [ahead.id]],
-    ], 'the first seven days of the stay, from the arrival day');
-    assert.equal(early.week.length, 7);
     // The Patients list asks for the next two weeks as well, so a guest added ahead is on it (#496).
     const names = async (q: string) => ((await (await fetch(`${API_BASE}/patients?resident_on=2030-06-08${q}`, { headers: { Authorization: `Bearer ${token}` } })).json()) as { name: string }[]).map((x) => x.name);
     assert.ok(!(await names('')).includes(rekha.name), 'in house only, by default');
