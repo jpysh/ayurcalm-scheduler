@@ -302,7 +302,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await showDay(page, day);
       await tap(upcoming());
       await tap(page.getByRole('dialog').getByRole('button', { name: /^When/ }));
-      await tap(page.getByRole('dialog').getByRole('button', { name: /Suggested/ }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /Best fit/ }));
       const note = page.locator('[data-sonner-toast]').filter({ hasText: 'Moved to' });
       await expect(note).toBeVisible({ timeout: 20000 });
       await note.getByRole('button', { name: 'Undo' }).click();
@@ -465,17 +465,17 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     await job(page, rows, 'See who needs attention', async (tap) => {
       await tap(page.getByRole('button', { name: 'Menu', exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Patients/ }));
-      await tap(activePanel(page).getByRole('button', { name: /^Needs attention/ }));
-      await expect(activePanel(page).getByRole('button', { name: /^Needs attention/ })).toHaveAttribute('aria-pressed', 'true');
+      await tap(activePanel(page).getByRole('button', { name: /^Need you/ }));
+      await expect(activePanel(page).getByRole('button', { name: /^Need you/ })).toHaveAttribute('aria-pressed', 'true');
     });
 
     await job(page, rows, 'Therapist not in', async (tap) => {
       await showDay(page, day);
       await tap(page.getByRole('button', { name: /^Show the day by/ }));
       await tap(page.getByRole('dialog').getByRole('button', { name: 'Therapist', exact: true }));
-      await tap(activePanel(page).getByRole('button', { name: / not in$/ }).first());
+      await tap(activePanel(page).getByRole('button', { name: / on leave$/ }).first());
       const note = page.locator('[data-sonner-toast]');
-      await expect(note).toContainText('not in all day', { timeout: 20000 });
+      await expect(note).toContainText('on leave all day', { timeout: 20000 });
       await note.getByRole('button', { name: 'Undo' }).click();
       await activePanel(page).getByRole('button', { name: /^Show the day by/ }).click();
       await page.getByRole('dialog').getByRole('button', { name: 'Time', exact: true }).click();
@@ -486,7 +486,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await showDay(page, day);
       await tap(upcoming());
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Something wrong/ }));
-      await tap(page.getByRole('dialog').getByRole('button', { name: /can't be used/ }));
+      await tap(page.getByRole('dialog').getByRole('button', { name: /is out of use/ }));
       const note = page.locator('[data-sonner-toast]').filter({ hasText: 'out of use' });
       await expect(note).toBeVisible({ timeout: 20000 });
       await note.getByRole('button', { name: 'Undo' }).click();

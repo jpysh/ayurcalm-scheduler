@@ -159,12 +159,6 @@ const AdminDashboard = () => {
   const therapyNameById = useMemo(() => Object.fromEntries(therapies.map((t: UiTherapy) => [String(t.id), t.name])), [therapies]);
   const staffNameById = useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
   const roomNameById = useMemo(() => Object.fromEntries(roomsList.map((r) => [r.id, r.name])), [roomsList]);
-  const moves = useMemo(() => {
-    const m = new Map<string, { in: number; out: number }>();
-    const at = (iso: string) => m.get(iso) ?? m.set(iso, { in: 0, out: 0 }).get(iso)!;
-    for (const p of patients) for (const s of p.stays ?? []) { at(s.start_date.slice(0, 10)).in++; at(s.end_date.slice(0, 10)).out++; }
-    return m;
-  }, [patients]);
   const patientNameById = useMemo(() => Object.fromEntries(patients.map((p) => [p.id, p.name])), [patients]);
   const amenityOptions = useMemo(() => {
     const s = new Set<string>();
@@ -571,7 +565,7 @@ const AdminDashboard = () => {
 
   return (
     <BackContext.Provider value={backTo}>
-    <div className="min-h-screen bg-background overflow-x-clip pb-[calc(var(--bar-h)+var(--bar-gap)+env(safe-area-inset-bottom)+1rem)]">
+    <div className="min-h-screen bg-background overflow-x-clip pb-[calc(var(--bar-h)+var(--bar-gap)+env(safe-area-inset-bottom)+5rem)]">
       {/* Main Content */}
       {/* The phone design widened on a desktop, never a second layout (#67): one centred column. */}
       {/* No top padding: each screen's own header carries the design's 12–14px (#193). */}
@@ -608,7 +602,7 @@ const AdminDashboard = () => {
                     </ListGroup>
                   </div>
                 ) : null}
-                {loaded && (ready || !show) && !scheduleScreen.searching ? <WeekStrip day={dayKeyMemo} today={ymdInTZ(new Date())} moves={moves} stamp={appointmentsByDate[dayKeyMemo]} setDay={(iso) => setCurrentDate(dayDate(iso))} /> : null}
+                {loaded && (ready || !show) && !scheduleScreen.searching ? <WeekStrip day={dayKeyMemo} today={ymdInTZ(new Date())} stamp={appointmentsByDate[dayKeyMemo]} setDay={(iso) => setCurrentDate(dayDate(iso))} /> : null}
                 {loaded && (ready || !show) ? scheduleScreen.tab : null}
               </>);
             })()}

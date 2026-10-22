@@ -8,7 +8,7 @@ import { API_BASE } from "@/lib/apiBase";
 
 // A problem on a row, in a few words: the pill's sheet says the rest.
 const SHORT: Record<string, string> = {
-  STAFF_OFF: "Therapist not in", ROOM_OFF: "Room out of use", THERAPY_OFF: "Therapy not given that day", PATIENT_OFF: "Patient has no treatments then", STAFF_BUSY: "Therapist booked twice", STAFF_IN_EVENT: "Therapist in an event",
+  STAFF_OFF: "Therapist on leave", ROOM_OFF: "Room out of use", THERAPY_OFF: "Therapy not given that day", PATIENT_OFF: "Patient has no treatments then", STAFF_BUSY: "Therapist booked twice", STAFF_IN_EVENT: "Therapist in an event",
   GENDER_MISMATCH: "Therapist must match", STAFF_SHORT: "Needs 2 therapists", PATIENT_BUSY: "Patient booked twice",
   ROOM_BUSY: "Room booked twice", AMENITIES_MISSING: "Room lacks what it needs", NO_THERAPIST: "Needs a therapist", EVENT_OVERLAP: "Runs through an event",
 };
@@ -20,7 +20,7 @@ const partDay = (p: { kind: string; what?: string; start_time?: string | null })
   const m = p.what?.match(/^(\S+).* is not in from (\d\d:\d\d) to (\d\d:\d\d)/);
   if (m) return p.start_time && p.start_time < m[2] ? `${m[1]} leaves at ${m[2]}` : `${m[1]} away until ${m[3]}`;
   const who = p.what?.match(/^(\S+).* is not in/)?.[1];
-  return who ? `${who} not in` : null;
+  return who ? `${who} on leave` : null;
 };
 
 /** Minutes past midnight now, on the centre's clock. */
@@ -79,7 +79,7 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
   };
 
   const isToday = dayKeyMemo === ymdInTZ(new Date());
-  // Who arrives and who leaves on this day: the strip's '+5' and '−6', with names (#583).
+  // Who arrives and who leaves on this day: named on the day (#583).
   // First name and initial: a centre can have four Ananyas (#633).
   const firstName = (n: string) => { const [f, ...rest] = n.replace(/^Dr\.? /, "").split(" "); const last = rest.at(-1); return last ? `${f} ${last[0]}.` : f; };
   const comings = {
@@ -104,7 +104,7 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
     if (!res.ok) { toast.error(body.error || "That could not be saved."); return; }
     await refreshDay(dayKeyMemo);
     const moved = (body.replan || []).reduce((n: number, r: { moved: unknown[] }) => n + r.moved.length, 0);
-    toast(`${name} ${entity_type === "staff" ? "not in" : "out of use"} ${from ? `from ${from}` : "all day"}${moved ? ` · ${moved} moved` : ""}`, {
+    toast(`${name} ${entity_type === "staff" ? "on leave" : "out of use"} ${from ? `from ${from}` : "all day"}${moved ? ` · ${moved} moved` : ""}`, {
       action: { label: "Undo", onClick: async () => {
         // A refused Undo leaves them out; say so, or the admin believes the day is back (#878).
         const undo = await fetch(`${API_BASE}/timeoff/${body.id}`, { method: "DELETE" }).catch(() => null);

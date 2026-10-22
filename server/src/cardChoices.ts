@@ -26,6 +26,8 @@ const works = (weekly: unknown, day: Date, start: number, minutes: number) => {
 /** How many rows a list shows: enough to choose, few enough to read on a phone. */
 const MAX = 5;
 const DAY_MS = 86400000;
+/** "1 h 45", "30 min": a move said the way the admin would. */
+const span = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60}` : ''}`);
 /** "Tue 29 Sep", for an option on another day. */
 const dayLabel = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
 
@@ -72,10 +74,11 @@ export async function cardChoices(appointmentId: string, kind: Kind, nowMinutes:
     // From now on today, never into the past.
     const from = Math.max(open, nowMinutes ?? open);
     const sameRoom = scan(a.scheduled_date, ctx, from, [a.room_id], 3, (t) => `${hm(t)} to ${hm(t + a.duration_minutes)}`)
-      .map((c) => { const diff = toM(String(c.change.start_time)) - start; return { ...c, hint: diff > 0 ? `+${diff} min` : `${diff} min` }; });
+      .map((c) => { const diff = toM(String(c.change.start_time)) - start; return { ...c, hint: `${span(Math.abs(diff))} ${diff > 0 ? 'later' : 'earlier'}` }; });
     // Another room today, for when this one is the problem (#201).
     const taken = new Set(sameRoom.map((c) => c.change.start_time));
-    const otherRooms = scan(a.scheduled_date, ctx, from, rooms.map((r) => r.id).filter((id) => id !== a.room_id), 4, (t, r) => `Today ${hm(t)}, ${nameOf(rooms, r)}`)
+    const otherRooms = scan(a.scheduled_date, ctx, from, rooms.map((r) => r.id).filter((id) => id !== a.room_id), 4, (t, r) => `${hm(t)} to ${hm(t + a.duration_minutes)}`)
+      .map((c) => ({ ...c, hint: `Same day, in ${nameOf(rooms, String(c.change.room_id))}` }))
       .filter((c) => !taken.has(c.change.start_time)).slice(0, 2);
     // The next days the same therapist and room are free at a similar hour.
     // Only while the resident is staying: the scheduler never books outside a stay (#142).
@@ -86,7 +89,7 @@ export async function cardChoices(appointmentId: string, kind: Kind, nowMinutes:
       if (stays.length && !stays.some((x) => x.start_date <= day && day <= x.end_date)) continue;
       const dayCtx = await loadDay(day, prisma);
       const [c] = scan(day, dayCtx, Math.max(open, start - 60), [a.room_id], 1, (t) => `${dayLabel(day)}, ${hm(t)}`);
-      if (c) later.push(c);
+      if (c) later.push({ ...c, hint: 'Another day' });
     }
     const options = [...sameRoom, ...otherRooms, ...later];
     if (options.length) options[0].best = true;

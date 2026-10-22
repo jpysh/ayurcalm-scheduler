@@ -127,7 +127,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
       ) : inHouse === null ? <Loading /> : (<>
         <div className="flex gap-1.5 px-1 pb-1">
           <button type="button" className={chip} aria-pressed={!onlyNeeds} onClick={() => setOnlyNeeds(false)}>In house</button>
-          <button type="button" className={chip} aria-pressed={onlyNeeds} onClick={() => setOnlyNeeds(true)}>Needs attention{needy.length ? ` · ${needy.length}` : ""}</button>
+          <button type="button" className={chip} aria-pressed={onlyNeeds} onClick={() => setOnlyNeeds(true)}>Need you{needy.length ? ` · ${needy.length}` : ""}</button>
           <button type="button" className={`${chip} ml-auto grid w-11 place-items-center !px-0`} aria-label="Search patients" onClick={onSearch}><Search className="h-5 w-5" /></button>
         </div>
         {onlyNeeds ? (
@@ -423,7 +423,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
   out: (id: string) => React.ReactNode;
   /** "Not available until …" on a guest's row (#695). */
   away: (id: string) => string | undefined;
-  /** The patient items the rules raise today: the "Needs attention" chip and the flags on rows. */
+  /** The patient items the rules raise today: the "Need you" chip and the flags on rows. */
   needs: AttentionItem[];
   patients: PatientRow[]; setPatients: React.Dispatch<React.SetStateAction<PatientRow[]>>; staff: UiStaff[];
   therapyNameById: Record<string, string>; timezone: string;

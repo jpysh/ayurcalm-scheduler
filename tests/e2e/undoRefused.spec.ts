@@ -14,7 +14,7 @@ test('a refused Undo on Not in says so', async ({ page, request }) => {
   await page.goto('/admin/schedule');
   await page.getByRole('button', { name: /^Show the day by/ }).click();
   await page.getByText(/^Therapist$/).first().click();
-  await page.getByRole('button', { name: / not in$/ }).first().click();
+  await page.getByRole('button', { name: / on leave$/ }).first().click();
   await page.locator('[data-sonner-toast]').getByRole('button', { name: 'Undo' }).click();
   await expect(page.getByText('Undo failed')).toBeVisible();
 });
