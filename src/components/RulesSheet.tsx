@@ -60,7 +60,7 @@ export function RulesSheet({ open, onOpenChange, section, attention, reload }: {
   const on = rules.filter((r) => r.on).length;
 
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange} title="What needs you" note={`${on} of ${rules.length} on. Only what needs action counts on the pill; information shows in grey.`}
+    <BottomSheet open={open} onOpenChange={onOpenChange} title="What needs you" note={`${on} of ${rules.length} on. Only what needs action counts on the Menu number; the rest is for your information.`}
       foot={Object.keys(changed).length ? <Btn kind="quiet" onClick={() => put(rules.map((r) => ({ ...r, on: r.default_on, hours: r.default_hours })))}>Reset to the defaults</Btn> : undefined}>
       <div ref={body}>
         {(["Day", "Patients", "Team"] as const).map((s) => (

@@ -155,7 +155,7 @@ const Settings = ({ signOut, openLog, openScreen, initialSheet, sheetOpened, att
   const rules = attention.rules;
   // What the Menu says: one row a patient (#370), so five patients with three things each are five, not fifteen (#526).
   const raised = new Set(attention.items.filter((i) => i.kind === "action").map((i) => i.patient_id ?? i.id)).size + (rules.find((r) => r.id === "day")?.count ?? 0);
-  const rulesFact = rules.length ? `${rules.filter((r) => r.on).length} of ${rules.length} on · ${raised ? `the pill shows ${raised} today` : "nothing on the pill today"}` : "What shows on the pill";
+  const rulesFact = rules.length ? `${rules.filter((r) => r.on).length} of ${rules.length} on · ${raised ? `the Menu number shows ${raised} today` : "nothing on the Menu number today"}` : "What shows on the Menu number";
   const hoursFact = `${daysText(settings.working_days)} · ${settings.opening_time}–${settings.closing_time}`;
   const SETUP: { key: string; sheet: () => void; title: string; now: string }[] = [
     { key: "hours", title: "Opening hours", now: hoursFact, sheet: () => show("hours") },
