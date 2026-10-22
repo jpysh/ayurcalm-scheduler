@@ -22,6 +22,8 @@ Made for the admin's phone. A desktop only widens it.
 <img src="docs/guide/3-book.png" width="200" alt="Book a treatment: the next free slot, best resident first">
 </p>
 
+<a href="docs/guide/sheets/sheet-day.pdf"><img src="docs/guide/4-day-sheet.png" width="640" alt="The printed day sheet: one row per resident, their treatments in time columns, meals and diet notes above"></a>
+
 Every morning it prints these, from the example centre: [day sheet](docs/guide/sheets/sheet-day.pdf) · [therapist sheets](docs/guide/sheets/sheet-therapist.pdf) · [kitchen](docs/guide/sheets/sheet-kitchen.pdf) · [doctor](docs/guide/sheets/sheet-doctor.pdf).
 
 ## Three ways in
