@@ -472,6 +472,11 @@ model DietTemplate {
   rest_dinner    String @default("")
   rest_snacks    String @default("")
 
+  /// Day-by-day steps (#1082): [{ breakfast, lunch, ... }], Day 1 first. A meal a
+  /// step leaves out is the plan's own; after the last step the guest moves to
+  /// the General sattvic plan.
+  steps Json @default("[]")
+
   /// Retired plans stop being offered but stay readable by the patients on them.
   is_active  Boolean  @default(true)
   created_at DateTime @default(now())

@@ -24,6 +24,7 @@ const publicFields = {
   rest_lunch: true,
   rest_dinner: true,
   rest_snacks: true,
+  steps: true,
   is_active: true,
   updated_at: true,
 } as const;
@@ -37,6 +38,7 @@ const mealFields = z.object({
   rest_lunch: z.string().max(2000).default(''),
   rest_dinner: z.string().max(2000).default(''),
   rest_snacks: z.string().max(2000).default(''),
+  steps: z.array(z.object({ breakfast: z.string().max(2000), lunch: z.string().max(2000), dinner: z.string().max(2000), snacks: z.string().max(2000) }).partial().strict()).max(60).optional(),
   description: z.string().max(2000).optional(),
   is_active: z.boolean().optional(),
 });
