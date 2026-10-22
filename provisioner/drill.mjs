@@ -13,7 +13,9 @@ import { execFileSync } from 'node:child_process';
 
 Object.assign(process.env, { RUTA_DATA: mkdtempSync(join(tmpdir(), 'ruta-drill-')), BEHIND_CLOUDFLARE: 'true', CENTRE_PORT_FROM: '8390', PORT: '0' });
 delete process.env.TURNSTILE_SECRET; delete process.env.CF_EMAIL_TOKEN;
-const { server, tick } = await import('./index.mjs');
+const { tick, inbox } = await import('./index.mjs');
+const { server } = await import('./public.mjs'); // both halves in one process, through the scratch folder (#1091)
+setInterval(() => inbox(), 100);
 await new Promise((ok) => server.listen(0, ok));
 const port = server.address().port;
 const H = 3_600_000, D = 24 * H;

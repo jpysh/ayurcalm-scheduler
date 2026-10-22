@@ -13,6 +13,30 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # The public sign-up page (#1091), apart from everything that can touch the Mac: no Docker,
+  # no centre's secrets, a read-only filesystem, not root. It sees only ~/ruta-data/signup:
+  # inbox/ to leave requests for the manager (provisioner/index.mjs), out/ to read its answers.
+  # The manager starts and rebuilds it; the tunnel and the centres' feedback reach it on :8200.
+  signup:
+    build: { context: .., dockerfile: hosting/signup.Dockerfile }
+    restart: unless-stopped
+    read_only: true
+    user: node
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      SIGNUP_DIR: /box
+      BEHIND_CLOUDFLARE: "true"
+      RUTA_DOMAIN: ${RUTA_DOMAIN:-jains.es}
+      TURNSTILE_SITEKEY: ${TURNSTILE_SITEKEY:-}
+      TURNSTILE_SECRET: ${TURNSTILE_SECRET:-}
+      FEEDBACK_KEY: ${FEEDBACK_KEY:-}
+    volumes:
+      - ${RUTA_DATA:-~/ruta-data}/signup/inbox:/box/inbox
+      - ${RUTA_DATA:-~/ruta-data}/signup/out:/box/out:ro
+    ports:
+      - 127.0.0.1:8200:8200
+
   # Off by default until R2 is set up: docker compose ... --profile offsite up -d
   offsite:
     image: rclone/rclone:1.71

@@ -48,17 +48,50 @@ assert.equal(took(3 * D), '3 days');
 console.log('provisioner lifecycle ok');
 
 // Sign-up goes straight to the centre even when email is set up: nothing waits on an inbox (#727).
+// The public box and the manager talk only through the shared folder (#1091).
 {
-  const { mkdtempSync } = await import('node:fs');
+  const { mkdtempSync, readFileSync } = await import('node:fs');
   process.env.RUTA_DATA = mkdtempSync('/tmp/ruta-test-');
   process.env.CF_EMAIL_TOKEN = 'set';
-  const { server } = await import('./index.mjs');
+  const { inbox } = await import('./index.mjs');
+  const { server } = await import('./public.mjs');
   await new Promise((ok) => server.listen(0, ok));
-  const r = await fetch(`http://localhost:${server.address().port}/signup`, { method: 'POST', redirect: 'manual', body: new URLSearchParams({ centre: 'Om', email: 'a@b.co' }) });
-  server.close();
+  const base = `http://localhost:${server.address().port}`;
+  assert.match(await fetch(base).then((r) => r.text()), /Already have a centre\?/, 'the manager tells the box email is set up');
+  const r = await fetch(`${base}/signup`, { method: 'POST', redirect: 'manual', body: new URLSearchParams({ centre: 'Om', email: 'a@b.co' }) });
   assert.equal(r.status, 303);
   assert.match(r.headers.get('location'), /^\/go\?k=/);
-  console.log('sign-up straight in ok');
+  await inbox();
+  const kept = JSON.parse(readFileSync(`${process.env.RUTA_DATA}/provisioner.json`, 'utf8')).signups;
+  assert.deepEqual(kept.map((s) => s.email), ['a@b.co'], 'the manager kept the sign-up');
+  assert.equal((await fetch(`${base}/signup`, { method: 'POST', body: new URLSearchParams({ centre: 'Om', email: 'a@b.co' }) })).status, 429, 'the box sees what the manager kept');
+  assert.equal((await fetch(`${base}/feedback`, { method: 'POST', body: '{"text":"x"}' })).status, 404, 'feedback needs the key');
+  // A box that is not trusted: a forged sign-up past the day's limit is dropped by the manager.
+  const { writeFileSync } = await import('node:fs');
+  for (let i = 0; i < 25; i++) writeFileSync(`${process.env.RUTA_DATA}/signup/inbox/${String(i).padStart(18, '0')}.json`, JSON.stringify({ do: 'signup', s: { centre: 'X', email: `x${i}@b.co`, ip: `1.1.1.${i}`, key: `k${String(i).padStart(23, '0')}` } }));
+  await inbox();
+  assert.equal(JSON.parse(readFileSync(`${process.env.RUTA_DATA}/provisioner.json`, 'utf8')).signups.length, 20, 'twenty a day, however many the box sends');
+  server.close();
+  console.log('sign-up through the shared folder ok');
+}
+
+// The sign-up box is flagged hourly if it could ever reach Docker or the Mac (#1091).
+{
+  const { boxProblems } = await import('./index.mjs');
+  const good = { State: { Running: true }, Config: { User: 'node' }, HostConfig: { ReadonlyRootfs: true }, Mounts: [{ Source: '/Users/w/ruta-data/signup/inbox', Destination: '/box/inbox' }, { Source: '/Users/w/ruta-data/signup/out', Destination: '/box/out' }] };
+  assert.deepEqual(boxProblems(good), []);
+  assert.deepEqual(boxProblems({ ...good, Mounts: [...good.Mounts, { Source: '/var/run/docker.sock', Destination: '/var/run/docker.sock' }] }), ['the sign-up box can reach Docker', 'the sign-up box sees more than its shared folder']);
+  assert.deepEqual(boxProblems({ ...good, Config: { User: '' } }), ['the sign-up box runs as root']);
+  assert.deepEqual(boxProblems({ ...good, HostConfig: { ReadonlyRootfs: false } }), ['the sign-up box can change its own files']);
+  assert.deepEqual(boxProblems(null), ['the sign-up page is not running']);
+  // The real compose file: no socket, read-only, not root, one shared folder.
+  const y = (await import('node:fs')).readFileSync(new URL('../hosting/compose.yml', import.meta.url), 'utf8');
+  const box = y.slice(y.indexOf('  signup:'), y.indexOf('  offsite:'));
+  assert.doesNotMatch(box, /docker\.sock|privileged/);
+  assert.match(box, /read_only: true/); assert.match(box, /user: node/); assert.match(box, /127\.0\.0\.1:8200:8200/);
+  assert.deepEqual(box.match(/^      - .*:\/box\/.*$/gm).length, 2);
+  assert.doesNotMatch((await import('node:fs')).readFileSync(new URL('./index.mjs', import.meta.url), 'utf8'), /\.listen\(|createServer/, 'the manager opens no port');
+  console.log('sign-up box locked down ok');
 }
 
 // The morning (#818): the push picks a health problem first, then a silent trial about to end.

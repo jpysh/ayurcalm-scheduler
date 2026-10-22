@@ -94,6 +94,8 @@ type ApiStaff = { id: string; name: string; gender: "male" | "female" | "other";
 type ApiRoom = { id: string; name: string; amenities: string[]; is_active: boolean };
 type ApiTimeOffSimple = { id?: string; entity_type: 'center'|'staff'|'room'|'guest_room'|'therapy'|'patient'; entity_id?: string | null };
 type ApiPatient = { id: string; name: string; gender: "male" | "female" | "other"; phone?: string; email?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; date_of_birth?: string | null; medical_notes?: string | null; Stays?: { start_date: string; end_date: string }[] };
+type HandedLeft = { date: string; start_time: string; patient_name: string; therapy_name: string };
+
 const AdminDashboard = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   // Opening hours drive the schedule's time rows. Defaults match the old
@@ -141,6 +143,8 @@ const AdminDashboard = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
   // Until the first load lands, an empty list means "not yet", not "a new centre" (#220).
   const [loaded, setLoaded] = useState(false);
+  // What a deleted therapist's hand-over could not place (#1080), listed once.
+  const [handed, setHanded] = useState<{ name: string; moved: number; left: HandedLeft[] } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ kind: 'staff'|'room'|'therapy'|'patient'|'appointment'; id: string; name?: string; counts?: Record<string, number> } | null>(null);
 
   const TAB_ORDER = SCREENS.map(([key]) => key as string);
@@ -312,16 +316,15 @@ const AdminDashboard = () => {
     const del = async (path: string) => { const res = await fetch(`${API_BASE}/${path}/${id}`, { method: 'DELETE', headers }); if (!res.ok) throw new Error(await saveError(res, 'That could not be deleted.')); };
     try {
       if (kind === 'staff') {
-        await del('staff');
+        const res = await fetch(`${API_BASE}/staff/${id}`, { method: 'DELETE', headers });
+        if (!res.ok) throw new Error(await saveError(res, 'That could not be deleted.'));
+        const result: { moved: number; left: HandedLeft[] } = await res.json();
         setStaff(prev => prev.filter(s => s.id !== id));
         setTimeOffs(prev => prev.filter(h => !(h.type === 'Staff' && h.entity === id)));
-        setAppointmentsByDate(prev => {
-          const next: Record<string, ApiAppointment[]> = {};
-          for (const [key, list] of Object.entries(prev)) {
-            next[key] = (Array.isArray(list) ? list : []).filter((a) => a.staff_id !== id);
-          }
-          return next;
-        });
+        setAppointmentsByDate({});
+        void refreshAppointmentsForDate(dayKeyMemo, true);
+        if (result.left.length) setHanded({ name: confirmDelete.name || 'They', ...result });
+        else if (result.moved) toast.success(`${result.moved} treatment${result.moved === 1 ? '' : 's'} handed to others`);
       } else if (kind === 'room') {
         await del('rooms');
         setRoomsList(prev => prev.filter(r => r.id !== id));
@@ -759,8 +762,14 @@ const AdminDashboard = () => {
       {/* What a delete takes with it, in words, before it happens (it cannot be undone). */}
       <BottomSheet open={!!confirmDelete} onOpenChange={(open) => !open && setConfirmDelete(null)} title={confirmDelete ? `Delete ${confirmDelete.name || `this ${confirmDelete.kind}`}?` : ''}
         note="This cannot be undone."
-        foot={<SheetFoot save={executeDelete} label="Delete" tone="destructive" />}>
-        {confirmDelete?.counts ? (
+        foot={<SheetFoot save={executeDelete} label={confirmDelete?.kind === 'staff' && confirmDelete.counts?.appointments ? `Hand their ${confirmDelete.counts.appointments} treatment${confirmDelete.counts.appointments === 1 ? '' : 's'} to others first` : 'Delete'} tone="destructive" />}>
+        {confirmDelete?.kind === 'staff' && confirmDelete.counts ? (
+          <Consequence>{[
+            confirmDelete.counts.appointments ? `Their ${confirmDelete.counts.appointments} coming treatment${confirmDelete.counts.appointments === 1 ? ' goes' : 's go'} to other therapists, then they are deleted. Any nobody can take wait under What needs you.` : '',
+            confirmDelete.counts.done ? `${confirmDelete.counts.done} already done stay on the records.` : '',
+            confirmDelete.counts.timeoff ? `${confirmDelete.counts.timeoff} leave entr${confirmDelete.counts.timeoff === 1 ? 'y' : 'ies'} will go too.` : '',
+          ].filter(Boolean).join(' ') || 'Nothing else depends on them.'}</Consequence>
+        ) : confirmDelete?.counts ? (
           <Consequence>{[
             confirmDelete.counts.appointments ? `${confirmDelete.counts.appointments} treatment${confirmDelete.counts.appointments === 1 ? '' : 's'} ${confirmDelete.counts.done ? 'coming up' : 'booked'} will go with it.` : '',
             confirmDelete.counts.done ? `${confirmDelete.counts.done} already done stay on the records.` : '',
@@ -768,6 +777,11 @@ const AdminDashboard = () => {
             confirmDelete.counts.dietplans ? `${confirmDelete.counts.dietplans} diet plan${confirmDelete.counts.dietplans === 1 ? '' : 's'} will go too.` : '',
           ].filter(Boolean).join(' ') || 'Nothing else depends on it.'}</Consequence>
         ) : null}
+      </BottomSheet>
+      <BottomSheet open={!!handed} onOpenChange={(open) => !open && setHanded(null)} title={handed ? `${handed.left.length} treatment${handed.left.length === 1 ? '' : 's'} still need a therapist` : ''}
+        note={handed ? `${handed.moved} went to others. These wait under What needs you.` : undefined}
+        foot={<SheetFoot save={() => setHanded(null)} label="Done" />}>
+        <ListGroup>{handed?.left.map((l, i) => <Row key={i} title={l.patient_name} facts={`${dayText(l.date)} · ${l.start_time} · ${l.therapy_name}`} />)}</ListGroup>
       </BottomSheet>
     </div>
     </BackContext.Provider>
