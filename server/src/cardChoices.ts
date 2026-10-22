@@ -267,7 +267,7 @@ function assign(ctx: Ctx, day: Date, t: number, therapy: Ctx['therapies'][number
 export type Option = { id: string; name: string; free: boolean; why?: string };
 /** A therapist's first free time from the day on: today's, or a later day of the stay. */
 export type FirstChoice = { staff_id: string; staff_name: string; date: string; start_time: string; their_therapist: boolean };
-export type BookingOptions = { times: Suggestion[]; staff: Option[]; rooms: Option[]; why?: string; actions: Action[]; warnings: Soft[]; first_choice?: FirstChoice | null; sooner?: (Suggestion & { date: string }) | null };
+export type BookingOptions = { times: Suggestion[]; staff: Option[]; rooms: Option[]; why?: string; actions: Action[]; warnings: Soft[]; their_therapist_id?: string | null; first_choice?: FirstChoice | null; sooner?: (Suggestion & { date: string }) | null };
 
 /**
  * The one booking sheet's lists (#285 story 5): every free time for this patient
@@ -308,10 +308,10 @@ export async function bookingOptions(dayISO: string, nowMinutes: number | null, 
   }
   // Someone else free sooner than the first choice: one tap takes it.
   const early = anyone.find((a) => a.staff_id !== lead);
-  const sooner = lead && early && (!first_choice || first_choice.date > dayISO || early.start_time < first_choice.start_time) ? { ...early, date: dayISO } : null;
+  const sooner = first_choice && early && (first_choice.date > dayISO || early.start_time < first_choice.start_time) ? { ...early, date: dayISO } : null;
   const once = await oncePerCourse({ patient_id: patient.id, therapy_id: therapy.id, scheduled_date: day }, prisma);
   const warnings = [...softWarnings({ patient_id: patient.id, therapy_id: therapy.id }, ctx), ...(once ? [once] : [])];
-  if (!times.length) return { times, staff: [], rooms: [], ...(await noTimeWhy(ctx, day, nowMinutes, therapy, patient, stay, prisma)), warnings, first_choice, sooner };
+  if (!times.length) return { times, staff: [], rooms: [], ...(await noTimeWhy(ctx, day, nowMinutes, therapy, patient, stay, prisma)), warnings, their_therapist_id: patient.preferred_staff_id, first_choice, sooner };
   const chosen = times.find((x) => x.start_time === at) || times[0];
   const base: Candidate = { scheduled_date: day, start_time: chosen.start_time, duration_minutes: chosen.duration_minutes, staff_id: chosen.staff_id, co_staff_ids: chosen.co_staff_ids, room_id: chosen.room_id, patient_id: patient.id, therapy_id: therapy.id };
   const t0 = toM(chosen.start_time);
@@ -326,7 +326,7 @@ export async function bookingOptions(dayISO: string, nowMinutes: number | null, 
     return { id: r.id, name: r.name, free: !off && !c, why: off ? 'closed then' : c?.reason === 'ROOM_BUSY' ? 'in use' : c?.reason === 'ROOM_OFF' ? 'out of use' : c ? c.message : undefined };
   });
   const byFree = (a: Option, b: Option) => Number(b.free) - Number(a.free) || a.name.localeCompare(b.name);
-  return { times, staff: staff.sort(byFree), rooms: rooms.sort(byFree), actions: [], warnings, first_choice, sooner };
+  return { times, staff: staff.sort(byFree), rooms: rooms.sort(byFree), actions: [], warnings, their_therapist_id: patient.preferred_staff_id, first_choice, sooner };
 }
 
 /** The patient's stay nearest the day, said in words, with a way forward: go to a day they are here, or change the stay (#330). */
