@@ -194,8 +194,8 @@ export async function watch(now = Date.now()) {
   }
   const used = await run('df', ['-P', DATA]).then((r) => Number(r.stdout.trim().split('\n')[1].split(/\s+/)[4].replace('%', '')), () => 0);
   if (used >= 85) problems.push(`disk ${used}% full`);
-  for (const p of problems) if (!open.has(p)) { open.add(p); await notify(`ALERT: ${p}`); }
-  for (const p of [...open]) if (!problems.includes(p)) { open.delete(p); await notify(`Cleared: ${p}`); }
+  for (const p of problems) if (!open.has(p)) { open.add(p); (db.events ||= []).push({ at: now, text: p }); save(); await notify(`ALERT: ${p}`); }
+  for (const p of [...open]) if (!problems.includes(p)) { open.delete(p); (db.events ||= []).push({ at: now, text: `${p}, cleared` }); save(); await notify(`Cleared: ${p}`); }
   if (!problems.length && env.HEALTHCHECKS_URL) await fetch(env.HEALTHCHECKS_URL).catch(() => {});
   latest = problems;
   return problems;
@@ -253,7 +253,6 @@ export const server = http.createServer(async (req, res) => {
       return send(res, 200, '');
     }
     // The maintainer's morning, on this Mac only (#920): the tunnel always adds cf-ray, so nothing from outside gets it.
-    if (url.pathname === '/dashboard' && !req.headers['cf-ray'] && /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || '')) return send(res, 200, page(`<h1>Morning</h1><pre style="white-space:pre-wrap;font:inherit">${esc(morning(db, latest, Date.now(), db.feedback))}</pre>`), { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
     // The landing page's "N of 10 founding places left" (#245). Founding centres not hosted here: FOUNDING_ELSEWHERE.
     if (url.pathname === '/founding') {
       const taken = db.centres.filter((c) => c.trial?.plan === 'founding').length + Number(env.FOUNDING_ELSEWHERE || 0);
@@ -309,8 +308,9 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
     if (d.getHours() === 7 && sent !== d.toDateString()) {
       sent = d.toDateString();
       const text = morning(db, latest, Date.now(), db.feedback);
-      // Read on this Mac (#920): the email is optional.
-      writeFileSync(`${DATA}/MORNING.md`, `# Morning, ${d.toDateString()}\n\n${text.split('\n').map((l) => (l && !l.startsWith('  ') ? `- ${l}` : l)).join('\n')}\n\nAny time: http://localhost:${env.PORT || 8200}/dashboard\n`);
+      // Newest day on top, older days below, kept for good. Only on this Mac: nothing serves this file.
+      const file = `${DATA}/MORNING.md`, past = existsSync(file) ? readFileSync(file, 'utf8').replace(/^# Morning log\n+/, '') : '';
+      writeFileSync(file, `# Morning log\n\n## ${d.toDateString()}\n\n${text.split('\n').map((l) => (l && !l.startsWith('  ') ? `- ${l}` : l)).join('\n')}\n\n${past}`);
       await notify(text);
     }
     if (indiaHour(d) === 3) await tidy().catch(console.error);
