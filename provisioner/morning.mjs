@@ -22,6 +22,7 @@ export function morning(db, problems, now, feedback = []) {
     `Trials live: ${live.length} · paused: ${db.centres.length - live.length} · paying: ${db.centres.filter((c) => c.trial?.plan).length} · waiting list: ${db.waitlist.length}`,
     ending.length ? `Ending within 7 days: ${ending.map((c) => `${c.centre} (${left(c)} d${c.sheet_at ? '' : ', no sheet yet'})`).join(', ')}` : 'No trial ends this week',
     db.update?.failed ? `Update ${db.update.sha} stopped at ${db.update.failed}: ${db.update.why}` : db.update ? `Update: ${db.update.sha} everywhere` : null,
+    ...((db.events || []).some((e) => e.at >= day) ? [`Since yesterday: ${db.events.filter((e) => e.at >= day).map((e) => e.text).join('; ')}`] : []),
     problems.length ? `Health: ${problems.join('; ')}` : 'Health: every centre up and backed up',
     db.tidy ? `Disk: ${db.tidy.after} full after the night's tidy (was ${db.tidy.before})${db.tidy.stopped.length ? `; stopped ${db.tidy.stopped.join(', ')}` : ''}` : null,
     feedback.length ? `Feedback this week: ${n(feedback, week)}${feedback.slice(0, 3).map((f) => `\n  ${f.centre}: ${f.text.slice(0, 120)}`).join('')}` : 'Feedback this week: none yet',
