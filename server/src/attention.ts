@@ -180,7 +180,7 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
 
   const ctx = await loadDay(day, prisma);
   const away = staffDay(ctx).filter((d) => d.off).map((d) => ({ id: d.staff_id, name: ctx.staff.find((x) => x.id === d.staff_id)?.name ?? '', why: d.off }));
-  for (const a of away) found.push({ id: `on_leave:${a.id}`, rule: 'on_leave', section: 'Team', kind: 'information', who: a.name, what: `${a.name} is not in today${a.why ? `: ${a.why}` : ''}` });
+  for (const a of away) found.push({ id: `on_leave:${a.id}`, rule: 'on_leave', section: 'Team', kind: 'information', who: a.name, what: `${a.name} is not in${a.why ? `: ${a.why}` : ''}` });
 
   const blocking = (await checkDay(day, prisma, { withFixes: false })).problems.filter((p) => p.problem_class === 'blocking').length;
   return {
