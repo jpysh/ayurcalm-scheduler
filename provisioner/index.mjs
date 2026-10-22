@@ -254,7 +254,6 @@ export const server = http.createServer(async (req, res) => {
       return send(res, 200, '');
     }
     // The maintainer's morning, on this Mac only (#920): the tunnel always adds cf-ray, so nothing from outside gets it.
-    if (url.pathname === '/dashboard' && !req.headers['cf-ray'] && /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || '')) return send(res, 200, page(`<h1>Morning</h1><pre style="white-space:pre-wrap;font:inherit">${esc(morning(db, latest, Date.now(), db.feedback))}</pre>`), { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
     // The landing page's "N of 10 founding places left" (#245). Founding centres not hosted here: FOUNDING_ELSEWHERE.
     if (url.pathname === '/founding') {
       const taken = db.centres.filter((c) => c.trial?.plan === 'founding').length + Number(env.FOUNDING_ELSEWHERE || 0);
@@ -311,7 +310,7 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
       sent = d.toDateString();
       const text = morning(db, latest, Date.now(), db.feedback);
       // Read on this Mac (#920): Telegram is optional.
-      writeFileSync(`${DATA}/MORNING.md`, `# Morning, ${d.toDateString()}\n\n${text.split('\n').map((l) => (l && !l.startsWith('  ') ? `- ${l}` : l)).join('\n')}\n\nAny time: http://localhost:${env.PORT || 8200}/dashboard\n`);
+      writeFileSync(`${DATA}/MORNING.md`, `# Morning, ${d.toDateString()}\n\n${text.split('\n').map((l) => (l && !l.startsWith('  ') ? `- ${l}` : l)).join('\n')}\n`);
       await telegram(text);
     }
     if (indiaHour(d) === 3) await tidy().catch(console.error);
