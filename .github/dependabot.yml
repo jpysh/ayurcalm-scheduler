@@ -2,28 +2,35 @@ version: 2
 # Weekly, and only minor and patch updates for packages: one pull request a week to read.
 # A major version (React 19, Prisma 7, Tailwind 4, TypeScript 7, ESLint 10 were all offered
 # at once on 9 Oct and broke CI) is a deliberate upgrade, one at a time, never a bot bundle.
+# A release waits 3 days before Dependabot offers it (#1085): a bad or hijacked release is usually
+# pulled within that, and patch and minor updates now merge without a person.
 updates:
   - package-ecosystem: npm
     directory: /
     schedule: { interval: weekly }
+    cooldown: { default-days: 3 }
     groups: { weekly: { update-types: [minor, patch] } }
     ignore: [{ dependency-name: "*", update-types: ["version-update:semver-major"] }]
   - package-ecosystem: npm
     directory: /server
     schedule: { interval: weekly }
+    cooldown: { default-days: 3 }
     groups: { weekly: { update-types: [minor, patch] } }
     ignore: [{ dependency-name: "*", update-types: ["version-update:semver-major"] }]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    cooldown: { default-days: 3 }
   # Pinned images, monthly (#1085): node:24-slim in the Dockerfile, postgres:16 in
   # docker-compose.yml, cloudflared and rclone in hosting/compose.yml. The nightly gate
   # already pulls fresh builds of the same tags; these move the tags themselves.
   - package-ecosystem: docker
     directory: /
     schedule: { interval: monthly }
+    cooldown: { default-days: 3 }
     ignore: [{ dependency-name: "*", update-types: ["version-update:semver-major"] }]
   - package-ecosystem: docker-compose
     directories: [/, /hosting]
     schedule: { interval: monthly }
+    cooldown: { default-days: 3 }
     ignore: [{ dependency-name: "*", update-types: ["version-update:semver-major"] }]
