@@ -237,10 +237,10 @@ test("@smoke the day's problems are named on the first screen", async ({ page, r
     const therapy = await call('post', '/therapies', { name: `${TAG} Abhyanga`, duration_minutes: 60 });
     await call('post', '/rooms', { name: `${TAG} Room`, weekly_schedule: allWeek });
     const therapist = await call('post', '/staff', { name: `${TAG} Asha`, gender: 'female', specializations: [therapy.id], weekly_schedule: allWeek });
-    // Only she may treat this resident, so marking her off cannot quietly move it.
+    // Only she gives this therapy, so marking her off cannot quietly move it.
     const resident = await call('post', '/patients', {
       name: `${TAG} Rekha`, gender: 'female', stay: { start_date: '2030-03-01', end_date: '2030-03-31' },
-      preferred_staff_id: therapist.id, requires_preferred_staff: true,
+      preferred_staff_id: therapist.id,
     });
     await call('post', '/appointments', {
       patient_id: resident.id, therapy_id: therapy.id, total_sessions: 1,

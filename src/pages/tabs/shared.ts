@@ -10,7 +10,7 @@ export type Patient = {
   emergencyContact: string; emergencyPhone: string; address: string; country: string; idNumber: string; visaNumber?: string; visaValidUntil?: string; registrationNumber: string; medicalNotes: string;
   actualStart: string; actualEnd: string; preferredStaffId?: string | null;
   /** Every stay, newest first; actualStart/actualEnd are only the newest. */
-  stays?: { start_date: string; end_date: string }[]; requiresPreferredStaff?: boolean;
+  stays?: { start_date: string; end_date: string }[];
 };
 export type ApiAppointment = { id: string; patient_id: string; therapy_id: string; staff_id: string | null; room_id: string | null; scheduled_date: string; start_time: string; duration_minutes: number; status?: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'rescheduled'; notes?: string | null; cancel_reason?: string | null;
   /** What the private links recorded (#219). */

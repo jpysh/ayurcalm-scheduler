@@ -27,7 +27,6 @@ export const patientSchema = z.object({
   before_treatment: z.string().max(2000).nullable().optional(),
   after_treatment: z.string().max(2000).nullable().optional(),
   preferred_staff_id: z.string().uuid().nullable().optional(),
-  requires_preferred_staff: z.boolean().optional(),
   /** False for a day patient. */
   on_site: z.boolean().default(true),
   /** The consultation to book with them, as `/consultations/next` offered it; none if left out. */

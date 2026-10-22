@@ -92,8 +92,6 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
 
   const patient = await withTimeout(prisma.patient.findUnique({ where: { id: input.patient_id } }), maxMs, 'PATIENT');
   if (!patient) throw new Error('Patient not found');
-  // A resident only their own therapist may treat is booked with no one else (#1043).
-  if (patient.requires_preferred_staff && patient.preferred_staff_id) input.preferred_staff_id = patient.preferred_staff_id;
   const stays = await withTimeout(prisma.patientStay.findMany({ where: { patient_id: patient.id } }), maxMs, 'STAYS');
 
   // The whole table: a centre's programme is a handful of rows, and which of
@@ -120,6 +118,7 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
   let sessionsScheduled = 0;
   // The days a course lands on, so a preview can name them before anything is booked (#792).
   const days: string[] = [];
+  const dayLeads: string[] = [];
   let pastStay = false;
   const currentDate = new Date(startDate);
   const overallDeadline = Date.now() + maxMs;
@@ -247,6 +246,8 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     // comes from everyone else free.
     const leadAvail = input.preferred_staff_id ? staffAvail.filter((s) => s.id === input.preferred_staff_id) : staffAvail;
     if (input.preferred_staff_id && leadAvail.length === 0) staffAvail = [];
+    // Their own therapist each day they are free, else the best one free (#1043).
+    const own = !input.preferred_staff_id && leadAvail.find((s) => s.id === patient.preferred_staff_id);
 
     if (roomsAvail.length === 0 || staffAvail.length === 0) {
       conflicts.reason = conflicts.reason || 'NO_MATCHING_TIME_SLOTS';
@@ -300,84 +301,87 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
     let chosen: { room?: TherapyRoom; staff?: Staff; co?: Staff[]; start?: number } = {};
     const seenTimes = new Set<string>();
     const alignedStart = Math.ceil(slotWindowStart / step) * step;
-    for (let slotStart = alignedStart; slotStart + duration <= windowEnd; slotStart += step) {
-      const slotEnd = slotStart + duration;
-      // Opening hours are checked against slotEnd, conflicts against slotBusyEnd.
-      const slotBusyEnd = slotEnd;
-      // try rooms and staff
-      for (const r of roomsAvail) {
-        const rDay = getDay(r.weekly_schedule, weekday) || defaultDay;
-        const rS = toMinutes(rDay.start);
-        const rE = toMinutes(rDay.end);
-        if (!(slotStart >= rS && slotEnd <= rE)) continue;
-        const roomConflict = (roomBusy[r.id] || []).some((b) => overlaps(b.s, b.e, slotStart, slotBusyEnd)) || holidays.some((h) => {
-          if (!(h.entity_type === 'room' && h.entity_id === r.id)) return false;
-          const dateHit = h.date && h.date.toDateString() === nd.toDateString();
-          const rangeHit = h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd;
-          if (!(dateHit || rangeHit)) return false;
-          if (!h.start_time || !h.end_time) return true;
-          // If explicit time range provided, use that
-          if (h.start_time && h.end_time) {
-            const hs = toMinutes(h.start_time);
-            const he = toMinutes(h.end_time);
-            return overlaps(hs, he, slotStart, slotEnd);
-          }
-          // Fallback: derive time window from startDate/endDate if both on same day
-          if (h.start_date && h.end_date && h.start_date.toDateString() === nd.toDateString() && h.end_date.toDateString() === nd.toDateString()) {
-            const hs = h.start_date.getHours() * 60 + h.start_date.getMinutes();
-            const he = h.end_date.getHours() * 60 + h.end_date.getMinutes();
-            return overlaps(hs, he, slotStart, slotEnd);
-          }
-          return true; // default to full-day block for ranges spanning the day
-        });
-        if (roomConflict) continue;
-        // The centre shut for some hours (#985) shuts every room then.
-        if (offOnDay(holidays, 'room', r.id, nd).some((b) => overlaps(b.s, b.e, slotStart, slotEnd))) continue;
-        const staffFree = (s: Staff) => {
-          const sDay = staffDay(s.weekly_schedule, weekday);
-          if (!sDay) return false;
-          const sS = toMinutes(sDay.start);
-          const sE = toMinutes(sDay.end);
-          if (!(slotStart >= sS && slotEnd <= sE)) return false;
-          const staffConflictBusy = (staffBusy[s.id] || []).some((b) => overlaps(b.s, b.e, slotStart, slotBusyEnd));
-          const staffHolidayBlock = holidays.some((h) => {
-            if (!(h.entity_type === 'staff' && h.entity_id === s.id)) return false;
+    for (const leads of own ? [[own], leadAvail] : [leadAvail]) {
+      if (chosen.room) break;
+      for (let slotStart = alignedStart; slotStart + duration <= windowEnd; slotStart += step) {
+        const slotEnd = slotStart + duration;
+        // Opening hours are checked against slotEnd, conflicts against slotBusyEnd.
+        const slotBusyEnd = slotEnd;
+        // try rooms and staff
+        for (const r of roomsAvail) {
+          const rDay = getDay(r.weekly_schedule, weekday) || defaultDay;
+          const rS = toMinutes(rDay.start);
+          const rE = toMinutes(rDay.end);
+          if (!(slotStart >= rS && slotEnd <= rE)) continue;
+          const roomConflict = (roomBusy[r.id] || []).some((b) => overlaps(b.s, b.e, slotStart, slotBusyEnd)) || holidays.some((h) => {
+            if (!(h.entity_type === 'room' && h.entity_id === r.id)) return false;
             const dateHit = h.date && h.date.toDateString() === nd.toDateString();
             const rangeHit = h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd;
             if (!(dateHit || rangeHit)) return false;
             if (!h.start_time || !h.end_time) return true;
+            // If explicit time range provided, use that
             if (h.start_time && h.end_time) {
               const hs = toMinutes(h.start_time);
               const he = toMinutes(h.end_time);
               return overlaps(hs, he, slotStart, slotEnd);
             }
+            // Fallback: derive time window from startDate/endDate if both on same day
             if (h.start_date && h.end_date && h.start_date.toDateString() === nd.toDateString() && h.end_date.toDateString() === nd.toDateString()) {
               const hs = h.start_date.getHours() * 60 + h.start_date.getMinutes();
               const he = h.end_date.getHours() * 60 + h.end_date.getMinutes();
               return overlaps(hs, he, slotStart, slotEnd);
             }
-            return true;
+            return true; // default to full-day block for ranges spanning the day
           });
-          return !staffConflictBusy && !staffHolidayBlock;
-        };
-        const patientConflict = patientBusy.some((b) => overlaps(b.s, b.e, slotStart, slotBusyEnd));
-        if (patientConflict) continue;
-        const lead = leadAvail.find(staffFree);
-        const co = lead ? staffAvail.filter((s) => s.id !== lead.id && staffFree(s)).slice(0, staffRequired - 1) : [];
-        // A therapy it cannot fully staff is not booked short-handed.
-        if (lead && co.length === staffRequired - 1) {
-          const startStr = toTimeString(slotStart);
-          if (!seenTimes.has(startStr) && suggestions.length < 3) {
-            suggestions.push({ scheduled_date: nd, start_time: startStr, room_id: r.id, staff_id: lead.id, co_staff_ids: co.map((s) => s.id) });
-            seenTimes.add(startStr);
+          if (roomConflict) continue;
+          // The centre shut for some hours (#985) shuts every room then.
+          if (offOnDay(holidays, 'room', r.id, nd).some((b) => overlaps(b.s, b.e, slotStart, slotEnd))) continue;
+          const staffFree = (s: Staff) => {
+            const sDay = staffDay(s.weekly_schedule, weekday);
+            if (!sDay) return false;
+            const sS = toMinutes(sDay.start);
+            const sE = toMinutes(sDay.end);
+            if (!(slotStart >= sS && slotEnd <= sE)) return false;
+            const staffConflictBusy = (staffBusy[s.id] || []).some((b) => overlaps(b.s, b.e, slotStart, slotBusyEnd));
+            const staffHolidayBlock = holidays.some((h) => {
+              if (!(h.entity_type === 'staff' && h.entity_id === s.id)) return false;
+              const dateHit = h.date && h.date.toDateString() === nd.toDateString();
+              const rangeHit = h.start_date && h.end_date && h.start_date <= nd && h.end_date >= nd;
+              if (!(dateHit || rangeHit)) return false;
+              if (!h.start_time || !h.end_time) return true;
+              if (h.start_time && h.end_time) {
+                const hs = toMinutes(h.start_time);
+                const he = toMinutes(h.end_time);
+                return overlaps(hs, he, slotStart, slotEnd);
+              }
+              if (h.start_date && h.end_date && h.start_date.toDateString() === nd.toDateString() && h.end_date.toDateString() === nd.toDateString()) {
+                const hs = h.start_date.getHours() * 60 + h.start_date.getMinutes();
+                const he = h.end_date.getHours() * 60 + h.end_date.getMinutes();
+                return overlaps(hs, he, slotStart, slotEnd);
+              }
+              return true;
+            });
+            return !staffConflictBusy && !staffHolidayBlock;
+          };
+          const patientConflict = patientBusy.some((b) => overlaps(b.s, b.e, slotStart, slotBusyEnd));
+          if (patientConflict) continue;
+          const lead = leads.find(staffFree);
+          const co = lead ? staffAvail.filter((s) => s.id !== lead.id && staffFree(s)).slice(0, staffRequired - 1) : [];
+          // A therapy it cannot fully staff is not booked short-handed.
+          if (lead && co.length === staffRequired - 1) {
+            const startStr = toTimeString(slotStart);
+            if (!seenTimes.has(startStr) && suggestions.length < 3) {
+              suggestions.push({ scheduled_date: nd, start_time: startStr, room_id: r.id, staff_id: lead.id, co_staff_ids: co.map((s) => s.id) });
+              seenTimes.add(startStr);
+            }
+            if (!chosen.room || !chosen.staff) chosen = { room: r, staff: lead, co, start: slotStart };
           }
-          if (!chosen.room || !chosen.staff) chosen = { room: r, staff: lead, co, start: slotStart };
+          if (chosen.room && chosen.staff && suggestions.length >= 3) break;
         }
-        if (chosen.room && chosen.staff && suggestions.length >= 3) break;
+        // Enough suggestions, but a day stops only once it has a time: breaking on the
+        // count alone cut every course short after the third suggestion (#780).
+        if (chosen.room && suggestions.length >= 3) break;
       }
-      // Enough suggestions, but a day stops only once it has a time: breaking on the
-      // count alone cut every course short after the third suggestion (#780).
-      if (chosen.room && suggestions.length >= 3) break;
     }
 
     if (!chosen.room || !chosen.staff || chosen.start === undefined) {
@@ -421,16 +425,22 @@ export async function autoSchedule(raw: unknown, prisma: PrismaClient) {
       appointments.push(appt);
     }
     days.push(nd.toISOString().slice(0, 10));
+    dayLeads.push(chosen.staff!.id);
     sessionsScheduled++;
     currentDate.setDate(nd.getDate() + 1);
   }
 
   const success = input.preview_only ? suggestions.length > 0 : (appointments.length === input.total_sessions);
+  // How many days each therapist leads, for "12 days · 10 with Bhavna, 2 with Priya".
+  const by_therapist = Object.entries(dayLeads.reduce<Record<string, number>>((m, id) => ({ ...m, [id]: (m[id] || 0) + 1 }), {}))
+    .map(([staff_id, count]) => ({ staff_id, name: candidateStaff.find((s) => s.id === staff_id)?.name || '', count, their_therapist: staff_id === patient.preferred_staff_id }))
+    .sort((a, b) => b.count - a.count);
   return {
     success,
     appointments,
     suggestions,
     days,
+    by_therapist,
     conflicts: success ? undefined : conflicts,
   };
   } catch (e) {

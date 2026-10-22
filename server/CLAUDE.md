@@ -27,9 +27,8 @@ goes through `teamOf()`, or a co-therapist reads as free and gets booked twice.
 **Gender match and room amenities are refusals, not preferences.** The scheduler
 always avoided proposing them; since #88 `appointmentGuard` refuses them too, so
 nothing can arrive by another route. Gender matching still honours the Settings
-switch. The only rule an admin may switch off in Verify is a resident's own
-therapist, and it lives in the planner — relaxing it widens the search and can
-never book what the guard refuses.
+switch. A resident's own therapist is a preference, never a rule (#1043): the
+first choice everywhere, and nothing refuses another therapist.
 
 **A therapy has one length, and it includes the room's cleaning time.**
 `buffer_minutes` is gone. It was a second number nobody could see — not in

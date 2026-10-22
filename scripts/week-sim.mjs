@@ -37,7 +37,7 @@ for (let i = 0; i < 12; i++) {
   const gender = pick(['male', 'female']);
   const name = `Sim ${pick(['Asha','Ravi','Meera','Karan','Leela','Arjun','Tara','Vikram','Anya','Dev'])} ${String.fromCharCode(65 + i)}`;
   const body = { name, gender, stay: { start_date: arrive, end_date: addDays(arrive, stayLen) }, on_site: true };
-  if (i % 6 === 0) { const st = pick(staff); body.preferred_staff_id = st.id; body.requires_preferred_staff = true; }
+  if (i % 6 === 0) { const st = pick(staff); body.preferred_staff_id = st.id; }
   const r = await api('POST', '/patients', body);
   if (r.status >= 300) { note(`patient ${name} -> ${r.status} ${JSON.stringify(r.j).slice(0, 200)}`); continue; }
   const p = { id: r.j.id, name, arrive, leave: body.stay.end_date, only: body.preferred_staff_id };
