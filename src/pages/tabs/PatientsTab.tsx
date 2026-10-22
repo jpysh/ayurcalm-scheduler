@@ -56,6 +56,8 @@ type ResidentDay = {
   /** What therapists recorded after treatments, newest first (#508). */
   readings: { date: string; text: string }[];
   last_consultation: Visit | null; next_consultation: Visit | null;
+  /** Their own therapist: the first choice everywhere, never the only one (#1043). */
+  preferred_staff_id: string | null;
 };
 type Found = { id: string; name: string; plan: string; stay: { start: string; end: string } | null; next_start: string | null; last_end: string | null };
 type Visit = { id: string; date: string; start_time: string; doctor: string | null; note: string | null };
@@ -142,8 +144,9 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
 }
 
 /** One resident: the stay, today's treatments, today's meals, and what to change. */
-function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, changeMeals, changePackage, changeHouse, changeStay, book, details, detailsHint, out }: {
+function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, changeMeals, changePackage, changeHouse, changeStay, book, details, detailsHint, out, therapists }: {
   out: (id: string) => React.ReactNode;
+  therapists: { id: string; name: string }[];
   id: string | null; today: string; onClose: () => void;
   /** The inbox opens the card already on its follow-up message (#603); asked once the card has loaded. */
   startOn?: 'followup' | 'week' | null; onStarted?: () => void;
@@ -194,6 +197,11 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
     if (!d || plan === null) return;
     const res = await fetch(`${API_BASE}/patients/${d.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doctor_plan: plan.trim() || null }) });
     if (res.ok) { setD({ ...d, doctor_plan: plan.trim() || null }); setPlan(null); }
+  };
+  const setTheirs = async (staffId: string | null) => {
+    if (!d) return;
+    const res = await fetch(`${API_BASE}/patients/${d.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferred_staff_id: staffId }) });
+    if (res.ok) setD({ ...d, preferred_staff_id: staffId }); else toast.error(await saveError(res));
   };
   const load = () => { if (id) fetchJsonWithTimeout<ResidentDay>(`${API_BASE}/patients/${id}/day?date=${today}`).then(setD).catch(() => setD(null)); };
   useEffect(() => {
@@ -323,6 +331,8 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
           </ListGroup>
           {/* Story 4: everything a patient may have is a row with an arrow, filled when it is decided; nothing is forced. */}
           <div className="mt-3 border-t border-border">
+            <ChangeLine label="Their therapist" value={therapists.find((s) => s.id === d.preferred_staff_id)?.name || "None"} faint={!d.preferred_staff_id}
+              select={<LineSelect label="Their therapist" value={d.preferred_staff_id || ""} onChange={(v) => void setTheirs(v || null)} free={[{ id: "", name: "None" }, ...therapists]} />} />
             <ChangeLine label="Diet" value={d.plan_name ? (d.diet_next ? `${d.plan_name}, then ${d.diet_next.name} from ${dayText(d.diet_next.from)}` : d.plan_name) : "Not decided yet"} faint={!d.plan_name} onClick={() => changeMeals(d)} />
             {up ? <ChangeLine label="Stay" value={stayRange(up)} onClick={() => changeStay(d)} /> : <ChangeLine label={d.last_stay ? 'New stay' : 'Stay'} value={d.last_stay?.package ? `From today · ${d.last_stay.package.name}` : 'Not staying · add a stay'} faint={!d.last_stay} onClick={() => changeStay(d)} />}
             {up ? <ChangeLine label="Package" value={up.package ? `${up.package.days} days · ${money(up.package.price)}` : "Not decided yet"} faint={!up.package} onClick={() => changePackage(d)} /> : null}
@@ -587,7 +597,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         editList={() => { setHouseFor(null); setBack(null); openCatalogue('accommodation'); }} />
       <StaySheet patient={stayFor?.patient ?? null} target={stayFor ? { ...stayFor.target, end: stayEnd ?? stayFor.target.end } : null} today={today}
         now={clock(timezone)} onClose={backToCard(() => { setStayFor(null); setStayEnd(null); })} onSaved={() => { if (stayFor) void refreshStays(stayFor.patient.id); }} />
-      <ResidentCard out={out} id={cardId} today={today} startOn={startOn} onStarted={() => setStartOn(null)} onClose={() => { setCardId(null); setStartOn(null); }}
+      <ResidentCard therapists={staff.filter((s) => s.role !== "doctor" && s.status === "Active").map((s) => ({ id: String(s.id), name: s.name }))} out={out} id={cardId} today={today} startOn={startOn} onStarted={() => setStartOn(null)} onClose={() => { setCardId(null); setStartOn(null); }}
         openTreatment={(a) => { setCardId(null); openTreatment(a); }}
         changeMeals={(p) => { setBack(p.id); setCardId(null); setDietFor(p); }}
         changePackage={(p) => { const st = p.stay ?? p.coming; if (st) { setBack(p.id); setCardId(null); setPackFor({ patient: p, stay: st }); } }}
