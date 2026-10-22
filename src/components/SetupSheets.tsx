@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChangeLine, Consequence, Days, TimeList, WEEK, Chips, chip, dayText, timesBetween, Dropdown, Group, More, Seg, SheetFoot, Switch, Text, noteText, say, field, Btn, toastUndo } from "@/components/kit";
+import { ChangeLine, Consequence, Days, TimeList, WEEK, Chips, chip, dayText, timesBetween, Dropdown, Group, More, Seg, SheetFoot, Switch, Text, noteText, say, field, Btn, toastUndo, TwoFoot, plural } from "@/components/kit";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { BottomSheet } from "@/components/BottomBar";
@@ -14,7 +14,7 @@ import type { UiRoom, UiStaff, UiTherapy } from "@/pages/tabs/shared";
 async function send(path: string, method: string, body: unknown) {
   const r = await fetch(`${API_BASE}${path}`, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const out = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(out?.error || `Could not save (${r.status})`);
+  if (!r.ok) throw Object.assign(new Error(out?.error || `Could not save (${r.status})`), { out });
   return out;
 }
 
@@ -190,28 +190,35 @@ export function TherapySheet({ therapy, open, onClose, amenityOptions, onSaved, 
   const [name, setName] = useState(""); const [mins, setMins] = useState(60); const [needs, setNeeds] = useState<string[]>([]);
   const [staff, setStaff] = useState(1); const [same, setSame] = useState(false); const [once, setOnce] = useState(false); const [before, setBefore] = useState(false);
   const [checks, setChecks] = useState<{ text: string; required: boolean }[]>([]); const [vitals, setVitals] = useState<string[]>(["bp"]); const [busy, setBusy] = useState(false);
+  const [ask, setAsk] = useState(0);
   useEffect(() => {
     if (!open) return;
+    setAsk(0);
     setName(therapy?.name ?? ""); setMins(therapy?.duration ?? 60); setNeeds(therapy?.amenities ?? []); setStaff(therapy?.staffRequired ?? 1);
     setSame(therapy?.genderMatch ?? false); setOnce(therapy?.once ?? false); setBefore(therapy?.before ?? false); setChecks(therapy?.checklist ?? []); setVitals(therapy?.vitals ?? ["bp"]);
   }, [open, therapy]);
-  const save = async () => {
+  useEffect(() => setAsk(0), [mins]);
+  const save = async (booked?: "change" | "keep") => {
     setBusy(true);
     try {
-      const body = { name: name.trim(), duration_minutes: mins, required_amenities: needs, staff_required: staff, requires_gender_match: same, once_per_course: once, before_purification: before, checklist: checks.filter((c) => c.text.trim()), vitals };
+      const body = { name: name.trim(), duration_minutes: mins, required_amenities: needs, staff_required: staff, requires_gender_match: same, once_per_course: once, before_purification: before, checklist: checks.filter((c) => c.text.trim()), vitals, booked };
       const x = await send(therapy ? `/therapies/${therapy.id}` : "/therapies", therapy ? "PUT" : "POST", body);
       onSaved({ id: x.id, name: x.name, duration: x.duration_minutes ?? mins, amenities: x.required_amenities || needs, genderMatch: !!x.requires_gender_match, staffRequired: x.staff_required ?? staff, once: !!x.once_per_course, before: !!x.before_purification, checklist: x.checklist || [], vitals: x.vitals || vitals });
       if (therapy) {
         const before = { name: therapy.name, duration_minutes: therapy.duration, required_amenities: therapy.amenities, staff_required: therapy.staffRequired, requires_gender_match: therapy.genderMatch, once_per_course: therapy.once, before_purification: therapy.before, checklist: therapy.checklist, vitals: therapy.vitals };
-        savedWithUndo(`${x.name} saved`, `/therapies/${therapy.id}`, before, therapy, onSaved);
+        savedWithUndo(booked === "change" ? `${x.name} saved, ${plural(ask, "booked treatment")} now ${mins} min` : `${x.name} saved`, `/therapies/${therapy.id}`, { ...before, booked: booked ?? "keep" }, therapy, onSaved);
       } else toast(`${x.name} added`);
       onClose();
-    } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
+    } catch (e) {
+      const out = (e as { out?: { reason?: string; count?: number } }).out;
+      if (out?.reason === "ASK_BOOKED") setAsk(out.count || 0); else toast.error((e as Error).message);
+    } finally { setBusy(false); }
   };
   const vitalNames = VITALS.map(([, l]) => l);
   return (
-    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={therapy ? therapy.name : "Add therapy"} note={therapy ? "Change anything, then save." : "Name and length are needed. The rest can wait."}
-      foot={<SheetFoot busy={busy} ok={!!name.trim() && mins > 0} save={save} label={therapy ? "Save the therapy" : "Add the therapy"} remove={therapy ? () => { onClose(); remove(therapy); } : undefined} removeLabel="Delete this therapy" />}>
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={therapy ? therapy.name : "Add therapy"} note={ask && therapy ? `${plural(ask, "treatment")} already booked at ${therapy.duration} min. A clash the new length makes shows in the day check.` : therapy ? "Change anything, then save." : "Name and length are needed. The rest can wait."}
+      foot={ask ? <TwoFoot busy={busy} main={`Also change the ${plural(ask, "booked treatment")}`} onMain={() => save("change")} alt="Only new bookings" onAlt={() => save("keep")} />
+        : <SheetFoot busy={busy} ok={!!name.trim() && mins > 0} save={() => save()} label={therapy ? "Save the therapy" : "Add the therapy"} remove={therapy ? () => { onClose(); remove(therapy); } : undefined} removeLabel="Delete this therapy" />}>
       <Text label="Name" id="therapy-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Abhyanga" />
       <Dropdown label="How long" value={String(mins)} onChange={(e) => setMins(Number(e.target.value))}>
         {[...new Set([15, 20, 30, 45, 60, 75, 90, 105, 120, mins])].sort((a, b) => a - b).map((m) => <option key={m} value={m}>{m} minutes</option>)}
