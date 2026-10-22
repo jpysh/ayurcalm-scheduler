@@ -6,7 +6,7 @@ Context for an AI assistant picking this up. Human contributors want
 ## What this is
 
 A self-hosted appointment and therapy scheduler for wellness centres. Public,
-MIT, maintained by one person (`jpysh`) roughly one pass a week. Built first for
+AGPL-3.0 (commercial licence on request), maintained by one person (`jpysh`) roughly one pass a week. Built first for
 residential Ayurveda centres; positioned to also fit massage studios, spas and
 physiotherapy practices.
 

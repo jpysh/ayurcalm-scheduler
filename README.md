@@ -1,7 +1,7 @@
 # Ruta
 
 [![CI](https://github.com/jpysh/ayurcalm-scheduler/actions/workflows/ci.yml/badge.svg)](https://github.com/jpysh/ayurcalm-scheduler/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/jpysh/ayurcalm-scheduler/badge)](https://scorecard.dev/viewer/?uri=github.com/jpysh/ayurcalm-scheduler)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15691/badge)](https://www.bestpractices.dev/projects/15691)
 [![Security](https://img.shields.io/badge/security-policy-blue.svg)](SECURITY.md)
@@ -65,4 +65,6 @@ Issues, ideas and pull requests welcome: [CONTRIBUTING.md](CONTRIBUTING.md). Sec
 
 ## License
 
-[MIT](LICENSE) © jpysh
+[AGPL-3.0](LICENSE) © jpysh
+
+Free to run for your own centre, to read and to change. If you run a modified copy as a service for others, you must publish your changes under the same licence. To resell or embed it without that, ask for a commercial licence: open a [Discussion](https://github.com/jpysh/ayurcalm-scheduler/discussions) or write via [jains.es/ruta](https://jains.es/ruta).

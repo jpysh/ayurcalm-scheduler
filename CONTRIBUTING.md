@@ -85,3 +85,11 @@ This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
 Those last two write to the database and tidy up afterwards, so they refuse to run unless it is marked as demo data. Point `DATABASE_URL` at a test install, or set `ALLOW_TEST_WRITES=1` if you are certain.
 
 The front end always calls `/api` on its own origin. In development Vite proxies that to `http://localhost:4000` (override with `VITE_API_PROXY_TARGET`); `VITE_API_BASE` points a built app at another host.
+
+## Licence of contributions
+
+The project is AGPL-3.0, and the maintainer also sells commercial licences to vendors who cannot meet its terms. So a pull request is accepted only with this line in its description:
+
+> I license this contribution to jpysh under AGPL-3.0 and grant jpysh the right to also license it under other terms, including commercially.
+
+You keep the copyright in your contribution.
