@@ -65,6 +65,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
 }) {
   const [showHolidays, setShowHolidays] = useState(false);
   const [showLater, setShowLater] = useState(false);
+  const [thing, setThing] = useState<{ type: UiTimeOff['type']; entity: string } | null>(null);
   const closedDays = useMemo(() => timeOffs.filter((h) => h.type === "Center").map((h) => ({ id: h.id, date: sortKey(h).slice(0, 10), endDate: (h.endDate || h.date || '').slice(0, 10), description: h.description, hours: h.startTime && h.endTime ? `${h.startTime.slice(0, 5)}–${h.endTime.slice(0, 5)}` : undefined })), [timeOffs]);
   /** After the closed-days sheet changes something: the centre's rows read again from the server. */
   const reloadClosed = async () => {
@@ -256,6 +257,13 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
     } } : undefined });
   };
 
+  /** One row per thing (#1078): someone off on three separate days is one row naming the days; a tap opens all of them. */
+  const rowsFor = (list: UiTimeOff[]) => {
+    const by = new Map<string, UiTimeOff[]>();
+    for (const h of list) by.set(`${h.type}:${h.entity}`, [...(by.get(`${h.type}:${h.entity}`) ?? []), h]);
+    return [...by.values()].map((g) => g.length === 1 ? rowFor(g[0])
+      : <Row key={g[0].id} title={nameOf(g[0].type, g[0].entity)} facts={[kindOf(g[0]), g.map((h) => leaveWhen(h, isFullDay(h))).join(', ')].join(' · ')} trailing="›" onClick={() => setThing({ type: g[0].type, entity: g[0].entity })} />);
+  };
   const rowFor = (h: UiTimeOff) => <Row key={h.id} title={nameOf(h.type, h.entity)} facts={[kindOf(h), leaveWhen(h, isFullDay(h)), h.description].filter(Boolean).join(' · ')} trailing="›" onClick={() => openEdit(h)} />;
 
   /** A thing's own sheet, the same rows for every kind (#695): Available again when it is not, its times, Not available…. */
@@ -283,9 +291,9 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
     <div data-testid="timeoff-table">
       <PageHead title="Availability" note={`${now.length || 'None'} now · ${coming.length} coming`} />
       {live.length === 0 ? <Empty text="Everything is available. Tap + when something is not." /> : null}
-      {now.length ? <ListGroup title="Not available now" count={now.length}>{now.map(rowFor)}</ListGroup> : null}
-      {soon.length ? <div className="mt-3"><ListGroup title="Coming up" count={soon.length}>{soon.map(rowFor)}</ListGroup></div> : null}
-      {later.length ? <div className="mt-3"><ListGroup title="Later" count={later.length}>{showLater ? later.map(rowFor) : <Row title={`Show ${later.length} more`} facts={`From ${dayText(sortKey(later[0]).slice(0, 10))}`} trailing="›" onClick={() => setShowLater(true)} />}</ListGroup></div> : null}
+      {now.length ? <ListGroup title="Not available now" count={now.length}>{rowsFor(now)}</ListGroup> : null}
+      {soon.length ? <div className="mt-3"><ListGroup title="Coming up" count={soon.length}>{rowsFor(soon)}</ListGroup></div> : null}
+      {later.length ? <div className="mt-3"><ListGroup title="Later" count={later.length}>{showLater ? rowsFor(later) : <Row title={`Show ${later.length} more`} facts={`From ${dayText(sortKey(later[0]).slice(0, 10))}`} trailing="›" onClick={() => setShowLater(true)} />}</ListGroup></div> : null}
       <div className="mt-3"><ListGroup title="The centre"><Row title="Centre closed days" facts={nextClosed ? `Next: ${nextClosed.description || 'Closed'}, ${leaveWhen(nextClosed, true)}` : 'None coming up'} trailing="›" onClick={() => setShowHolidays(true)} /></ListGroup></div>
     </div>
   );
@@ -303,6 +311,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
   const fixLabel = !s ? '' : s.date === s.endDate ? (s.date === centreToday ? 'Save and fix the day' : 'Save and fix that day') : 'Save and fix those days';
   const dialogs = (
     <>
+      <BottomSheet open={!!thing} onOpenChange={(o) => { if (!o) setThing(null); }} title={thing ? nameOf(thing.type, thing.entity) : ''}>{thing ? outFor(thing.type, thing.entity) : null}</BottomSheet>
       <HolidaysSheet open={showHolidays} onOpenChange={setShowHolidays} closed={closedDays} today={centreToday} shown={todayKey} onChanged={reloadClosed} />
       <BottomSheet open={picking} onOpenChange={setPicking} title="What is not available?" note="Choose one or several of the same kind."
         foot={<>
@@ -323,7 +332,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
       </BottomSheet>
       <BottomSheet open={!!f} onOpenChange={(o) => { if (!o) setForm(null); }} title={f ? `${names}: not available` : ''} note={f ? (f.editing ? kindOf(f.editing) : f.ids.length === 1 ? kindOf({ type: f.kind, entity: f.ids[0] }) : `${f.ids.length} ${ONE[f.kind][1]}`) : undefined}
         foot={!f ? null : f.editing
-          ? <Foot label="Save" save={saveEdit} remove={() => { const h = f.editing!; setForm(null); void remove(h); }} removeLabel="Available again" />
+          ? <Foot label="Save" save={saveEdit} remove={() => { const h = f.editing!; setForm(null); void remove(h); }} removeLabel="Delete this entry" />
           : f.kind === 'GuestRoom' ? <Foot label="Save" save={() => save(false)} />
           : <TwoFoot main={fixLabel} onMain={() => save(true)} alt="Save, fix later" onAlt={() => save(false)} />}>
         {f ? <>

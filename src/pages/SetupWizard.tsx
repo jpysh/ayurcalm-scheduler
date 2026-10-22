@@ -143,7 +143,9 @@ const current = (z: string) => RENAMED[z] ?? z;
 export function ZoneOptions({ also = "" }: { also?: string }) {
   const first = [...new Set([...TIMEZONES, also].filter(Boolean))];
   const rest = allZones().filter((z) => !first.includes(z));
-  const name = (z: string) => z.replace(/_/g, " ");
+  // "Kolkata · India Standard Time", not the raw "Asia/Kolkata" (#1078).
+  const long = (z: string) => { try { return new Intl.DateTimeFormat("en-GB", { timeZone: z, timeZoneName: "long" }).formatToParts(new Date()).find((p) => p.type === "timeZoneName")?.value; } catch { return undefined; } };
+  const name = (z: string) => { const city = z.split("/").pop()!.replace(/_/g, " "); const l = long(z); return l && z !== "UTC" ? `${city} · ${l}` : city; };
   return (<>
     {first.map((z) => <option key={z} value={z}>{name(z)}</option>)}
     {rest.length > 0 && <optgroup label="All other zones">{rest.map((z) => <option key={z} value={z}>{name(z)}</option>)}</optgroup>}

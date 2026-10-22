@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import { confirmSheet } from "@/components/ConfirmSheet";
-import { BottomSheet, Empty, Foot, ListGroup, LinkRow, Loading, Row, SectionHead, Text, noteText, money, Btn } from "@/components/kit";
+import { BottomSheet, Empty, Foot, ListGroup, LinkRow, Loading, Row, SectionHead, Text, noteText, money, Btn, EXAMPLE_PRICE, ownNote } from "@/components/kit";
 import { ManageGuestRooms } from "@/components/GuestRoomManage";
 
 type Item = { id: string; name: string; notes: string | null; is_active: boolean; patients: number } & Record<string, unknown>;
@@ -47,7 +47,8 @@ function CatalogueEditor({ path, noun, fields, facts, trailing, extra }: { path:
   return (
     <div>
       {items === null ? <Loading rows={3} /> : items.length ? (
-        <ListGroup>{items.map((i) => <Row key={i.id} title={i.name} facts={[facts(i), i.notes].filter(Boolean).join(" · ")} trailing={i.is_active ? trailing(i) : "Retired"} onClick={() => open(i)} />)}</ListGroup>
+        <>{items.some((i) => i.notes === EXAMPLE_PRICE) ? <p className={`mb-2 ${noteText}`}>{`${EXAMPLE_PRICE}.`}</p> : null}
+        <ListGroup>{items.map((i) => <Row key={i.id} title={i.name} facts={[facts(i), ownNote(i.notes)].filter(Boolean).join(" · ")} trailing={i.is_active ? trailing(i) : "Retired"} onClick={() => open(i)} />)}</ListGroup></>
       ) : <Empty text={`No ${noun}s yet.`} />}
       <Btn kind="quiet" inline className="-ml-2 mt-2" onClick={() => open()}>Add {/^[aeiou]/.test(noun) ? "an" : "a"} {noun}</Btn>
       <p className={`mt-1 ${noteText}`}>For reference only: nothing here sends an invoice or takes a payment.</p>

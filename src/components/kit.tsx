@@ -26,6 +26,11 @@ export const chip = "min-h-11 rounded-full border border-[hsl(var(--input)/0.45)
 export const wide = "min-h-11 w-full rounded-full font-semibold";
 // Seeded names are stored as massage_table; the admin reads "massage table".
 export const say = (s: string) => s.replace(/_/g, " ");
+/** The starter catalogue's note on every price (catalogueSeed.ts): said once above a list, not on each row (#1078). */
+export const EXAMPLE_PRICE = "Example price: change it to yours";
+export const ownNote = (n: string | null | undefined) => (n && n !== EXAMPLE_PRICE ? n : "");
+/** A stored tag ("bp monitor") read in sentence case ("BP monitor") (#1078). */
+const sentence = (s: string) => say(s).replace(/^./, (c) => c.toUpperCase()).replace(/\bbp\b/gi, "BP");
 
 /** The line under a sheet's title that says what the sheet is for. */
 export const SheetNote = ({ children }: { children: ReactNode }) => <p className={noteText}>{children}</p>;
@@ -204,7 +209,7 @@ export function Chips({ options, value, onChange, addLabel }: { options: string[
   const toggle = (o: string) => onChange(value.includes(o) ? value.filter((x) => x !== o) : [...value, o]);
   return (
     <div className="flex flex-wrap gap-1.5">
-      {all.map((o) => <button key={o} type="button" className={chip} aria-pressed={value.includes(o)} onClick={() => toggle(o)}>{say(o)}</button>)}
+      {all.map((o) => <button key={o} type="button" className={chip} aria-pressed={value.includes(o)} onClick={() => toggle(o)}>{sentence(o)}</button>)}
       {addLabel ? (
         <input className="h-11 min-w-0 flex-1 rounded-full border bg-background px-3 text-sm" placeholder={addLabel} aria-label={addLabel} value={draft}
           onChange={(e) => setDraft(e.target.value)}

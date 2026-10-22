@@ -15,7 +15,7 @@ export function useDietScreen({ active }: { active: boolean }) {
   const load = () => fetchJsonWithTimeout<Plan[]>(`${API_BASE}/diet-templates`).then((r) => setPlans(Array.isArray(r) ? r : [])).catch(() => setPlans([]));
   useEffect(() => { if (active) load(); }, [active]);
   // Two lines a plan: the whole description is one tap away, in the plan (#810).
-  const row = (p: Plan) => <Row key={p.id} title={p.name} facts={p.description ? <span className="line-clamp-2">{p.description}</span> : undefined} trailing={p.patients ? `${p.patients} now or coming` : "Not used"} onClick={() => setEditing(p)} />;
+  const row = (p: Plan) => <Row key={p.id} title={p.name} facts={p.description || undefined} trailing={p.patients ? `${p.patients} now or coming` : "Not used"} onClick={() => setEditing(p)} />;
   const live = (plans || []).filter((p) => p.is_active);
   const retired = (plans || []).filter((p) => !p.is_active);
   const tab = active ? (
