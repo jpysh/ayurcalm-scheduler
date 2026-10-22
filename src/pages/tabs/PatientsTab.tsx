@@ -58,6 +58,8 @@ type ResidentDay = {
   last_consultation: Visit | null; next_consultation: Visit | null;
   /** Their own therapist: the first choice everywhere, never the only one (#1043). */
   preferred_staff_id: string | null;
+  /** Who has given most of this stay's treatments, offered while there is no preference (#1077). */
+  suggested_staff_id?: string | null;
 };
 type Found = { id: string; name: string; plan: string; stay: { start: string; end: string } | null; next_start: string | null; last_end: string | null };
 type Visit = { id: string; date: string; start_time: string; doctor: string | null; note: string | null };
@@ -343,6 +345,9 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
             <ChangeLine label="Diet" value={d.plan_name ? (d.diet_next ? `${d.plan_name}, then ${d.diet_next.name} from ${dayText(d.diet_next.from)}` : d.plan_name) : "Not decided yet"} faint={!d.plan_name} onClick={() => changeMeals(d)} />
             <ChangeLine label="Preferred therapist" value={therapists.find((s) => s.id === d.preferred_staff_id)?.name || "No preference"} faint={!d.preferred_staff_id}
               select={<LineSelect label="Preferred therapist" value={d.preferred_staff_id || ""} onChange={(v) => void setTheirs(v || null)} free={[{ id: "", name: "No preference" }, ...therapists]} />} />
+            {!d.preferred_staff_id && d.suggested_staff_id && therapists.some((s) => s.id === d.suggested_staff_id) ? (
+              <Btn kind="quiet" inline className="mx-1 my-1" onClick={() => void setTheirs(d.suggested_staff_id!)}>{`Make ${therapists.find((s) => s.id === d.suggested_staff_id)!.name} their preferred therapist`}</Btn>
+            ) : null}
           </ListGroup>
           {/* Arrival (#219): the first days, until the intake is written. Then the plan follows from the consultation. */}
           {d.stay && (d.stay.day <= 3 || !d.stay.vitals) ? (
@@ -620,9 +625,9 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
 
       <ResidentsFromSheet open={fromSheet} onClose={() => setFromSheet(false)} onAdded={(created) => setPatients((prev) => [...prev, ...created.map((c) => toRow(c as Parameters<typeof toRow>[0]))])} />
       <BottomSheet open={showAddPatient} onOpenChange={(open) => { setShowAddPatient(open); if (!open) { setNewPatient(blankNew()); setInline(null); setGuestRoom(''); } }} title="New patient" note="Only name and gender are needed. Everything else can wait."
-        foot={<Btn kind="primary" disabled={!newPatient.name.trim() || !newPatient.gender || newPatient.leaving < newPatient.arriving} onClick={saveNewPatient}>Add patient</Btn>}>
+        foot={<Btn kind="primary" disabled={!newPatient.name.trim() || !newPatient.gender || newPatient.leaving < newPatient.arriving} onClick={saveNewPatient}>{!newPatient.name.trim() ? "Type a name first" : !newPatient.gender ? "Choose a gender first" : newPatient.leaving < newPatient.arriving ? "Leaving is before arriving" : "Add patient"}</Btn>}>
         {inline ? null : <Btn kind="quiet" inline className="-ml-1" onClick={() => { setShowAddPatient(false); setFromSheet(true); }}>Many at once? From a spreadsheet ›</Btn>}
-        <Text label="Name" autoComplete="off" maxLength={80} note={newPatient.name.length >= 70 ? `${newPatient.name.length} of 80 letters` : undefined} value={newPatient.name} valid={newPatient.name.trim().length > 1} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} />
+        <Text label="Name" autoComplete="off" maxLength={80} note={newPatient.name.length >= 80 ? "That's the most it can hold" : newPatient.name.length >= 70 ? `${newPatient.name.length} of 80 letters` : undefined} value={newPatient.name} valid={newPatient.name.trim().length > 1} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} />
         {/* Nothing chosen to start with (#283): a list that opened on Male made every resident one until corrected. */}
         <Group label="Gender" note={newPatient.name.trim() && !newPatient.gender ? "Choose one to add them." : undefined}>
           <Seg options={[["Female", "Female"], ["Male", "Male"], ["Other", "Other"]]} value={newPatient.gender} onChange={(gender) => setNewPatient({ ...newPatient, gender })} />

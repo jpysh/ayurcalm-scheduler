@@ -107,7 +107,7 @@ export function DietSheet({ patient, today, onClose, onChanged, onDayMeals }: { 
   return (
     <BottomSheet open={!!patient} onOpenChange={(o) => { if (!o) onClose(); }} title={patient ? `Diet for ${first(patient.name)}` : "Diet"}
       note={line ? `Runs to the leaving date, ${dayText(line.stay.end)}. Each change starts where the last ended.` : undefined}
-      foot={line ? <Foot label={plan ? `Start this plan on ${dayText(from)}` : "Choose a plan"} ok={!!plan} busy={busy} save={start} /> : undefined}>
+      foot={line ? <Foot label={plan ? `Start this plan on ${dayText(from)}` : "Pick a plan first"} ok={!!plan} busy={busy} save={start} /> : undefined}>
       {line === null ? <Loading rows={3} /> : (<>
         <Timeline items={line.entries.map((e) => {
           return {
@@ -422,13 +422,13 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     onSaved();
     onClose();
   };
-  const label = !target.id ? "Add the stay" : delta < 0 ? `Leave on ${dayText(end)}` : delta > 0 ? `Stay until ${dayText(end)}` : "Save the stay";
+  const label = !target.id ? "Add the stay" : !changed ? "Change a date to save" : delta < 0 ? `Leave on ${dayText(end)}` : delta > 0 ? `Stay until ${dayText(end)}` : "Save the stay";
   return (
     <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} title={target.id ? `Stay for ${first(patient.name)}` : "New stay"}
       note={target.id ? `Now ${dayText(target.start)} to ${dayText(target.end)} · ${plural(oldDays, "day")}` : "Arriving, leaving, and the rest follows."}
       foot={<Foot label={label} ok={end >= start && (changed || !target.id)} busy={busy} save={save} />}>
       <div className="border-t border-border">
-        <ChangeLine label="Arrived" value={dayText(start)} select={<LineDate label="Arrived" value={start} onChange={(v) => { setStart(v); if (end < v) setEnd(v); }} />} />
+        <ChangeLine label={start > today ? "Arriving" : "Arrived"} value={dayText(start)} select={<LineDate label={start > today ? "Arriving" : "Arrived"} value={start} onChange={(v) => { setStart(v); if (end < v) setEnd(v); }} />} />
         <ChangeLine label="Leaving" value={dayText(end)} select={<LineDate label="Leaving" value={end} min={start} onChange={setEnd} />} />
       </div>
       {target.id && start <= today && end > today ? <Btn kind="quiet" inline className="-ml-2 mt-1" onClick={() => setEnd(today)}>Leaves today</Btn> : null}
@@ -567,14 +567,14 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
             const done = !l.sessions.length && !l.missing.length;
             return (
               <SwitchRow key={l.from_therapy_id} title={name} on={!off[l.from_therapy_id]} set={(v) => setOff({ ...off, [l.from_therapy_id]: !v })}
-                facts={done ? "Already booked next week" : swapped ? `Instead of ${l.therapy_name} · ${plural(l.sessions.length + l.missing.length, "day")}, times found on Book all` : `${l.start_time} · ${l.staff_name} · ${plural(l.sessions.length + l.missing.length, "day")}`}
+                facts={done ? "Already booked next week" : swapped ? `Instead of ${l.therapy_name} · ${plural(l.sessions.length + l.missing.length, "day")}` : `${l.start_time} · ${l.staff_name} · ${plural(l.sessions.length + l.missing.length, "day")}`}
                 flag={!swapped && l.missing.length ? `${l.missing.map((m) => (m.why.startsWith("The centre is") ? `${m.why} on ${dayText(m.date)}` : `No free time on ${dayText(m.date)}`)).join(". ")}. Swap it, or book its days from Next days` : l.skipped?.length ? `Skips ${l.skipped.map((m) => dayText(m.date)).join(", ")}: ${l.skipped[0].why.replace("The centre is", "the centre is")}` : undefined}>
-                {done ? null : <ChangeLine label="Swap" value={name} select={<LineSelect label={`Swap ${l.therapy_name}`} value={swapped || l.therapy_id} onChange={(v) => setSwaps({ ...swaps, [l.from_therapy_id]: v })} free={therapies} />} />}
+                {done ? null : <ChangeLine label="Swap" value="For another therapy" select={<LineSelect label={`Swap ${l.therapy_name}`} value={swapped || l.therapy_id} onChange={(v) => setSwaps({ ...swaps, [l.from_therapy_id]: v })} free={therapies} />} />}
               </SwitchRow>
             );
           }) : therapies.length ? <>
             {listed.map((t) => (
-              <SwitchRow key={t.id} title={t.name} on={!!starts[t.id]} set={(v) => setStarts({ ...starts, [t.id]: v })} facts={`${sessionsOf(t.id)} of ${plural(Math.max(weekDays, 0), "day")}, times found on Book all`}>
+              <SwitchRow key={t.id} title={t.name} on={!!starts[t.id]} set={(v) => setStarts({ ...starts, [t.id]: v })} facts={starts[t.id] ? `${sessionsOf(t.id)} of ${plural(Math.max(weekDays, 0), "day")}` : undefined}>
                 {starts[t.id] && weekDays > 1 ? <ChangeLine label="Sessions" value={`${sessionsOf(t.id)} of ${weekDays} days`} select={<LineSelect label={`Sessions of ${t.name}`} value={String(sessionsOf(t.id))} onChange={(v) => setCounts({ ...counts, [t.id]: Number(v) })} free={dayChoices} />} /> : null}
               </SwitchRow>
             ))}

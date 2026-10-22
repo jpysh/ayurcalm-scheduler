@@ -22,6 +22,13 @@ export async function lastReadings(patientId: string, day: Date, prisma: PrismaC
   }).slice(0, 3);
 }
 
+/** The therapist who has given most of this stay's treatments, offered as their preferred one (#1077); three at least, so one booking is no pattern. */
+async function mostBooked(patientId: string, from: Date, prisma: PrismaClient) {
+  const rows = await prisma.appointment.groupBy({ by: ['staff_id'], where: { patient_id: patientId, scheduled_date: { gte: from }, status: { notIn: ['cancelled', 'no_show'] }, staff_id: { not: null }, Therapy: { is_consultation: false } }, _count: true });
+  const top = rows.sort((a, b) => b._count - a._count)[0];
+  return top && top._count >= 3 ? top.staff_id : null;
+}
+
 export async function residentDay(patientId: string, date: string, prisma: PrismaClient) {
   const day = new Date(`${date}T00:00:00.000Z`);
   const patient = await prisma.patient.findUnique({ where: { id: patientId } });
@@ -103,6 +110,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
   return {
     follow_up,
     preferred_staff_id: patient.preferred_staff_id ?? null,
+    suggested_staff_id: patient.preferred_staff_id || !stay ? null : await mostBooked(patientId, stay.start_date, prisma),
     passport_photo: (await prisma.patientPhoto.findUnique({ where: { patient_id: patientId }, select: { updated_at: true } }))?.updated_at.toISOString() ?? null,
     feedback: told ? { rating: told.rating, note: told.note } : null,
     readings,

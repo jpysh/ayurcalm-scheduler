@@ -250,7 +250,9 @@ export function softWarnings(c: { id?: string; patient_id: string; therapy_id?: 
   const twin = c.therapy_id ? mine.find((a) => a.therapy_id === c.therapy_id) : undefined;
   if (twin) {
     const name = ctx.therapies.find((t) => t.id === c.therapy_id)?.name.replace(/_/g, ' ') || 'that treatment';
-    out.push({ reason: 'SAME_THERAPY', message: `${first} already has ${name} at ${twin.start_time}.`, actions: [anyway] });
+    // Who they already see, so the admin can tell a slip from a second visit on purpose (#1077).
+    const by = ctx.staff.find((x) => x.id === twin.staff_id)?.name;
+    out.push({ reason: 'SAME_THERAPY', message: `${first} already has ${name} at ${twin.start_time}${by ? ` with ${by}` : ''}.`, actions: [anyway] });
   }
   return out;
 }
