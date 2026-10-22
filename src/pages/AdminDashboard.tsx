@@ -494,7 +494,8 @@ const AdminDashboard = () => {
     setActiveTab(v);
     if (v !== 'patients') patientsScreen.setSearching(false);
     setListSearching(false); setListQuery('');
-    const uname = location.pathname.split('/').filter(Boolean)[0] || (localStorage.getItem('authUser') || 'admin');
+    // The first part is the role, as sign-in sets it; never the email, which would sit in history and shared links (#1123).
+    const uname = location.pathname.split('/').filter(Boolean)[0] || (localStorage.getItem('authRole') === 'Staff' ? 'staff' : 'admin');
     navigate(`/${uname}/${v}`);
     window.scrollTo(0, 0);
   };
