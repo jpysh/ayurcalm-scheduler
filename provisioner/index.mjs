@@ -9,9 +9,9 @@ import http from 'node:http';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHmac, randomBytes } from 'node:crypto';
-import { readFileSync, writeFileSync, renameSync, appendFileSync, existsSync, rmSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync, appendFileSync, existsSync, rmSync } from 'node:fs';
 import { next, deletesAt, refuse, slugFor, linkOpen, took, rollout } from './lifecycle.mjs';
-import { morning, security, nodeLine } from './morning.mjs';
+import { morning } from './morning.mjs';
 
 const run = promisify(execFile);
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -145,11 +145,6 @@ export async function update(now = false) {
     await run('git', ['-C', ROOT, 'worktree', 'add', '-f', '--detach', gate, sha]);
     // A bare worktree has no packages, and the browser walk in qa needs Playwright (#924).
     await run('npm', ['ci', '--no-audit', '--no-fund'], { cwd: gate, maxBuffer: 1 << 26 });
-    // Fresh builds of node:24-slim and postgres:16 (#1089): the same tags, so never a new major, and the rollout
-    // below builds on the images the tests ran on. Without this a security fix in Node never reached a centre.
-    const gateEnv = { cwd: gate, env: { ...env, COMPOSE_PROJECT_NAME: 'ruta-gate' }, maxBuffer: 1 << 26 };
-    await run('docker', ['compose', 'pull', '-q', '--ignore-buildable'], gateEnv);
-    await run('docker', ['compose', 'build', '-q', '--pull'], gateEnv);
     const qa = await run('sh', [`${gate}/scripts/qa.sh`], { env: { ...env, COMPOSE_PROJECT_NAME: 'ruta-gate', APP_PORT: '8199' }, maxBuffer: 1 << 26 }).then(() => null, (e) => (e.stdout || '').split('\n').find((l) => l.includes('FAIL'))?.trim() || 'qa did not finish');
     await run('docker', ['compose', '-p', 'ruta-gate', 'down', '-v'], { cwd: gate }).catch(() => {});
     let r = { failed: qa ? 'tests' : null, why: qa };
@@ -312,12 +307,7 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
     const d = new Date();
     if (d.getHours() === 7 && sent !== d.toDateString()) {
       sent = d.toDateString();
-      const sec = `${DATA}/SECURITY.md`, sites = [{ slug: 'demo' }, ...LIVE];
-      const apps = await Promise.all(sites.map((c) => run('docker', ['exec', `ruta-${c.slug}-app-1`, 'node', '-v']).then((r) => r.stdout.trim(), () => null)));
-      const text = morning(db, latest, Date.now(), db.feedback, [
-        existsSync(sec) ? security(readFileSync(sec, 'utf8'), statSync(sec).mtimeMs, Date.now()) : security(null, 0, Date.now()),
-        nodeLine(process.version, apps.filter(Boolean)),
-      ]);
+      const text = morning(db, latest, Date.now(), db.feedback);
       // Newest day on top, older days below, kept for good. Only on this Mac: nothing serves this file.
       const file = `${DATA}/MORNING.md`, past = existsSync(file) ? readFileSync(file, 'utf8').replace(/^# Morning log\n+/, '') : '';
       writeFileSync(file, `# Morning log\n\n## ${d.toDateString()}\n\n${text.split('\n').map((l) => (l && !l.startsWith('  ') ? `- ${l}` : l)).join('\n')}\n\n${past}`);

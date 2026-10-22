@@ -17,10 +17,10 @@ const post = (date: string, endDate: string, description: string, move = false, 
  * reopened with a tap; any day of the centre's own added with a reason; and India's
  * gazetted holidays not yet closed, all ticked, so closing on them is one tap.
  */
-export function HolidaysSheet({ open, onOpenChange, closed, today, shown, onChanged }: {
+export function HolidaysSheet({ open, onOpenChange, closed, today, onChanged }: {
   open: boolean; onOpenChange: (o: boolean) => void;
   /** The centre's closed days, every one. */
-  closed: ClosedDay[]; today: string; shown: string;
+  closed: ClosedDay[]; today: string;
   /** Read time off again after a change here. */
   onChanged: () => void;
 }) {
@@ -144,7 +144,7 @@ export function HolidaysSheet({ open, onOpenChange, closed, today, shown, onChan
     <BottomSheet open={open} onOpenChange={onOpenChange} title="Centre closed days" note="Tap a day to open the centre after all."
       foot={holidays.length ? <SheetFoot busy={busy} ok={!!chosen.length} save={addHolidays} label={`Close on ${chosen.length} public holiday${chosen.length === 1 ? "" : "s"}`} /> : undefined}>
       <ListGroup title="Closed" count={coming.length}>
-        <LinkRow label="Close another day…" onClick={() => setAdding({ date: shown > today ? shown : today, endDate: shown > today ? shown : today, description: "" })} />
+        <LinkRow label="Close another day…" onClick={() => setAdding({ date: today, endDate: today, description: "" })} />
         {coming.length ? coming.map((c) => <Row key={c.id} title={c.endDate > c.date ? `${dayText(c.date)} to ${dayText(c.endDate)}` : dayText(c.date)} facts={[c.hours, c.description || "Closed"].filter(Boolean).join(" · ")} trailing="Open ›" onClick={() => void reopen(c)} />)
           : <Empty text="No closed days coming." />}
       </ListGroup>

@@ -16,14 +16,3 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
-  # Pinned images, monthly (#1085): node:24-slim in the Dockerfile, postgres:16 in
-  # docker-compose.yml, cloudflared and rclone in hosting/compose.yml. The nightly gate
-  # already pulls fresh builds of the same tags; these move the tags themselves.
-  - package-ecosystem: docker
-    directory: /
-    schedule: { interval: monthly }
-    ignore: [{ dependency-name: "*", update-types: ["version-update:semver-major"] }]
-  - package-ecosystem: docker-compose
-    directories: [/, /hosting]
-    schedule: { interval: monthly }
-    ignore: [{ dependency-name: "*", update-types: ["version-update:semver-major"] }]

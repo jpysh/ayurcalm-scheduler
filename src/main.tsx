@@ -48,6 +48,15 @@ if (typeof window !== "undefined") {
       res.clone().text().then((body) => writeStale(url, body)).catch(() => {});
     }
     if (isApiCall && res.status === 401 && window.location.pathname !== "/login") {
+      // A save refused only because the sign-in expired is kept for this tab and sent again once the same person signs back in (#1073).
+      // Other reads on the screen 401 in the same moment; they must not overwrite the kept save.
+      try {
+        const kept = JSON.parse(sessionStorage.getItem("signedOut") || "null");
+        const user = localStorage.getItem("authUser") ?? kept?.user;
+        const back = location.pathname + location.search;
+        if (method !== "GET" && typeof init.body === "string") sessionStorage.setItem("signedOut", JSON.stringify({ url, method, body: init.body, user, back }));
+        else if (!kept) sessionStorage.setItem("signedOut", JSON.stringify({ user, back }));
+      } catch { /* private mode: plain sign-in */ }
       localStorage.removeItem("authToken");
       localStorage.removeItem("authRole");
       localStorage.removeItem("authUser");
