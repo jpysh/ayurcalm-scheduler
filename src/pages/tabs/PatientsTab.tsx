@@ -254,6 +254,8 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
   const visit = (v: Visit, withTime: boolean) => `${dayText(v.date)}${withTime ? ` ${v.start_time}` : ''}${v.doctor ? ` · ${v.doctor}` : ''}`;
   // On the last day the discharge comes first and nothing more is booked (#406).
   const leavingToday = !!d?.stay && d.stay.day === d.stay.days;
+  // The summary is written in the last days; before them it is a line under Records, not a bar at the top.
+  const leavingSoon = !!d?.stay && d.stay.days - d.stay.day < 3;
   const bar = d?.stay?.discharge ? <div className="mt-3"><ChecklistBar label="Discharge summary" done={d.stay.discharge.done} total={d.stay.discharge.total} onClick={() => setChecklist(true)} /></div> : null;
   // Story s18 (#422): what a new patient needs, on the arrival days, each step opening its own line.
   const up = d?.stay ?? d?.coming ?? null;
@@ -266,17 +268,19 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
     ...(d.form_c ? [['Form C', !!d.form_c.filed, d.form_c.filed ? `Filed ${dayText(d.form_c.filed)}` : undefined, () => setFormC(true)]] : []),
   ] as [string, boolean, string | undefined, () => void][]) : null;
   const [arrival, setArrival] = useState(false);
+  // How soon, said as the admin would ("tomorrow", "in 4 days"), with the date beside it.
+  const soon = (iso: string) => { const n = Math.round((Date.parse(iso.slice(0, 10)) - Date.parse(today)) / DAY_MS); return n === 1 ? `tomorrow, ${stayDay(iso)}` : n > 1 && n < 7 ? `in ${n} days, ${stayDay(iso)}` : stayDay(iso); };
   const nights = up ? Math.round((Date.parse(up.end_date) - Date.parse(up.start_date)) / DAY_MS) : 0;
   return (
     <>
     <BottomSheet open={!!id} onOpenChange={(o) => { if (!o) onClose(); }} title={d?.name || 'Patient'}>
       {d ? (
-        <div className="-mt-2 max-h-[70dvh] overflow-y-auto">
+        <div className="-mt-2">
           <div className="text-sm text-muted-foreground">
-            {d.stay ? `${d.stay.on_site === false ? 'Day patient ·' : 'Staying'} ${stayRange(d.stay)}${d.stay.days > 1 ? ` · day ${d.stay.day} of ${d.stay.days}` : ''}` : d.coming ? `Arrives ${stayDay(d.coming.start_date)} · leaves ${stayDay(d.coming.end_date)}` : d.last_stay ? `Stayed until ${stayDay(d.last_stay.end_date)}` : 'Not staying today'}
+            {d.stay ? `${d.stay.on_site === false ? 'Day patient ·' : 'Staying'} ${stayRange(d.stay)}${d.stay.days > 1 ? ` · day ${d.stay.day} of ${d.stay.days}` : ''}` : d.coming ? `Arrives ${soon(d.coming.start_date)} · leaves ${stayDay(d.coming.end_date)}` : d.last_stay ? `Stayed until ${stayDay(d.last_stay.end_date)}` : 'Not staying today'}
           </div>
-          {leavingToday ? bar : null}
-          {steps && !leavingToday ? <div className="mt-3"><ChecklistBar label="Arrival" done={steps.filter((x) => x[1]).length} total={steps.length} onClick={() => setArrival(true)} /></div> : null}
+          {leavingSoon ? bar : null}
+          {steps && !leavingSoon ? <div className="mt-3"><ChecklistBar label="Arrival" done={steps.filter((x) => x[1]).length} total={steps.length} missing={steps.filter((x) => !x[1]).map((x) => x[0])} onClick={() => setArrival(true)} /></div> : null}
           {/* Today first, then the coming days, so the week reads in order (#801). Not here (yet, or any more) there is no day to rest: the group is only for a guest who is staying or has something booked (#514). */}
           {d.stay || d.treatments.length ? (
             <ListGroup title="Treatments today">
@@ -302,10 +306,10 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
               else rows.push([w]);
             }
             return (<>
-              <ListGroup title="Next days">
+              <ListGroup title={d.stay ? "Next days" : "First days"}>
                 {rows.map((w) => Array.isArray(w) ? (
                   <Row key={w[0].date} title={w.length === 1 ? dayText(w[0].date) : `${dayText(w[0].date)} to ${dayText(w[w.length - 1].date)}`}
-                    facts="Not planned yet: after the review" onClick={() => book({ id: d.id, name: d.name, date: w[0].date })} />
+                    facts="Not planned yet: usually after the review" onClick={() => book({ id: d.id, name: d.name, date: w[0].date })} />
                 ) : (() => {
                   const leaving = w.date === d.stay?.end_date;
                   const empty = !w.treatments.length;
@@ -313,49 +317,51 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
                     <Row key={w.date} title={dayText(w.date)} onClick={() => book({ id: d.id, name: d.name, date: w.date })}
                       facts={empty ? (leaving ? 'Leaving day' : undefined) : w.treatments.map((t) => `${t.start_time} ${t.therapy_name}`).join(' · ')}
                       flag={empty && !leaving ? 'Nothing booked' : undefined}
-                      trailing={w.date === review ? 'Review' : undefined} />
+                      trailing={w.date === d.coming?.start_date ? 'Arrives' : w.date === review ? 'Review' : undefined} />
                   );
                 })())}
               </ListGroup>
               {/* Story 14 (#354): after the review, next week is this week again; one sheet, Book all. */}
-              {weekFrom ? <Btn kind="primary" className="mt-3" onClick={() => setWeek(true)}>Plan next week</Btn> : null}
+              {/* The admin may plan before the doctor has seen them, so it stays; it is not the card's main action. */}
+              {weekFrom ? <Btn className="mt-3" onClick={() => setWeek(true)}>Plan next week</Btn> : null}
             </>);
           })() : null}
           <ListGroup title="Doctor">
-            {d.last_consultation?.note ? <TextRow label={`Last seen · ${visit(d.last_consultation, false)}`}>{d.last_consultation.note}</TextRow>
+            {d.coming && !d.last_consultation ? null : d.last_consultation?.note ? <TextRow label={`Last seen · ${visit(d.last_consultation, false)}`}>{d.last_consultation.note}</TextRow>
               : <ChangeLine label="Last seen" value={d.last_consultation ? visit(d.last_consultation, false) : 'Not seen yet'} faint={!d.last_consultation} />}
-            <ChangeLine label="Next" value={d.next_consultation ? visit(d.next_consultation, true) : leavingToday ? 'None · leaving today' : 'None booked · book one'} faint={!d.next_consultation} onClick={d.next_consultation || leavingToday ? undefined : () => book({ id: d.id, name: d.name, consult: true })} />
+            {d.coming && d.next_consultation && d.week.some((w) => w.date === d.next_consultation!.date.slice(0, 10)) ? null : <ChangeLine label="Next" value={d.next_consultation ? visit(d.next_consultation, true) : leavingToday ? 'None · leaving today' : 'None booked · book one'} faint={!d.next_consultation} onClick={d.next_consultation || leavingToday ? undefined : () => book({ id: d.id, name: d.name, consult: true })} />}
             {d.feedback ? <TextRow label="Their stay">{`${({ good: "Very good", fine: "Fine", poor: "Not good" } as Record<string, string>)[d.feedback.rating] ?? d.feedback.rating}${d.feedback.note ? `: “${d.feedback.note}”` : ""}`}</TextRow> : null}
             {d.readings.length ? <TextRow label="Readings">{d.readings.map((r) => `${r.text} · ${dayText(r.date)}`).join("  ·  ")}</TextRow> : null}
             <TextRow label="Plan" faint={!d.doctor_plan} onClick={() => setPlan(d.doctor_plan || '')}>{d.doctor_plan || 'No plan written yet'}</TextRow>
           </ListGroup>
-          {/* Story 4: everything a patient may have is a row with an arrow, filled when it is decided; nothing is forced. */}
-          <div className="mt-3 border-t border-border">
-            <ChangeLine label="Their therapist" value={therapists.find((s) => s.id === d.preferred_staff_id)?.name || "None"} faint={!d.preferred_staff_id}
-              select={<LineSelect label="Their therapist" value={d.preferred_staff_id || ""} onChange={(v) => void setTheirs(v || null)} free={[{ id: "", name: "None" }, ...therapists]} />} />
-            <ChangeLine label="Diet" value={d.plan_name ? (d.diet_next ? `${d.plan_name}, then ${d.diet_next.name} from ${dayText(d.diet_next.from)}` : d.plan_name) : "Not decided yet"} faint={!d.plan_name} onClick={() => changeMeals(d)} />
-            {up ? <ChangeLine label="Stay" value={stayRange(up)} onClick={() => changeStay(d)} /> : <ChangeLine label={d.last_stay ? 'New stay' : 'Stay'} value={d.last_stay?.package ? `From today · ${d.last_stay.package.name}` : 'Not staying · add a stay'} faint={!d.last_stay} onClick={() => changeStay(d)} />}
-            {up ? <ChangeLine label="Package" value={up.package ? `${up.package.days} days · ${money(up.package.price)}` : "Not decided yet"} faint={!up.package} onClick={() => changePackage(d)} /> : null}
+          {/* Story 4: everything a patient may have is a row with an arrow, filled when it is decided; nothing is forced. Grouped by what the admin does with it: the stay they sell and plan, then the records they keep. */}
+          <ListGroup title="Stay">
+            {up ? <ChangeLine label="Dates" value={stayRange(up)} onClick={() => changeStay(d)} /> : <ChangeLine label={d.last_stay ? 'New stay' : 'Stay'} value={d.last_stay?.package ? `From today · ${d.last_stay.package.name}` : 'Not staying · add a stay'} faint={!d.last_stay} onClick={() => changeStay(d)} />}
+            {up ? <ChangeLine label="Package" value={up.package ? `${up.package.days} days · ${money(up.package.price)}${up.package.days !== up.days ? ` · stay is ${up.days} days` : ''}` : "Not decided yet"} faint={!up.package} onClick={() => changePackage(d)} /> : null}
             {up && up.on_site !== false ? <ChangeLine label="Accommodation" value={up.accommodation ? `${up.accommodation.name}${up.accommodation.room ? ` · ${up.accommodation.room.name}` : ""} · ${nights} nights · ${money(nights * up.accommodation.price_per_day)}` : "Not decided yet"} faint={!up.accommodation} onClick={() => changeHouse(d)} /> : null}
-            {d.follow_up ? <ChangeLine label="Follow-up" value={d.follow_up.done ? `Done ${dayText(d.follow_up.done)}` : `Due ${dayText(d.follow_up.due)}`} onClick={() => setFollowUp(true)} /> : null}
-            {d.form_c ? <ChangeLine label="Form C" value={d.form_c.filed ? `Filed ${dayText(d.form_c.filed)}` : `${d.form_c.due < today ? 'Overdue since' : 'Due by'} ${dayText(d.form_c.due)}${d.form_c.fields.some(([, v]) => !v) ? ` · ${d.form_c.fields.filter(([, v]) => !v).length} missing` : ''}`} onClick={() => setFormC(true)} /> : null}
-            <ChangeLine label="Passport photo" value={d.passport_photo ? `Kept ${dayText(d.passport_photo)}` : "Take a photo"} faint={!d.passport_photo} onClick={() => (d.passport_photo ? setPhotoOpen(true) : photoInput.current?.click())} />
-            <input ref={photoInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { void keepPhoto(e.target.files?.[0]); e.target.value = ""; }} />
-            <ChangeLine label="Details" value={detailsHint(d.id)} faint onClick={() => details(d.id)} />
-          </div>
-          {d.stay ? <div className="mt-3">{out(d.id)}</div> : null}
-          {/* Story 8: what the summary still lacks. It informs and never blocks; printing is always there. */}
-          {leavingToday ? null : bar}
+            <ChangeLine label="Diet" value={d.plan_name ? (d.diet_next ? `${d.plan_name}, then ${d.diet_next.name} from ${dayText(d.diet_next.from)}` : d.plan_name) : "Not decided yet"} faint={!d.plan_name} onClick={() => changeMeals(d)} />
+            <ChangeLine label="Preferred therapist" value={therapists.find((s) => s.id === d.preferred_staff_id)?.name || "No preference"} faint={!d.preferred_staff_id}
+              select={<LineSelect label="Preferred therapist" value={d.preferred_staff_id || ""} onChange={(v) => void setTheirs(v || null)} free={[{ id: "", name: "No preference" }, ...therapists]} />} />
+          </ListGroup>
           {/* Arrival (#219): the first days, until the intake is written. Then the plan follows from the consultation. */}
           {d.stay && (d.stay.day <= 3 || !d.stay.vitals) ? (
-            <ListGroup title="Arrival">
+            <ListGroup title="Arrival notes">
               <TextRow label="Vitals and what they came about" faint={!d.stay.vitals && !d.stay.concerns} onClick={() => setIntake(startIntake(d))}>{d.stay.vitals || d.stay.concerns ? [d.stay.vitals, d.stay.concerns].filter(Boolean).join(' · ') : 'Not written yet'}</TextRow>
               <TextRow label="External tests" faint={!d.stay.tests} onClick={() => setIntake(startIntake(d))}>{d.stay.tests || 'None recorded'}</TextRow>
             </ListGroup>
           ) : null}
-          <div className="mt-3 border-t border-border">
-            <ChangeLine label="Private link" value="Share their day" onClick={() => link.share('patients', d.id, d.name)} />
-          </div>
+          <ListGroup title="Records">
+            {/* Story 8: what the summary still lacks. It informs and never blocks; in the last days it is the bar at the top. */}
+            {d.stay?.discharge && !leavingSoon ? <ChangeLine label="Discharge summary" value={`${d.stay.discharge.done} of ${d.stay.discharge.total} ready`} faint onClick={() => setChecklist(true)} /> : null}
+            {d.follow_up ? <ChangeLine label="Follow-up" value={d.follow_up.done ? `Done ${dayText(d.follow_up.done)}` : `Due ${dayText(d.follow_up.due)}`} onClick={() => setFollowUp(true)} /> : null}
+            {d.form_c ? <ChangeLine label="Form C" value={d.form_c.filed ? `Filed ${dayText(d.form_c.filed)}` : `${d.form_c.due < today ? 'Overdue since' : 'Due by'} ${dayText(d.form_c.due)}${d.form_c.fields.some(([, v]) => !v) ? ` · ${d.form_c.fields.filter(([, v]) => !v).length} missing` : ''}`} onClick={() => setFormC(true)} /> : null}
+            <ChangeLine label="Details" value={detailsHint(d.id)} faint onClick={() => details(d.id)} />
+            <ChangeLine label="Passport photo" value={d.passport_photo ? `Kept ${dayText(d.passport_photo)}` : "Take a photo"} faint={!d.passport_photo} onClick={() => (d.passport_photo ? setPhotoOpen(true) : photoInput.current?.click())} />
+            {/* Before they come the link is how they fill in their own details (#489); once here it is their day. */}
+            <ChangeLine label="Private link" value={d.coming ? "Send for their details" : "Share their day"} onClick={() => link.share('patients', d.id, d.name)} />
+          </ListGroup>
+          <input ref={photoInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { void keepPhoto(e.target.files?.[0]); e.target.value = ""; }} />
+          {d.stay ? <div className="mt-3">{out(d.id)}</div> : null}
         </div>
       ) : <div className="py-6 text-center text-muted-foreground"><Loading rows={4} /></div>}
       <BottomSheet open={intake !== null} onOpenChange={(o) => { if (!o) setIntake(null); }} title={`Arrival · ${d?.name.split(' ')[0] ?? ''}`} note="Written once, from the first days. Nothing here is required."
