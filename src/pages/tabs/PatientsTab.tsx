@@ -288,9 +288,10 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
           ) : null}
           {/* Story 14 (#353): the week and the doctor come first; the change lines follow, then the arrival notes. */}
           {/* Story 14 (#350): the week the doctor planned. A day with nothing booked before the next review needs booking; after it, planning waits for the review. */}
-          {d.week.length > 1 ? (() => {
+          {/* Before arrival the week starts on the arrival day, so none of it is today (#1068). */}
+          {d.week.length > (d.stay ? 1 : 0) ? (() => {
             const review = d.next_consultation?.date;
-            const days = d.week.slice(1);
+            const days = d.week.slice(d.stay ? 1 : 0);
             // Empty days after the review are one row: planning them is the review's job.
             const isLater = (w: typeof days[number]) => !!review && w.date > review && !w.treatments.length && w.date !== d.stay?.end_date;
             // Each run of them folds where it falls, so the days still read in order once some are booked (#370).
