@@ -17,10 +17,10 @@ the centre closed on Mon 26 Oct with "move", 2 stays shortened, 3 cancellations 
 
 | Finding | Issue | Fix | Status |
 |---|---|---|---|
-| Booking a course ignores "only treated by their own therapist": 11 of Sim Anya G's 12 treatments went to other therapists, and /day-check said nothing | #1043 | #1046: the course scheduler books only their own therapist | auto-merge on; #1043 stays open for the question below |
-| Treatments kept after a stay is shortened stay on the day list and the printed sheets, and nothing flags them | #1044 | #1047: /day-check flags NOT_STAYING ("Cancel it, or change their stay"); shows on the printed sheet too | auto-merge on |
-| A closed day where nothing can move still offers a Move button that moves nothing | #1048 | #1049: the day check counts what can move; with none, the card says so and offers no button | auto-merge on |
+| Booking a course ignores "only treated by their own therapist": 11 of Sim Anya G's 12 treatments went to other therapists, and /day-check said nothing | #1043 | #1046: the course scheduler books only their own therapist | merged; #1043 closed by #1050 and #1051: their own therapist is the first choice, never the only one |
+| Treatments kept after a stay is shortened stay on the day list and the printed sheets, and nothing flags them | #1044 | #1047: /day-check flags NOT_STAYING ("Cancel it, or change their stay"); shows on the printed sheet too | merged |
+| A closed day where nothing can move still offers a Move button that moves nothing | #1048 | #1049: the day check counts what can move; with none, the card says so and offers no button | merged |
 
 ## For the maintainer
 
-- #1043, one question: may a hand-picked booking ("Book a treatment") still put such a resident with another therapist, or should it be refused?
+- Nothing left: #1043 was answered (their own therapist is a preference, never a rule) and closed.
