@@ -107,8 +107,9 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   useEffect(() => { if (open) { setDone(null); setError(null); setOpened([]); setShown([]); setPlan(""); fetch(`${apiBase}/diet-templates`).then((r) => r.json()).then((d) => setPlans(Array.isArray(d) ? d : [])).catch(() => setPlans([])); } }, [open, apiBase]);
 
   const act = problems.filter((p) => p.problem_class === "blocking");
-  // Only rows with one answer: a row asking the admin to choose is never chosen for them.
-  const fixable = act.filter((p) => p.fix && p.choices.length <= 1);
+  // Only rows with one answer, except a closed day (#1074): its move is taken in bulk, but a cancel is never chosen for the admin.
+  const suggested = (p: DayProblem) => p.choices.length <= 1 ? p.fix : p.kind === "CENTER_HOLIDAY" ? p.choices.find((c) => !c.cancel) ?? null : null;
+  const fixable = act.filter(suggested);
   // A resident with nothing booked is a rest day, not a note (#144).
   const urgent = problems.filter((p) => p.urgent && !dismissed.includes(p.id));
   const notes = problems.filter((p) => p.problem_class === "worth_knowing" && p.kind !== "IDLE_RESIDENT" && !p.urgent && !dismissed.includes(p.id) && !(dayOver && p.kind === "CONSULTED"));
@@ -234,11 +235,12 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   const causeRow = (g: DayProblem[]) => {
     const key = g[0].what;
     if (g.length < 2 || opened.includes(key)) return g.map(actionItem);
-    const one = g.every((p) => p.fix && p.choices.length <= 1);
+    const one = g.every(suggested);
     const n = `${g.length} treatments`;
     return [item(key, `${n} to move`,
-      <>{g.map((p) => `${p.start_time} ${p.patient_name}${p.fix && one ? ` → ${p.fix.label}` : ""}`).join(" · ")}<span className="block text-destructive">{key.replace(/ on this day/, "")}</span></>, <>
-        {one ? <button type="button" data-main className={tb(true)} disabled={busy !== null} onClick={() => apply(null, ...g.map((p) => p.fix!))}>{busy === "all" ? "Fixing…" : `Fix all ${g.length} as shown`}</button> : null}
+      <>{g.map((p) => <span key={p.id} className="block">{p.start_time} {p.patient_name}{one ? ` → ${suggested(p)!.label}` : ""}</span>)}<span className="block text-destructive">{key.replace(/ on this day/, "")}</span></>, <>
+        {/* With one cause the foot's button already says it (#1074). */}
+        {one && causes.length > 1 ? <button type="button" data-main className={tb(true)} disabled={busy !== null} onClick={() => apply(null, ...g.map((p) => suggested(p)!))}>{busy === "all" ? "Fixing…" : `Fix all ${g.length} as shown`}</button> : null}
         <button type="button" className={tb(!one)} onClick={() => setOpened([...opened, key])}>{one ? "Choose each" : `Open the ${n}`}</button>
       </>)];
   };
@@ -249,7 +251,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
     <InboxSheet open={open} onOpenChange={onOpenChange} title={dayName} empty="Nothing else needs you."
       // The one bulk action sits under the thumb (#1074); the rules link is the quiet line below it.
       foot={<div className="space-y-1">
-        {fixable.length ? <Btn kind="primary" disabled={busy !== null} onClick={() => apply(null, ...fixable.map((p) => p.fix!))}>{busy === "all" ? "Fixing…" : fixable.length === 1 ? "Make this change" : `Make these ${fixable.length} changes`}</Btn> : null}
+        {fixable.length ? <Btn kind="primary" disabled={busy !== null} onClick={() => apply(null, ...fixable.map((p) => suggested(p)!))}>{busy === "all" ? "Fixing…" : fixable.length === 1 ? "Make this change" : `Make these ${fixable.length} changes`}</Btn> : null}
         <Btn kind="quiet" onClick={() => { onOpenChange(false); openRules(); }}>Choose what shows here ›</Btn>
       </div>}
       // The one inbox for the whole app (story 1). Patients and Team come from the rules in Settings, What needs you; empty sections do not show.

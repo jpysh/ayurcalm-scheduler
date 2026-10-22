@@ -15,6 +15,6 @@ await p.getByRole('button', { name: 'Menu' }).click(); await p.waitForTimeout(60
 await p.getByRole('button', { name: /need you|to know/ }).first().click();
 await p.waitForTimeout(1500);
 await p.screenshot({ path: `${OUT}/after-sheet-375.png` });
-await p.getByRole('button', { name: /^Open the \d+ treatments$/ }).first().click(); await p.waitForTimeout(800);
+await p.getByRole('button', { name: /^(Choose each|Open the \d+ treatments)$/ }).first().click(); await p.waitForTimeout(800);
 await p.screenshot({ path: `${OUT}/after-opened-375.png` });
 await b.close();

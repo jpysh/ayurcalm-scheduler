@@ -7,4 +7,4 @@ Decided 22 Oct by the maintainer, from two prototypes (card per problem, one-tap
 - "Make these N changes" (was "Fix all N as shown") sits in the sheet's foot, in thumb reach on a phone, above "Choose what shows here ›" (was "What needs you · change the rules ›").
 - Staff on leave are one line, "Off today: Manish, Suresh and Bhavna", not a row each.
 - Section names lose "not counted": "To fix" (was "Day"), "For your information".
-- Unchanged: a problem that offers a choice (a closed day's move or cancel) is never in the bulk button (#358).
+- A closed day's treatments join the bulk button with their suggested move (maintainer, 22 Oct): a closure is planned and Undo covers it. Cancel is never taken in bulk, and any other problem that offers a choice stays out of it (#358).
