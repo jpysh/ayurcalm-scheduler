@@ -96,3 +96,16 @@ assert.equal(deletesAt({ created: t0, paused_at: t0 + 20 * D }), t0 + 34 * D);
   ], now), ['qa906']);
   console.log('tidy ok');
 }
+
+// The morning carries the weekly security verdict and the host's Node (#1089).
+{
+  const { security, nodeLine } = await import('./morning.mjs');
+  const now = Date.parse('2030-04-10T07:00:00Z'), D = 86_400_000;
+  assert.equal(security('Security (Mon 8 Apr): all clear\nmore', now - 2 * D, now), 'Security (Mon 8 Apr): all clear');
+  assert.equal(security('Security (Mon 1 Apr): all clear', now - 9 * D, now), 'Security: weekly check has not run for over a week');
+  assert.equal(security(null, 0, now), 'Security: weekly check has not run for over a week');
+  assert.equal(nodeLine('v24.22.1', ['v24.22.1']), 'Node: v24.22.1 on the host');
+  assert.match(nodeLine('v24.22.1', ['v24.22.0', 'v24.23.0']), /older than the centres' v24\.23\.0/);
+  assert.equal(nodeLine('v24.22.1', ['v26.0.0']), 'Node: v24.22.1 on the host', 'another major is a deliberate upgrade');
+  console.log('morning security ok');
+}
