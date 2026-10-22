@@ -117,18 +117,18 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
       } },
     });
   }
-  /** "Not available from 14:00", "until 14:00", "until Wed 14 Oct", by the entry's own times and days. */
-  const outLine = (e: RoomOff) => {
+  /** "Out of use from 14:00", "On leave until Wed 14 Oct", by the entry's own times and days: a room's word or a person's (#1126). */
+  const outLine = (e: RoomOff, word = "Out of use") => {
     const last = (e.end_date ?? e.date ?? "").slice(0, 10);
-    if (firstOut(e) > today) return `Not available ${dayText(firstOut(e))}${last > firstOut(e) ? ` to ${dayText(last)}` : ""}`;
-    if (last > today) return `Not available until ${dayText(last)}`;
+    if (firstOut(e) > today) return `${word} ${dayText(firstOut(e))}${last > firstOut(e) ? ` to ${dayText(last)}` : ""}`;
+    if (last > today) return `${word} until ${dayText(last)}`;
     const fromT = e.start_time && e.start_time > opening ? e.start_time : null, toT = e.end_time && e.end_time < closing ? e.end_time : null;
-    return fromT && toT ? `Not available ${fromT}–${toT}` : fromT ? `Not available from ${fromT}` : toT ? `Not available until ${toT}` : "Not available today";
+    return fromT && toT ? `${word} ${fromT}–${toT}` : fromT ? `${word} from ${fromT}` : toT ? `${word} until ${toT}` : `${word} today`;
   };
   // A leave still to come, so nobody books the same days again (#737).
-  const nextOff = (id: string) => { const e = staffOff.find((x) => x.entity_id === id && firstOut(x) > day); return e ? outLine(e) : undefined; };
+  const nextOff = (id: string) => { const e = staffOff.find((x) => x.entity_id === id && firstOut(x) > day); return e ? outLine(e, "On leave") : undefined; };
   // On the row only a week ahead, in grey (#751): red is kept for who is not in today.
-  const soonOff = (id: string) => { const e = staffOff.find((x) => x.entity_id === id && firstOut(x) > day && firstOut(x) <= addDays(day, 7)); return e ? outLine(e) : undefined; };
+  const soonOff = (id: string) => { const e = staffOff.find((x) => x.entity_id === id && firstOut(x) > day && firstOut(x) <= addDays(day, 7)); return e ? outLine(e, "On leave") : undefined; };
   // Their own hours that day (#571): a time at the edge of their shift changes nothing.
   const shift = pick?.kind === "staff" && on >= 0 ? week!.rows.find((r) => r.id === pick.id)?.days[on] : undefined;
   const sStart = shift?.start || opening, sEnd = shift?.end || closing;
