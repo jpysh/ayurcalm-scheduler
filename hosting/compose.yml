@@ -39,7 +39,7 @@ services:
 
   # Off by default until R2 is set up: docker compose ... --profile offsite up -d
   offsite:
-    image: rclone/rclone:1.71
+    image: rclone/rclone:1.75
     profiles: [offsite]
     restart: unless-stopped
     entrypoint: ["sh", "/offsite.sh"]
