@@ -237,8 +237,14 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
     if (g.length < 2 || opened.includes(key)) return g.map(actionItem);
     const one = g.every(suggested);
     const n = `${g.length} treatments`;
-    return [item(key, `${n} to move`,
-      <>{g.map((p) => <span key={p.id} className="block">{p.start_time} {p.patient_name}{one ? ` → ${suggested(p)!.label}` : ""}</span>)}<span className="block text-destructive">{key.replace(/ on this day/, "")}</span></>, <>
+    // All to one day: the day is said once in the heading, so each line is only time, patient and therapist (#1074).
+    // Every row says its change, or that it waits for the admin: the foot's button must never act on a line the list does not show.
+    const to = [...new Set(g.map((p) => suggested(p)?.date).filter(Boolean))] as string[];
+    const sameDay = to.length === 1 ? dayText(to[0]) : null;
+    // ponytail: trims the server's label text; a label format change only makes the line longer, never wrong.
+    const short = (l: string) => sameDay ? l.replace(`${sameDay}, `, "").replace(/ \(\d+ days? later\)| \(\d+ days? later, /, (m) => m.endsWith(", ") ? " (" : "").replace(" with ", " · ") : l;
+    return [item(key, sameDay && one ? `${n} move to ${sameDay}` : `${n} to move`,
+      <><span className="block text-destructive">{key.replace(/ on this day/, "")}</span>{sameDay && !one ? <span className="block font-semibold">Moves to {sameDay}</span> : null}{g.map((p) => <span key={p.id} className="block">{p.start_time} {p.patient_name}{suggested(p) ? ` → ${short(suggested(p)!.label)}` : <span className="text-muted-foreground"> · you choose</span>}</span>)}</>, <>
         {/* With one cause the foot's button already says it (#1074). */}
         {one && causes.length > 1 ? <button type="button" data-main className={tb(true)} disabled={busy !== null} onClick={() => apply(null, ...g.map((p) => suggested(p)!))}>{busy === "all" ? "Fixing…" : `Fix all ${g.length} as shown`}</button> : null}
         <button type="button" className={tb(!one)} onClick={() => setOpened([...opened, key])}>{one ? "Choose each" : `Open the ${n}`}</button>
