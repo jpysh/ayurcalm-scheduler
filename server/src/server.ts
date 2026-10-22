@@ -219,20 +219,40 @@ async function fromToday() {
   return { gte: new Date(`${centreClock(settings?.timezone || 'Asia/Kolkata').date}T00:00:00.000Z`) };
 }
 
+// A therapist who leaves hands their coming treatments to the others first, through
+// the planner leave uses (#1080): they come off the list before it runs, so it cannot
+// hand anything back. What finds nobody is left unassigned for What needs you.
 app.delete('/staff/:id', async (req: Request, res: Response) => {
   const id = req.params.id;
-  try {
-    const ahead = await fromToday();
-    await prisma.$transaction(async (tx) => {
-      await tx.appointment.deleteMany({ where: { staff_id: id, scheduled_date: ahead } });
-      await tx.$executeRaw`UPDATE "Appointment" SET "co_staff_ids" = array_remove("co_staff_ids", ${id}) WHERE ${id} = ANY("co_staff_ids") AND "scheduled_date" >= ${ahead.gte}`;
-      await tx.timeOff.deleteMany({ where: { entity_type: 'staff', entity_id: id } });
-      await tx.staff.update({ where: { id }, data: { is_active: false } });
-    });
-    res.status(204).end();
-  } catch (e) {
-    res.status(500).json({ error: 'Delete failed' });
+  const ahead = await fromToday();
+  await prisma.staff.update({ where: { id }, data: { is_active: false } });
+  await prisma.timeOff.deleteMany({ where: { entity_type: 'staff', entity_id: id } });
+  const days = await prisma.appointment.findMany({
+    where: { OR: [{ staff_id: id }, { co_staff_ids: { has: id } }], scheduled_date: ahead, status: { in: ['pending', 'confirmed'] } },
+    distinct: ['scheduled_date'], select: { scheduled_date: true }, orderBy: { scheduled_date: 'asc' },
+  });
+  let moved = 0;
+  const stuck: string[] = [];
+  const left: { date: string; start_time: string; patient_name: string; therapy_name: string }[] = [];
+  for (const { scheduled_date } of days) {
+    const r = await replanStaffDay(id, scheduled_date, prisma, { apply: true });
+    moved += r.moved.length;
+    // A question the plan would ask about leave has one answer here: their therapist is not coming back.
+    for (const m of r.proposed) {
+      const done = await acceptPlan([{ appointment_id: m.appointment_id, staff_id: m.to.staff_id, co_staff_ids: m.to.co_staff_ids, room_id: m.to.room_id, start_time: m.to.start_time, date: m.to.date }], prisma);
+      if ('batch_id' in done) moved++;
+      else {
+        stuck.push(m.appointment_id);
+        left.push({ date: r.date, start_time: m.from.start_time, patient_name: m.patient_name, therapy_name: m.therapy_name });
+      }
+    }
+    left.push(...r.unplaced.map((u) => ({ date: r.date, start_time: u.start_time, patient_name: u.patient_name, therapy_name: u.therapy_name })));
   }
+  if (stuck.length) {
+    await prisma.appointment.updateMany({ where: { id: { in: stuck }, staff_id: id }, data: { staff_id: null } });
+    await prisma.$executeRaw`UPDATE "Appointment" SET "co_staff_ids" = array_remove("co_staff_ids", ${id}) WHERE "id" = ANY(${stuck})`;
+  }
+  res.json({ moved, left });
 });
 
 // Rooms
