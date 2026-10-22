@@ -13,12 +13,12 @@ export type AttentionItem = {
 };
 export type Attention = { rules: Rule[]; items: AttentionItem[] };
 
-/** What needs the admin beyond the day's own problems (#288): the rules, the day's counts and the patient and team items. */
-export function useAttention(date: string) {
+/** What needs the admin beyond the day's own problems (#288): the rules, today's counts and the patient and team items. */
+export function useAttention() {
   const [data, setData] = useState<Attention>({ rules: [], items: [] });
   const reload = useCallback(() => {
-    fetch(`${API_BASE}/attention?date=${date}`).then((r) => (r.ok ? r.json() : null)).then((d) => { if (d) setData(d); }).catch(() => { /* the pill still shows the day's own */ });
-  }, [date]);
+    fetch(`${API_BASE}/attention`).then((r) => (r.ok ? r.json() : null)).then((d) => { if (d) setData(d); }).catch(() => { /* the pill still shows the day's own */ });
+  }, []);
   useEffect(() => { reload(); }, [reload]);
   return { ...data, reload };
 }
