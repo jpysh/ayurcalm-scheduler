@@ -74,6 +74,15 @@ export const starterDietTemplates = [
     rest_lunch: 'Mung soup without fat (akrita yusha), then with ghee and mild spices (krita yusha)',
     rest_dinner: 'Soft rice with mung soup',
     rest_snacks: 'Warm water; buttermilk at later steps if advised',
+    // The ladder for a middle-strength purification: two days at each rung.
+    steps: [
+      { breakfast: 'Thin rice gruel (peya)', lunch: 'Thin rice gruel (peya)', dinner: 'Thin rice gruel (peya)' },
+      { breakfast: 'Thin rice gruel (peya)', lunch: 'Thicker gruel (vilepi)', dinner: 'Thicker gruel (vilepi)' },
+      { breakfast: 'Thicker gruel (vilepi)', lunch: 'Thicker gruel (vilepi)', dinner: 'Mung soup without fat (akrita yusha)' },
+      { breakfast: 'Thicker gruel (vilepi)', lunch: 'Soft rice with akrita yusha', dinner: 'Mung soup without fat (akrita yusha)' },
+      { breakfast: 'Soft rice with a little ghee', lunch: 'Soft rice with mung soup, ghee and mild spices (krita yusha)', dinner: 'Krita yusha' },
+      { breakfast: 'Soft rice with a little ghee', lunch: 'Soft rice, krita yusha, one cooked vegetable', dinner: 'Soft rice with krita yusha' },
+    ],
   },
   {
     name: 'Before purification (deepana–pachana)',

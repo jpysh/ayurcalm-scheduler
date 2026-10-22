@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { kitchenMeals, resolveDiet, type MealKey } from '../dietResolution.js';
+import { kitchenMeals, movesToGeneralPlan, resolveDiet, type MealKey } from '../dietResolution.js';
 
 /**
  * The day sheet tells a patient what they may eat. A wrong precedence here does
@@ -131,6 +131,28 @@ const cases: [string, () => void][] = [
     // #832: the same plan twice in one meal says which side each line is.
     assert.deepEqual(lunch.counts.map((c) => c.plan), ['Standard sattvic plan · treatment day', 'Standard sattvic plan · rest day']);
     assert.deepEqual(lunch.exceptions, [{ name: 'Dev', plan: 'Standard sattvic plan', food: 'Clear broth' }]);
+  }],
+  ['a plan with steps serves that day\'s step, the plan for a meal it leaves out, and the patient\'s own first (#1082)', () => {
+    const stepped = { ...plan, steps: [{ breakfast: 'Peya', lunch: 'Peya' }, { lunch: 'Vilepi' }] };
+    const day2 = resolveDiet({ ...base, template: stepped, hasTherapyToday: true, dayNumber: 2 });
+    assert.equal(day2.meals.lunch, 'Vilepi');
+    assert.equal(day2.meals.breakfast, 'Mung dal porridge');
+    assert.equal(day2.step, 2);
+    const own = resolveDiet({ ...base, template: stepped, hasTherapyToday: true, dayNumber: 1, overrides: { therapy_lunch: 'Clear broth' } });
+    assert.equal(own.meals.lunch, 'Clear broth');
+    assert.equal(own.meals.breakfast, 'Peya');
+    const counts = kitchenMeals([{ name: 'A', diet: day2 }])[1].counts;
+    assert.equal(counts[0].plan, 'Standard sattvic plan · Day 2');
+  }],
+
+  ['after the last step, or once every plan has ended mid-stay, the guest moves to the everyday plan (#1082)', () => {
+    assert.equal(movesToGeneralPlan({ holdsPlan: true, dayNumber: 3, steps: 2, hadPlan: false, staying: true }), true);
+    assert.equal(movesToGeneralPlan({ holdsPlan: true, dayNumber: 2, steps: 2, hadPlan: false, staying: true }), false);
+    assert.equal(movesToGeneralPlan({ holdsPlan: true, dayNumber: 9, steps: 0, hadPlan: false, staying: true }), false);
+    assert.equal(movesToGeneralPlan({ holdsPlan: false, dayNumber: 0, steps: 0, hadPlan: true, staying: true }), true);
+    assert.equal(movesToGeneralPlan({ holdsPlan: false, dayNumber: 0, steps: 0, hadPlan: true, staying: false }), false);
+    // Never on a plan: still flagged as having none.
+    assert.equal(movesToGeneralPlan({ holdsPlan: false, dayNumber: 0, steps: 0, hadPlan: false, staying: true }), false);
   }],
 ];
 

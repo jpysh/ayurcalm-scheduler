@@ -3,6 +3,7 @@ import { useCentreName, useDemo, useTrial } from "@/lib/centreName";
 import { useNavigate } from "react-router-dom";
 import { Btn, Callout, FullPage, More, QuietLink, Text } from "@/components/kit";
 import { API_BASE } from "@/lib/apiBase";
+import { toast } from "sonner";
 
 const Login = () => {
   const centreName = useCentreName();
@@ -13,6 +14,9 @@ const Login = () => {
   const navigate = useNavigate();
   const demo = useDemo();
   const trial = useTrial();
+  const [signedOut] = useState<{ url?: string; method?: string; body?: string; user?: string | null; back?: string } | null>(() => {
+    try { return JSON.parse(sessionStorage.getItem("signedOut") || "null"); } catch { return null; }
+  });
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +61,16 @@ const Login = () => {
           return;
         }
       }
+      if (signedOut) {
+        sessionStorage.removeItem("signedOut");
+        const email = data.user?.email ?? username.trim();
+        if (signedOut.url && signedOut.user === email) {
+          const saved = await fetch(signedOut.url, { method: signedOut.method, headers: { "Content-Type": "application/json" }, body: signedOut.body }).catch(() => null);
+          if (saved?.ok) toast.success("Signed in again and saved.");
+          else toast.error("Signed in again, but the change was not saved. Make it again.");
+        }
+        if (signedOut.back && signedOut.user === email) { navigate(signedOut.back); return; }
+      }
       navigate(data.user?.role === "admin" ? "/admin/schedule" : "/staff/schedule");
     } catch {
       setError("Could not reach the server. Check the connection and try again.");
@@ -71,6 +85,13 @@ const Login = () => {
         <div className="mt-4">
           <Callout tone="notice" title="This is a demo" actions={<Btn kind="primary" inline disabled={isLoading} onClick={() => signIn("login", { email: demo.email, password: demo.password })}>Open the demo</Btn>}>
             Sign in with <span className="font-mono">{demo.email} / {demo.password}</span>
+          </Callout>
+        </div>
+      )}
+      {signedOut && (
+        <div className="mt-4">
+          <Callout tone="notice" title={signedOut.url ? "Signed out. Sign in again to save." : "Signed out. Sign in again."}>
+            {signedOut.url ? "Your change is kept and saves as soon as you are back in." : "The sign-in had expired."}
           </Callout>
         </div>
       )}
