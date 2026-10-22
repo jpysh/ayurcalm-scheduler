@@ -71,8 +71,6 @@ export type DayProblem = {
   patient_id: string | null;
   patient_name: string;
   staff_id: string | null;
-  /** True when the resident's own-therapist rule is what leaves them stuck. */
-  blocked_by_preferred_staff: boolean;
   fix: Fix | null;
   /** Tier 4: what the admin can pick from, the fix among them when one is selected. */
   choices: Fix[];
@@ -180,8 +178,6 @@ export type CheckOptions = {
   withFixes?: boolean;
   /** Rows the admin decided themselves; the rest of the plan fits around them. */
   pins?: Pin[];
-  /** The one negotiable rule: a resident's own therapist. */
-  relaxPreferredStaff?: boolean;
   /** The centre's clock. Defaults to now; tests pass a fixed one. */
   now?: Clock;
 };
@@ -222,8 +218,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
       appointment_id: a.id,
       patient_id: a.patient_id,
       patient_name: nameOfPatient(a.patient_id),
-      blocked_by_preferred_staff: false,
-      fix: null,
+           fix: null,
       choices: [],
       no_fix_reason: null,
     };
@@ -328,7 +323,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
         what: `Seen by ${nameOfStaff(a.staff_id)}. Update their diet or treatments?`,
         group_key: 'CONSULTED', group_label: 'Consultations to act on',
         appointment_id: a.id, patient_id: a.patient_id, patient_name: nameOfPatient(a.patient_id), staff_id: a.staff_id,
-        blocked_by_preferred_staff: false, fix: null, choices: [], no_fix_reason: null, cost: COST.IDLE_RESIDENT,
+        fix: null, choices: [], no_fix_reason: null, cost: COST.IDLE_RESIDENT,
       });
     }
   }
@@ -352,7 +347,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
       group_key: 'ISSUE', group_label: 'Raised by staff',
       ...(i.kind === 'room' && a?.room_id ? { room_out: { room_id: a.room_id, reason: i.note ?? null } } : {}),
       appointment_id: null, patient_id: a?.patient_id ?? null, patient_name: a ? nameOfPatient(a.patient_id) : '', staff_id: i.staff_id,
-      blocked_by_preferred_staff: false, fix: null, choices: [], no_fix_reason: null, cost: i.kind === 'sos' ? -1 : COST.IDLE_RESIDENT,
+      fix: null, choices: [], no_fix_reason: null, cost: i.kind === 'sos' ? -1 : COST.IDLE_RESIDENT,
     });
   }
   for (const a of appointments) {
@@ -364,7 +359,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
       what: `👎 ${r.feedback_note || 'Did not like it'}`,
       group_key: 'FEEDBACK', group_label: 'Patients not happy',
       appointment_id: null, patient_id: a.patient_id, patient_name: nameOfPatient(a.patient_id), staff_id: a.staff_id,
-      blocked_by_preferred_staff: false, fix: null, choices: [], no_fix_reason: null, cost: COST.IDLE_RESIDENT,
+      fix: null, choices: [], no_fix_reason: null, cost: COST.IDLE_RESIDENT,
     });
   }
 
@@ -389,8 +384,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
       patient_id: stay.patient_id,
       patient_name: nameOfPatient(stay.patient_id),
       staff_id: null,
-      blocked_by_preferred_staff: false,
-      fix: null,
+           fix: null,
       choices: [],
       no_fix_reason: null,
       cost: COST.IDLE_RESIDENT,
@@ -408,7 +402,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
       what: `${n} treatments, more than the usual ${max}.`,
       group_key: 'DAY_FULL', group_label: 'Patients with a long day',
       appointment_id: null, patient_id: stay.patient_id, patient_name: nameOfPatient(stay.patient_id), staff_id: null,
-      blocked_by_preferred_staff: false, fix: null, choices: [], no_fix_reason: null, cost: COST.IDLE_RESIDENT,
+      fix: null, choices: [], no_fix_reason: null, cost: COST.IDLE_RESIDENT,
     });
   }
 
@@ -427,7 +421,6 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
       const result = await planDay(null, day, prisma, {
         appointmentIds: movable,
         pins: opts.pins,
-        relaxPreferredStaff: opts.relaxPreferredStaff,
         now,
       });
       canLeave = [...result.moved, ...result.proposed].filter((m) => offClosedDay(m, day)).length;
@@ -452,7 +445,6 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
         p.choices = p.fix?.choices || choicesBy.get(p.appointment_id) || [];
         p.no_fix_reason = p.fix ? null : unplacedBy.get(p.appointment_id) || 'Nothing free in the next 30 days. It can be cancelled.';
         if (!p.fix && actionsBy.get(p.appointment_id)?.length) p.actions = actionsBy.get(p.appointment_id);
-        p.blocked_by_preferred_staff = false;
         if (p.fix) plan.push(p.fix);
       }
     }
@@ -498,7 +490,7 @@ export async function rowOptions(
   appointmentId: string,
   day: Date,
   prisma: PrismaClient,
-  opts: { pins?: Pin[]; relaxPreferredStaff?: boolean } = {},
+  opts: { pins?: Pin[] } = {},
 ): Promise<Fix[]> {
   const excludeStaffIds: string[] = [];
   const out: Fix[] = [];
@@ -506,7 +498,6 @@ export async function rowOptions(
     const result = await planDay(null, day, prisma, {
       appointmentIds: [appointmentId],
       pins: (opts.pins || []).filter((p) => p.appointment_id !== appointmentId),
-      relaxPreferredStaff: opts.relaxPreferredStaff,
       excludeStaffIds,
     });
     const move = result.moved[0] || result.proposed[0] || null;

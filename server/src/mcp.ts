@@ -222,7 +222,7 @@ async function readResident(residentId: string, date: string) {
     resident_id: patient.id,
     name: patient.name,
     gender: patient.gender,
-    own_therapist: own ? { id: own.id, name: own.name, required: patient.requires_preferred_staff } : null,
+    own_therapist: own ? { id: own.id, name: own.name } : null,
     stay: stay ? { start: ymd(stay.start_date), end: ymd(stay.end_date), nights: stay.duration_days } : null,
     date,
     stay_day: today?.stay_day ?? null,
@@ -493,14 +493,13 @@ export function buildServer() {
       title: 'Plan a day',
       description:
         'Re-plan a day: propose, show the admin, apply on their yes. Nothing changes before apply. ' +
-        '"propose_day": one plan for everything day/check finds wrong on `date`: moves (from, to, note) and not_placed with reasons. absent_therapist_id plans a therapist\'s day away before their leave is recorded; allow_other_therapist lets a resident kept to their own therapist go to another. ' +
+        '"propose_day": one plan for everything day/check finds wrong on `date`: moves (from, to, note) and not_placed with reasons. absent_therapist_id plans a therapist\'s day away before their leave is recorded; ' +
         '"propose_move": one treatment. With `to`: a proposal, or `refused` with the reason and nearest free time. Without: up to 3 alternatives. ' +
         '"apply": write a proposal as one batch, which history/undo reverses. After 30 minutes, or if the day changed, nothing is written and the answer says so.',
       inputSchema: z.object({
         action: z.enum(['propose_day', 'propose_move', 'apply']),
         date: DATE.optional(),
         absent_therapist_id: z.string().optional(),
-        allow_other_therapist: z.boolean().optional(),
         treatment_id: z.string().optional(),
         to: z.object({
           date: z.string(), start_time: z.string(), therapist_id: z.string().nullable().describe('The lead.'),
@@ -510,19 +509,18 @@ export function buildServer() {
       }),
       annotations: WRITE,
     },
-    async ({ action, date, absent_therapist_id, allow_other_therapist, treatment_id, to, proposal_id }) => {
+    async ({ action, date, absent_therapist_id, treatment_id, to, proposal_id }) => {
       if (action === 'propose_day') {
         if (!date) return refuse('Which date? Ask centre/today if you need today.');
         // ponytail: no `keep` (rows the admin placed themselves) yet; the planner takes pins, so add it when a conversation needs it (#121).
-        const opts = { relaxPreferredStaff: allow_other_therapist };
         let plan: Pin[], not_placed: NotPlaced[];
         if (absent_therapist_id) {
           // Never apply: true, which writes without the guard (#102).
-          const r = await planDay(absent_therapist_id, dayOf(date), prisma, { ...opts, apply: false });
+          const r = await planDay(absent_therapist_id, dayOf(date), prisma, { apply: false });
           plan = [...r.moved, ...r.proposed].map((m) => ({ appointment_id: m.appointment_id, staff_id: m.to.staff_id, co_staff_ids: m.to.co_staff_ids, start_time: m.to.start_time, date: m.to.date, room_id: m.to.room_id, cancel: m.cancel }));
           not_placed = r.unplaced.map((u) => ({ treatment_id: u.appointment_id, resident: u.patient_name, therapy: u.therapy_name, start_time: u.start_time, reason: u.reason }));
         } else {
-          const c = await checkDay(dayOf(date), prisma, opts);
+          const c = await checkDay(dayOf(date), prisma);
           plan = c.plan.map((f) => ({ appointment_id: f.appointment_id, staff_id: f.staff_id, co_staff_ids: f.co_staff_ids, start_time: f.start_time, date: f.date, room_id: f.room_id, cancel: f.cancel }));
           not_placed = c.problems.filter((p) => p.appointment_id && !p.fix && p.no_fix_reason)
             .map((p) => ({ treatment_id: p.appointment_id!, resident: p.patient_name, therapy: p.who.split(' — ')[1] || '', start_time: p.start_time || '', reason: p.no_fix_reason! }));

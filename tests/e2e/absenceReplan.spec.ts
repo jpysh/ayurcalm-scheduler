@@ -86,7 +86,7 @@ async function build(call: Call) {
   const therapist = await call('post', '/staff', { name: THERAPIST, gender: 'female', specializations: [therapy.id], weekly_schedule: allWeek });
   const resident = await call('post', '/patients', {
     name: RESIDENT, gender: 'female', stay: { start_date: '2030-03-01', end_date: '2030-03-31' },
-    preferred_staff_id: therapist.id, requires_preferred_staff: true,
+    preferred_staff_id: therapist.id,
   });
   const booked = await call('post', '/appointments', {
     patient_id: resident.id, therapy_id: therapy.id, total_sessions: 1,

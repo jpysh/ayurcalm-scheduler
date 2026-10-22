@@ -17,7 +17,7 @@ import { Search } from "lucide-react";
 import { marked } from "@/components/SearchScreen";
 import type { AttentionItem } from "@/lib/attention";
 
-type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; preferredStaffId?: string | null; requiresPreferredStaff?: boolean };
+type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; preferredStaffId?: string | null };
 
 /** Today and what is coming, soonest first, then what was given, latest first: nearest to today either way, but read as two runs instead of hopping between past and future. */
 const byNearest = (today: string) => (a: { scheduled_date: string; start_time: string }, b: { scheduled_date: string; start_time: string }) => {

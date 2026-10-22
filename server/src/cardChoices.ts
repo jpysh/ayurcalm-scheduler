@@ -238,11 +238,14 @@ export async function bookingSuggestions(dayISO: string, nowMinutes: number | nu
 type Ctx = Awaited<ReturnType<typeof loadDay>>;
 
 /** The first therapist (and co-therapists) and room the guard accepts for this patient and therapy at `t`. */
-function assign(ctx: Ctx, day: Date, t: number, therapy: Ctx['therapies'][number], patientId: string, preferred?: { staff_id?: string; room_id?: string }): Suggestion | null {
+function assign(ctx: Ctx, day: Date, t: number, therapy: Ctx['therapies'][number], patientId: string, preferred?: { staff_id?: string; room_id?: string; only?: boolean }): Suggestion | null {
   const staff = ctx.staff.filter((s) => s.is_active && gives(s, therapy));
   const rooms = ctx.rooms.filter((x) => x.is_active);
   const first = <T extends { id: string }>(l: T[], id?: string) => (id ? [...l.filter((x) => x.id === id), ...l.filter((x) => x.id !== id)] : l);
-  for (const s of first(staff, preferred?.staff_id)) for (const room of first(rooms, preferred?.room_id)) {
+  // Their own therapist is the first choice everywhere, never the only one (#1043).
+  const lead = preferred?.staff_id ?? ctx.patients.find((x) => x.id === patientId)?.preferred_staff_id ?? undefined;
+  const leads = preferred?.only ? staff.filter((s) => s.id === lead) : first(staff, lead);
+  for (const s of leads) for (const room of first(rooms, preferred?.room_id)) {
     if (!works(s.weekly_schedule, day, t, therapy.duration_minutes) || !works(room.weekly_schedule, day, t, therapy.duration_minutes)) continue;
     const c: Candidate = { scheduled_date: day, start_time: hm(t), duration_minutes: therapy.duration_minutes, staff_id: s.id, co_staff_ids: [], room_id: room.id, patient_id: patientId, therapy_id: therapy.id };
     // A therapy given by two or more: add each further therapist the guard has nothing against but the head count.
@@ -262,7 +265,9 @@ function assign(ctx: Ctx, day: Date, t: number, therapy: Ctx['therapies'][number
 }
 
 export type Option = { id: string; name: string; free: boolean; why?: string };
-export type BookingOptions = { times: Suggestion[]; staff: Option[]; rooms: Option[]; why?: string; actions: Action[]; warnings: Soft[] };
+/** A therapist's first free time from the day on: today's, or a later day of the stay. */
+export type FirstChoice = { staff_id: string; staff_name: string; date: string; start_time: string; their_therapist: boolean };
+export type BookingOptions = { times: Suggestion[]; staff: Option[]; rooms: Option[]; why?: string; actions: Action[]; warnings: Soft[]; first_choice?: FirstChoice | null; sooner?: (Suggestion & { date: string }) | null };
 
 /**
  * The one booking sheet's lists (#285 story 5): every free time for this patient
@@ -270,7 +275,7 @@ export type BookingOptions = { times: Suggestion[]; staff: Option[]; rooms: Opti
  * room with whether it is free and, if not, why. Busy ones are listed, greyed in
  * the app, so a clash is never picked by accident.
  */
-export async function bookingOptions(dayISO: string, nowMinutes: number | null, pick: { patient_id: string; therapy_id: string }, at: string | undefined, prisma: PrismaClient): Promise<BookingOptions | null> {
+export async function bookingOptions(dayISO: string, nowMinutes: number | null, pick: { patient_id: string; therapy_id: string; staff_id?: string }, at: string | undefined, prisma: PrismaClient): Promise<BookingOptions | null> {
   const day = new Date(`${dayISO}T00:00:00.000Z`);
   const ctx = await loadDay(day, prisma);
   const therapy = ctx.therapies.find((t) => t.id === pick.therapy_id);
@@ -280,15 +285,33 @@ export async function bookingOptions(dayISO: string, nowMinutes: number | null, 
   if (!stay) return { times: [], staff: [], rooms: [], ...(await notStaying(patient.id, day, prisma)), warnings: [] };
   const open = toM(ctx.settings?.opening_time || '09:00');
   const close = toM(ctx.settings?.closing_time || '18:00');
-  const times: Suggestion[] = [];
-  // ponytail: every quarter hour of the day, each checked once; fine for a centre's size.
-  for (let t = Math.ceil(Math.max(open, nowMinutes ?? open) / 15) * 15; t + therapy.duration_minutes <= close; t += 15) {
-    const a = assign(ctx, day, t, therapy, patient.id);
-    if (a) times.push(a);
+  // The therapist picked, else their own: that one's times; anyone's when they have none that day (#1043).
+  const lead = pick.staff_id ?? patient.preferred_staff_id ?? undefined;
+  const listFor = (only: boolean) => {
+    const out: Suggestion[] = [];
+    // ponytail: every quarter hour of the day, each checked once; fine for a centre's size.
+    for (let t = Math.ceil(Math.max(open, nowMinutes ?? open) / 15) * 15; t + therapy.duration_minutes <= close; t += 15) {
+      const a = assign(ctx, day, t, therapy, patient.id, lead ? { staff_id: lead, only } : undefined);
+      if (a) out.push(a);
+    }
+    return out;
+  };
+  const anyone = listFor(false);
+  const theirs = lead ? listFor(true) : [];
+  const times = theirs.length ? theirs : anyone;
+  let first_choice: FirstChoice | null = null;
+  if (lead) {
+    const later = theirs.length ? null : await nextFreeSlot(day, stay.end_date, therapy, patient.id, prisma, lead);
+    const at0 = theirs[0] ? { date: dayISO, start_time: theirs[0].start_time } : later && { date: later.date.toISOString().slice(0, 10), start_time: later.start_time };
+    const who = ctx.staff.find((s) => s.id === lead);
+    if (at0 && who) first_choice = { staff_id: lead, staff_name: who.name, ...at0, their_therapist: lead === patient.preferred_staff_id };
   }
+  // Someone else free sooner than the first choice: one tap takes it.
+  const early = anyone.find((a) => a.staff_id !== lead);
+  const sooner = lead && early && (!first_choice || first_choice.date > dayISO || early.start_time < first_choice.start_time) ? { ...early, date: dayISO } : null;
   const once = await oncePerCourse({ patient_id: patient.id, therapy_id: therapy.id, scheduled_date: day }, prisma);
   const warnings = [...softWarnings({ patient_id: patient.id, therapy_id: therapy.id }, ctx), ...(once ? [once] : [])];
-  if (!times.length) return { times, staff: [], rooms: [], ...(await noTimeWhy(ctx, day, nowMinutes, therapy, patient, stay, prisma)), warnings };
+  if (!times.length) return { times, staff: [], rooms: [], ...(await noTimeWhy(ctx, day, nowMinutes, therapy, patient, stay, prisma)), warnings, first_choice, sooner };
   const chosen = times.find((x) => x.start_time === at) || times[0];
   const base: Candidate = { scheduled_date: day, start_time: chosen.start_time, duration_minutes: chosen.duration_minutes, staff_id: chosen.staff_id, co_staff_ids: chosen.co_staff_ids, room_id: chosen.room_id, patient_id: patient.id, therapy_id: therapy.id };
   const t0 = toM(chosen.start_time);
@@ -303,7 +326,7 @@ export async function bookingOptions(dayISO: string, nowMinutes: number | null, 
     return { id: r.id, name: r.name, free: !off && !c, why: off ? 'closed then' : c?.reason === 'ROOM_BUSY' ? 'in use' : c?.reason === 'ROOM_OFF' ? 'out of use' : c ? c.message : undefined };
   });
   const byFree = (a: Option, b: Option) => Number(b.free) - Number(a.free) || a.name.localeCompare(b.name);
-  return { times, staff: staff.sort(byFree), rooms: rooms.sort(byFree), actions: [], warnings };
+  return { times, staff: staff.sort(byFree), rooms: rooms.sort(byFree), actions: [], warnings, first_choice, sooner };
 }
 
 /** The patient's stay nearest the day, said in words, with a way forward: go to a day they are here, or change the stay (#330). */
@@ -321,7 +344,7 @@ export async function notStaying(patientId: string, day: Date, prisma: PrismaCli
 }
 
 /** The first time on a later day of the stay (to a fortnight on) that the patient, a therapist and a room are all free. */
-async function nextFreeSlot(day: Date, stayEnd: Date, therapy: Ctx['therapies'][number], patientId: string, prisma: PrismaClient): Promise<{ date: Date; start_time: string } | null> {
+async function nextFreeSlot(day: Date, stayEnd: Date, therapy: Ctx['therapies'][number], patientId: string, prisma: PrismaClient, onlyStaffId?: string): Promise<{ date: Date; start_time: string } | null> {
   for (let d = 1; d <= 14; d++) {
     const next = new Date(day.getTime() + d * DAY_MS);
     if (next > stayEnd) return null;
@@ -331,7 +354,7 @@ async function nextFreeSlot(day: Date, stayEnd: Date, therapy: Ctx['therapies'][
     const open = toM(ctx.settings?.opening_time || '09:00');
     const close = toM(ctx.settings?.closing_time || '18:00');
     for (let t = Math.ceil(open / 15) * 15; t + therapy.duration_minutes <= close; t += 15) {
-      const a = assign(ctx, next, t, therapy, patientId);
+      const a = assign(ctx, next, t, therapy, patientId, onlyStaffId ? { staff_id: onlyStaffId, only: true } : undefined);
       if (a) return { date: next, start_time: a.start_time };
     }
   }

@@ -57,9 +57,9 @@ async function main() {
     patients.forEach((p) => made.push({ table: 'patient', id: p.id }));
     const [pOne, pTwo, pLoyal] = patients;
 
-    // One resident is only treated by Sim Loyal, who is not the absent one:
-    // their treatment must keep those hands and move in time instead.
-    await prisma.patient.update({ where: { id: pLoyal.id }, data: { preferred_staff_id: loyalTherapist.id, requires_preferred_staff: true } });
+    // One resident's own therapist is Sim Loyal, who is not the absent one: a
+    // first choice, never a lock, so the time is kept with whoever is free (#1043).
+    await prisma.patient.update({ where: { id: pLoyal.id }, data: { preferred_staff_id: loyalTherapist.id } });
 
     const book = async (patientId: string, staffId: string, roomId: string, start: string) => {
       const a = await prisma.appointment.create({ data: {
@@ -118,11 +118,11 @@ async function main() {
     const ten = result.moved.find((m) => m.from.start_time === '10:00');
     assert.ok(ten && ten.to.staff_id !== coverTwo.id, 'gave a treatment to a therapist who is running a class');
 
-    // The loyal resident kept their therapist and changed time instead.
+    // Sim Loyal is busy at noon: the loyal resident keeps their time with someone else.
     const loyalMove = [...result.moved, ...result.proposed].find((m) => m.patient_name === 'Sim Resident Loyal');
     assert.ok(loyalMove, 'the loyal resident was not dealt with at all');
-    assert.equal(loyalMove!.to.staff_id, loyalTherapist.id, 'the loyal resident was handed to someone else');
-    assert.notEqual(loyalMove!.to.start_time, '12:00');
+    assert.notEqual(loyalMove!.to.staff_id, loyalTherapist.id, 'the loyal resident went to a therapist who is busy');
+    assert.equal(loyalMove!.to.start_time, '12:00', 'the loyal resident lost their time to wait for their own therapist');
 
     // Nobody is in two places: no therapist, room or resident is double-booked.
     const dayNow = await prisma.appointment.findMany({ where: { scheduled_date: day, status: { not: 'cancelled' } } });

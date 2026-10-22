@@ -436,7 +436,7 @@ app.post('/patients/import/check', async (req: Request, res: Response) => {
 
 app.post('/patients', async (req: Request, res: Response) => {
   const body = patientSchema.parse(req.body);
-  const data: any = { name: body.name, gender: body.gender, phone: body.phone, email: body.email, emergency_contact: body.emergency_contact, emergency_phone: body.emergency_phone, address: body.address, country: body.country, id_number: body.id_number, visa_number: body.visa_number, visa_valid_until: body.visa_valid_until || null, registration_number: body.registration_number, medical_notes: body.medical_notes, food_limits: body.food_limits, preferred_staff_id: body.preferred_staff_id, requires_preferred_staff: body.requires_preferred_staff };
+  const data: any = { name: body.name, gender: body.gender, phone: body.phone, email: body.email, emergency_contact: body.emergency_contact, emergency_phone: body.emergency_phone, address: body.address, country: body.country, id_number: body.id_number, visa_number: body.visa_number, visa_valid_until: body.visa_valid_until || null, registration_number: body.registration_number, medical_notes: body.medical_notes, food_limits: body.food_limits, preferred_staff_id: body.preferred_staff_id };
   if (body.date_of_birth) data.date_of_birth = new Date(body.date_of_birth);
   // The consultation goes through the same guard as any booking, before anything is saved.
   const visit = body.consultation && body.stay ? body.consultation : null;
@@ -489,7 +489,6 @@ app.put('/patients/:id', async (req: Request, res: Response) => {
     before_treatment: z.string().max(2000).nullable().optional(),
     after_treatment: z.string().max(2000).nullable().optional(),
     preferred_staff_id: z.string().uuid().nullable().optional(),
-    requires_preferred_staff: z.boolean().optional(),
     doctor_plan: z.string().max(4000).nullable().optional(),
   });
   const body = schema.parse(req.body);
@@ -911,11 +910,9 @@ app.post('/day-check', async (req: Request, res: Response) => {
   const body = z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     pins: z.array(pinSchema).optional(),
-    relax_preferred_staff: z.boolean().optional(),
   }).parse(req.body);
   res.json(await checkDay(new Date(body.date), prisma, {
     pins: body.pins as Pin[] | undefined,
-    relaxPreferredStaff: body.relax_preferred_staff,
   }));
 });
 
@@ -1059,7 +1056,7 @@ app.get('/day-check/options', async (req: Request, res: Response) => {
   const date = String(req.query.date || '').slice(0, 10);
   const id = String(req.query.appointment_id || '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !id) { res.status(400).json({ error: 'date and appointment_id required' }); return; }
-  res.json({ options: await rowOptions(id, new Date(date), prisma, { relaxPreferredStaff: req.query.relax_preferred_staff === 'true' }) });
+  res.json({ options: await rowOptions(id, new Date(date), prisma) });
 });
 
 /**
@@ -1645,7 +1642,7 @@ app.get('/appointments/who', async (req: Request, res: Response) => {
   res.json(await bookingWho(date, prisma));
 });
 app.get('/appointments/options', async (req: Request, res: Response) => {
-  const q = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), patient_id: z.string().uuid(), therapy_id: z.string().uuid(), at: z.string().regex(/^\d\d:\d\d$/).optional(), now: z.string().regex(/^\d\d:\d\d$/).optional() }).parse(req.query);
+  const q = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), patient_id: z.string().uuid(), therapy_id: z.string().uuid(), staff_id: z.string().uuid().optional(), at: z.string().regex(/^\d\d:\d\d$/).optional(), now: z.string().regex(/^\d\d:\d\d$/).optional() }).parse(req.query);
   const out = await bookingOptions(q.date, q.now ? Number(q.now.slice(0, 2)) * 60 + Number(q.now.slice(3)) : null, q, q.at, prisma);
   if (!out) { res.status(404).json({ error: 'Patient or therapy not found' }); return; }
   res.json(out);

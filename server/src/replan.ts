@@ -9,11 +9,9 @@
  *
  *   1. same time, same room, another pair of hands   — applied
  *   2. same day, another time                        — applied
- *   3. a resident locked to the absent therapist: that therapist's first free
- *      slot in the next 3 days, inside the stay      — proposed, in the plan
- *   4. otherwise ask: up to three choices, the best one selected (#135) —
- *      another therapist this time only, the next day their own therapist is
- *      free, or cancel the treatment
+ *   3. the absent therapist is the resident's own: the time kept with another,
+ *      or later with their own, or cancel (#1043)    — asked, the first selected
+ *   4. otherwise ask (#135): the next free day, or cancel the treatment
  *
  * Tiers 1 and 2 are recoveries. Anything else changes which side of the diet
  * plan the resident eats from, where they are in their course, or who treats
@@ -111,8 +109,6 @@ export async function planDay(
     pins?: Pin[];
     /** Therapists already offered, so asking again gives a different answer. */
     excludeStaffIds?: string[];
-    /** The one rule the admin may switch off, and nothing else. */
-    relaxPreferredStaff?: boolean;
     /** The centre's clock. Defaults to now; tests pass a fixed one. */
     now?: Clock;
   } = {},
@@ -266,7 +262,7 @@ export async function planDay(
       from: { staff_name: absent?.name || staffById.get(appt.staff_id || '')?.name || 'Unassigned', start_time: appt.start_time, date: ymd(date), room_id: appt.room_id },
     };
 
-    const mustKeepTherapist = patient?.requires_preferred_staff && !opts.relaxPreferredStaff ? patient.preferred_staff_id : null;
+    const own = patient?.preferred_staff_id ?? null;
     const needed = Math.max(1, therapy?.staff_required ?? 1);
 
     /** `today` false: a later day, where the absent therapist may be back. */
@@ -289,16 +285,15 @@ export async function planDay(
     /**
      * A full team for one slot, or null. Whoever is on the treatment already
      * and can stay, stays: a therapist off replaces one seat, not the pair.
-     * `isFree` says whether someone can work that slot. `relax` drops the
-     * resident's own-therapist lock, for "another therapist this time only".
+     * `isFree` says whether someone can work that slot. `lock` leads with that
+     * therapist or not at all.
      */
-    const teamFor = (isFree: (sid: string) => boolean, today = true, relax = false): string[] | null => {
+    const teamFor = (isFree: (sid: string) => boolean, today = true, lock: string | null = null): string[] | null => {
       const ok = (sid: string, team: string[]) => {
         const s = staffById.get(sid);
         return Boolean(s && qualified(s, today) && isFree(sid) && !team.includes(sid));
       };
       const team: string[] = [];
-      const lock = relax ? null : mustKeepTherapist;
       if (lock) {
         if (!ok(lock, team)) return null;
         team.push(lock);
@@ -322,16 +317,16 @@ export async function planDay(
 
     type Slot = { team: string[]; start: number; room: string; tier: 1 | 2 | 3; date: string };
     /** Tier 1, else tier 2: this day, first the same time and then any time. */
-    const sameDay = (relax: boolean): Slot | null => {
+    const sameDay = (): Slot | null => {
       if (closedOn(date)) return null;
-      const team = !shut(date, start, start + duration) && teamFor((sid) => canTake(sid, start, start + duration), true, relax);
+      const team = !shut(date, start, start + duration) && teamFor((sid) => canTake(sid, start, start + duration));
       const room = team && roomFor(start, start + duration);
       if (team && room) return { team, start, room, tier: 1, date: ymd(date) };
       for (let t = firstSlot; t + duration <= close; t += 30) {
         if (!free(patientBusy[appt.patient_id], t, t + duration) || shut(date, t, t + duration)) continue;
         const r = roomFor(t, t + duration);
         if (!r) continue;
-        const tm = teamFor((sid) => canTake(sid, t, t + duration), true, relax);
+        const tm = teamFor((sid) => canTake(sid, t, t + duration));
         if (tm) return { team: tm, start: t, room: r, tier: 2, date: ymd(date) };
       }
       return null;
@@ -340,9 +335,9 @@ export async function planDay(
      * The first later day and time, within `days`, where the team, a room and
      * the resident are all free. Any time in the centre's hours, not only the
      * same one, and never on top of the resident's own day. `inStay` stops at
-     * the end of the resident's stay.
+     * the end of the resident's stay; `lock` keeps it to that one therapist.
      */
-    const laterSlot = async (days: number, inStay: boolean): Promise<Slot | null> => {
+    const laterSlot = async (days: number, inStay: boolean, lock: string | null = null): Promise<Slot | null> => {
       for (let i = 1; i <= days; i++) {
         const other = new Date(date);
         other.setDate(date.getDate() + i);
@@ -365,7 +360,7 @@ export async function planDay(
             taken.some((x) => x.team.includes(sid) && overlaps(x.s, x.e, t, e)) ||
             staffEventBusy(events, sid, other).some((b) => overlaps(b.s, b.e, t, e)) ||
             staffAwayOnDay(timeOff, staff.find((x) => x.id === sid) ?? { id: sid }, other).some((b) => overlaps(b.s, b.e, t, e));
-          const team = teamFor((sid) => !busyThen(sid), false);
+          const team = teamFor((sid) => !busyThen(sid), false, lock);
           if (!team) continue;
           const room = rooms.find(
             (r) =>
@@ -402,8 +397,31 @@ export async function planDay(
       addBusy(patientBusy, appt.patient_id, slot.start, end);
     };
 
+    const daysLater = (d: string) => Math.round((Date.parse(d) - Date.parse(ymd(date))) / 86400000);
+    const cancel: Move = {
+      appointment_id: appt.id,
+      ...names,
+      tier: 2,
+      choice: 'cancel',
+      cancel: true,
+      note: 'kept as cancelled, can be undone',
+      to: { staff_id: appt.staff_id, co_staff_ids: appt.co_staff_ids, staff_name: '', start_time: appt.start_time, date: ymd(date), room_id: appt.room_id, room_name: roomName(appt.room_id) },
+    };
+    const here = sameDay();
+    // Tier 3 — their own therapist is the one away: the time is kept with
+    // someone else, and a later day with their own is offered beside it (#1043).
+    const ownAway = Boolean(own && appt.staff_id === own && here && !here.team.includes(own));
+    const back = ownAway ? await laterSlot(30, true, own) : null;
+    const ownName = staffById.get(own || '')?.name || 'their therapist';
+    if (here && back) {
+      hold(here);
+      const n = daysLater(back.date);
+      const keep = moveOf(here, { choice: 'this_time_only', note: `this time only; ${ownName} stays their therapist` });
+      const later = moveOf(back, { choice: 'next_free_day', note: `their therapist, ${n} day${n === 1 ? '' : 's'} later` });
+      proposed.push({ ...keep, choices: [keep, later, cancel] });
+      continue;
+    }
     // Tiers 1 and 2 — this day, applied.
-    const here = sameDay(false);
     if (here) {
       hold(here);
       moved.push(moveOf(here));
@@ -415,48 +433,18 @@ export async function planDay(
       continue;
     }
 
-    const ownName = staffById.get(mustKeepTherapist || '')?.name || 'their therapist';
-    // Tier 3 — locked to one therapist: that therapist's next free slot, soon.
-    if (mustKeepTherapist) {
-      const soon = await laterSlot(3, true);
-      if (soon) {
-        hold(soon);
-        proposed.push(moveOf(soon, { note: 'their own therapist' }));
-        continue;
-      }
-    }
-
-    // Tier 4 — ask. Up to three choices, the best one selected.
-    const daysLater = (d: string) => Math.round((Date.parse(d) - Date.parse(ymd(date))) / 86400000);
-    const choices: Move[] = [];
-    const thisTime = mustKeepTherapist ? sameDay(true) : null;
-    if (thisTime) choices.push(moveOf(thisTime, { choice: 'this_time_only', note: `this time only; ${ownName} stays their therapist` }));
-    // Their own therapist when locked, anyone qualified otherwise. Past the stay
-    // too, so the admin sees how far it is rather than nothing.
+    // Tier 4 — ask: the next free day, past the stay too so the admin sees how
+    // far it is rather than nothing, or cancel. Cancel is never picked for them.
     const next = await laterSlot(30, false);
-    const inStay = next && (!stayEnds || new Date(`${next.date}T00:00:00.000Z`) <= stayEnds);
     if (next) {
+      const inStay = !stayEnds || new Date(`${next.date}T00:00:00.000Z`) <= stayEnds;
       const n = daysLater(next.date);
-      choices.push(moveOf(next, { choice: 'next_free_day', note: `${n} day${n === 1 ? '' : 's'} later${inStay ? '' : ', after their stay ends'}`, beyond_stay: !inStay || undefined }));
-    }
-    choices.push({
-      appointment_id: appt.id,
-      ...names,
-      tier: 2,
-      choice: 'cancel',
-      cancel: true,
-      note: 'kept as cancelled, can be undone',
-      to: { staff_id: appt.staff_id, co_staff_ids: appt.co_staff_ids, staff_name: '', start_time: appt.start_time, date: ymd(date), room_id: appt.room_id, room_name: roomName(appt.room_id) },
-    });
-    const nextMove = choices.find((c) => c.choice === 'next_free_day');
-    const thisMove = choices.find((c) => c.choice === 'this_time_only');
-    // Cancel is never picked for the admin.
-    const pick = next && inStay && daysLater(next.date) <= 3 ? nextMove : thisMove || nextMove;
-    if (pick) {
-      hold(pick === thisMove ? thisTime! : next!);
-      proposed.push({ ...pick, choices });
+      const pick = moveOf(next, { choice: 'next_free_day', note: `${n} day${n === 1 ? '' : 's'} later${inStay ? '' : ', after their stay ends'}`, beyond_stay: !inStay || undefined });
+      hold(next);
+      proposed.push({ ...pick, choices: [pick, cancel] });
       continue;
     }
+    const choices = [cancel];
 
     writes.push({
       appointment_id: appt.id,

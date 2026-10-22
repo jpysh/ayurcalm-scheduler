@@ -63,7 +63,7 @@ the machine's clock or UTC.
 
 **The seeded day carries its problems on purpose.** A therapist on leave with
 three or four treatments still on their name, from morning to at least 18:00 so an evening visitor still sees it (#369), and
-a resident who may only be treated by one therapist. They are what the
+a resident whose own therapist is the one on leave. They are what the
 reassignment exists for, so a seed change that quietly fixes the day has broken
 the dataset.
 

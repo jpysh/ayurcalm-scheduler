@@ -450,16 +450,15 @@ async function main() {
     }
   }
 
-  // One resident who is only treated by their own therapist. The replan cannot
-  // swap their hands, so it offers them another time — which is the case that
-  // looks right until you meet it, and is now in the dataset by default.
+  // One resident whose own therapist is the one on leave: the replan keeps their
+  // time with someone else and offers a later one with their own (#1043).
   const todaysBookings = await prisma.appointment.findMany({ where: { scheduled_date: new Date(todayKey) } });
   const offToday = new Set((await prisma.timeOff.findMany({ where: { entity_type: 'staff', date: new Date(todayKey) } })).map((h) => h.entity_id));
   const loyal = todaysBookings.find((a) => a.staff_id && offToday.has(a.staff_id));
   if (loyal?.staff_id) {
     await prisma.patient.update({
       where: { id: loyal.patient_id },
-      data: { preferred_staff_id: loyal.staff_id, requires_preferred_staff: true },
+      data: { preferred_staff_id: loyal.staff_id },
     });
   }
 
