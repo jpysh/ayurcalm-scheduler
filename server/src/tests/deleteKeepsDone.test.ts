@@ -1,7 +1,7 @@
 /**
- * Deleting a therapist, room or therapy takes only its treatments from today on
- * (#567); done ones stay on the record, and a therapy that was given stays out
- * of use so they keep its name.
+ * Deleting a room or therapy takes only its treatments from today on (#567); a
+ * therapist hands theirs to the others instead (#1080). Done ones stay on the
+ * record, and a therapy that was given stays out of use so they keep its name.
  *
  * A fixed past day and a fixed day in 2030, tidied afterwards. Needs a running server: API_BASE.
  */
@@ -47,8 +47,17 @@ async function main() {
     const [done] = [await book(PAST), await book(AHEAD)];
     const left = async () => (await prisma.appointment.findMany({ where: { patient_id: rekha.id } })).map((a) => a.id);
 
-    await del(`/staff/${asha.id}`);
-    assert.deepEqual(await left(), [done.id], 'the done treatment stays with the therapist deleted; the coming one goes');
+    const res = await fetch(`${API_BASE}/staff/${asha.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(res.status, 200);
+    const handed = (await res.json()) as { moved: number; left: { patient_name: string }[] };
+    const after = await prisma.appointment.findMany({ where: { patient_id: rekha.id }, orderBy: { scheduled_date: 'asc' } });
+    assert.equal(after.length, 2, 'the coming treatment is kept, not deleted');
+    assert.equal(after[0].staff_id, asha.id, 'the done one stays with the therapist deleted');
+    assert.notEqual(after[1].staff_id, asha.id, 'the coming one is no longer on their name');
+    assert.equal(handed.moved + handed.left.length, 1, 'and is either handed on or listed as left');
+    if (after[1].staff_id === null) assert.equal(handed.left[0]?.patient_name, rekha.name, 'what nobody could take is listed');
+    assert.equal((await prisma.staff.findUniqueOrThrow({ where: { id: asha.id } })).is_active, false);
+    await prisma.appointment.delete({ where: { id: after[1].id } });
 
     await book(AHEAD);
     await del(`/rooms/${room.id}`);
