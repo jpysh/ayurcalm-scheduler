@@ -62,6 +62,15 @@ async function main() {
     const early = (await dischargeOf(out.id, prisma, new Date('2030-04-01T14:07:00Z')))!.draft;
     assert.equal(early.discharged_time, '', 'not the leaving day: no time is invented');
     assert.equal(early.signed_at, '2030-04-02');
+    // #1077: a day nothing was given reads why, not "Rest": they did not come, or the centre was shut.
+    await prisma.appointment.create({ data: { patient_id: p.id, therapy_id: therapy.id, staff_id: therapist.id, room_id: room.id, scheduled_date: new Date('2030-04-01T00:00:00Z'), start_time: '10:00', duration_minutes: 60, session_number: 1, total_sessions: 1, status: 'no_show', assignment_type: 'manual' } });
+    const shut = await prisma.timeOff.create({ data: { entity_type: 'center', date: new Date('2030-04-02T00:00:00Z'), start_date: new Date('2030-04-02T00:00:00Z'), end_date: new Date('2030-04-02T00:00:00Z'), description: 'Test closure' } });
+    try {
+      const notes = (await dischargeOf(out.id, prisma))!.table.map((r) => r.note);
+      assert.deepEqual(notes, ['Did not come', 'Centre closed']);
+    } finally {
+      await prisma.timeOff.delete({ where: { id: shut.id } });
+    }
     await prisma.patientStay.delete({ where: { id: out.id } });
 
     assert.equal(pageLine('Leela Menon', '', 1, 1), 'Leela Menon · page 1 of 1', 'no number, no empty separator (#542)');

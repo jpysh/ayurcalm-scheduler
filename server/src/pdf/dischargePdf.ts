@@ -111,7 +111,7 @@ export async function generateDischargePdf(v: DischargeView, centre: { name: str
   doc.moveDown(0.2);
   head();
   for (const r of v.table) {
-    const text = r.items.map((i) => i.name).join(', ') || 'Rest';
+    const text = r.items.map((i) => i.name).join(', ') || r.note || 'Rest';
     doc.font('Helvetica').fontSize(7.5);
     const h = Math.max(11, doc.heightOfString(text, { width: cols[3] - 6 }) + 3);
     if (doc.y + h > BOTTOM) { doc.addPage(); head(); }

@@ -11,6 +11,9 @@ import { API_BASE } from "@/lib/apiBase";
  */
 
 // The boundary is dark enough to read as a box to type in; focus is a soft halo on the box itself.
+/** A greyed main button stays readable (about 5:1); its label says what is missing (#1077). */
+const offPrimary = "disabled:bg-secondary disabled:text-muted-foreground";
+
 export const field = `h-11 w-full rounded-xl border border-[hsl(var(--input)/0.45)] bg-background px-3.5 text-base tabular-nums transition-shadow placeholder:text-muted-foreground focus:border-primary focus:shadow-[0_0_0_3px_hsl(var(--primary)/0.18)] focus-visible:outline-none disabled:opacity-60`;
 /** A field that is a button or a date line: the same box, but it grows with large text rather than cutting its value. */
 const growing = field.replace("h-11", "min-h-11 py-2");
@@ -230,7 +233,7 @@ export const Days = ({ value, onChange }: { value: string[]; onChange: (v: strin
 export function Foot({ busy, save, label = "Save", remove, removeLabel = "Remove", ok = true }: { busy?: boolean; save: () => void; label?: string; remove?: () => void; removeLabel?: string; ok?: boolean }) {
   return (
     <div className="sticky bottom-[calc(-1rem-env(safe-area-inset-bottom))] z-10 -mx-4 -mb-[calc(1rem+env(safe-area-inset-bottom))] mt-4 grid gap-1 bg-card px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
-      <button type="button" className={`${wide} bg-primary text-primary-foreground disabled:opacity-50`} disabled={busy || !ok} onClick={save}>{busy ? "Saving…" : label}</button>
+      <button type="button" className={`${wide} bg-primary text-primary-foreground ${offPrimary}`} disabled={busy || !ok} onClick={save}>{busy ? "Saving…" : label}</button>
       {remove ? <button type="button" className={`${wide} text-sm text-destructive`} onClick={remove}>{removeLabel}</button> : null}
     </div>
   );
@@ -410,7 +413,7 @@ export function Picker<T extends string>({ options, value, onChange, onEdit }: {
 /** The main action, and beneath it one quiet alternative. Never two fills. */
 export const TwoFoot = ({ main, onMain, alt, onAlt, busy, ok = true }: { main: string; onMain: () => void; alt: string; onAlt: () => void; busy?: boolean; ok?: boolean }) => (
   <div className="grid gap-1">
-    <button type="button" className={`${wide} bg-primary text-base text-primary-foreground disabled:opacity-50`} disabled={busy || !ok} onClick={onMain}>{busy ? "Saving…" : main}</button>
+    <button type="button" className={`${wide} bg-primary text-base text-primary-foreground ${offPrimary}`} disabled={busy || !ok} onClick={onMain}>{busy ? "Saving…" : main}</button>
     <button type="button" className={`${wide} text-sm font-semibold text-primary`} disabled={busy || !ok} onClick={onAlt}>{alt}</button>
   </div>
 );
@@ -550,7 +553,7 @@ export function QuickDates({ label, value, today, onChange, min, max }: { label:
 export function SheetFoot({ busy, save, label = "Save", remove, removeLabel = "Delete", ok = true, tone }: { tone?: "destructive"; busy?: boolean; save: () => void; label?: string; remove?: () => void; removeLabel?: string; ok?: boolean }) {
   return (
     <div className="grid gap-1">
-      <button type="button" className={`${wide} ${tone === "destructive" ? "border-[1.5px] border-destructive text-destructive" : "bg-primary text-primary-foreground"} disabled:opacity-50`} disabled={busy || !ok} onClick={save}>{busy ? "Saving…" : label}</button>
+      <button type="button" className={`${wide} ${tone === "destructive" ? "border-[1.5px] border-destructive text-destructive" : `bg-primary text-primary-foreground ${offPrimary}`}`} disabled={busy || !ok} onClick={save}>{busy ? "Saving…" : label}</button>
       {remove ? <button type="button" className={`${wide} text-sm text-destructive`} onClick={remove}>{removeLabel}</button> : null}
     </div>
   );
@@ -611,8 +614,8 @@ export const ItemRow = ({ title, facts, children, stacked, form }: { title: Reac
 
 /* ---- Session 8 (#285): the card, sign-in, setup and the private links ---- */
 
-const btnKinds = { primary: "bg-primary text-primary-foreground", secondary: "border-[1.5px] border-border", quiet: "text-primary", destructive: "text-destructive" };
-const btnClass = (kind: keyof typeof btnKinds, inline?: boolean) => `inline-flex min-h-11 items-center justify-center rounded-full ${kind === "quiet" || kind === "destructive" ? "px-2" : "px-4"} font-semibold disabled:opacity-50 ${inline ? "" : "w-full"} ${btnKinds[kind]}`;
+const btnKinds = { primary: `bg-primary text-primary-foreground ${offPrimary}`, secondary: "border-[1.5px] border-border", quiet: "text-primary", destructive: "text-destructive" };
+const btnClass = (kind: keyof typeof btnKinds, inline?: boolean) => `inline-flex min-h-11 items-center justify-center rounded-full ${kind === "quiet" || kind === "destructive" ? "px-2" : "px-4"} font-semibold ${kind === "primary" ? "" : "disabled:opacity-50"} ${inline ? "" : "w-full"} ${btnKinds[kind]}`;
 
 /** A button that says its action: primary (fill), secondary (border), quiet (text) or destructive (alert text). One primary per view. `inline` gives it its own width, not the row's. */
 export const Btn = ({ kind = "secondary", inline, className = "", onClick, disabled, ...rest }: { kind?: keyof typeof btnKinds; inline?: boolean } & ButtonHTMLAttributes<HTMLButtonElement>) => {

@@ -55,7 +55,7 @@ test('B3: diet plans fit the phone', async ({ page }) => {
   await signIn(page);
   await menuTo(page, /^Diet/);
   await expect(page.getByRole('heading', { name: 'Diet plans' })).toBeVisible();
-  await page.getByRole('button', { name: /patients?$/ }).first().click();
+  await page.getByRole('button', { name: /now or coming$/ }).first().click();
   await expect(page.getByLabel('Plan name')).not.toHaveValue('');
   expect(await fitsWidth(page)).toBe(true);
 });

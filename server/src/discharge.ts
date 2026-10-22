@@ -7,7 +7,7 @@
  */
 import { z } from 'zod';
 import { Prisma, type PrismaClient } from '@prisma/client';
-import { centreClock } from './availability.js';
+import { centreClock, centreClosed } from './availability.js';
 
 const DAY_MS = 86400000;
 const line = z.string().trim().max(200).default('');
@@ -76,6 +76,12 @@ export async function dischargeOf(stayId: string, prisma: PrismaClient, now = ne
     include: { Therapy: { select: { name: true, is_consultation: true } } },
   });
   const days = Math.round((stay.end_date.getTime() - stay.start_date.getTime()) / DAY_MS) + 1;
+  // A day with nothing given is not always a rest day: the centre was shut, or they did not come (#1077).
+  const [settingsRow, closures, missed] = await Promise.all([
+    prisma.settings.findUnique({ where: { id: 'singleton' } }),
+    prisma.timeOff.findMany({ where: { entity_type: 'center' } }),
+    prisma.appointment.findMany({ where: { patient_id: stay.patient_id, scheduled_date: { gte: stay.start_date, lte: stay.end_date }, status: 'no_show' }, select: { scheduled_date: true } }),
+  ]);
   const table = Array.from({ length: days }, (_, i) => {
     const date = ymd(new Date(stay.start_date.getTime() + i * DAY_MS));
     const those = appts.filter((a) => ymd(a.scheduled_date) === date);
@@ -83,6 +89,7 @@ export async function dischargeOf(stayId: string, prisma: PrismaClient, now = ne
       date, day: i + 1,
       items: those.map((a) => ({ name: a.Therapy.name, consultation: a.Therapy.is_consultation })),
       bp: those.map((a) => lastBp(a.record)).filter(Boolean).pop() || '',
+      note: those.length ? '' : centreClosed(settingsRow, closures, new Date(`${date}T00:00:00Z`)) ? 'Centre closed' : missed.some((a) => ymd(a.scheduled_date) === date) ? 'Did not come' : '',
     };
   });
   const consultations = appts.filter((a) => a.Therapy.is_consultation);

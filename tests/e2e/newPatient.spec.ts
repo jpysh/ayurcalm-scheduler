@@ -20,7 +20,7 @@ test('@smoke a patient is added from four fields, gets a consultation, and stays
   await signIn(page);
   await page.getByRole('button', { name: 'New patient', exact: true }).click();
   const sheet = page.getByRole('dialog');
-  await expect(sheet.getByRole('button', { name: 'Add patient' })).toBeDisabled();
+  await expect(sheet.getByRole('button', { name: 'Type a name first' })).toBeDisabled();
   await sheet.getByLabel('Name', { exact: true }).fill('E2E Meera Nair');
   await sheet.getByRole('button', { name: 'Female' }).click();
   await expect(sheet.getByText('First consultation')).toBeVisible({ timeout: 15000 });
