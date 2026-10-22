@@ -35,11 +35,10 @@ async function email(to, subject, text) {
     if (!r.ok) throw new Error(`email ${r.status}`);
   } else console.log(`[email to ${to}] ${subject}\n${text}\n`); // until an email provider is set up
 }
-async function telegram(text) {
-  if (env.TELEGRAM_BOT_TOKEN) await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text }),
-  }).catch(() => {});
-  else console.log(`[telegram] ${text}`);
+// Every notice goes to the log and, once CF_EMAIL_TOKEN is set, to ALERT_EMAIL, critical lines only (alerts are email only, never Telegram).
+async function notify(text) {
+  console.log(`[notify] ${text}`);
+  if (/^(ALERT|Provisioning FAILED)/.test(text)) await email(env.ALERT_EMAIL || 'helloayursen@gmail.com', text.split('\n')[0].slice(0, 80), text).catch(() => {});
 }
 async function human(token, ip) {
   if (!env.TURNSTILE_SECRET) return true; // local runs only
@@ -89,10 +88,10 @@ function provision(s) {
       db.centres.push({ slug, port, email: s.email, centre: s.centre, ref: s.ref, created: Date.now(), signed_up: s.at });
       s.state = 'ready'; s.ready_at = Date.now(); s.slug = slug; s.used = true; save();
       if (env.CF_EMAIL_TOKEN) await email(s.email, `${s.centre} is ready`, `Your centre is at https://${slug}.${DOMAIN}\n\nTo sign in on another phone, open ${SELF} and ask for a sign-in link.\n\nIf you did not ask for this, reply and we will delete it.`).catch((e) => console.error('ready email', e));
-      await telegram(`New trial centre: ${s.centre} (${slug}.${DOMAIN}) by ${s.email}${s.ref ? `, invited by ${s.ref}` : ''}`);
+      await notify(`New trial centre: ${s.centre} (${slug}.${DOMAIN}) by ${s.email}${s.ref ? `, invited by ${s.ref}` : ''}`);
     } catch (e) {
       console.error('provision failed', e); s.state = 'failed'; save();
-      await telegram(`Provisioning FAILED for ${s.centre} (${s.email}): ${e.message}`);
+      await notify(`Provisioning FAILED for ${s.centre} (${s.email}): ${e.message}`);
     }
   });
 }
@@ -101,8 +100,8 @@ function provision(s) {
 async function timings(c) {
   const [signin, sheet] = await centreSh({}, 'timings', c.slug).then((r) => r.stdout.trim().split('|').map((x) => (x ? Number(x) * 1000 : null)), () => []);
   const from = db.signups.find((s) => s.slug === c.slug)?.at ?? c.created;
-  if (signin && !c.signin_at) { c.signin_at = signin; await telegram(`${c.centre}: came in ${took(signin - from)} after signing up`); }
-  if (sheet && !c.sheet_at) { c.sheet_at = sheet; await telegram(`${c.centre}: printed its own day sheet ${took(sheet - from)} after signing up`); }
+  if (signin && !c.signin_at) { c.signin_at = signin; await notify(`${c.centre}: came in ${took(signin - from)} after signing up`); }
+  if (sheet && !c.sheet_at) { c.sheet_at = sheet; await notify(`${c.centre}: printed its own day sheet ${took(sheet - from)} after signing up`); }
   save();
 }
 
@@ -118,7 +117,7 @@ export async function tick(now = Date.now()) {
       if (a.do === 'delete') {
         await centreSh({}, 'delete', c.slug); await route(c.slug, null);
         db.centres = db.centres.filter((x) => x !== c);
-        await telegram(`Deleted ${c.slug} (${a.why})`);
+        await notify(`Deleted ${c.slug} (${a.why})`);
       }
     } catch (e) { console.error(`lifecycle ${c.slug}`, e); }
     save();
@@ -155,7 +154,7 @@ export async function update(now = false) {
       r = await rollout(sites, async (c) => { await centreSh({}, 'backup', c.slug); await centreSh({}, 'up', c.slug, String(c.port)); await up(c.port); if (!(await fetch(`http://localhost:${c.port}/api/health`).then((x) => x.ok, () => false))) throw new Error('did not come up'); });
     }
     db.update = { sha: short, at: Date.now(), failed: r.failed, why: r.why, failed_sha: r.failed ? sha : null, deployed: r.failed ? db.update?.deployed : sha }; save();
-    await telegram(r.failed ? `ALERT: update ${short} stopped at ${r.failed}: ${r.why}` : `Updated to ${short}: demo, live centres and trials`);
+    await notify(r.failed ? `ALERT: update ${short} stopped at ${r.failed}: ${r.why}` : `Updated to ${short}: demo, live centres and trials`);
     if (!r.failed) process.exit(0); // launchd starts the service again on the new code
   } catch (e) { console.error('update', e); }
   finally { await run('git', ['-C', ROOT, 'worktree', 'remove', '-f', gate]).catch(() => {}); updating = false; }
@@ -180,7 +179,7 @@ export async function tidy(now = Date.now()) {
 }
 
 // ---- watch, hourly (#248): the demo and every centre up, a backup in the last 26 h, disk not full.
-// Each problem is told once on Telegram, and once more when it clears. All clear pings HEALTHCHECKS_URL,
+// Each problem is told once by email, and once more when it clears. All clear pings HEALTHCHECKS_URL,
 // so a silent host (provisioner or Mac down) raises Healthchecks.io's own alarm.
 const open = new Set();
 let latest = [];
@@ -195,8 +194,8 @@ export async function watch(now = Date.now()) {
   }
   const used = await run('df', ['-P', DATA]).then((r) => Number(r.stdout.trim().split('\n')[1].split(/\s+/)[4].replace('%', '')), () => 0);
   if (used >= 85) problems.push(`disk ${used}% full`);
-  for (const p of problems) if (!open.has(p)) { open.add(p); await telegram(`ALERT: ${p}`); }
-  for (const p of [...open]) if (!problems.includes(p)) { open.delete(p); await telegram(`Cleared: ${p}`); }
+  for (const p of problems) if (!open.has(p)) { open.add(p); await notify(`ALERT: ${p}`); }
+  for (const p of [...open]) if (!problems.includes(p)) { open.delete(p); await notify(`Cleared: ${p}`); }
   if (!problems.length && env.HEALTHCHECKS_URL) await fetch(env.HEALTHCHECKS_URL).catch(() => {});
   latest = problems;
   return problems;
@@ -225,7 +224,7 @@ async function wake(req, res, c) {
     c.waking = (async () => {
       await centreSh({}, 'start', c.slug); await up(c.port); await route(c.slug, svc(c.port));
       c.paused_at = null; c.created = Date.now(); save();
-      await telegram(`Switched back on: ${c.slug}`);
+      await notify(`Switched back on: ${c.slug}`);
     })().finally(() => { delete c.waking; });
   }
   await c.waking;
@@ -250,7 +249,7 @@ export const server = http.createServer(async (req, res) => {
       if (typeof f.text !== 'string' || !f.text.trim()) return send(res, 400, '');
       const item = { centre: String(f.centre || '').slice(0, 80), from: String(f.from || '').slice(0, 120), text: f.text.trim().slice(0, 2000), at: Date.now() };
       db.feedback.unshift(item); save();
-      await telegram(`Feedback from ${item.centre} (${item.from}): ${item.text}`);
+      await notify(`Feedback from ${item.centre} (${item.from}): ${item.text}`);
       return send(res, 200, '');
     }
     // The maintainer's morning, on this Mac only (#920): the tunnel always adds cf-ray, so nothing from outside gets it.
@@ -269,7 +268,7 @@ export const server = http.createServer(async (req, res) => {
       const no = refuse(db.signups, db.centres, { ip, email: to }, Date.now());
       if (no === 'waitlist') {
         db.waitlist.push({ centre, email: to, at: Date.now() }); save();
-        await telegram(`Waitlist: ${centre} (${to}). ${db.centres.length} centres live.`);
+        await notify(`Waitlist: ${centre} (${to}). ${db.centres.length} centres live.`);
         return send(res, 200, page(`<h1>You're on the list</h1><p>All our trial places are full right now. We will email ${esc(to)} as soon as one opens.</p>`));
       }
       if (no) return send(res, 429, form(no));
@@ -310,9 +309,9 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
     if (d.getHours() === 7 && sent !== d.toDateString()) {
       sent = d.toDateString();
       const text = morning(db, latest, Date.now(), db.feedback);
-      // Read on this Mac (#920): Telegram is optional.
+      // Read on this Mac (#920): the email is optional.
       writeFileSync(`${DATA}/MORNING.md`, `# Morning, ${d.toDateString()}\n\n${text.split('\n').map((l) => (l && !l.startsWith('  ') ? `- ${l}` : l)).join('\n')}\n\nAny time: http://localhost:${env.PORT || 8200}/dashboard\n`);
-      await telegram(text);
+      await notify(text);
     }
     if (indiaHour(d) === 3) await tidy().catch(console.error);
   }, 3_600_000);
