@@ -107,8 +107,9 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   useEffect(() => { if (open) { setDone(null); setError(null); setOpened([]); setShown([]); setPlan(""); fetch(`${apiBase}/diet-templates`).then((r) => r.json()).then((d) => setPlans(Array.isArray(d) ? d : [])).catch(() => setPlans([])); } }, [open, apiBase]);
 
   const act = problems.filter((p) => p.problem_class === "blocking");
-  // Only rows with one answer: a row asking the admin to choose is never chosen for them.
-  const fixable = act.filter((p) => p.fix && p.choices.length <= 1);
+  // Only rows with one answer, except a closed day (#1074): its move is taken in bulk, but a cancel is never chosen for the admin.
+  const suggested = (p: DayProblem) => p.choices.length <= 1 ? p.fix : p.kind === "CENTER_HOLIDAY" ? p.choices.find((c) => !c.cancel) ?? null : null;
+  const fixable = act.filter(suggested);
   // A resident with nothing booked is a rest day, not a note (#144).
   const urgent = problems.filter((p) => p.urgent && !dismissed.includes(p.id));
   const notes = problems.filter((p) => p.problem_class === "worth_knowing" && p.kind !== "IDLE_RESIDENT" && !p.urgent && !dismissed.includes(p.id) && !(dayOver && p.kind === "CONSULTED"));
@@ -122,6 +123,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   // A therapist whose day was moved already has their line under the day.
   const teamInfo = items.filter((i) => i.kind === "information" && i.section === "Team" && !didForYou.some((b) => b.staff_name === i.who));
   // What a guest said on leaving, when it was good or fine (#509): grey, under Patients.
+  const offToday = teamInfo.filter((i) => i.rule === "on_leave");
   const patientInfo = items.filter((i) => i.kind === "information" && i.section === "Patients");
   const empty = act.length + urgent.length + notes.length + didForYou.length + patientAct.length + groups.length + patientInfo.length + teamAct.length + teamInfo.length + (tomorrow?.count ?? 0) + (coming?.length ?? 0) === 0;
 
@@ -190,13 +192,16 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   }
 
   const tb = (main = false) => `min-h-11 px-3 rounded-full text-sm ${main ? "font-bold text-primary" : "font-semibold text-muted-foreground"} disabled:opacity-50`;
-  const item = (key: string, title: string, body: string | null, buttons: React.ReactNode, choose = false) => <ItemRow key={key} title={title} facts={body} stacked={choose}>{buttons}</ItemRow>;
+  const item = (key: string, title: string, body: React.ReactNode, buttons: React.ReactNode, choose = false) => <ItemRow key={key} title={title} facts={body} stacked={choose}>{buttons}</ItemRow>;
 
+  // Patient first, then what and when, then why in red (#1074): the admin thinks "Riya's 09:20", not "the centre is closed".
   const actionItem = (p: DayProblem) => {
     const see = p.appointment_id ? <button type="button" className={tb()} onClick={() => seeIt(p.appointment_id!)}>See it</button> : null;
-    const at = [p.start_time, p.who].filter(Boolean).join(" · ");
+    const [name, therapy] = p.patient_name && p.who.startsWith(p.patient_name) ? [p.patient_name, p.who.split(" — ")[1]] : [p.who, undefined];
+    const facts = (note: string | null) => <>{[p.start_time, therapy, note].filter(Boolean).join(" · ")}<span className="block text-destructive">{p.what}</span></>;
+    const title = name;
     if (p.choices.length > 1) {
-      return item(p.id, p.what, [at, p.no_fix_reason].filter(Boolean).join(". "), <>
+      return item(p.id, title, facts(p.no_fix_reason), <>
         {p.choices.map((c, i) => (
           <button key={c.choice || i} type="button" data-main={i === 0 || undefined} className={`${tb(i === 0)} text-right`} disabled={busy !== null} onClick={() => apply(p, c)}>{c.label}</button>
         ))}
@@ -204,8 +209,8 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
       </>, true);
     }
     if (p.fix) {
-      return item(p.id, p.what, [at, p.fix.cost_note].filter(Boolean).join(". "), <>
-        <button type="button" data-main className={`${tb(true)}`} disabled={busy !== null} onClick={() => apply(p, p.fix!)}>{p.fix.label}</button>
+      return item(p.id, title, facts(p.fix.cost_note), <>
+        <button type="button" data-main className={`${tb(true)}`} disabled={busy !== null} onClick={() => apply(p, p.fix!)}>→ {p.fix.label}</button>
         {see}
       </>);
     }
@@ -222,7 +227,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
         } finally { setBusy(null); }
       }}>{a.label}</button>
     ));
-    return item(p.id, p.what, [at, p.no_fix_reason].filter(Boolean).join(". "), <>{fixCause}{see}</>, fixCause.length > 0);
+    return item(p.id, title, facts(p.no_fix_reason), <>{fixCause}{see}</>, fixCause.length > 0);
   };
 
   // One cause is one row (#418), its two buttons side by side (#637): a therapist not in is "Ravi Gupta is not in · 4 treatments", not four rows saying it again.
@@ -230,11 +235,12 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   const causeRow = (g: DayProblem[]) => {
     const key = g[0].what;
     if (g.length < 2 || opened.includes(key)) return g.map(actionItem);
-    const one = g.every((p) => p.fix && p.choices.length <= 1);
+    const one = g.every(suggested);
     const n = `${g.length} treatments`;
-    return [item(key, `${key.replace(/ on this day/, "").replace(/\.$/, "")} · ${n}`,
-      g.map((p) => `${p.start_time} ${p.patient_name}${p.fix && one ? ` → ${p.fix.label}` : ""}`).join(" · "), <>
-        {one ? <button type="button" data-main className={tb(true)} disabled={busy !== null} onClick={() => apply(null, ...g.map((p) => p.fix!))}>{busy === "all" ? "Fixing…" : `Fix all ${g.length} as shown`}</button> : null}
+    return [item(key, `${n} to move`,
+      <>{g.map((p) => <span key={p.id} className="block">{p.start_time} {p.patient_name}{one ? ` → ${suggested(p)!.label}` : ""}</span>)}<span className="block text-destructive">{key.replace(/ on this day/, "")}</span></>, <>
+        {/* With one cause the foot's button already says it (#1074). */}
+        {one && causes.length > 1 ? <button type="button" data-main className={tb(true)} disabled={busy !== null} onClick={() => apply(null, ...g.map((p) => suggested(p)!))}>{busy === "all" ? "Fixing…" : `Fix all ${g.length} as shown`}</button> : null}
         <button type="button" className={tb(!one)} onClick={() => setOpened([...opened, key])}>{one ? "Choose each" : `Open the ${n}`}</button>
       </>)];
   };
@@ -243,13 +249,16 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   const dayName = day === today ? "Today" : dayText(day);
   return (
     <InboxSheet open={open} onOpenChange={onOpenChange} title={dayName} empty="Nothing else needs you."
-      foot={<Btn kind="quiet" onClick={() => { onOpenChange(false); openRules(); }}>What needs you · change the rules ›</Btn>}
+      // The one bulk action sits under the thumb (#1074); the rules link is the quiet line below it.
+      foot={<div className="space-y-1">
+        {fixable.length ? <Btn kind="primary" disabled={busy !== null} onClick={() => apply(null, ...fixable.map((p) => suggested(p)!))}>{busy === "all" ? "Fixing…" : fixable.length === 1 ? "Make this change" : `Make these ${fixable.length} changes`}</Btn> : null}
+        <Btn kind="quiet" onClick={() => { onOpenChange(false); openRules(); }}>Choose what shows here ›</Btn>
+      </div>}
       // The one inbox for the whole app (story 1). Patients and Team come from the rules in Settings, What needs you; empty sections do not show.
       sections={[{
-        name: "Day", count: act.length + urgent.length,
+        name: "To fix", count: act.length + urgent.length,
         body: act.length + urgent.length === 0 ? null : (
           <div className="space-y-3">
-            {fixable.length > 1 && causes.length > 1 ? <Btn kind="primary" disabled={busy !== null} onClick={() => apply(null, ...fixable.map((p) => p.fix!))}>{busy === "all" ? "Fixing…" : `Fix all ${fixable.length} as shown`}</Btn> : null}
             {urgent.length ? <ListGroup>{urgent.map((p) => item(p.id, [p.start_time, p.who].filter(Boolean).join(" · "), null, <>
               <span className={`mr-auto self-center text-base font-semibold ${p.sos ? "text-destructive" : ""}`}>{p.what}</span>
               <button type="button" className={tb()} onClick={() => dismiss(p.id)}>Dismiss</button>
@@ -265,7 +274,12 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
         body: coming?.length ? <ListGroup>{coming.map((c) => <Row key={c.date} title={`${dayText(c.date)} · ${c.count} to fix`} facts={c.headline ?? "Open the day to fix it before it starts"} trailing="Open ›" onClick={c.open} />)}</ListGroup> : null,
       }, {
         name: "Staff", count: teamAct.length,
-        body: teamAct.length + teamInfo.length ? <ListGroup>{[...teamAct, ...teamInfo].map((i) => <Row key={i.id} title={i.kind === "information" ? i.what : i.who} facts={i.kind === "information" ? "Information · not counted" : i.what} />)}</ListGroup> : null,
+        // Who is off is context for the moves, so it is one quiet line, not a row each (#1074).
+        body: teamAct.length + teamInfo.length ? <ListGroup>
+          {teamAct.map((i) => <Row key={i.id} title={i.who} facts={i.what} />)}
+          {offToday.length ? <Row key="off" title="Off today" facts={listed(offToday.map((i) => first(i.who)))} /> : null}
+          {teamInfo.filter((i) => i.rule !== "on_leave").map((i) => <Row key={i.id} title={i.what} />)}
+        </ListGroup> : null,
       }, {
         name: "Patients", count: new Set(patientAll.map((i) => i.patient_id ?? i.id)).size,
         body: patientRows.length + patientInfo.length + groups.length ? <ListGroup>{groups.map((g) => {
@@ -283,10 +297,10 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
           // Two things for one patient are one row; their card reaches both.
           const i = g.length > 1 ? { ...g[0], action: "card" as const, move: undefined } : g[0];
           return <Row key={i.id} title={i.who} facts={g.map((x) => x.what).join(" · ")} trailing={i.move ? `Move to ${i.move.room_name} ›` : { card: "Open card ›", diet: "Choose diet ›", summary: "Summary ›", followup: "Follow up ›", move: "Open card ›", week: "Plan next week ›" }[i.action ?? "card"]} onClick={() => onItem(i)} />;
-        })}{patientInfo.map((i) => <Row key={i.id} title={i.who} facts={`${i.what} · information, not counted`} trailing="Open card ›" onClick={() => onItem(i)} />)}</ListGroup> : null,
+        })}{patientInfo.map((i) => <Row key={i.id} title={i.who} facts={i.what} trailing="Open card ›" onClick={() => onItem(i)} />)}</ListGroup> : null,
       }, {
         // What counts comes first on the sheet; the day's information follows everything (#661).
-        name: "Information · not counted", count: 0,
+        name: "For your information", count: 0,
         body: didForYou.length + notes.length ? <ListGroup>
             {didForYou.map((b) => item(b.batch_id, `${b.staff_name} is not in ${day === today ? "today" : `on ${dayName}`}`,
               b.moved.length
