@@ -1,0 +1,23 @@
+// node scripts/uat-1082.mjs — editing a diet plan's day-by-day steps (#1082), 375x812, on a throwaway stack (APP_URL) with ALLOW_DEMO_PASSWORD=true.
+import { chromium } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+const APP = process.env.APP_URL || 'http://localhost:8120';
+const OUT = 'docs/design/uat/2026-10-22-diet-steps';
+mkdirSync(OUT, { recursive: true });
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, timezoneId: 'Asia/Kolkata' });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+const p = await ctx.newPage();
+await p.goto(`${APP}/admin/diet`); await p.waitForTimeout(2500);
+await p.getByText('After purification (samsarjana krama)', { exact: true }).first().click(); await p.waitForTimeout(800);
+const add = p.getByRole('button', { name: /^Add day/ });
+await add.scrollIntoViewIfNeeded();
+await p.screenshot({ path: `${OUT}/steps-375.png` });
+await add.click();
+await p.getByRole('dialog').getByLabel('Breakfast (optional)').last().fill('Yusha with rice');
+const [r] = await Promise.all([p.waitForResponse((x) => x.request().method() === 'PUT'), p.getByRole('button', { name: 'Save the plan' }).click()]); console.log(r.status(), (await r.text()).slice(0, 300)); await p.waitForTimeout(800);
+const plans = await (await fetch(`${APP}/api/diet-templates`, { headers: { Authorization: `Bearer ${token}` } })).json();
+const s = plans.find((x) => x.name.startsWith('After purification')).steps;
+console.log(`${s.length} days; last: ${JSON.stringify(s.at(-1))}`);
+await b.close();
