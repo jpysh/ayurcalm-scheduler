@@ -129,7 +129,6 @@ const AdminDashboard = () => {
   const [hasGuestRooms, setHasGuestRooms] = useState(false);
   useEffect(() => { fetch(`${API_BASE}/guest-rooms`).then((r) => (r.ok ? r.json() : [])).then((r) => setHasGuestRooms(Array.isArray(r) && r.some((x: { is_active: boolean }) => x.is_active))).catch(() => {}); }, [activeTab]);
   // What needs you (#288): the rules and the patient and team items they raise; the rules sheet opens from Settings, the pill and the gear on Patients and Team.
-  const attention = useAttention();
   // A guest room not available (#695): the free room offered under What needs you, applied only on this tap, with Undo.
   const moveGuest = async (who: string, m: NonNullable<AttentionItem['move']>) => {
     const put = (room: string) => fetch(`${API_BASE}/patients/${m.patient_id}/stays/${m.stay_id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(API_TOKEN ? { 'x-api-key': API_TOKEN } : {}) }, body: JSON.stringify({ guest_room_id: room }) });
@@ -186,6 +185,7 @@ const AdminDashboard = () => {
     const d = parts.find((p) => p.type === 'day')?.value || String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   };
+  const attention = useAttention(ymdInTZ(currentDate));
 
   // A chosen day (YYYY-MM-DD) as the instant of that day's noon on the centre's clock, so reading it back through ymdInTZ gives the same day on a phone in any zone (#599). Local midnight of the phone does not: ahead of the centre it is the evening before there.
   const dayDate = (iso: string) => {

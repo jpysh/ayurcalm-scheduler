@@ -1,0 +1,1 @@
+ALTER TABLE "DietTemplate" ADD COLUMN "steps" JSONB NOT NULL DEFAULT '[]';

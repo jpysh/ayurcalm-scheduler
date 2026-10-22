@@ -372,9 +372,21 @@ app.put('/therapies/:id', async (req: Request, res: Response) => {
     products: z.array(z.string().max(100)).max(20).optional(),
     checklist: z.array(z.object({ text: z.string().trim().min(1).max(100), required: z.boolean() })).max(20).optional(),
     vitals: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
+    booked: z.enum(['change', 'keep']).optional(),
   });
-  const body = schema.parse(req.body);
-  const t = await prisma.therapy.update({ where: { id }, data: body });
+  const { booked, ...body } = schema.parse(req.body);
+  // A new length asks about the treatments already booked at the old one (#1079):
+  // the admin chooses, and a clash it makes is shown by the day check, not refused.
+  const old = await prisma.therapy.findUniqueOrThrow({ where: { id } });
+  const ahead = { therapy_id: id, duration_minutes: old.duration_minutes, status: { in: ['pending', 'confirmed'] as Prisma.EnumAppointmentStatusFilter['in'] }, scheduled_date: await fromToday() };
+  if (body.duration_minutes !== undefined && body.duration_minutes !== old.duration_minutes && !booked) {
+    const count = await prisma.appointment.count({ where: ahead });
+    if (count) { res.status(409).json({ reason: 'ASK_BOOKED', count, message: `${count} booked at ${old.duration_minutes} min.` }); return; }
+  }
+  const t = await prisma.$transaction(async (tx) => {
+    if (booked === 'change' && body.duration_minutes !== undefined) await tx.appointment.updateMany({ where: ahead, data: { duration_minutes: body.duration_minutes } });
+    return tx.therapy.update({ where: { id }, data: body });
+  });
   res.json(t);
 });
 

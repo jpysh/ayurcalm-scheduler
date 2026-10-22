@@ -452,7 +452,7 @@ export function DischargeSheet({ patient, stay, onClose, openField, write, print
 
 /* ------------------------------ Story 14: plan next week (#354) ------------------------------ */
 
-type WeekLine = { from_therapy_id: string; therapy_id: string; therapy_name: string; start_time: string; staff_name: string; sessions: { date: string }[]; missing: { date: string; why: string }[] };
+type WeekLine = { from_therapy_id: string; therapy_id: string; therapy_name: string; start_time: string; staff_name: string; sessions: { date: string }[]; missing: { date: string; why: string }[]; skipped?: { date: string; why: string }[] };
 type Starter = { name: string; lines: { therapy_id: string; sessions: number }[]; blocked?: string[] };
 type WeekPlan = { from: string; to: string; brief: string | null; lines: WeekLine[]; review: { date: string; start_time: string; staff_name: string } | null; review_missing?: string };
 
@@ -549,7 +549,7 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
             return (
               <SwitchRow key={l.from_therapy_id} title={name} on={!off[l.from_therapy_id]} set={(v) => setOff({ ...off, [l.from_therapy_id]: !v })}
                 facts={done ? "Already booked next week" : swapped ? `Instead of ${l.therapy_name} · ${plural(l.sessions.length + l.missing.length, "day")}, times found on Book all` : `${l.start_time} · ${l.staff_name} · ${plural(l.sessions.length + l.missing.length, "day")}`}
-                flag={!swapped && l.missing.length ? `${l.missing.map((m) => (m.why.startsWith("The centre is") ? `${m.why} on ${dayText(m.date)}` : `No free time on ${dayText(m.date)}`)).join(". ")}. Swap it, or book its days from Next days` : undefined}>
+                flag={!swapped && l.missing.length ? `${l.missing.map((m) => (m.why.startsWith("The centre is") ? `${m.why} on ${dayText(m.date)}` : `No free time on ${dayText(m.date)}`)).join(". ")}. Swap it, or book its days from Next days` : l.skipped?.length ? `Skips ${l.skipped.map((m) => dayText(m.date)).join(", ")}: ${l.skipped[0].why.replace("The centre is", "the centre is")}` : undefined}>
                 {done ? null : <ChangeLine label="Swap" value={name} select={<LineSelect label={`Swap ${l.therapy_name}`} value={swapped || l.therapy_id} onChange={(v) => setSwaps({ ...swaps, [l.from_therapy_id]: v })} free={therapies} />} />}
               </SwitchRow>
             );

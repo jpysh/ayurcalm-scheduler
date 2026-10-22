@@ -36,6 +36,8 @@ export type ResolveDietInput = {
   mealsWithColumn: Set<MealKey>;
   /** Names a bespoke plan that follows no template. */
   segmentLabel?: string | null;
+  /** Which day of the plan this is for the patient, Day 1 being the day it started (#1082). */
+  dayNumber?: number;
   /** The patient's own medication and how they eat around treatment (#355): never the plan's. */
   patient?: { food_limits?: string | null; medication?: string | null; before_treatment?: string | null; after_treatment?: string | null };
 };
@@ -56,7 +58,16 @@ export type ResolvedDiet = {
   personal: MealKey[];
   /** Which side of the plan this is: the kitchen names it when a plan prints twice in a meal (#832). */
   treatmentDay: boolean;
+  /** The plan's day-by-day step served today, if it has steps (#1082). */
+  step?: number;
 };
+
+export type DietStep = Partial<Record<MealKey, string>>;
+
+/** A plan's day-by-day steps, read loosely from the stored JSON. */
+export function stepsOf(template: DietTemplateFields | null): DietStep[] {
+  return Array.isArray(template?.steps) ? (template.steps as DietStep[]) : [];
+}
 
 export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
   const { template, hasTherapyToday, mealsWithColumn } = input;
@@ -70,10 +81,15 @@ export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
   const field = (name: string) =>
     (overrides[name] ?? (template?.[name] as string | null | undefined) ?? '').toString().trim();
 
+  // A step is that day's food on either side; a meal it does not mention falls back to the plan (#1082).
+  const steps = stepsOf(template);
+  const stepNo = input.dayNumber && input.dayNumber <= steps.length ? input.dayNumber : undefined;
+  const step = stepNo ? steps[stepNo - 1] : {};
   const meals: Partial<Record<MealKey, string>> = {};
   const personal: MealKey[] = [];
   for (const meal of mealOrder) {
-    const text = (input.dayMeals[meal] || field(`${side}_${meal}`)).trim();
+    const mine = overrides[`${side}_${meal}`];
+    const text = (input.dayMeals[meal] || mine || step[meal]?.trim() || field(`${side}_${meal}`)).trim();
     if (text) meals[meal] = text;
     if (text && (input.dayMeals[meal] || overrides[`${side}_${meal}`])) personal.push(meal);
   }
@@ -102,6 +118,7 @@ export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
     foodLimits: own(input.patient?.food_limits),
     personal,
     treatmentDay: input.hasTherapyToday,
+    step: stepNo,
   };
 }
 
@@ -114,11 +131,24 @@ export function resolveDiet(input: ResolveDietInput): ResolvedDiet {
  * patient. Precedence is per meal, so overriding breakfast leaves the rest of
  * the plan standing.
  */
+/** A guest whose plan's steps are done, or whose plans have all ended while they stay, eats the everyday plan (#1082). */
+export function movesToGeneralPlan(p: { holdsPlan: boolean; dayNumber: number; steps: number; hadPlan: boolean; staying: boolean }) {
+  return p.holdsPlan ? p.steps > 0 && p.dayNumber > p.steps : p.hadPlan && p.staying;
+}
+
+export const GENERAL_PLAN = 'General sattvic plan';
+
 export async function loadDietsForDay(day: Date, prisma: PrismaClient) {
-  const [dietDay, dietSegments] = await Promise.all([
+  const [dietDay, dietSegments, endedBefore, staying, sattvic] = await Promise.all([
     prisma.dietPlan.findMany({ where: { date: day } }),
     prisma.dietPlanSegment.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } }, include: { Template: true } }),
+    prisma.dietPlanSegment.findMany({ where: { end_date: { lt: day } }, select: { patient_id: true }, distinct: ['patient_id'] }),
+    prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } }, select: { patient_id: true } }),
+    // ponytail: found by its starter name; a centre that renames it loses the fallback.
+    prisma.dietTemplate.findUnique({ where: { name: GENERAL_PLAN } }),
   ]);
+  const hadPlan = new Set(endedBefore.map((s) => s.patient_id));
+  const isStaying = new Set(staying.map((s) => s.patient_id));
   const dayMealsByPatient = new Map<string, Partial<Record<MealKey, string>>>();
   for (const d of dietDay) {
     const meals = dayMealsByPatient.get(d.patient_id) || {};
@@ -135,9 +165,14 @@ export async function loadDietsForDay(day: Date, prisma: PrismaClient) {
   // Meals no longer take columns on the sheet, so every meal resolves as text.
   const mealsWithColumn = new Set<MealKey>();
   const dietFor = (patient: { id: string; food_limits?: string | null; medication?: string | null; before_treatment?: string | null; after_treatment?: string | null }, hasTherapyToday: boolean) => {
-    const seg = segmentByPatient.get(patient.id);
+    const held = segmentByPatient.get(patient.id);
+    const dayNumber = held ? Math.round((day.getTime() - held.start_date.getTime()) / 86_400_000) + 1 : 0;
+    const steps = stepsOf(held?.Template ?? null).length;
+    const finished = movesToGeneralPlan({ holdsPlan: !!held, dayNumber, steps, hadPlan: hadPlan.has(patient.id), staying: isStaying.has(patient.id) });
+    const seg = finished ? undefined : held;
     return resolveDiet({
-      template: seg?.Template ?? null,
+      template: finished ? sattvic : (seg?.Template ?? null),
+      dayNumber: finished ? 0 : dayNumber,
       overrides: (seg?.overrides || null) as Record<string, string | undefined> | null,
       dayMeals: dayMealsByPatient.get(patient.id) || {},
       hasTherapyToday,
@@ -170,7 +205,7 @@ export function kitchenMeals(people: { name: string; diet: ResolvedDiet }[]): Ki
     const counts = new Map<string, { plan: string; food: string; n: number; treatmentDay: boolean }>();
     const exceptions: KitchenMeal['exceptions'] = [];
     for (const { name, diet } of people) {
-      const plan = diet.planName || 'No diet plan';
+      const plan = (diet.planName || 'No diet plan') + (diet.step ? ` · Day ${diet.step}` : '');
       const food = diet.meals[meal] || '';
       if (diet.personal.includes(meal)) { exceptions.push({ name, plan, food }); continue; }
       const key = `${plan}\u0000${food}`;

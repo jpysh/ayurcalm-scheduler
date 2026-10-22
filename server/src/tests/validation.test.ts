@@ -114,8 +114,8 @@ async function main() {
         const after = await prisma.dietTemplate.findUnique({ where: { id: plan.id } });
         if (JSON.stringify(after) !== JSON.stringify(plan)) {
           // Put the demo plan back before failing, so a broken server does not leave it edited.
-          const { id, ...fields } = plan;
-          await prisma.dietTemplate.update({ where: { id }, data: fields });
+          const { id, steps, ...fields } = plan;
+          await prisma.dietTemplate.update({ where: { id }, data: { ...fields, steps: steps ?? [] } });
           throw new Error('the plan changed although the edit was refused');
         }
       } finally {

@@ -42,8 +42,6 @@ export type Move = {
   to: { staff_id: string | null; co_staff_ids: string[]; staff_name: string; start_time: string; date: string; room_id: string | null; room_name: string };
   /** True when the admin chose this row themselves and the plan must keep it. */
   pinned?: boolean;
-  /** A later day past the end of the resident's stay: offered, never taken for them. */
-  beyond_stay?: boolean;
 };
 
 /** A row the admin has decided for themselves. The plan fits around it. */
@@ -334,14 +332,14 @@ export async function planDay(
     /**
      * The first later day and time, within `days`, where the team, a room and
      * the resident are all free. Any time in the centre's hours, not only the
-     * same one, and never on top of the resident's own day. `inStay` stops at
-     * the end of the resident's stay; `lock` keeps it to that one therapist.
+     * same one, never on top of the resident's own day and never after their
+     * stay ends; `lock` keeps it to that one therapist.
      */
-    const laterSlot = async (days: number, inStay: boolean, lock: string | null = null): Promise<Slot | null> => {
+    const laterSlot = async (days: number, lock: string | null = null): Promise<Slot | null> => {
       for (let i = 1; i <= days; i++) {
         const other = new Date(date);
         other.setDate(date.getDate() + i);
-        if (inStay && stayEnds && other > stayEnds) return null;
+        if (stayEnds && other > stayEnds) return null;
         if (closedOn(other)) continue;
         const key = ymd(other);
         const otherDay = (laterDays[key] ??= await prisma.appointment.findMany({ where: { scheduled_date: other, ...HAPPENING } }));
@@ -411,7 +409,7 @@ export async function planDay(
     // Tier 3 — their own therapist is the one away: the time is kept with
     // someone else, and a later day with their own is offered beside it (#1043).
     const ownAway = Boolean(own && appt.staff_id === own && here && !here.team.includes(own));
-    const back = ownAway ? await laterSlot(30, true, own) : null;
+    const back = ownAway ? await laterSlot(30, own) : null;
     const ownName = staffById.get(own || '')?.name || 'their therapist';
     if (here && back) {
       hold(here);
@@ -433,13 +431,12 @@ export async function planDay(
       continue;
     }
 
-    // Tier 4 — ask: the next free day, past the stay too so the admin sees how
-    // far it is rather than nothing, or cancel. Cancel is never picked for them.
-    const next = await laterSlot(30, false);
+    // Tier 4 — ask: the next free day of their stay, or cancel. Never a day
+    // after they have left (#1075). Cancel is never picked for them.
+    const next = await laterSlot(30);
     if (next) {
-      const inStay = !stayEnds || new Date(`${next.date}T00:00:00.000Z`) <= stayEnds;
       const n = daysLater(next.date);
-      const pick = moveOf(next, { choice: 'next_free_day', note: `${n} day${n === 1 ? '' : 's'} later${inStay ? '' : ', after their stay ends'}`, beyond_stay: !inStay || undefined });
+      const pick = moveOf(next, { choice: 'next_free_day', note: `${n} day${n === 1 ? '' : 's'} later` });
       hold(next);
       proposed.push({ ...pick, choices: [pick, cancel] });
       continue;
@@ -639,7 +636,7 @@ export async function replanRoomDay(
  */
 /** Where a treatment on a closed day can go: a later day inside the stay, or nowhere. The day check counts with it (#1048). */
 export function offClosedDay(m: Move, day: Date): Move | undefined {
-  return m.to.date !== ymd(day) && !m.cancel && !m.beyond_stay ? m : m.choices?.find((c) => c.choice === 'next_free_day' && !c.beyond_stay);
+  return m.to.date !== ymd(day) && !m.cancel ? m : m.choices?.find((c) => c.choice === 'next_free_day');
 }
 
 export async function moveOffClosedDays(from: string, to: string, prisma: PrismaClient, opts: { timeOffId?: string; now?: Clock } = {}) {

@@ -91,6 +91,7 @@ run attention       "What needs you: patient items follow the rules, a changed '
 run fastOpen        "A fast first open: the script is compressed and cached for a year, and the week comes in one call"
 run teamPartDay      "Team shows the hours someone is actually in, and warns too few only when someone usually in is away"
 run deleteKeepsDone  "Deleting a therapist hands their coming treatments on; a room or therapy takes its; done ones stay on the record"
+run therapyLength    "A therapy given a new length asks whether the booked treatments change too, and Undo puts them back"
 run changeLog        "The Log shows each change in words, newest first, and the newest fix from the day's check can be undone from it"
 run dietOverride       "Editing a diet plan changes it for everyone except what one patient was told specifically"
 run onboarding         "After the setup wizard, the centre has its hours, timezone, therapies, rooms and therapists, and the day sheet prints"

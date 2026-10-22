@@ -544,7 +544,7 @@ export async function nextConsultations(fromISO: string, nowMinutes: number | nu
 /* ------------------------------ Story 14: plan next week (#354) ------------------------------ */
 
 export type WeekSession = { date: string; start_time: string; duration_minutes: number; staff_id: string; co_staff_ids: string[]; room_id: string };
-export type WeekLine = { from_therapy_id: string; therapy_id: string; therapy_name: string; start_time: string; staff_name: string; sessions: WeekSession[]; missing: { date: string; why: string }[] };
+export type WeekLine = { from_therapy_id: string; therapy_id: string; therapy_name: string; start_time: string; staff_name: string; sessions: WeekSession[]; missing: { date: string; why: string }[]; skipped: { date: string; why: string }[] };
 export type WeekPlan = { from: string; to: string; brief: string | null; lines: WeekLine[]; review: (WeekSession & { therapy_id: string; staff_name: string }) | null; review_missing?: string };
 
 const isoOf = (d: Date) => d.toISOString().slice(0, 10);
@@ -585,6 +585,18 @@ export async function planNextWeek(patientId: string, reviewISO: string, prisma:
     e.last = a; e.dates.add(shift(isoOf(a.scheduled_date), 7));
     byTherapy.set(a.therapy_id, e);
   }
+  // Already booked in the coming week (a first week from + Book, #1069): shown as booked, so the sheet never offers the same days again.
+  const ahead = await prisma.appointment.findMany({
+    where: { patient_id: patientId, scheduled_date: { gt: review, lte: new Date(`${to}T00:00:00.000Z`) }, ...HAPPENING, Therapy: { is_consultation: false } },
+    include: { Therapy: true }, orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }],
+  });
+  const repeated = new Set(byTherapy.keys());
+  for (const a of ahead) {
+    if (repeated.has(a.therapy_id)) continue;
+    const e = byTherapy.get(a.therapy_id) || { last: a, dates: new Set<string>() };
+    e.dates.add(isoOf(a.scheduled_date));
+    byTherapy.set(a.therapy_id, e);
+  }
   const consult = [...past].reverse().find((a) => a.Therapy?.is_consultation);
   // Never a day already gone: a review planned late fills only what is left of the week.
   const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
@@ -595,7 +607,7 @@ export async function planNextWeek(patientId: string, reviewISO: string, prisma:
     .filter(([id]) => !opts.only || opts.only.includes(id))
     .map(([id, e]) => {
       const t = therapies.find((x) => x.id === (opts.swaps?.[id] || id))!;
-      return { from_therapy_id: id, therapy_id: t.id, therapy_name: t.name, start_time: e.last.start_time, staff_name: '', sessions: [], missing: [], _pref: e.last as Pref, _dates: [...e.dates].filter((d) => d > reviewISO && d <= to) };
+      return { from_therapy_id: id, therapy_id: t.id, therapy_name: t.name, start_time: e.last.start_time, staff_name: '', sessions: [], missing: [], skipped: [], _pref: e.last as Pref, _dates: [...e.dates].filter((d) => d > reviewISO && d <= to) };
     })
     // A therapy ticked that this week never had (a patient's first days, #611): every day of the week, from the centre's opening time.
     .concat((opts.only || []).filter((id) => !byTherapy.has(id) && therapies.some((t) => t.id === (opts.swaps?.[id] || id) && !t.is_consultation)).map((id) => {
@@ -605,7 +617,7 @@ export async function planNextWeek(patientId: string, reviewISO: string, prisma:
       // A count shapes the course (#984): 3 of 7 days is every other day or so, spread from the first.
       const n = Math.min(opts.sessions?.[id] ?? all.length, all.length);
       const days = [...new Set(Array.from({ length: n }, (_, i) => all[Math.floor((i * all.length) / n)]))];
-      return { from_therapy_id: id, therapy_id: t.id, therapy_name: t.name, start_time: settings?.opening_time || '09:00', staff_name: '', sessions: [], missing: [], _pref: { staff_id: null, room_id: null } as Pref, _dates: days };
+      return { from_therapy_id: id, therapy_id: t.id, therapy_name: t.name, start_time: settings?.opening_time || '09:00', staff_name: '', sessions: [], missing: [], skipped: [], _pref: { staff_id: null, room_id: null } as Pref, _dates: days };
     }))
     .sort((a, b) => a.start_time.localeCompare(b.start_time)) as (WeekLine & { _pref: Pref; _dates: string[] })[];
   let reviewOut: WeekPlan['review'] = null;
@@ -641,9 +653,11 @@ export async function planNextWeek(patientId: string, reviewISO: string, prisma:
       if (!l._dates.includes(d)) continue;
       // Already booked that day (planned by hand, or by an earlier Book all): left as it is.
       if (ctx.appointments.some((a) => a.patient_id === patientId && a.therapy_id === l.therapy_id)) continue;
+      // A closed day is skipped and named, never a reason to switch the whole line off (#1070).
+      if (shut) { l.skipped.push({ date: d, why: `The centre is ${shut}` }); continue; }
       const a = place(l.therapy_id, l.start_time, l._pref);
       if (a) l.sessions.push({ date: d, start_time: a.start_time, duration_minutes: a.duration_minutes, staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id });
-      else l.missing.push({ date: d, why: shut ? `The centre is ${shut}` : 'No therapist or room is free that day' });
+      else l.missing.push({ date: d, why: 'No therapist or room is free that day' });
     }
   }
   return {
