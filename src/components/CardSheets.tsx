@@ -147,6 +147,7 @@ const PLAN_FIELDS = ["therapy", "rest"].flatMap((kind) => MEALS.map(([k]) => `${
 export function PlanEditor({ plan, patient, segmentId = "", onClose, onSaved }: { plan: Plan; patient?: Who; segmentId?: string; onClose: () => void; onSaved: () => void }) {
   const [over, setOver] = useState<Record<string, string> | null>(null);
   const [text, setText] = useState<Record<string, string> | null>(null);
+  const [steps, setSteps] = useState<Record<string, string>[]>([]);
   const isNew = plan.id === "new";
   const [scope, setScope] = useState<"me" | "all">(segmentId ? "me" : "all");
   const [busy, setBusy] = useState(false);
@@ -157,6 +158,7 @@ export function PlanEditor({ plan, patient, segmentId = "", onClose, onSaved }: 
       setOver(o);
       const all = [...PLAN_FIELDS, ...(patient ? [] : ["name", "description"])];
       setText(Object.fromEntries(all.map((k) => [k, String(o[k] ?? plan[k] ?? "")])));
+      setSteps(Array.isArray(plan.steps) ? (plan.steps as Record<string, string>[]) : []);
     })();
   }, [plan, patient?.id, segmentId]);
   const save = async () => {
@@ -164,7 +166,7 @@ export function PlanEditor({ plan, patient, segmentId = "", onClose, onSaved }: 
     setBusy(true);
     if (!patient && !text.name.trim()) { toast.error("Give the plan a name."); setBusy(false); return; }
     const res = scope === "all"
-      ? await fetch(`${API_BASE}/diet-templates${isNew ? "" : `/${plan.id}`}`, { method: isNew ? "POST" : "PUT", headers: json, body: JSON.stringify(text) })
+      ? await fetch(`${API_BASE}/diet-templates${isNew ? "" : `/${plan.id}`}`, { method: isNew ? "POST" : "PUT", headers: json, body: JSON.stringify(patient ? text : { ...text, steps: steps.map((d) => Object.fromEntries(Object.entries(d).filter(([, v]) => v.trim()))) }) })
       // Only what differs from the plan is kept as this patient's own wording.
       : await fetch(`${API_BASE}/dietplans/segments/${segmentId}`, { method: "PUT", headers: json, body: JSON.stringify({ overrides: Object.fromEntries(Object.entries(text).filter(([k, v]) => v !== String(plan[k] ?? "") || (over && k in over))) }) });
     setBusy(false);
@@ -197,6 +199,23 @@ export function PlanEditor({ plan, patient, segmentId = "", onClose, onSaved }: 
             <div className="grid gap-4">{MEALS.map(([m, t]) => <Area key={m} label={`${t} (optional)`} rows={2} maxLength={2000} value={text[`${kind}_${m}`]} onChange={(e) => setText({ ...text, [`${kind}_${m}`]: e.target.value })} />)}</div>
           </Group>
         ))}
+        {!patient ? (
+          // Day 1 is the day a patient starts the plan; a meal a day leaves empty comes from the plan's own (#1082).
+          <Group label="Day by day (optional)" note="For a plan that changes each day, like samsarjana. A meal left empty is the plan's own; after the last day the patient moves to General sattvic.">
+            <div className="grid gap-6">
+              {steps.map((d, i) => (
+                <div key={i} className="grid gap-4">
+                  <p className="text-sm font-semibold">Day {i + 1}</p>
+                  {MEALS.map(([m, t]) => <Area key={m} label={`${t} (optional)`} rows={2} maxLength={2000} value={d[m] ?? ""} onChange={(e) => setSteps(steps.map((x, j) => j === i ? { ...x, [m]: e.target.value } : x))} />)}
+                </div>
+              ))}
+              <div className="flex flex-wrap gap-2">
+                {steps.length < 60 ? <Btn kind="quiet" inline onClick={() => setSteps([...steps, {}])}>Add day {steps.length + 1}</Btn> : null}
+                {steps.length ? <Btn kind="quiet" inline onClick={() => setSteps(steps.slice(0, -1))}>Remove day {steps.length}</Btn> : null}
+              </div>
+            </div>
+          </Group>
+        ) : null}
       </>)}
     </BottomSheet>
   );
