@@ -1,0 +1,22 @@
+# Raw findings (walk notes, before triage)
+
+- PRIV-1 Every screen URL carries the admin's email (/admin@example.com/therapies): ends up in browser history, shared screenshots. Low.
+- NOTE New patient at 14:10: arrives today, first consultation offered Fri 23 Oct 09:45 (today's slots gone). Check the card says why.
+- UX-1 Diet sheet: '44 patients' beside a plan counts every patient ever/coming on it, more than the 38 in house; reads as wrong. Say 'on it now' or count in-house only.
+- BUG-1 Card of a guest arriving tomorrow: Diet reads "Not decided yet" and the Arrival checklist says Diet not done, though four plans are set from her arrival. residentDay works the diet out for today, before the stay starts (server/src/residentDay.ts:69, PatientsTab steps). Shot walk/course-07.
+- BUG-2 Same card shows none of the 15 treatments already booked for her stay: the week is built only while staying (#437), so before arrival the admin cannot check the course they just booked. Shot walk/course-08.
+- DOMAIN-1 Abhyanga then Bashpa Sweda booked as two courses land 10:45 and 12:15: steam is meant to follow the massage directly. The app has no "follows" link between therapies. Maintainer: is back-to-back pairing needed for launch?
+- DOMAIN-2 Diet plans have one text per meal for a treatment day and a rest day; snehapana's rising ghee dose and samsarjana's day-by-day steps (peya, vilepi, yusha) cannot be written per day except as "Change meals for some days". Maintainer: is that enough?
+- BUG-3 Plan next week at the first review (day 1) offers starters for Sat 24 - Fri 30 Oct as if the week were empty, though Abhyanga and Bashpa Sweda are already booked every day of it; no line says so. Shot walk/weeks-02.
+- UX-3 Plan next week with no review to repeat lists every therapy (50) as a switch, each '7 of 7 days': a long scroll to find two. Shot walk/weeks-07.
+- BUG-4 Plan next week: one closed day in the week (Diwali, Sun 8 Nov) switches the whole line off ('Swap it, or book its days from Next days'); the admin then books 4 days one by one. Expected: book the open days, say the closed one is skipped. Shot walk/weeks-13.
+- VERIFY-1 Day 8 swap: after swapping both lines, Kashaya Vasti (for Bashpa Sweda) showed switched off with no flag and was not booked; Book all booked 7 Anuvasana + review. Could be the script's tap; re-check by hand.
+- COPY-1 What needs you for a future day (Mon 2 Nov) says 'Manish Khan is not in today'; should name the day or say 'not in'. Shot walk/holiday-05.
+- DECIDE-1 Changing a therapy's length (Anuvasana 45 to 90) leaves every booked session at 45 and the day sheet prints 45; the sheet says nothing. Maintainer: should booked sessions take the new length? At least the sheet should say which.
+- VERIFY-2 Move sheet for a late patient (When, on a future day) suggests 09:00, 105 min EARLIER, as 'Suggested'. Check on today at the real hour: a late patient's suggestion must be later than now.
+- BUG-5 What needs you on another day (Mon 2 Nov, Fri 6 Nov) lists TODAY's staff leave ("Manish Khan is not in today") under the day's own title; none of the three is off on those days. useAttention fetches /attention with no date (src/lib/attention.ts:20) though the server takes one (attentionFor(prisma, date)). The admin reads that a therapist is off on a day they are working. Shot walk/breaks-05, holiday-05.
+- UX-7 Availability > Mark not available, opened while the day shows Fri 6 Nov, starts on "From now" today; a leave meant for the day on screen is saved for today (the walk did exactly that). Shot walk/breaks-02.
+- COPY-2 Discharge summary prints a day she was marked 'didn't come' (5 Nov) as 'Rest', and the centre's closed day (2 Nov) also as 'Rest'. Say 'Did not come' / 'Centre closed'. File walk/discharge-summary.pdf.
+- UX-8 New patient with Leaving (Sat 24 Oct) before Arriving (Tue 27 Oct): Add patient is greyed with no word on why; DESIGN.md asks for inline validation. Shot walk/edge-01.
+- UX-9 Sign-in expired while the doctor's plan is open: Save throws the admin to the sign-in page with no word of why, and the typed plan is gone. Expected: say 'Signed out; sign in to save' and keep the text. Shot walk/edge-05.
+- DECIDE-2 A therapist who leaves the centre for good: deleting them removes all their coming treatments; nothing offers to hand them to others first. Maintainer: should deleting offer 'move their treatments' like leave does?

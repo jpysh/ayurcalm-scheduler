@@ -1,0 +1,301 @@
+screen	element	action	shot	result
+Menu	menu	open	menu.jpg	8 need you | Search | Change day | Patients | Guest rooms | Staff | Rooms | Availability | Diet plans | Settings | Therapies | Classes and events
+today	page 1/6	scroll	today-scroll0.jpg	ok
+today	page 2/6	scroll	today-scroll1.jpg	ok
+today	page 3/6	scroll	today-scroll2.jpg	ok
+today	page 4/6	scroll	today-scroll3.jpg	ok
+today	page 5/6	scroll	today-scroll4.jpg	ok
+today	page 6/6	scroll	today-scroll5.jpg	ok
+Today	0 inputs	count		
+Today	Thu 22 Oct · week ›	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+Today	By time ▾	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+Today	09:00	tap	today--09-00.jpg	sheet opened
+Today	09:20	tap	today--09-20.jpg	sheet opened
+Today	09:30	tap	today--09-30.jpg	sheet opened
+Today	10:00	tap	today--10-00.jpg	sheet opened
+Today	10:30	tap	today--10-30.jpg	sheet opened
+Today	11:30	tap	today--11-30.jpg	sheet opened
+Today	13:30	tap	today--13-30.jpg	sheet opened
+Today	14:30	tap	today--14-30.jpg	sheet opened
+Today	15:00	tap	today--15-00.jpg	sheet opened
+Today	15:30	tap	today--15-30.jpg	sheet opened
+Today	16:00	tap	today--16-00.jpg	sheet opened
+Today	16:30	tap	today--16-30.jpg	sheet opened
+Today	17:00	tap	today--17-00.jpg	sheet opened
+Today	17:30	tap	today--17-30.jpg	sheet opened
+Today	18:00	tap	today--18-00.jpg	sheet opened
+Today	18:30	tap	today--18-30.jpg	sheet opened
+Today	8 need you	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+8-need-you	page 1/6	scroll	8-need-you-scroll0.jpg	ok
+8-need-you	page 2/6	scroll	8-need-you-scroll1.jpg	ok
+8-need-you	page 3/6	scroll	8-need-you-scroll2.jpg	ok
+8-need-you	page 4/6	scroll	8-need-you-scroll3.jpg	ok
+8-need-you	page 5/6	scroll	8-need-you-scroll4.jpg	ok
+8-need-you	page 6/6	scroll	8-need-you-scroll5.jpg	ok
+8 need you	0 inputs	count		
+8 need you	Open the 3 treatments	tap	8-need-you--open-the-3-treatments.jpg	changed in place
+8 need you	Arjun Banerjee	tap	8-need-you--arjun-banerjee.jpg	changed in place
+8 need you	Sai Banerjee	tap	8-need-you--sai-banerjee.jpg	changed in place
+8 need you	Vihaan Chatterjee	tap	8-need-you--vihaan-chatterjee.jpg	changed in place
+8 need you	Krishna Mishra	tap	8-need-you--krishna-mishra.jpg	changed in place
+8 need you	Ananya Yadav	tap	8-need-you--ananya-yadav.jpg	changed in place
+8 need you	Diet	tap	8-need-you--diet.jpg	changed in place
+8 need you	Treatments	tap	8-need-you--treatments.jpg	changed in place
+8 need you	Dismiss	tap	8-need-you--dismiss.jpg	changed in place
+8 need you	What needs you · change the rules ›	tap	8-need-you--what-needs-you-change-the-rules.jpg	changed in place
+search	page 1/2	scroll	search-scroll0.jpg	ok
+search	page 2/2	scroll	search-scroll1.jpg	ok
+Search	1 inputs	count		
+Search	Nisha Verma	tap	search--nisha-verma.jpg	changed in place
+Search	Riya Iyer	tap	search--riya-iyer.jpg	changed in place
+Search	Arjun Joshi	tap	search--arjun-joshi.jpg	changed in place
+Search	Krishna Banerjee	tap	search--krishna-banerjee.jpg	changed in place
+Search	Aarav Singh	tap	search--aarav-singh.jpg	changed in place
+Search	Arjun Das	tap	search--arjun-das.jpg	changed in place
+Search	Neha	tap	search--neha.jpg	changed in place
+Search	Manish	tap	search--manish.jpg	changed in place
+Search	Varsha	tap	search--varsha.jpg	changed in place
+Search	Arvind	tap	search--arvind.jpg	changed in place
+Search	Pooja	tap	search--pooja.jpg	changed in place
+Search	Alok	tap	search--alok.jpg	changed in place
+Search	Ravi	tap	search--ravi.jpg	changed in place
+Search	Kiran	tap	search--kiran.jpg	changed in place
+Search	Meera	tap	search--meera.jpg	changed in place
+Search	Asha	tap	search--asha.jpg	changed in place
+Search	Raj	tap	search--raj.jpg	changed in place
+Search	Kumar	tap	search--kumar.jpg	changed in place
+Search	Anjali	tap	search--anjali.jpg	changed in place
+Search	Dr Vikram	tap	search--dr-vikram.jpg	changed in place
+Search	Priya	tap	search--priya.jpg	changed in place
+Search	Suresh	tap	search--suresh.jpg	changed in place
+Search	Dr Lakshmi	tap	search--dr-lakshmi.jpg	changed in place
+Search	Bhavna	tap	search--bhavna.jpg	changed in place
+change-day	page 1/6	scroll	change-day-scroll0.jpg	ok
+change-day	page 2/6	scroll	change-day-scroll1.jpg	ok
+change-day	page 3/6	scroll	change-day-scroll2.jpg	ok
+change-day	page 4/6	scroll	change-day-scroll3.jpg	ok
+change-day	page 5/6	scroll	change-day-scroll4.jpg	ok
+change-day	page 6/6	scroll	change-day-scroll5.jpg	ok
+Change day	1 inputs	count		
+Change day	Day before	tap	change-day--day-before.jpg	went to /admin@example.com/schedule
+Change day	Today	tap	change-day--today.jpg	went to /admin@example.com/schedule
+Change day	Next day	tap	change-day--next-day.jpg	went to /admin@example.com/schedule
+patients	page 1/5	scroll	patients-scroll0.jpg	ok
+patients	page 2/5	scroll	patients-scroll1.jpg	ok
+patients	page 3/5	scroll	patients-scroll2.jpg	ok
+patients	page 4/5	scroll	patients-scroll3.jpg	ok
+patients	page 5/5	scroll	patients-scroll4.jpg	ok
+Patients	0 inputs	count		
+Patients	‹ Day	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+Patients	In house	tap	patients--in-house.jpg	changed in place
+Patients	Needs attention · 5	tap	patients--needs-attention-5.jpg	changed in place
+Patients	Arjun Banerjee	tap	patients--arjun-banerjee.jpg	sheet opened
+Patients	Ishita Verma	tap	patients--ishita-verma.jpg	sheet opened
+Patients	Vihaan Das	tap	patients--vihaan-das.jpg	sheet opened
+Patients	Ananya Das	tap	patients--ananya-das.jpg	sheet opened
+Patients	Diya Mishra	tap	patients--diya-mishra.jpg	sheet opened
+Patients	Aarav Gupta	tap	patients--aarav-gupta.jpg	sheet opened
+Patients	Aarav Patel	tap	patients--aarav-patel.jpg	sheet opened
+Patients	Aarav Singh	tap	patients--aarav-singh.jpg	sheet opened
+Patients	Aarohi Khan	tap	patients--aarohi-khan.jpg	sheet opened
+Patients	Aarohi Yadav	tap	patients--aarohi-yadav.jpg	sheet opened
+Patients	Aditya Chatterjee	tap	patients--aditya-chatterjee.jpg	sheet opened
+Patients	Aditya Gupta	tap	patients--aditya-gupta.jpg	sheet opened
+Patients	Aditya Joshi	tap	patients--aditya-joshi.jpg	sheet opened
+Patients	Ananya Mishra	tap	patients--ananya-mishra.jpg	sheet opened
+Patients	Ananya Yadav	tap	patients--ananya-yadav.jpg	sheet opened
+Patients	Arjun Das	tap	patients--arjun-das.jpg	sheet opened
+Patients	Arjun Joshi	tap	patients--arjun-joshi.jpg	sheet opened
+Patients	Diya Khan	tap	patients--diya-khan.jpg	sheet opened
+Patients	Diya Yadav	tap	patients--diya-yadav.jpg	sheet opened
+Patients	Krishna Banerjee	tap	patients--krishna-banerjee.jpg	sheet opened
+Patients	Krishna Mishra	tap	patients--krishna-mishra.jpg	sheet opened
+Patients	Meera Iyer	tap	patients--meera-iyer.jpg	sheet opened
+Patients	Meera Nair	tap	patients--meera-nair.jpg	sheet opened
+Patients	Meera Patel	tap	patients--meera-patel.jpg	sheet opened
+Patients	Meera Reddy	tap	patients--meera-reddy.jpg	sheet opened
+Patients	Nisha Iyer	tap	patients--nisha-iyer.jpg	sheet opened
+Patients	Nisha Reddy	tap	patients--nisha-reddy.jpg	sheet opened
+guest-rooms	page 1/4	scroll	guest-rooms-scroll0.jpg	ok
+guest-rooms	page 2/4	scroll	guest-rooms-scroll1.jpg	ok
+guest-rooms	page 3/4	scroll	guest-rooms-scroll2.jpg	ok
+guest-rooms	page 4/4	scroll	guest-rooms-scroll3.jpg	ok
+Guest rooms	2 inputs	count		
+Guest rooms	‹ Day	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+Guest rooms	Thu 22 Oct · week ›	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+Guest rooms	T1	tap	guest-rooms--t1.jpg	sheet opened
+Guest rooms	T2	tap	guest-rooms--t2.jpg	sheet opened
+Guest rooms	T3	tap	guest-rooms--t3.jpg	sheet opened
+Guest rooms	T4	tap	guest-rooms--t4.jpg	sheet opened
+Guest rooms	T5	tap	guest-rooms--t5.jpg	sheet opened
+Guest rooms	T6	tap	guest-rooms--t6.jpg	sheet opened
+Guest rooms	T7	tap	guest-rooms--t7.jpg	sheet opened
+Guest rooms	T8	tap	guest-rooms--t8.jpg	sheet opened
+Guest rooms	T9	tap	guest-rooms--t9.jpg	sheet opened
+Guest rooms	T10	tap	guest-rooms--t10.jpg	sheet opened
+Guest rooms	T11	tap	guest-rooms--t11.jpg	sheet opened
+Guest rooms	T12	tap	guest-rooms--t12.jpg	sheet opened
+Guest rooms	N1	tap	guest-rooms--n1.jpg	sheet opened
+Guest rooms	N2	tap	guest-rooms--n2.jpg	sheet opened
+Guest rooms	N3	tap	guest-rooms--n3.jpg	sheet opened
+Guest rooms	N4	tap	guest-rooms--n4.jpg	sheet opened
+Guest rooms	N5	tap	guest-rooms--n5.jpg	sheet opened
+Guest rooms	N6	tap	guest-rooms--n6.jpg	sheet opened
+Guest rooms	N7	tap	guest-rooms--n7.jpg	sheet opened
+Guest rooms	N8	tap	guest-rooms--n8.jpg	sheet opened
+Guest rooms	N9	tap	guest-rooms--n9.jpg	sheet opened
+Guest rooms	N10	tap	guest-rooms--n10.jpg	sheet opened
+Guest rooms	H1	tap	guest-rooms--h1.jpg	sheet opened
+Guest rooms	H2	tap	guest-rooms--h2.jpg	sheet opened
+Guest rooms	H3	tap	guest-rooms--h3.jpg	sheet opened
+Guest rooms	H4	tap	guest-rooms--h4.jpg	sheet opened
+Guest rooms	H5	tap	guest-rooms--h5.jpg	sheet opened
+Guest rooms	H6	tap	guest-rooms--h6.jpg	sheet opened
+staff	page 1/3	scroll	staff-scroll0.jpg	ok
+staff	page 2/3	scroll	staff-scroll1.jpg	ok
+staff	page 3/3	scroll	staff-scroll2.jpg	ok
+Staff	0 inputs	count		
+Staff	‹ Day	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+Staff	S	tap	staff--s.jpg	sheet opened
+Staff	M	tap	staff--m.jpg	changed in place
+Staff	T	tap	staff--t.jpg	went to /admin@example.com/schedule
+Staff	W	tap	staff--w.jpg	sheet opened
+Staff	F	tap	staff--f.jpg	sheet opened
+Staff	Dr Lakshmi Menon	tap	staff--dr-lakshmi-menon.jpg	sheet opened
+Staff	Dr Vikram Rao	tap	staff--dr-vikram-rao.jpg	sheet opened
+Staff	Alok Yadav	tap	staff--alok-yadav.jpg	sheet opened
+Staff	Anjali Verma	tap	staff--anjali-verma.jpg	sheet opened
+Staff	Arvind Iyer	tap	staff--arvind-iyer.jpg	sheet opened
+Staff	Asha Yadav	tap	staff--asha-yadav.jpg	sheet opened
+Staff	Bhavna Mishra	tap	staff--bhavna-mishra.jpg	sheet opened
+Staff	Kiran Mishra	tap	staff--kiran-mishra.jpg	sheet opened
+Staff	Kumar Sharma	tap	staff--kumar-sharma.jpg	sheet opened
+Staff	Manish Khan	tap	staff--manish-khan.jpg	sheet opened
+Staff	Meera Nair	tap	staff--meera-nair.jpg	sheet opened
+Staff	Neha Singh	tap	staff--neha-singh.jpg	sheet opened
+Staff	Pooja Khan	tap	staff--pooja-khan.jpg	sheet opened
+Staff	Priya Patel	tap	staff--priya-patel.jpg	sheet opened
+Staff	Raj Das	tap	staff--raj-das.jpg	sheet opened
+Staff	Ravi Gupta	tap	staff--ravi-gupta.jpg	sheet opened
+Staff	Suresh Verma	tap	staff--suresh-verma.jpg	sheet opened
+Staff	Varsha Nair	tap	staff--varsha-nair.jpg	sheet opened
+Staff	Therapies	tap	staff--therapies.jpg	went to /admin@example.com/therapies
+Staff	Classes and events	tap	staff--classes-and-events.jpg	went to /admin@example.com/events
+Staff	8 need you	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+rooms	page 1/2	scroll	rooms-scroll0.jpg	ok
+rooms	page 2/2	scroll	rooms-scroll1.jpg	ok
+Rooms	0 inputs	count		
+Rooms	‹ Day	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+Rooms	Annexe	tap	rooms--annexe.jpg	sheet opened
+Rooms	Chandra	tap	rooms--chandra.jpg	sheet opened
+Rooms	Charaka	tap	rooms--charaka.jpg	sheet opened
+Rooms	Dasra	tap	rooms--dasra.jpg	sheet opened
+Rooms	Dhanvantari	tap	rooms--dhanvantari.jpg	sheet opened
+Rooms	Ganesha	tap	rooms--ganesha.jpg	sheet opened
+Rooms	Hanuman	tap	rooms--hanuman.jpg	sheet opened
+Rooms	Lakshmi	tap	rooms--lakshmi.jpg	sheet opened
+Rooms	Nasatya	tap	rooms--nasatya.jpg	sheet opened
+Rooms	Parvati	tap	rooms--parvati.jpg	sheet opened
+Rooms	Saraswati	tap	rooms--saraswati.jpg	sheet opened
+Rooms	Shiva	tap	rooms--shiva.jpg	sheet opened
+Rooms	Surya	tap	rooms--surya.jpg	sheet opened
+Rooms	Sushruta	tap	rooms--sushruta.jpg	sheet opened
+Rooms	Vishnu	tap	rooms--vishnu.jpg	sheet opened
+Rooms	8 need you	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+availability	page 1/2	scroll	availability-scroll0.jpg	ok
+availability	page 2/2	scroll	availability-scroll1.jpg	ok
+Availability	0 inputs	count		
+Availability	‹ Day	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+Availability	Annexe	tap	availability--annexe.jpg	sheet opened
+Availability	Suresh Verma	tap	availability--suresh-verma.jpg	sheet opened
+Availability	Bhavna Mishra	tap	availability--bhavna-mishra.jpg	sheet opened
+Availability	Manish Khan	tap	availability--manish-khan.jpg	sheet opened
+Availability	Kiran Mishra	tap	availability--kiran-mishra.jpg	sheet opened
+Availability	Priya Patel	tap	availability--priya-patel.jpg	sheet opened
+Availability	Asha Yadav	tap	availability--asha-yadav.jpg	sheet opened
+Availability	Neha Singh	tap	availability--neha-singh.jpg	sheet opened
+Availability	Varsha Nair	tap	availability--varsha-nair.jpg	sheet opened
+Availability	Kumar Sharma	tap	availability--kumar-sharma.jpg	sheet opened
+Availability	Show 68 more	tap	availability--show-68-more.jpg	changed in place
+Availability	Centre closed days	tap	availability--centre-closed-days.jpg	sheet opened
+Availability	8 need you	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+diet-plans	page 1/2	scroll	diet-plans-scroll0.jpg	ok
+diet-plans	page 2/2	scroll	diet-plans-scroll1.jpg	ok
+Diet plans	0 inputs	count		
+Diet plans	‹ Day	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+Diet plans	After purification (samsarjana krama)	tap	diet-plans--after-purification-samsarjana-krama.jpg	sheet opened
+Diet plans	Before purification (deepana–pachana)	tap	diet-plans--before-purification-deepana-pachana.jpg	sheet opened
+Diet plans	General sattvic plan	tap	diet-plans--general-sattvic-plan.jpg	sheet opened
+Diet plans	Internal oleation (snehapana)	tap	diet-plans--internal-oleation-snehapana.jpg	sheet opened
+Diet plans	Weight and metabolism (sthaulya)	tap	diet-plans--weight-and-metabolism-sthaulya.jpg	sheet opened
+Diet plans	8 need you	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+settings	page 1/2	scroll	settings-scroll0.jpg	ok
+settings	page 2/2	scroll	settings-scroll1.jpg	ok
+Settings	0 inputs	count		
+Settings	‹ Day	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+Settings	What needs you	tap	settings--what-needs-you.jpg	sheet opened
+Settings	People with access	tap	settings--people-with-access.jpg	sheet opened
+Settings	Centre and letterhead	tap	settings--centre-and-letterhead.jpg	sheet opened
+Settings	Opening hours and holidays	tap	settings--opening-hours-and-holidays.jpg	sheet opened
+Settings	Therapies	tap	settings--therapies.jpg	went to /admin@example.com/therapies
+Settings	Classes and events	tap	settings--classes-and-events.jpg	went to /admin@example.com/events
+Settings	Packages and accommodation	tap	settings--packages-and-accommodation.jpg	sheet opened
+Settings	Backups	tap	settings--backups.jpg	sheet opened
+Settings	Log	tap	settings--log.jpg	went to /admin@example.com/log
+Settings	Your account	tap	settings--your-account.jpg	sheet opened
+Settings	Security	tap	settings--security.jpg	changed in place
+Settings	Help and plan	tap	settings--help-and-plan.jpg	sheet opened
+Settings	8 need you	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+therapies	page 1/4	scroll	therapies-scroll0.jpg	ok
+therapies	page 2/4	scroll	therapies-scroll1.jpg	ok
+therapies	page 3/4	scroll	therapies-scroll2.jpg	ok
+therapies	page 4/4	scroll	therapies-scroll3.jpg	ok
+Therapies	0 inputs	count		
+Therapies	‹ Day	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+Therapies	Standard therapies	tap	therapies--standard-therapies.jpg	sheet opened
+Therapies	Abhyanga	tap	therapies--abhyanga.jpg	sheet opened
+Therapies	Agnikarma	tap	therapies--agnikarma.jpg	sheet opened
+Therapies	Anuvasana Vasti	tap	therapies--anuvasana-vasti.jpg	sheet opened
+Therapies	Avagaha Sweda	tap	therapies--avagaha-sweda.jpg	sheet opened
+Therapies	Bashpa Sweda	tap	therapies--bashpa-sweda.jpg	sheet opened
+Therapies	Consultation	tap	therapies--consultation.jpg	sheet opened
+Therapies	Elakizhi	tap	therapies--elakizhi.jpg	sheet opened
+Therapies	Gandusha	tap	therapies--gandusha.jpg	sheet opened
+Therapies	Greeva Vasti	tap	therapies--greeva-vasti.jpg	sheet opened
+Therapies	Hridaya Vasti	tap	therapies--hridaya-vasti.jpg	sheet opened
+Therapies	Jalaukavacharana	tap	therapies--jalaukavacharana.jpg	sheet opened
+Therapies	Jambira Pinda Sweda	tap	therapies--jambira-pinda-sweda.jpg	sheet opened
+Therapies	Janu Vasti	tap	therapies--janu-vasti.jpg	sheet opened
+Therapies	Karnapoorana	tap	therapies--karnapoorana.jpg	sheet opened
+Therapies	Kashaya Vasti	tap	therapies--kashaya-vasti.jpg	sheet opened
+Therapies	Kashayadhara	tap	therapies--kashayadhara.jpg	sheet opened
+Therapies	Kati Vasti	tap	therapies--kati-vasti.jpg	sheet opened
+Therapies	Kavala	tap	therapies--kavala.jpg	sheet opened
+Therapies	Ksheeradhara	tap	therapies--ksheeradhara.jpg	sheet opened
+Therapies	Lepam	tap	therapies--lepam.jpg	sheet opened
+Therapies	Marma Massage	tap	therapies--marma-massage.jpg	sheet opened
+Therapies	Mukha Lepam	tap	therapies--mukha-lepam.jpg	sheet opened
+Therapies	Mukhabhyanga	tap	therapies--mukhabhyanga.jpg	sheet opened
+Therapies	Nadi Sweda	tap	therapies--nadi-sweda.jpg	sheet opened
+Therapies	Nasya	tap	therapies--nasya.jpg	sheet opened
+Therapies	Netra Tarpana	tap	therapies--netra-tarpana.jpg	sheet opened
+Therapies	Njavarakizhi	tap	therapies--njavarakizhi.jpg	sheet opened
+Therapies	Padabhyanga	tap	therapies--padabhyanga.jpg	sheet opened
+classes-and-events	page 1/2	scroll	classes-and-events-scroll0.jpg	ok
+classes-and-events	page 2/2	scroll	classes-and-events-scroll1.jpg	ok
+Classes and events	0 inputs	count		
+Classes and events	‹ Day	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.
+Classes and events	Morning Yoga	tap	classes-and-events--morning-yoga.jpg	sheet opened
+Classes and events	Breakfast	tap	classes-and-events--breakfast.jpg	sheet opened
+Classes and events	Morning Prayer Meditation	tap	classes-and-events--morning-prayer-meditation.jpg	sheet opened
+Classes and events	Temple Havan Ritual	tap	classes-and-events--temple-havan-ritual.jpg	sheet opened
+Classes and events	Lunch	tap	classes-and-events--lunch.jpg	sheet opened
+Classes and events	Snacks	tap	classes-and-events--snacks.jpg	sheet opened
+Classes and events	Evening Yoga	tap	classes-and-events--evening-yoga.jpg	sheet opened
+Classes and events	Evening Prayer Meditation	tap	classes-and-events--evening-prayer-meditation.jpg	sheet opened
+Classes and events	Dinner	tap	classes-and-events--dinner.jpg	sheet opened
+Classes and events	Special Session 1	tap	classes-and-events--special-session-1.jpg	sheet opened
+Classes and events	Special Session 2	tap	classes-and-events--special-session-2.jpg	sheet opened
+Classes and events	Special Session 3	tap	classes-and-events--special-session-3.jpg	sheet opened
+Classes and events	Special Session 4	tap	classes-and-events--special-session-4.jpg	sheet opened
+Classes and events	8 need you	tap		FAILED: locator.scrollIntoViewIfNeeded: Timeout 3000ms exceeded.

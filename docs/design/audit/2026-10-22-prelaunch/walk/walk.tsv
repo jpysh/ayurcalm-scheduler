@@ -1,0 +1,137 @@
+admit	new patient sheet	admit-01-new-patient-sheet.jpg			
+admit	filled, arriving tomorrow for 21 days	admit-02-filled-arriving-tomorrow-for-21-days.jpg			
+admit	added	admit-03-added.jpg	Devi Audit added, T12, consultation Fri 23 Oct 09:45 Open card Undo	saved	
+admit	card scroll 0	admit-04-card-scroll-0.jpg			
+admit	card scroll 1	admit-05-card-scroll-1.jpg			
+setup	Plan scroll 0	setup-01-plan-scroll-0.jpg			
+setup	no "Their therapist" row on the card				
+setup	Diet scroll 0	setup-02-diet-scroll-0.jpg			
+setup	Diet scroll 1	setup-03-diet-scroll-1.jpg			
+setup	Package scroll 0	setup-04-package-scroll-0.jpg			
+setup	Package scroll 1	setup-05-package-scroll-1.jpg			
+setup	Package chosen	setup-06-package-chosen.jpg	Devi: Panchakarma 21 days Undo		
+setup	Details scroll 0	setup-07-details-scroll-0.jpg			
+setup	Details scroll 1	setup-08-details-scroll-1.jpg			
+setup	Private link scroll 0	setup-09-private-link-scroll-0.jpg			
+diet	BROKE	diet-01-broke.jpg		locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded.	
+diet	BROKE	diet-01-broke.jpg		locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded.	
+diet	BROKE	diet-01-broke.jpg		locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded.	
+diet	BROKE	diet-01-broke.jpg		locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded.	
+diet	BROKE	diet-01-broke.jpg		locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded.	
+diet	Before purification from day 1	diet-01-before-purification-from-day-1.jpg			
+diet	Before purification saved	diet-02-before-purification-saved.jpg	Before purification (deepana–pachana) from Fri 23 Oct		
+diet	Internal oleation from day 4	diet-03-internal-oleation-from-day-4.jpg			
+diet	Internal oleation saved	diet-04-internal-oleation-saved.jpg	Internal oleation (snehapana) from Mon 26 Oct		
+diet	After purification from day 9	diet-05-after-purification-from-day-9.jpg			
+diet	After purification saved	diet-06-after-purification-saved.jpg	After purification (samsarjana krama) from Sat 31 Oct		
+diet	General sattvic from day 14	diet-07-general-sattvic-from-day-14.jpg			
+diet	General sattvic saved	diet-08-general-sattvic-saved.jpg	General sattvic plan from Thu 5 Nov		
+diet	diet course scroll 0	diet-09-diet-course-scroll-0.jpg			
+diet	diet course scroll 1	diet-10-diet-course-scroll-1.jpg			
+diet	meals day 1			Breakfast: Warm water with ginger; thin gruel only if hungry | Lunch: Mung soup with ginger, pepper and long pepper; soft rice, small quantity | Dinner: Clear vegetable soup, early and light | Snacks: Warm water; nothing between meals	
+diet	meals day 4			Breakfast: Thin rice gruel, warm | Lunch: Soft khichdi with a little ghee; cooked bottle gourd | Dinner: Rice gruel or light vegetable soup | Snacks: Warm water only	
+diet	meals day 9			Breakfast: Vilepi, or soft rice with a little ghee at later steps | Lunch: Mung soup without fat (akrita yusha), then with ghee and mild spices (krita yusha) | Dinner: Soft rice with mung soup | Snacks: Warm water; buttermilk at later steps if advised	
+diet	meals day 14			Breakfast: Vegetable upma or poha; soaked almonds; herbal tea | Lunch: Rice, dal, two seasonal vegetables, curd, salad | Dinner: Chapati with a light vegetable curry | Snacks: Seasonal fruit; roasted chana	
+diet	meals day 20			Breakfast: Vegetable upma or poha; soaked almonds; herbal tea | Lunch: Rice, dal, two seasonal vegetables, curd, salad | Dinner: Chapati with a light vegetable curry | Snacks: Seasonal fruit; roasted chana	
+course	week 1 abhyanga who chosen	course-01-week-1-abhyanga-who-chosen.jpg			
+course	week 1 abhyanga x7 ready	course-02-week-1-abhyanga-x7-ready.jpg			
+course	week 1 abhyanga x7 booked	course-03-week-1-abhyanga-x7-booked.jpg			
+course	week 1 sweda who chosen	course-04-week-1-sweda-who-chosen.jpg			
+course	week 1 sweda x7 ready	course-05-week-1-sweda-x7-ready.jpg			
+course	week 1 sweda x7 booked	course-06-week-1-sweda-x7-booked.jpg			
+course	booked so far			10-23 09:45 53f01da3-511c-4642-926e-aa2ffd6649ec  | 10-24 10:45 3d014201-23b8-4e46-bb71-6a1b3040a843  | 10-24 12:15 92e483a2-150a-47fd-9b39-b32e7ee7d085  | 10-25 10:45 3d014201-23b8-4e46-bb71-6a1b3040a843  | 10-25 12:15 92e483a2-150a-47fd-9b39-b32e7ee7d085  | 10-26 10:45 3d014201-23b8-4e46-bb71-6a1b3040a843  | 10-26 12:30 92e483a2-150a-47fd-9b39-b32e7ee7d085  | 10-27 10:45 3d014201-23b8-4e46-bb71-6a1b3040a843  | 10-27 12:15 92e483a2-150a-47fd-9b39-b32e7ee7d085  | 10-28 10:45 3d014201-23b8-4e46-bb71-6a1b3040a843  | 10-28 12:15 92e483a2-150a-47fd-9b39-b32e7ee7d085  | 10-29 10:45 3d014201-23b8-4e46-bb71-6a1b3040a843  | 10-29 12:15 92e483a2-150a-47fd-9b39-b32e7ee7d085  | 10-30 10:45 3d014201-23b8-4e46-bb71-6a1b3040a843  | 10-30 12:15 92e483a2-150a-47fd-9b39-b32e7ee7d085 	
+course	card after week 1 scroll 0	course-07-card-after-week-1-scroll-0.jpg			
+course	card after week 1 scroll 1	course-08-card-after-week-1-scroll-1.jpg			
+weeks	day 1 card after review	weeks-01-day-1-card-after-review.jpg			
+weeks	day 1 next week scroll 0	weeks-02-day-1-next-week-scroll-0.jpg			
+weeks	day 1 next week scroll 1	weeks-03-day-1-next-week-scroll-1.jpg			
+weeks	day 1 next week scroll 2	weeks-04-day-1-next-week-scroll-2.jpg			
+weeks	day 1 next week scroll 3	weeks-05-day-1-next-week-scroll-3.jpg			
+weeks	day 1 next week scroll 4	weeks-06-day-1-next-week-scroll-4.jpg			
+weeks	BROKE	weeks-07-broke.jpg		locator.isEnabled: Timeout 30000ms exceeded.	
+weeks	day 8 card after review	weeks-01-day-8-card-after-review.jpg			
+weeks	day 8 next week scroll 0	weeks-02-day-8-next-week-scroll-0.jpg			
+weeks	day 8 next week scroll 1	weeks-03-day-8-next-week-scroll-1.jpg			
+weeks	day 8 next week scroll 2	weeks-04-day-8-next-week-scroll-2.jpg			
+weeks	day 8 next week scroll 3	weeks-05-day-8-next-week-scroll-3.jpg			
+weeks	day 8 next week scroll 4	weeks-06-day-8-next-week-scroll-4.jpg			
+weeks	day 8 swapped	weeks-07-day-8-swapped.jpg			
+weeks	day 15 card after review	weeks-08-day-15-card-after-review.jpg			
+weeks	day 15 next week scroll 0	weeks-09-day-15-next-week-scroll-0.jpg			
+weeks	day 15 next week scroll 1	weeks-10-day-15-next-week-scroll-1.jpg			
+weeks	day 15 next week scroll 2	weeks-11-day-15-next-week-scroll-2.jpg			
+weeks	day 15 next week scroll 3	weeks-12-day-15-next-week-scroll-3.jpg			
+weeks	day 15 next week scroll 4	weeks-13-day-15-next-week-scroll-4.jpg			
+weeks	day 15 swapped	weeks-14-day-15-swapped.jpg			
+weeks	course			10-23 09:45 Consultation | 10-24 10:45 Abhyanga | 10-24 12:15 Bashpa Sweda | 10-25 10:45 Abhyanga | 10-25 12:15 Bashpa Sweda | 10-26 10:45 Abhyanga | 10-26 12:30 Bashpa Sweda | 10-27 10:45 Abhyanga | 10-27 12:15 Bashpa Sweda | 10-28 10:45 Abhyanga | 10-28 12:15 Bashpa Sweda | 10-29 10:45 Abhyanga | 10-29 12:15 Bashpa Sweda | 10-30 10:45 Abhyanga | 10-30 12:15 Bashpa Sweda	
+weeks	day 8 review who chosen	weeks-01-day-8-review-who-chosen.jpg			
+weeks	day 8 review x1 ready	weeks-02-day-8-review-x1-ready.jpg			
+weeks	day 8 review x1 booked	weeks-03-day-8-review-x1-booked.jpg			
+weeks	day 8 card after review	weeks-04-day-8-card-after-review.jpg			
+weeks	day 8 next week scroll 0	weeks-05-day-8-next-week-scroll-0.jpg			
+weeks	day 8 swapped	weeks-06-day-8-swapped.jpg			
+weeks	day 8 booked	weeks-07-day-8-booked.jpg	Booked 8 treatments for Devi, Sat 31 Oct to Fri 6 Nov Undo		
+weeks	day 15 review who chosen	weeks-08-day-15-review-who-chosen.jpg			
+weeks	day 15 review x1 ready	weeks-09-day-15-review-x1-ready.jpg			
+weeks	day 15 review x1 booked	weeks-10-day-15-review-x1-booked.jpg			
+weeks	day 15 card after review	weeks-11-day-15-card-after-review.jpg			
+weeks	day 15 next week scroll 0	weeks-12-day-15-next-week-scroll-0.jpg			
+weeks	day 15 swapped	weeks-13-day-15-swapped.jpg			
+weeks	course			10-23 09:45 Consultation | 10-24 10:45 Abhyanga | 10-24 12:15 Bashpa Sweda | 10-25 10:45 Abhyanga | 10-25 12:15 Bashpa Sweda | 10-26 10:45 Abhyanga | 10-26 12:30 Bashpa Sweda | 10-27 10:45 Abhyanga | 10-27 12:15 Bashpa Sweda | 10-28 10:45 Abhyanga | 10-28 12:15 Bashpa Sweda | 10-29 10:45 Abhyanga | 10-29 12:15 Bashpa Sweda | 10-30 10:00 Consultation | 10-30 10:45 Abhyanga | 10-30 12:15 Bashpa Sweda | 10-31 10:45 Anuvasana Vasti | 11-01 10:45 Anuvasana Vasti | 11-02 10:45 Anuvasana Vasti | 11-03 10:45 Anuvasana Vasti | 11-04 10:45 Anuvasana Vasti | 11-05 10:45 Anuvasana Vasti | 11-06 10:00 Consultation | 11-06 10:45 Anuvasana Vasti | 11-06 11:30 Consultation	
+holiday	close another day	holiday-01-close-another-day.jpg			
+holiday	closed day filled	holiday-02-closed-day-filled.jpg			
+holiday	BROKE	holiday-03-broke.jpg		locator.click: Timeout 30000ms exceeded.	
+holiday	close another day	holiday-01-close-another-day.jpg			
+holiday	closed day filled	holiday-02-closed-day-filled.jpg			
+holiday	closed day saved	holiday-03-closed-day-saved.jpg	Centre closed Mon 2 Nov. 6 treatments moved to Tue 3 Nov to Sat 7 Nov. 1 could not be placed and wait under "need you". Undo		
+holiday	day 11 after closing	holiday-04-day-11-after-closing.jpg			
+holiday	day 11 what needs you scroll 0	holiday-05-day-11-what-needs-you-scroll-0.jpg			
+holiday	day 11 what needs you scroll 1	holiday-06-day-11-what-needs-you-scroll-1.jpg			
+therapy	new therapy sheet	therapy-01-new-therapy-sheet.jpg			
+therapy	new therapy filled	therapy-02-new-therapy-filled.jpg			
+therapy	new therapy saved	therapy-03-new-therapy-saved.jpg	Audit Pizhichil added		
+therapy	anuvasana 90 min	therapy-04-anuvasana-90-min.jpg			
+therapy	anuvasana saved	therapy-05-anuvasana-saved.jpg	Anuvasana Vasti saved Undo		
+breaks	day 14 her treatment card	breaks-01-day-14-her-treatment-card.jpg			
+breaks	something wrong sheet	breaks-02-something-wrong-sheet.jpg			
+breaks	marked didnt come	breaks-03-marked-didnt-come.jpg	Devi: didn't come. Room and therapist are free. Undo		
+breaks	when sheet	breaks-04-when-sheet.jpg			
+breaks	moved later	breaks-05-moved-later.jpg	Moved to 09:00 Undo		
+breaks	room out of use	breaks-06-room-out-of-use.jpg	Hanuman out of use all day · 1 moved Undo		
+breaks	day 15 card shows therapist	breaks-07-day-15-card-shows-therapist.jpg			
+breaks	BROKE	breaks-08-broke.jpg		locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded.	
+breaks	day 15 card shows therapist	breaks-01-day-15-card-shows-therapist.jpg			
+breaks	leave for Priya Patel dates	breaks-02-leave-for-priya-patel-dates.jpg			
+breaks	leave plan scroll 0	breaks-03-leave-plan-scroll-0.jpg			
+breaks	leave saved	breaks-04-leave-saved.jpg			
+breaks	day 15 need you after leave scroll 0	breaks-05-day-15-need-you-after-leave-scroll-0.jpg			
+breaks	day 15 need you after leave scroll 1	breaks-06-day-15-need-you-after-leave-scroll-1.jpg			
+leave	stay sheet	leave-01-stay-sheet.jpg			
+leave	leaving day 18	leave-02-leaving-day-18.jpg			
+leave	stay shortened	leave-03-stay-shortened.jpg	Devi: Fri 23 Oct to Mon 9 Nov Undo		
+leave	card after shortening scroll 0	leave-04-card-after-shortening-scroll-0.jpg			
+leave	card after shortening scroll 1	leave-05-card-after-shortening-scroll-1.jpg			
+leave	no discharge row on the card				
+leave	stay sheet	leave-01-stay-sheet.jpg			
+leave	leaving day 18	leave-02-leaving-day-18.jpg			
+leave	BROKE	leave-03-broke.jpg		locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded.	
+leave	stay sheet	leave-01-stay-sheet.jpg			
+leave	leaving day 18	leave-02-leaving-day-18.jpg			
+leave	BROKE	leave-03-broke.jpg		locator.click: Timeout 30000ms exceeded.	
+leave	stay sheet	leave-01-stay-sheet.jpg			
+leave	leaving day 18	leave-02-leaving-day-18.jpg			
+leave	card after shortening scroll 0	leave-03-card-after-shortening-scroll-0.jpg			
+leave	card after shortening scroll 1	leave-04-card-after-shortening-scroll-1.jpg			
+leave	card on leaving day scroll 0	leave-05-card-on-leaving-day-scroll-0.jpg			
+leave	card on leaving day scroll 1	leave-06-card-on-leaving-day-scroll-1.jpg			
+leave	discharge sheet scroll 0	leave-07-discharge-sheet-scroll-0.jpg			
+leave	discharge printed	leave-08-discharge-printed.jpg		pdf saved	
+edge	long emoji name, leaving before arriving	edge-01-long-emoji-name-leaving-before-arriving.jpg			
+edge	BROKE	edge-02-broke.jpg		locator.click: Timeout 30000ms exceeded.	
+edge	long emoji name, leaving before arriving	edge-01-long-emoji-name-leaving-before-arriving.jpg			
+edge	BROKE	edge-02-broke.jpg		page.goto: net::ERR_ABORTED at http://localhost:8097/admin/patients	
+edge	long emoji name, leaving before arriving	edge-01-long-emoji-name-leaving-before-arriving.jpg			
+edge	save while offline	edge-02-save-while-offline.jpg	No signal, so nothing was saved. Try again when the connection is back.		
+edge	save when back online	edge-03-save-when-back-online.jpg			
+edge	save with expired sign-in	edge-04-save-with-expired-sign-in.jpg			
+edge	after expiry	edge-05-after-expiry.jpg		http://localhost:8097/login	
