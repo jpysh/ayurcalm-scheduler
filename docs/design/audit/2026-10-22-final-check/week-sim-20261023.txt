@@ -1,0 +1,67 @@
+seed=20261023 tz=Asia/Kolkata today=2026-10-23 days=2026-10-24..2026-10-30
+staff=18 therapies=39
+leave Pooja Khan 2026-10-28..2026-10-28 -> 201
+leave Asha Yadav 2026-10-26..2026-10-27 -> 201
+patient Sim Anya A 2026-10-25..2026-10-31 only-one-therapist
+  course Shirodhara -> 201 3 booked
+  course Nasya -> 201 4 booked
+patient Sim Meera B 2026-10-27..2026-11-04
+  course Nasya -> 201 5 booked
+  course Hridaya Vasti -> 201 3 booked
+patient Sim Asha C 2026-10-27..2026-11-03
+  course Podikizhi -> 201 4 booked
+  course Ksheeradhara -> 201 1 booked
+  course Mukhabhyanga -> 201 5 booked
+patient Sim Tara D 2026-10-24..2026-10-28
+  course Virechana -> 201 3 booked
+  course Njavarakizhi -> 409 {"success":false,"appointments":[],"suggestions":[],"days":[],"by_therapist":[],"conflicts":{"reason":"NO_MATCHING_TIME_SLOTS","alternatives":[]}}
+  course Janu Vasti -> 201 3 booked
+patient Sim Ravi E 2026-10-27..2026-11-06
+  course Elakizhi -> 409 {"success":false,"appointments":[],"suggestions":[],"days":[],"by_therapist":[],"conflicts":{"reason":"NO_STAFF_AVAILABLE","alternatives":[{"date":"2026-10-27T0
+patient Sim Leela F 2026-10-27..2026-11-01
+  course Talapothichil -> 201 1 booked
+  course Agnikarma -> 201 4 booked
+patient Sim Meera G 2026-10-24..2026-10-28 only-one-therapist
+  course Hridaya Vasti -> 409 {"success":false,"appointments":[],"suggestions":[],"days":[],"by_therapist":[],"conflicts":{"reason":"NO_MATCHING_TIME_SLOTS","alternatives":[]}}
+patient Sim Tara H 2026-10-28..2026-11-02
+  course Jambira Pinda Sweda -> 409 {"success":false,"appointments":[{"id":"c1b84ce7-101a-4aa2-8689-e6e99b3d74b0","patient_id":"73f78ac1-880f-4a05-821b-caf5d5105588","therapy_id":"211ee8f0-28a4-41
+  course Ksheeradhara -> 201 2 booked
+  course Kati Vasti -> 201 1 booked
+patient Sim Leela I 2026-10-24..2026-11-03
+  course Agnikarma -> 201 3 booked
+  course Marma Massage -> 201 1 booked
+patient Sim Asha J 2026-10-27..2026-11-06
+  course Jalaukavacharana -> 201 4 booked
+patient Sim Dev K 2026-10-27..2026-11-05
+  course Abhyanga -> 201 1 booked
+  course Netra Tarpana -> 201 2 booked
+patient Sim Vikram L 2026-10-28..2026-11-03
+  course Marma Massage -> 409 {"success":false,"appointments":[{"id":"8974114b-9b71-4d5b-8b69-62d3cbfa3833","patient_id":"c6b9c5ee-1fec-423d-a74a-c33d73bf68d6","therapy_id":"c64b7584-3219-47
+closure 2026-10-27 move -> 201 {"id":"960f0eea-1982-426e-8a48-9cc2609ee4a6","entity_type":"center","entity_id":null,"date":"2026-10-27T00:00:00.000Z","start_date":null,"end_date":null,"start_time":null,"end_time":null,"description"
+leaves early Sim Anya A 2026-10-31->2026-10-26 -> 200 
+leaves early Sim Meera B 2026-11-04->2026-10-28 -> 200 
+cancel fc9c5ec1 2026-10-28 13:30 -> 200
+cancel af5c6289 2026-10-24 16:00 -> 200
+cancel 948bad5b 2026-10-25 16:30 -> 200
+move 938c7748 11:00->16:30 -> 409 Bhavna Mishra already has a treatment at 16:00.
+move 4b8ba759 15:00->11:30 -> 409 Bhavna Mishra already has a treatment at 11:30.
+move c8f76d43 11:00->08:30 -> 409 Bhavna Mishra already has a treatment at 09:00.
+2026-10-24 saturday: 69 treatments, day-check problems=1
+2026-10-25 sunday: 61 treatments, day-check problems=6
+2026-10-26 monday: 46 treatments, day-check problems=10
+2026-10-27 tuesday: 3 treatments, day-check problems=3
+2026-10-28 wednesday: 58 treatments, day-check problems=19
+2026-10-29 thursday: 27 treatments, day-check problems=30
+2026-10-30 friday: 18 treatments, day-check problems=31
+AUDIT 11 problems
+  2026-10-27 closed but 3 treatments
+  2026-10-28 Sim Anya A treated outside stay at 09:00
+  2026-10-28 Sim Anya A treated outside stay at 12:30
+  2026-10-29 Sim Anya A treated outside stay at 09:00
+  2026-10-29 Sim Anya A one-therapist rule broken at 10:30
+  2026-10-29 Sim Anya A treated outside stay at 10:30
+  2026-10-29 Sim Meera B treated outside stay at 09:00
+  2026-10-29 Sim Meera B treated outside stay at 12:15
+  2026-10-30 Sim Anya A treated outside stay at 09:00
+  2026-10-30 Sim Meera B treated outside stay at 09:00
+  2026-10-30 Sim Meera B treated outside stay at 11:00
