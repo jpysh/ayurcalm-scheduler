@@ -284,7 +284,8 @@ export async function watch(now = Date.now()) {
 if (process.argv[1] === new URL(import.meta.url).pathname) {
   // The public box is rebuilt from this checkout whenever the manager starts, so the nightly rollout's restart refreshes it (#1091).
   console.log('manager started');
-  compose('up', '-d', '--build', 'signup').catch((e) => notify(`ALERT: the sign-up page did not start: ${String(e.message).split('\n')[0]}`));
+  // The first watch waits for the build: run during it, it saw no box, started a second one and raised a false alarm.
+  const built = compose('up', '-d', '--build', 'signup').catch((e) => notify(`ALERT: the sign-up page did not start: ${String(e.message).split('\n')[0]}`));
   setInterval(() => inbox().catch(console.error), 500);
   // Hourly; the morning goes out on the first run in the 7 o'clock hour of the Mac's own clock (#818), and the tidy at 03:00 in India.
   let sent = '';
@@ -307,7 +308,7 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
     if (indiaHour(d) === 3) await tidy().catch(console.error);
   }, 3_600_000);
   setInterval(() => update(), 600_000);
-  watch().catch(console.error);
+  built.then(() => watch()).catch(console.error);
   // `touch ~/ruta-data/update-now` asks for one update now, outside the 21:00 hour (#924).
   setInterval(() => { if (existsSync(`${DATA}/update-now`)) { rmSync(`${DATA}/update-now`); update(true); } }, 60_000);
 }
