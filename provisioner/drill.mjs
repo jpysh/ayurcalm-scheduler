@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 Object.assign(process.env, { RUTA_DATA: mkdtempSync(join(tmpdir(), 'ruta-drill-')), BEHIND_CLOUDFLARE: 'true', CENTRE_PORT_FROM: '8390', PORT: '0' });
-delete process.env.TURNSTILE_SECRET; delete process.env.CF_EMAIL_TOKEN; delete process.env.TELEGRAM_BOT_TOKEN;
+delete process.env.TURNSTILE_SECRET; delete process.env.CF_EMAIL_TOKEN;
 const { server, tick } = await import('./index.mjs');
 await new Promise((ok) => server.listen(0, ok));
 const port = server.address().port;
