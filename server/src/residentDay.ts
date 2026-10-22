@@ -26,17 +26,21 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
   const day = new Date(`${date}T00:00:00.000Z`);
   const patient = await prisma.patient.findUnique({ where: { id: patientId } });
   if (!patient) return null;
-  // Seven days from today: the weekly doctor review plans about that far ahead (#348).
-  const weekEnd = new Date(day.getTime() + 6 * DAY_MS);
-  const [stay, ahead, diets] = await Promise.all([
-    prisma.patientStay.findFirst({ where: { patient_id: patientId, start_date: { lte: day }, end_date: { gte: day } } }),
+  const stay = await prisma.patientStay.findFirst({ where: { patient_id: patientId, start_date: { lte: day }, end_date: { gte: day } } });
+  // A guest whose stay starts later has the card of that stay: what it needs before they arrive (#495).
+  const comingStay = stay ? null : await prisma.patientStay.findFirst({ where: { patient_id: patientId, start_date: { gt: day } }, orderBy: { start_date: 'asc' } });
+  // Their week and diet are read from the arrival day, so the course just booked can be checked (#1068).
+  const from = comingStay?.start_date ?? day;
+  // Seven days on: the weekly doctor review plans about that far ahead (#348).
+  const weekEnd = new Date(from.getTime() + 6 * DAY_MS);
+  const [ahead, diets] = await Promise.all([
     // A no-show stays on the card, marked; a cancellation does not.
     prisma.appointment.findMany({
       where: { patient_id: patientId, scheduled_date: { gte: day, lte: weekEnd }, status: { not: 'cancelled' } },
       orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }],
       include: { Therapy: { select: { name: true, is_consultation: true } }, Room: { select: { name: true } } },
     }),
-    loadDietsForDay(day, prisma),
+    loadDietsForDay(from, prisma),
   ]);
   // The doctor's side of the card (#219): the last consultation before today,
   // the next one from today, and the plan the last one left.
@@ -56,9 +60,10 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
   const appts = ahead.filter((a) => a.scheduled_date.getTime() === day.getTime());
   // The days the stay covers, each with what is booked, so an empty one shows (#350).
   // Not staying, there is nothing to book and no week to show (#437).
-  const lastDay = stay ? (stay.end_date < weekEnd ? stay.end_date : weekEnd) : new Date(day.getTime() - DAY_MS);
+  const up = stay ?? comingStay;
+  const lastDay = up ? (up.end_date < weekEnd ? up.end_date : weekEnd) : new Date(day.getTime() - DAY_MS);
   const week = [];
-  for (let t = day.getTime(); t <= lastDay.getTime(); t += DAY_MS) {
+  for (let t = from.getTime(); t <= lastDay.getTime(); t += DAY_MS) {
     const iso = new Date(t).toISOString().slice(0, 10);
     week.push({ date: iso, treatments: ahead.filter((a) => a.scheduled_date.getTime() === t).map((a) => ({ id: a.id, start_time: a.start_time, therapy_name: a.Therapy.name, consultation: a.Therapy.is_consultation, status: a.status })) });
   }
@@ -66,12 +71,9 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
   const visit = (a: (typeof visits)[number] | null) => a && { id: a.id, date: a.scheduled_date.toISOString().slice(0, 10), start_time: a.start_time, doctor: a.Staff?.name ?? null, note: a.notes };
   const team = [...new Set(appts.flatMap((a) => [a.staff_id, ...a.co_staff_ids]).filter((x): x is string => Boolean(x)))];
   const names = new Map((await prisma.staff.findMany({ where: { id: { in: team } }, select: { id: true, name: true } })).map((s) => [s.id, s.name]));
-  const diet = diets.dietFor(patient, appts.some((a) => a.status !== 'no_show'));
+  const diet = diets.dietFor(patient, ahead.some((a) => a.scheduled_date.getTime() === from.getTime() && a.status !== 'no_show'));
   // The plan that takes over later in the stay, so the Diet row can say "then X from 5 Oct".
-  const nextSeg = stay ? await prisma.dietPlanSegment.findFirst({ where: { patient_id: patientId, start_date: { gt: day, lte: stay.end_date } }, orderBy: { start_date: 'asc' }, include: { Template: { select: { name: true } } } }) : null;
-  // A guest whose stay starts later has the card of that stay: what it needs before they arrive (#495).
-  const comingStay = stay ? null : await prisma.patientStay.findFirst({ where: { patient_id: patientId, start_date: { gt: day } }, orderBy: { start_date: 'asc' } });
-  const up = stay ?? comingStay;
+  const nextSeg = up ? await prisma.dietPlanSegment.findFirst({ where: { patient_id: patientId, start_date: { gt: from, lte: up.end_date } }, orderBy: { start_date: 'asc' }, include: { Template: { select: { name: true } } } }) : null;
   const [pack, house, discharge] = up ? await Promise.all([
     up.package_id ? prisma.package.findUnique({ where: { id: up.package_id } }) : null,
     up.accommodation_id ? prisma.accommodationType.findUnique({ where: { id: up.accommodation_id } }) : null,
