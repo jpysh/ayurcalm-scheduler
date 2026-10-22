@@ -335,6 +335,8 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   const seq = useRef(0);
   // A time carried over from "Book that" on another day, applied when that day's times arrive.
   const pendingAt = useRef<string | undefined>(undefined);
+  // Why the sheet moved itself off the asked-for day, said once above the lines instead of a dead end beside a greyed button.
+  const [moved, setMoved] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -377,11 +379,14 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
     fetch(`${API_BASE}/appointments/options?date=${date}&patient_id=${chosen.id}&therapy_id=${therapyId}${l ? `&staff_id=${l}` : ""}${at ? `&at=${at}` : ""}${nowQ}`)
       .then((r) => (r.ok ? r.json() : null)).then((o: Options | null) => {
         if (n !== seq.current || !o) return;
+        // Nothing free but the server named the next free time: open on it rather than on a dead end (decision 22 Oct).
+        const next = o.actions?.[0];
+        if (!o.times.length && !at && next?.kind === "book_at" && next.date && next.date !== date) { setMoved(o.why || null); carry(next); return; }
         const slot = o.times.find((t) => t.start_time === at) || o.times[0];
         setOpts(o); setTime(slot?.start_time || ""); setStaffId(slot?.staff_id || ""); setRoomId(slot?.room_id || "");
       });
   };
-  useEffect(() => { setLead(""); }, [chosen, therapyId]);
+  useEffect(() => { setMoved(null); setLead(""); }, [chosen, therapyId]);
   useEffect(() => { setOpts(null); const at = pendingAt.current; pendingAt.current = undefined; load(at); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [chosen, therapyId, date, rev]);
 
   const slot = opts?.times.find((t) => t.start_time === time);
@@ -495,13 +500,13 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   // The last one had comes first; what is already booked that day drops to the end, greyed and still bookable (#1028).
   const listed = (facts || []).filter((t) => !long || t.repeat || t.taken).sort((a, b) => Number(b.repeat) - Number(a.repeat) || Number(a.taken) - Number(b.taken));
   const matching = (facts || []).filter((t) => say(t.name).toLowerCase().includes(tq.trim().toLowerCase()));
-  const when = `${date === today ? "" : `${weekday} `}${time}`;
+  const when = `${weekday} ${time}`;
   const label = !therapyId ? "Choose a therapy" : !slot ? `Book ${first}` : warnings.length ? `Book anyway, ${sessions > 1 ? `${sessions} days from ` : ""}${when}` : `Book ${first}, ${sessions > 1 ? `${sessions} days from ` : ""}${when}`;
 
   return (
     <>
     <BottomSheet open={open} onOpenChange={(o) => { if (!o) close(); }} title={booked ? "Booked" : chosen ? chosen.name : "Book a treatment"}
-      note={booked ? chosen?.name : `${chosen ? chosen.note ?? "" : `Who is it for, ${date === today ? "today" : dayText(date)}?`}${full ? ` Full from ${full}.` : ""}`.trim() || undefined}
+      note={booked ? chosen?.name : chosen?.note ? <>{chosen.note.split(" · ").map((l, i) => <span key={i} className="block">{i ? l[0].toUpperCase() + l.slice(1) : l}</span>)}{full ? <span className="block">Full from {full}.</span> : null}</> : `Who is it for, ${date === today ? "today" : dayText(date)}?${full ? ` Full from ${full}.` : ""}`}
       foot={booked ? undefined
         : chosen
         ? <SheetFoot busy={busy} ok={!!slot} save={book} label={label} />
@@ -519,7 +524,8 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
         )
       ) : (
         <div>
-          {!patient ? <Btn kind="quiet" inline className="-ml-4" onClick={() => { setChosen(null); setOpts(null); }}>‹ Someone else</Btn> : null}
+          {!patient ? <Btn kind="quiet" inline className="-ml-4" onClick={() => { setChosen(null); setOpts(null); }}>‹ Change patient</Btn> : null}
+          {moved && opts?.times.length ? <Consequence>{moved} Showing {dayText(date)}.</Consequence> : null}
           <ChangeLine label={sessions > 1 ? "Starts" : "Date"} value={dayText(date)} select={<LineDate label="Date" value={date} min={today} onChange={setDate} />} />
           {therapyId ? <ChangeLine label="Therapy" value={therapyName} onClick={() => { setTherapyId(""); setOpts(null); }} /> : facts === null ? <Loading rows={3} /> : (
             <div className="mt-2">
@@ -531,7 +537,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
           )}
           {therapyId ? (
             <Group label="Days in a row">
-              <Seg<number> options={[...COURSE_DAYS.map((n) => [n, n === 1 ? "One" : String(n)] as [number, string]), [0, "Other"]]} value={otherDays || !COURSE_DAYS.includes(sessions) ? 0 : sessions}
+              <Seg<number> options={[...COURSE_DAYS.map((n) => [n, String(n)] as [number, string]), [0, "Other"]]} value={otherDays || !COURSE_DAYS.includes(sessions) ? 0 : sessions}
                 onChange={(n) => { if (n === 0) { setOtherDays(true); if (COURSE_DAYS.includes(sessions)) setSessions(2); } else { setOtherDays(false); setSessions(n); } }} />
               {otherDays || !COURSE_DAYS.includes(sessions) ? (
                 <ChangeLine label="Days" value={String(sessions)} select={<LineSelect label="Days in a row" value={String(sessions)} onChange={(v) => setSessions(Number(v))} free={Array.from({ length: 20 }, (_, i) => ({ id: String(i + 2), name: `${i + 2} days in a row` }))} />} />
@@ -540,7 +546,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
           ) : null}
           {!therapyId ? null : opts === null ? <Loading rows={3} /> : opts.times.length === 0 ? (
             <Callout tone="notice" title={opts.why || `No free time for ${first}.`}
-              actions={opts.actions.map((a, i) => <Btn key={a.label} kind={i === 0 ? "primary" : "secondary"} inline onClick={() => carry(a)}>{a.label}</Btn>)} />
+              actions={opts.actions.filter((a) => a.kind !== "other_therapy").map((a, i) => <Btn key={a.label} kind={i === 0 ? "primary" : "secondary"} inline onClick={() => carry(a)}>{a.label}</Btn>)} />
           ) : (<>
             {warnings.length ? <div className="mb-2 mt-2"><Callout tone="notice" title={warnings.map((w) => w.message).join(" ")} actions={warnings.flatMap((w) => (w.actions || []).filter((a) => a.kind !== "book_anyway")).map((a) => <Btn key={a.label} kind="quiet" inline onClick={() => carry(a)}>{a.label}</Btn>)}>Booking it is still possible.</Callout></div> : null}
             {opts.first_choice ? <ChangeLine label={opts.first_choice.their_therapist ? "Their therapist" : giver} value={`${opts.first_choice.staff_name.split(" ")[0]} · ${opts.first_choice.date === date ? "" : `${dayText(opts.first_choice.date)} `}${opts.first_choice.start_time}`}
