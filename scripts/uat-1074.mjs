@@ -1,0 +1,20 @@
+// node scripts/uat-1074.mjs — the day's to-fix sheet, patient first with the bulk button under the thumb (#1074), 375x812 on Mon 2 Nov, the closed day the maintainer reported.
+import { chromium } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+const APP = process.env.APP_URL || 'http://localhost:8080';
+const OUT = 'docs/design/uat/2026-10-22-day-check-sheet';
+mkdirSync(OUT, { recursive: true });
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, timezoneId: 'Asia/Kolkata' });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+const p = await ctx.newPage();
+await p.clock.setFixedTime(new Date('2026-11-02T08:30:00+05:30'));
+await p.goto(`${APP}/`); await p.waitForTimeout(3500);
+await p.getByRole('button', { name: 'Menu' }).click(); await p.waitForTimeout(600);
+await p.getByRole('button', { name: /need you|to know/ }).first().click();
+await p.waitForTimeout(1500);
+await p.screenshot({ path: `${OUT}/after-sheet-375.png` });
+await p.getByRole('button', { name: /^Open the \d+ treatments$/ }).first().click(); await p.waitForTimeout(800);
+await p.screenshot({ path: `${OUT}/after-opened-375.png` });
+await b.close();
