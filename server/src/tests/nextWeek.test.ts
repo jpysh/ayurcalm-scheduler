@@ -121,6 +121,10 @@ async function main() {
     const start = await call('POST', `/patients/${fresh.id}/next-week`, { date: REVIEW, review: false, lines: [{ from_therapy_id: kati.id, therapy_id: kati.id }, { from_therapy_id: shiro.id, therapy_id: shiro.id }] });
     assert.equal(start.count, 14, 'two therapies on each of the seven days, from the day after the review');
     assert.equal(await prisma.appointment.count({ where: { patient_id: fresh.id, therapy_id: kati.id } }), 7);
+    // Booked that week already (#1069): the sheet shows those lines as booked, never the starters again.
+    const booked = await call('GET', `/patients/${fresh.id}/next-week?date=${REVIEW}`);
+    assert.equal(booked.lines.length, 2, 'the therapies already booked that week should be lines');
+    assert.ok(booked.lines.every((l: { sessions: unknown[]; missing: unknown[] }) => !l.sessions.length && !l.missing.length), 'a booked line should offer nothing more');
     // A course shape (#984): 3 of 7 days is spread over the week, not the first three.
     const shaped = await call('POST', '/patients', { name: `${TAG} Shaped`, gender: 'female', stay: { start_date: REVIEW, end_date: day(12) } });
     assert.equal((await call('POST', `/patients/${shaped.id}/next-week`, { date: REVIEW, review: false, lines: [{ from_therapy_id: kati.id, therapy_id: kati.id, sessions: 3 }] })).count, 3);

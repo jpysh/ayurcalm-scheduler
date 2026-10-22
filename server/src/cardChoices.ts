@@ -585,6 +585,18 @@ export async function planNextWeek(patientId: string, reviewISO: string, prisma:
     e.last = a; e.dates.add(shift(isoOf(a.scheduled_date), 7));
     byTherapy.set(a.therapy_id, e);
   }
+  // Already booked in the coming week (a first week from + Book, #1069): shown as booked, so the sheet never offers the same days again.
+  const ahead = await prisma.appointment.findMany({
+    where: { patient_id: patientId, scheduled_date: { gt: review, lte: new Date(`${to}T00:00:00.000Z`) }, ...HAPPENING, Therapy: { is_consultation: false } },
+    include: { Therapy: true }, orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }],
+  });
+  const repeated = new Set(byTherapy.keys());
+  for (const a of ahead) {
+    if (repeated.has(a.therapy_id)) continue;
+    const e = byTherapy.get(a.therapy_id) || { last: a, dates: new Set<string>() };
+    e.dates.add(isoOf(a.scheduled_date));
+    byTherapy.set(a.therapy_id, e);
+  }
   const consult = [...past].reverse().find((a) => a.Therapy?.is_consultation);
   // Never a day already gone: a review planned late fills only what is left of the week.
   const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
