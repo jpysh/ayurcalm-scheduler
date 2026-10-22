@@ -267,8 +267,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
         name: "Staff", count: teamAct.length,
         body: teamAct.length + teamInfo.length ? <ListGroup>{[...teamAct, ...teamInfo].map((i) => <Row key={i.id} title={i.kind === "information" ? i.what : i.who} facts={i.kind === "information" ? "Information · not counted" : i.what} />)}</ListGroup> : null,
       }, {
-        // Patients and Team are always today's: on a sheet headed with another day they say so (#663).
-        name: day === today ? "Patients" : "Today's patients", count: new Set(patientAll.map((i) => i.patient_id ?? i.id)).size,
+        name: "Patients", count: new Set(patientAll.map((i) => i.patient_id ?? i.id)).size,
         body: patientRows.length + patientInfo.length + groups.length ? <ListGroup>{groups.map((g) => {
           const n = new Set(g.list.map((i) => i.patient_id)).size;
           const showBtn = <button type="button" className={tb()} onClick={() => setShown([...shown, g.rule])}>Show the {n}</button>;
