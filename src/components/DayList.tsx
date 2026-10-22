@@ -128,6 +128,8 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
             <span className="ml-auto pt-0.5 text-sm text-muted-foreground whitespace-nowrap inline-flex items-center gap-1"><DoorClosed className="h-3 w-3" aria-hidden />{r.room}</span>
           </span>
           <span className="block text-sm text-muted-foreground [overflow-wrap:anywhere]">{line}</span>
+          {/* The red end time alone said "running now" by colour only (#1076). */}
+          {n ? <span className="block text-sm font-semibold text-now">In progress</span> : null}
           {flag ? <span className={`block text-sm ${flag.blocking ? "font-semibold text-destructive" : flag.info ? "text-muted-foreground" : "text-notice"}`}>{flag.text}</span> : null}
           {movedFrom[r.a.id] ? (
             <span className="flex items-center gap-1 text-sm text-notice"><i className="h-2 w-2 rounded-full bg-warning" />Was {movedFrom[r.a.id].split(" ")[0]}'s</span>
@@ -198,7 +200,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
             <span className="flex items-baseline gap-2 font-medium text-muted-foreground whitespace-nowrap">
               {summary}
               {view === "therapist" && onNotIn && left.length ? (
-                <Btn kind="quiet" inline aria-label={`${g.label} not in`} onClick={() => onNotIn(g.id!, g.label)}>Not in</Btn>
+                <Btn kind="quiet" inline aria-label={`${g.label} on leave`} onClick={() => onNotIn(g.id!, g.label)}>On leave</Btn>
               ) : null}
             </span>
           </div>

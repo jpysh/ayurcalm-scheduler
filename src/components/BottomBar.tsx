@@ -84,7 +84,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
       setHints({
         patients: inHouseNote((residents as { Stays: { start_date: string; end_date: string; on_site?: boolean }[] }[]).flatMap((p) => p.Stays.filter((s) => s.start_date.slice(0, 10) <= today && s.end_date.slice(0, 10) >= today).slice(0, 1))),
         rooms: `${plural(rooms.length, "room")}${roomsOut ? ` · ${roomsOut} out` : ""}`,
-        team: !staff.length ? "No staff yet" : out.length === 0 ? "Everyone in" : out.length === 1 ? `${out[0]} not in` : `${out.length} not in`,
+        team: !staff.length ? "No staff yet" : out.length === 0 ? "Everyone in" : out.length === 1 ? `${out[0]} on leave` : `${out.length} on leave`,
         schedule: dayText(day),
         ...(guestRooms.length ? { guestrooms: `${guestRooms.filter((r) => r.free).length} free tonight` } : {}),
       });
@@ -167,7 +167,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
  * The day, as Apple Calendar draws it (5 Oct): one week across, swipe for the next or last, tap a day.
  * Today carries a ring, the chosen day is filled. Far-off dates are in the Menu's Change day.
  */
-export function WeekStrip({ day, today, setDay, moves, stamp }: { day: string; today: string; setDay: (iso: string) => void; moves?: Map<string, { in: number; out: number }>; stamp?: unknown }) {
+export function WeekStrip({ day, today, setDay, stamp }: { day: string; today: string; setDay: (iso: string) => void; stamp?: unknown }) {
   const dow = (iso: string) => new Date(`${iso}T00:00:00Z`).getUTCDay();
   const weekOf = (iso: string) => shift(iso, -dow(iso));
   const weeksBetween = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / (7 * 86400000));
@@ -236,13 +236,11 @@ export function WeekStrip({ day, today, setDay, moves, stamp }: { day: string; t
         {weeks.map((w) => (
           <div key={w} className="flex w-full flex-none snap-start justify-between">
             {Array.from({ length: 7 }, (_, i) => shift(w, i)).map((d) => {
-              const on = d === day, now = d === today, m = moves?.get(d);
+              const on = d === day, now = d === today;
               return (
-                <button key={d} type="button" aria-label={dayText(d)} title={m ? `${m.in} arriving, ${m.out} leaving` : undefined} aria-pressed={on} onClick={() => setDay(d)} className="flex min-h-14 w-[14.28%] flex-col items-center justify-center gap-0.5">
+                <button key={d} type="button" aria-label={dayText(d)} aria-pressed={on} onClick={() => setDay(d)} className="flex min-h-14 w-[14.28%] flex-col items-center justify-center gap-0.5">
                   <span className={`text-xs font-semibold ${dow(d) % 6 === 0 ? "text-muted-foreground" : ""}`}>{"SMTWTFS"[dow(d)]}</span>
                   <span className={`grid h-10 w-full max-w-10 place-items-center rounded-xl text-[min(1.125rem,5.6vw)] tabular-nums ${on ? "bg-primary font-bold text-primary-foreground" : now ? "border-2 border-primary font-bold text-primary" : ""}`}>{Number(d.slice(8))}</span>
-                  {/* Monday planning (#421): who comes and goes, read off the stays already loaded. A fixed line so the days stay level. */}
-                  {moves ? <span aria-hidden className="h-3.5 text-[11px] font-semibold leading-none tabular-nums">{m?.in ? <span className="text-primary">+{m.in}</span> : null}{m?.in && m?.out ? " " : null}{m?.out ? <span className="text-muted-foreground">−{m.out}</span> : null}</span> : null}
                 </button>
               );
             })}

@@ -138,7 +138,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
   return (
     <div>
       {isTeam ? <>
-        <PageHead title="Staff" note={day === today ? `${staff.filter(staffActive).length - notIn.length} in${notIn.length ? ` · ${notIn.length} not in` : ""}` : `${on < 0 ? "…" : inOn} in on ${dayText(day)}`} gear={{ label: "What needs you: staff rules", run: openRules }} />
+        <PageHead title="Staff" note={day === today ? `${staff.filter(staffActive).length - notIn.length} in${notIn.length ? ` · ${notIn.length} on leave` : ""}` : `${on < 0 ? "…" : inOn} in on ${dayText(day)}`} gear={{ label: "What needs you: staff rules", run: openRules }} />
         <WeekStrip day={day} today={today} setDay={setDay} stamp={staff} />
       </> : <PageHead title="Rooms" note={`${plural(rooms.filter(roomActive).length, "room")}${roomsOut ? ` · ${roomsOut} out` : ""}`} />}
       {/* With nobody on the list yet, "No staff yet" below already says it. */}
@@ -152,7 +152,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
             const d = dayOf(s);
             const away = d?.state === "away" || d?.state === "off";
             return (
-              <Row key={s.id} title={away ? <s className="text-muted-foreground">{s.name}</s> : s.name} facts={[dayLine(d), soonOff(String(s.id))].filter(Boolean).join(" · ")}
+              <Row key={s.id} title={away ? <span className="text-muted-foreground">{s.name}</span> : s.name} facts={[dayLine(d), soonOff(String(s.id))].filter(Boolean).join(" · ")}
                 flag={day === today && offToday[String(s.id)] && !away ? "Not in today" : undefined} trailing="›"
                 onClick={() => (day < today ? openPerson(String(s.id)) : setPick({ kind: "staff", id: String(s.id), name: s.name }))} />
             );
@@ -224,5 +224,5 @@ const load = (d: Day) => d.capacity && d.booked / d.capacity > 0.9 ? " · nearly
 /** "07:00–15:00 · 5h of 8h booked"; away with the reason; a day off says so. */
 const dayLine = (d?: Day) => !d ? undefined
   : d.state === "off" ? "Day off"
-  : d.state === "away" ? `Away · ${d.why || "leave"}`
+  : d.state === "away" ? (d.why ? `On leave · ${d.why}` : "On leave")
   : `${d.start}–${d.end} · ${booked(d.booked, d.capacity)}${load(d)}${d.state === "part" ? ` · ${(d.why || "part of the day").toLowerCase()}` : ""}`;

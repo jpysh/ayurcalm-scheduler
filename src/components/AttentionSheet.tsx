@@ -308,7 +308,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
         // What counts comes first on the sheet; the day's information follows everything (#661).
         name: "For your information", count: 0,
         body: didForYou.length + notes.length ? <ListGroup>
-            {didForYou.map((b) => item(b.batch_id, `${b.staff_name} is not in ${day === today ? "today" : `on ${dayName}`}`,
+            {didForYou.map((b) => item(b.batch_id, `${b.staff_name} is on leave ${day === today ? "today" : `on ${dayName}`}`,
               b.moved.length
                 ? `${first(b.staff_name)}'s ${b.moved.length} treatment${b.moved.length === 1 ? "" : "s"} went to ${listed([...new Set(b.moved.map((m) => first(m.to.staff_name)))])}.`
                 : "Nothing of theirs could be moved by itself.", <>

@@ -216,13 +216,13 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients
     );
   } else if (page === "wrong") {
     title = "Something wrong?";
-    note$ = `${who} · ${appt.start_time} ${say(therapyNameById[appt.therapy_id] || "")}. Each acts at once; Undo follows.`;
+    note$ = `${who} · ${appt.start_time} ${say(therapyNameById[appt.therapy_id] || "")}. Tap one: it happens straight away, and you can undo it.`;
     const items: [string, string, () => void][] = [
       [`${first} didn't come`, "", () => apply({ status: "no_show" }, `${first}: didn't come. Room and therapist are free.`)],
       [`${first} is running late`, "Start later ›", () => open("time")],
       [`${first} wants to cancel`, "", () => apply({ status: "cancelled" }, `${first}'s ${appt.start_time} ${say(therapyNameById[appt.therapy_id] || "treatment")}${isToday ? "" : ` on ${dayText(appt.scheduled_date)}`} cancelled`)],
-      ...team.map((id): [string, string, () => void] => [`${nameIn(staff, id)} is not in`, "From now", () => { onClose(); staffNotIn(id, nameIn(staff, id)); }]),
-      ...(appt.room_id ? [[`${nameIn(roomsList, appt.room_id)} can't be used`, "From now", () => { onClose(); roomOut(appt.room_id!, nameIn(roomsList, appt.room_id)); }] as [string, string, () => void]] : []),
+      ...team.map((id): [string, string, () => void] => [`${nameIn(staff, id)} is on leave`, "From now", () => { onClose(); staffNotIn(id, nameIn(staff, id)); }]),
+      ...(appt.room_id ? [[`${nameIn(roomsList, appt.room_id)} is out of use`, "From now", () => { onClose(); roomOut(appt.room_id!, nameIn(roomsList, appt.room_id)); }] as [string, string, () => void]] : []),
     ];
     body = <><ListGroup>{items.map(([label, hint, go]) => <Row key={label} title={label} trailing={hint} onClick={busy ? undefined : go} />)}</ListGroup></>;
   } else if (page === "history") {
@@ -242,7 +242,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients
     // Nobody to swap in: the list holds other times and cancel, so the line under the title says so.
     const noSwap = seat && choices?.some((c) => !c.now) && choices.every((c) => c.now || "start_time" in c.change || "status" in c.change);
     if (seat) [title, note$] = [`Instead of ${nameIn(staff, seat)}`, noSwap ? `No one else is free at ${appt.start_time}. Nothing moves until you choose.` : "Free for the whole treatment, and trained for it"];
-    const shown = choices?.map((c, i) => ({ id: String(i), name: say(c.label), note: c.best ? "Suggested" : undefined, fact: c.now ? undefined : c.hint, c })) ?? [];
+    const shown = choices?.map((c, i) => ({ id: String(i), name: say(c.label), note: c.best ? "Best fit" : undefined, fact: c.now ? undefined : c.hint, c })) ?? [];
     const current = shown.find((o) => o.c.now);
     body = (
       <>
