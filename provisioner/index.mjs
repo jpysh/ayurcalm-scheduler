@@ -4,12 +4,13 @@
 // email (#727): seeing their centre comes first; the email only says where it is.
 // Hourly, each centre moves through lifecycle.mjs; nothing about that is emailed.
 // Runs on the trial host next to Docker (hosting/centre.sh). No dependencies.
-//   node provisioner/index.mjs          (PORT 8200; env below)
-import http from 'node:http';
+// The public pages run in their own container (public.mjs, #1091); this manager has no
+// network port and answers them through ~/ruta-data/signup.
+//   node provisioner/index.mjs
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHmac, randomBytes } from 'node:crypto';
-import { readFileSync, writeFileSync, renameSync, appendFileSync, existsSync, rmSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync, existsSync, rmSync, statSync, mkdirSync, readdirSync, lstatSync } from 'node:fs';
 import { next, deletesAt, refuse, slugFor, linkOpen, took, rollout } from './lifecycle.mjs';
 import { morning, security, nodeLine } from './morning.mjs';
 
@@ -23,7 +24,18 @@ const DB = `${DATA}/provisioner.json`;
 
 // ---- state: one JSON file, written whole (a few dozen centres at most) ----
 const db = { feedback: [], ...(existsSync(DB) ? JSON.parse(readFileSync(DB, 'utf8')) : { signups: [], centres: [], waitlist: [] }) };
-const save = () => { writeFileSync(`${DB}.tmp`, JSON.stringify(db, null, 1)); renameSync(`${DB}.tmp`, DB); };
+// What the public box (#1091) may show, rewritten on every save: no centre's port or secret.
+const BOX = `${DATA}/signup`;
+mkdirSync(`${BOX}/inbox`, { recursive: true }); mkdirSync(`${BOX}/out`, { recursive: true });
+const out = (name, o) => { writeFileSync(`${BOX}/out/.${name}.tmp`, JSON.stringify(o)); renameSync(`${BOX}/out/.${name}.tmp`, `${BOX}/out/${name}.json`); };
+const view = () => ({
+  email: Boolean(env.CF_EMAIL_TOKEN),
+  founding: db.centres.filter((c) => c.trial?.plan === 'founding').length + Number(env.FOUNDING_ELSEWHERE || 0),
+  signups: db.signups.map(({ centre, email, ip, at, key, used, state, ready_at }) => ({ centre, email, ip, at, key, used, state, ready_at })),
+  centres: db.centres.map(({ slug, centre, email, paused_at, created, signed_up, trial }) => ({ slug, centre, email, paused_at, created, signed_up, trial })),
+});
+const save = () => { writeFileSync(`${DB}.tmp`, JSON.stringify(db, null, 1)); renameSync(`${DB}.tmp`, DB); out('state', view()); };
+out('state', view());
 
 // ---- outside world ----
 async function email(to, subject, text) {
@@ -39,13 +51,6 @@ async function email(to, subject, text) {
 async function notify(text) {
   console.log(`[notify] ${text}`);
   if (/^(ALERT|Provisioning FAILED)/.test(text)) await email(env.ALERT_EMAIL || 'helloayursen@gmail.com', text.split('\n')[0].slice(0, 80), text).catch(() => {});
-}
-async function human(token, ip) {
-  if (!env.TURNSTILE_SECRET) return true; // local runs only
-  const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-    method: 'POST', body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token || '', remoteip: ip }),
-  }).then((x) => x.json()).catch(() => ({}));
-  return r.success === true;
 }
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
 function signinLink(slug, to) {
@@ -124,6 +129,71 @@ export async function tick(now = Date.now()) {
   }
 }
 
+// ---- the public box's requests (#1091): one file each in signup/inbox. The box is not trusted:
+// every field is checked again here, and the sign-up limits are applied again on the host.
+const KEY = /^[A-Za-z0-9_-]{24}$/, EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const str = (x, n) => String(x ?? '').trim().slice(0, n);
+async function answer(id, q) {
+  const s = KEY.test(q.key || '') && db.signups.find((x) => x.key === q.key);
+  if (q.do === 'signup') {
+    const n = q.s || {}, centre = str(n.centre, 80), to = str(n.email, 120).toLowerCase(), ip = str(n.ip, 64);
+    if (!centre || !EMAIL.test(to) || !KEY.test(n.key || '') || db.signups.some((x) => x.key === n.key)) return;
+    if (refuse(db.signups, db.centres, { ip, email: to }, Date.now())) return;
+    db.signups.push({ centre, email: to, ip, ref: /^[a-z0-9-]{1,40}$/.test(n.ref || '') ? n.ref : undefined, at: Date.now(), key: n.key }); save();
+  }
+  if (q.do === 'go' && s && !s.state) provision(s);
+  if (q.do === 'link' && s) out(id, { go: linkOpen(s, Date.now()) ? signinLink(s.slug, s.email) : null });
+  if (q.do === 'waitlist' && EMAIL.test(str(q.email, 120))) {
+    db.waitlist.push({ centre: str(q.centre, 80), email: str(q.email, 120), at: Date.now() }); save();
+    await notify(`Waitlist: ${str(q.centre, 80)} (${str(q.email, 120)}). ${db.centres.length} centres live.`);
+  }
+  if (q.do === 'again' && env.CF_EMAIL_TOKEN) {
+    const to = str(q.email, 120).toLowerCase(), c = db.centres.find((x) => x.email === to && !x.paused_at);
+    if (c) await email(to, `Sign in to ${c.centre}`, `This link signs you in to ${c.slug}.${DOMAIN}. It works once, within 30 minutes.\n\n${signinLink(c.slug, to)}`);
+  }
+  if (q.do === 'feedback' && typeof q.item?.text === 'string' && q.item.text.trim()) {
+    const item = { centre: str(q.item.centre, 80), from: str(q.item.from, 120), text: str(q.item.text, 2000), at: Date.now() };
+    db.feedback.unshift(item); save();
+    await notify(`Feedback from ${item.centre} (${item.from}): ${item.text}`);
+  }
+  const c = q.do === 'wake' && db.centres.find((x) => x.slug === q.slug && x.paused_at);
+  if (c && !c.waking) {
+    c.waking = (async () => {
+      await centreSh({}, 'start', c.slug); await up(c.port); await route(c.slug, svc(c.port));
+      c.paused_at = null; c.created = Date.now(); save();
+      await notify(`Switched back on: ${c.slug}`);
+    })().catch((e) => console.error('wake', e)).finally(() => { delete c.waking; });
+  }
+}
+let reading = false;
+export async function inbox(now = Date.now()) {
+  if (reading) return;
+  reading = true;
+  try {
+    for (const f of readdirSync(`${BOX}/inbox`)) {
+      const p = `${BOX}/inbox/${f}`, id = f.match(/^([0-9a-f]{18})\.json$/)?.[1], st = lstatSync(p);
+      if (!id && now - st.mtimeMs < 60_000) continue; // a .tmp still being written
+      let q = null;
+      try { if (id && st.isFile() && st.size < 16384) q = JSON.parse(readFileSync(p, 'utf8')); } catch {}
+      rmSync(p, { force: true, recursive: true });
+      if (q) await answer(id, q).catch(console.error);
+    }
+    for (const f of readdirSync(`${BOX}/out`)) if (f !== 'state.json' && now - lstatSync(`${BOX}/out/${f}`).mtimeMs > 60_000) rmSync(`${BOX}/out/${f}`, { force: true });
+  } finally { reading = false; }
+}
+
+// The box itself, checked hourly: a sign-up page that could reach Docker or the Mac's files would undo the split.
+export function boxProblems(c) {
+  if (!c?.State?.Running) return ['the sign-up page is not running'];
+  const p = [];
+  if (c.Mounts.some((m) => /docker\.sock/.test(`${m.Source} ${m.Destination}`))) p.push('the sign-up box can reach Docker');
+  if (c.Mounts.some((m) => !/\/signup\/(inbox|out)$/.test(m.Source))) p.push('the sign-up box sees more than its shared folder');
+  if (!c.HostConfig.ReadonlyRootfs) p.push('the sign-up box can change its own files');
+  if (c.HostConfig.Privileged || !c.Config.User || /^(0|root)(:|$)/.test(c.Config.User)) p.push('the sign-up box runs as root');
+  return p;
+}
+const compose = (...a) => run('docker', ['compose', '-f', `${ROOT}hosting/compose.yml`, '-p', 'ruta-host', ...a], { env: { ...env, RUTA_DATA: DATA }, maxBuffer: 1 << 26 });
+
 // ---- update (#904): a new main is tested on a throwaway centre, then rolled out. Once a day, in the
 // 21:00 hour in India, after treatments (#920): one restart a night, not one per merge.
 // LIVE_CENTRES in provisioner.env lists the centres with real use, e.g. "babaji:8202".
@@ -197,6 +267,11 @@ export async function watch(now = Date.now()) {
     const age = newest ? now - (await import('node:fs')).statSync(newest).mtimeMs : Infinity;
     if (age > 26 * 3_600_000 && now - (c.created || 0) > 26 * 3_600_000) problems.push(`${c.slug}: no backup in 26 hours`);
   }
+  const box = await run('docker', ['inspect', 'ruta-host-signup-1']).then((r) => JSON.parse(r.stdout)[0], () => null);
+  problems.push(...boxProblems(box));
+  if (!box?.State?.Running) await compose('up', '-d', 'signup').catch(console.error);
+  // The manager has no port at all: everything from outside goes through the box.
+  if (await run('lsof', ['-nP', '-a', '-p', String(process.pid), '-iTCP', '-sTCP:LISTEN']).then((r) => r.stdout.trim(), () => '')) problems.push('the manager listens on a network port');
   const used = await run('df', ['-P', DATA]).then((r) => Number(r.stdout.trim().split('\n')[1].split(/\s+/)[4].replace('%', '')), () => 0);
   if (used >= 85) problems.push(`disk ${used}% full`);
   for (const p of problems) if (!open.has(p)) { open.add(p); (db.events ||= []).push({ at: now, text: p }); save(); await notify(`ALERT: ${p}`); }
@@ -206,105 +281,11 @@ export async function watch(now = Date.now()) {
   return problems;
 }
 
-// ---- HTTP ----
-const page = (body) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ruta: start a free trial</title>
-<style>body{font:16px/1.5 system-ui,sans-serif;max-width:26rem;margin:2rem auto;padding:0 1rem;color:#1c2b22;background:#f3f6f3}label{display:block;margin:.8rem 0 .2rem}input{width:100%;box-sizing:border-box;padding:.7rem;border:1px solid #8a9a8f;border-radius:.6rem;font:inherit}button{margin-top:1rem;width:100%;padding:.8rem;border:0;border-radius:.6rem;background:#3d6b50;color:#fff;font:inherit;font-weight:600}a{color:#3d6b50}</style>
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>${body}</html>`;
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const form = (msg = '', ref = '') => page(`<h1>Start a free 30-day trial</h1><p>Your own centre at <b>yourname.${DOMAIN}</b>, ready in about two minutes. No card. Want to look first? <a href="https://demo.${DOMAIN}">See the demo</a>.</p>
-${msg && `<p role="alert"><b>${esc(msg)}</b></p>`}<form method="post" action="/signup">${/^[a-z0-9-]{1,40}$/.test(ref || '') ? `<input type="hidden" name="ref" value="${ref}">` : ''}<label for="c">Centre name</label><input id="c" name="centre" required maxlength="80" autocomplete="organization">
-<label for="e">Your email</label><input id="e" name="email" type="email" required maxlength="120" autocomplete="email">
-${env.TURNSTILE_SITEKEY ? `<div class="cf-turnstile" data-sitekey="${env.TURNSTILE_SITEKEY}" style="margin-top:1rem"></div>` : ''}<button>Create my centre</button></form>
-${env.CF_EMAIL_TOKEN ? `<h2 style="font-size:1rem;margin-top:2rem">Already have a centre?</h2><form method="post" action="/again"><label for="a">Your email</label><input id="a" name="email" type="email" required autocomplete="email"><button>Email me a sign-in link</button></form>` : ''}
-<p style="font-size:.85rem;margin-top:2rem">By starting a trial you accept the <a href="https://jains.es/ruta/pilot">pilot notice</a>. Questions: <a href="https://wa.me/420777558262">WhatsApp</a> · <a href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a></p>`);
-
-const day = (ms) => new Date(ms).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-async function wake(req, res, c) {
-  const login = `https://${c.slug}.${DOMAIN}/login`;
-  const opening = page(`<meta http-equiv="refresh" content="8;url=${login}"><h1>${esc(c.centre)} is back on</h1><p>Opening it in a few seconds. <a href="${login}">Open it now</a></p>`);
-  if (!c.paused_at) return send(res, 200, opening); // switched on a moment ago; the tunnel is catching up
-  if (req.method !== 'POST') return send(res, 200, page(`<h1>${esc(c.centre)} is switched off</h1><p>Nobody used it for three days, so we switched it off to save space. Everything in it is kept until <b>${day(deletesAt(c))}</b>.</p>${c.trial?.started_at ? '' : `<p>Only wanted a look around? <a href="https://demo.${DOMAIN}">The demo</a> is always on.</p>`}
-<form method="post"><button>Switch it back on</button></form><p style="font-size:.85rem;margin-top:2rem">Questions: <a href="https://wa.me/420777558262">WhatsApp</a></p>`));
-  if (!c.waking) {
-    c.waking = (async () => {
-      await centreSh({}, 'start', c.slug); await up(c.port); await route(c.slug, svc(c.port));
-      c.paused_at = null; c.created = Date.now(); save();
-      await notify(`Switched back on: ${c.slug}`);
-    })().finally(() => { delete c.waking; });
-  }
-  await c.waking;
-  send(res, 200, opening);
-}
-
-const body = (req) => new Promise((ok) => { let b = ''; req.on('data', (d) => { if ((b += d).length > 4096) req.destroy(); }); req.on('end', () => ok(new URLSearchParams(b))); });
-const send = (res, code, html, headers = {}) => { res.writeHead(code, { 'Content-Type': 'text/html; charset=utf-8', ...headers }); res.end(html); };
-
-export const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, SELF);
-  const ip = (env.BEHIND_CLOUDFLARE === 'true' && req.headers['cf-connecting-ip']) || req.socket.remoteAddress;
-  try {
-    // A paused centre's own address lands here (#247): switch it back on, no key, no email.
-    const own = (req.headers.host || '').match(new RegExp(`^([a-z0-9-]+)\\.${DOMAIN.replaceAll('.', '\\.')}$`));
-    const c = own && db.centres.find((x) => x.slug === own[1]);
-    if (c) return wake(req, res, c);
-    if (req.method === 'GET' && url.pathname === '/') return send(res, 200, form('', url.searchParams.get('ref')));
-    // A hosted centre's "Report a problem or an idea" (#818): kept for the morning, and told at once.
-    if (req.method === 'POST' && url.pathname === '/feedback' && env.FEEDBACK_KEY && req.headers['x-feedback-key'] === env.FEEDBACK_KEY) {
-      const f = await new Promise((ok) => { let b = ''; req.on('data', (d) => { if ((b += d).length > 8192) req.destroy(); }); req.on('end', () => { try { ok(JSON.parse(b)); } catch { ok({}); } }); });
-      if (typeof f.text !== 'string' || !f.text.trim()) return send(res, 400, '');
-      const item = { centre: String(f.centre || '').slice(0, 80), from: String(f.from || '').slice(0, 120), text: f.text.trim().slice(0, 2000), at: Date.now() };
-      db.feedback.unshift(item); save();
-      await notify(`Feedback from ${item.centre} (${item.from}): ${item.text}`);
-      return send(res, 200, '');
-    }
-    // The maintainer's morning, on this Mac only (#920): the tunnel always adds cf-ray, so nothing from outside gets it.
-    // The landing page's "N of 10 founding places left" (#245). Founding centres not hosted here: FOUNDING_ELSEWHERE.
-    if (url.pathname === '/founding') {
-      const taken = db.centres.filter((c) => c.trial?.plan === 'founding').length + Number(env.FOUNDING_ELSEWHERE || 0);
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=300' });
-      return res.end(JSON.stringify({ left: Math.max(0, 10 - taken) }));
-    }
-    if (req.method === 'POST' && url.pathname === '/signup') {
-      const f = await body(req);
-      const centre = (f.get('centre') || '').trim().slice(0, 80), to = (f.get('email') || '').trim().toLowerCase();
-      if (!centre || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return send(res, 400, form('Please give a centre name and a working email.'));
-      if (!(await human(f.get('cf-turnstile-response'), ip))) return send(res, 400, form('Please tick the check box and try again.'));
-      const no = refuse(db.signups, db.centres, { ip, email: to }, Date.now());
-      if (no === 'waitlist') {
-        db.waitlist.push({ centre, email: to, at: Date.now() }); save();
-        await notify(`Waitlist: ${centre} (${to}). ${db.centres.length} centres live.`);
-        return send(res, 200, page(`<h1>You're on the list</h1><p>All our trial places are full right now. We will email ${esc(to)} as soon as one opens.</p>`));
-      }
-      if (no) return send(res, 429, form(no));
-      const ref = /^[a-z0-9-]{1,40}$/.test(f.get('ref') || '') ? f.get('ref') : undefined;
-      const s = { centre, email: to, ip, ref, at: Date.now(), key: randomBytes(18).toString('base64url') };
-      db.signups.push(s); save();
-      return send(res, 303, '', { Location: `/go?k=${s.key}` });
-    }
-    if (req.method === 'POST' && url.pathname === '/again' && env.CF_EMAIL_TOKEN) {
-      const to = ((await body(req)).get('email') || '').trim().toLowerCase();
-      const c = db.centres.find((x) => x.email === to && !x.paused_at);
-      if (c) await email(to, `Sign in to ${c.centre}`, `This link signs you in to ${c.slug}.${DOMAIN}. It works once, within 30 minutes.\n\n${signinLink(c.slug, to)}`);
-      return send(res, 200, page(`<h1>Check your email</h1><p>If ${esc(to)} has a trial centre, a sign-in link is on its way.</p>`));
-    }
-    const s = db.signups.find((x) => x.key && x.key === url.searchParams.get('k'));
-    if (url.pathname === '/go' && s) {
-      if (!s.state) provision(s);
-      return send(res, 200, page(`<h1>Creating ${esc(s.centre)}…</h1><p id="m">This takes about two minutes. Keep this page open.</p><progress style="width:100%"></progress>
-<p id="o" hidden><a id="go" style="display:block;text-align:center;padding:.8rem;border-radius:.6rem;background:#3d6b50;color:#fff;font-weight:600;text-decoration:none">Open your centre</a></p>
-<script>(async function poll(){const r=await fetch('/status?k=${esc(s.key)}').then(r=>r.json()).catch(()=>({}));if(r.go){const h=document.querySelector('h1');h.textContent=h.textContent.replace(/^Creating (.*)…$/,'$1 is ready');document.getElementById('m').textContent='Open it here. It works once: you choose your password first.';document.querySelector('progress').remove();document.getElementById('go').href=r.go;document.getElementById('o').hidden=false;return}if(r.state==='ready'){const h=document.querySelector('h1');h.textContent=h.textContent.replace(/^Creating (.*)…$/,'$1 is ready');document.getElementById('m').textContent='Your centre is ready, but this sign-in link has run out. WhatsApp +420 777 558 262 and we will send a new one.';document.querySelector('progress').remove();return}if(r.failed){document.getElementById('m').textContent='Something went wrong. We have been told; WhatsApp +420 777 558 262 if you want to hear back sooner.';return}setTimeout(poll,3000)})()</script>`));
-    }
-    if (url.pathname === '/status' && s) {
-      // A fresh single-use sign-in on every ask while the centre is new (the life of a link, 30 minutes), so a reload still gets in (#588); after that, by WhatsApp.
-      const go = linkOpen(s, Date.now()) ? signinLink(s.slug, s.email) : null;
-      res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ state: s.state, go, failed: s.state === 'failed' }));
-    }
-    send(res, 404, page('<h1>This link is not valid</h1><p><a href="/">Start again</a></p>'));
-  } catch (e) { console.error(e); send(res, 500, page('<h1>Something went wrong</h1><p>Please try again in a minute.</p>')); }
-});
-
 if (process.argv[1] === new URL(import.meta.url).pathname) {
-  server.listen(Number(env.PORT || 8200), () => console.log(`provisioner on :${env.PORT || 8200}`));
+  // The public box is rebuilt from this checkout whenever the manager starts, so the nightly rollout's restart refreshes it (#1091).
+  console.log('manager started');
+  compose('up', '-d', '--build', 'signup').catch((e) => notify(`ALERT: the sign-up page did not start: ${String(e.message).split('\n')[0]}`));
+  setInterval(() => inbox().catch(console.error), 500);
   // Hourly; the morning goes out on the first run in the 7 o'clock hour of the Mac's own clock (#818), and the tidy at 03:00 in India.
   let sent = '';
   setInterval(async () => {
