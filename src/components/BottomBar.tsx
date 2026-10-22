@@ -20,7 +20,7 @@ export const SCREENS = [
   ["rooms", "Rooms", "Where treatments happen"],
   ["timeoff", "Availability", "Anything not available"],
   ["diet", "Diet plans", "Meals by plan"],
-  ["settings", "Settings", "Centre, users, AI"],
+  ["settings", "Settings", "Centre, users, backups"],
   ["schedule", "Back to the day", "The list"],
   ["therapies", "Therapies", "What you offer"],
   ["events", "Classes and events", "The daily round"],

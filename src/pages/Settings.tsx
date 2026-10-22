@@ -38,7 +38,7 @@ const LETTERHEAD: [keyof Letterhead, string, string][] = [
   ["email", "Email", "care@yourcentre.in"],
   ["website", "Website", "yourcentre.in"],
   ["footer_line", "Footer line", "Corporate office: …"],
-  ["discharge_format", "Discharge number", "DS/{YYYY}/{N}"],
+  ["discharge_format", "Discharge number", "DS/{YYYY}/{N}: the year, then the count"],
 ];
 const SHORT = (d: string) => d[0].toUpperCase() + d.slice(1, 3);
 /** "Mon–Sat", or the days named when they are not one run. */
@@ -202,9 +202,9 @@ const Settings = ({ signOut, openLog, openScreen, initialSheet, sheetOpened, att
       </ListGroup>
 
       <ListGroup title="You and the app">
-        <Row title="Your account" facts={isAdmin ? "Email, password and your AI assistant" : "Email and password"} flag={account?.demo_password ? "Change the demo password" : undefined} trailing="›" onClick={() => setSheet("account")} />
+        <Row title="Your account" facts="Email and password" flag={account?.demo_password ? "Change the demo password" : undefined} trailing="›" onClick={() => setSheet("account")} />
         <Row title="Security" facts="How your centre's data is kept safe" trailing="›" onClick={() => window.open("https://github.com/jpysh/ayurcalm-scheduler/blob/main/SECURITY.md", "_blank", "noopener")} />
-        <Row title="Help and plan" facts={trial && isAdmin ? "Report a problem, invite a centre, plan" : "Report a problem"} trailing="›" onClick={() => setSheet("help")} />
+        <Row title="Help and plan" facts={trial && isAdmin ? "Report a problem, your plan" : "Report a problem"} trailing="›" onClick={() => setSheet("help")} />
       </ListGroup>
       {signOut ? <Btn kind="secondary" className="mt-4" onClick={signOut}>Sign out</Btn> : null}
       {!isAdmin ? <p className={`mt-3 ${noteText}`}>Settings are read-only for staff accounts. Ask an administrator to make changes.</p> : null}
@@ -233,7 +233,7 @@ const Settings = ({ signOut, openLog, openScreen, initialSheet, sheetOpened, att
           </Group>
 
           <SectionHead>Discharge letterhead</SectionHead>
-          <p className={`mb-1 ${noteText}`}>Printed under the name and logo. {"{YYYY}"} in the number is the year, {"{N}"} counts summaries. All optional.</p>
+          <p className={`mb-1 ${noteText}`}>Printed under the name and logo. A summary is numbered like {(lh.discharge_format || "DS/{YYYY}/{N}").replace("{YYYY}", String(new Date().getFullYear())).replace("{N}", "0014")}. All optional.</p>
           <Group label="Right-hand logo or seal (optional)">
             <div className="flex items-center gap-3">
               {lh.seal_logo ? <img src={lh.seal_logo} alt="Seal" className="h-10 w-auto rounded border" /> : null}

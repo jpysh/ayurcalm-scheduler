@@ -215,8 +215,8 @@ export type MarkOut = { type: "Staff" | "Room" | "Therapy" | "GuestRoom" | "Pati
 type RoomOff = { id: string; date?: string | null; start_date?: string | null; end_date?: string | null; start_time: string | null; end_time: string | null; description?: string | null };
 type Day = { state: "in" | "part" | "away" | "off"; start?: string; end?: string; why?: string; booked: number; capacity: number };
 type Week = { start: string; days: string[]; rows: { id: string; name: string; role: string; days: Day[] }[]; gaps: { start: string; end: string; in: number }[][]; rooms: { id: string; days: { booked: number; capacity: number }[] }[] };
-/** "None of 8h booked" reads calmer than "0 min of 8h booked" (#806). */
-const booked = (b: number, cap: number) => `${b ? hrs(b) : "None"} of ${hrs(cap)} booked`;
+/** "Free all day" and "Busy 7h of 11h" read at a glance (#806, #1078). */
+const booked = (b: number, cap: number) => (b ? `Busy ${hrs(b)} of ${hrs(cap)}` : "Free all day");
 const hrs = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}`);
 /** Over 90% leaves no room for a swap, under 25% is someone free to take one (#351); words, not a flag, as neither needs doing now. */
 // "1h 20m of 6h booked" already says how light a day is; only a nearly full one is worth a word (#463, #635).

@@ -73,7 +73,7 @@ export function BackupsSheet({ open, onOpenChange, backups }: { open: boolean; o
           facts={backups?.latest ? `${(backups.latest.size / 1024 / 1024).toFixed(1)} MB · ${backups.count} kept` : "Ask whoever set up the app to check the backup service is running."} />
       </ListGroup>
       <p className={`mt-2 ${noteText}`}>Keep a copy somewhere else too: download the newest now and then, and save it to your phone or email it to yourself.</p>
-      <ListGroup title={`Move to another ${PRODUCT}`}>
+      <ListGroup title="Move to another computer">
         <div className="grid gap-2 p-3">
           <p className={noteText}>From the cloud to your own computer, or back: download everything as one file, then load it into the other one. Loading replaces whatever that install holds, so do it on a new one.</p>
           <Btn kind="secondary" disabled={moving} onClick={exportCentre}>{moving ? "Working…" : "Download everything"}</Btn>
@@ -181,10 +181,10 @@ export function HelpSheet({ open, onOpenChange, centre, supportWhatsapp, trial, 
     <BottomSheet open={open} onOpenChange={onOpenChange} title="Help and plan">
       <ListGroup>
         {supportWhatsapp ? <Row title="Report a problem or an idea" facts="Straight to whoever looks after the app" trailing="›" onClick={() => setWords("")} /> : null}
-        {admin ? <Row title="Invite a centre" facts="On WhatsApp · you both get 3 months free" trailing="›"
-          onClick={() => wa("", `We run ${centre} on ${PRODUCT}: patients, therapists and the day sheet on one phone. Free for 30 days: https://jains.es/ruta?ref=${encodeURIComponent(window.location.host.split(".")[0])}`)} /> : null}
         {admin && trial ? <Row title="Plan" facts={planHint(trial)} trailing="›" onClick={() => setPlan(true)} /> : null}
         {admin && demo ? <Row title="Demo data" facts="Clear it, or reset it from today" trailing="›" onClick={() => setDemoOpen(true)} /> : null}
+        {admin ? <Row title="Invite a centre" facts="On WhatsApp · you both get 3 months free" trailing="›"
+          onClick={() => wa("", `We run ${centre} on ${PRODUCT}: patients, therapists and the day sheet on one phone. Free for 30 days: https://jains.es/ruta?ref=${encodeURIComponent(window.location.host.split(".")[0])}`)} /> : null}
       </ListGroup>
 
       <BottomSheet open={words !== null} onOpenChange={(o) => { if (!o) setWords(null); }} title="Report a problem or an idea" foot={<Foot label="Send" save={report} ok={!!words?.trim()} />}>

@@ -11,7 +11,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import {
   Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, LineSelect, Picker, QuickDates, Row, Seg, SwitchRow, Text, TextRow, Timeline,
-  dayText, noteText, money, toastUndo, Btn, saveError, deleteAll, undoWrite } from "@/components/kit";
+  dayText, noteText, money, toastUndo, Btn, saveError, deleteAll, undoWrite, EXAMPLE_PRICE, ownNote } from "@/components/kit";
 
 const DAY_MS = 86400000;
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
@@ -273,9 +273,9 @@ export function PackageSheet({ patient, stay, onClose, onSaved, editList, matchS
         ) : null}
         <div className="mt-3">
         <Picker value={pick} onChange={setPick} onEdit={editList}
-          options={[{ id: "none", name: "Not decided yet" }, ...list.filter((p) => p.is_active || p.id === stay.package?.id).map((p) => ({ id: p.id, name: p.name, note: p.notes || undefined, fact: money(p.price) }))]} />
+          options={[{ id: "none", name: "Not decided yet" }, ...list.filter((p) => p.is_active || p.id === stay.package?.id).map((p) => ({ id: p.id, name: p.name, note: ownNote(p.notes) || undefined, fact: money(p.price) }))]} />
         </div>
-        <p className={`mt-2 ${noteText}`}>The price includes the registration charge. For reference, not an invoice.</p>
+        <p className={`mt-2 ${noteText}`}>{list?.some((p) => p.notes === EXAMPLE_PRICE) ? `${EXAMPLE_PRICE}. ` : ""}The price includes the registration charge. For reference, not an invoice.</p>
       </>)}
     </BottomSheet>
   );
@@ -338,7 +338,7 @@ export function AccommodationSheet({ patient, stay, onClose, onSaved, editList }
         <div className="mt-3">
         <Picker value={pick} onChange={(id) => (id === "none" ? (setPick("none"), setRoom("")) : choose(id))} onEdit={editList}
           options={[{ id: "none", name: "No accommodation" }, ...list.filter((h) => h.is_active || h.id === stay.accommodation?.id).map((h) => ({ id: h.id, name: h.name,
-            note: [`${money(h.price_per_day)} a day`, rooms.some((r) => r.accommodation_id === h.id) ? `${freeOf(h.id).length} free` : "", h.notes || ""].filter(Boolean).join(" · "), fact: money(h.price_per_day * nights) }))]} />
+            note: [`${money(h.price_per_day)} a day`, rooms.some((r) => r.accommodation_id === h.id) ? `${freeOf(h.id).length} free` : "", ownNote(h.notes)].filter(Boolean).join(" · "), fact: money(h.price_per_day * nights) }))]} />
         </div>
       </>)}
     </BottomSheet>
