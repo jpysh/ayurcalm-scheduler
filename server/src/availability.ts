@@ -26,6 +26,21 @@ export type EventRow = {
 
 export type Busy = { s: number; e: number; label: string };
 
+export type RequiredEventRow = EventRow & { patients_scope: string | null; is_optional: boolean };
+/**
+ * A required all-guests event a treatment from s to e would cover whole. The day
+ * check reports one, so the planner must never move a treatment into one (#1135).
+ */
+export const coversRequiredEvent = (events: RequiredEventRow[], day: Date, s: number, e: number) =>
+  events.find((row) => {
+    if ((row.patients_scope || 'all') !== 'all' || row.is_optional) return false;
+    const onDay = (row.date && row.date.toDateString() === day.toDateString())
+      || (row.start_date && row.end_date && row.start_date <= day && row.end_date >= day)
+      || (row.recurrence === 'weekly' && Array.isArray(row.weekdays) && row.weekdays.length > 0);
+    if (!onDay) return false;
+    return s <= toMinutes(row.start_time) && e >= toMinutes(row.end_time);
+  });
+
 /**
  * A person's hours on a day from their weekly pattern (#351): minutes in, null on a day off,
  * undefined when the pattern was never set (then only the centre's hours apply).

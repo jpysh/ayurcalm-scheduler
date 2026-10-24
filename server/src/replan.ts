@@ -18,7 +18,7 @@
  * them, so it is put to the admin: only their Accept applies it.
  */
 import { PrismaClient, Prisma } from '@prisma/client';
-import { centreClock, centreClosed, gives, offOnDay, staffAwayOnDay, stayOn, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow, type OffRow } from './availability.js';
+import { centreClock, centreClosed, coversRequiredEvent, type RequiredEventRow, gives, offOnDay, staffAwayOnDay, stayOn, overlaps, startedBefore, staffEventBusy, teamOf, toMinutes, type Clock, type EventRow, type OffRow } from './availability.js';
 import { HAPPENING, findConflict, loadDay, type Action, type Conflict } from './appointmentGuard.js';
 
 /** Which of the tier 4 choices a move is. */
@@ -305,6 +305,8 @@ export async function planDay(
     // The guard refuses these hours (#670), so no tier may offer them.
     const shut = (d: Date, s: number, e: number) =>
       [...(appt.therapy_id ? offOnDay(timeOff, 'therapy', appt.therapy_id, d) : []), ...offOnDay(timeOff, 'patient', appt.patient_id, d)].some((b) => overlaps(b.s, b.e, s, e));
+    // A new time never covers a whole required event such as Lunch: the day check would report it (#1135).
+    const meal = (d: Date, s: number, e: number) => !!coversRequiredEvent(events as RequiredEventRow[], d, s, e);
     const roomFor = (s: number, e: number) => {
       if (appt.room_id && free(roomBusy[appt.room_id], s, e)) return appt.room_id;
       const alt = rooms.find(
@@ -321,7 +323,7 @@ export async function planDay(
       const room = team && roomFor(start, start + duration);
       if (team && room) return { team, start, room, tier: 1, date: ymd(date) };
       for (let t = firstSlot; t + duration <= close; t += 30) {
-        if (!free(patientBusy[appt.patient_id], t, t + duration) || shut(date, t, t + duration)) continue;
+        if (!free(patientBusy[appt.patient_id], t, t + duration) || shut(date, t, t + duration) || meal(date, t, t + duration)) continue;
         const r = roomFor(t, t + duration);
         if (!r) continue;
         const tm = teamFor((sid) => canTake(sid, t, t + duration));
@@ -352,7 +354,7 @@ export async function planDay(
           const e = t + duration;
           const patientFree = !otherDay.some((a) => a.patient_id === appt.patient_id && a.id !== appt.id && hits(a, t, e)) &&
             !taken.some((x) => x.patient === appt.patient_id && overlaps(x.s, x.e, t, e));
-          if (!patientFree || shut(other, t, e)) continue;
+          if (!patientFree || shut(other, t, e) || meal(other, t, e)) continue;
           const busyThen = (sid: string) =>
             otherDay.some((a) => a.id !== appt.id && teamOf(a).includes(sid) && hits(a, t, e)) ||
             taken.some((x) => x.team.includes(sid) && overlaps(x.s, x.e, t, e)) ||
