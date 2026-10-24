@@ -4,7 +4,7 @@
 # $RUTA_DATA/tunnel.yml (starts as a copy of hosting/tunnel.yml; one line per centre).
 services:
   tunnel:
-    image: cloudflare/cloudflared:2026.9.3
+    image: cloudflare/cloudflared:2026.10.1
     restart: unless-stopped
     command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
     volumes:
