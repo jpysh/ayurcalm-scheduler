@@ -88,6 +88,9 @@ async function main() {
     assert.equal(askedBody.reason, 'SAME_THERAPY');
     assert.match(askedBody.message, /already has .*at 09:00/);
     assert.ok((askedBody.actions as Act[]).some((a) => a.kind === 'book_anyway'), 'no Book anyway offered');
+    const existing = (askedBody.warnings[0].actions as (Act & { appointment_id?: string })[])[0];
+    assert.equal(existing.kind, 'open_existing', 'Open the existing one is not the first action (#1130)');
+    assert.equal(existing.appointment_id, (await prisma.appointment.findFirst({ where: { patient_id: gita.id } }))?.id, 'Open the existing one does not name the booked treatment');
     assert.equal((await prisma.appointment.count({ where: { patient_id: gita.id } })), 1, 'it was booked before being confirmed');
     assert.equal((await call('POST', '/appointments/one', { ...again, confirm: true })).day_count, 2, 'the booked panel is not told how full the day is');
 
