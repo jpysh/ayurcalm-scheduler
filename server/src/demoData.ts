@@ -58,6 +58,14 @@ export async function makeItMine(tx: Prisma.TransactionClient, body: Mine) {
   await wipeDemo(tx, ['therapies', 'rooms']);
   await tx.therapyRoom.updateMany({ where: { id: { notIn: body.rooms.map((r) => r.id) } }, data: { is_active: false } });
   for (const r of body.rooms) await tx.therapyRoom.update({ where: { id: r.id }, data: { name: r.name, is_active: true } });
+  // A small centre sees new residents in a room it kept: with none fit for a consultation, nobody
+  // arriving could be booked one, so the first kept room takes what a consultation needs (#1140).
+  const consult = await tx.therapy.findFirst({ where: { is_consultation: true } });
+  const keptRooms = await tx.therapyRoom.findMany({ where: { id: { in: body.rooms.map((r) => r.id) } } });
+  if (consult && !keptRooms.some((r) => consult.required_amenities.every((a) => r.amenities.includes(a)))) {
+    const first = keptRooms.find((r) => r.id === body.rooms[0].id)!;
+    await tx.therapyRoom.update({ where: { id: first.id }, data: { amenities: [...new Set([...first.amenities, ...consult.required_amenities])] } });
+  }
   // A consultation is how every new resident starts, so it is never switched off.
   await tx.therapy.updateMany({ where: { id: { notIn: body.therapy_ids }, is_consultation: false }, data: { is_active: false } });
   const kept = await tx.therapy.findMany({ where: { is_active: true }, select: { id: true, is_consultation: true } });
