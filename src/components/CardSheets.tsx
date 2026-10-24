@@ -562,6 +562,7 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
         ) : null}
         <ListGroup title="Therapies">
           {plan.lines.length ? plan.lines.map((l) => {
+            // A swap is a choice to book the replacement, so it switches the line on: a line left off hid its flag and was skipped (#1133).
             const swapped = swaps[l.from_therapy_id];
             const name = swapped ? therapies.find((t) => t.id === swapped)?.name || l.therapy_name : l.therapy_name;
             const done = !l.sessions.length && !l.missing.length;
@@ -569,7 +570,7 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
               <SwitchRow key={l.from_therapy_id} title={name} on={!off[l.from_therapy_id]} set={(v) => setOff({ ...off, [l.from_therapy_id]: !v })}
                 facts={done ? "Already booked next week" : swapped ? `Instead of ${l.therapy_name} · ${plural(l.sessions.length + l.missing.length, "day")}` : `${l.start_time} · ${l.staff_name} · ${plural(l.sessions.length + l.missing.length, "day")}`}
                 flag={!swapped && l.missing.length ? `${l.missing.map((m) => (m.why.startsWith("The centre is") ? `${m.why} on ${dayText(m.date)}` : `No free time on ${dayText(m.date)}`)).join(". ")}. Swap it, or book its days from Next days` : l.skipped?.length ? `Skips ${l.skipped.map((m) => dayText(m.date)).join(", ")}: ${l.skipped[0].why.replace("The centre is", "the centre is")}` : undefined}>
-                {done ? null : <ChangeLine label="Swap" value="For another therapy" select={<LineSelect label={`Swap ${l.therapy_name}`} value={swapped || l.therapy_id} onChange={(v) => setSwaps({ ...swaps, [l.from_therapy_id]: v })} free={therapies} />} />}
+                {done ? null : <ChangeLine label="Swap" value="For another therapy" select={<LineSelect label={`Swap ${l.therapy_name}`} value={swapped || l.therapy_id} onChange={(v) => { setSwaps({ ...swaps, [l.from_therapy_id]: v }); setOff({ ...off, [l.from_therapy_id]: false }); }} free={therapies} />} />}
               </SwitchRow>
             );
           }) : therapies.length ? <>
