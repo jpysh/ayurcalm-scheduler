@@ -217,8 +217,10 @@ export function staffDay(ctx: DayContext) {
  * with no way forward is a dead end.
  */
 export type Action = {
-  kind: 'book_at' | 'set_date' | 'other_therapy' | 'add_staff' | 'add_room' | 'allow_any_gender' | 'allow_fewer' | 'change_stay' | 'book_anyway';
+  kind: 'book_at' | 'set_date' | 'other_therapy' | 'add_staff' | 'add_room' | 'allow_any_gender' | 'allow_fewer' | 'change_stay' | 'book_anyway' | 'open_existing';
   label: string;
+  /** open_existing: the treatment already booked, opened instead of a second one (#1130). */
+  appointment_id?: string;
   date?: string;
   start_time?: string;
   gender?: string;
@@ -252,7 +254,7 @@ export function softWarnings(c: { id?: string; patient_id: string; therapy_id?: 
     const name = ctx.therapies.find((t) => t.id === c.therapy_id)?.name.replace(/_/g, ' ') || 'that treatment';
     // Who they already see, so the admin can tell a slip from a second visit on purpose (#1077).
     const by = ctx.staff.find((x) => x.id === twin.staff_id)?.name;
-    out.push({ reason: 'SAME_THERAPY', message: `${first} already has ${name} at ${twin.start_time}${by ? ` with ${by}` : ''}.`, actions: [anyway] });
+    out.push({ reason: 'SAME_THERAPY', message: `${first} already has ${name} at ${twin.start_time}${by ? ` with ${by}` : ''}.`, actions: [{ kind: 'open_existing', label: 'Open the existing one', appointment_id: twin.id }, anyway] });
   }
   return out;
 }
