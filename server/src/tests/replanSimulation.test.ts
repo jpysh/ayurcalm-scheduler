@@ -178,6 +178,28 @@ async function main() {
     const giver = await prisma.staff.findUnique({ where: { id: swap!.to.staff_id ?? "" } });
     assert.equal(giver?.specializations.length, 0, 'cover went to someone not trained in it');
 
+    // A new time never covers a whole required event (#1135): the day check would flag it with no way out.
+    // Busy all morning and nobody free at 14:00, the first free hour is noon, which covers Sim Lunch.
+    const day3 = new Date('2030-01-18T00:00:00.000Z');
+    const lunch = await prisma.programEvent.create({ data: {
+      date: day3, start_time: '12:00', end_time: '12:30', activity_name: 'Sim Lunch', required_amenities: [], patients_scope: 'all', is_optional: false,
+    } });
+    made.push({ table: 'programEvent', id: lunch.id });
+    for (const [sid, at] of [[coverOne.id, '09:00'], [coverTwo.id, '10:00'], [loyalTherapist.id, '11:00']] as const) {
+      const a = await prisma.appointment.create({ data: { patient_id: pOne.id, therapy_id: therapy.id, staff_id: sid, room_id: rooms[1].id, scheduled_date: day3, start_time: at, duration_minutes: 60, session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual', notes: '' } });
+      made.push({ table: 'appointment', id: a.id });
+    }
+    for (const sid of [coverOne.id, coverTwo.id, loyalTherapist.id, noList.id]) {
+      const off = await prisma.timeOff.create({ data: { entity_type: 'staff', entity_id: sid, date: day3, start_time: '14:00', end_time: '15:00', description: 'Sim' } });
+      made.push({ table: 'timeOff', id: off.id });
+    }
+    const late = await prisma.appointment.create({ data: { patient_id: pOne.id, therapy_id: therapy.id, staff_id: absent.id, room_id: rooms[0].id, scheduled_date: day3, start_time: '14:00', duration_minutes: 60, session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual', notes: '' } });
+    made.push({ table: 'appointment', id: late.id });
+    const r3 = await replanStaffDay(absent.id, day3, prisma, { apply: false });
+    const moved3 = [...r3.moved, ...r3.proposed].find((m) => m.appointment_id === late.id);
+    assert.ok(moved3, `the 14:00 treatment was not moved: ${JSON.stringify(r3.unplaced.map((u) => u.reason))}`);
+    assert.notEqual(moved3!.to.start_time, '12:00', 'the treatment was moved to cover the whole of a required event');
+
     console.log('replan simulation passed');
   } finally {
     for (const m of [...made].reverse()) {
