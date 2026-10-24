@@ -24,8 +24,10 @@ function state() {
   return st;
 }
 // A request for the manager; with wait (ms), its answer, or null if none came.
+// Named by the time first, so the manager reads a sign-up before the "go" sent right after it (#1139).
+export const inboxId = () => Date.now().toString(16).padStart(12, '0') + randomBytes(3).toString('hex');
 async function ask(req, wait = 0) {
-  const id = randomBytes(9).toString('hex'), f = `${BOX}/inbox/${id}`;
+  const id = inboxId(), f = `${BOX}/inbox/${id}`;
   writeFileSync(`${f}.tmp`, JSON.stringify(req)); renameSync(`${f}.tmp`, `${f}.json`);
   for (let t = 0; t < wait; t += 250) {
     await sleep(250);
