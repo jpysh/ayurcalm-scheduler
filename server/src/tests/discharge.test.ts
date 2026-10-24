@@ -127,6 +127,18 @@ async function main() {
     const words = execFileSync('pdftotext', ['-raw', '-', '-'], { input: pdf }).toString();
     assert.ok(words.replace(/\n/g, '').includes(email), 'the email is printed whole, on two lines if it must');
     assert.ok(words.includes('30 Mar 2030') && !words.includes('2030-03-30'), 'the payment date reads 30 Mar 2030');
+    // A Hindi footer and registration line print in the Devanagari font, the rest still in Helvetica (#1136).
+    const settings = await prisma.settings.findFirst();
+    const kept = settings!.letterhead;
+    await prisma.settings.update({ where: { id: settings!.id }, data: { letterhead: { ...((kept as object) || {}), footer_line: 'धन्यवाद। फिर पधारें।', registration_line: 'पंजीकरण संख्या 1234' } } });
+    try {
+      const hindi = Buffer.from(await (await call('GET', `/patients/${p.id}/stays/${stay.id}/discharge-pdf`)).arrayBuffer());
+      const text = execFileSync('pdftotext', ['-raw', '-', '-'], { input: hindi }).toString();
+      assert.ok(text.includes('धन्यवाद') && text.includes('1234'), 'the Hindi footer or registration line is not drawn in Devanagari');
+      assert.ok(text.includes('page 1 of'), 'the Latin part of the footer was lost');
+    } finally {
+      await prisma.settings.update({ where: { id: settings!.id }, data: { letterhead: kept ?? undefined } });
+    }
     const pages = (pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length;
     assert.ok(pages >= 1 && pages <= 2, `the summary is ${pages} pages`);
     console.log(`discharge: number ${after.draft.no}, ${pages} page(s)`);
