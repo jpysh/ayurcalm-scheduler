@@ -22,6 +22,9 @@ const image = (doc: any, uri: string | null | undefined, x: number, y: number, o
 };
 
 /** The footer's own line; a summary not yet saved has no number, and an empty one left a bare '· ·' (#542). */
+// Helvetica has no Devanagari and the Devanagari font no Latin letters: a line takes the one its script needs.
+const face = (t: string) => (/[\u0900-\u097F]/.test(t) ? 'Local' : 'Helvetica');
+
 export const pageLine = (name: string, no: string, page: number, pages: number) => [name, no, `page ${page} of ${pages}`].filter(Boolean).join(' · ');
 
 export async function generateDischargePdf(v: DischargeView, centre: { name: string; address: string | null; logo: string | null; made?: string }, lh: Letterhead): Promise<Buffer> {
@@ -39,9 +42,9 @@ export async function generateDischargePdf(v: DischargeView, centre: { name: str
   const tw = W - 140;
   doc.font('Helvetica-Bold').fontSize(15).fillColor('#1d4d33').text(centre.name, M + 70, M, { width: tw, align: 'center' });
   if (lh.name_local) doc.font('Local').fontSize(12).text(lh.name_local, { width: tw, align: 'center' });
-  doc.font('Helvetica').fontSize(7.5).fillColor('#333');
+  doc.fontSize(7.5).fillColor('#333');
   for (const t of [lh.registration_line, lh.accreditation_line, centre.address, [lh.phones && `Phone: ${lh.phones}`, lh.email, lh.website].filter(Boolean).join('  ·  ')]) {
-    if (t) doc.text(t, { width: tw, align: 'center' });
+    if (t) doc.font(face(t)).text(t, { width: tw, align: 'center' });
   }
   doc.y = Math.max(doc.y, M + 60) + 6;
   doc.moveTo(M, doc.y).lineTo(M + W, doc.y).lineWidth(1).strokeColor('#1d4d33').stroke();
@@ -165,9 +168,11 @@ export async function generateDischargePdf(v: DischargeView, centre: { name: str
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);
     doc.page.margins.bottom = 0; // or writing in the margin starts a new page
-    doc.font('Helvetica').fontSize(7).fillColor('#666');
-    const foot = [lh.footer_line, pageLine(v.name, d.no, i + 1, range.count), centre.made].filter(Boolean).join('    ');
-    doc.text(foot, M, 841.89 - M - 8, { width: W, align: 'center', lineBreak: false });
+    // The footer line may be Hindi and the rest is not: each part in its own font, centred together (#1136).
+    doc.fontSize(7).fillColor('#666');
+    const parts = [lh.footer_line, pageLine(v.name, d.no, i + 1, range.count), centre.made].filter((t): t is string => !!t).map((t, j) => (j ? `    ${t}` : t));
+    let x = M + (W - parts.reduce((w, t) => w + doc.font(face(t)).widthOfString(t), 0)) / 2;
+    for (const t of parts) { doc.font(face(t)).text(t, x, 841.89 - M - 8, { lineBreak: false }); x += doc.widthOfString(t); }
   }
   doc.end();
   return done;
