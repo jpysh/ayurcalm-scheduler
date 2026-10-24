@@ -29,7 +29,7 @@
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_MAX_PER_DAY, findConflict, loadDay, type Action, type Candidate, type DayContext } from './appointmentGuard.js';
 import { planDay, offClosedDay, type Move, type Pin } from './replan.js';
-import { centreClock, closureOn, startedBefore, toMinutes, type Clock } from './availability.js';
+import { centreClock, closureOn, coversRequiredEvent, startedBefore, toMinutes, type Clock, type RequiredEventRow } from './availability.js';
 
 export type Fix = {
   label: string;
@@ -286,15 +286,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
     // resident no way to be there.
     const s = toMinutes(a.start_time);
     const e = s + a.duration_minutes;
-    const clash = events.find((ev) => {
-      const row = ev as unknown as { patients_scope: string | null; is_optional: boolean; start_time: string; end_time: string; date: Date | null; start_date: Date | null; end_date: Date | null; recurrence: string | null; weekdays: string[] };
-      if ((row.patients_scope || 'all') !== 'all' || row.is_optional) return false;
-      const onDay = (row.date && row.date.toDateString() === day.toDateString())
-        || (row.start_date && row.end_date && row.start_date <= day && row.end_date >= day)
-        || (row.recurrence === 'weekly' && Array.isArray(row.weekdays) && row.weekdays.length > 0);
-      if (!onDay) return false;
-      return s <= toMinutes(row.start_time) && e >= toMinutes(row.end_time);
-    }) as unknown as { activity_name: string } | undefined;
+    const clash = coversRequiredEvent(events as unknown as RequiredEventRow[], day, s, e);
     if (clash) {
       raw.push({
         ...common,
