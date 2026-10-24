@@ -131,6 +131,16 @@ async function main() {
       assert.equal(s?.demo_data, false); assert.equal(s?.setup_complete, true); assert.equal(s?.centre_name, 'Mine Test Centre');
       throw ROLLBACK;
     }, { timeout: 120000 }).catch((e) => { if (e !== ROLLBACK) throw e; });
+    // One room kept, not the consultation room: residents can still be seen there (#1140).
+    await prisma.$transaction(async (tx) => {
+      const consult = await tx.therapy.findFirstOrThrow({ where: { is_consultation: true } });
+      const room = (await tx.therapyRoom.findMany({ where: { is_active: true } })).find((r) => !consult.required_amenities.every((a) => r.amenities.includes(a)))!;
+      const therapy = await tx.therapy.findFirstOrThrow({ where: { is_active: true, is_consultation: false } });
+      await makeItMine(tx, { centre_name: 'One Room', team: [{ name: 'Dr Asha', gender: 'female', doctor: true }, { name: 'Ravi', gender: 'male', doctor: false }], rooms: [{ id: room.id, name: room.name }], therapy_ids: [therapy.id] });
+      const kept = await tx.therapyRoom.findUniqueOrThrow({ where: { id: room.id } });
+      assert.ok(consult.required_amenities.every((a) => kept.amenities.includes(a)), 'A one-room centre has no room a consultation can use');
+      throw ROLLBACK;
+    }, { timeout: 120000 }).catch((e) => { if (e !== ROLLBACK) throw e; });
     assert.ok(await prisma.patient.count() > 0, 'The rollback did not put the demo centre back');
 
     console.log('Onboarding: settings kept, setup complete, centre has what it needs, day sheet prints; starting your own centre keeps the therapies and rooms; Make it mine leaves the admin\'s team, rooms and therapies.');
