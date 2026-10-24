@@ -1,0 +1,25 @@
+// node scripts/uat-1133.mjs — Plan next week: swapping a switched-off line switches it on (#1133), at 375x812 on a throwaway stack (APP_URL).
+import { chromium } from '@playwright/test';
+const APP = process.env.APP_URL || 'http://localhost:8090';
+const WHO = process.env.WHO || 'Riya Verma';
+const LINE = process.env.LINE || 'Jambira Pinda Sweda';
+const OUT = 'docs/design/uat/2026-10-24-swap-on';
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, timezoneId: 'Asia/Kolkata' });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+const p = await ctx.newPage();
+await p.goto(`${APP}/admin/patients`); await p.waitForTimeout(2500);
+await p.getByText(WHO).first().click(); await p.waitForTimeout(1500);
+await p.getByRole('button', { name: 'Plan next week' }).click(); await p.waitForTimeout(2000);
+const sheet = p.getByRole('dialog').last();
+const offBefore = await sheet.getByRole('switch', { checked: false }).count();
+await sheet.getByLabel(`Swap ${LINE}`).scrollIntoViewIfNeeded(); await p.waitForTimeout(400);
+await p.screenshot({ path: `${OUT}/before-swap-375.png` });
+await sheet.getByLabel(`Swap ${LINE}`).selectOption({ index: 1 });
+await p.waitForTimeout(800);
+const offAfter = await sheet.getByRole('switch', { checked: false }).count();
+await p.screenshot({ path: `${OUT}/after-swap-375.png` });
+console.log(`switched off before ${offBefore}, after ${offAfter}`);
+await b.close();
+if (offAfter >= offBefore) process.exit(1);
