@@ -71,6 +71,12 @@ console.log('provisioner lifecycle ok');
   for (let i = 0; i < 25; i++) writeFileSync(`${process.env.RUTA_DATA}/signup/inbox/${String(i).padStart(18, '0')}.json`, JSON.stringify({ do: 'signup', s: { centre: 'X', email: `x${i}@b.co`, ip: `1.1.1.${i}`, key: `k${String(i).padStart(23, '0')}` } }));
   await inbox();
   assert.equal(JSON.parse(readFileSync(`${process.env.RUTA_DATA}/provisioner.json`, 'utf8')).signups.length, 20, 'twenty a day, however many the box sends');
+  // A "go" written right after its sign-up is read after it, or the centre is never built (#1139).
+  const { inboxId } = await import('./public.mjs');
+  const ids = [];
+  for (let i = 0; i < 3; i++) { ids.push(inboxId()); await new Promise((r) => setTimeout(r, 2)); }
+  assert.deepEqual([...ids].sort(), ids, 'the inbox is not read in the order requests arrived');
+  assert.ok(ids.every((id) => /^[0-9a-f]{18}$/.test(id)), 'an inbox name the manager would skip');
   server.close();
   console.log('sign-up through the shared folder ok');
 }

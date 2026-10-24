@@ -170,7 +170,7 @@ export async function inbox(now = Date.now()) {
   if (reading) return;
   reading = true;
   try {
-    for (const f of readdirSync(`${BOX}/inbox`)) {
+    for (const f of readdirSync(`${BOX}/inbox`).sort()) {
       const p = `${BOX}/inbox/${f}`, id = f.match(/^([0-9a-f]{18})\.json$/)?.[1], st = lstatSync(p);
       if (!id && now - st.mtimeMs < 60_000) continue; // a .tmp still being written
       let q = null;
