@@ -205,6 +205,7 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
     <BookSheet open={booking} onClose={() => setBooking(false)} day={bookDay} today={ymdInTZ(new Date())} isToday={isToday && !afterClosing} nowMinutes={now} patient={bookFor} rev={staffCount}
       onAction={(a: { kind: string; amenities?: string[] }) => (a.kind === "add_room" ? addRoom(a) : addTherapist(a))} onAddPatient={addPatient}
       onShowDay={(d: string) => { if (d !== dayKeyMemo) showDay(d); }}
+      onOpenCard={(a) => { setBooking(false); setCard(a); }}
       refresh={() => refreshDay(bookDay)} />
   );
 

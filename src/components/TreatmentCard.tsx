@@ -269,7 +269,7 @@ type Slot = {
 };
 type Option = { id: string; name: string; free: boolean; why?: string };
 /** What the server offers beside a refusal or warning (#330); the sheet only carries each kind out. */
-export type BookAction = { kind: "book_at" | "set_date" | "other_therapy" | "add_staff" | "add_room" | "allow_any_gender" | "change_stay" | "book_anyway"; label: string; amenities?: string[]; date?: string; start_time?: string; gender?: string; therapy_id?: string; patient_id?: string };
+export type BookAction = { kind: "book_at" | "set_date" | "other_therapy" | "add_staff" | "add_room" | "allow_any_gender" | "change_stay" | "book_anyway" | "open_existing"; label: string; appointment_id?: string; amenities?: string[]; date?: string; start_time?: string; gender?: string; therapy_id?: string; patient_id?: string };
 type Options = { times: Slot[]; staff: Option[]; rooms: Option[]; why?: string; actions: BookAction[]; warnings: { reason: string; message: string; actions?: BookAction[] }[];
   /** Their own therapist's first free time, or the therapist picked (#1043). */
   their_therapist_id?: string | null; first_choice?: { staff_id: string; staff_name: string; date: string; start_time: string; their_therapist: boolean } | null; sooner?: (Slot & { date: string }) | null };
@@ -296,7 +296,7 @@ const span = (from: string, to: string) => {
  * the button into Book anyway. `patient` skips the first step, for a booking
  * started from their card.
  */
-export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refresh, patient, rev, onAction, onAddPatient, onShowDay }: {
+export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refresh, patient, rev, onAction, onAddPatient, onShowDay, onOpenCard }: {
   open: boolean; onClose: () => void; day: string; today: string; isToday: boolean; nowMinutes: number;
   refresh: () => Promise<void>; patient?: { id: string; name: string; consult?: boolean } | null;
   /** Changes when the team does, so the lists are asked again after a therapist is added. */
@@ -305,6 +305,8 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
   onAction?: (a: BookAction) => void;
   /** After a booking: the day it landed on, so the screen can show it. */
   onShowDay?: (iso: string) => void;
+  /** The same therapy already booked that day, opened instead of booking it twice (#1130). */
+  onOpenCard?: (a: CardAppt) => void;
   /** A name nobody matches becomes a new patient, who comes back chosen (#330). */
   onAddPatient?: (name: string, arriving: string, done: (p: { id: string; name: string }) => void) => void;
 }) {
@@ -398,7 +400,12 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
 
   /** Carries out what the server offered beside a refusal. */
   const carry = (a: BookAction) => {
-    if (a.kind === "set_date" && a.date) setDate(a.date);
+    if (a.kind === "open_existing" && chosen) {
+      void fetch(`${API_BASE}/appointments?date=${date}&patient_id=${chosen.id}`).then((r) => (r.ok ? r.json() : [])).then((list: CardAppt[]) => {
+        const twin = list.find((x) => x.id === a.appointment_id);
+        if (twin) onOpenCard?.(twin);
+      });
+    } else if (a.kind === "set_date" && a.date) setDate(a.date);
     else if (a.kind === "book_at" && a.date) { pendingAt.current = a.start_time; if (a.date === date) load(a.start_time); else setDate(a.date); }
     else if (a.kind === "other_therapy") { setTherapyId(""); setOpts(null); }
     else if (a.kind === "allow_any_gender" && a.therapy_id) {
@@ -548,7 +555,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
             <Callout tone="notice" title={opts.why || `No free time for ${first}.`}
               actions={opts.actions.filter((a) => a.kind !== "other_therapy").map((a, i) => <Btn key={a.label} kind={i === 0 ? "primary" : "secondary"} inline onClick={() => carry(a)}>{a.label}</Btn>)} />
           ) : (<>
-            {warnings.length ? <div className="mb-2 mt-2"><Callout tone="notice" title={warnings.map((w) => w.message).join(" ")} actions={warnings.flatMap((w) => (w.actions || []).filter((a) => a.kind !== "book_anyway")).map((a) => <Btn key={a.label} kind="quiet" inline onClick={() => carry(a)}>{a.label}</Btn>)}>Booking it is still possible.</Callout></div> : null}
+            {warnings.length ? <div className="mb-2 mt-2"><Callout tone="notice" title={warnings.map((w) => w.message).join(" ")} actions={warnings.flatMap((w) => (w.actions || []).filter((a) => a.kind !== "book_anyway" && (a.kind !== "open_existing" || onOpenCard))).map((a) => <Btn key={a.label} kind={a.kind === "open_existing" ? "primary" : "quiet"} inline onClick={() => carry(a)}>{a.label}</Btn>)}>Booking it is still possible.</Callout></div> : null}
             {opts.first_choice ? <ChangeLine label={opts.first_choice.their_therapist ? "Their therapist" : giver} value={`${opts.first_choice.staff_name.split(" ")[0]} · ${opts.first_choice.date === date ? "" : `${dayText(opts.first_choice.date)} `}${opts.first_choice.start_time}`}
               onClick={opts.first_choice.date === date && opts.first_choice.start_time === time && opts.first_choice.staff_id === staffId ? undefined : () => { const f = opts.first_choice!; setLead(f.staff_id); if (f.date === date) load(f.start_time, f.staff_id); else { pendingAt.current = f.start_time; setDate(f.date); } }} /> : null}
             {opts.sooner && sessions === 1 && (opts.sooner.start_time !== time || opts.sooner.staff_id !== staffId) ? <Btn kind="secondary" className="mt-2" onClick={() => { const s = opts.sooner!; setLead(s.staff_id); load(s.start_time, s.staff_id); }}>{`Sooner with ${opts.sooner.staff_name.split(" ")[0]} · ${date === today ? "today" : dayText(date)} ${opts.sooner.start_time}`}</Btn> : null}
