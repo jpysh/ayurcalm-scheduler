@@ -133,6 +133,15 @@ assert.equal(deletesAt({ created: t0, paused_at: t0 + 20 * D }), t0 + 34 * D);
     { project: 'audit911', dir, created: fresh }, { project: 'ruta-babaji', dir, created: old },
     { project: 'ayurcalm-scheduler', dir, created: old }, { project: 'other-app', dir: '/u/code/other', created: old },
   ], now), ['qa906']);
+  const { gone } = await import('./index.mjs');
+  const D = 86_400_000, home = '/Users/w/code/Ranikhet/ayurcalm-scheduler/.claude/worktrees/x', ago = (d) => new Date(now - d * D).toISOString();
+  const row = (project, days, o = {}) => ({ project, dir: home, running: false, finished: ago(days), volumes: [`${project}_pg`], ...o });
+  assert.deepEqual(gone([
+    row('qa4', 4), row('qa4', 5), row('qa2', 2), row('ruta-babaji', 30), row('ayurcalm-scheduler', 9),
+    row('oddname', 9, { dir: '/Users/w/ruta-host' }), row('up', 0, { running: true, finished: '0001-01-01T00:00:00Z' }),
+    row('shared', 9, { volumes: ['up_pg'] }), row('', 9), row('mixed', 9), row('mixed', 1),
+  ], now), ['qa4']);
+  assert.deepEqual(stale([{ project: 'up', dir: home, created: old }], now), ['up']);
   console.log('tidy ok');
 }
 

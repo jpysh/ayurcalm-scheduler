@@ -36,7 +36,7 @@ export function morning(db, problems, now, feedback = [], host = []) {
     ...((db.events || []).some((e) => e.at >= day) ? [`Since yesterday: ${db.events.filter((e) => e.at >= day).map((e) => e.text).join('; ')}`] : []),
     problems.length ? `Health: ${problems.join('; ')}` : 'Health: every centre up and backed up',
     ...host,
-    db.tidy ? `Disk: ${db.tidy.after} full after the night's tidy (was ${db.tidy.before})${db.tidy.stopped.length ? `; stopped ${db.tidy.stopped.join(', ')}` : ''}` : null,
+    db.tidy ? `Disk: ${db.tidy.after} full after the night's tidy (was ${db.tidy.before})${db.tidy.stopped.length ? `; stopped ${db.tidy.stopped.join(', ')}` : ''}${db.tidy.removed?.length ? `; removed ${db.tidy.removed.length} stopped test stack(s) with their data` : ''}` : null,
     feedback.length ? `Feedback this week: ${n(feedback, week)}${feedback.slice(0, 3).map((f) => `\n  ${f.centre}: ${f.text.slice(0, 120)}`).join('')}` : 'Feedback this week: none yet',
   ].filter((l) => l !== null).join('\n');
 }

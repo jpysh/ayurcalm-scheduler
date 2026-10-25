@@ -241,6 +241,16 @@ export async function update(now = false) {
 // local copy are never touched.
 const KEEP = /^(ruta-.*|ayurcalm-scheduler)$/;
 export const stale = (rows, now) => [...new Set(rows.filter((r) => !KEEP.test(r.project) && /ayurcalm-scheduler/.test(r.dir) && now - Date.parse(r.created) > 24 * 3_600_000).map((r) => r.project))];
+// Stopped stacks are removed with their data after 3 days (#1156). Every check must pass: compose
+// labels, not a kept name, every container's folder inside this repo's checkout (centres run from
+// ~/ruta-host, so a wrong name alone cannot reach them), nothing run for 3 days, no volume mounted by a running container.
+const HOME = /\/code\/Ranikhet\/ayurcalm-scheduler(\/|$)/;
+export const inspectRow = (c) => ({ project: c.Config.Labels?.['com.docker.compose.project'] ?? '', dir: c.Config.Labels?.['com.docker.compose.project.working_dir'] ?? '', running: c.State.Running, finished: c.State.FinishedAt, volumes: c.Mounts.filter((m) => m.Type === 'volume').map((m) => m.Name) });
+export function gone(rows, now) {
+  const busy = new Set(rows.filter((r) => r.running).flatMap((r) => r.volumes));
+  const byProject = Map.groupBy(rows, (r) => r.project);
+  return [...byProject].filter(([p, rs]) => p && !KEEP.test(p) && rs.every((r) => r.dir && HOME.test(r.dir) && !r.running && now - Date.parse(r.finished) > 3 * 86_400_000 && !r.volumes.some((v) => busy.has(v)))).map(([p]) => p);
+}
 export async function tidy(now = Date.now()) {
   const before = await run('df', ['-P', DATA]).then((r) => r.stdout.trim().split('\n')[1].split(/\s+/)[4], () => '?');
   await run('docker', ['builder', 'prune', '-af', '--max-used-space', '20gb']).catch(console.error);
@@ -249,8 +259,13 @@ export async function tidy(now = Date.now()) {
   const rows = ps.map((l) => { const [project, dir, at] = l.split('\t'); return { project, dir, created: at.split(' ').slice(0, 3).join(' ').replace(' ', 'T').replace(' ', '') }; });
   const stopped = stale(rows, now);
   for (const p of stopped) await run('docker', ['compose', '-p', p, 'stop']).catch(console.error);
+  const ids = await run('docker', ['ps', '-aq']).then((r) => r.stdout.split('\n').filter(Boolean), () => []);
+  const all = ids.length ? await run('docker', ['inspect', ...ids]).then((r) => JSON.parse(r.stdout).map(inspectRow), () => []) : [];
+  const removed = gone(all, now);
+  for (const p of removed) { console.log(`tidy: removing stack ${p} and its data`); await run('docker', ['compose', '-p', p, 'down', '-v']).catch(console.error); }
+  await run('docker', ['volume', 'prune', '-f']).catch(console.error);
   const after = await run('df', ['-P', DATA]).then((r) => r.stdout.trim().split('\n')[1].split(/\s+/)[4], () => '?');
-  db.tidy = { at: now, before, after, stopped }; save();
+  db.tidy = { at: now, before, after, stopped, removed }; save();
 }
 
 // ---- watch, hourly (#248): the demo and every centre up, a backup in the last 26 h, disk not full.
