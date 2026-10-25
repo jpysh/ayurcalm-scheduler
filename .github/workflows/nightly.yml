@@ -41,6 +41,9 @@ jobs:
             [ -n "$n" ] && gh issue comment "$n" --body "Green on $(date +%F). Closing." && gh issue close "$n"
             exit 0
           fi
-          body=$(printf 'Failing on %s ([run](%s/%s/actions/runs/%s)):\n\n```\n%s\n```\n\nTap-count report:\n\n```\n%s\n```\n' "$(date +%F)" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$fails" "$taps")
+          # The same failures as last night add nothing: one comment per change, so the issue reads as a short history.
+          sig=$(printf '%s' "$fails" | sed -E 's/^\s+[0-9]+\) //' | sort | sha1sum | cut -c1-12)
+          if [ -n "$n" ] && gh issue view "$n" --json body,comments -q '.body, .comments[].body' | grep -o 'sig:[0-9a-f]*' | tail -1 | grep -qx "sig:$sig"; then echo "Same failures as before; no comment."; exit 0; fi
+          body=$(printf 'Failing on %s ([run](%s/%s/actions/runs/%s)):\n\n```\n%s\n```\n\nTap-count report:\n\n```\n%s\n```\n<!-- sig:%s -->\n' "$(date +%F)" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$fails" "$taps" "$sig")
           if [ -n "$n" ]; then gh issue comment "$n" --body "$body"
           else gh issue create --title "Nightly browser tests" --body "$body"; fi
