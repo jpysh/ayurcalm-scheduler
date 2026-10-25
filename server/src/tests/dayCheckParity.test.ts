@@ -189,6 +189,10 @@ async function main() {
     assert.ok(line && line.includes('Parity One'), `headline should name the resident: ${line}`);
     assert.ok(line && /and \d+ more to fix$/.test(line), `headline should count the rest: ${line}`);
 
+    // Two rooms out of use: the line names one room and only its residents (#1152).
+    const off = (room: string, who: string) => ({ ...mine[0], problem_class: 'blocking', kind: 'ROOM_OFF', group_key: `ROOM_OFF:${room}`, what: `${room} is out of use on this day.`, patient_name: who }) as typeof mine[0];
+    assert.equal(headlineFor([off('Annexe', 'Asha'), off('Dasra', 'Ravi'), off('Annexe', 'Meera')]), 'Annexe is out of use on this day — Asha, Meera, and 1 more to fix');
+
     console.log('dayCheck parity: ok');
   } finally {
     for (const m of [...made].reverse()) {
