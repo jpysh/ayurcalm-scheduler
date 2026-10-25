@@ -583,10 +583,10 @@ const AdminDashboard = () => {
                 setCurrentDate((d) => dayDate(shiftDay(ymdInTZ(d), dx < 0 ? 1 : -1)));
               }
             }}>
-            {/* A new centre's first steps, until it can book (#60): each row opens the screen that adds it. */}
+            {/* A new centre's first steps, until it can book (#60): each row opens the screen that adds it. A doctor gives only consultations, so is not a therapist here (#1162). */}
             {/* The checklist is the screen until the centre can book (#972): no date bar over an empty day. It stays until the first treatment is booked, and the example centre has Make it mine instead. */}
             {(() => {
-              const basics = [["therapies", "Add your therapies", therapies.length], ["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.length], ["patients", "Add your first patient", patients.length]] as const;
+              const basics = [["therapies", "Add your therapies", therapies.length], ["rooms", "Add your rooms", roomsList.length], ["staff", "Add your therapists", staff.filter((s) => s.role !== "doctor").length], ["patients", "Add your first patient", patients.length]] as const;
               const ready = basics.every(([, , n]) => n > 0);
               const booked = Object.values(appointmentsByDate).some((l) => l.length > 0);
               const show = loaded && !readOnly && !demo && !booked;
