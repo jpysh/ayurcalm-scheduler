@@ -25,7 +25,8 @@ const image = (doc: any, uri: string | null | undefined, x: number, y: number, o
 // Helvetica has no Devanagari and the Devanagari font no Latin letters: a line takes the one its script needs.
 const face = (t: string) => (/[\u0900-\u097F]/.test(t) ? 'Local' : 'Helvetica');
 
-export const pageLine = (name: string, no: string, page: number, pages: number) => [name, no, `page ${page} of ${pages}`].filter(Boolean).join(' · ');
+// The name prints whole in the grid; the footer keeps 31 letters so its line stays on the page (#1137).
+export const pageLine = (name: string, no: string, page: number, pages: number) => [name.length > 31 ? `${name.slice(0, 30)}…` : name, no, `page ${page} of ${pages}`].filter(Boolean).join(' · ');
 
 export async function generateDischargePdf(v: DischargeView, centre: { name: string; address: string | null; logo: string | null; made?: string }, lh: Letterhead): Promise<Buffer> {
   const doc = new PDFDocument({ size: 'A4', margin: M, bufferPages: true });
@@ -56,18 +57,23 @@ export async function generateDischargePdf(v: DischargeView, centre: { name: str
   const grid = (rows: [string, string][][]) => {
     for (const row of rows) {
       const y = doc.y;
-      row.forEach(([k, val], i) => {
-        const x = M + i * cell;
-        doc.rect(x, y, cell, 17).lineWidth(0.5).strokeColor(LINE).stroke();
-        doc.font('Helvetica').fontSize(7).fillColor('#555').text(k, x + 3, y + 5, { width: 62, height: 10, ellipsis: true, lineBreak: false });
-        // A long email or address shrinks to fit before anything is cut: the guest takes this page home (#845).
-        const room = cell - 69;
+      // A long email or address shrinks to fit before it wraps, and the row grows to its tallest cell,
+      // so nothing is cut: the guest takes this page home (#845, #1137).
+      const room = cell - 69;
+      const cells = row.map(([k, val]) => {
         doc.font('Helvetica-Bold').fontSize(8);
         const size = Math.max(6, Math.min(8, (8 * room) / (doc.widthOfString(val || '') || 1)));
         const two = doc.fontSize(size).widthOfString(val || '') > room;
-        doc.fillColor('#000').text(val || '', x + 66, two ? y + 1.5 : y + 4.5 + (8 - size) / 2, two ? { width: room, height: 15, lineGap: -1, ellipsis: true } : { width: room, height: 10, ellipsis: true, lineBreak: false });
+        return { k, val: val || '', size, two, h: two ? doc.heightOfString(val || '', { width: room, lineGap: -1 }) : 10 };
       });
-      doc.x = M; doc.y = y + 17;
+      const rowH = Math.max(17, ...cells.map((c) => c.h + 3));
+      cells.forEach(({ k, val, size, two }, i) => {
+        const x = M + i * cell;
+        doc.rect(x, y, cell, rowH).lineWidth(0.5).strokeColor(LINE).stroke();
+        doc.font('Helvetica').fontSize(7).fillColor('#555').text(k, x + 3, y + 5, { width: 62, height: 10, ellipsis: true, lineBreak: false });
+        doc.font('Helvetica-Bold').fontSize(size).fillColor('#000').text(val, x + 66, two ? y + 1.5 : y + 4.5 + (8 - size) / 2, two ? { width: room, lineGap: -1 } : { width: room, height: 10, ellipsis: true, lineBreak: false });
+      });
+      doc.x = M; doc.y = y + rowH;
     }
   };
   const when = (ymd: string, t: string) => `${nice(ymd)}${t ? `, ${t}` : ''}`;
