@@ -74,6 +74,8 @@ export const buildRota = (input: {
   openingTime: string;
   closingTime: string;
   onlyStaffId?: string;
+  /** Who the sheet is for, as its marks say it: the doctor rota's only doctor on leave is no doctor, not no therapist (#1163). */
+  person?: 'therapist' | 'doctor';
 }): Rota => {
   const { day, appts, events, timeOff, patientById, therapyById, roomById } = input;
   const staffName = new Map(input.staff.map((s) => [s.id, s.name] as const));
@@ -150,7 +152,7 @@ export const buildRota = (input: {
         .map((a) => ({
           t: a.start_time,
           bold: true,
-          text: ['NO THERAPIST', roomOut(a) ? 'ROOM OUT' : '', `${therapyById[a.therapy_id] || a.therapy_id} ${a.duration_minutes || 0}m`, patientById[a.patient_id] || a.patient_id, roomName(a)]
+          text: [`NO ${(input.person ?? 'therapist').toUpperCase()}`, roomOut(a) ? 'ROOM OUT' : '', `${therapyById[a.therapy_id] || a.therapy_id} ${a.duration_minutes || 0}m`, patientById[a.patient_id] || a.patient_id, roomName(a)]
             .filter(Boolean).join(' · '),
         })));
       (mine.length ? unstaffed : out).push({
@@ -285,6 +287,7 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
     openingTime: settings?.opening_time || '09:00',
     closingTime: settings?.closing_time || '18:00',
     onlyStaffId: staffId,
+    person: role,
   });
 
   // A therapist's own rota is their day, not the centre's problems.
@@ -318,7 +321,7 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
     // than as someone free to take work, and there are usually several.
     const busy = (r: RotaRow) => r.cells.some((c) => c.length > 0);
     const groups: [string, (r: RotaRow) => boolean][] = [
-      ['Needs a therapist: booked with someone who is off', (r) => !!r.unstaffed],
+      [`Needs a ${Person.toLowerCase()}: booked with someone who is off`, (r) => !!r.unstaffed],
       ['Working today', (r) => r.available && busy(r)],
       ['Working today, nothing booked', (r) => r.available && !busy(r)],
       ['Not available today', (r) => !r.available && !r.unstaffed],
