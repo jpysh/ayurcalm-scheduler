@@ -119,13 +119,17 @@ async function main() {
 
     // A long email is printed whole, and a typed payment date reads like the others (#845).
     const email = 'leela.menon.longname@a-long-example-domain.com';
-    await prisma.patient.update({ where: { id: p.id }, data: { email } });
+    // The longest name the app allows prints whole; the row grows to hold it (#1137).
+    // It starts with the tag, so the tidy-up still finds it.
+    const longName = `${TAG} Venkatalakshmi Ramaswamy Subramaniam Iyengar Krishnamurthy Nataraj`.slice(0, 80);
+    await prisma.patient.update({ where: { id: p.id }, data: { email, name: longName } });
     await call('PUT', `/patients/${p.id}/stays/${stay.id}/discharge`, { payment_amount: 'Rs. 50,000', payment_mode: 'Cash', payment_date: '2030-03-30' });
 
     // Everything filled in, thirty days: still two pages.
     const pdf = Buffer.from(await (await call('GET', `/patients/${p.id}/stays/${stay.id}/discharge-pdf`)).arrayBuffer());
     const words = execFileSync('pdftotext', ['-raw', '-', '-'], { input: pdf }).toString();
     assert.ok(words.replace(/\n/g, '').includes(email), 'the email is printed whole, on two lines if it must');
+    assert.ok(words.replace(/\s+/g, ' ').includes(longName), 'an 80-letter name is cut on the summary');
     assert.ok(words.includes('30 Mar 2030') && !words.includes('2030-03-30'), 'the payment date reads 30 Mar 2030');
     // A Hindi footer and registration line print in the Devanagari font, the rest still in Helvetica (#1136).
     const settings = await prisma.settings.findFirst();
