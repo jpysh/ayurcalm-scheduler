@@ -169,3 +169,10 @@ console.log('therapistRota: ok');
   const at10 = slots.findIndex((s) => s.start <= 600 && s.end > 600);
   assert.equal(rows[0].cells[at10][0].text, 'NO THERAPIST · Abhyanga 60m · Sarah Smith · Room 1');
 }
+
+// #1163: on the doctor rota the mark names a doctor.
+{
+  const { slots, rows } = buildRota({ ...base, person: 'doctor', timeOff: [off({ entity_id: 's2', date: day, description: 'Leave' })] });
+  const at10 = slots.findIndex((s) => s.start <= 600 && s.end > 600);
+  assert.equal(rows[0].cells[at10][0].text, 'NO DOCTOR · Abhyanga 60m · Sarah Smith · Room 1');
+}
