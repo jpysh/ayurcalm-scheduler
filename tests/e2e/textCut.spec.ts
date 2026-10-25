@@ -69,3 +69,16 @@ test('At 200% text Events, Diet plans, Therapies and Search show every word whol
   await page.waitForTimeout(800);
   expect(await page.evaluate(cutText), 'search').toEqual([]);
 });
+
+// A long therapy name ran past the card's edge (#1151).
+test('At 200% text the Log shows every word whole', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/admin/log');
+  await big(page);
+  await page.waitForTimeout(800);
+  for (const y of [0, 1e6]) {
+    await page.evaluate((top) => window.scrollTo(0, top), y);
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(cutText), `log, scrolled to ${y}`).toEqual([]);
+  }
+});

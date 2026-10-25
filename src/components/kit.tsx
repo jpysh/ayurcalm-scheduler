@@ -596,12 +596,12 @@ export const PickPhoto = ({ id, has, disabled, onPick }: { id: string; has: bool
 /** A caption over a part of a long sheet or page ("Centre", "Letterhead"): the same words ListGroup puts over its list. */
 export const SectionHead = ({ children }: { children: ReactNode }) => <div className="pb-1.5 pt-5 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{children}</div>;
 
-/** One dated line of a record (the Log): time, the sentence wrapped in full, who did it, and one action such as Undo. */
+/** One dated line of a record (the Log): time, the sentence wrapped in full (a long therapy name breaks inside the card at large text, #1151), who did it, and one action such as Undo. */
 export const EntryRow = ({ time, text, by, muted, action }: { time: string; text: ReactNode; by?: ReactNode; muted?: boolean; action?: { label: string; run: () => void } }) => (
   <div className="flex min-h-[56px] items-start gap-3 border-b border-border px-3 py-2.5 last:border-b-0">
     <span className="w-12 flex-none pt-px text-base font-semibold tabular-nums">{time}</span>
     <span className="min-w-0 flex-1">
-      <span className={`block text-base leading-snug ${muted ? "text-muted-foreground" : ""}`}>{text}</span>
+      <span className={`block break-words text-base leading-snug ${muted ? "text-muted-foreground" : ""}`}>{text}</span>
       {by ? <span className={`block ${noteText}`}>{by}</span> : null}
     </span>
     {action ? <button type="button" className="-my-1 min-h-11 flex-none rounded-full px-3 text-sm font-bold text-primary" onClick={action.run}>{action.label}</button> : null}
