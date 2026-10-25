@@ -512,7 +512,8 @@ export function headlineFor(all: DayProblem[]): string | null {
   const problems = all.filter((p) => p.problem_class === 'blocking');
   if (problems.length === 0) return null;
   const worst = problems[0];
-  const sameKind = problems.filter((p) => p.kind === worst.kind);
+  // The line names one room or one person, so it takes only that one's residents (#1152).
+  const sameKind = problems.filter((p) => p.group_key === worst.group_key);
   // Every resident is named. "and 2 more" saves a line and costs the admin the
   // one thing the line is for: knowing who is affected before they open it.
   const names = [...new Set(sameKind.map((p) => p.patient_name))];
