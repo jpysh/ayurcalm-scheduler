@@ -21,13 +21,16 @@ for (const zone of ['America/New_York', 'Pacific/Auckland', 'Asia/Kolkata']) {
       // The response is awaited, not listened for: a handler still reading the body when the test ended threw "Test ended" and left the leave behind.
       const made = page.waitForResponse((r) => /\/api\/timeoff$/.test(r.url()) && r.request().method() === 'POST');
       await page.goto('/admin/timeoff');
-      await page.getByRole('button', { name: /^(\+|Add)/ }).first().click();
+      // Availability's one form (#695): who, then Some days, then the dates.
+      await page.getByRole('button', { name: 'Mark not available' }).click();
       const sheet = page.getByRole('dialog').last();
-      await sheet.getByText('Choose…').click();
-      await page.getByRole('dialog').last().getByRole('button').filter({ hasNotText: /Closed for a day|Show/ }).first().click();
+      await sheet.getByText('Show staff').click();
+      await sheet.getByRole('checkbox').first().click();
+      await sheet.getByRole('button', { name: /^Next/ }).click();
+      await sheet.getByRole('button', { name: 'Some days' }).click();
       await sheet.locator('input[type=date]').first().fill(DAY);
       await sheet.locator('input[type=date]').nth(1).fill(DAY);
-      await sheet.getByRole('button', { name: 'Save, plan later' }).click();
+      await sheet.getByRole('button', { name: 'Save, fix later' }).click();
       const res = await made;
       const sent = res.request().postDataJSON() as { start_date: string; end_date: string };
       expect(sent.start_date.slice(0, 10)).toBe(DAY);

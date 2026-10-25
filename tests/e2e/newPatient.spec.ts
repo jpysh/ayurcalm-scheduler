@@ -101,10 +101,14 @@ test('a double tap on Add on a slow network adds the patient once', async ({ pag
 test('a long name stops at 80 letters and counts from 70', async ({ page }) => {
   await signIn(page);
   await page.getByRole('button', { name: 'New patient', exact: true }).click();
-  const name = page.getByRole('dialog').locator('input[maxlength="80"]');
-  await name.pressSequentially('x'.repeat(85));
+  // The name is a box that wraps a long name (#957); at 80 it says it is full.
+  const name = page.getByRole('dialog').getByLabel('Name');
+  await name.pressSequentially('x'.repeat(75));
+  await expect(page.getByText('75 of 80 letters')).toBeVisible();
+  await name.pressSequentially('x'.repeat(10));
   await expect(name).toHaveValue('x'.repeat(80));
-  await expect(page.getByText('80 of 80 letters')).toBeVisible();
+  await expect(page.getByText("That's the most it can hold")).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Female', exact: true }).click();
   await expect(page.getByRole('dialog').getByRole('button', { name: 'Add patient' })).toBeVisible();
 });
 
