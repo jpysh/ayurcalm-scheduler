@@ -120,7 +120,8 @@ async function main() {
     // A long email is printed whole, and a typed payment date reads like the others (#845).
     const email = 'leela.menon.longname@a-long-example-domain.com';
     // The longest name the app allows prints whole; the row grows to hold it (#1137).
-    const longName = 'Shrimati Venkatalakshmi Ramaswamy Subramaniam Iyengar Krishnamurthy Natarajan Pi';
+    // It starts with the tag, so the tidy-up still finds it.
+    const longName = `${TAG} Venkatalakshmi Ramaswamy Subramaniam Iyengar Krishnamurthy Nataraj`.slice(0, 80);
     await prisma.patient.update({ where: { id: p.id }, data: { email, name: longName } });
     await call('PUT', `/patients/${p.id}/stays/${stay.id}/discharge`, { payment_amount: 'Rs. 50,000', payment_mode: 'Cash', payment_date: '2030-03-30' });
 
