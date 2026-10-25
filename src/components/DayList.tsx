@@ -5,7 +5,7 @@ import { BottomSheet, Btn, plural, Seg } from "@/components/kit";
  * screen opening there. The same rows regroup by therapist, room or resident.
  * Everything shown comes from the server's appointments; the list only sorts.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DoorClosed } from "lucide-react";
 
 type Appt = {
@@ -67,6 +67,15 @@ const namesOf = (l: string[]) => (l.length > 3 ? `${l.slice(0, 3).join(", ")} an
 
 export default function DayList({ appointments, isToday, nowMinutes: NOW, view, setView, query, patients, roomsList, staff, therapyNameById, onOpen, onNotIn, headerAction, movedFrom = {}, roomCount, flags = {}, comings, closed, onEditClosed, onMoveClosed }: Props) {
   const [pickView, setPickView] = useState(false);
+  // At 200% text the count and "By time" take two lines (#1160): the hour headers stick under it whatever its height.
+  const countBar = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = countBar.current; if (!el) return;
+    const put = () => document.documentElement.style.setProperty("--count-h", `${el.offsetHeight}px`);
+    put();
+    const ro = new ResizeObserver(put); ro.observe(el);
+    return () => { ro.disconnect(); document.documentElement.style.removeProperty("--count-h"); };
+  });
   const name = (list: Named[], id: string | null) => list.find((x) => String(x.id) === String(id))?.name || "";
   const colourOf = (id: string) => COLOURS[Math.max(0, staff.findIndex((s) => String(s.id) === id)) % COLOURS.length];
   const q = query.trim().toLowerCase();
@@ -143,7 +152,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
     <b className="ml-2 rounded-md bg-now px-1.5 text-xs font-bold text-white tabular-nums">{hm(NOW)}</b>
   </div>;
   const group = "rounded-xl overflow-hidden bg-card";
-  const sticky = "sticky top-[calc(var(--strip-h,104px)+2.75rem)] z-[2] bg-background flex items-baseline gap-2 px-1 pt-3 pb-1.5";
+  const sticky = "sticky top-[calc(var(--strip-h,104px)+var(--count-h,2.75rem))] z-[2] bg-background flex items-baseline gap-2 px-1 pt-3 pb-1.5";
 
   let body: React.ReactNode;
   if (view === "time") {
@@ -237,7 +246,7 @@ export default function DayList({ appointments, isToday, nowMinutes: NOW, view, 
 
   return (
     <div className="flex flex-col">
-      <div className="sticky top-[var(--strip-h,104px)] z-[3] flex h-11 items-center justify-between bg-background px-1 text-sm text-muted-foreground">
+      <div ref={countBar} className="sticky top-[var(--strip-h,104px)] z-[3] flex min-h-11 flex-wrap items-center justify-between gap-x-2 bg-background px-1 text-sm text-muted-foreground">
         <span className="flex items-center gap-2">{rows.length} {rows.length === 1 ? "treatment" : "treatments"}{roomCount ? ` · ${plural(roomCount, "room")}` : ""}{headerAction}</span>
         <button type="button" aria-label={`Show the day by, now ${VIEW_NAMES[view]}`} onClick={() => setPickView(true)} className="-my-1.5 min-h-11 rounded-full px-3 font-semibold text-primary active:bg-secondary">By {VIEW_NAMES[view].toLowerCase()} ▾</button>
       </div>
