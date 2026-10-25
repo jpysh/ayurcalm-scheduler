@@ -6,7 +6,9 @@ test.use({ viewport: { width: 360, height: 640 } });
 test('guest link: ?date= is honoured, the week is one tap, the details form takes a date field', async ({ page, request }) => {
   const { token } = await (await request.post('/api/auth/login', { data: { email: 'admin@example.com', password: 'demo1234' } })).json();
   const headers = { Authorization: `Bearer ${token}` };
-  const patient = (await (await request.get('/api/patients', { headers })).json())[0];
+  // Someone staying now: a past guest's link lapses, and the first patient on the list may be one.
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const patient = (await (await request.get(`/api/patients?resident_on=${today}`, { headers })).json())[0];
   const { token: link } = await (await request.post(`/api/patients/${patient.id}/link`, { headers })).json();
   await page.goto(`/l/${link}?date=2030-03-04`);
   await expect(page.getByText('Monday 4 March')).toBeVisible();

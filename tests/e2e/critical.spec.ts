@@ -59,7 +59,7 @@ async function openTab(page: Page, name: string) {
 
 test('wrong password stays on the login page', async ({ page }) => {
   await signIn(page, 'not-the-password');
-  await expect(page.getByText(/invalid/i)).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('do not match');
   await expect(page).toHaveURL(/\/login/);
 });
 
@@ -128,7 +128,7 @@ test('an edit to a room is still there after a reload', async ({ page }) => {
   // A centre edits its own data on day one, and an edit that looks saved but is
   // not is the failure nobody notices until the schedule is already wrong.
   // Each room is a row; a tap opens its sheet (#273).
-  const rows = activePanel(page).getByRole('button', { name: /Has |Nothing special/ });
+  const rows = activePanel(page).getByRole('button', { name: / room ›$/ });
   const rename = async (from: string, to: string) => {
     await activePanel(page).getByRole('button', { name: new RegExp(`^${from}`) }).first().click();
     await page.getByRole('dialog').getByRole('button', { name: /^Details/ }).click();
@@ -308,22 +308,19 @@ test('a search match inside a room name keeps the name in one piece (#193)', asy
   expect(parents.filter((d) => d.includes('flex'))).toEqual([]);
 });
 
-test('a room out for some hours reads as the day and those hours in Leave (#189)', async ({ page }) => {
+test('a room out for some hours reads as those hours on Rooms (#189)', async ({ page }) => {
   await signIn(page);
   await passSetupIfShown(page);
-  await openTab(page, 'Leave');
+  // Rooms out of use moved from Leave to Rooms (#685).
+  await openTab(page, 'Rooms');
   // The seed takes a room out from 14:00 to 20:00 (a plumbing repair). It used to read
   // "27 Sept 2026, 05:30 am": UTC midnight on an Indian clock, with the hours lost.
-  await activePanel(page).getByRole('button', { name: 'All', exact: true }).click();
-  const line = activePanel(page).getByRole('button').filter({ hasText: 'Plumbing repair' });
-  await expect(line).toContainText(/\d{1,2} \w{3,4}, 14:00–20:00/, { timeout: 15000 });
+  const line = activePanel(page).getByRole('button').filter({ hasText: /Out of use/ }).first();
+  await expect(line).toContainText(/Out of use (from )?14:00/, { timeout: 15000 });
   await expect(line).not.toContainText('05:30');
-  // Its edit sheet reads the same hours, not the phone's clock (#214).
+  // Its sheet reads the same hours, not the phone's clock (#214).
   await line.click();
-  const sheet = page.getByRole('dialog').last();
-  await expect(sheet.getByLabel('Starts')).toHaveValue('14:00');
-  await expect(sheet.getByLabel('Ends')).toHaveValue('20:00');
-  await expect(sheet.getByRole('button', { name: 'Delete this leave' })).toBeVisible();
+  await expect(page.getByRole('dialog').getByRole('button', { name: /^Available again/ })).toContainText(/14:00/);
   await page.keyboard.press('Escape');
 });
 
@@ -338,8 +335,9 @@ test('the day by therapist starts where the by-time view does (#193)', async ({ 
   await page.getByRole('dialog').getByRole('button', { name: 'Therapist', exact: true }).click();
   const chip = page.getByRole('button', { name: /^Show the day by, now Therapist/ });
   await expect(chip).toBeVisible();
-  // The count line and its view chip sit under the week strip, at the same height in either view.
-  expect(byTime).toBeLessThan(145);
+  // The count line and its view chip sit just under the week strip (whatever its height), at the same height in either view.
+  const week = (await page.getByLabel('Week').boundingBox())!;
+  expect(byTime - (week.y + week.height)).toBeLessThan(50);
   expect(Math.abs((await top(page.getByText(/ treatments?\b/).first())) - byTime)).toBeLessThan(12);
 });
 
@@ -347,16 +345,16 @@ test('on a phone, lists are plain rows and a tap opens the edit sheet (#178)', a
   await page.setViewportSize({ width: 375, height: 812 });
   await signIn(page);
   await passSetupIfShown(page);
-  // Leave: a row opens a sheet with Delete in it.
-  await openTab(page, 'Leave');
+  // Availability (was Leave): a row opens a sheet with Delete in it.
+  await openTab(page, 'Availability');
   const leave = activePanel(page).getByRole('button').filter({ hasText: /Personal/ }).first();
   await expect(leave).toBeVisible({ timeout: 15000 });
   await leave.click();
-  await expect(page.getByRole('dialog').getByRole('button', { name: 'Delete this leave' })).toBeVisible();
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Delete this entry' })).toBeVisible();
   await page.keyboard.press('Escape');
   // Diet plans: the centre's plans; one opens its editor with Retire in it.
   await openTab(page, 'Diet plans');
-  await activePanel(page).getByRole('button', { name: /patients?$/ }).first().click();
+  await activePanel(page).getByRole('button', { name: /now or coming$/ }).first().click();
   await expect(page.getByRole('dialog').getByRole('button', { name: 'Retire this plan' })).toBeVisible({ timeout: 15000 });
   await page.keyboard.press('Escape');
   // Settings: a row opens its form in a sheet.
@@ -530,7 +528,7 @@ test('Team is read by day: each person\'s hours and how booked, any day of the s
   await signIn(page);
   await passSetupIfShown(page);
   await openTab(page, 'Staff');
-  await expect(activePanel(page).getByText(/^\d{2}:\d{2}–\d{2}:\d{2} · .+ booked/).first()).toBeVisible({ timeout: 15000 });
+  await expect(activePanel(page).getByText(/^\d{2}:\d{2}–\d{2}:\d{2} · Busy /).first()).toBeVisible({ timeout: 15000 });
   await activePanel(page).getByLabel('Week').getByRole('button').nth(3).click();
   await expect(activePanel(page).getByText(/ in on /)).toBeVisible();
 });
@@ -648,7 +646,8 @@ test('tapping the date from the bottom returns to the top and the week strip set
   await page.setViewportSize({ width: 375, height: 812 });
   await signIn(page);
   await passSetupIfShown(page);
-  await page.waitForTimeout(1500);
+  // The strip stays open for 1.5 s after the day is picked (the list scrolling itself to now); scroll after that.
+  await page.waitForTimeout(3000);
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await page.waitForTimeout(500);
   await page.getByRole('button', { name: /week ›/ }).click();

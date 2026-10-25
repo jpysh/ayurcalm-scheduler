@@ -10,10 +10,13 @@ test('diet sheet: names first, detail on tap, no Edit link in the timeline', asy
   await page.getByLabel('Password').press('Enter');
   await page.waitForURL(/\/admin/);
   await page.goto('/admin/patients');
-  await page.getByText('Aarav Iyer').first().click();
+  // The seed's residents change with the day it is run: take the first one staying a while.
+  const row = page.getByRole('button', { name: /Day \d+ of \d+ · leaves (?!today)/ }).first();
+  const first = (await row.innerText()).split(/\s/)[0];
+  await row.click();
   await page.getByText(/^Diet$/).first().click();
   const sheet = page.getByRole('dialog').last();
-  await expect(sheet.getByText('Diet for Aarav')).toBeVisible();
+  await expect(sheet.getByText(`Diet for ${first}`)).toBeVisible();
   await expect(sheet.getByText('Edit ›')).toHaveCount(0);
   const plans = sheet.locator('button[aria-pressed]');
   const before = await plans.first().innerText();

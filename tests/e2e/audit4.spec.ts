@@ -28,6 +28,8 @@ const addToTeam = async (page: Page, what: string) => {
 test('H1: rooms, therapists and therapies are plain rows with one sheet to add', async ({ page, request }) => {
   const { token } = await (await request.post('/api/auth/login', { data: { email: 'admin@example.com', password: 'demo1234' } })).json();
   const headers = { Authorization: `Bearer ${token}` };
+  // A run that failed before its tidy-up left its room behind.
+  for (const r of (await (await request.get('/api/rooms', { headers })).json()) as { id: string; name: string }[]) if (r.name === 'E2E Room') await request.delete(`/api/rooms/${r.id}`, { headers });
   await signIn(page);
   await toTeam(page);
   const panel = page.locator('[role=tabpanel][data-state=active]');
@@ -36,13 +38,13 @@ test('H1: rooms, therapists and therapies are plain rows with one sheet to add',
   const sheet = page.getByRole('dialog');
   await sheet.getByLabel('Name').fill('E2E Room');
   // A new room starts with nothing ticked (#303); the admin ticks what it has.
-  await expect(sheet.getByRole('button', { name: 'steam', exact: true })).toHaveAttribute('aria-pressed', 'false');
-  await sheet.getByRole('button', { name: 'steam', exact: true }).click();
+  await expect(sheet.getByRole('button', { name: 'Steam', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await sheet.getByRole('button', { name: 'Steam', exact: true }).click();
   await sheet.getByRole('button', { name: 'Add the room' }).click();
-  await expect(panel.getByRole('button', { name: /^E2E Room/ })).toContainText('Has ');
-  await expect(panel.getByRole('button', { name: /^E2E Room/ })).toContainText('steam');
-  const room = ((await (await request.get('/api/rooms', { headers })).json()) as { id: string; name: string }[]).find((r) => r.name === 'E2E Room');
-  expect(room).toBeTruthy();
+  // The row names the kind of room (#1118); what it has is on the room itself.
+  await expect(panel.getByRole('button', { name: /^E2E Room/ })).toContainText('room');
+  const room = ((await (await request.get('/api/rooms', { headers })).json()) as { id: string; name: string; amenities: string[] }[]).find((r) => r.name === 'E2E Room');
+  expect(room?.amenities).toEqual(['steam']);
   await request.delete(`/api/rooms/${room!.id}`, { headers });
 
   for (const what of ['Therapist or doctor', 'Therapy']) {
@@ -80,15 +82,6 @@ test('H3: a read-only trial says so on +, and hides Get started', async ({ page 
   await expect(page.getByLabel('Get started')).toHaveCount(0);
 });
 
-test('O1: Leave has Upcoming · Past · All, not a Filter popover', async ({ page }) => {
-  await signIn(page);
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: /^Leave/ }).click();
-  const panel = page.locator('[role=tabpanel][data-state=active]');
-  await expect(panel.getByRole('button', { name: 'Upcoming' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(panel.getByRole('button', { name: 'Filter' })).toHaveCount(0);
-});
-
 test('Print opens one sheet: all sheets as one PDF, or each on its own row (#1030)', async ({ page }) => {
   await signIn(page);
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
@@ -122,8 +115,15 @@ test("M1: a resident's link offers WhatsApp reception once the centre sets its o
   }
 });
 
+// Get started shows on a centre's own data (the example has Make it mine, #728) until its first booking (#974).
+async function asOwnCentre(page: Page) {
+  await page.route('**/api/settings', async (route) => route.request().method() === 'GET' ? route.fulfill({ json: { ...(await (await route.fetch()).json()), demo_data: false } }) : route.continue());
+  await page.route('**/api/appointments?*', (route) => route.request().method() === 'GET' ? route.fulfill({ json: [] }) : route.continue());
+}
+
 test('U1: a centre with no therapies is asked for them first, and the library opens', async ({ page }) => {
   await page.route('**/api/therapies', (route) => route.request().method() === 'GET' ? route.fulfill({ json: [] }) : route.continue());
+  await asOwnCentre(page);
   await signIn(page);
   const start = page.getByLabel('Get started');
   await expect(start.getByRole('button').first()).toContainText('Add your therapies');
