@@ -232,3 +232,17 @@ test('#564: any hours for a day, several days at once, and a day off, without le
   await expect(sheet.getByRole('alert')).toContainText('after start');
   await expect(sheet.getByRole('button', { name: 'Apply' })).toBeDisabled();
 });
+
+test('U1b: a centre with only a doctor is asked for a therapist, not told it has one (#1162)', async ({ page }) => {
+  await page.route('**/api/therapies', (route) => route.request().method() === 'GET' ? route.fulfill({ json: [] }) : route.continue());
+  await page.route('**/api/staff', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const all = await (await route.fetch()).json();
+    await route.fulfill({ json: all.filter((s: { role: string }) => s.role === 'doctor').slice(0, 1) });
+  });
+  // Get started shows on a centre's own data (#728) until its first booking (#974).
+  await page.route('**/api/settings', async (route) => route.request().method() === 'GET' ? route.fulfill({ json: { ...(await (await route.fetch()).json()), demo_data: false } }) : route.continue());
+  await page.route('**/api/appointments?*', (route) => route.request().method() === 'GET' ? route.fulfill({ json: [] }) : route.continue());
+  await signIn(page);
+  await expect(page.getByLabel('Get started').getByRole('button', { name: /Add your therapists/ })).toContainText('Not yet');
+});
