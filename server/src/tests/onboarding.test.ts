@@ -115,12 +115,12 @@ async function main() {
       await makeItMine(tx, {
         centre_name: 'Mine Test Centre',
         team: [{ name: 'Dr Asha', gender: 'female', doctor: true }, { name: 'Ravi', gender: 'male', doctor: false }, { name: 'Lata', gender: 'female', doctor: false }],
-        rooms: [{ id: rooms[0].id, name: 'Lotus' }, { id: rooms[1].id, name: rooms[1].name }],
+        rooms: [{ id: rooms[0].id, name: 'Lotus' }, { id: rooms[1].id, name: rooms[1].name }], consult_room: 'OPD',
         therapy_ids: therapies.slice(0, 3).map((t) => t.id),
       });
       assert.equal(await tx.patient.count(), 0, 'Make it mine kept the example residents');
       assert.deepEqual((await tx.staff.findMany({ orderBy: { name: 'asc' } })).map((s) => `${s.name} ${s.role}`), ['Dr Asha doctor', 'Lata therapist', 'Ravi therapist']);
-      assert.deepEqual((await tx.therapyRoom.findMany({ where: { is_active: true } })).map((r) => r.id).sort(), [rooms[0].id, rooms[1].id].sort(), 'An unticked room is still in use');
+      assert.deepEqual((await tx.therapyRoom.findMany({ where: { is_active: true, NOT: { name: 'OPD' } } })).map((r) => r.id).sort(), [rooms[0].id, rooms[1].id].sort(), 'An unticked room is still in use');
       assert.equal((await tx.therapyRoom.findUnique({ where: { id: rooms[0].id } }))?.name, 'Lotus', 'A renamed room kept its old name');
       const active = await tx.therapy.findMany({ where: { is_active: true } });
       assert.equal(active.filter((t) => !t.is_consultation).length, 3, 'An unticked therapy is still offered');
@@ -131,14 +131,16 @@ async function main() {
       assert.equal(s?.demo_data, false); assert.equal(s?.setup_complete, true); assert.equal(s?.centre_name, 'Mine Test Centre');
       throw ROLLBACK;
     }, { timeout: 120000 }).catch((e) => { if (e !== ROLLBACK) throw e; });
-    // One room kept, not the consultation room: residents can still be seen there (#1140).
+    // One treatment room kept: the doctor still has an OPD room, and the treatment room is left as it was (#1147).
     await prisma.$transaction(async (tx) => {
       const consult = await tx.therapy.findFirstOrThrow({ where: { is_consultation: true } });
-      const room = (await tx.therapyRoom.findMany({ where: { is_active: true } })).find((r) => !consult.required_amenities.every((a) => r.amenities.includes(a)))!;
+      const fits = (r: { amenities: string[] }) => consult.required_amenities.every((a) => r.amenities.includes(a));
+      const room = (await tx.therapyRoom.findMany({ where: { is_active: true } })).find((r) => !fits(r))!;
       const therapy = await tx.therapy.findFirstOrThrow({ where: { is_active: true, is_consultation: false } });
-      await makeItMine(tx, { centre_name: 'One Room', team: [{ name: 'Dr Asha', gender: 'female', doctor: true }, { name: 'Ravi', gender: 'male', doctor: false }], rooms: [{ id: room.id, name: room.name }], therapy_ids: [therapy.id] });
-      const kept = await tx.therapyRoom.findUniqueOrThrow({ where: { id: room.id } });
-      assert.ok(consult.required_amenities.every((a) => kept.amenities.includes(a)), 'A one-room centre has no room a consultation can use');
+      await makeItMine(tx, { centre_name: 'One Room', team: [{ name: 'Dr Asha', gender: 'female', doctor: true }, { name: 'Ravi', gender: 'male', doctor: false }], rooms: [{ id: room.id, name: room.name }], consult_room: 'OPD', therapy_ids: [therapy.id] });
+      const active = await tx.therapyRoom.findMany({ where: { is_active: true } });
+      assert.deepEqual(active.filter(fits).map((r) => r.name), ['OPD'], 'Get started did not keep exactly one OPD room');
+      assert.deepEqual((await tx.therapyRoom.findUniqueOrThrow({ where: { id: room.id } })).amenities, room.amenities, 'The treatment room was given consultation equipment');
       throw ROLLBACK;
     }, { timeout: 120000 }).catch((e) => { if (e !== ROLLBACK) throw e; });
     assert.ok(await prisma.patient.count() > 0, 'The rollback did not put the demo centre back');

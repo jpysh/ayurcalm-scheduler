@@ -51,6 +51,7 @@ export default function MakeItMine() {
   const [doctors, setDoctors] = useState<Named[]>([]);
   const [therapists, setTherapists] = useState<Named[]>([]);
   const [rooms, setRooms] = useState<Item[]>([]);
+  const [opd, setOpd] = useState("OPD");
   const [therapies, setTherapies] = useState<Item[]>([]);
   const [residentsText, setResidentsText] = useState("");
   const [residents, setResidents] = useState<Named[]>([]);
@@ -68,13 +69,19 @@ export default function MakeItMine() {
       if (s?.timezone) setTz(s.timezone);
       setWhatsapp(s?.support_whatsapp || "");
     }).catch(() => {});
-    fetch(`${API_BASE}/rooms`).then((r) => r.json()).then((l) => setRooms((Array.isArray(l) ? l : []).filter((r) => r.is_active !== false).map((r) => ({ id: r.id, name: r.name, on: true })))).catch(() => {});
-    fetch(`${API_BASE}/therapies`).then((r) => r.json()).then((l) => setTherapies((Array.isArray(l) ? l : []).filter((t) => t.is_active !== false && !t.is_consultation).map((t) => ({ id: t.id, name: t.name, on: true })).sort((a, b) => a.name.localeCompare(b.name)))).catch(() => {});
+    // The consultation room is asked for on its own (#1147), so the treatment rooms leave out any a consultation fits.
+    Promise.all([fetch(`${API_BASE}/rooms`).then((r) => r.json()), fetch(`${API_BASE}/therapies`).then((r) => r.json())]).then(([rl, tl]) => {
+      const list: { id: string; name: string; is_active?: boolean; is_consultation?: boolean; required_amenities?: string[] }[] = Array.isArray(tl) ? tl : [];
+      const needs = list.find((t) => t.is_consultation)?.required_amenities ?? [];
+      const isOpd = (r: { amenities?: string[] }) => needs.length > 0 && needs.every((a) => r.amenities?.includes(a));
+      setRooms((Array.isArray(rl) ? rl : []).filter((r) => r.is_active !== false && !isOpd(r)).map((r) => ({ id: r.id, name: r.name, on: true })));
+      setTherapies(list.filter((t) => t.is_active !== false && !t.is_consultation).map((t) => ({ id: t.id, name: t.name, on: true })).sort((a, b) => a.name.localeCompare(b.name)));
+    }).catch(() => {});
   }, []);
 
   const team = [...doctors.map((p) => ({ ...p, doctor: true })), ...therapists.map((p) => ({ ...p, doctor: false }))];
   const teamOk = !!centre.trim() && doctors.length > 0 && therapists.length > 0 && team.every((p) => p.gender);
-  const kitOk = rooms.some((r) => r.on && r.name.trim()) && therapies.some((t) => t.on);
+  const kitOk = !!opd.trim() && rooms.some((r) => r.on && r.name.trim()) && therapies.some((t) => t.on);
   const residentsOk = sheet.length ? sheet.every((p) => !p.problems.length) : residents.every((p) => p.gender);
   const arriving = sheet.length ? sheet.length : residents.length;
 
@@ -86,6 +93,7 @@ export default function MakeItMine() {
         body: JSON.stringify({
           centre_name: centre.trim(), team,
           rooms: rooms.filter((r) => r.on && r.name.trim()).map((r) => ({ id: r.id, name: r.name.trim() })),
+          consult_room: opd.trim(),
           therapy_ids: therapies.filter((t) => t.on).map((t) => t.id),
         }),
       });
@@ -153,10 +161,13 @@ export default function MakeItMine() {
               </div>
             ))}
           </Group>
+          <Group label="Consultation room" note="Where the doctor sees residents. Rename it as your centre calls it.">
+            <input aria-label="Consultation room" className="h-11 rounded-xl border border-input/45 bg-background px-3 text-base" value={opd} onChange={(e) => setOpd(e.target.value)} />
+          </Group>
           <Group label="Therapies you give" note={`${therapies.filter((t) => t.on).length} of ${therapies.length}. Untick any you do not give; lengths and prices are in Settings.`}>
             {therapies.map((t, i) => <Tick key={t.id} label={t.name} on={t.on} set={(on) => setTherapies((all) => all.map((x, j) => (j === i ? { ...x, on } : x)))} />)}
           </Group>
-          {foot(kitOk, "Continue", 1, "Keep at least one room with a name and one therapy.")}
+          {foot(kitOk, "Continue", 1, "Name the consultation room, and keep at least one treatment room and one therapy.")}
         </form>
       )}
 
