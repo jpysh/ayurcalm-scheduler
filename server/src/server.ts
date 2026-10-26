@@ -817,6 +817,41 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
 });
 
 /**
+ * A pause in treatments (#1194): ill for a few days, or menstruating in Panchakarma. The room and meals stay.
+ * 'drop' cancels the treatments on those days ("paused"); 'push' moves every treatment from the first paused
+ * day later by the length of the pause, and the stay with them, the room re-checked first. One batch, one Undo.
+ */
+app.post('/patients/:id/stays/:stayId/pause', async (req: Request, res: Response) => {
+  const stay = await stayOf(req);
+  if (!stay) { res.status(404).json({ error: 'Stay not found' }); return; }
+  const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+  const body = z.object({ from: ymd, to: ymd, mode: z.enum(['drop', 'push']), reason: z.string().trim().max(80).optional() }).refine((b) => b.to >= b.from).parse(req.body);
+  const [from, to] = [new Date(`${body.from}T00:00:00.000Z`), new Date(`${body.to}T00:00:00.000Z`)];
+  if (from < stay.start_date || to > stay.end_date) { res.status(409).json({ reason: 'NOT_STAYING', message: 'The pause is outside the stay.' }); return; }
+  const days = Math.round((to.getTime() - from.getTime()) / 86400000) + 1;
+  const end = new Date(stay.end_date.getTime() + days * 86400000);
+  if (body.mode === 'push' && stay.guest_room_id && stay.on_site) {
+    const refused = await guestRoomRefusal(prisma, stay.guest_room_id, stay.end_date, end, stay.id);
+    if (refused) { res.status(409).json(refused); return; }
+  }
+  const booked = await prisma.appointment.findMany({ where: { patient_id: stay.patient_id, ...HAPPENING, scheduled_date: body.mode === 'drop' ? { gte: from, lte: to } : { gte: from, lte: stay.end_date } }, include: { Therapy: { select: { name: true } } } });
+  const day = (d: Date, n = 0) => new Date(d.getTime() + n * 86400000).toISOString().slice(0, 10);
+  const reason = `paused${body.reason ? `: ${body.reason}` : ''}`;
+  const out = booked.length ? await applyPlan(booked.map((a) => ({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id, start_time: a.start_time, date: day(a.scheduled_date, body.mode === 'push' ? days : 0), ...(body.mode === 'drop' ? { cancel: true, reason } : {}) })), prisma) : null;
+  if (body.mode === 'push') {
+    await prisma.patientStay.update({ where: { id: stay.id }, data: { end_date: end, duration_days: stay.duration_days + days } });
+    await extendDiet(stay.patient_id, stay.end_date, end, prisma);
+  }
+  const clashes: string[] = [];
+  if (body.mode === 'push') for (const a of booked) {
+    const at = new Date(`${day(a.scheduled_date, days)}T00:00:00.000Z`);
+    const hit = findConflict({ id: a.id, scheduled_date: at, start_time: a.start_time, duration_minutes: a.duration_minutes, staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id, patient_id: a.patient_id, therapy_id: a.therapy_id }, await loadDay(at, prisma));
+    if (hit) clashes.push(`${a.Therapy.name} on ${day(at)}: ${hit.message}`);
+  }
+  res.json({ batch_id: out?.batch_id ?? null, changed: out?.applied ?? 0, end_before: day(stay.end_date), end_date: day(body.mode === 'push' ? end : stay.end_date), clashes, days });
+});
+
+/**
  * A guest who never came (#980). The stay goes, so the room, the meals, Form C and the
  * records no longer count it; its treatments are cancelled "did not arrive" in one
  * batch. What was removed is kept in the audit row, so Undo puts all of it back.
