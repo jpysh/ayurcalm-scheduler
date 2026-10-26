@@ -45,6 +45,21 @@ async function main() {
     await prisma.earlierGuestRoom.delete({ where: { id: moved.id } });
     const spare = await prisma.guestRoom.findUniqueOrThrow({ where: { name: 'QA2' } });
     assert.equal((await (await call('DELETE', `/guest-rooms/${spare.id}`)).json()).deleted, true, 'an unused room is deleted');
+    // Fewer beds than the guests already booked is refused, naming the night and who (#1186).
+    const pair = await prisma.guestRoom.findUniqueOrThrow({ where: { name: 'QA4' } });
+    const two = await prisma.patient.findMany({ take: 2, orderBy: { name: 'asc' } });
+    const booked = await Promise.all(two.map((p) => prisma.patientStay.create({ data: { patient_id: p.id, start_date: new Date('2030-03-01T00:00:00Z'), end_date: new Date('2030-03-05T00:00:00Z'), duration_days: 4, guest_room_id: pair.id } })));
+    try {
+      const lowered = await call('PUT', `/guest-rooms/${pair.id}`, { beds: 1 });
+      assert.equal(lowered.status, 409, 'one bed for two booked guests is refused');
+      const why = await lowered.json();
+      assert.equal(why.date, '2030-03-01');
+      assert.deepEqual([...why.names].sort(), two.map((p) => p.name).sort());
+      assert.equal((await prisma.guestRoom.findUniqueOrThrow({ where: { id: pair.id } })).beds, 2, 'the refused change is not saved');
+      assert.equal((await call('PUT', `/guest-rooms/${pair.id}`, { beds: 3 })).status, 200, 'more beds is fine');
+    } finally {
+      await prisma.patientStay.deleteMany({ where: { id: { in: booked.map((b) => b.id) } } });
+    }
     await tidy();
 
     // The seed: rooms with guests in them, and no night over a room's beds.
