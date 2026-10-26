@@ -65,6 +65,12 @@ async function main() {
 
     await prisma.appointment.update({ where: { id: a.id }, data: { status: 'completed' } });
     assert.equal((await call(`/patients/${p.id}/stays/${stay.id}/did-not-arrive`)).status, 409, 'a guest who was treated did arrive');
+    // A stay already over stays on the record (#1215), whatever the phone shows.
+    const past = await prisma.patientStay.create({ data: { patient_id: p.id, start_date: day('2020-04-02'), end_date: day('2020-04-05'), duration_days: 4, on_site: true } });
+    const over = await call(`/patients/${p.id}/stays/${past.id}/did-not-arrive`);
+    assert.equal(over.status, 409);
+    assert.equal((await over.json()).reason, 'STAY_OVER');
+    assert.ok(await prisma.patientStay.findUnique({ where: { id: past.id } }), 'the past stay is still there');
     console.log('did not arrive: stay, room, meals and treatments go, and Undo brings them back');
   } finally {
     await tidy(prisma);
