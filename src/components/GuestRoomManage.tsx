@@ -7,10 +7,12 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
-import { BottomSheet, Btn, ChangeLine, Empty, Foot, Group, ListGroup, LinkRow, Loading, Row, Seg, Text, noteText } from "@/components/kit";
+import { BottomSheet, Btn, ChangeLine, Empty, Foot, Group, ItemRow, ListGroup, LinkRow, Loading, Row, Seg, Text, dayText, noteText } from "@/components/kit";
 
 type Type = { id: string; name: string; is_active: boolean };
 type Room = { id: string; name: string; accommodation_id: string; beds: number; is_active: boolean };
+/** A guest with nights in the room from today on (#1187), and the room the server suggests. */
+type Ahead = { stay_id: string; patient_id: string; name: string; from: string; to: string; move_from: string; move_to: { id: string; name: string; type: string } | null };
 const BEDS: [number, string][] = [[1, "1"], [2, "2"], [3, "3"], [4, "4"]];
 const bedsText = (n: number) => `${n} bed${n === 1 ? "" : "s"}`;
 const typesNow = () => fetchJsonWithTimeout<Type[]>(`${API_BASE}/accommodations`).then((r) => (Array.isArray(r) ? r.filter((t) => t.is_active) : []));
@@ -78,6 +80,16 @@ export function ManageGuestRooms({ open, onOpenChange, typeId, onChanged, openTy
   const [edit, setEdit] = useState<Room | null>(null);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [ahead, setAhead] = useState<Ahead[] | null>(null);
+  const loadAhead = (id: string) => fetchJsonWithTimeout<Ahead[]>(`${API_BASE}/guest-rooms/${id}/ahead`).then((r) => setAhead(Array.isArray(r) ? r : []));
+  useEffect(() => { setAhead(null); if (edit) loadAhead(edit.id); }, [edit?.id]);
+  const move = async (g: Ahead) => {
+    if (!g.move_to || !edit) return;
+    const res = await fetch(`${API_BASE}/patients/${g.patient_id}/stays/${g.stay_id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ guest_room_id: g.move_to.id, move_from: g.move_from }) });
+    const out = await res.json().catch(() => ({}));
+    if (res.ok) toast.success(`${g.name} moved to ${g.move_to.name}`); else toast.error(out.message ?? "The move was not saved. Try again.");
+    loadAhead(edit.id); onChanged();
+  };
   const load = () => Promise.all([fetchJsonWithTimeout<Room[]>(`${API_BASE}/guest-rooms`), typesNow()]).then(([r, t]) => { setRooms(Array.isArray(r) ? r.filter((x) => x.is_active) : []); setTypes(t); });
   useEffect(() => { if (open) load(); }, [open]);
   const changed = () => { load(); onChanged(); };
@@ -110,11 +122,16 @@ export function ManageGuestRooms({ open, onOpenChange, typeId, onChanged, openTy
       </BottomSheet>
       <AddGuestRooms open={adding} onOpenChange={setAdding} typeId={typeId} onChanged={changed} openTypes={() => { onOpenChange(false); openTypes(); }} />
       <BottomSheet open={!!edit} onOpenChange={(o) => { if (!o) setEdit(null); }} title={edit ? `Guest room ${edit.name}` : ""} note={edit ? `${typeName(edit.accommodation_id)}. Beds is how many patients may share it.` : undefined}
-        foot={<Foot label="Save changes" ok={!!edit?.name.trim()} busy={busy} save={save} remove={remove} removeLabel={edit ? `Remove ${edit.name}` : "Remove"} />}>
+        foot={<Foot label="Save changes" ok={!!edit?.name.trim()} busy={busy} save={save} remove={ahead && !ahead.length ? remove : undefined} removeLabel={edit ? `Remove ${edit.name}` : "Remove"} />}>
         {edit ? <div className="grid gap-3">
           <Text label="Name" autoComplete="off" maxLength={20} value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
           <Group label="Beds"><Seg<number> options={BEDS} value={edit.beds} onChange={(n) => setEdit({ ...edit, beds: n })} /></Group>
           {out ? out(edit.id) : null}
+          {ahead?.length ? <ListGroup title="Move these guests to remove it" count={ahead.length}>
+            {ahead.map((g) => <ItemRow key={g.stay_id} title={g.name} facts={`${dayText(g.from)} to ${dayText(g.to)}`}>
+              {g.move_to ? <Btn inline onClick={() => move(g)}>Move to {g.move_to.name}</Btn> : <span className={noteText}>No room free for these nights</span>}
+            </ItemRow>)}
+          </ListGroup> : null}
         </div> : null}
       </BottomSheet>
     </>
