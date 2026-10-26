@@ -7,7 +7,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 DATA=${RUTA_DATA:-$HOME/ruta-data}
-r2() { docker run --rm --env-file "$DATA/r2.env" -v "$PWD/hosting/offsite.sh:/offsite.sh:ro" -v "$DATA:/out" --entrypoint sh rclone/rclone:1.71 /offsite.sh "$@"; }
+r2() { docker run --rm --env-file "$DATA/r2.env" -v "$PWD/hosting/offsite.sh:/offsite.sh:ro" -v "$DATA:/out" --entrypoint sh rclone/rclone:1.75.2 /offsite.sh "$@"; }
 start=$(date +%s)
 r2 tunnel /out
 # Each "hostname: <slug>.jains.es" line is followed by its "service: ...:<port>".
