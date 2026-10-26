@@ -28,7 +28,7 @@ import { COMMON, therapyLibrary } from './therapyLibrary.js';
 import { requireAdmin } from './settings.js';
 import { attentionFor, changesSchema } from './attention.js';
 import { indiaHolidays } from './indiaHolidays.js';
-import { firstFreeRoom, guestRoomRefusal, moveRooms, nightsEnd } from './guestRooms.js';
+import { firstFreeRoom, guestRoomRefusal, moveRooms, nightsEnd, roomOn } from './guestRooms.js';
 import { checkResidentRows, patientSchema, staySchema } from './residentImport.js';
 
 if (!process.env.DATABASE_URL) {
@@ -697,13 +697,14 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
   const now = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : (v as string | null) ?? null);
   if (extras.if_still && Object.entries(extras.if_still).some(([k, v]) => now(stay[k as keyof typeof extras.if_still]) !== v)) { res.status(409).json(CHANGED_SINCE); return; }
   const dates = req.body.start_date || req.body.end_date ? stayData(staySchema.parse(req.body)) : { start_date: stay.start_date, end_date: stay.end_date, duration_days: stay.duration_days };
-  const roomId = extras.guest_room_id !== undefined ? extras.guest_room_id : stay.guest_room_id;
-  const room = roomId ? await prisma.guestRoom.findUnique({ where: { id: roomId } }) : null;
   // A move mid-stay (#1164) keeps the nights already slept in the rooms they were in; only the nights from the move are checked.
   const earlier = await prisma.earlierGuestRoom.findMany({ where: { stay_id: stay.id } });
-  const moved = roomId !== stay.guest_room_id;
-  const tz = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
   const end = nightsEnd(dates.start_date, dates.end_date);
+  // Shortened to end before a move (#1174): the stay ends in the room of its last night, not the one it was to move to.
+  const roomId = extras.guest_room_id !== undefined ? extras.guest_room_id : roomOn({ guest_room_id: stay.guest_room_id, EarlierRooms: earlier }, end.getTime() - 86400000);
+  const room = roomId ? await prisma.guestRoom.findUnique({ where: { id: roomId } }) : null;
+  const moved = extras.guest_room_id !== undefined && roomId !== stay.guest_room_id;
+  const tz = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
   const from = moved ? new Date(`${extras.move_from ?? centreClock(tz).date}T00:00:00.000Z`) : end;
   const rooms = moveRooms(earlier, stay.guest_room_id, dates.start_date, end, from, roomId);
   const checkFrom = rooms.length ? rooms[rooms.length - 1].until : dates.start_date;
@@ -715,8 +716,8 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
     await tx.earlierGuestRoom.deleteMany({ where: { stay_id: stay.id } });
     if (rooms.length) await tx.earlierGuestRoom.createMany({ data: rooms.map((r) => ({ ...r, stay_id: stay.id })) });
     return tx.patientStay.update({ where: { id: stay.id }, data: {
-      ...dates, package_id: extras.package_id, guest_room_id: extras.guest_room_id,
-      accommodation_id: extras.guest_room_id && room ? room.accommodation_id : extras.accommodation_id,
+      ...dates, package_id: extras.package_id, guest_room_id: roomId,
+      accommodation_id: roomId !== stay.guest_room_id || extras.guest_room_id ? room?.accommodation_id ?? extras.accommodation_id : extras.accommodation_id,
     } });
   });
   await extendDiet(id, stay.end_date, dates.end_date, prisma);

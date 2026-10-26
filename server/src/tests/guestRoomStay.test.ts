@@ -110,6 +110,10 @@ async function main() {
       writeFileSync(pdf, await generateDailySchedulePdf(d, prisma));
       assert.ok(execFileSync('pdftotext', ['-raw', pdf, '-']).toString().replace(/\s+/g, ' ').includes(`${TAG} Sunil ${TAG}${n}`), `the day sheet for ${d} prints the room slept in that night`);
     }
+    // Shortened to end before the move (#1174): the stay ends in the room it never left.
+    await call('PUT', sunilStay, { start_date: '2030-05-01', end_date: '2030-05-06' });
+    const short = await prisma.patientStay.findUniqueOrThrow({ where: { id: sunil.Stays[0].id }, include: { EarlierRooms: true } });
+    assert.deepEqual([short.guest_room_id, short.EarlierRooms.length], [await room('1'), 0], 'a stay shortened before its move stays in the old room');
     console.log('guest room stays: ok');
   } finally {
     await tidy(prisma).catch(() => {});
