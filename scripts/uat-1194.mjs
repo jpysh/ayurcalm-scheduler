@@ -1,0 +1,25 @@
+// node scripts/uat-1194.mjs — pause treatments for a few days: drop them or push the rest later (#1194), 375x812, on a throwaway stack (APP_URL).
+import { chromium } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+const APP = process.env.APP_URL || 'http://localhost:8391';
+const OUT = 'docs/design/uat/2026-10-27-pause-treatments';
+mkdirSync(OUT, { recursive: true });
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+const add = (n, d) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+const api = (m, p, b) => fetch(`${APP}/api${p}`, { method: m, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: b ? JSON.stringify(b) : undefined }).then((r) => r.json());
+await api('POST', '/patients', { name: 'Uat Pause Guest', gender: 'female', on_site: true, stay: { start_date: add(0), end_date: add(6) } });
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, timezoneId: 'Asia/Kolkata' });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+const p = await ctx.newPage();
+await p.goto(`${APP}/admin/patients`); await p.waitForTimeout(2500);
+await p.getByRole('button', { name: 'Search patients' }).click();
+await p.keyboard.type('Uat Pause'); await p.waitForTimeout(1200);
+await p.getByText('Uat Pause Guest').first().click(); await p.waitForTimeout(1500);
+await p.getByText('Dates', { exact: true }).first().click(); await p.waitForTimeout(1500);
+await p.getByRole('button', { name: 'Pause treatments…' }).click(); await p.waitForTimeout(800);
+await p.getByText('Push the rest later').click(); await p.waitForTimeout(800);
+await p.getByText('Pause treatments', { exact: true }).scrollIntoViewIfNeeded();
+await p.screenshot({ path: `${OUT}/pause-push-375.png` });
+await b.close();
