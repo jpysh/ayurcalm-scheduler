@@ -7,6 +7,7 @@ import PageHead from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
 import { HolidaysSheet } from "@/components/HolidaysSheet";
 import type { MarkOut } from "@/components/TeamRooms";
+import { GuestsToMove } from "@/components/GuestRoomManage";
 
 type Kind = Exclude<UiTimeOff['type'], 'Center'>;
 type Mode = 'now' | 'part' | 'days';
@@ -138,7 +139,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
       fetchJsonWithTimeout<{ id: string; guests: { name: string }[] }[]>(`${API_BASE}/guest-rooms/free?from=${s.date}&to=${nextDay(s.endDate)}`).then((r) => {
         if (stale || !Array.isArray(r)) return;
         const names = r.filter((x) => form.ids.includes(x.id)).flatMap((x) => x.guests.map((g) => g.name));
-        setImpact(names.length ? `${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]} ${names.length === 1 ? 'is' : 'are'} in ${form.ids.length === 1 ? 'it' : 'them'} then and will need another room. It waits under "need you"; nobody is moved for you.` : 'Nobody is in it then.');
+        setImpact(names.length ? `${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]} ${names.length === 1 ? 'is' : 'are'} in ${form.ids.length === 1 ? 'it' : 'them'} then and will need another room: move them below, or later from "need you".` : 'Nobody is in it then.');
       }).catch(() => {});
     } else {
       const hours = s.start ? `&after=${s.start}&before=${s.end}` : '';
@@ -357,6 +358,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
           )}
           <Text label="Reason (optional)" id="newTimeOffDescription" value={f.description} onChange={(e) => set({ description: e.target.value })} />
           {impact ? <Consequence>{impact}</Consequence> : null}
+          {/* The guests in it those nights, each with a free room and one tap (#1188), as removing a room offers. */}
+          {f.kind === 'GuestRoom' ? f.ids.map((id) => { const s = stored(f); return <GuestsToMove key={id} roomId={id} from={s.date} to={nextDay(s.endDate)} title="Move them to another room" onChanged={() => {}} />; }) : null}
         </> : null}
       </BottomSheet>
       <BottomSheet open={!!plan} onOpenChange={(o) => { if (!o) closePlan(); }} title="The plan"

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from './server.js';
 import { getSettings, requireAdmin } from './settings.js';
 import { centreClock } from './availability.js';
-import { expandRoomNames, guestRoomsFor } from './guestRooms.js';
+import { expandRoomNames, guestRoomsFor, spans } from './guestRooms.js';
 
 /**
  * The centre's packages and accommodation types (#285 stories 11 and 12): reference
@@ -120,8 +120,38 @@ guestRoomsRouter.put('/:id', requireAdmin, async (req: Request, res: Response) =
   }
   res.json(full.room);
 });
+/**
+ * Guests with nights in this room from today on (#1187), each with the first other room of the
+ * same type free for those nights: the move that has to happen before the room can be retired.
+ */
+/** Guests in the room on nights from `since` (default the centre's today) up to `until`, each with a free room to move to: retiring (#1187) and out of use (#1188). */
+async function guestsAhead(id: string, since?: string, until?: string) {
+  const now = centreClock((await getSettings()).timezone).date;
+  const today = new Date(`${since && since > now ? since : now}T00:00:00Z`);
+  const stop = until ? new Date(`${until}T00:00:00Z`) : null;
+  const room = await prisma.guestRoom.findUnique({ where: { id } });
+  const stays = await prisma.patientStay.findMany({ where: { end_date: { gt: today }, OR: [{ guest_room_id: id }, { EarlierRooms: { some: { guest_room_id: id } } }] }, include: { Patient: { select: { name: true } }, EarlierRooms: true }, orderBy: { start_date: 'asc' } });
+  const out = [];
+  for (const s of stays) {
+    const here = spans(s).filter((p) => p.room === id && p.end > today && (!stop || p.start < stop));
+    if (!here.length) continue;
+    const from = here[0].start > today ? here[0].start : today;
+    const to = here[here.length - 1].end;
+    // ponytail: two guests may be offered the same room; the second tap is then refused and the list reloads with another.
+    const free = (await guestRoomsFor(prisma, from, to, s.id)).filter((r) => r.free && r.id !== id);
+    const move_to = free.find((r) => r.accommodation_id === room?.accommodation_id) ?? free[0] ?? null;
+    out.push({ stay_id: s.id, patient_id: s.patient_id, name: s.Patient.name, from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10), move_from: from.toISOString().slice(0, 10), move_to: move_to && { id: move_to.id, name: move_to.name, type: move_to.type } });
+  }
+  return out;
+}
+guestRoomsRouter.get('/:id/ahead', async (req: Request, res: Response) => {
+  const q = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).parse(req.query);
+  res.json(await guestsAhead(String(req.params.id), q.from, q.to));
+});
 guestRoomsRouter.delete('/:id', requireAdmin, async (req: Request, res: Response) => {
   const id = String(req.params.id);
+  const ahead = await guestsAhead(id);
+  if (ahead.length) return void res.status(409).json({ error: `${ahead.length === 1 ? `${ahead[0].name} is` : `${ahead.length} guests are`} booked in this room from today on. Move ${ahead.length === 1 ? 'them' : 'them all'} first`, guests: ahead });
   await prisma.timeOff.deleteMany({ where: { entity_type: 'guest_room', entity_id: id } });
   const inUse = await prisma.patientStay.count({ where: { OR: [{ guest_room_id: id }, { EarlierRooms: { some: { guest_room_id: id } } }] } });
   if (inUse) { await prisma.guestRoom.update({ where: { id }, data: { is_active: false } }); res.json({ retired: true, patients: inUse }); return; }
