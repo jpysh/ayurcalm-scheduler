@@ -184,6 +184,16 @@ async function main() {
     assert.equal(home.guest_room_id, d, 'moving back brings her back');
     assert.equal(home.EarlierRooms.length, 0, 'and leaves no trace of the move');
 
+    // Extending into a booked room (#1192): the preview names the free room and the night it starts; saving both keeps the nights before.
+    const ext = await (await add('Extender', '2031-02-01', '2031-02-05', await room('1'))).json();
+    await add('Nextguest', '2031-02-05', '2031-02-10', await room('1'));
+    const pv = await call('GET', `/patients/${ext.id}/stays/${ext.Stays[0].id}/preview?end_date=2031-02-08`);
+    assert.equal(pv.room.move_from, '2031-02-05', 'the move starts on the first night the room is taken');
+    assert.ok(pv.room.move_to, 'a free room is offered');
+    await call('PUT', `/patients/${ext.id}/stays/${ext.Stays[0].id}`, { start_date: '2031-02-01', end_date: '2031-02-08', guest_room_id: pv.room.move_to.id, move_from: pv.room.move_from });
+    const kept = await prisma.patientStay.findUniqueOrThrow({ where: { id: ext.Stays[0].id }, include: { EarlierRooms: true } });
+    assert.deepEqual(kept.EarlierRooms.map((e) => [e.guest_room_id, e.until.toISOString().slice(0, 10)]), [[await room('1'), '2031-02-05']], 'the first four nights stay in the first room');
+
     console.log('guest room stays: ok');
   } finally {
     await tidy(prisma).catch(() => {});
