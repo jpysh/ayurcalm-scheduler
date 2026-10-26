@@ -82,7 +82,7 @@ Open https://app.yourcentre.in on your phone. The first minute after starting ca
 
 ## 3. Backups
 
-Already running: every night at 02:30 India time the whole database (logos and signatures included) is saved to `~/ayurcalm/backups`, newest 14 kept. Settings → Backups shows the last one.
+Already running: every hour the whole database (logos and signatures included) is saved to `~/ayurcalm/backups`, newest 48 (two days) kept. Settings → Backups shows the last one.
 
 **Keep a copy off the Mac.** A backup on the same disk dies with the disk. Once a week, Settings → Backups → *Download the newest backup* on your phone. Time Machine on the Mac also copies the `backups` folder.
 

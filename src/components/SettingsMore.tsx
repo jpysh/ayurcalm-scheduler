@@ -66,7 +66,7 @@ export function BackupsSheet({ open, onOpenChange, backups }: { open: boolean; o
     } finally { setMoving(false); }
   };
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange} title="Backups" note="Backed up ten minutes after the app starts and every night at 02:30; the newest 14 stay on the computer that runs it."
+    <BottomSheet open={open} onOpenChange={onOpenChange} title="Backups" note="Backed up ten minutes after the app starts and every hour; the newest 48 stay on the computer that runs it."
       foot={backups?.latest ? <Btn kind="primary" onClick={download}>Download the newest backup</Btn> : undefined}>
       <ListGroup>
         <Row title={backups?.latest ? `Newest ${ago(backups.latest.at)}` : "No backup yet"}
