@@ -58,6 +58,11 @@ async function main() {
       assert.equal(guest.move_to?.name.startsWith('QA'), true, 'the suggestion is a free room of the same type');
       assert.notEqual(guest.move_to.id, going.id);
       assert.equal((await (await call('GET', `/guest-rooms/${going.id}/ahead`)).json()).length, 1);
+      // Out of use for some nights (#1188): only a guest sleeping there on those nights is listed, moved from the first of them.
+      const window = await (await call('GET', `/guest-rooms/${going.id}/ahead?from=2030-04-05&to=2030-04-07`)).json();
+      assert.equal(window.length, 1);
+      assert.equal(window[0].move_from, '2030-04-05');
+      assert.equal((await (await call('GET', `/guest-rooms/${going.id}/ahead?from=2030-04-12&to=2030-04-14`)).json()).length, 0, 'nobody is there after they leave');
       const move = await call('PUT', `/patients/${someone.id}/stays/${ahead.id}`, { guest_room_id: guest.move_to.id, move_from: guest.move_from });
       assert.equal(move.status, 200, 'the suggested move is accepted');
       assert.equal((await (await call('GET', `/guest-rooms/${going.id}/ahead`)).json()).length, 0, 'nobody is left once moved');
