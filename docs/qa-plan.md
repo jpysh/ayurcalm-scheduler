@@ -32,7 +32,7 @@ tests, releases, backups or hosting. How each test runs is in `testing.md`.
 
 - Each centre is backed up every hour (48 kept, two days) and copied to R2 at :30,
   encrypted; one weekly copy kept 8 weeks. At most about an hour of data lost.
-- If the Mac fails, centres are restored onto the Oracle VM, aim 1 to 2 hours.
+- If the Mac fails, centres are restored onto the Oracle VM (set up before launch, idle until then) with `hosting/failover.sh`, aim 1 to 2 hours.
   A restore drill monthly, its time recorded. Alarm when a centre has no backup
   for 2 hours.
 
