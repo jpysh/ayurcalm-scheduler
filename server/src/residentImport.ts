@@ -29,6 +29,8 @@ export const patientSchema = z.object({
   preferred_staff_id: z.string().uuid().nullable().optional(),
   /** False for a day patient. */
   on_site: z.boolean().default(true),
+  /** A companion: sleeps and eats here, takes no treatments (#1195). */
+  companion: z.boolean().optional(),
   /** The consultation to book with them, as `/consultations/next` offered it; none if left out. */
   consultation: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), start_time: z.string().regex(/^\d\d:\d\d$/), staff_id: z.string().uuid(), room_id: z.string().uuid() }).optional(),
   /** Arriving and leaving. Without a stay a resident is never "in house" and never on the day sheet (#142). */

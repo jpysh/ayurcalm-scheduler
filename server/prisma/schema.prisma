@@ -89,6 +89,9 @@ model PatientStay {
   accommodation_id String?
   /// The guest room they sleep in now (#456); the rooms before a move mid-stay are EarlierRooms (#1164).
   guest_room_id    String?
+  /// A companion (#1195): a spouse or carer who sleeps and eats here but takes no treatments. Counted for beds,
+  /// meals and Form C; never asked for a discharge summary, a review or a next week.
+  companion        Boolean @default(false)
 
   Patient       Patient            @relation(fields: [patient_id], references: [id])
   GuestRoom     GuestRoom?         @relation(fields: [guest_room_id], references: [id], onDelete: SetNull)
