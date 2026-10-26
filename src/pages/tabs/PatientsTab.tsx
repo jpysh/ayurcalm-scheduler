@@ -605,7 +605,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
       <PackageSheet patient={packFor?.patient ?? null} stay={packFor?.stay ?? null} onClose={backToCard(() => setPackFor(null))} onSaved={() => {}}
         editList={() => { setPackFor(null); setBack(null); openCatalogue('packages'); }}
         matchStay={(end) => { const f = packFor!; setPackFor(null); setStayFor({ patient: f.patient, target: { id: f.stay.id, start: f.stay.start_date, end: f.stay.end_date, package: f.stay.package, accommodation: f.stay.accommodation } }); setStayEnd(end); }} />
-      <AccommodationSheet patient={houseFor?.patient ?? null} stay={houseFor?.stay ?? null} onClose={backToCard(() => setHouseFor(null))} onSaved={() => {}}
+      <AccommodationSheet patient={houseFor?.patient ?? null} stay={houseFor?.stay ?? null} today={today} onClose={backToCard(() => setHouseFor(null))} onSaved={() => {}}
         editList={() => { setHouseFor(null); setBack(null); openCatalogue('accommodation'); }} />
       <StaySheet patient={stayFor?.patient ?? null} target={stayFor ? { ...stayFor.target, end: stayEnd ?? stayFor.target.end } : null} today={today}
         now={clock(timezone)} onClose={backToCard(() => { setStayFor(null); setStayEnd(null); })} onSaved={() => { if (stayFor) void refreshStays(stayFor.patient.id); }} />
