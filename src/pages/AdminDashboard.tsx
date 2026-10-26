@@ -24,7 +24,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout, API_TOKEN, type ApiAppointment, type ApiProgramEvent, type Patient, type UiRoom, type UiStaff, type UiTherapy, type UiTimeOff } from "./tabs/shared";
 import PageHead, { BackContext } from "@/components/PageHead";
 import { BottomSheet } from "@/components/BottomBar";
-import { Consequence, dayText, ListGroup, Row, SheetFoot, saveError, setCurrency, undoBatch } from "@/components/kit";
+import { Consequence, Strip, dayText, ListGroup, Row, SheetFoot, saveError, setCurrency, undoBatch } from "@/components/kit";
 
 /** Builds the schedule's time rows from the centre's opening hours. */
 const buildTimeSlots = (openingTime: string, closingTime: string, slotMinutes: number) => {
@@ -140,6 +140,10 @@ const AdminDashboard = () => {
   const [rules, setRules] = useState<{ section: "Day" | "Patients" | "Team" | null } | null>(null);
   // A link on another screen to a Settings list ("Edit the list" on a picker).
   const [settingsSheet, setSettingsSheet] = useState<string | null>(null);
+  // The server says whether this admin is still on demo1234; the public demo always answers no (#1173).
+  const [demoPassword, setDemoPassword] = useState(false);
+  const checkAccount = useCallback(() => { fetch(`${API_BASE}/account`).then((r) => (r.ok ? r.json() : null)).then((a) => setDemoPassword(!!a?.demo_password)).catch(() => {}); }, []);
+  useEffect(checkAccount, [checkAccount]);
   const [patients, setPatients] = useState<Patient[]>([]);
   // Until the first load lands, an empty list means "not yet", not "a new centre" (#220).
   const [loaded, setLoaded] = useState(false);
@@ -571,6 +575,7 @@ const AdminDashboard = () => {
       {/* The phone design widened on a desktop, never a second layout (#67): one centred column. */}
       {/* No top padding: each screen's own header carries the design's 12–14px (#193). */}
       <div className="mx-auto w-full max-w-xl px-3 pb-3">
+        {demoPassword ? <Strip action="Change it" onAction={() => { setSettingsSheet('account'); go('settings'); }}>You're still using the demo password.</Strip> : null}
         <Tabs value={activeTab} onValueChange={go} className="space-y-6 [&>[role=tabpanel]]:mt-0">
           {/* Swipe the day left and right, as the date sheet says (#67). */}
           <TabsContent value="schedule" className="space-y-6"
@@ -652,7 +657,7 @@ const AdminDashboard = () => {
           </TabsContent>
 
           <TabsContent value="settings" data-testid="tabpanel-settings">
-            <Settings signOut={signOut} openLog={() => go("log")} openScreen={go} initialSheet={settingsSheet} sheetOpened={() => setSettingsSheet(null)}
+            <Settings signOut={signOut} openLog={() => go("log")} openScreen={go} initialSheet={settingsSheet} sheetOpened={() => setSettingsSheet(null)} accountChanged={checkAccount}
               attention={attention} openRules={() => setRules({ section: null })} openHolidays={timeOffScreen.openHolidays} />
           </TabsContent>
 
