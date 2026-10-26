@@ -364,6 +364,9 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [cancels, setCancels] = useState(0);
+  // Arriving days later (#1193): what is booked before the new arrival, and whether it is cancelled or the whole stay pushed later.
+  const [missed, setMissed] = useState(0);
+  const [late, setLate] = useState<"cancel" | "shift">("cancel");
   const [busy, setBusy] = useState(false);
   // A new stay starts, like a new patient, in the next free doctor time (#575); Later leaves it to the card.
   const [slots, setSlots] = useState<{ date: string; start_time: string; staff_id: string; staff_name: string; room_id: string }[]>([]);
@@ -397,10 +400,10 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
   const [room, setRoom] = useState<{ taken: string; move_to: { id: string; name: string; type: string } | null; move_from?: string } | null>(null);
   useEffect(() => {
     const moved = !!target && (start !== target.start || end !== target.end);
-    if (!patient || !target?.id || !end || !moved) { setCancels(0); setRoom(null); return; }
+    if (!patient || !target?.id || !end || !moved) { setCancels(0); setRoom(null); setMissed(0); return; }
     let stale = false;
-    fetchJsonWithTimeout<{ cancels: unknown[]; room: typeof room }>(`${API_BASE}/patients/${patient.id}/stays/${target.id}/preview?start_date=${start}&end_date=${end}`)
-      .then((r) => { if (!stale) { setCancels(end < target.end ? r?.cancels?.length ?? 0 : 0); setRoom(r?.room ?? null); } });
+    fetchJsonWithTimeout<{ cancels: unknown[]; room: typeof room; missed?: number }>(`${API_BASE}/patients/${patient.id}/stays/${target.id}/preview?start_date=${start}&end_date=${end}`)
+      .then((r) => { if (!stale) { setCancels(end < target.end ? r?.cancels?.length ?? 0 : 0); setRoom(r?.room ?? null); setMissed(start > target.start ? r?.missed ?? 0 : 0); } });
     return () => { stale = true; };
   }, [patient?.id, target?.id, target?.start, target?.end, start, end]); // eslint-disable-line react-hooks/exhaustive-deps
   const [noShow, setNoShow] = useState<number | null>(null);
@@ -411,7 +414,8 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
   const delta = days - oldDays;
   const changed = start !== target.start || end !== target.end;
   const lines = [
-    delta < 0 ? `${plural(-delta, "day")} shorter.${cancels ? ` ${plural(cancels, "treatment")} after ${dayText(end)} will be marked cancelled (stay shortened) and stay in the record.` : ""} Meals stop that day.` : "",
+    missed ? (late === "cancel" ? `${plural(missed, "treatment")} before ${dayText(start)} ${missed === 1 ? "is" : "are"} cancelled, "arrived late"; the leaving day stays.` : `Every treatment moves ${plural(Math.round((Date.parse(start) - Date.parse(target.start)) / DAY_MS), "day")} later with the same therapist, room and time; where one clashes, the day's check offers the fix.`) : "",
+    delta < 0 ? `${plural(-delta, "day")} shorter.${cancels ? ` ${plural(cancels, "treatment")} after ${dayText(end)} will be marked cancelled (stay shortened) and stay in the record.` : ""} ${end < target.end ? "Meals stop that day." : `Meals start on ${dayText(start)}.`}` : "",
     delta > 0 ? `${plural(delta, "day")} longer. Meals carry on to ${dayText(end)}.` : "",
     changed && target.accommodation ? `Accommodation: ${plural(between(start, end), "night")}, ${money(between(start, end) * target.accommodation.price_per_day)}.` : "",
     changed && target.package && target.package.days !== days ? `Package: ${target.package.days} days; the stay is now ${days}.` : "",
@@ -420,7 +424,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
   const save = async () => {
     setBusy(true);
     const res = target.id
-      ? await saveStay(patient.id, target.id, { start_date: start, end_date: end, cancel_after: cancels > 0, ...(room ? { guest_room_id: room.move_to?.id ?? null, ...(room.move_from ? { move_from: room.move_from } : {}) } : {}) })
+      ? await saveStay(patient.id, target.id, { start_date: start, end_date: end, cancel_after: cancels > 0, ...(missed ? { late } : {}), ...(room ? { guest_room_id: room.move_to?.id ?? null, ...(room.move_from ? { move_from: room.move_from } : {}) } : {}) })
       : await fetch(`${API_BASE}/patients/${patient.id}/stays`, { method: "POST", headers: json, body: JSON.stringify({ start_date: start, end_date: end, package_id: target.package?.id ?? null, guest_room_id: guestRoom || null, ...(visit ? { consultation: { date: visit.date, start_time: visit.start_time, staff_id: visit.staff_id, room_id: visit.room_id } } : {}) }) });
     setBusy(false);
     if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The stay was not saved. Try again."); return; }
@@ -430,9 +434,11 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
       return back.ok && out.batch_id ? fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: json, body: JSON.stringify({ batch_id: out.batch_id, anyway }) }) : back;
     }, onSaved) : null;
     const text = target.id
-      ? `${first(patient.name)}: ${dayText(start)} to ${dayText(end)}${room?.move_to ? `, in ${room.move_to.name} from ${room.move_from ? dayText(room.move_from) : "tonight"}` : ""}${out.cancelled ? `, ${plural(out.cancelled, "treatment")} cancelled` : ""}`
+      ? `${first(patient.name)}: ${dayText(start)} to ${dayText(end)}${room?.move_to ? `, in ${room.move_to.name} from ${room.move_from ? dayText(room.move_from) : "tonight"}` : ""}${out.cancelled ? `, ${plural(out.cancelled, "treatment")} cancelled` : ""}${out.shifted ? `, ${plural(out.shifted, "treatment")} moved later` : ""}`
       : `Stay added for ${first(patient.name)}: ${dayText(start)} to ${dayText(end)}${guestRoom ? `, ${freeRooms.find((x) => x.id === guestRoom)?.name}` : ""}${visit ? `, consultation ${dayText(visit.date)} ${visit.start_time}` : ""}`;
     if (undo) toastUndo(text, undo); else toast.success(text);
+    // Pushed treatments that now clash wait for the day's check, which plans them in one pass.
+    if (out.clashes?.length) toast.warning(`${plural(out.clashes.length, "moved treatment")} now clash${out.clashes.length === 1 ? "es" : ""}: the day's check offers the fix.`, { description: out.clashes.slice(0, 3).join(" · ") });
     onSaved();
     onClose();
   };
@@ -451,7 +457,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     onSaved();
     onClose();
   };
-  const label = !target.id ? "Add the stay" : !changed ? "Change a date to save" : delta < 0 ? `Leave on ${dayText(end)}` : delta > 0 ? `Stay until ${dayText(end)}${room?.move_to ? ` in ${room.move_to.name}` : ""}` : "Save the stay";
+  const label = !target.id ? "Add the stay" : !changed ? "Change a date to save" : missed && late === "shift" ? `Push to ${dayText(start)}–${dayText(end)}` : start !== target.start && end === target.end ? `Arrive on ${dayText(start)}` : delta < 0 ? `Leave on ${dayText(end)}` : delta > 0 ? `Stay until ${dayText(end)}${room?.move_to ? ` in ${room.move_to.name}` : ""}` : "Save the stay";
   return (
     <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} title={target.id ? `Stay for ${first(patient.name)}` : "New stay"}
       note={target.id ? `Now ${dayText(target.start)} to ${dayText(target.end)} · ${plural(oldDays, "day")}` : "Arriving, leaving, and the rest follows."}
@@ -459,6 +465,11 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
       <div className="border-t border-border">
         <ChangeLine label={start > today ? "Arriving" : "Arrived"} value={dayText(start)} select={<LineDate label={start > today ? "Arriving" : "Arrived"} value={start} onChange={(v) => { setStart(v); if (end < v) setEnd(v); }} />} />
         <ChangeLine label="Leaving" value={dayText(end)} select={<LineDate label="Leaving" value={end} min={start} onChange={setEnd} />} />
+        {missed ? (() => {
+          const by = Math.round((Date.parse(start) - Date.parse(target.start)) / DAY_MS);
+          return <div className="px-1 py-3"><Seg<"cancel" | "shift"> value={late} onChange={(v) => { setLate(v); setEnd(v === "shift" ? addDays(target.end, by) : target.end); }}
+            options={[["cancel", "Cancel missed days"], ["shift", `Push ${plural(by, "day")} later`]]} /></div>;
+        })() : null}
       </div>
       {target.id && start <= today && end > today ? <Btn kind="quiet" inline className="-ml-2 mt-1" onClick={() => setEnd(today)}>Leaves today</Btn> : null}
       {target.id && target.start <= today && target.end >= today && noShow === null ? <Btn kind="quiet" inline className="-ml-2 mt-1" disabled={busy} onClick={askNoShow}>Did not arrive</Btn> : null}
