@@ -686,7 +686,10 @@ app.get('/patients/:id/stays/:stayId/preview', async (req: Request, res: Respons
   const move_from = first ? (first < today ? today : first) : moved.toISOString().slice(0, 10);
   const since = new Date(`${move_from}T00:00:00.000Z`);
   const move_to = refused ? (await firstFreeRoom(prisma, since, to, room?.accommodation_id, stay.id)) ?? (await firstFreeRoom(prisma, since, to, null, stay.id)) : null;
+  // Arriving later (#1193): what is booked before the new arrival, so the sheet can ask what happens to it.
+  const missed = from > stay.start_date ? await prisma.appointment.count({ where: { patient_id: stay.patient_id, ...HAPPENING, scheduled_date: { gte: stay.start_date, lt: from } } }) : 0;
   res.json({
+    missed,
     cancels: cancels.map((a) => ({ id: a.id, date: a.scheduled_date.toISOString().slice(0, 10), start_time: a.start_time, therapy_name: a.Therapy.name })),
     room: refused ? { taken: refused.message.slice(0, refused.message.indexOf('.') + 1), move_to: move_to && { id: move_to.id, name: move_to.name, type: move_to.type }, move_from } : null,
   });
@@ -701,6 +704,11 @@ const stayExtras = z.object({
   guest_room_id: z.string().uuid().nullable().optional(),
   /** The first night in the new room (#1164); a stay already under way moves from the centre's today, a stay not yet begun for every night. */
   move_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  /**
+   * Arriving days later (#1193): 'cancel' cancels the treatments before the new arrival, "arrived late";
+   * 'shift' moves every treatment of the stay later by the same days (the dates sent already moved the leaving day).
+   */
+  late: z.enum(['cancel', 'shift']).optional(),
   /** Mark the treatments left after a shortened stay cancelled, "stay shortened", as one batch with one Undo. */
   cancel_after: z.boolean().optional(),
   /** Undo puts the rooms back exactly (#1184): the room and the earlier rooms the save's answer gave as `rooms_before`. */
@@ -779,11 +787,31 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
   const left = await leftOverAfter(id, stay, dates.end_date);
   let batch_id: string | null = null;
   let cancelled = 0;
-  if (extras.cancel_after && left.length) {
+  let shifted = 0;
+  const clashes: string[] = [];
+  const later = Math.round((dates.start_date.getTime() - stay.start_date.getTime()) / 86400000);
+  if (extras.late && later > 0) {
+    const before = await prisma.appointment.findMany({ where: { patient_id: id, ...HAPPENING, scheduled_date: extras.late === 'cancel' ? { gte: stay.start_date, lt: dates.start_date } : { gte: stay.start_date, lte: stay.end_date } }, include: { Therapy: { select: { name: true } } } });
+    // Arriving later and leaving sooner in one save is one batch, so one Undo puts both back.
+    const missed = extras.late === 'cancel' && extras.cancel_after ? [...before, ...left] : before;
+    const day = (d: Date, n = 0) => new Date(d.getTime() + n * 86400000).toISOString().slice(0, 10);
+    if (missed.length) {
+      const out = await applyPlan(missed.map((a) => ({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id, start_time: a.start_time, date: day(a.scheduled_date, extras.late === 'shift' ? later : 0), ...(extras.late === 'cancel' ? { cancel: true, reason: 'arrived late' } : {}) })), prisma);
+      batch_id = out.batch_id;
+      if (extras.late === 'cancel') cancelled = out.applied; else shifted = out.applied;
+    }
+    // A pushed treatment keeps its therapist, room and time; where that now clashes, the day's check offers the fix in one pass.
+    if (extras.late === 'shift') for (const a of missed) {
+      const to = new Date(`${day(a.scheduled_date, later)}T00:00:00.000Z`);
+      const hit = findConflict({ id: a.id, scheduled_date: to, start_time: a.start_time, duration_minutes: a.duration_minutes, staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id, patient_id: a.patient_id, therapy_id: a.therapy_id }, await loadDay(to, prisma));
+      if (hit) clashes.push(`${a.Therapy.name} on ${day(to)}: ${hit.message}`);
+    }
+  }
+  if (extras.cancel_after && left.length && !batch_id) {
     const out = await applyPlan(left.map((a) => ({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: [], room_id: a.room_id, start_time: a.start_time, date: a.scheduled_date.toISOString().slice(0, 10), cancel: true, reason: 'stay shortened' })), prisma);
     batch_id = out.batch_id; cancelled = out.applied;
   }
-  res.json({ stay: updated, rooms_before: { guest_room_id: stay.guest_room_id, earlier: earlier.map((e) => ({ guest_room_id: e.guest_room_id, until: e.until.toISOString().slice(0, 10) })) }, left_over: extras.cancel_after ? [] : left.map(({ Therapy, ...a }) => a), cancelled, batch_id, moved_with });
+  res.json({ stay: updated, rooms_before: { guest_room_id: stay.guest_room_id, earlier: earlier.map((e) => ({ guest_room_id: e.guest_room_id, until: e.until.toISOString().slice(0, 10) })) }, left_over: extras.cancel_after ? [] : left.map(({ Therapy, ...a }) => a), cancelled, shifted, clashes, batch_id, moved_with });
 });
 
 /**
