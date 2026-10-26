@@ -1,4 +1,5 @@
 declare module 'pdfkit';
+import { roomOn } from '../guestRooms.js';
 import { teamOf, offOnDay, overlaps } from '../availability.js';
 import PDFDocument from 'pdfkit';
 import { madeWith } from '../product.js';
@@ -78,7 +79,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     prisma.programEvent.findMany({ where: { OR: [{ date: day }, { AND: [{ start_date: { lte: day } }, { end_date: { gte: day } }] }] } }),
     prisma.programEvent.findMany({ where: { recurrence: 'weekly' } }),
     loadDietsForDay(day, prisma),
-    prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } }, include: { GuestRoom: { select: { name: true } } } }),
+    prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day } }, include: { GuestRoom: { select: { name: true } }, EarlierRooms: { include: { GuestRoom: { select: { name: true } } } } } }),
     prisma.timeOff.findMany({ where: { entity_type: { in: ['staff', 'room'] } } }),
   ]);
 
@@ -328,7 +329,9 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
       });
       // The guest room under the name (#456), so whoever carries the sheet knows which door to knock on.
       // Its own line: beside the name, a narrow column wrapped the room away from it ("Vikram Shah ·" / "T2").
-      const room = staysToday.find((s) => s.patient_id === id && s.on_site && s.GuestRoom)?.GuestRoom?.name;
+      const stay = staysToday.find((s) => s.patient_id === id && s.on_site);
+      // Moved mid-stay (#1164): a day before the move prints the room they slept in then.
+      const room = stay && (roomOn(stay, day.getTime()) === stay.guest_room_id ? stay.GuestRoom?.name : stay.EarlierRooms.find((e) => e.guest_room_id === roomOn(stay, day.getTime()))?.GuestRoom.name);
       items.push({ kind: 'row', name: `${patientById[id] || id}${room ? `\n${room}` : ''}`, cells, group });
     }
   }

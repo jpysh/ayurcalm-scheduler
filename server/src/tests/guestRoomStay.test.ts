@@ -91,6 +91,25 @@ async function main() {
     const rooms = execFileSync('pdftotext', ['-raw', sheet, '-']).toString().replace(/\s+/g, ' ');
     assert.ok(rooms.includes(`${TAG} Lakshminarayanan Iyer until Wed 10 Apr`), `the guest rooms sheet prints the third guest whole: ${rooms}`);
     assert.ok(!rooms.includes('…'), `and cuts no line: ${rooms}`);
+
+    // A move mid-stay (#1164) is checked only from the move, and the nights before it stay in the old room.
+    const sunil = await (await add('Sunil', '2030-05-01', '2030-05-15', await room('1'))).json();
+    assert.equal((await add('Kiran', '2030-05-01', '2030-05-07', await room('2'))).status, 201);
+    const sunilStay = `/patients/${sunil.id}/stays/${sunil.Stays[0].id}`;
+    await call('PUT', sunilStay, { guest_room_id: await room('2'), move_from: '2030-05-07' });
+    await call('PUT', sunilStay, { guest_room_id: await room('1'), move_from: '2030-05-07' });
+    assert.equal(await prisma.earlierGuestRoom.count({ where: { stay_id: sunil.Stays[0].id } }), 0, 'Undo on the same day leaves no earlier room');
+    await call('PUT', sunilStay, { guest_room_id: await room('2'), move_from: '2030-05-07' });
+    assert.equal((await add('Tara', '2030-05-03', '2030-05-05', await room('1'))).status, 409, 'the old room stays taken on the nights before the move');
+    assert.equal((await add('Tara', '2030-05-07', '2030-05-09', await room('1'))).status, 201, 'and is free from the move');
+    writeFileSync(sheet, await generateGuestRoomsSheetPdf('2030-05-07', prisma));
+    const moveDay = execFileSync('pdftotext', ['-raw', sheet, '-']).toString().replace(/\s+/g, ' ');
+    assert.ok(moveDay.includes(`${TAG} Sunil leaves today`) || moveDay.includes(`Make up, then ready for ${TAG} Tara`), `on the day of the move the old room is made up: ${moveDay}`);
+    assert.ok(moveDay.includes(`${TAG} Sunil until Wed 15 May (arrives today)`) || moveDay.includes(`ready for ${TAG} Sunil`), `and the new one readied: ${moveDay}`);
+    for (const [d, n] of [['2030-05-03', '1'], ['2030-05-10', '2']]) {
+      writeFileSync(pdf, await generateDailySchedulePdf(d, prisma));
+      assert.ok(execFileSync('pdftotext', ['-raw', pdf, '-']).toString().replace(/\s+/g, ' ').includes(`${TAG} Sunil ${TAG}${n}`), `the day sheet for ${d} prints the room slept in that night`);
+    }
     console.log('guest room stays: ok');
   } finally {
     await tidy(prisma).catch(() => {});
