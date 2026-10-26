@@ -414,7 +414,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The stay was not saved. Try again."); return; }
     const out = await res.json().catch(() => ({}));
     const undo = target.id ? () => undoWrite(async (anyway) => {
-      const back = await saveStay(patient.id, target.id!, { start_date: target.start, end_date: target.end, ...(room ? { guest_room_id: target.accommodation?.room?.id ?? null } : {}), ...(anyway ? {} : { if_still: { start_date: start, end_date: end } }) });
+      const back = await saveStay(patient.id, target.id!, { start_date: target.start, end_date: target.end, ...(out.rooms_before ? { restore_rooms: out.rooms_before } : {}), ...(anyway ? {} : { if_still: { start_date: start, end_date: end } }) });
       return back.ok && out.batch_id ? fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: json, body: JSON.stringify({ batch_id: out.batch_id, anyway }) }) : back;
     }, onSaved) : null;
     const text = target.id

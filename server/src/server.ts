@@ -695,6 +695,8 @@ const stayExtras = z.object({
   move_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   /** Mark the treatments left after a shortened stay cancelled, "stay shortened", as one batch with one Undo. */
   cancel_after: z.boolean().optional(),
+  /** Undo puts the rooms back exactly (#1184): the room and the earlier rooms the save's answer gave as `rooms_before`. */
+  restore_rooms: z.object({ guest_room_id: z.string().uuid().nullable(), earlier: z.array(z.object({ guest_room_id: z.string().uuid(), until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })) }).optional(),
   /** Undo sends the stay as its save left it: changed since on another phone, it asks first (#911). */
   if_still: z.object({ start_date: z.string(), end_date: z.string(), package_id: z.string().nullable(), accommodation_id: z.string().nullable(), guest_room_id: z.string().nullable() }).partial().optional(),
 });
@@ -717,12 +719,13 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
   const earlier = await prisma.earlierGuestRoom.findMany({ where: { stay_id: stay.id } });
   const end = nightsEnd(dates.start_date, dates.end_date);
   // Shortened to end before a move (#1174): the stay ends in the room of its last night, not the one it was to move to.
-  const roomId = extras.guest_room_id !== undefined ? extras.guest_room_id : roomOn({ guest_room_id: stay.guest_room_id, EarlierRooms: earlier }, end.getTime() - 86400000);
+  const back = extras.restore_rooms;
+  const roomId = back ? back.guest_room_id : extras.guest_room_id !== undefined ? extras.guest_room_id : roomOn({ guest_room_id: stay.guest_room_id, EarlierRooms: earlier }, end.getTime() - 86400000);
   const room = roomId ? await prisma.guestRoom.findUnique({ where: { id: roomId } }) : null;
   const moved = extras.guest_room_id !== undefined && roomId !== stay.guest_room_id;
   const tz = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
   const from = moved ? new Date(`${extras.move_from ?? centreClock(tz).date}T00:00:00.000Z`) : end;
-  const rooms = moveRooms(earlier, stay.guest_room_id, dates.start_date, end, from, roomId);
+  const rooms = back ? back.earlier.map((e) => ({ guest_room_id: e.guest_room_id, until: new Date(`${e.until}T00:00:00.000Z`) })) : moveRooms(earlier, stay.guest_room_id, dates.start_date, end, from, roomId);
   const checkFrom = rooms.length ? rooms[rooms.length - 1].until : dates.start_date;
   const updated = await prisma.$transaction(async (tx) => {
     await lockStays(tx);
@@ -750,7 +753,7 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
     const out = await applyPlan(left.map((a) => ({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: [], room_id: a.room_id, start_time: a.start_time, date: a.scheduled_date.toISOString().slice(0, 10), cancel: true, reason: 'stay shortened' })), prisma);
     batch_id = out.batch_id; cancelled = out.applied;
   }
-  res.json({ stay: updated, left_over: extras.cancel_after ? [] : left.map(({ Therapy, ...a }) => a), cancelled, batch_id });
+  res.json({ stay: updated, rooms_before: { guest_room_id: stay.guest_room_id, earlier: earlier.map((e) => ({ guest_room_id: e.guest_room_id, until: e.until.toISOString().slice(0, 10) })) }, left_over: extras.cancel_after ? [] : left.map(({ Therapy, ...a }) => a), cancelled, batch_id });
 });
 
 /**

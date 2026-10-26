@@ -157,6 +157,16 @@ async function main() {
     const look = await call('GET', `/patients/${mover.id}/stays/${mover.Stays[0].id}/preview?end_date=2030-11-11`);
     assert.equal(look.room, null, 'a night the guest slept elsewhere is not a clash');
 
+    // Undo of a shortened stay puts a planned move back exactly (#1184).
+    const planned = await (await add('Planned', '2030-12-01', '2030-12-20', await room('1'))).json();
+    const ps = planned.Stays[0].id;
+    await call('PUT', `/patients/${planned.id}/stays/${ps}`, { guest_room_id: two, move_from: '2030-12-15' });
+    const cut = await call('PUT', `/patients/${planned.id}/stays/${ps}`, { start_date: '2030-12-01', end_date: '2030-12-10' });
+    await call('PUT', `/patients/${planned.id}/stays/${ps}`, { start_date: '2030-12-01', end_date: '2030-12-20', restore_rooms: cut.rooms_before });
+    const after = await prisma.patientStay.findUniqueOrThrow({ where: { id: ps }, include: { EarlierRooms: true } });
+    assert.equal(after.guest_room_id, two, 'the move to the second room is back');
+    assert.deepEqual(after.EarlierRooms.map((e) => [e.guest_room_id, e.until.toISOString().slice(0, 10)]), [[await room('1'), '2030-12-15']]);
+
     console.log('guest room stays: ok');
   } finally {
     await tidy(prisma).catch(() => {});
