@@ -4,16 +4,19 @@ import { madeWith } from '../product.js';
 import { guestRoomsFor } from '../guestRooms.js';
 import { addHeader } from './dailySchedulePdf.js';
 
-type Guest = { name: string; start_date: string; end_date: string };
+type Guest = { name: string; start_date: string; end_date: string; from_room?: string | null; to_room?: string | null };
 type SheetRoom = { name: string; beds: number; type: string; guests: Guest[]; /** Out of use for this day (#563). */ out?: { reason: string | null } | null };
 export type RoomRow = { room: string; kind: 'turnover' | 'leaving' | 'arriving' | 'staying' | 'free' | 'out'; line: string };
 
 const dayText = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
 const list = (names: string[]) => names.join(', ');
+// A move mid-stay (#1210) is said as a move, so housekeeping does not expect a new face or a departure.
+const who = (g: Guest) => `${g.name}${g.from_room ? ` (moves in from ${g.from_room})` : ''}`;
+const gone = (gs: Guest[]) => gs.map((g) => `${g.name}${g.to_room ? ` moves to ${g.to_room}` : ' leaves'}`).join(', ');
 // Guests sharing a room often leave on different days; housekeeping needs each one's (#660).
 const until = (gs: Guest[], note = '') => new Set(gs.map((g) => g.end_date)).size === 1
-  ? `${list(gs.map((g) => g.name))}${note} · until ${dayText(gs[0].end_date)}`
-  : `${list(gs.map((g) => `${g.name} until ${dayText(g.end_date)}`))}${note}`;
+  ? `${list(gs.map(who))}${note} · until ${dayText(gs[0].end_date)}`
+  : `${list(gs.map((g) => `${who(g)} until ${dayText(g.end_date)}`))}${note}`;
 
 /**
  * What the housekeeper reads for one day, per room (#559): the room to make up first when someone
@@ -37,7 +40,7 @@ export function buildGuestRoomsSheet(rooms: SheetRoom[], day: string) {
     // A shared room where one guest leaves and another stays is not empty to make up.
     const emptied = !staying.length;
     if (emptied && leaving.length && arriving.length) row = { room: r.name, kind: 'turnover', line: `Make up, then ready for ${until(arriving, ' (arrives today)')}` };
-    else if (emptied && leaving.length) row = { room: r.name, kind: 'leaving', line: `Make up · ${list(leaving.map((g) => g.name))} leaves today` };
+    else if (emptied && leaving.length) row = { room: r.name, kind: 'leaving', line: `Make up · ${gone(leaving)} today` };
     else if (emptied && r.out) row = { room: r.name, kind: 'out', line: outText };
     else if (emptied && arriving.length) row = { room: r.name, kind: 'arriving', line: `Ready for ${until(arriving)}` };
     else if (!emptied) {
@@ -45,7 +48,7 @@ export function buildGuestRoomsSheet(rooms: SheetRoom[], day: string) {
       if (leaving.length) sharedMakeUp++;
       if (arriving.length) sharedArriving++;
       if (leaving.length && arriving.length) handover.push(r.name);
-      row = { room: r.name, kind: 'staying', line: `${until(staying)}${leaving.length ? ` · ${list(leaving.map((g) => g.name))} leaves today` : ''}${arriving.length ? ` · ready a bed for ${until(arriving, ' (arrives today)')}` : ''}${spare > 0 && r.beds > 1 && !r.out ? ` · ${spare} bed free` : ''}` };
+      row = { room: r.name, kind: 'staying', line: `${until(staying)}${leaving.length ? ` · ${gone(leaving)} today` : ''}${arriving.length ? ` · ready a bed for ${until(arriving, ' (arrives today)')}` : ''}${spare > 0 && r.beds > 1 && !r.out ? ` · ${spare} bed free` : ''}` };
     } else row = { room: r.name, kind: 'free', line: 'Free' };
     // A guest still in a room taken out of use must move: the sheet says so as the inbox does (#624).
     if (r.out && row.kind !== 'out') row.line += ` · out of use${r.out.reason ? `: ${r.out.reason}` : ''}${row.kind === 'staying' ? ', needs another room' : ''}`;
