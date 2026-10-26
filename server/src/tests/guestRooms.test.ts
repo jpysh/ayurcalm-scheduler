@@ -38,6 +38,11 @@ async function main() {
     await prisma.patientStay.update({ where: { id: stay.id }, data: { guest_room_id: room.id } });
     assert.equal((await (await call('DELETE', `/guest-rooms/${room.id}`)).json()).retired, true, 'a room a stay used is retired');
     await prisma.patientStay.update({ where: { id: stay.id }, data: { guest_room_id: null } });
+    // A room left in a move mid-stay is still the stay's on those nights (#1182).
+    const left = await prisma.guestRoom.findUniqueOrThrow({ where: { name: 'QA3' } });
+    const moved = await prisma.earlierGuestRoom.create({ data: { stay_id: stay.id, guest_room_id: left.id, until: stay.end_date } });
+    assert.equal((await (await call('DELETE', `/guest-rooms/${left.id}`)).json()).retired, true, 'a room a stay moved out of is retired');
+    await prisma.earlierGuestRoom.delete({ where: { id: moved.id } });
     const spare = await prisma.guestRoom.findUniqueOrThrow({ where: { name: 'QA2' } });
     assert.equal((await (await call('DELETE', `/guest-rooms/${spare.id}`)).json()).deleted, true, 'an unused room is deleted');
     await tidy();
