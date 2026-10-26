@@ -759,6 +759,9 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
 app.post('/patients/:id/stays/:stayId/did-not-arrive', async (req: Request, res: Response) => {
   const stay = await stayOf(req);
   if (!stay) { res.status(404).json({ error: 'Stay not found' }); return; }
+  // A stay already over is a record, not a booking (#1215): only the centre's today decides, never the phone that asked.
+  const tz = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
+  if (stay.end_date.toISOString().slice(0, 10) < centreClock(tz).date) { res.status(409).json({ reason: 'STAY_OVER', message: 'This stay is already over, so it stays on the record.' }); return; }
   const inStay = { patient_id: stay.patient_id, scheduled_date: { gte: stay.start_date, lte: stay.end_date } };
   if (await prisma.appointment.count({ where: { ...inStay, status: 'completed' } })) { res.status(409).json({ reason: 'ARRIVED', message: 'A treatment in this stay was given, so they did arrive.' }); return; }
   const [booked, segments, meals] = await Promise.all([
