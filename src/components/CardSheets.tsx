@@ -400,6 +400,8 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
       .then((r) => { if (!stale) { setCancels(end < target.end ? r?.cancels?.length ?? 0 : 0); setRoom(r?.room ?? null); } });
     return () => { stale = true; };
   }, [patient?.id, target?.id, target?.start, target?.end, start, end]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [noShow, setNoShow] = useState<number | null>(null);
+  useEffect(() => setNoShow(null), [target?.id]);
   if (!patient || !target) return null;
   const oldDays = between(target.start, target.end) + 1;
   const days = between(start, end) + 1;
@@ -432,7 +434,10 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     onClose();
   };
   // A guest who never came (#980): the stay goes, with its room, meals and treatments, and Undo brings it all back.
+  // Asked first (#1208): what goes, said before the tap that removes it.
+  const askNoShow = () => fetchJsonWithTimeout<{ treatments: number }>(`${API_BASE}/timeoff/impact?type=patient&ids=${patient.id}&from=${target.start}&to=${target.end}`).then((r) => setNoShow(r?.treatments ?? 0)).catch(() => setNoShow(0));
   const didNotArrive = async () => {
+    setNoShow(null);
     setBusy(true);
     const res = await fetch(`${API_BASE}/patients/${patient.id}/stays/${target.id}/did-not-arrive`, { method: "POST", headers: json }).catch(() => null);
     setBusy(false);
@@ -453,7 +458,11 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
         <ChangeLine label="Leaving" value={dayText(end)} select={<LineDate label="Leaving" value={end} min={start} onChange={setEnd} />} />
       </div>
       {target.id && start <= today && end > today ? <Btn kind="quiet" inline className="-ml-2 mt-1" onClick={() => setEnd(today)}>Leaves today</Btn> : null}
-      {target.id && target.start <= today && target.end >= today ? <Btn kind="quiet" inline className="-ml-2 mt-1" disabled={busy} onClick={didNotArrive}>Did not arrive</Btn> : null}
+      {target.id && target.start <= today && target.end >= today && noShow === null ? <Btn kind="quiet" inline className="-ml-2 mt-1" disabled={busy} onClick={askNoShow}>Did not arrive</Btn> : null}
+      {noShow !== null ? <div className="mt-2">
+        <Consequence>{`The stay goes, with ${target.accommodation?.room ? `${target.accommodation.room.name} and ` : ""}the meals${noShow ? `, and ${plural(noShow, "treatment")} ${noShow === 1 ? "is" : "are"} cancelled` : ""}. Undo puts it all back.`}</Consequence>
+        <div className="mt-2 flex gap-2"><Btn inline disabled={busy} onClick={didNotArrive}>Remove the stay</Btn><Btn kind="quiet" inline onClick={() => setNoShow(null)}>Keep it</Btn></div>
+      </div> : null}
       {!target.id && freeRooms.length ? (() => {
         const r = freeRooms.find((x) => x.id === guestRoom);
         return (
