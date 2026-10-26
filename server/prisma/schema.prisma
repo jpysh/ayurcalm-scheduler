@@ -87,13 +87,28 @@ model PatientStay {
   /// What the patient chose from the centre's catalogues (stories 11 and 12), changeable any time in the stay.
   package_id       String?
   accommodation_id String?
-  /// The guest room they sleep in (#456): one for the whole stay; a move changes it.
+  /// The guest room they sleep in now (#456); the rooms before a move mid-stay are EarlierRooms (#1164).
   guest_room_id    String?
 
   Patient       Patient            @relation(fields: [patient_id], references: [id])
   GuestRoom     GuestRoom?         @relation(fields: [guest_room_id], references: [id], onDelete: SetNull)
   Package       Package?           @relation(fields: [package_id], references: [id], onDelete: SetNull)
   Accommodation AccommodationType? @relation(fields: [accommodation_id], references: [id], onDelete: SetNull)
+  EarlierRooms  EarlierGuestRoom[]
+}
+
+/// A room a guest slept in before a move mid-stay (#1164): the nights up to, not including,
+/// `until`, from the stay's start or the earlier row's `until`. Later nights are the stay's room.
+model EarlierGuestRoom {
+  id            String   @id @default(uuid())
+  stay_id       String
+  guest_room_id String
+  until         DateTime
+
+  Stay      PatientStay @relation(fields: [stay_id], references: [id], onDelete: Cascade)
+  GuestRoom GuestRoom   @relation(fields: [guest_room_id], references: [id], onDelete: Cascade)
+
+  @@index([stay_id])
 }
 
 /// A Panchakarma package the centre sells (#285 story 11). Reference only: the price is one
@@ -135,6 +150,7 @@ model GuestRoom {
 
   Accommodation AccommodationType @relation(fields: [accommodation_id], references: [id], onDelete: Cascade)
   Stays         PatientStay[]
+  EarlierStays  EarlierGuestRoom[]
 }
 
 model Staff {
