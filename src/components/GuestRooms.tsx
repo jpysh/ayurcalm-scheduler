@@ -9,7 +9,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import PageHead from "@/components/PageHead";
 import { WeekStrip } from "@/components/BottomBar";
-import { Btn, DateRow, datePair, Empty, LinkRow, ListGroup, Loading, Row, SectionHead, dayText, money, noteText } from "@/components/kit";
+import { Btn, DateRow, datePair, Empty, LinkRow, ListGroup, Loading, Row, SectionHead, Seg, WeekBars, dayText, money, noteText, type WeekBar } from "@/components/kit";
 import { AddGuestRooms, ManageGuestRooms } from "@/components/GuestRoomManage";
 import type { GuestRoomNight } from "@/components/CardSheets";
 
@@ -48,6 +48,10 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [range, setRange] = useState<Room[] | null>(null);
+  // The week at a glance (#1213): who sleeps where for seven nights from the chosen day.
+  const [view, setView] = useState<"night" | "week">("night");
+  const [week, setWeek] = useState<Room[] | null>(null);
+  useEffect(() => { if (view !== "week") return; setWeek(null); fetchRooms(day, addDays(day, 7)).then(setWeek); }, [view, day, version]);
   useEffect(() => { setNight(null); fetchRooms(day, addDays(day, 1)).then(setNight); }, [day, version]);
   useEffect(() => { setRange(null); if (from && to > from) fetchRooms(from, to).then(setRange); }, [from, to, version]);
 
@@ -93,6 +97,24 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
         </div>
       ) : (<>
         <div className="mt-3"><WeekStrip day={day} today={today} setDay={setDay} /></div>
+        <div className="mt-2"><Seg<"night" | "week"> value={view} onChange={setView} options={[["night", "This night"], ["week", "Seven nights"]]} /></div>
+        {view === "week" ? (week === null ? <Loading rows={6} /> : byType(week).map(([type, rooms]) => (
+          <div key={type} className="mt-3">
+            <SectionHead>{type}</SectionHead>
+            <WeekBars days={[0, 1, 2, 3, 4, 5, 6].map((n) => ({ label: new Date(`${addDays(day, n)}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "narrow", day: "numeric", timeZone: "UTC" }), today: addDays(day, n) === today }))}
+              rows={rooms.map((r) => {
+                // One lane per bed: each guest takes the first lane free for their nights.
+                const lanes: WeekBar[][] = [];
+                // Only nights inside the week: a guest who leaves this morning slept here before it.
+                for (const g of [...r.guests].filter((x) => nights(day, x.end_date) > 0 && nights(day, x.start_date) < 7).sort((a, b) => a.start_date.localeCompare(b.start_date))) {
+                  const bar: WeekBar = { key: `${g.stay_id}${g.start_date}`, from: nights(day, g.start_date), to: nights(day, g.end_date), text: g.name.split(" ")[0], onClick: () => openPatient(g.patient_id) };
+                  const lane = lanes.find((l) => l.every((b) => b.to <= bar.from || bar.to <= b.from));
+                  if (lane) lane.push(bar); else lanes.push([bar]);
+                }
+                return { id: r.id, label: r.name, lanes, onEmpty: r.out ? undefined : (n: number) => newPatient({ arriving: addDays(day, n), leaving: addDays(day, n + 13), room: r.id }) };
+              })} />
+          </div>
+        ))) : null}
         {/* The morning's housekeeping in one line (#456 part 4): the rooms to make up, and the rooms someone comes into. */}
         {night ? (() => {
           // A shared room where one guest stays on is not empty, but a bed left and taken the same day still needs making up (#1209).
@@ -100,7 +122,7 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
           const into = night.filter((r) => arriving(r).length).map((r) => r.name);
           return out.length || into.length ? <p className={`px-1 pt-2 ${noteText}`}>{[out.length ? `Leaving${day === today ? " today" : ""}: ${out.join(", ")} to make up` : "", into.length ? `Arriving: ${into.join(", ")}` : ""].filter(Boolean).join(" · ")}</p> : null;
         })() : null}
-        {night === null ? <Loading rows={6} /> : byType(night).map(([type, rooms]) => (
+        {view === "week" ? null : night === null ? <Loading rows={6} /> : byType(night).map(([type, rooms]) => (
           <ListGroup key={type} title={type} count={`${rooms.filter((r) => r.free).length} free`}>
             {rooms.map((r) => {
               const inIt = sleeping(r);

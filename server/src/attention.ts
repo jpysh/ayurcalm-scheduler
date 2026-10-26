@@ -114,7 +114,10 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
   const hoursIn = (s: { start_date: Date }) => Math.round((day.getTime() - s.start_date.getTime()) / DAY_MS) * 24 + hourNow;
 
   const found: Item[] = [];
-  const add = (r: Rule, s: { Patient: { id: string; name: string } }, what: string, action: Item['action'], kind = r.kind) =>
+  // A companion takes no treatments (#1195): nothing about a programme, a review or a discharge summary is owed for them.
+  const programmeOnly = new Set(['leaves_today', 'arrival_open', 'review_due', 'next_week', 'leaves_tomorrow']);
+  const add = (r: Rule, s: { Patient: { id: string; name: string }; companion?: boolean }, what: string, action: Item['action'], kind = r.kind) =>
+    s.companion && programmeOnly.has(r.id) ? undefined :
     found.push({ id: `${r.id}:${s.Patient.id}`, rule: r.id, section: r.section as 'Patients', kind, who: s.Patient.name, what, patient_id: s.Patient.id, action });
   // Form C is owed even after the guest has gone, so a stay that ended in the last fortnight unfiled still asks.
   const leftUnfiled = await prisma.patientStay.findMany({ where: { form_c_filed: null, end_date: { lt: day, gte: new Date(day.getTime() - 14 * DAY_MS) } }, include: { Patient: { select: { id: true, name: true, country: true } } } });

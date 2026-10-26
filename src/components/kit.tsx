@@ -710,3 +710,37 @@ export async function deleteAll(urls: string[], init: RequestInit = {}): Promise
   toast.error(bad ? await saveError(bad, "That could not be undone.") : "That could not be undone.");
   return false;
 }
+
+/**
+ * A week at a glance (#1213): rows down, seven nights across, each booking a bar. A bar opens what it
+ * is; an empty night offers to fill it. Built for a phone: the label column is narrow and nights share
+ * the rest, so the whole week fits 375px without a sideways scroll.
+ */
+export type WeekBar = { key: string; from: number; to: number; text: string; onClick: () => void };
+export function WeekBars({ days, rows }: { days: { label: string; today?: boolean }[]; rows: { id: string; label: string; lanes: WeekBar[][]; onEmpty?: (night: number) => void }[] }) {
+  const cols = { gridTemplateColumns: `3rem repeat(${days.length}, minmax(0, 1fr))` };
+  return (
+    <div className="rounded-2xl bg-card">
+      <div className="grid border-b border-border px-1 py-1.5 text-center text-xs font-semibold text-muted-foreground" style={cols}>
+        <span />{days.map((d, i) => <span key={i} className={d.today ? "text-primary" : ""}>{d.label}</span>)}
+      </div>
+      {rows.map((r) => (
+        <div key={r.id} className="border-b border-border px-1 last:border-0">
+          {(r.lanes.length ? r.lanes : [[]]).map((lane, li) => (
+            <div key={li} className="grid min-h-11 items-center gap-y-0.5" style={cols}>
+              <span className="truncate text-sm font-semibold" style={{ gridRow: 1, gridColumn: 1 }}>{li === 0 ? r.label : ""}</span>
+              {r.onEmpty ? days.map((_, d) => lane.some((b) => b.from <= d && d < b.to) ? null : (
+                <button key={`e${d}`} type="button" aria-label={`${r.label}, ${days[d].label}: free`} onClick={() => r.onEmpty!(d)} className="h-11" style={{ gridRow: 1, gridColumn: d + 2 }} />
+              )) : null}
+              {lane.map((b) => (
+                <button key={b.key} type="button" onClick={b.onClick} title={b.text}
+                  className="mx-px h-9 truncate rounded-lg bg-[hsl(var(--primary)/0.16)] px-1.5 text-left text-xs font-semibold text-foreground"
+                  style={{ gridRow: 1, gridColumn: `${Math.max(b.from, 0) + 2} / ${Math.min(b.to, days.length) + 2}` }}>{b.text}</button>
+              ))}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}

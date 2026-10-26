@@ -29,7 +29,7 @@ const byNearest = (today: string) => (a: { scheduled_date: string; start_time: s
 const stayDay = (iso?: string) => (iso ? dayText(iso) : '');
 /** One day reads once: a day patient's visit is not 'Fri 9 Oct to Fri 9 Oct' (#720). */
 const stayRange = (s: { start_date: string; end_date: string }) => s.start_date.slice(0, 10) === s.end_date.slice(0, 10) ? stayDay(s.start_date) : `${stayDay(s.start_date)} to ${stayDay(s.end_date)}`;
-const blankNew = () => ({ name: '', gender: '' as '' | 'Female' | 'Male' | 'Other', arriving: '', leaving: '', onSite: true, phone: '', emergencyContact: '', emergencyPhone: '', address: '', country: '', idNumber: '', registrationNumber: '', foodLimits: '' });
+const blankNew = () => ({ name: '', gender: '' as '' | 'Female' | 'Male' | 'Other', arriving: '', leaving: '', onSite: true, companion: false, phone: '', emergencyContact: '', emergencyPhone: '', address: '', country: '', idNumber: '', registrationNumber: '', foodLimits: '' });
 type Slot = { date: string; start_time: string; staff_id: string; staff_name: string; room_id: string; room_name: string };
 const clock = (timeZone: string) => new Date().toLocaleTimeString('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
 
@@ -76,13 +76,13 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
     fetchJsonWithTimeout<InHouse[]>(`${API_BASE}/patients?resident_on=${today}&arriving_within=7`).then((r) => setInHouse(Array.isArray(r) ? r : [])).catch(() => setInHouse([]));
   }, [today, patients.length, patients.map((p) => `${p.actualStart}${p.actualEnd}`).join()]);
   const stayOf = (p: InHouse) => p.Stays.find((s) => s.start_date.slice(0, 10) <= today && s.end_date.slice(0, 10) >= today);
-  const dayOf = (s: { start_date: string; end_date: string; on_site?: boolean; GuestRoom?: { name: string } | null }) => {
+  const dayOf = (s: { start_date: string; end_date: string; on_site?: boolean; companion?: boolean; GuestRoom?: { name: string } | null }) => {
     if (s.on_site === false && s.start_date.slice(0, 10) === s.end_date.slice(0, 10)) return 'Day patient';
     const n = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(s.start_date)) / DAY_MS) + 1;
     const of = Math.round((Date.parse(s.end_date) - Date.parse(s.start_date)) / DAY_MS) + 1;
     // Under Leaving today a date is a puzzle; today and tomorrow are said in words (#836).
     const left = of - n;
-    return `Day ${n} of ${of}${s.GuestRoom ? ` · ${s.GuestRoom.name}` : ""} · leaves ${left === 0 ? "today" : left === 1 ? "tomorrow" : stayDay(s.end_date)}`;
+    return `${s.companion ? "Companion · " : ""}Day ${n} of ${of}${s.GuestRoom ? ` · ${s.GuestRoom.name}` : ""} · leaves ${left === 0 ? "today" : left === 1 ? "tomorrow" : stayDay(s.end_date)}`;
   };
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
   // Guests whose stay starts in the next week, nearest first.
@@ -495,11 +495,11 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     const res = await fetch(`${API_BASE}/patients`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: n.name.trim(), gender: n.gender.toLowerCase(), on_site: n.onSite,
+        name: n.name.trim(), gender: n.gender.toLowerCase(), on_site: n.onSite, companion: n.onSite && n.companion,
         phone: blank(n.phone), emergency_contact: blank(n.emergencyContact), emergency_phone: blank(n.emergencyPhone),
         address: blank(n.address), country: blank(n.country), id_number: blank(n.idNumber), registration_number: blank(n.registrationNumber), food_limits: blank(n.foodLimits),
         stay: { start_date: n.arriving, end_date: n.leaving }, guest_room_id: n.onSite && guestRoom ? guestRoom : undefined,
-        consultation: visit ? { date: visit.date, start_time: visit.start_time, staff_id: visit.staff_id, room_id: visit.room_id } : undefined,
+        consultation: visit && !(n.onSite && n.companion) ? { date: visit.date, start_time: visit.start_time, staff_id: visit.staff_id, room_id: visit.room_id } : undefined,
       }),
     });
     if (!res.ok) {
@@ -639,6 +639,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         </div>
         {newPatient.arriving ? <NightChips from={newPatient.arriving} value={newPatient.leaving} steps={[7, 14, 21]} onChange={(leaving) => setNewPatient({ ...newPatient, leaving })} /> : null}
         <Switch label="Stays on site" note="Off for a day patient" on={newPatient.onSite} set={(onSite) => setNewPatient({ ...newPatient, onSite })} />
+        {newPatient.onSite ? <Switch label="Companion" note="Stays and eats here, no treatments" on={newPatient.companion} set={(companion) => setNewPatient({ ...newPatient, companion })} /> : null}
         {newPatient.onSite && freeRooms.length ? (() => {
           const r = freeRooms.find((x) => x.id === guestRoom);
           return (
@@ -650,7 +651,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
             </div>
           );
         })() : null}
-        {inline ? null : slots === null || slots.length === 0 ? (
+        {inline || (newPatient.onSite && newPatient.companion) ? null : slots === null || slots.length === 0 ? (
           slots?.length === 0 ? <p className={`mt-3 ${noteText}`}>{why || 'No doctor is free before they leave, so no consultation is booked. Book one from their card.'}</p> : null
         ) : (
           <div className="mt-3 rounded-xl border p-3">

@@ -495,7 +495,7 @@ app.post('/patients', async (req: Request, res: Response) => {
     const created = await tx.patient.create({ data });
     if (body.stay) {
       const stay = stayData(body.stay);
-      await tx.patientStay.create({ data: { patient_id: created.id, ...stay, on_site: body.on_site, ...(room ? { guest_room_id: room.id, accommodation_id: room.accommodation_id } : {}) } });
+      await tx.patientStay.create({ data: { patient_id: created.id, ...stay, on_site: body.on_site, companion: body.companion ?? false, ...(room ? { guest_room_id: room.id, accommodation_id: room.accommodation_id } : {}) } });
       if (visit && consult) await tx.appointment.create({ data: { patient_id: created.id, therapy_id: consult.id, staff_id: visit.staff_id, room_id: visit.room_id, scheduled_date: new Date(`${visit.date}T00:00:00.000Z`), start_time: visit.start_time, duration_minutes: consult.duration_minutes, co_staff_ids: [], session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
       if (body.template_id) await tx.dietPlanSegment.create({ data: { patient_id: created.id, start_date: stay.start_date, end_date: stay.end_date, template_id: body.template_id } });
     }
@@ -701,6 +701,8 @@ const CHANGED_SINCE = { reason: 'CHANGED_SINCE', message: 'It was changed since,
 const stayExtras = z.object({
   package_id: z.string().uuid().nullable().optional(),
   accommodation_id: z.string().uuid().nullable().optional(),
+  /** A companion takes no treatments (#1195). */
+  companion: z.boolean().optional(),
   /** The guest room (#456); it sets the accommodation to the room's type. */
   guest_room_id: z.string().uuid().nullable().optional(),
   /** The first night in the new room (#1164); a stay already under way moves from the centre's today, a stay not yet begun for every night. */
@@ -767,7 +769,7 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
     await tx.earlierGuestRoom.deleteMany({ where: { stay_id: stay.id } });
     if (rooms.length) await tx.earlierGuestRoom.createMany({ data: rooms.map((r) => ({ ...r, stay_id: stay.id })) });
     const saved = await tx.patientStay.update({ where: { id: stay.id }, data: {
-      ...dates, package_id: extras.package_id, guest_room_id: roomId,
+      ...dates, package_id: extras.package_id, guest_room_id: roomId, companion: extras.companion,
       accommodation_id: roomId !== stay.guest_room_id || extras.guest_room_id ? room?.accommodation_id ?? extras.accommodation_id : extras.accommodation_id,
     } });
     for (const m of mates) {
