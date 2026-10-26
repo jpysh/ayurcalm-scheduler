@@ -322,9 +322,12 @@ export function AccommodationSheet({ patient, stay, today, onClose, onSaved, edi
     const res = await saveStay(patient.id, stay.id, chosen ? { accommodation_id: chosen.id, guest_room_id: room || null } : { accommodation_id: null, guest_room_id: null });
     setBusy(false);
     if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The accommodation was not saved. Try again."); return; }
-    const saved = (await res.json().catch(() => ({}))).stay;
+    const answer = await res.json().catch(() => ({}));
+    const saved = answer.stay;
     const still = saved ? { if_still: { accommodation_id: saved.accommodation_id, guest_room_id: saved.guest_room_id } } : {};
-    toastUndo(chosen ? `${first(patient.name)}: ${chosen.name}${chosenRoom ? ` · ${chosenRoom.name}` : ""}` : `${first(patient.name)}: no accommodation`, () => undoWrite((anyway) => saveStay(patient.id, stay.id, { ...before, ...(anyway ? {} : still) }), onSaved));
+    // Roommates moved too (#1191): the toast names them, and Undo (moving this guest back) brings them back with them.
+    const mates: string[] = (answer.moved_with ?? []).map((m: { name: string }) => first(m.name));
+    toastUndo(chosen ? `${[first(patient.name), ...mates].join(" and ")}: ${chosen.name}${chosenRoom ? ` · ${chosenRoom.name}` : ""}` : `${first(patient.name)}: no accommodation`, () => undoWrite((anyway) => saveStay(patient.id, stay.id, { ...before, ...(anyway ? {} : still) }), onSaved));
     onSaved();
     onClose();
   };
@@ -423,7 +426,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The stay was not saved. Try again."); return; }
     const out = await res.json().catch(() => ({}));
     const undo = target.id ? () => undoWrite(async (anyway) => {
-      const back = await saveStay(patient.id, target.id!, { start_date: target.start, end_date: target.end, ...(room ? { guest_room_id: target.accommodation?.room?.id ?? null } : {}), ...(anyway ? {} : { if_still: { start_date: start, end_date: end } }) });
+      const back = await saveStay(patient.id, target.id!, { start_date: target.start, end_date: target.end, ...(out.rooms_before ? { restore_rooms: out.rooms_before } : {}), ...(anyway ? {} : { if_still: { start_date: start, end_date: end } }) });
       return back.ok && out.batch_id ? fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: json, body: JSON.stringify({ batch_id: out.batch_id, anyway }) }) : back;
     }, onSaved) : null;
     const text = target.id

@@ -685,6 +685,7 @@ app.get('/patients/:id/stays/:stayId/preview', async (req: Request, res: Respons
   });
 });
 
+class RoomRefused extends Error { constructor(public why: object) { super('room refused'); } }
 const CHANGED_SINCE = { reason: 'CHANGED_SINCE', message: 'It was changed since, on another phone or link.' };
 const stayExtras = z.object({
   package_id: z.string().uuid().nullable().optional(),
@@ -695,6 +696,8 @@ const stayExtras = z.object({
   move_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   /** Mark the treatments left after a shortened stay cancelled, "stay shortened", as one batch with one Undo. */
   cancel_after: z.boolean().optional(),
+  /** Undo puts the rooms back exactly (#1184): the room and the earlier rooms the save's answer gave as `rooms_before`. */
+  restore_rooms: z.object({ guest_room_id: z.string().uuid().nullable(), earlier: z.array(z.object({ guest_room_id: z.string().uuid(), until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })) }).optional(),
   /** Undo sends the stay as its save left it: changed since on another phone, it asks first (#911). */
   if_still: z.object({ start_date: z.string(), end_date: z.string(), package_id: z.string().nullable(), accommodation_id: z.string().nullable(), guest_room_id: z.string().nullable() }).partial().optional(),
 });
@@ -717,13 +720,20 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
   const earlier = await prisma.earlierGuestRoom.findMany({ where: { stay_id: stay.id } });
   const end = nightsEnd(dates.start_date, dates.end_date);
   // Shortened to end before a move (#1174): the stay ends in the room of its last night, not the one it was to move to.
-  const roomId = extras.guest_room_id !== undefined ? extras.guest_room_id : roomOn({ guest_room_id: stay.guest_room_id, EarlierRooms: earlier }, end.getTime() - 86400000);
+  const back = extras.restore_rooms;
+  const roomId = back ? back.guest_room_id : extras.guest_room_id !== undefined ? extras.guest_room_id : roomOn({ guest_room_id: stay.guest_room_id, EarlierRooms: earlier }, end.getTime() - 86400000);
   const room = roomId ? await prisma.guestRoom.findUnique({ where: { id: roomId } }) : null;
   const moved = extras.guest_room_id !== undefined && roomId !== stay.guest_room_id;
   const tz = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
   const from = moved ? new Date(`${extras.move_from ?? centreClock(tz).date}T00:00:00.000Z`) : end;
-  const rooms = moveRooms(earlier, stay.guest_room_id, dates.start_date, end, from, roomId);
+  const rooms = back ? back.earlier.map((e) => ({ guest_room_id: e.guest_room_id, until: new Date(`${e.until}T00:00:00.000Z`) })) : moveRooms(earlier, stay.guest_room_id, dates.start_date, end, from, roomId);
   const checkFrom = rooms.length ? rooms[rooms.length - 1].until : dates.start_date;
+  // Roommates move together (#1191): whoever shares the room on the night of the move goes too, or nobody moves.
+  const left_room = roomOn({ guest_room_id: stay.guest_room_id, EarlierRooms: earlier }, from.getTime());
+  const mates = moved && !back && left_room && roomId ? (await prisma.patientStay.findMany({
+    where: { id: { not: stay.id }, on_site: true, start_date: { lte: from }, end_date: { gt: from }, OR: [{ guest_room_id: left_room }, { EarlierRooms: { some: { guest_room_id: left_room } } }] },
+    include: { EarlierRooms: true, Patient: { select: { name: true } } },
+  })).filter((m) => roomOn(m, from.getTime()) === left_room) : [];
   const updated = await prisma.$transaction(async (tx) => {
     await lockStays(tx);
     const overlap = await ownStayOverlap(tx, id, dates.start_date, dates.end_date, stay.id);
@@ -736,12 +746,24 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
     }
     await tx.earlierGuestRoom.deleteMany({ where: { stay_id: stay.id } });
     if (rooms.length) await tx.earlierGuestRoom.createMany({ data: rooms.map((r) => ({ ...r, stay_id: stay.id })) });
-    return tx.patientStay.update({ where: { id: stay.id }, data: {
+    const saved = await tx.patientStay.update({ where: { id: stay.id }, data: {
       ...dates, package_id: extras.package_id, guest_room_id: roomId,
       accommodation_id: roomId !== stay.guest_room_id || extras.guest_room_id ? room?.accommodation_id ?? extras.accommodation_id : extras.accommodation_id,
     } });
-  });
+    for (const m of mates) {
+      const mEnd = nightsEnd(m.start_date, m.end_date);
+      const mRooms = moveRooms(m.EarlierRooms, m.guest_room_id, m.start_date, mEnd, from, roomId);
+      const refused = await guestRoomRefusal(tx, roomId!, mRooms.length ? mRooms[mRooms.length - 1].until : m.start_date, m.end_date, m.id);
+      // Thrown, not returned: the first guest's move is already written in this transaction and must be undone with it.
+      if (refused) throw new RoomRefused({ ...refused, message: `${room?.name} has no bed for ${m.Patient.name}, who shares the room and moves too. ${refused.message.slice(refused.message.indexOf('.') + 2)}` });
+      await tx.earlierGuestRoom.deleteMany({ where: { stay_id: m.id } });
+      if (mRooms.length) await tx.earlierGuestRoom.createMany({ data: mRooms.map((r) => ({ ...r, stay_id: m.id })) });
+      await tx.patientStay.update({ where: { id: m.id }, data: { guest_room_id: roomId, accommodation_id: room?.accommodation_id } });
+    }
+    return saved;
+  }).catch((e) => { if (e instanceof RoomRefused) return { refused: e.why }; throw e; });
   if ('refused' in updated) { res.status(409).json(updated.refused); return; }
+  const moved_with = mates.map((m) => ({ stay_id: m.id, patient_id: m.patient_id, name: m.Patient.name, rooms_before: { guest_room_id: m.guest_room_id, earlier: m.EarlierRooms.map((e) => ({ guest_room_id: e.guest_room_id, until: e.until.toISOString().slice(0, 10) })) } }));
   await extendDiet(id, stay.end_date, dates.end_date, prisma);
   const left = await leftOverAfter(id, stay, dates.end_date);
   let batch_id: string | null = null;
@@ -750,7 +772,7 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
     const out = await applyPlan(left.map((a) => ({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: [], room_id: a.room_id, start_time: a.start_time, date: a.scheduled_date.toISOString().slice(0, 10), cancel: true, reason: 'stay shortened' })), prisma);
     batch_id = out.batch_id; cancelled = out.applied;
   }
-  res.json({ stay: updated, left_over: extras.cancel_after ? [] : left.map(({ Therapy, ...a }) => a), cancelled, batch_id });
+  res.json({ stay: updated, rooms_before: { guest_room_id: stay.guest_room_id, earlier: earlier.map((e) => ({ guest_room_id: e.guest_room_id, until: e.until.toISOString().slice(0, 10) })) }, left_over: extras.cancel_after ? [] : left.map(({ Therapy, ...a }) => a), cancelled, batch_id, moved_with });
 });
 
 /**
