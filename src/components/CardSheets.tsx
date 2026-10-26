@@ -394,7 +394,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
   useEffect(() => { if (target) { setStart(cover && target.id && cover < target.start ? cover : target.start); setEnd(cover && target.id && cover > target.end ? cover : target.end); setCancels(0); } }, [target?.id, target?.start, target?.end, cover]); // eslint-disable-line react-hooks/exhaustive-deps
   // What a shorter stay would cancel, asked of the server before the tap.
   // New dates re-check the guest room (#456): taken on a night, the save moves them to the room the server names.
-  const [room, setRoom] = useState<{ taken: string; move_to: { id: string; name: string; type: string } | null } | null>(null);
+  const [room, setRoom] = useState<{ taken: string; move_to: { id: string; name: string; type: string } | null; move_from?: string } | null>(null);
   useEffect(() => {
     const moved = !!target && (start !== target.start || end !== target.end);
     if (!patient || !target?.id || !end || !moved) { setCancels(0); setRoom(null); return; }
@@ -415,12 +415,12 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     delta > 0 ? `${plural(delta, "day")} longer. Meals carry on to ${dayText(end)}.` : "",
     changed && target.accommodation ? `Accommodation: ${plural(between(start, end), "night")}, ${money(between(start, end) * target.accommodation.price_per_day)}.` : "",
     changed && target.package && target.package.days !== days ? `Package: ${target.package.days} days; the stay is now ${days}.` : "",
-    room ? `${room.taken} ${room.move_to ? `Saving moves them to ${room.move_to.name}${room.move_to.type !== target.accommodation?.name ? ` (${room.move_to.type})` : ""} for the whole stay.` : "No guest room is free for every night, so saving leaves them without one."}` : "",
+    room ? `${room.taken} ${room.move_to ? `They stay in ${room.move_to.name}${room.move_to.type !== target.accommodation?.name ? ` (${room.move_to.type})` : ""} from ${room.move_from ? dayText(room.move_from) : "tonight"}; the nights before keep their room.` : "No guest room is free for those nights, so saving leaves them without one from then."}` : "",
   ].filter(Boolean);
   const save = async () => {
     setBusy(true);
     const res = target.id
-      ? await saveStay(patient.id, target.id, { start_date: start, end_date: end, cancel_after: cancels > 0, ...(room ? { guest_room_id: room.move_to?.id ?? null } : {}) })
+      ? await saveStay(patient.id, target.id, { start_date: start, end_date: end, cancel_after: cancels > 0, ...(room ? { guest_room_id: room.move_to?.id ?? null, ...(room.move_from ? { move_from: room.move_from } : {}) } : {}) })
       : await fetch(`${API_BASE}/patients/${patient.id}/stays`, { method: "POST", headers: json, body: JSON.stringify({ start_date: start, end_date: end, package_id: target.package?.id ?? null, guest_room_id: guestRoom || null, ...(visit ? { consultation: { date: visit.date, start_time: visit.start_time, staff_id: visit.staff_id, room_id: visit.room_id } } : {}) }) });
     setBusy(false);
     if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The stay was not saved. Try again."); return; }
@@ -430,7 +430,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
       return back.ok && out.batch_id ? fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: json, body: JSON.stringify({ batch_id: out.batch_id, anyway }) }) : back;
     }, onSaved) : null;
     const text = target.id
-      ? `${first(patient.name)}: ${dayText(start)} to ${dayText(end)}${out.cancelled ? `, ${plural(out.cancelled, "treatment")} cancelled` : ""}`
+      ? `${first(patient.name)}: ${dayText(start)} to ${dayText(end)}${room?.move_to ? `, in ${room.move_to.name} from ${room.move_from ? dayText(room.move_from) : "tonight"}` : ""}${out.cancelled ? `, ${plural(out.cancelled, "treatment")} cancelled` : ""}`
       : `Stay added for ${first(patient.name)}: ${dayText(start)} to ${dayText(end)}${guestRoom ? `, ${freeRooms.find((x) => x.id === guestRoom)?.name}` : ""}${visit ? `, consultation ${dayText(visit.date)} ${visit.start_time}` : ""}`;
     if (undo) toastUndo(text, undo); else toast.success(text);
     onSaved();
@@ -451,7 +451,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     onSaved();
     onClose();
   };
-  const label = !target.id ? "Add the stay" : !changed ? "Change a date to save" : delta < 0 ? `Leave on ${dayText(end)}` : delta > 0 ? `Stay until ${dayText(end)}` : "Save the stay";
+  const label = !target.id ? "Add the stay" : !changed ? "Change a date to save" : delta < 0 ? `Leave on ${dayText(end)}` : delta > 0 ? `Stay until ${dayText(end)}${room?.move_to ? ` in ${room.move_to.name}` : ""}` : "Save the stay";
   return (
     <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} title={target.id ? `Stay for ${first(patient.name)}` : "New stay"}
       note={target.id ? `Now ${dayText(target.start)} to ${dayText(target.end)} · ${plural(oldDays, "day")}` : "Arriving, leaving, and the rest follows."}

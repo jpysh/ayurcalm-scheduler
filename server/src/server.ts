@@ -28,7 +28,7 @@ import { COMMON, therapyLibrary } from './therapyLibrary.js';
 import { requireAdmin } from './settings.js';
 import { attentionFor, changesSchema } from './attention.js';
 import { indiaHolidays } from './indiaHolidays.js';
-import { firstFreeRoom, guestRoomRefusal, lockStays, moveRooms, nightsEnd, ownStayOverlap, roomOn } from './guestRooms.js';
+import { firstFreeRoom, guestRoomRefusal, guestRoomsFor, lockStays, moveRooms, nightsEnd, ownStayOverlap, roomOn } from './guestRooms.js';
 import { checkResidentRows, patientSchema, staySchema } from './residentImport.js';
 
 if (!process.env.DATABASE_URL) {
@@ -678,10 +678,17 @@ app.get('/patients/:id/stays/:stayId/preview', async (req: Request, res: Respons
   const moved = earlier.reduce((m, e) => (e.until > m ? e.until : m), from);
   const refused = stay.guest_room_id && stay.on_site ? await guestRoomRefusal(prisma, stay.guest_room_id, moved, to, stay.id) : null;
   const room = refused && stay.guest_room_id ? await prisma.guestRoom.findUnique({ where: { id: stay.guest_room_id } }) : null;
-  const move_to = refused ? (await firstFreeRoom(prisma, moved, to, room?.accommodation_id, stay.id)) ?? (await firstFreeRoom(prisma, moved, to, null, stay.id)) : null;
+  // The move runs from the first night the room is taken (#1192), never from a night already slept, so the nights before stay where they are.
+  const here = refused && stay.guest_room_id ? (await guestRoomsFor(prisma, moved, to, stay.id)).find((r) => r.id === stay.guest_room_id) : null;
+  const tz = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
+  const first = [here?.full_on?.date, here?.out?.date].filter(Boolean).sort()[0];
+  const today = centreClock(tz).date;
+  const move_from = first ? (first < today ? today : first) : moved.toISOString().slice(0, 10);
+  const since = new Date(`${move_from}T00:00:00.000Z`);
+  const move_to = refused ? (await firstFreeRoom(prisma, since, to, room?.accommodation_id, stay.id)) ?? (await firstFreeRoom(prisma, since, to, null, stay.id)) : null;
   res.json({
     cancels: cancels.map((a) => ({ id: a.id, date: a.scheduled_date.toISOString().slice(0, 10), start_time: a.start_time, therapy_name: a.Therapy.name })),
-    room: refused ? { taken: refused.message.slice(0, refused.message.indexOf('.') + 1), move_to: move_to && { id: move_to.id, name: move_to.name, type: move_to.type } } : null,
+    room: refused ? { taken: refused.message.slice(0, refused.message.indexOf('.') + 1), move_to: move_to && { id: move_to.id, name: move_to.name, type: move_to.type }, move_from } : null,
   });
 });
 
@@ -733,7 +740,11 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
   const mates = moved && !back && left_room && roomId ? (await prisma.patientStay.findMany({
     where: { id: { not: stay.id }, on_site: true, start_date: { lte: from }, end_date: { gt: from }, OR: [{ guest_room_id: left_room }, { EarlierRooms: { some: { guest_room_id: left_room } } }] },
     include: { EarlierRooms: true, Patient: { select: { name: true } } },
-  })).filter((m) => roomOn(m, from.getTime()) === left_room) : [];
+  })).filter((m) => {
+    // A roommate shares the room with the guest the night before the move too; someone arriving into it that night is the reason for the move, not a roommate.
+    const prev = from > dates.start_date ? from.getTime() - 86400000 : from.getTime();
+    return roomOn(m, from.getTime()) === left_room && m.start_date.getTime() <= prev && roomOn(m, prev) === roomOn({ guest_room_id: stay.guest_room_id, EarlierRooms: earlier }, prev);
+  }) : [];
   const updated = await prisma.$transaction(async (tx) => {
     await lockStays(tx);
     const overlap = await ownStayOverlap(tx, id, dates.start_date, dates.end_date, stay.id);
