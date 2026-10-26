@@ -11,7 +11,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import {
   Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, LineSelect, Picker, QuickDates, Row, Seg, SwitchRow, Text, TextRow, Timeline,
-  dayText, noteText, money, NightChips, toastUndo, Btn, saveError, deleteAll, undoWrite, EXAMPLE_PRICE, ownNote } from "@/components/kit";
+  dayText, datePair, DateRow, noteText, money, NightChips, toastUndo, Btn, saveError, deleteAll, undoWrite, EXAMPLE_PRICE, ownNote } from "@/components/kit";
 
 const DAY_MS = 86400000;
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
@@ -408,6 +408,9 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
   }, [patient?.id, target?.id, target?.start, target?.end, start, end]); // eslint-disable-line react-hooks/exhaustive-deps
   const [noShow, setNoShow] = useState<number | null>(null);
   useEffect(() => setNoShow(null), [target?.id]);
+  // A pause in treatments (#1194): those days dropped, or the rest of the programme pushed later with the stay.
+  const [pause, setPause] = useState<{ from: string; to: string; mode: "drop" | "push"; reason: string } | null>(null);
+  useEffect(() => setPause(null), [target?.id]);
   if (!patient || !target) return null;
   const oldDays = between(target.start, target.end) + 1;
   const days = between(start, end) + 1;
@@ -438,6 +441,22 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
       : `Stay added for ${first(patient.name)}: ${dayText(start)} to ${dayText(end)}${guestRoom ? `, ${freeRooms.find((x) => x.id === guestRoom)?.name}` : ""}${visit ? `, consultation ${dayText(visit.date)} ${visit.start_time}` : ""}`;
     if (undo) toastUndo(text, undo); else toast.success(text);
     // Pushed treatments that now clash wait for the day's check, which plans them in one pass.
+    if (out.clashes?.length) toast.warning(`${plural(out.clashes.length, "moved treatment")} now clash${out.clashes.length === 1 ? "es" : ""}: the day's check offers the fix.`, { description: out.clashes.slice(0, 3).join(" · ") });
+    onSaved();
+    onClose();
+  };
+  const doPause = async () => {
+    if (!pause || !target.id) return;
+    setBusy(true);
+    const res = await fetch(`${API_BASE}/patients/${patient.id}/stays/${target.id}/pause`, { method: "POST", headers: json, body: JSON.stringify({ ...pause, reason: pause.reason || undefined }) }).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) { const why = await res?.json().catch(() => ({})); toast.error(why?.message || "That was not saved. Try again."); return; }
+    const out = await res.json();
+    toastUndo(`${first(patient.name)}: treatments paused ${dayText(pause.from)} to ${dayText(pause.to)}${pause.mode === "push" ? `, the rest ${plural(out.days, "day")} later, leaving ${dayText(out.end_date)}` : `, ${plural(out.changed, "treatment")} cancelled`}`,
+      () => undoWrite(async (anyway) => {
+        const back = pause.mode === "push" ? await saveStay(patient.id, target.id!, { start_date: target.start, end_date: out.end_before }) : null;
+        return out.batch_id ? fetch(`${API_BASE}/replan/undo`, { method: "POST", headers: json, body: JSON.stringify({ batch_id: out.batch_id, anyway }) }) : back!;
+      }, onSaved));
     if (out.clashes?.length) toast.warning(`${plural(out.clashes.length, "moved treatment")} now clash${out.clashes.length === 1 ? "es" : ""}: the day's check offers the fix.`, { description: out.clashes.slice(0, 3).join(" · ") });
     onSaved();
     onClose();
@@ -474,6 +493,18 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
       </div>
       {target.id && start <= today && end > today ? <Btn kind="quiet" inline className="-ml-2 mt-1" onClick={() => setEnd(today)}>Leaves today</Btn> : null}
       {target.id && target.start <= today && target.end >= today && noShow === null ? <Btn kind="quiet" inline className="-ml-2 mt-1" disabled={busy} onClick={askNoShow}>Did not arrive</Btn> : null}
+      {target.id && target.end > today && !pause && noShow === null ? <Btn kind="quiet" inline className="-ml-2 mt-1" disabled={busy} onClick={() => { const f = target.start > today ? target.start : today; setPause({ from: f, to: addDays(f, 2) > target.end ? target.end : addDays(f, 2), mode: "drop", reason: "" }); }}>Pause treatments…</Btn> : null}
+      {pause ? <div className="mt-3 rounded-xl border p-3">
+        <b className="block">Pause treatments</b>
+        <div className={`${datePair} mt-2`}>
+          <DateRow label="From" value={pause.from} min={target.start > today ? target.start : today} max={target.end} onChange={(v) => setPause({ ...pause, from: v, to: pause.to < v ? v : pause.to })} />
+          <DateRow label="Until" value={pause.to} min={pause.from} max={target.end} onChange={(v) => setPause({ ...pause, to: v })} />
+        </div>
+        <div className="py-2"><Seg<"drop" | "push"> value={pause.mode} onChange={(mode) => setPause({ ...pause, mode })} options={[["drop", "Drop those days"], ["push", "Push the rest later"]]} /></div>
+        <Text label="Why (optional)" value={pause.reason} maxLength={80} onChange={(e) => setPause({ ...pause, reason: e.target.value })} />
+        <Consequence>{pause.mode === "drop" ? `Treatments ${dayText(pause.from)} to ${dayText(pause.to)} are cancelled, "paused". The room and meals stay.` : `Every treatment from ${dayText(pause.from)} moves ${plural(Math.round((Date.parse(pause.to) - Date.parse(pause.from)) / DAY_MS) + 1, "day")} later, and so does the leaving day.`}</Consequence>
+        <div className="mt-2 flex gap-2"><Btn inline disabled={busy} onClick={doPause}>Pause</Btn><Btn kind="quiet" inline onClick={() => setPause(null)}>Not now</Btn></div>
+      </div> : null}
       {noShow !== null ? <div className="mt-2">
         <Consequence>{`The stay goes, with ${target.accommodation?.room ? `${target.accommodation.room.name} and ` : ""}the meals${noShow ? `, and ${plural(noShow, "treatment")} ${noShow === 1 ? "is" : "are"} cancelled` : ""}. Undo puts it all back.`}</Consequence>
         <div className="mt-2 flex gap-2"><Btn inline disabled={busy} onClick={didNotArrive}>Remove the stay</Btn><Btn kind="quiet" inline onClick={() => setNoShow(null)}>Keep it</Btn></div>

@@ -59,7 +59,19 @@ async function main() {
     const moved = await prisma.appointment.findMany({ where: { id: { in: s.appts.map((a) => a.id) } }, orderBy: { scheduled_date: 'asc' } });
     assert.deepEqual(moved.map((a) => [a.scheduled_date.toISOString().slice(0, 10), a.start_time, a.staff_id]), [['2030-05-09', '08:00', staff.id], ['2030-05-10', '08:00', staff.id], ['2030-05-13', '08:00', staff.id]]);
     assert.ok(Array.isArray(pushed.clashes), 'clashes are listed for the day check');
-    console.log('late arrival: cancel the missed days, or push the stay later, each undone in one tap');
+    // A pause (#1194): drop those days, or push the rest and the leaving day later.
+    const d = await guest('Drop');
+    const dropped = await call('POST', `/patients/${d.p.id}/stays/${d.stay.id}/pause`, { from: '2030-05-07', to: '2030-05-08', mode: 'drop', reason: 'fever' });
+    assert.equal(dropped.changed, 1);
+    assert.equal((await prisma.appointment.findUniqueOrThrow({ where: { id: d.appts[1].id } })).cancel_reason, 'paused: fever');
+    const k = await guest('Push');
+    const later = await call('POST', `/patients/${k.p.id}/stays/${k.stay.id}/pause`, { from: '2030-05-07', to: '2030-05-08', mode: 'push' });
+    assert.equal(later.end_date, '2030-05-14', 'the leaving day moves two days');
+    const pushedK = await prisma.appointment.findMany({ where: { id: { in: k.appts.map((a) => a.id) } }, orderBy: { scheduled_date: 'asc' } });
+    assert.deepEqual(pushedK.map((a) => a.scheduled_date.toISOString().slice(0, 10)), ['2030-05-06', '2030-05-09', '2030-05-12'], 'Monday stays; the rest move two days');
+    const outside = await fetch(`${API_BASE}/patients/${k.p.id}/stays/${k.stay.id}/pause`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ from: '2030-06-01', to: '2030-06-02', mode: 'drop' }) });
+    assert.equal(outside.status, 409, 'a pause outside the stay is refused');
+    console.log('late arrival and pause: cancel the missed days, or push the stay later, each undone in one tap');
   } finally {
     await tidy(prisma).catch(() => {});
     await prisma.$disconnect();
