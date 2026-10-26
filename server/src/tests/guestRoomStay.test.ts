@@ -150,6 +150,13 @@ async function main() {
     assert.equal(roomForDay.status, 409);
     assert.equal((await roomForDay.json()).reason, 'NOT_ON_SITE');
 
+    // After a move, the preview checks only the nights in the new room, as the save does (#1214).
+    const mover = await (await add('Mover', '2030-11-01', '2030-11-10', await room('1'))).json();
+    await call('PUT', `/patients/${mover.id}/stays/${mover.Stays[0].id}`, { guest_room_id: two, move_from: '2030-11-05' });
+    await add('Earlier', '2030-11-01', '2030-11-05', two);
+    const look = await call('GET', `/patients/${mover.id}/stays/${mover.Stays[0].id}/preview?end_date=2030-11-11`);
+    assert.equal(look.room, null, 'a night the guest slept elsewhere is not a clash');
+
     console.log('guest room stays: ok');
   } finally {
     await tidy(prisma).catch(() => {});

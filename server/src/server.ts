@@ -673,9 +673,12 @@ app.get('/patients/:id/stays/:stayId/preview', async (req: Request, res: Respons
   const [from, to] = [q.start_date ? new Date(`${q.start_date}T00:00:00.000Z`) : stay.start_date, new Date(`${q.end_date}T00:00:00.000Z`)];
   const cancels = await leftOverAfter(stay.patient_id, stay, to);
   // New dates re-check the guest room (#456): taken on a night, it says so and names the room the save moves them to.
-  const refused = stay.guest_room_id && stay.on_site ? await guestRoomRefusal(prisma, stay.guest_room_id, from, to, stay.id) : null;
+  // The same nights the save checks (#1214): after a move, only the nights in the current room.
+  const earlier = await prisma.earlierGuestRoom.findMany({ where: { stay_id: stay.id } });
+  const moved = earlier.reduce((m, e) => (e.until > m ? e.until : m), from);
+  const refused = stay.guest_room_id && stay.on_site ? await guestRoomRefusal(prisma, stay.guest_room_id, moved, to, stay.id) : null;
   const room = refused && stay.guest_room_id ? await prisma.guestRoom.findUnique({ where: { id: stay.guest_room_id } }) : null;
-  const move_to = refused ? (await firstFreeRoom(prisma, from, to, room?.accommodation_id, stay.id)) ?? (await firstFreeRoom(prisma, from, to, null, stay.id)) : null;
+  const move_to = refused ? (await firstFreeRoom(prisma, moved, to, room?.accommodation_id, stay.id)) ?? (await firstFreeRoom(prisma, moved, to, null, stay.id)) : null;
   res.json({
     cancels: cancels.map((a) => ({ id: a.id, date: a.scheduled_date.toISOString().slice(0, 10), start_time: a.start_time, therapy_name: a.Therapy.name })),
     room: refused ? { taken: refused.message.slice(0, refused.message.indexOf('.') + 1), move_to: move_to && { id: move_to.id, name: move_to.name, type: move_to.type } } : null,
