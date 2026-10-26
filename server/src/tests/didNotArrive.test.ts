@@ -55,6 +55,9 @@ async function main() {
     assert.equal(await prisma.patientStay.count({ where: { patient_id: p.id } }), 0, 'the stay, and with it the room and Form C, is gone');
     assert.equal(await prisma.dietPlanSegment.count({ where: { patient_id: p.id } }) + await prisma.dietPlan.count({ where: { patient_id: p.id } }), 0, 'the meals are gone');
     assert.equal((await prisma.appointment.findUniqueOrThrow({ where: { id: a.id } })).cancel_reason, 'did not arrive');
+    // The Log says it in words (#1208), not as a day's check.
+    const log = await (await fetch(`${API_BASE}/log`, { headers: { Authorization: `Bearer ${token}` } })).json();
+    assert.ok(JSON.stringify(log).includes(`did not arrive: stay 2030-04-02 to 2030-04-15 removed`), 'the Log names the no-show');
 
     assert.equal((await call('/stays/did-not-arrive/undo', { undo_id: out.undo_id })).status, 200);
     const back = await prisma.patientStay.findUniqueOrThrow({ where: { id: stay.id } });

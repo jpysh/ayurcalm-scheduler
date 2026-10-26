@@ -24,6 +24,7 @@ export async function changeLog(days: number, prisma: PrismaClient): Promise<Log
       OR: [
         { action: { in: ['update', 'delete', 'replan', 'dayfix', 'replan_undone'] }, entity_type: { in: ['appointment', 'patient', 'staff'] } },
         { action: 'write' },
+        { action: { in: ['did_not_arrive', 'did_not_arrive_undone'] } },
       ],
     },
     orderBy: { timestamp: 'desc' },
@@ -65,6 +66,10 @@ export async function changeLog(days: number, prisma: PrismaClient): Promise<Log
     } else if (r.action === 'update') {
       const lines = describe((r.old_value || {}) as Snap, (r.new_value || {}) as Snap);
       text = `${whose(r.entity_id)}: ${lines.join('; ') || 'changed'}`;
+    } else if (r.action.startsWith('did_not_arrive')) {
+      // The card's record of a no-show (#1208): who, and the stay that went.
+      const st = ((r.old_value || {}) as { stay?: { patient_id?: string; start_date?: string; end_date?: string } }).stay || {};
+      text = `${name(patients, st.patient_id) || 'A guest'} did not arrive: stay ${String(st.start_date || '').slice(0, 10)} to ${String(st.end_date || '').slice(0, 10)} removed${r.action.endsWith('undone') ? ', then put back' : ''}`;
     } else if (r.entity_type === 'staff') {
       // A therapist not in: what the app did with their day.
       const s = (r.new_value || {}) as ReplanSummary;
