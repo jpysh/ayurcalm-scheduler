@@ -28,7 +28,7 @@ import { COMMON, therapyLibrary } from './therapyLibrary.js';
 import { requireAdmin } from './settings.js';
 import { attentionFor, changesSchema } from './attention.js';
 import { indiaHolidays } from './indiaHolidays.js';
-import { firstFreeRoom, guestRoomRefusal } from './guestRooms.js';
+import { firstFreeRoom, guestRoomRefusal, moveRooms, nightsEnd } from './guestRooms.js';
 import { checkResidentRows, patientSchema, staySchema } from './residentImport.js';
 
 if (!process.env.DATABASE_URL) {
@@ -673,8 +673,10 @@ const CHANGED_SINCE = { reason: 'CHANGED_SINCE', message: 'It was changed since,
 const stayExtras = z.object({
   package_id: z.string().uuid().nullable().optional(),
   accommodation_id: z.string().uuid().nullable().optional(),
-  /** The guest room for the whole stay (#456); it sets the accommodation to the room's type. */
+  /** The guest room (#456); it sets the accommodation to the room's type. */
   guest_room_id: z.string().uuid().nullable().optional(),
+  /** The first night in the new room (#1164); a stay already under way moves from the centre's today, a stay not yet begun for every night. */
+  move_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   /** Mark the treatments left after a shortened stay cancelled, "stay shortened", as one batch with one Undo. */
   cancel_after: z.boolean().optional(),
   /** Undo sends the stay as its save left it: changed since on another phone, it asks first (#911). */
@@ -695,17 +697,28 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
   const now = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : (v as string | null) ?? null);
   if (extras.if_still && Object.entries(extras.if_still).some(([k, v]) => now(stay[k as keyof typeof extras.if_still]) !== v)) { res.status(409).json(CHANGED_SINCE); return; }
   const dates = req.body.start_date || req.body.end_date ? stayData(staySchema.parse(req.body)) : { start_date: stay.start_date, end_date: stay.end_date, duration_days: stay.duration_days };
-  // The room is checked on every night of the stay as it will be, whether the room or the dates changed.
   const roomId = extras.guest_room_id !== undefined ? extras.guest_room_id : stay.guest_room_id;
   const room = roomId ? await prisma.guestRoom.findUnique({ where: { id: roomId } }) : null;
+  // A move mid-stay (#1164) keeps the nights already slept in the rooms they were in; only the nights from the move are checked.
+  const earlier = await prisma.earlierGuestRoom.findMany({ where: { stay_id: stay.id } });
+  const moved = roomId !== stay.guest_room_id;
+  const tz = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
+  const end = nightsEnd(dates.start_date, dates.end_date);
+  const from = moved ? new Date(`${extras.move_from ?? centreClock(tz).date}T00:00:00.000Z`) : end;
+  const rooms = moveRooms(earlier, stay.guest_room_id, dates.start_date, end, from, roomId);
+  const checkFrom = rooms.length ? rooms[rooms.length - 1].until : dates.start_date;
   if (roomId && stay.on_site) {
-    const refused = await guestRoomRefusal(prisma, roomId, dates.start_date, dates.end_date, stay.id);
+    const refused = await guestRoomRefusal(prisma, roomId, checkFrom, dates.end_date, stay.id);
     if (refused) { res.status(409).json(refused); return; }
   }
-  const updated = await prisma.patientStay.update({ where: { id: stay.id }, data: {
-    ...dates, package_id: extras.package_id, guest_room_id: extras.guest_room_id,
-    accommodation_id: extras.guest_room_id && room ? room.accommodation_id : extras.accommodation_id,
-  } });
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.earlierGuestRoom.deleteMany({ where: { stay_id: stay.id } });
+    if (rooms.length) await tx.earlierGuestRoom.createMany({ data: rooms.map((r) => ({ ...r, stay_id: stay.id })) });
+    return tx.patientStay.update({ where: { id: stay.id }, data: {
+      ...dates, package_id: extras.package_id, guest_room_id: extras.guest_room_id,
+      accommodation_id: extras.guest_room_id && room ? room.accommodation_id : extras.accommodation_id,
+    } });
+  });
   await extendDiet(id, stay.end_date, dates.end_date, prisma);
   const left = await leftOverAfter(id, stay, dates.end_date);
   let batch_id: string | null = null;
