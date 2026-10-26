@@ -53,10 +53,12 @@ type Sheet = "centre" | "hours" | "catalogues" | "people" | "account" | "backups
 /** Opening a sheet counts as looking at its setup items; one sheet can cover two. */
 const REVIEWS: Partial<Record<Sheet, string>> = { centre: "centre", hours: "hours", catalogues: "catalogues", people: "people" };
 
-const Settings = ({ signOut, openLog, openScreen, initialSheet, sheetOpened, attention, openRules, openHolidays }: {
+const Settings = ({ signOut, openLog, openScreen, initialSheet, sheetOpened, attention, openRules, openHolidays, accountChanged }: {
   signOut?: () => void; openLog?: () => void; openScreen?: (screen: string) => void;
   /** A sheet to open at once, from a link on another screen ("Edit the list"). */
   initialSheet?: string | null; sheetOpened?: () => void;
+  /** So the demo-password line over every screen goes the moment the password changes (#1173). */
+  accountChanged?: () => void;
   attention: Attention; openRules: () => void; openHolidays: () => void;
 }) => {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -64,13 +66,15 @@ const Settings = ({ signOut, openLog, openScreen, initialSheet, sheetOpened, att
   // The server's refusal, kept beside the box it is about (#949); the toast alone is gone before it is read.
   const [refused, setRefused] = useState<{ field: string; error: string } | null>(null);
   const why = (field: string) => (refused?.field === field ? refused.error : undefined);
-  const [sheet, setSheet] = useState<Sheet | null>(initialSheet === "packages" || initialSheet === "accommodation" ? "catalogues" : initialSheet === "help" ? "help" : null);
+  const [sheet, setSheet] = useState<Sheet | null>(initialSheet === "packages" || initialSheet === "accommodation" ? "catalogues" : initialSheet === "help" || initialSheet === "account" ? initialSheet : null);
   useEffect(() => { if (initialSheet) sheetOpened?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // The demo-password line can be tapped while Settings is already open (#1173).
+  useEffect(() => { if (initialSheet === "account") { setSheet("account"); sheetOpened?.(); } }, [initialSheet]); // eslint-disable-line react-hooks/exhaustive-deps
   const trial = useTrial();
   const isAdmin = typeof window !== "undefined" && localStorage.getItem("authRole") === "Admin";
 
   const [account, setAccount] = useState<{ email: string; demo_password: boolean } | null>(null);
-  const loadAccount = useCallback(() => { fetch(`${API_BASE}/account`).then((r) => (r.ok ? r.json() : null)).then(setAccount).catch(() => setAccount(null)); }, []);
+  const loadAccount = useCallback(() => { fetch(`${API_BASE}/account`).then((r) => (r.ok ? r.json() : null)).then(setAccount).catch(() => setAccount(null)).finally(accountChanged); }, [accountChanged]);
   useEffect(loadAccount, [loadAccount]);
   useEffect(() => {
     fetch(`${API_BASE}/settings`).then((r) => r.json()).then(setSettings).catch(() => toast.error("Could not load settings"));

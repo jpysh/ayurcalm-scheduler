@@ -656,6 +656,14 @@ export const Callout = ({ tone = "plain", title, children, actions }: { tone?: "
   </div>
 );
 
+/** One line across the top of every screen for something only the admin can fix; it has no close, it goes when the fix is made (#1173). */
+export const Strip = ({ children, action, onAction }: { children: ReactNode; action: string; onAction: () => void }) => (
+  <div role="status" className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-destructive/10 px-3 text-sm">
+    <span className="py-2">{children}</span>
+    <button type="button" className="min-h-11 shrink-0 font-semibold text-destructive underline" onClick={onAction}>{action}</button>
+  </div>
+);
+
 /** Back, for BottomSheet's `onBack`. */
 const BackLink = ({ onBack }: { onBack: () => void }) => (
   <button type="button" className="-ml-1 -mt-2 mb-1 flex min-h-11 items-center px-1 font-semibold text-primary" onClick={onBack}>‹ Back</button>
