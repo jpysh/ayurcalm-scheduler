@@ -96,8 +96,8 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
         <div className="mt-3"><WeekStrip day={day} today={today} setDay={setDay} /></div>
         {/* The morning's housekeeping in one line (#456 part 4): the rooms to make up, and the rooms someone comes into. */}
         {night ? (() => {
-          // A shared room where one guest stays on is not empty, so it is not one to make up.
-          const out = night.filter((r) => leaving(r).length && !sleeping(r).some((g) => g.start_date !== day)).map((r) => r.name);
+          // A shared room where one guest stays on is not empty, but a bed left and taken the same day still needs making up (#1209).
+          const out = night.filter((r) => leaving(r).length && (arriving(r).length || !sleeping(r).some((g) => g.start_date !== day))).map((r) => r.name);
           const into = night.filter((r) => arriving(r).length).map((r) => r.name);
           return out.length || into.length ? <p className={`px-1 pt-2 ${noteText}`}>{[out.length ? `Leaving${day === today ? " today" : ""}: ${out.join(", ")} to make up` : "", into.length ? `Arriving: ${into.join(", ")}` : ""].filter(Boolean).join(" · ")}</p> : null;
         })() : null}
