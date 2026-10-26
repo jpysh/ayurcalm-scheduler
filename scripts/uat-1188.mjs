@@ -1,0 +1,23 @@
+// node scripts/uat-1188.mjs — a guest room marked out of use lists the guests in it those nights, each with a free room and one tap (#1188), 375x812, on a throwaway stack (APP_URL).
+import { chromium } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+const APP = process.env.APP_URL || 'http://localhost:8391';
+const OUT = 'docs/design/uat/2026-10-27-room-out-move-guests';
+mkdirSync(OUT, { recursive: true });
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+const api = (m, p) => fetch(`${APP}/api${p}`, { method: m, headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json());
+const room = (await api('GET', `/guest-rooms/free?from=${today}&to=${today}`)).find((r) => r.guests.length);
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, timezoneId: 'Asia/Kolkata' });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+const p = await ctx.newPage();
+await p.goto(`${APP}/admin/timeoff`); await p.waitForTimeout(2500);
+await p.getByRole('button', { name: /Mark not available/ }).click(); await p.waitForTimeout(800);
+await p.getByPlaceholder('Type a name').fill(room.name); await p.waitForTimeout(600);
+await p.getByLabel(room.name, { exact: true }).first().check({ force: true }).catch(() => p.getByText(room.name, { exact: true }).first().click());
+await p.getByRole('button', { name: new RegExp(`^Next: ${room.name}`) }).click(); await p.waitForTimeout(2500);
+if (!(await p.getByText('Move them to another room').count())) throw new Error('no move list on the out-of-use form');
+await p.getByText('Move them to another room').scrollIntoViewIfNeeded();
+await p.screenshot({ path: `${OUT}/out-of-use-move-list-375.png` });
+await b.close();

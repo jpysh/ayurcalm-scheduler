@@ -124,13 +124,16 @@ guestRoomsRouter.put('/:id', requireAdmin, async (req: Request, res: Response) =
  * Guests with nights in this room from today on (#1187), each with the first other room of the
  * same type free for those nights: the move that has to happen before the room can be retired.
  */
-async function guestsAhead(id: string) {
-  const today = new Date(`${centreClock((await getSettings()).timezone).date}T00:00:00Z`);
+/** Guests in the room on nights from `since` (default the centre's today) up to `until`, each with a free room to move to: retiring (#1187) and out of use (#1188). */
+async function guestsAhead(id: string, since?: string, until?: string) {
+  const now = centreClock((await getSettings()).timezone).date;
+  const today = new Date(`${since && since > now ? since : now}T00:00:00Z`);
+  const stop = until ? new Date(`${until}T00:00:00Z`) : null;
   const room = await prisma.guestRoom.findUnique({ where: { id } });
   const stays = await prisma.patientStay.findMany({ where: { end_date: { gt: today }, OR: [{ guest_room_id: id }, { EarlierRooms: { some: { guest_room_id: id } } }] }, include: { Patient: { select: { name: true } }, EarlierRooms: true }, orderBy: { start_date: 'asc' } });
   const out = [];
   for (const s of stays) {
-    const here = spans(s).filter((p) => p.room === id && p.end > today);
+    const here = spans(s).filter((p) => p.room === id && p.end > today && (!stop || p.start < stop));
     if (!here.length) continue;
     const from = here[0].start > today ? here[0].start : today;
     const to = here[here.length - 1].end;
@@ -142,7 +145,8 @@ async function guestsAhead(id: string) {
   return out;
 }
 guestRoomsRouter.get('/:id/ahead', async (req: Request, res: Response) => {
-  res.json(await guestsAhead(String(req.params.id)));
+  const q = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).parse(req.query);
+  res.json(await guestsAhead(String(req.params.id), q.from, q.to));
 });
 guestRoomsRouter.delete('/:id', requireAdmin, async (req: Request, res: Response) => {
   const id = String(req.params.id);

@@ -24,6 +24,28 @@ async function send(method: string, path: string, body?: unknown) {
   return out;
 }
 
+/**
+ * Guests booked in a room on some nights, each with a free room and one tap to move them from the first
+ * of those nights: before retiring a room (#1187) and when it is out of use (#1188). The admin decides; the app searches.
+ */
+export function GuestsToMove({ roomId, from, to, title, onList, onChanged }: { roomId: string; from?: string; to?: string; title: string; onList?: (a: Ahead[]) => void; onChanged: () => void }) {
+  const [ahead, setAhead] = useState<Ahead[] | null>(null);
+  const load = () => fetchJsonWithTimeout<Ahead[]>(`${API_BASE}/guest-rooms/${roomId}/ahead${from ? `?from=${from}${to ? `&to=${to}` : ""}` : ""}`).then((r) => { const a = Array.isArray(r) ? r : []; setAhead(a); onList?.(a); });
+  useEffect(() => { setAhead(null); load(); }, [roomId, from, to]); // eslint-disable-line react-hooks/exhaustive-deps
+  const move = async (g: Ahead) => {
+    if (!g.move_to) return;
+    const res = await fetch(`${API_BASE}/patients/${g.patient_id}/stays/${g.stay_id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ guest_room_id: g.move_to.id, move_from: g.move_from }) });
+    const out = await res.json().catch(() => ({}));
+    if (res.ok) toast.success(`${g.name} moves to ${g.move_to.name} from ${dayText(g.move_from)}`); else toast.error(out.message ?? "The move was not saved. Try again.");
+    load(); onChanged();
+  };
+  return ahead?.length ? <ListGroup title={title} count={ahead.length}>
+    {ahead.map((g) => <ItemRow key={g.stay_id} title={g.name} facts={`${dayText(g.from)} to ${dayText(g.to)}`}>
+      {g.move_to ? <Btn inline onClick={() => move(g)}>Move to {g.move_to.name}</Btn> : <span className={noteText}>No room free for these nights</span>}
+    </ItemRow>)}
+  </ListGroup> : null;
+}
+
 export function AddGuestRooms({ open, onOpenChange, typeId, onChanged, openTypes }: {
   open: boolean; onOpenChange: (o: boolean) => void;
   /** Preselected type, when asked from one. */
@@ -81,15 +103,7 @@ export function ManageGuestRooms({ open, onOpenChange, typeId, onChanged, openTy
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ahead, setAhead] = useState<Ahead[] | null>(null);
-  const loadAhead = (id: string) => fetchJsonWithTimeout<Ahead[]>(`${API_BASE}/guest-rooms/${id}/ahead`).then((r) => setAhead(Array.isArray(r) ? r : []));
-  useEffect(() => { setAhead(null); if (edit) loadAhead(edit.id); }, [edit?.id]);
-  const move = async (g: Ahead) => {
-    if (!g.move_to || !edit) return;
-    const res = await fetch(`${API_BASE}/patients/${g.patient_id}/stays/${g.stay_id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ guest_room_id: g.move_to.id, move_from: g.move_from }) });
-    const out = await res.json().catch(() => ({}));
-    if (res.ok) toast.success(`${g.name} moved to ${g.move_to.name}`); else toast.error(out.message ?? "The move was not saved. Try again.");
-    loadAhead(edit.id); onChanged();
-  };
+  useEffect(() => { setAhead(null); }, [edit?.id]);
   const load = () => Promise.all([fetchJsonWithTimeout<Room[]>(`${API_BASE}/guest-rooms`), typesNow()]).then(([r, t]) => { setRooms(Array.isArray(r) ? r.filter((x) => x.is_active) : []); setTypes(t); });
   useEffect(() => { if (open) load(); }, [open]);
   const changed = () => { load(); onChanged(); };
@@ -127,11 +141,7 @@ export function ManageGuestRooms({ open, onOpenChange, typeId, onChanged, openTy
           <Text label="Name" autoComplete="off" maxLength={20} value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
           <Group label="Beds"><Seg<number> options={BEDS} value={edit.beds} onChange={(n) => setEdit({ ...edit, beds: n })} /></Group>
           {out ? out(edit.id) : null}
-          {ahead?.length ? <ListGroup title="Move these guests to remove it" count={ahead.length}>
-            {ahead.map((g) => <ItemRow key={g.stay_id} title={g.name} facts={`${dayText(g.from)} to ${dayText(g.to)}`}>
-              {g.move_to ? <Btn inline onClick={() => move(g)}>Move to {g.move_to.name}</Btn> : <span className={noteText}>No room free for these nights</span>}
-            </ItemRow>)}
-          </ListGroup> : null}
+          <GuestsToMove roomId={edit.id} title="Move these guests to remove it" onList={setAhead} onChanged={onChanged} />
         </div> : null}
       </BottomSheet>
     </>
