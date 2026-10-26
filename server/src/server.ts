@@ -28,7 +28,7 @@ import { COMMON, therapyLibrary } from './therapyLibrary.js';
 import { requireAdmin } from './settings.js';
 import { attentionFor, changesSchema } from './attention.js';
 import { indiaHolidays } from './indiaHolidays.js';
-import { firstFreeRoom, guestRoomRefusal, moveRooms, nightsEnd, roomOn } from './guestRooms.js';
+import { firstFreeRoom, guestRoomRefusal, lockStays, moveRooms, nightsEnd, ownStayOverlap, roomOn } from './guestRooms.js';
 import { checkResidentRows, patientSchema, staySchema } from './residentImport.js';
 
 if (!process.env.DATABASE_URL) {
@@ -480,13 +480,17 @@ app.post('/patients', async (req: Request, res: Response) => {
     if (conflict) { res.status(409).json(conflict); return; }
   }
   const room = body.guest_room_id && body.stay && body.on_site ? await prisma.guestRoom.findUnique({ where: { id: body.guest_room_id } }) : null;
-  if (room && body.stay) {
-    const { start_date, end_date } = stayData(body.stay);
-    const refused = await guestRoomRefusal(prisma, room.id, start_date, end_date);
-    if (refused) { res.status(409).json(refused); return; }
-  }
   // One save: the resident, their stay, their diet plan and their consultation, or none of them.
   const p = await prisma.$transaction(async (tx) => {
+    await lockStays(tx);
+    // The same resident sent twice within two minutes is a double tap or a retry on a slow signal (#1198): the first save stands.
+    const twin = body.stay && await tx.patient.findFirst({ where: { name: { equals: body.name, mode: 'insensitive' }, created_at: { gte: new Date(Date.now() - 120000) }, Stays: { some: { start_date: stayData(body.stay).start_date } } }, include: { Stays: true } });
+    if (twin) return twin;
+    if (room && body.stay) {
+      const { start_date, end_date } = stayData(body.stay);
+      const refused = await guestRoomRefusal(tx, room.id, start_date, end_date);
+      if (refused) return { refused };
+    }
     const created = await tx.patient.create({ data });
     if (body.stay) {
       const stay = stayData(body.stay);
@@ -496,6 +500,7 @@ app.post('/patients', async (req: Request, res: Response) => {
     }
     return tx.patient.findUnique({ where: { id: created.id }, include: { Stays: true } });
   });
+  if (p && 'refused' in p) { res.status(409).json(p.refused); return; }
   res.status(201).json(p);
 });
 
@@ -633,11 +638,15 @@ app.post('/patients/:id/stays', async (req: Request, res: Response) => {
   // A returning guest gets a fresh link, so the lapsed one forwarded last time stays dead (#827).
   const lapsed = await linkLapsed(id, prisma);
   const created = await prisma.$transaction(async (tx) => {
+    await lockStays(tx);
+    const overlap = await ownStayOverlap(tx, id, stay.start_date, stay.end_date);
+    if (overlap) return { overlap };
     if (lapsed) await tx.patient.update({ where: { id }, data: { link_token: null } });
     const made = await tx.patientStay.create({ data: { patient_id: id, package_id: package_id ?? null, ...stay } });
     if (consultation && consult) await tx.appointment.create({ data: { patient_id: id, therapy_id: consult.id, staff_id: consultation.staff_id, room_id: consultation.room_id, scheduled_date: new Date(`${consultation.date}T00:00:00.000Z`), start_time: consultation.start_time, duration_minutes: consult.duration_minutes, co_staff_ids: [], session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
     return made;
   });
+  if ('overlap' in created) { res.status(409).json(created.overlap); return; }
   res.status(201).json(created);
 });
 
@@ -708,11 +717,14 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
   const from = moved ? new Date(`${extras.move_from ?? centreClock(tz).date}T00:00:00.000Z`) : end;
   const rooms = moveRooms(earlier, stay.guest_room_id, dates.start_date, end, from, roomId);
   const checkFrom = rooms.length ? rooms[rooms.length - 1].until : dates.start_date;
-  if (roomId && stay.on_site) {
-    const refused = await guestRoomRefusal(prisma, roomId, checkFrom, dates.end_date, stay.id);
-    if (refused) { res.status(409).json(refused); return; }
-  }
   const updated = await prisma.$transaction(async (tx) => {
+    await lockStays(tx);
+    const overlap = await ownStayOverlap(tx, id, dates.start_date, dates.end_date, stay.id);
+    if (overlap) return { refused: overlap };
+    if (roomId && stay.on_site) {
+      const refused = await guestRoomRefusal(tx, roomId, checkFrom, dates.end_date, stay.id);
+      if (refused) return { refused };
+    }
     await tx.earlierGuestRoom.deleteMany({ where: { stay_id: stay.id } });
     if (rooms.length) await tx.earlierGuestRoom.createMany({ data: rooms.map((r) => ({ ...r, stay_id: stay.id })) });
     return tx.patientStay.update({ where: { id: stay.id }, data: {
@@ -720,6 +732,7 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
       accommodation_id: roomId !== stay.guest_room_id || extras.guest_room_id ? room?.accommodation_id ?? extras.accommodation_id : extras.accommodation_id,
     } });
   });
+  if ('refused' in updated) { res.status(409).json(updated.refused); return; }
   await extendDiet(id, stay.end_date, dates.end_date, prisma);
   const left = await leftOverAfter(id, stay, dates.end_date);
   let batch_id: string | null = null;

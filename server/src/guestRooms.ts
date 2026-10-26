@@ -20,6 +20,19 @@ const dayOf = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day
 /** The morning after the last night: the leaving day, or the next day for a stay that starts and ends on one day. */
 export const nightsEnd = (from: Date, to: Date) => (to > from ? to : new Date(from.getTime() + DAY_MS));
 
+/**
+ * Stay and guest-room writes one at a time (#1198): a double tap, or two phones, would
+ * otherwise both pass the check before either saves. Held to the end of the transaction.
+ */
+export const lockStays = (tx: Prisma.TransactionClient) => tx.$queryRaw`SELECT pg_advisory_xact_lock(1198)::text`;
+
+/** The patient's other stay sharing a night with these dates (#1198): one person sleeps in one stay at a time. */
+export async function ownStayOverlap(db: Db, patientId: string, start: Date, end: Date, except?: string) {
+  const mine = await db.patientStay.findMany({ where: { patient_id: patientId, ...(except ? { id: { not: except } } : {}) } });
+  const s = mine.find((m) => m.start_date < nightsEnd(start, end) && start < nightsEnd(m.start_date, m.end_date));
+  return s ? { reason: 'STAY_OVERLAPS', message: `They already have a stay from ${dayOf(s.start_date)} to ${dayOf(s.end_date)}. Change that one instead.`, stay_id: s.id } : null;
+}
+
 type Earlier = { guest_room_id: string; until: Date };
 /** The room a stay sleeps in on night `d` (#1164): an earlier room up to its `until`, then the stay's room. */
 export const roomOn = (stay: { guest_room_id: string | null; EarlierRooms?: Earlier[] }, d: number) =>

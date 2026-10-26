@@ -122,6 +122,23 @@ async function main() {
     await call('PUT', sunilStay, { start_date: '2030-05-01', end_date: '2030-05-06' });
     const short = await prisma.patientStay.findUniqueOrThrow({ where: { id: sunil.Stays[0].id }, include: { EarlierRooms: true } });
     assert.deepEqual([short.guest_room_id, short.EarlierRooms.length], [await room('1'), 0], 'a stay shortened before its move stays in the old room');
+    // A double tap (#1198): the same New stay, or the same new resident, sent twice at once is saved once.
+    const twice = (path: string, body: unknown) => Promise.all([raw('POST', path, body), raw('POST', path, body)]);
+    const solo = await (await add('Solo', '2030-01-01', '2030-01-03', await room('2'))).json();
+    const stays = await twice(`/patients/${solo.id}/stays`, { start_date: '2030-08-01', end_date: '2030-08-05' });
+    assert.deepEqual(stays.map((r) => r.status).sort(), [201, 409], 'one New stay saved, the second refused');
+    assert.equal((await stays.find((r) => r.status === 409)!.json()).reason, 'STAY_OVERLAPS');
+    assert.equal(await prisma.patientStay.count({ where: { patient_id: solo.id, start_date: new Date('2030-08-01T00:00:00Z') } }), 1);
+    const back = await raw('POST', `/patients/${solo.id}/stays`, { start_date: '2030-08-05', end_date: '2030-08-09' });
+    assert.equal(back.status, 201, 'a stay starting on the leaving day of another is not an overlap');
+    const newcomer = { name: `${TAG} Twice`, gender: 'female', stay: { start_date: '2030-08-01', end_date: '2030-08-05' } };
+    await twice('/patients', newcomer);
+    assert.equal(await prisma.patient.count({ where: { name: `${TAG} Twice` } }), 1, 'one resident, not two');
+    const two = await room('2');
+    await twice('/patients', { name: `${TAG} Last`, gender: 'female', stay: { start_date: '2030-09-01', end_date: '2030-09-03' }, guest_room_id: two });
+    const both = await twice('/patients', { name: `${TAG} Rival`, gender: 'female', stay: { start_date: '2030-09-01', end_date: '2030-09-03' }, guest_room_id: two });
+    assert.deepEqual(both.map((r) => r.status).sort(), [409, 409], 'the last bed, once taken, is refused to everyone after');
+
     console.log('guest room stays: ok');
   } finally {
     await tidy(prisma).catch(() => {});
