@@ -167,6 +167,23 @@ async function main() {
     assert.equal(after.guest_room_id, two, 'the move to the second room is back');
     assert.deepEqual(after.EarlierRooms.map((e) => [e.guest_room_id, e.until.toISOString().slice(0, 10)]), [[await room('1'), '2030-12-15']]);
 
+    // Roommates move together (#1191): moving one moves the other, a room too small refuses both, and moving back brings both back.
+    await call('POST', '/guest-rooms', { name: `${TAG}E`, accommodation_id: house.id, beds: 2 });
+    const d = await room('D'); const e = await room('E');
+    const husband = await (await add('Husband', '2031-01-01', '2031-01-10', d)).json();
+    const wife = await (await add('Wife', '2031-01-01', '2031-01-10', d)).json();
+    const small = await raw('PUT', `/patients/${husband.id}/stays/${husband.Stays[0].id}`, { guest_room_id: await room('1'), move_from: '2031-01-04' });
+    assert.equal(small.status, 409, 'a one-bed room cannot take the couple');
+    assert.match((await small.json()).message, new RegExp(`no bed for ${TAG} Wife`));
+    assert.equal((await prisma.patientStay.findUniqueOrThrow({ where: { id: husband.Stays[0].id } })).guest_room_id, d, 'refused means nobody moved, not even him');
+    const together = await call('PUT', `/patients/${husband.id}/stays/${husband.Stays[0].id}`, { guest_room_id: e, move_from: '2031-01-04' });
+    assert.deepEqual(together.moved_with.map((m: { name: string }) => m.name), [`${TAG} Wife`]);
+    assert.equal((await prisma.patientStay.findUniqueOrThrow({ where: { id: wife.Stays[0].id } })).guest_room_id, e, 'the wife moved too');
+    await call('PUT', `/patients/${husband.id}/stays/${husband.Stays[0].id}`, { guest_room_id: d, move_from: '2031-01-04' });
+    const home = await prisma.patientStay.findUniqueOrThrow({ where: { id: wife.Stays[0].id }, include: { EarlierRooms: true } });
+    assert.equal(home.guest_room_id, d, 'moving back brings her back');
+    assert.equal(home.EarlierRooms.length, 0, 'and leaves no trace of the move');
+
     console.log('guest room stays: ok');
   } finally {
     await tidy(prisma).catch(() => {});

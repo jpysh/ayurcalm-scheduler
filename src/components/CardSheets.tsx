@@ -315,9 +315,12 @@ export function AccommodationSheet({ patient, stay, onClose, onSaved, editList }
     const res = await saveStay(patient.id, stay.id, chosen ? { accommodation_id: chosen.id, guest_room_id: room || null } : { accommodation_id: null, guest_room_id: null });
     setBusy(false);
     if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The accommodation was not saved. Try again."); return; }
-    const saved = (await res.json().catch(() => ({}))).stay;
+    const answer = await res.json().catch(() => ({}));
+    const saved = answer.stay;
     const still = saved ? { if_still: { accommodation_id: saved.accommodation_id, guest_room_id: saved.guest_room_id } } : {};
-    toastUndo(chosen ? `${first(patient.name)}: ${chosen.name}${chosenRoom ? ` · ${chosenRoom.name}` : ""}` : `${first(patient.name)}: no accommodation`, () => undoWrite((anyway) => saveStay(patient.id, stay.id, { ...before, ...(anyway ? {} : still) }), onSaved));
+    // Roommates moved too (#1191): the toast names them, and Undo (moving this guest back) brings them back with them.
+    const mates: string[] = (answer.moved_with ?? []).map((m: { name: string }) => first(m.name));
+    toastUndo(chosen ? `${[first(patient.name), ...mates].join(" and ")}: ${chosen.name}${chosenRoom ? ` · ${chosenRoom.name}` : ""}` : `${first(patient.name)}: no accommodation`, () => undoWrite((anyway) => saveStay(patient.id, stay.id, { ...before, ...(anyway ? {} : still) }), onSaved));
     onSaved();
     onClose();
   };
