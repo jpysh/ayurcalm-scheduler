@@ -1,7 +1,8 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { prisma } from './server.js';
-import { requireAdmin } from './settings.js';
+import { getSettings, requireAdmin } from './settings.js';
+import { centreClock } from './availability.js';
 import { expandRoomNames, guestRoomsFor } from './guestRooms.js';
 
 /**
@@ -98,7 +99,26 @@ guestRoomsRouter.put('/:id', requireAdmin, async (req: Request, res: Response) =
   const body = roomBody.partial().parse(req.body);
   const clash = body.name ? await prisma.guestRoom.findFirst({ where: { name: body.name, id: { not: String(req.params.id) } } }) : null;
   if (clash) return void taken(res);
-  res.json(await prisma.guestRoom.update({ where: { id: String(req.params.id) }, data: body }));
+  const id = String(req.params.id);
+  // Fewer beds than guests already booked (#1186): refused with the first over-full night, from today on.
+  const today = new Date(`${centreClock((await getSettings()).timezone).date}T00:00:00Z`);
+  const last = await prisma.patientStay.aggregate({ _max: { end_date: true }, where: { end_date: { gte: today }, OR: [{ guest_room_id: id }, { EarlierRooms: { some: { guest_room_id: id } } }] } });
+  const full = await prisma.$transaction(async (tx) => {
+    const room = await tx.guestRoom.update({ where: { id }, data: body });
+    if (body.beds === undefined || !last._max.end_date) return { room };
+    const guests = (await guestRoomsFor(tx, today, last._max.end_date)).find((r) => r.id === id)?.guests ?? [];
+    for (let d = today.getTime(); d <= last._max.end_date.getTime(); d += 86400000) {
+      const date = new Date(d).toISOString().slice(0, 10);
+      const names = guests.filter((g) => g.start_date <= date && (date < g.end_date || g.start_date === g.end_date && date === g.start_date)).map((g) => g.name);
+      if (names.length > room.beds) throw Object.assign(new Error('over-full'), { on: { date, names } });
+    }
+    return { room };
+  }).catch((e) => { if (e.on) return { on: e.on as { date: string; names: string[] } }; throw e; });
+  if ('on' in full) {
+    const day = new Date(`${full.on.date}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
+    return void res.status(409).json({ error: `${body.name ?? 'This room'} has ${full.on.names.length} guests on ${day}: ${full.on.names.join(', ')}. Move one first`, date: full.on.date, names: full.on.names });
+  }
+  res.json(full.room);
 });
 guestRoomsRouter.delete('/:id', requireAdmin, async (req: Request, res: Response) => {
   const id = String(req.params.id);
