@@ -47,6 +47,15 @@ assert.deepEqual(s.counts, { rooms: 14, makeUp: 4, arriving: 4, staying: 8, free
 assert.deepEqual(s.first, ['T4', 'A4'], 'a bed that changes hands today is made up first too');
 assert.deepEqual(s.groups.map((x) => x.type), ['Trishul House', 'Nanda House']);
 
+// A move mid-stay reads as a move on both rooms, never as an arrival and a leaving (#1210).
+const moved = buildGuestRoomsSheet([
+  { name: 'A3', beds: 1, type: 'Trishul House', guests: [{ ...g('Vihaan Patel', '2026-10-01', '2026-10-08'), to_room: 'T9' }] },
+  { name: 'T9', beds: 1, type: 'Trishul House', guests: [{ ...g('Vihaan Patel', '2026-10-08', '2026-10-20'), from_room: 'A3' }] },
+], day);
+const mv = Object.fromEntries(moved.groups.flatMap((x) => x.rows).map((r) => [r.room, r]));
+assert.equal(mv.A3.line, 'Make up · Vihaan Patel moves to T9 today');
+assert.equal(mv.T9.line, 'Ready for Vihaan Patel (moves in from A3) · until Tue 20 Oct');
+
 // Out of use is the whole days from the first to the last, both included; the first such night in the asked nights wins.
 const offRow = (start: string, end: string, why: string | null) => ({ entity_id: 'r1', date: null, start_date: new Date(`${start}T00:00:00Z`), end_date: new Date(`${end}T00:00:00Z`), description: why });
 const d = (x: string) => new Date(`${x}T00:00:00Z`);

@@ -286,19 +286,26 @@ export type GuestRoomNight = { id: string; name: string; beds: number; accommoda
 /** Taken rooms say by whom and from when, so a clash is never picked by accident. */
 export const takenBy = (r: GuestRoomNight) => r.out ? `Out of use${r.out.reason ? `: ${r.out.reason}` : ""} · ${dayText(r.out.date)}` : r.full_on ? `${r.full_on.names.join(" & ")} · ${dayText(r.full_on.date)}` : "";
 
-export function AccommodationSheet({ patient, stay, onClose, onSaved, editList }: { patient: Who | null; stay: CardStay | null; onClose: () => void; onSaved: () => void; editList: () => void }) {
+export function AccommodationSheet({ patient, stay, today, onClose, onSaved, editList }: { patient: Who | null; stay: CardStay | null; today: string; onClose: () => void; onSaved: () => void; editList: () => void }) {
   const [list, setList] = useState<House[] | null>(null);
   const [rooms, setRooms] = useState<GuestRoomNight[]>([]);
   const [pick, setPick] = useState("");
   const [room, setRoom] = useState("");
   const [busy, setBusy] = useState(false);
+  // A stay under way moves from tonight, so only the nights from today on are asked (#1207), as the server checks them.
+  const from = stay && stay.start_date < today && today < stay.end_date ? today : stay?.start_date;
   useEffect(() => {
     if (!patient || !stay) return;
     setList(null); setPick(stay.accommodation?.id ?? ""); setRoom(stay.accommodation?.room?.id ?? "");
     Promise.all([
       fetchJsonWithTimeout<House[]>(`${API_BASE}/accommodations`),
-      fetchJsonWithTimeout<GuestRoomNight[]>(`${API_BASE}/guest-rooms/free?from=${stay.start_date}&to=${stay.end_date}&stay=${stay.id}`),
-    ]).then(([h, r]) => { setRooms(Array.isArray(r) ? r : []); setList(Array.isArray(h) ? h : []); });
+      fetchJsonWithTimeout<GuestRoomNight[]>(`${API_BASE}/guest-rooms/free?from=${from}&to=${stay.end_date}&stay=${stay.id}`),
+    ]).then(([h, r]) => {
+      const list = Array.isArray(r) ? r : [];
+      setRooms(list); setList(Array.isArray(h) ? h : []);
+      // No room yet: the first free for every night, as New patient chooses (#1211).
+      if (!stay.accommodation?.room) { const r0 = list.find((x) => x.free && (!stay.accommodation || x.accommodation_id === stay.accommodation.id)) ?? list.find((x) => x.free); if (r0) { setPick(r0.accommodation_id); setRoom(r0.id); } }
+    });
   }, [patient?.id, stay?.id, stay?.accommodation?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!patient || !stay) return null;
   const nights = between(stay.start_date, stay.end_date);

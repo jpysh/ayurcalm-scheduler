@@ -13,13 +13,12 @@ import { Btn, DateRow, datePair, Empty, LinkRow, ListGroup, Loading, Row, Sectio
 import { AddGuestRooms, ManageGuestRooms } from "@/components/GuestRoomManage";
 import type { GuestRoomNight } from "@/components/CardSheets";
 
-type Guest = { stay_id: string; patient_id: string; name: string; start_date: string; end_date: string };
+type Guest = { stay_id: string; patient_id: string; name: string; start_date: string; end_date: string; from_room?: string | null; to_room?: string | null };
 type Room = GuestRoomNight & { guests: Guest[] };
 
 const DAY_MS = 86400000;
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
 const nights = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY_MS);
-const first = (name: string) => name.split(" ")[0];
 /** Rooms in their types, in the server's order (cheapest type first). */
 const byType = (rooms: Room[]) => rooms.reduce<[string, Room[]][]>((out, r) => {
   const last = out[out.length - 1];
@@ -108,9 +107,9 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
               const out = leaving(r);
               // What a room needs this morning first: who arrives, who leaves (the room to make up), then who is in.
               const facts: string[] = [
-                ...arriving(r).map((g) => `${first(g.name)} arrives · until ${dayText(g.end_date)}`),
+                ...arriving(r).map((g) => `${g.name} ${g.from_room ? `moves in from ${g.from_room}` : "arrives"} · until ${dayText(g.end_date)}`),
                 ...inIt.filter((g) => g.start_date !== day).map((g) => `${g.name} · until ${dayText(g.end_date)}`),
-                ...out.map((g) => `${first(g.name)} leaves${day === today ? " today" : ""}`),
+                ...out.map((g) => `${g.name} ${g.to_room ? `moves to ${g.to_room}` : "leaves"}${day === today ? " today" : ""}`),
               ];
               // Out of use (#563) first: it is why the room is not offered.
               if (r.out) facts.unshift(`Not available${r.out.reason ? `: ${r.out.reason}` : ""} · until ${dayText(r.out.until)}`);

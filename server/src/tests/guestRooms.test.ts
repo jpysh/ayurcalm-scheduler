@@ -34,7 +34,9 @@ async function main() {
     assert.equal((await call('POST', '/guest-rooms', { name: 'QA6', accommodation_id: house.id })).status, 409, 'a name already taken is refused');
 
     const room = await prisma.guestRoom.findUniqueOrThrow({ where: { name: 'QA1' } });
-    const stay = await prisma.patientStay.findFirstOrThrow({ where: { guest_room_id: null } });
+    // A past stay: guests from today on are moved before a retire (#1187), past ones keep the room.
+    const someone = await prisma.patient.findFirstOrThrow();
+    const stay = await prisma.patientStay.create({ data: { patient_id: someone.id, start_date: new Date('2020-03-01T00:00:00Z'), end_date: new Date('2020-03-05T00:00:00Z'), duration_days: 4 } });
     await prisma.patientStay.update({ where: { id: stay.id }, data: { guest_room_id: room.id } });
     assert.equal((await (await call('DELETE', `/guest-rooms/${room.id}`)).json()).retired, true, 'a room a stay used is retired');
     await prisma.patientStay.update({ where: { id: stay.id }, data: { guest_room_id: null } });
@@ -43,6 +45,31 @@ async function main() {
     const moved = await prisma.earlierGuestRoom.create({ data: { stay_id: stay.id, guest_room_id: left.id, until: stay.end_date } });
     assert.equal((await (await call('DELETE', `/guest-rooms/${left.id}`)).json()).retired, true, 'a room a stay moved out of is retired');
     await prisma.earlierGuestRoom.delete({ where: { id: moved.id } });
+    await prisma.patientStay.delete({ where: { id: stay.id } });
+
+    // A room with a guest ahead is not retired until they are moved; the list offers a free room of its type (#1187).
+    const going = await prisma.guestRoom.findUniqueOrThrow({ where: { name: 'QA5' } });
+    const ahead = await prisma.patientStay.create({ data: { patient_id: someone.id, start_date: new Date('2030-04-01T00:00:00Z'), end_date: new Date('2030-04-10T00:00:00Z'), duration_days: 9, guest_room_id: going.id } });
+    try {
+      const refused = await call('DELETE', `/guest-rooms/${going.id}`);
+      assert.equal(refused.status, 409, 'a room with a guest ahead is not retired');
+      const [guest] = (await refused.json()).guests;
+      assert.equal(guest.stay_id, ahead.id);
+      assert.equal(guest.move_to?.name.startsWith('QA'), true, 'the suggestion is a free room of the same type');
+      assert.notEqual(guest.move_to.id, going.id);
+      assert.equal((await (await call('GET', `/guest-rooms/${going.id}/ahead`)).json()).length, 1);
+      // Out of use for some nights (#1188): only a guest sleeping there on those nights is listed, moved from the first of them.
+      const window = await (await call('GET', `/guest-rooms/${going.id}/ahead?from=2030-04-05&to=2030-04-07`)).json();
+      assert.equal(window.length, 1);
+      assert.equal(window[0].move_from, '2030-04-05');
+      assert.equal((await (await call('GET', `/guest-rooms/${going.id}/ahead?from=2030-04-12&to=2030-04-14`)).json()).length, 0, 'nobody is there after they leave');
+      const move = await call('PUT', `/patients/${someone.id}/stays/${ahead.id}`, { guest_room_id: guest.move_to.id, move_from: guest.move_from });
+      assert.equal(move.status, 200, 'the suggested move is accepted');
+      assert.equal((await (await call('GET', `/guest-rooms/${going.id}/ahead`)).json()).length, 0, 'nobody is left once moved');
+      assert.equal((await (await call('DELETE', `/guest-rooms/${going.id}`)).json()).deleted, true, 'then the room goes');
+    } finally {
+      await prisma.patientStay.delete({ where: { id: ahead.id } });
+    }
     const spare = await prisma.guestRoom.findUniqueOrThrow({ where: { name: 'QA2' } });
     assert.equal((await (await call('DELETE', `/guest-rooms/${spare.id}`)).json()).deleted, true, 'an unused room is deleted');
     // Fewer beds than the guests already booked is refused, naming the night and who (#1186).
