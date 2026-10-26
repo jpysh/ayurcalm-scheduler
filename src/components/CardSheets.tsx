@@ -11,7 +11,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import {
   Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, LineSelect, Picker, QuickDates, Row, Seg, SwitchRow, Text, TextRow, Timeline,
-  dayText, noteText, money, toastUndo, Btn, saveError, deleteAll, undoWrite, EXAMPLE_PRICE, ownNote } from "@/components/kit";
+  dayText, noteText, money, NightChips, toastUndo, Btn, saveError, deleteAll, undoWrite, EXAMPLE_PRICE, ownNote } from "@/components/kit";
 
 const DAY_MS = 86400000;
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
@@ -282,9 +282,9 @@ export function PackageSheet({ patient, stay, onClose, onSaved, editList, matchS
 }
 
 /** A guest room for some nights (#456), as `/guest-rooms/free` gives it. */
-export type GuestRoomNight = { id: string; name: string; beds: number; accommodation_id: string; type: string; free: boolean; full_on: { date: string; names: string[] } | null; out: { date: string; until: string; reason: string | null } | null };
+export type GuestRoomNight = { id: string; name: string; beds: number; accommodation_id: string; type: string; price_per_day?: number; free: boolean; full_on: { date: string; names: string[] } | null; out: { date: string; until: string; reason: string | null } | null };
 /** Taken rooms say by whom and from when, so a clash is never picked by accident. */
-export const takenBy = (r: GuestRoomNight) => r.out ? `Out of use${r.out.reason ? `: ${r.out.reason}` : ""} · ${dayText(r.out.date)}` : r.full_on ? `${r.full_on.names.join(" & ")} · ${dayText(r.full_on.date)}` : "";
+export const takenBy = (r: GuestRoomNight) => r.out ? `Out of use${r.out.reason ? `: ${r.out.reason}` : ""} · ${dayText(r.out.date)}` : r.full_on ? `${r.full_on.names.join(" & ")} · taken from ${dayText(r.full_on.date)}` : "";
 
 export function AccommodationSheet({ patient, stay, today, onClose, onSaved, editList }: { patient: Who | null; stay: CardStay | null; today: string; onClose: () => void; onSaved: () => void; editList: () => void }) {
   const [list, setList] = useState<House[] | null>(null);
@@ -415,7 +415,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
   const changed = start !== target.start || end !== target.end;
   const lines = [
     missed ? (late === "cancel" ? `${plural(missed, "treatment")} before ${dayText(start)} ${missed === 1 ? "is" : "are"} cancelled, "arrived late"; the leaving day stays.` : `Every treatment moves ${plural(Math.round((Date.parse(start) - Date.parse(target.start)) / DAY_MS), "day")} later with the same therapist, room and time; where one clashes, the day's check offers the fix.`) : "",
-    delta < 0 ? `${plural(-delta, "day")} shorter.${cancels ? ` ${plural(cancels, "treatment")} after ${dayText(end)} will be marked cancelled (stay shortened) and stay in the record.` : ""} ${end < target.end ? "Meals stop that day." : `Meals start on ${dayText(start)}.`}` : "",
+    delta < 0 ? `${plural(-delta, "day")} shorter.${cancels ? ` ${plural(cancels, "treatment")} after ${dayText(end)} will be marked cancelled (stay shortened) and stay in the record.` : ""} ${end < target.end ? `Meals stop that day.${target.accommodation?.room ? ` ${target.accommodation.room.name} is free from ${dayText(end)}.` : ""}` : `Meals start on ${dayText(start)}.`}` : "",
     delta > 0 ? `${plural(delta, "day")} longer. Meals carry on to ${dayText(end)}.` : "",
     changed && target.accommodation ? `Accommodation: ${plural(between(start, end), "night")}, ${money(between(start, end) * target.accommodation.price_per_day)}.` : "",
     changed && target.package && target.package.days !== days ? `Package: ${target.package.days} days; the stay is now ${days}.` : "",
@@ -463,8 +463,9 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
       note={target.id ? `Now ${dayText(target.start)} to ${dayText(target.end)} · ${plural(oldDays, "day")}` : "Arriving, leaving, and the rest follows."}
       foot={<Foot label={label} ok={end >= start && (changed || !target.id)} busy={busy} save={save} />}>
       <div className="border-t border-border">
-        <ChangeLine label={start > today ? "Arriving" : "Arrived"} value={dayText(start)} select={<LineDate label={start > today ? "Arriving" : "Arrived"} value={start} onChange={(v) => { setStart(v); if (end < v) setEnd(v); }} />} />
+        <ChangeLine label={start > today || !target.id ? "Arriving" : "Arrived"} value={dayText(start)} select={<LineDate label={start > today || !target.id ? "Arriving" : "Arrived"} value={start} onChange={(v) => { setStart(v); if (end < v) setEnd(v); }} />} />
         <ChangeLine label="Leaving" value={dayText(end)} select={<LineDate label="Leaving" value={end} min={start} onChange={setEnd} />} />
+        {!missed ? <NightChips from={target.id ? target.end : start} value={end} steps={target.id ? [1, 3, 7] : [7, 14, 21]} plus={!!target.id} onChange={setEnd} /> : null}
         {missed ? (() => {
           const by = Math.round((Date.parse(start) - Date.parse(target.start)) / DAY_MS);
           return <div className="px-1 py-3"><Seg<"cancel" | "shift"> value={late} onChange={(v) => { setLate(v); setEnd(v === "shift" ? addDays(target.end, by) : target.end); }}
@@ -483,7 +484,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
           <div className="border-t border-border">
             <ChangeLine label="Guest room" value={r ? `${r.name} · ${r.type}` : freeRooms.some((x) => x.free) ? "Not yet" : "None free for these nights"} faint={!r}
               select={<LineSelect label="Guest room" busyLabel="Taken" value={guestRoom} onChange={setGuestRoom}
-                free={[...freeRooms.filter((x) => x.free).map((x) => ({ id: x.id, name: x.name, tag: x.type })), { id: "", name: "Not yet" }]}
+                free={[{ id: "", name: "Not chosen yet" }, ...freeRooms.filter((x) => x.free).map((x) => ({ id: x.id, name: x.name, tag: x.type }))]}
                 busy={freeRooms.filter((x) => !x.free).map((x) => ({ id: x.id, name: x.name, why: takenBy(x) }))} />} />
           </div>
         );

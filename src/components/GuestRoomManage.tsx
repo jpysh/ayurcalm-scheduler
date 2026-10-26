@@ -9,7 +9,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import { BottomSheet, Btn, ChangeLine, Empty, Foot, Group, ItemRow, ListGroup, LinkRow, Loading, Row, Seg, Text, dayText, noteText } from "@/components/kit";
 
-type Type = { id: string; name: string; is_active: boolean };
+type Type = { id: string; name: string; is_active: boolean; price_per_day?: number };
 type Room = { id: string; name: string; accommodation_id: string; beds: number; is_active: boolean };
 /** A guest with nights in the room from today on (#1187), and the room the server suggests. */
 type Ahead = { stay_id: string; patient_id: string; name: string; from: string; to: string; move_from: string; move_to: { id: string; name: string; type: string } | null };
@@ -109,7 +109,9 @@ export function ManageGuestRooms({ open, onOpenChange, typeId, onChanged, openTy
   const changed = () => { load(); onChanged(); };
   const typeName = (id: string) => types.find((t) => t.id === id)?.name ?? "";
   const shown = (rooms ?? []).filter((r) => !typeId || r.accommodation_id === typeId);
-  const groups = [...new Set(shown.map((r) => r.accommodation_id))].map((id) => ({ id, rooms: shown.filter((r) => r.accommodation_id === id) }));
+  // Types cheapest first, as the Guest rooms screen and the sheet order them (#1212).
+  const price = (id: string) => types.find((t) => t.id === id)?.price_per_day ?? 0;
+  const groups = [...new Set(shown.map((r) => r.accommodation_id))].sort((a, b) => price(a) - price(b) || typeName(a).localeCompare(typeName(b))).map((id) => ({ id, rooms: shown.filter((r) => r.accommodation_id === id) }));
   const save = async () => {
     if (!edit) return;
     setBusy(true);

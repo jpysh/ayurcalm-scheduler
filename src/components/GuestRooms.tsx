@@ -9,7 +9,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import PageHead from "@/components/PageHead";
 import { WeekStrip } from "@/components/BottomBar";
-import { Btn, DateRow, datePair, Empty, LinkRow, ListGroup, Loading, Row, SectionHead, dayText, noteText } from "@/components/kit";
+import { Btn, DateRow, datePair, Empty, LinkRow, ListGroup, Loading, Row, SectionHead, dayText, money, noteText } from "@/components/kit";
 import { AddGuestRooms, ManageGuestRooms } from "@/components/GuestRoomManage";
 import type { GuestRoomNight } from "@/components/CardSheets";
 
@@ -86,7 +86,7 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
             <Btn kind="quiet" inline className="-mr-2" onClick={() => { setFrom(""); setTo(""); }}>Clear</Btn>
           </div>
           {range === null ? <Loading rows={3} /> : range.some((r) => r.free) ? byType(range.filter((r) => r.free)).map(([type, rooms]) => (
-            <ListGroup key={type} title={type} count={`${rooms.length} free`}>
+            <ListGroup key={type} title={`${type}${rooms[0].price_per_day ? ` · ${money(rooms[0].price_per_day)} a night` : ""}`} count={`${rooms.length} free`}>
               {rooms.map((r) => <Row key={r.id} title={r.name} facts={r.beds > 1 ? `${r.beds} beds` : undefined} trailing="Add a patient ›" onClick={() => newPatient({ arriving: from, leaving: to, room: r.id })} />)}
             </ListGroup>
           )) : <Empty text="Every guest room is taken on at least one of those nights. Try other dates." />}
@@ -112,7 +112,7 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
                 ...out.map((g) => `${g.name} ${g.to_room ? `moves to ${g.to_room}` : "leaves"}${day === today ? " today" : ""}`),
               ];
               // Out of use (#563) first: it is why the room is not offered.
-              if (r.out) facts.unshift(`Not available${r.out.reason ? `: ${r.out.reason}` : ""} · until ${dayText(r.out.until)}`);
+              if (r.out) facts.unshift(`Out of use${r.out.reason ? `: ${r.out.reason}` : ""} · until ${dayText(r.out.until)}`);
               const spare = r.beds - inIt.length;
               return <Row key={r.id} title={r.name} facts={facts.join(" · ") || undefined}
                 trailing={r.out && !inIt.length ? "Out" : !inIt.length ? "Free" : spare > 0 ? `${spare} bed free` : undefined}

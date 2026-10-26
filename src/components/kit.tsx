@@ -539,6 +539,17 @@ export const money = (n: number) => `${currency}${/[A-Za-z]$/.test(currency) ? "
  * Today and Tomorrow above the phone's own calendar: most changes start on one of them.
  * The chosen day is shown on the calendar row either way.
  */
+/** One-tap stay lengths under a Leaving date (#1212): "7 · 14 · 21 nights" from the arrival, or "+1 · +3 · +7" on a stay being changed. */
+export function NightChips({ from, value, steps, plus, onChange }: { from: string; value: string; steps: number[]; plus?: boolean; onChange: (iso: string) => void }) {
+  const at = (n: number) => new Date(Date.parse(`${from}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+  return (
+    <div className="flex gap-1.5 px-1 py-2">
+      {steps.map((n) => <button key={n} type="button" aria-pressed={value === at(n)} onClick={() => onChange(at(n))} className={chip}>{plus ? `+${n}` : n}</button>)}
+      <span className="self-center text-sm text-muted-foreground">nights</span>
+    </div>
+  );
+}
+
 export function QuickDates({ label, value, today, onChange, min, max }: { label: string; value: string; today: string; onChange: (iso: string) => void; min?: string; max?: string }) {
   const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
   const ok = (iso: string) => (!min || iso >= min) && (!max || iso <= max);

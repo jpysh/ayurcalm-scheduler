@@ -30,7 +30,7 @@ assert.equal(by.T2.line, 'Krishna Singh · until Mon 12 Oct · 1 bed free');
 assert.equal(by.T3.kind, 'leaving');
 assert.equal(by.T3.line, 'Make up · Sneha Banerjee leaves today');
 assert.equal(by.T4.kind, 'turnover');
-assert.match(by.T4.line, /^Make up, then ready for Ishita Shah \(arrives today\)/);
+assert.match(by.T4.line, /^Make up after Asha Rao leaves, then ready for Ishita Shah \(arrives today\)/);
 assert.equal(by.T5.kind, 'arriving');
 assert.equal(by.T6.kind, 'free');
 assert.equal(by.N1.line, 'Free');
