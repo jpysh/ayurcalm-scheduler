@@ -123,7 +123,7 @@ runs `qa` plus `npm run test:e2e` (sign-in, every tab, the day sheet, in
 Chromium) on any pull request that touches `server/` or the Docker files, and on
 every merge; other pull requests get the builds and the database-free tests only.
 
-## Tests and checks (detail: `docs/testing.md`)
+## Tests and checks (detail: `docs/testing.md`; what runs when, releases and backups: `docs/qa-plan.md`)
 
 - **Blocks a merge:** builds, `tsc` at 0 errors (`npx tsc -p tsconfig.app.json --noEmit`), `npm run qa` (server rule tests) and the ten `@smoke` browser tests. Nothing else blocks.
 - **Advisory, nightly (issue "Nightly browser tests"):** every other browser test and the tap-count report. Never fixed inside a feature PR; one weekly "test repair" PR clears them.
