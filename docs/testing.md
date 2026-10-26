@@ -75,7 +75,7 @@ recurred, and what stops them recurring:
 
 | Class (examples) | Guard |
 |---|---|
-| Clock: phone's zone against the centre's; after closing; midnight | nightly zone matrix (Pacific/Pago_Pago, America/New_York, Pacific/Auckland) on the day, leave and guest-link screens; `tests/e2e/leaveLists.spec.ts`: a part of today already ended is not listed (#743); `tests/e2e/dayByDate.spec.ts`: yesterday and tomorrow taken by date, never the clock minus 24 hours (#784) |
+| Clock: phone's zone against the centre's; after closing; midnight | nightly zone matrix (Pacific/Pago_Pago, America/New_York, Pacific/Auckland) on the day, leave and guest-link screens; `tests/e2e/leaveLists.spec.ts`: a part of today already ended is not listed (#743); `tests/e2e/dayByDate.spec.ts`: yesterday and tomorrow taken by date, never the clock minus 24 hours (#784); `tests/e2e/stayZone.spec.ts`: a stay's sheet (Arriving or Arrived, Leaves today, Did not arrive) at 23:30 and 00:30 India time from phones in India, New York and Auckland (#1197) |
 | Clock on the server: the machine's UTC date read as the centre's today (#732) | `server/src/tests/centreDay.test.ts` in `npm run qa`: no `new Date().toDateString()`, `.getDate()`, `.toISOString().slice(0, 10)` and the like outside tests |
 | A screen's words or number disagree with the server's ("16 will go", the server deletes 66; "pill shows 12", it shows 5) | a server-computed count rendered, never re-derived; a test asserting both read the same function |
 | Seed hides first-day gaps (no therapies asked, examples not marked) | the sign-up-to-printed-sheet walk, run before a release |
