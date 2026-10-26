@@ -139,6 +139,17 @@ async function main() {
     const both = await twice('/patients', { name: `${TAG} Rival`, gender: 'female', stay: { start_date: '2030-09-01', end_date: '2030-09-03' }, guest_room_id: two });
     assert.deepEqual(both.map((r) => r.status).sort(), [409, 409], 'the last bed, once taken, is refused to everyone after');
 
+    // A returning guest's New stay takes its room in the same save (#1190), checked like a new resident's.
+    const again = await call('POST', `/patients/${solo.id}/stays`, { start_date: '2030-10-01', end_date: '2030-10-05', guest_room_id: two });
+    assert.equal(again.guest_room_id, two, 'the New stay has its room');
+    const clashAgain = await raw('POST', `/patients/${asha.id}/stays`, { start_date: '2030-10-02', end_date: '2030-10-04', guest_room_id: two });
+    assert.equal(clashAgain.status, 409, 'a taken room is refused for a New stay too');
+    // A day patient sleeps at home (#1189): giving them a room is refused, never saved unchecked.
+    const day = await (await raw('POST', '/patients', { name: `${TAG} Daypatient`, gender: 'female', on_site: false, stay: { start_date: '2030-10-01', end_date: '2030-10-05' } })).json();
+    const roomForDay = await raw('PUT', `/patients/${day.id}/stays/${day.Stays[0].id}`, { guest_room_id: two, move_from: '2030-10-01' });
+    assert.equal(roomForDay.status, 409);
+    assert.equal((await roomForDay.json()).reason, 'NOT_ON_SITE');
+
     console.log('guest room stays: ok');
   } finally {
     await tidy(prisma).catch(() => {});
