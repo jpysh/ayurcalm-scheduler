@@ -25,6 +25,8 @@ export function buildGuestRoomsSheet(rooms: SheetRoom[], day: string) {
   const groups: { type: string; rows: RoomRow[] }[] = [];
   let sharedMakeUp = 0;
   let sharedArriving = 0;
+  // A shared room where one bed is left and another guest arrives into it the same day (#1209): that bed is made up first too.
+  const handover: string[] = [];
   for (const r of rooms) {
     const sleeping = r.guests.filter((g) => g.start_date <= day && day < g.end_date);
     const arriving = sleeping.filter((g) => g.start_date === day);
@@ -42,6 +44,7 @@ export function buildGuestRoomsSheet(rooms: SheetRoom[], day: string) {
       const spare = r.beds - sleeping.length;
       if (leaving.length) sharedMakeUp++;
       if (arriving.length) sharedArriving++;
+      if (leaving.length && arriving.length) handover.push(r.name);
       row = { room: r.name, kind: 'staying', line: `${until(staying)}${leaving.length ? ` · ${list(leaving.map((g) => g.name))} leaves today` : ''}${arriving.length ? ` · ready a bed for ${until(arriving, ' (arrives today)')}` : ''}${spare > 0 && r.beds > 1 && !r.out ? ` · ${spare} bed free` : ''}` };
     } else row = { room: r.name, kind: 'free', line: 'Free' };
     // A guest still in a room taken out of use must move: the sheet says so as the inbox does (#624).
@@ -54,7 +57,7 @@ export function buildGuestRoomsSheet(rooms: SheetRoom[], day: string) {
   return {
     groups,
     counts: { rooms: all.length, makeUp: n(['turnover', 'leaving']) + sharedMakeUp, arriving: n(['turnover', 'arriving']) + sharedArriving, staying: n(['staying']), free: n(['free']), out: n(['out']) },
-    first: all.filter((r) => r.kind === 'turnover').map((r) => r.room),
+    first: all.filter((r) => r.kind === 'turnover' || handover.includes(r.room)).map((r) => r.room),
   };
 }
 

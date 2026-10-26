@@ -14,6 +14,8 @@ const rooms = [
   { name: 'A1', beds: 2, type: 'Trishul House', guests: [g('Nisha Iyer', '2026-10-01', '2026-10-12'), g('Meera Reddy', '2026-10-01', '2026-10-08')] },
   { name: 'A2', beds: 2, type: 'Trishul House', guests: [g('Meera Patel', '2026-10-01', '2026-10-18'), g('Meera Iyer', '2026-10-01', '2026-10-11')] },
   { name: 'A3', beds: 2, type: 'Trishul House', guests: [g('Diya Yadav', '2026-10-01', '2026-10-12'), g('Arjun Das', '2026-10-08', '2026-10-15')] },
+  // One bed is left and another guest arrives into it while a third stays on (#1209).
+  { name: 'A4', beds: 2, type: 'Trishul House', guests: [g('Kavya Nair', '2026-10-01', '2026-10-20'), g('Ravi Menon', '2026-10-01', '2026-10-08'), g('Lata Joshi', '2026-10-08', '2026-10-16')] },
   { name: 'N1', beds: 1, type: 'Nanda House', guests: [] },
   { name: 'N2', beds: 1, type: 'Nanda House', guests: [], out: { reason: 'No electricity' } },
   { name: 'N3', beds: 1, type: 'Nanda House', guests: [g('Rohan Das', '2026-10-01', '2026-10-14')], out: { reason: 'Leak' } },
@@ -41,8 +43,8 @@ assert.equal(by.N2.kind, 'out');
 assert.equal(by.N2.line, 'Out of use: No electricity');
 assert.equal(by.N3.line, 'Rohan Das · until Wed 14 Oct · out of use: Leak, needs another room');
 assert.equal(by.N4.line, 'Tara Bose · until Wed 14 Oct · out of use, needs another room'); // no spare bed in a room nobody may sleep in (#624)
-assert.deepEqual(s.counts, { rooms: 13, makeUp: 3, arriving: 3, staying: 7, free: 2, out: 1 });
-assert.deepEqual(s.first, ['T4']);
+assert.deepEqual(s.counts, { rooms: 14, makeUp: 4, arriving: 4, staying: 8, free: 2, out: 1 });
+assert.deepEqual(s.first, ['T4', 'A4'], 'a bed that changes hands today is made up first too');
 assert.deepEqual(s.groups.map((x) => x.type), ['Trishul House', 'Nanda House']);
 
 // Out of use is the whole days from the first to the last, both included; the first such night in the asked nights wins.
