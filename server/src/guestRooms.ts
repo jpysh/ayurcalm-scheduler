@@ -26,7 +26,7 @@ export const roomOn = (stay: { guest_room_id: string | null; EarlierRooms?: Earl
   [...(stay.EarlierRooms ?? [])].sort((a, b) => a.until.getTime() - b.until.getTime()).find((e) => d < e.until.getTime())?.guest_room_id ?? stay.guest_room_id;
 
 /** Each room of a stay with the dates it was in it: an earlier room ends on the day of the move, the next starts on it. */
-function spans(stay: { start_date: Date; end_date: Date; guest_room_id: string | null; EarlierRooms: Earlier[] }) {
+export function spans(stay: { start_date: Date; end_date: Date; guest_room_id: string | null; EarlierRooms: Earlier[] }) {
   const out: { room: string | null; start: Date; end: Date }[] = [];
   let start = stay.start_date;
   for (const e of [...stay.EarlierRooms].sort((a, b) => a.until.getTime() - b.until.getTime())) { out.push({ room: e.guest_room_id, start, end: e.until }); start = e.until; }

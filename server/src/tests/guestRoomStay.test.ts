@@ -25,6 +25,7 @@ async function tidy(prisma: PrismaClient) {
   await prisma.appointment.deleteMany({ where: { patient_id: { in: ids } } });
   await prisma.patientStay.deleteMany({ where: { patient_id: { in: ids } } });
   await prisma.patient.deleteMany({ where: { id: { in: ids } } });
+  await prisma.timeOff.deleteMany({ where: { description: TAG } });
   await prisma.accommodationType.deleteMany({ where: { name: { startsWith: TAG } } });
 }
 
@@ -102,6 +103,13 @@ async function main() {
     await call('PUT', sunilStay, { guest_room_id: await room('2'), move_from: '2030-05-07' });
     assert.equal((await add('Tara', '2030-05-03', '2030-05-05', await room('1'))).status, 409, 'the old room stays taken on the nights before the move');
     assert.equal((await add('Tara', '2030-05-07', '2030-05-09', await room('1'))).status, 201, 'and is free from the move');
+    // Out of use is read per night (#1177): the room moved to before the move is no warning, the room left after it is one.
+    const sunilOut = async () => (await call('GET', '/attention?date=2030-05-01')).items.filter((i: { who: string; rule: string }) => i.rule === 'room_out' && i.who === `${TAG} Sunil`).map((i: { what: string }) => i.what);
+    await call('POST', '/timeoff', { entity_type: 'guest_room', entity_id: await room('2'), date: '2030-05-03', description: TAG });
+    assert.deepEqual(await sunilOut(), [], 'the room they move to later is not theirs yet');
+    await call('POST', '/timeoff', { entity_type: 'guest_room', entity_id: await room('1'), date: '2030-05-04', description: TAG });
+    assert.deepEqual(await sunilOut(), [`${TAG}1 is not available from Sat 4 May: ${TAG}`], 'the room they are in before the move is');
+    await prisma.timeOff.deleteMany({ where: { description: TAG } });
     writeFileSync(sheet, await generateGuestRoomsSheetPdf('2030-05-07', prisma));
     const moveDay = execFileSync('pdftotext', ['-raw', sheet, '-']).toString().replace(/\s+/g, ' ');
     assert.ok(moveDay.includes(`${TAG} Sunil leaves today`) || moveDay.includes(`Make up, then ready for ${TAG} Tara`), `on the day of the move the old room is made up: ${moveDay}`);

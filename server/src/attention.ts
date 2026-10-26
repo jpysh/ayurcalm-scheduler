@@ -12,7 +12,7 @@ import { centreClock } from './availability.js';
 import { checkDay, dayName } from './dayCheck.js';
 import { loadDay, staffDay } from './appointmentGuard.js';
 import { loadDietsForDay } from './dietResolution.js';
-import { firstFreeRoom, nightsEnd, outNight } from './guestRooms.js';
+import { firstFreeRoom, nightsEnd, outNight, spans } from './guestRooms.js';
 
 const DAY_MS = 86400000;
 
@@ -153,18 +153,24 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
     }
   }
   // A room taken out of use (#563) with a guest already in it, now or booked: they need another room.
-  const inRooms = await prisma.patientStay.findMany({ where: { guest_room_id: { not: null }, on_site: true, end_date: { gte: day } }, include: { Patient: { select: { id: true, name: true } }, GuestRoom: { select: { name: true } } } });
+  const inRooms = await prisma.patientStay.findMany({ where: { OR: [{ guest_room_id: { not: null } }, { EarlierRooms: { some: {} } }], on_site: true, end_date: { gte: day } }, include: { Patient: { select: { id: true, name: true } }, GuestRoom: { select: { name: true } }, EarlierRooms: { include: { GuestRoom: { select: { name: true } } } } } });
   if (inRooms.length) {
     const off = await prisma.timeOff.findMany({ where: { entity_type: 'guest_room' } });
     for (const s of inRooms) {
-      const hit = outNight(off, s.guest_room_id!, s.start_date > day ? s.start_date : day, nightsEnd(s.start_date, s.end_date));
-      if (!hit) continue;
-      const what = `${s.GuestRoom!.name} is not available from ${dayName(hit.date).replace(',', '')}${hit.reason ? `: ${hit.reason}` : ''}`;
+      // A guest moving mid-stay (#1177) is checked in each room on the nights they sleep in it.
+      const slept = spans(s).flatMap((p) => {
+        const end = p.room === s.guest_room_id && p.end === s.end_date ? nightsEnd(s.start_date, s.end_date) : p.end;
+        const hit = p.room && end > day ? outNight(off, p.room, p.start > day ? p.start : day, end) : null;
+        return hit ? [{ hit, room: p.room!, name: p.room === s.guest_room_id ? s.GuestRoom!.name : s.EarlierRooms.find((e) => e.guest_room_id === p.room)!.GuestRoom.name }] : [];
+      })[0];
+      if (!slept) continue;
+      const { hit } = slept;
+      const what = `${slept.name} is not available from ${dayName(hit.date).replace(',', '')}${hit.reason ? `: ${hit.reason}` : ''}`;
       // Same type first, then any: the room is offered, never given until tapped.
       const to = (await firstFreeRoom(prisma, s.start_date, s.end_date, s.accommodation_id, s.id)) ?? (await firstFreeRoom(prisma, s.start_date, s.end_date, null, s.id));
       if (!to) { add(rule('room_out'), s, `${what}. No room is free for those nights`, 'card'); continue; }
       add(rule('room_out'), s, what, 'move');
-      found[found.length - 1].move = { patient_id: s.Patient.id, stay_id: s.id, room_id: to.id, room_name: to.name, from_room_id: s.guest_room_id! };
+      found[found.length - 1].move = { patient_id: s.Patient.id, stay_id: s.id, room_id: to.id, room_name: to.name, from_room_id: slept.room };
     }
   }
   // The doctor's follow-up day (#487): due from that day, for a month, until marked done.
