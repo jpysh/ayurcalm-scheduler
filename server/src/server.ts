@@ -625,7 +625,7 @@ app.get('/patients/:id/stays', async (req: Request, res: Response) => {
 app.post('/patients/:id/stays', async (req: Request, res: Response) => {
   const id = String(req.params.id);
   // A returning guest's New stay starts on their last package (#437) and, like a new patient, in a first consultation (#575).
-  const { package_id, consultation } = z.object({ package_id: z.string().uuid().nullish(), consultation: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), start_time: z.string().regex(/^\d\d:\d\d$/), staff_id: z.string().uuid(), room_id: z.string().uuid() }).optional() }).parse(req.body);
+  const { package_id, guest_room_id, consultation } = z.object({ package_id: z.string().uuid().nullish(), guest_room_id: z.string().uuid().nullish(), consultation: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), start_time: z.string().regex(/^\d\d:\d\d$/), staff_id: z.string().uuid(), room_id: z.string().uuid() }).optional() }).parse(req.body);
   const dates = staySchema.parse(req.body);
   const stay = stayData(dates);
   const consult = consultation ? await prisma.therapy.findFirst({ where: { is_consultation: true } }) : null;
@@ -640,13 +640,17 @@ app.post('/patients/:id/stays', async (req: Request, res: Response) => {
   const created = await prisma.$transaction(async (tx) => {
     await lockStays(tx);
     const overlap = await ownStayOverlap(tx, id, stay.start_date, stay.end_date);
-    if (overlap) return { overlap };
+    if (overlap) return { refused: overlap };
+    // The room is given in the same save as the stay (#1190), checked like a new resident's.
+    const room = guest_room_id ? await tx.guestRoom.findUnique({ where: { id: guest_room_id } }) : null;
+    const refused = room && await guestRoomRefusal(tx, room.id, stay.start_date, stay.end_date);
+    if (refused) return { refused };
     if (lapsed) await tx.patient.update({ where: { id }, data: { link_token: null } });
-    const made = await tx.patientStay.create({ data: { patient_id: id, package_id: package_id ?? null, ...stay } });
+    const made = await tx.patientStay.create({ data: { patient_id: id, package_id: package_id ?? null, ...stay, ...(room ? { guest_room_id: room.id, accommodation_id: room.accommodation_id } : {}) } });
     if (consultation && consult) await tx.appointment.create({ data: { patient_id: id, therapy_id: consult.id, staff_id: consultation.staff_id, room_id: consultation.room_id, scheduled_date: new Date(`${consultation.date}T00:00:00.000Z`), start_time: consultation.start_time, duration_minutes: consult.duration_minutes, co_staff_ids: [], session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
     return made;
   });
-  if ('overlap' in created) { res.status(409).json(created.overlap); return; }
+  if ('refused' in created) { res.status(409).json(created.refused); return; }
   res.status(201).json(created);
 });
 
@@ -721,6 +725,8 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
     await lockStays(tx);
     const overlap = await ownStayOverlap(tx, id, dates.start_date, dates.end_date, stay.id);
     if (overlap) return { refused: overlap };
+    // A day patient sleeps at home (#1189): no guest room, so no bed taken without a check.
+    if (roomId && !stay.on_site && extras.guest_room_id) return { refused: { reason: 'NOT_ON_SITE', message: 'A day patient has no guest room. Mark them as staying here first.' } };
     if (roomId && stay.on_site) {
       const refused = await guestRoomRefusal(tx, roomId, checkFrom, dates.end_date, stay.id);
       if (refused) return { refused };

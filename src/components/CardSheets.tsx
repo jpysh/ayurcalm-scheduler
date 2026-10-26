@@ -367,6 +367,20 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     return () => { stale = true; };
   }, [patient?.id, target?.id, start, end]); // eslint-disable-line react-hooks/exhaustive-deps
   const visit = !target?.id && !later ? slots[0] : undefined;
+  // A New stay takes its guest room in the same save (#1190): the first free for every night, unless the admin chose another still free.
+  const [freeRooms, setFreeRooms] = useState<GuestRoomNight[]>([]);
+  const [guestRoom, setGuestRoom] = useState("");
+  useEffect(() => {
+    if (!target || target.id || !start || end < start) { setFreeRooms([]); return; }
+    let stale = false;
+    fetchJsonWithTimeout<GuestRoomNight[]>(`${API_BASE}/guest-rooms/free?from=${start}&to=${end}`).then((r) => {
+      if (stale) return;
+      const list = Array.isArray(r) ? r : [];
+      setFreeRooms(list);
+      setGuestRoom((was) => (list.some((x) => x.id === was && x.free) ? was : list.find((x) => x.free)?.id ?? ""));
+    });
+    return () => { stale = true; };
+  }, [target?.id, start, end]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (target) { setStart(cover && target.id && cover < target.start ? cover : target.start); setEnd(cover && target.id && cover > target.end ? cover : target.end); setCancels(0); } }, [target?.id, target?.start, target?.end, cover]); // eslint-disable-line react-hooks/exhaustive-deps
   // What a shorter stay would cancel, asked of the server before the tap.
   // New dates re-check the guest room (#456): taken on a night, the save moves them to the room the server names.
@@ -395,7 +409,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     setBusy(true);
     const res = target.id
       ? await saveStay(patient.id, target.id, { start_date: start, end_date: end, cancel_after: cancels > 0, ...(room ? { guest_room_id: room.move_to?.id ?? null } : {}) })
-      : await fetch(`${API_BASE}/patients/${patient.id}/stays`, { method: "POST", headers: json, body: JSON.stringify({ start_date: start, end_date: end, package_id: target.package?.id ?? null, ...(visit ? { consultation: { date: visit.date, start_time: visit.start_time, staff_id: visit.staff_id, room_id: visit.room_id } } : {}) }) });
+      : await fetch(`${API_BASE}/patients/${patient.id}/stays`, { method: "POST", headers: json, body: JSON.stringify({ start_date: start, end_date: end, package_id: target.package?.id ?? null, guest_room_id: guestRoom || null, ...(visit ? { consultation: { date: visit.date, start_time: visit.start_time, staff_id: visit.staff_id, room_id: visit.room_id } } : {}) }) });
     setBusy(false);
     if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The stay was not saved. Try again."); return; }
     const out = await res.json().catch(() => ({}));
@@ -405,7 +419,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     }, onSaved) : null;
     const text = target.id
       ? `${first(patient.name)}: ${dayText(start)} to ${dayText(end)}${out.cancelled ? `, ${plural(out.cancelled, "treatment")} cancelled` : ""}`
-      : `Stay added for ${first(patient.name)}: ${dayText(start)} to ${dayText(end)}${visit ? `, consultation ${dayText(visit.date)} ${visit.start_time}` : ""}`;
+      : `Stay added for ${first(patient.name)}: ${dayText(start)} to ${dayText(end)}${guestRoom ? `, ${freeRooms.find((x) => x.id === guestRoom)?.name}` : ""}${visit ? `, consultation ${dayText(visit.date)} ${visit.start_time}` : ""}`;
     if (undo) toastUndo(text, undo); else toast.success(text);
     onSaved();
     onClose();
@@ -433,6 +447,17 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
       </div>
       {target.id && start <= today && end > today ? <Btn kind="quiet" inline className="-ml-2 mt-1" onClick={() => setEnd(today)}>Leaves today</Btn> : null}
       {target.id && target.start <= today && target.end >= today ? <Btn kind="quiet" inline className="-ml-2 mt-1" disabled={busy} onClick={didNotArrive}>Did not arrive</Btn> : null}
+      {!target.id && freeRooms.length ? (() => {
+        const r = freeRooms.find((x) => x.id === guestRoom);
+        return (
+          <div className="border-t border-border">
+            <ChangeLine label="Guest room" value={r ? `${r.name} · ${r.type}` : freeRooms.some((x) => x.free) ? "Not yet" : "None free for these nights"} faint={!r}
+              select={<LineSelect label="Guest room" busyLabel="Taken" value={guestRoom} onChange={setGuestRoom}
+                free={[...freeRooms.filter((x) => x.free).map((x) => ({ id: x.id, name: x.name, tag: x.type })), { id: "", name: "Not yet" }]}
+                busy={freeRooms.filter((x) => !x.free).map((x) => ({ id: x.id, name: x.name, why: takenBy(x) }))} />} />
+          </div>
+        );
+      })() : null}
       {!target.id && slots.length ? (
         <div className="mt-3 rounded-xl border p-3">
           <div className="flex items-center justify-between gap-3">

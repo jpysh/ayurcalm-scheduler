@@ -71,7 +71,7 @@ run doctors            "A doctor and their consultations print on the doctor rot
 run daySheet           "The day sheet lists every resident, treatment time and therapist, in its groups, with no empty boxes"
 run unstaffedSheets   "A treatment booked with a therapist who is off shows, marked, on both the patient sheet and the therapist rota"
 run guestRooms        "Guest rooms: a range adds them all, a taken name is refused, a used room is retired, and no room holds more than its beds"
-run guestRoomStay     "A guest room is refused on any night it is full, naming the free ones; it frees on the leaving day, takes a couple in two beds, is re-checked when dates change, a move mid-stay is checked only from the move, a double tap saves once, and the room prints beside the name"
+run guestRoomStay     "A guest room is refused on any night it is full, naming the free ones; it frees on the leaving day, takes a couple in two beds, is re-checked when dates change, a move mid-stay is checked only from the move, a double tap saves once, a New stay takes its room, a day patient gets none, and the room prints beside the name"
 run guestRoomRange    "Is a room free: a guest room is free over a range only with a bed on every night, the leaving night counts as free"
 run starters          "A new centre is offered starter courses built from its own therapies until it saves its own"
 run nextWeek          "Plan next week repeats this week a week on, a swap changes one line, and Book all books every line and the review or nothing; a once-a-course therapy is left out, and a second one is asked about"
