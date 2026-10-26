@@ -94,10 +94,11 @@ export async function guestRoomsFor(db: Db, from: Date, to: Date, except?: strin
     }),
     db.timeOff.findMany({ where: { entity_type: 'guest_room' } }),
   ]);
+  const names = new Map((await db.guestRoom.findMany({ select: { id: true, name: true } })).map((r) => [r.id, r.name]));
   rooms.sort((a, b) => a.Accommodation.price_per_day - b.Accommodation.price_per_day || a.Accommodation.name.localeCompare(b.Accommodation.name) || a.name.localeCompare(b.name, 'en', { numeric: true }));
   return rooms.map((r) => {
     // A guest moved mid-stay is two guests to housekeeping: leaving one room and arriving in the other on the day of the move.
-    const guests = stays.flatMap((s) => spans(s).filter((p) => p.room === r.id && p.start < end && p.end >= from).map((p) => ({ ...s, start_date: p.start, end_date: p.end })));
+    const guests = stays.flatMap((s) => { const all = spans(s); return all.map((p, i) => ({ p, from_room: all[i - 1]?.room ?? null, to_room: all[i + 1]?.room ?? null })).filter(({ p }) => p.room === r.id && p.start < end && p.end >= from).map(({ p, from_room, to_room }) => ({ ...s, start_date: p.start, end_date: p.end, from_room, to_room })); });
     const sleeping = (d: number) => guests.filter((s) => s.start_date.getTime() <= d && d < nightsEnd(s.start_date, s.end_date).getTime());
     let full: number | null = null;
     for (let d = from.getTime(); d < end.getTime() && full === null; d += DAY_MS) if (sleeping(d).length >= r.beds) full = d;
@@ -109,7 +110,8 @@ export async function guestRoomsFor(db: Db, from: Date, to: Date, except?: strin
       out,
       /** The first night with no bed left, and who has them. */
       full_on: full === null ? null : { date: iso(new Date(full)), names: sleeping(full).map((s) => s.Patient.name) },
-      guests: guests.map((s) => ({ stay_id: s.id, patient_id: s.patient_id, name: s.Patient.name, start_date: iso(s.start_date), end_date: iso(s.end_date) })),
+      /** A guest moved mid-stay (#1210) names the room they came from and the one they go to, so a move never reads as an arrival or a leaving. */
+      guests: guests.map((s) => ({ stay_id: s.id, patient_id: s.patient_id, name: s.Patient.name, start_date: iso(s.start_date), end_date: iso(s.end_date), from_room: s.from_room && names.get(s.from_room), to_room: s.to_room && names.get(s.to_room) })),
     };
   });
 }
