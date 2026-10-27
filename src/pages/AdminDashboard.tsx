@@ -774,7 +774,7 @@ const AdminDashboard = () => {
           ].filter(Boolean).join(' ') || 'Nothing else depends on them.'}</Consequence>
         ) : confirmDelete?.counts ? (
           <Consequence>{[
-            confirmDelete.counts.appointments ? `${confirmDelete.counts.appointments} treatment${confirmDelete.counts.appointments === 1 ? '' : 's'} ${confirmDelete.counts.done ? 'coming up' : 'booked'} will go with it.` : '',
+            confirmDelete.counts.appointments ? confirmDelete.kind === 'room' ? `${confirmDelete.counts.appointments} treatment${confirmDelete.counts.appointments === 1 ? ' is' : 's are'} booked in it. Take it out of use for those days first, which moves them.` : `${confirmDelete.counts.appointments} treatment${confirmDelete.counts.appointments === 1 ? '' : 's'} ${confirmDelete.counts.done ? 'coming up' : 'booked'} will go with it.` : '',
             confirmDelete.counts.done ? `${confirmDelete.counts.done} already done stay on the records.` : '',
             confirmDelete.counts.timeoff ? `${confirmDelete.counts.timeoff} leave entr${confirmDelete.counts.timeoff === 1 ? 'y' : 'ies'} will go too.` : '',
             confirmDelete.counts.dietplans ? `${confirmDelete.counts.dietplans} diet plan${confirmDelete.counts.dietplans === 1 ? '' : 's'} will go too.` : '',
