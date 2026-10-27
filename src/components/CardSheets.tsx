@@ -22,7 +22,7 @@ const json = { "Content-Type": "application/json" };
 
 /** What the card holds about the stay it is showing (residentDay). */
 export type CardStay = {
-  id: string; start_date: string; end_date: string; day: number; days: number; on_site?: boolean; leaving_time?: string | null;
+  id: string; start_date: string; end_date: string; day: number; days: number; on_site?: boolean; leaving_time?: string | null; arriving_time?: string | null;
   package: { id: string; name: string; days: number; price: number } | null;
   accommodation: { id: string; name: string; price_per_day: number; room: { id: string; name: string } | null } | null;
   discharge: { total: number; done: number; missing: { key: string; label: string; where: "details" | "summary" }[] } | null;
@@ -357,7 +357,7 @@ export function AccommodationSheet({ patient, stay, today, onClose, onSaved, edi
 
 /* ------------------------------ Story 10: change a stay ------------------------------ */
 
-export type StayTarget = { id: string | null; start: string; end: string; package: CardStay["package"]; accommodation: CardStay["accommodation"]; leaving_time?: string | null };
+export type StayTarget = { id: string | null; start: string; end: string; package: CardStay["package"]; accommodation: CardStay["accommodation"]; leaving_time?: string | null; arriving_time?: string | null };
 
 /** `cover` is a day the stay should reach (a booking asked for it): the dates open already stretched to it. */
 export function StaySheet({ patient, target, today, now, cover, onClose, onSaved }: { patient: Who | null; target: StayTarget | null; today: string; now?: string; cover?: string; onClose: () => void; onSaved: () => void }) {
@@ -417,11 +417,14 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
   // Late checkout (#1200): the time they leave on the leaving day, so Guest rooms does not send housekeeping in before it.
   const [leaveAt, setLeaveAt] = useState<string | null>(null);
   useEffect(() => setLeaveAt(target?.leaving_time ?? null), [target?.id, target?.leaving_time]);
+  // A late arrival (#1255): the kitchen leaves out the meals served before it; dinner is kept.
+  const [arriveAt, setArriveAt] = useState<string | null>(null);
+  useEffect(() => setArriveAt(target?.arriving_time ?? null), [target?.id, target?.arriving_time]);
   if (!patient || !target) return null;
   const oldDays = between(target.start, target.end) + 1;
   const days = between(start, end) + 1;
   const delta = days - oldDays;
-  const timeChanged = leaveAt !== (target.leaving_time ?? null);
+  const timeChanged = leaveAt !== (target.leaving_time ?? null) || arriveAt !== (target.arriving_time ?? null);
   const changed = start !== target.start || end !== target.end || timeChanged;
   const lines = [
     missed ? (late === "cancel" ? `${plural(missed, "treatment")} before ${dayText(start)} ${missed === 1 ? "is" : "are"} cancelled, "arrived late"; the leaving day stays.` : `Every treatment moves ${plural(Math.round((Date.parse(start) - Date.parse(target.start)) / DAY_MS), "day")} later with the same therapist, room and time; where one clashes, the day's check offers the fix.`) : "",
@@ -434,7 +437,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
   const save = async () => {
     setBusy(true);
     const res = target.id
-      ? await saveStay(patient.id, target.id, { start_date: start, end_date: end, cancel_after: cancels > 0, ...(timeChanged ? { leaving_time: leaveAt } : {}), ...(missed ? { late } : {}), ...(room ? { guest_room_id: room.move_to?.id ?? null, ...(room.move_from ? { move_from: room.move_from } : {}) } : {}) })
+      ? await saveStay(patient.id, target.id, { start_date: start, end_date: end, cancel_after: cancels > 0, ...(timeChanged ? { leaving_time: leaveAt, arriving_time: arriveAt } : {}), ...(missed ? { late } : {}), ...(room ? { guest_room_id: room.move_to?.id ?? null, ...(room.move_from ? { move_from: room.move_from } : {}) } : {}) })
       : await fetch(`${API_BASE}/patients/${patient.id}/stays`, { method: "POST", headers: json, body: JSON.stringify({ start_date: start, end_date: end, package_id: target.package?.id ?? null, guest_room_id: guestRoom || null, ...(visit ? { consultation: { date: visit.date, start_time: visit.start_time, staff_id: visit.staff_id, room_id: visit.room_id } } : {}) }) });
     setBusy(false);
     if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The stay was not saved. Try again."); return; }
@@ -497,7 +500,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     onSaved();
     onClose();
   };
-  const label = !target.id ? "Add the stay" : !changed ? "Change a date to save" : missed && late === "shift" ? `Push to ${dayText(start)}–${dayText(end)}` : timeChanged && start === target.start && end === target.end ? (leaveAt ? `Leaving at ${leaveAt}` : "Save the stay") : start !== target.start && end === target.end ? `Arrive on ${dayText(start)}` : delta < 0 ? `Leave on ${dayText(end)}` : delta > 0 ? `Stay until ${dayText(end)}${room?.move_to ? ` in ${room.move_to.name}` : ""}` : "Save the stay";
+  const label = !target.id ? "Add the stay" : !changed ? "Change a date to save" : missed && late === "shift" ? `Push to ${dayText(start)}–${dayText(end)}` : timeChanged && start === target.start && end === target.end ? (arriveAt !== (target.arriving_time ?? null) && arriveAt ? `Arriving at ${arriveAt}` : leaveAt && leaveAt !== (target.leaving_time ?? null) ? `Leaving at ${leaveAt}` : "Save the stay") : start !== target.start && end === target.end ? `Arrive on ${dayText(start)}` : delta < 0 ? `Leave on ${dayText(end)}` : delta > 0 ? `Stay until ${dayText(end)}${room?.move_to ? ` in ${room.move_to.name}` : ""}` : "Save the stay";
   return (
     <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} title={target.id ? `Stay for ${first(patient.name)}` : "New stay"}
       note={target.id ? `Now ${dayText(target.start)} to ${dayText(target.end)} · ${plural(oldDays, "day")}` : "Arriving, leaving, and the rest follows."}
@@ -513,6 +516,12 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
         })() : null}
       </div>
       {target.id && start <= today && end > today ? <Btn kind="quiet" inline className="-ml-2 mt-1" onClick={() => setEnd(today)}>Leaves today</Btn> : null}
+      {target.id && start >= today && arriveAt === null ? <Btn kind="quiet" inline className="-ml-2 mt-1" onClick={() => setArriveAt("20:00")}>Arriving late…</Btn> : null}
+      {target.id && arriveAt !== null ? <div className="mt-3 rounded-xl border p-3">
+        <TimeList label={`Arriving ${dayText(start)} at`} value={arriveAt} onChange={setArriveAt} times={timesBetween("06:00", "23:30", 30)} />
+        <Consequence>{`The kitchen sheet leaves out the meals served before ${arriveAt} that day. Dinner is kept for them.`}</Consequence>
+        <Btn kind="quiet" inline className="-ml-2 mt-1" onClick={() => setArriveAt(null)}>Not arriving late</Btn>
+      </div> : null}
       {target.id && end >= today && leaveAt === null ? <Btn kind="quiet" inline className="-ml-2 mt-1" onClick={() => setLeaveAt("14:00")}>Late checkout…</Btn> : null}
       {target.id && leaveAt !== null ? <div className="mt-3 rounded-xl border p-3">
         <TimeList label={`Leaving ${dayText(end)} at`} value={leaveAt} onChange={setLeaveAt} times={timesBetween("09:00", "21:00", 30)} />

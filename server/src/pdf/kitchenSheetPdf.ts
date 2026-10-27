@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit';
 import { PrismaClient } from '@prisma/client';
 import { madeWith } from '../product.js';
-import { kitchenMeals, loadDietsForDay, mealLabel } from '../dietResolution.js';
+import { kitchenMeals, loadDietsForDay, mealLabel, mealsBefore } from '../dietResolution.js';
 import { addHeader } from './dailySchedulePdf.js';
 import { awayLabel } from '../availability.js';
 
@@ -29,8 +29,11 @@ export async function generateKitchenSheetPdf(dateISO: string, prisma: PrismaCli
   ]);
   // Only the patients staying eat the centre's meals; an outpatient goes home.
   const withTreatment = new Set(treated.map((a) => a.patient_id));
+  const startOf = (label: string) => events.find((x) => x.activity_name.toLowerCase() === label.toLowerCase())?.start_time;
+  const arriving = new Map(stays.filter((s) => s.start_date.getTime() === day.getTime() && s.arriving_time).map((s) => [s.patient_id, s.arriving_time]));
   const people = [...new Map(stays.map((s) => [s.patient_id, s.Patient])).values()]
-    .map((p) => ({ name: p.name, diet: diets.dietFor(p, withTreatment.has(p.id)), away: awayLabel(timeOff, p.id, day) }));
+    .map((p) => ({ name: p.name, diet: diets.dietFor(p, withTreatment.has(p.id)), away: awayLabel(timeOff, p.id, day), arrives: arriving.get(p.id) ?? null, skip: mealsBefore(arriving.get(p.id), (m) => startOf(mealLabel[m])) }));
+  const late = people.filter((p) => p.skip.length).sort((a, b) => a.name.localeCompare(b.name));
   // A guest out for the day still eats: the cook keeps their plate aside rather than not cooking it (#695).
   const away = people.filter((p) => p.away).sort((a, b) => a.name.localeCompare(b.name));
   const meals = kitchenMeals(people);
@@ -51,6 +54,11 @@ export async function generateKitchenSheetPdf(dateISO: string, prisma: PrismaCli
   if (away.length) {
     doc.font('Helvetica-Bold').fontSize(11).text('Away — keep their meals aside', x, doc.y, { width: w });
     for (const p of away) doc.font('Helvetica-Bold').fontSize(10).text(p.name, x + COUNT_W, doc.y, { width: w - COUNT_W, continued: true }).font('Helvetica').text(`  ${p.away}`);
+    doc.moveDown(0.6);
+  }
+  if (late.length) {
+    doc.font('Helvetica-Bold').fontSize(11).text('Arriving late — not counted for', x, doc.y, { width: w });
+    for (const p of late) doc.font('Helvetica-Bold').fontSize(10).text(p.name, x + COUNT_W, doc.y, { width: w - COUNT_W, continued: true }).font('Helvetica').text(`  arrives ${p.arrives}: ${p.skip.map((m) => mealLabel[m].toLowerCase()).join(', ').replace(/, ([^,]*)$/, ' and $1')}`);
     doc.moveDown(0.6);
   }
   // Named, before the counts (#977): a limit inside a plan's count is a plate the cook gets wrong.
