@@ -139,6 +139,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
     } : null,
     last_stay: before && { end_date: before.end_date.toISOString().slice(0, 10), package: beforePack && { id: beforePack.id, name: beforePack.name, days: beforePack.days, price: beforePack.price } },
     doctor_plan: patient.doctor_plan,
+    treatment_limits: patient.treatment_limits,
     last_consultation: visit(last),
     next_consultation: visit(next),
     plan_name: diet.planName,
