@@ -1,6 +1,6 @@
 // Fake-clock checks for the trial lifecycle and sign-up limits (#247).
 import assert from 'node:assert/strict';
-import { next, deletesAt, refuse, slugFor, linkOpen, took, rollout } from './lifecycle.mjs';
+import { next, deletesAt, refuse, slugFor, linkOpen, took, rollout, releaseHour } from './lifecycle.mjs';
 const H = 3_600_000, D = 24 * H, t0 = Date.parse('2026-10-01T00:00:00Z');
 
 // Level 1 idle 72 h -> paused; paused 14 days -> deleted. No warnings: nothing is emailed.
@@ -157,3 +157,8 @@ assert.equal(deletesAt({ created: t0, paused_at: t0 + 20 * D }), t0 + 34 * D);
   assert.equal(nodeLine('v24.22.1', ['v26.0.0']), 'Node: v24.22.1 on the host', 'another major is a deliberate upgrade');
   console.log('morning security ok');
 }
+
+// The weekly release hour is Wednesday 20:00 India time (#1178), whatever the host's clock zone.
+assert.equal(releaseHour(new Date('2030-01-02T14:30:00Z')), true); // Wed 20:00 IST
+assert.equal(releaseHour(new Date('2030-01-02T15:30:00Z')), false); // Wed 21:00 IST
+assert.equal(releaseHour(new Date('2030-01-01T14:30:00Z')), false); // Tue 20:00 IST
