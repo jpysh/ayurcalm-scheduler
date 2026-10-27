@@ -721,7 +721,7 @@ export function NextWeekSheet({ patient, review, onClose, onBooked, firstDay, bo
               </SwitchRow>
             ))}
             <Row title="Book one by hand" trailing="›" onClick={() => bookDay(firstDay)} />
-          </> : <Empty text="Nothing given yet to repeat. Book their first days; after the review, this repeats them." action={<Btn kind="primary" onClick={() => bookDay(firstDay)}>Book {dayText(firstDay)}</Btn>} />}
+          </> : <Empty text="Nothing given yet to repeat. Book their first days; after the review, this repeats them." action={<Btn kind="primary" onClick={() => bookDay(firstDay)}>Book {dayText(firstDay)}</Btn>} help="s5-plan-next-week" />}
         </ListGroup>
         {starting && startIds.length ? (
           <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-2">
