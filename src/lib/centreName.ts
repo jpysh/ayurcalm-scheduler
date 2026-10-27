@@ -10,6 +10,8 @@ type Support = { centre_name?: string; example?: boolean; patient_support_whatsa
 // One request for the whole page: the login screen and the demo banner both read it.
 let support: Promise<Support | null> | null = null;
 const loadSupport = () => (support ??= fetch(`${API_BASE}/public/support`).then((r) => (r.ok ? r.json() : null)).catch(() => null));
+// The tab says whose schedule it is once the centre has a name.
+loadSupport().then((d) => { if (d?.centre_name) document.title = `${d.centre_name} · ${PRODUCT}`; });
 
 /** The centre's own name from Settings; public, so the login page can show it too. */
 export function useCentreName(fallback = PRODUCT) {
