@@ -1,6 +1,6 @@
 // Fake-clock checks for the trial lifecycle and sign-up limits (#247).
 import assert from 'node:assert/strict';
-import { next, deletesAt, refuse, slugFor, linkOpen, took, rollout, releaseHour } from './lifecycle.mjs';
+import { next, nudge, nudgeEmail, activated, deletesAt, refuse, slugFor, linkOpen, took, rollout, releaseHour } from './lifecycle.mjs';
 const H = 3_600_000, D = 24 * H, t0 = Date.parse('2026-10-01T00:00:00Z');
 
 // Level 1 idle 72 h -> paused; paused 14 days -> deleted. No warnings: nothing is emailed.
@@ -109,6 +109,24 @@ console.log('provisioner lifecycle ok');
   console.log('sign-up box locked down ok');
 }
 
+// The three behaviour emails (#1301), each once; never for Babaji or a paying centre.
+{
+  const D = 86_400_000, start = Date.parse('2030-04-01T05:00:00Z');
+  const c = (x) => ({ slug: 't', centre: 'Shanti', trial: { started_at: new Date(start).toISOString(), ends_at: new Date(start + 30 * D).toISOString() }, ...x });
+  assert.equal(nudge(c(), start + D), null);
+  assert.equal(nudge(c(), start + 2 * D), 'nosheet');
+  assert.equal(nudge(c({ sent: { nosheet: 1 } }), start + 5 * D), null);
+  assert.equal(nudge(c({ sheet_at: start, sheets: [start + D] }), start + 3 * D), null);
+  assert.equal(nudge(c({ sheet_at: start, sheets: [start + D] }), start + 4 * D), 'silent');
+  assert.equal(nudge(c({ sheet_at: start, sheets: [start + 22 * D], sent: { silent: 1 } }), start + 23 * D), 'ending');
+  assert.equal(nudge(c({ slug: 'babajiayurveda' }), start + 23 * D), null);
+  assert.equal(nudge(c({ trial: { started_at: 'x', plan: 'founding' } }), start + 23 * D), null);
+  assert.match(nudgeEmail('ending', c(), 'jains.es')[1], /^7 days left\. Reply or WhatsApp \+420777558262 to keep going/);
+  assert.equal(activated(c({ sheets: [start + D, start + 2 * D, start + 6 * D] })), true);
+  assert.equal(activated(c({ sheets: [start + D, start + 2 * D, start + 8 * D] })), false);
+  console.log('behaviour emails ok');
+}
+
 // The morning (#818): the push picks a health problem first, then a silent trial about to end.
 {
   const { morning } = await import('./morning.mjs');
@@ -117,6 +135,7 @@ console.log('provisioner lifecycle ok');
   assert.match(morning(db, ['demo is down'], now), /^Today's push: Fix: demo is down/);
   assert.match(morning(db, [], now), /^Today's push: Call Shanti \(s@x\): trial ends in 2 days/);
   assert.match(morning(db, [], now), /Sign-ups: 1 yesterday, 1 this week/);
+  assert.match(morning(db, [], now), /Activated: none yet · silent 3\+ days: none/);
   console.log('morning ok');
 }
 

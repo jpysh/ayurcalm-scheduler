@@ -50,6 +50,7 @@ run dietRange         "One meal changed from a day until leaving changes every d
 run leaveTwice         "The same leave saved twice is one leave"
 run therapistRota     "The therapist rota shows who works when, and why someone is away"
 run centreDay          "Nothing on the server reads the machine's date as the centre's today"
+run printStreak       "The morning streak counts printed days in a row, ending on the centre's today"
 run scheduleInvariants "The demo schedule has no double bookings, today is properly full, and today has a therapist off to fix"
 run validation         "A half-filled form is refused politely, not crashed on, and nobody signed out can save, and staff cannot change a diet plan"
 run autoAssign         "Auto-booking a course respects gender, holidays, and times already past"

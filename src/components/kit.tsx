@@ -443,9 +443,10 @@ export const undoBatch = (batchId: string, after?: () => unknown) =>
 
 export const toastUndo = (text: string, undo: () => unknown) => toast(text, { duration: 5000, action: { label: "Undo", onClick: () => { void undo(); } } });
 
-/** Empty: one line saying why, and the action if there is one. */
-export const Empty = ({ text, action }: { text: string; action?: ReactNode }) => (
-  <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-base text-muted-foreground"><span>{text}</span>{action}</div>
+/** Empty: one line saying why, the action if there is one, and the job's help page (docs/help) if it has one. */
+export const Empty = ({ text, action, help }: { text: string; action?: ReactNode; help?: string }) => (
+  <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-base text-muted-foreground"><span>{text}</span>{action}
+    {help ? <QuietLink href={`https://github.com/jpysh/ruta/blob/main/docs/help/${help}.md`} target="_blank" rel="noopener noreferrer">How this works</QuietLink> : null}</div>
 );
 
 /** Loading: rows the height of real ones, and nothing at all for the first 300ms. */
@@ -668,10 +669,13 @@ export const Callout = ({ tone = "plain", title, children, actions }: { tone?: "
 );
 
 /** One line across the top of every screen for something only the admin can fix; it has no close, it goes when the fix is made (#1173). */
-export const Strip = ({ children, action, onAction }: { children: ReactNode; action: string; onAction: () => void }) => (
-  <div role="status" className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-destructive/10 px-3 text-sm">
+export const Strip = ({ children, action, onAction, onLater }: { children: ReactNode; action: string; onAction: () => void; /** "Later": hidden until tomorrow, so a reminder does not crowd large text all day (#1290). */ onLater?: () => void }) => (
+  <div role="status" className="mt-2 flex flex-wrap items-center justify-between gap-x-3 rounded-xl bg-destructive/10 px-3 text-sm">
     <span className="py-2">{children}</span>
-    <button type="button" className="min-h-11 shrink-0 font-semibold text-destructive underline" onClick={onAction}>{action}</button>
+    <span className="flex shrink-0 gap-3">
+      {onLater ? <button type="button" className="min-h-11 font-semibold text-muted-foreground" onClick={onLater}>Later</button> : null}
+      <button type="button" className="min-h-11 font-semibold text-destructive underline" onClick={onAction}>{action}</button>
+    </span>
   </div>
 );
 

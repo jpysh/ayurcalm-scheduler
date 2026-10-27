@@ -145,7 +145,7 @@ export function TeamRooms({ kind, staff, rooms, q, today, nowHM, opening, closin
       {isTeam && on >= 0 && week!.gaps[on].length && !ql && staff.some(staffActive) ? (
         <div className="mt-3"><Callout tone="notice" title="Too few therapists in">{week!.gaps[on].map((g) => `${g.start}–${g.end} · ${g.in ? `only ${g.in} in` : "no one in"}`).join("; ")}</Callout></div>
       ) : null}
-      {none ? <Empty text={ql ? (isTeam ? "No one matches." : "No room matches.") : isTeam ? "No staff yet. Tap + to add someone." : "No rooms yet. Tap + to add one."} /> : null}
+      {none ? <Empty text={ql ? (isTeam ? "No one matches." : "No room matches.") : isTeam ? "No staff yet. Tap + to add someone." : "No rooms yet. Tap + to add one."} help={!ql && isTeam ? "s6-share-with-staff" : undefined} /> : null}
       {([["Doctors", doctors], ["Therapists", therapists]] as const).map(([title, list]) => list.length ? (
         <ListGroup key={title} title={title} count={list.length}>
           {list.map((s) => {

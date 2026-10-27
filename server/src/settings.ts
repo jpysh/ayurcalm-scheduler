@@ -163,8 +163,9 @@ settingsRouter.post('/make-it-mine', requireAdmin, async (req: Request, res: Res
     team: z.array(z.object({ name, gender: z.enum(['male', 'female']), doctor: z.boolean() })).min(1).max(60),
     rooms: z.array(z.object({ id: z.string().uuid(), name })).min(1).max(60),
     consult_room: name.default('OPD'),
-    therapy_ids: z.array(z.string().uuid()).min(1).max(200),
-  }).parse(req.body);
+    therapy_ids: z.array(z.string().uuid()).max(200),
+    new_therapies: z.array(name).max(100).default([]),
+  }).refine((b) => b.therapy_ids.length + b.new_therapies.length > 0, 'Keep at least one therapy.').parse(req.body);
   await prisma.$transaction((tx) => makeItMine(tx, body), { timeout: 120000 });
   res.json({ ok: true });
 });

@@ -1,0 +1,22 @@
+// node scripts/uat-1308.mjs — pasting the centre's own therapies in Make it mine (#1308), 375x812, on a throwaway stack (APP_URL).
+import { chromium } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+const APP = process.env.APP_URL || 'http://localhost:8399';
+const OUT = 'docs/design/uat/2026-10-27-paste-therapies';
+mkdirSync(OUT, { recursive: true });
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, timezoneId: 'Asia/Kolkata' });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+const p = await ctx.newPage();
+await p.goto(`${APP}/setup/mine`); await p.waitForTimeout(3000);
+await p.getByLabel('Centre name').fill('Shanti Kendra');
+await p.getByLabel('Doctors').fill('Dr Asha');
+await p.getByLabel('Therapists').fill('Ravi');
+for (const w of await p.getByRole('button', { name: 'Woman' }).all()) await w.click();
+await p.getByRole('button', { name: 'Continue' }).click(); await p.waitForTimeout(1500);
+const box = p.getByLabel('Other therapies you give');
+await box.fill('1. Kati Basti\n2. Nasya\nshirodhara');
+await box.scrollIntoViewIfNeeded(); await p.mouse.wheel(0, 200); await p.waitForTimeout(500);
+await p.screenshot({ path: `${OUT}/pasted-375.png` });
+await b.close();

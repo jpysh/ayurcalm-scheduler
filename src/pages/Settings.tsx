@@ -207,7 +207,7 @@ const Settings = ({ signOut, openLog, openScreen, initialSheet, sheetOpened, att
 
       <ListGroup title="You and the app">
         <Row title="Your account" facts="Email and password" flag={account?.demo_password ? "Change the demo password" : undefined} trailing="›" onClick={() => setSheet("account")} />
-        <Row title="Security" facts="How your centre's data is kept safe" trailing="›" onClick={() => window.open("https://github.com/jpysh/ayurcalm-scheduler/blob/main/SECURITY.md", "_blank", "noopener")} />
+        <Row title="Security" facts="How your centre's data is kept safe" trailing="›" onClick={() => window.open("https://github.com/jpysh/ruta/blob/main/SECURITY.md", "_blank", "noopener")} />
         <Row title="Help and plan" facts={trial && isAdmin ? "Report a problem, your plan" : "Report a problem"} trailing="›" onClick={() => setSheet("help")} />
       </ListGroup>
       {signOut ? <Btn kind="secondary" className="mt-4" onClick={signOut}>Sign out</Btn> : null}

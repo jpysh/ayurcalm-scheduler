@@ -125,7 +125,7 @@ const Login = () => {
           <a className="underline" href="https://ruta.jains.es/pilot">Pilot notice: your data</a> · <a className="underline" href="https://wa.me/420777558262">WhatsApp</a> · <a className="underline" href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a>
         </p>
       ) : null}
-      <div className="mt-4 text-center"><QuietLink href="https://github.com/jpysh/ayurcalm-scheduler#readme" target="_blank" rel="noopener noreferrer">Help</QuietLink></div>
+      <div className="mt-4 text-center"><QuietLink href="https://github.com/jpysh/ruta#readme" target="_blank" rel="noopener noreferrer">Help</QuietLink></div>
     </FullPage>
   );
 };

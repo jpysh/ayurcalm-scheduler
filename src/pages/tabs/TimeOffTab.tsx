@@ -291,7 +291,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
   const tab = (
     <div data-testid="timeoff-table">
       <PageHead title="Availability" note={`${now.length || 'None'} now · ${coming.length} coming`} />
-      {live.length === 0 ? <Empty text="Everything is available. Tap + when something is not." /> : null}
+      {live.length === 0 ? <Empty text="Everything is available. Tap + when something is not." help="s10-record-leave" /> : null}
       {now.length ? <ListGroup title="Not available now" count={now.length}>{rowsFor(now)}</ListGroup> : null}
       {soon.length ? <div className="mt-3"><ListGroup title="Coming up" count={soon.length}>{rowsFor(soon)}</ListGroup></div> : null}
       {later.length ? <div className="mt-3"><ListGroup title="Later" count={later.length}>{showLater ? rowsFor(later) : <Row title={`Show ${later.length} more`} facts={`From ${dayText(sortKey(later[0]).slice(0, 10))}`} trailing="›" onClick={() => setShowLater(true)} />}</ListGroup></div> : null}
