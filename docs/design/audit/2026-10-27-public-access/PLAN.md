@@ -30,9 +30,9 @@ Medium
 6 taps, 3 fields, 2-min wait: near best practice; gaps are brand and the wait.
 
 ## What good looks like (sources)
-- Cliniko: 5 inputs on one screen, no card, 30 days, time zone detected ([cliniko.com/free-trial](https://www.cliniko.com/free-trial)).
-- Calendly: email or Google/Microsoft, no card ([calendly.com/signup](https://calendly.com/signup)).
-- Fewer fields beat fewer steps; defer account details until there is value ([Baymard](https://baymard.com/blog/checkout-flow-average-form-fields)).
+- Cliniko: 5 inputs on one screen, no card, 30 days, time zone detected (cliniko.com/free-trial).
+- Calendly: email or Google/Microsoft, no card (calendly.com/signup).
+- Fewer fields beat fewer steps; defer account details until there is value (baymard.com/blog/checkout-flow-average-form-fields).
 - Show only what most need, defer the rest, two levels at most.
 
 ## Recommended sign-up (one screen, phone)
