@@ -286,7 +286,7 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
     // resident no way to be there.
     const s = toMinutes(a.start_time);
     const e = s + a.duration_minutes;
-    const clash = coversRequiredEvent(events as unknown as RequiredEventRow[], day, s, e);
+    const clash = coversRequiredEvent(events as unknown as RequiredEventRow[], day, s, e, stays.find((x) => x.patient_id === a.patient_id)?.group_name);
     if (clash) {
       raw.push({
         ...common,

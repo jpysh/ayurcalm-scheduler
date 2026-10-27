@@ -9,10 +9,11 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import { BottomSheet } from "@/components/BottomBar";
 import { ResidentsFromSheet } from "@/components/ResidentImport";
-import { Btn, ChangeLine, Consequence, DateRow, LineDate, ListGroup, Row, Text, datePair, dayText, plural, toastUndo, undoWrite } from "@/components/kit";
+import { Btn, ChangeLine, Consequence, DateRow, LineDate, ListGroup, Row, Switch, Text, TimeList, datePair, dayText, plural, timesBetween, toastUndo, undoWrite } from "@/components/kit";
 
 type Hold = { accommodation_id: string; type: string; rooms: number; filled: number; start_date: string; end_date: string; keep_until: string | null; lapsed: boolean };
-export type Group = { name: string; count: number; start_date: string; end_date: string; holds: Hold[]; guests: { stay_id: string; patient_id: string; name: string; start_date: string; end_date: string; room: string | null; started: boolean }[] };
+type Part = { id: string; activity_name: string; start_time: string; end_time: string; is_optional: boolean };
+export type Group = { name: string; count: number; start_date: string; end_date: string; holds: Hold[]; programme: Part[]; guests: { stay_id: string; patient_id: string; name: string; start_date: string; end_date: string; room: string | null; started: boolean }[] };
 export const fetchGroups = () => fetchJsonWithTimeout<Group[]>(`${API_BASE}/groups`).then((r) => (Array.isArray(r) ? r : []));
 const DAY_MS = 86400000;
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
@@ -22,6 +23,7 @@ export function GroupSheet({ group, today, onClose, onChanged, openPatient }: { 
   const [busy, setBusy] = useState(false);
   const [holding, setHolding] = useState(false);
   const [listing, setListing] = useState(false);
+  const [adding, setAdding] = useState(false);
   useEffect(() => setArrive(group?.start_date ?? ""), [group?.name, group?.start_date]);
   if (!group) return null;
   const days = Math.round((Date.parse(arrive) - Date.parse(group.start_date)) / DAY_MS);
@@ -39,9 +41,15 @@ export function GroupSheet({ group, today, onClose, onChanged, openPatient }: { 
     onClose();
   };
   const notHere = group.start_date > today;
+  const removePart = async (e: Part) => {
+    const res = await fetch(`${API_BASE}/groups/programme/${e.id}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) { toast.error("That was not removed. Try again."); return; }
+    toastUndo(`${e.activity_name} removed from ${group.name}`, () => undoWrite(() => addPart(group.name, e), onChanged));
+    onChanged();
+  };
   return (
     <>
-      <BottomSheet open={!holding && !listing} onOpenChange={(o) => { if (!o) onClose(); }} title={group.name} note={`${plural(group.count, "guest")}, ${dayText(group.start_date)} to ${dayText(group.end_date)}.`}
+      <BottomSheet open={!holding && !listing && !adding} onOpenChange={(o) => { if (!o) onClose(); }} title={group.name} note={`${plural(group.count, "guest")}, ${dayText(group.start_date)} to ${dayText(group.end_date)}.`}
         foot={waiting || (notHere && group.holds.length) ? <Btn kind="primary" disabled={busy || !days} onClick={save}>{days ? `Move ${waiting ? plural(waiting, "guest") : "the held rooms"} to ${dayText(arrive)}` : "Choose the new arrival day"}</Btn> : undefined}>
         {waiting || (notHere && group.holds.length) ? <div className="border-y border-border">
           <ChangeLine label="Group arrives" value={dayText(arrive)} select={<LineDate label="Group arrives" value={arrive} min={today} onChange={setArrive} />} />
@@ -52,13 +60,52 @@ export function GroupSheet({ group, today, onClose, onChanged, openPatient }: { 
           <Row title={group.holds.length ? "Change the held rooms" : "Hold rooms before the names arrive"} trailing="›" onClick={() => setHolding(true)} />
           {group.holds.length ? <Row title="Add guests from the organiser's list" trailing="›" onClick={() => setListing(true)} /> : null}
         </ListGroup></div>
+        <div className="mt-3"><ListGroup title="Programme for everyone">
+          {group.programme.map((e) => <Row key={e.id} title={e.activity_name} facts={`${e.start_time}–${e.end_time} every day${e.is_optional ? " · optional" : ""}`} trailing="Remove" onClick={() => void removePart(e)} />)}
+          <Row title="Add to the programme" facts={group.programme.length ? undefined : "Yoga at 7 for the whole group; each guest's own treatments go on top."} trailing="›" onClick={() => setAdding(true)} />
+        </ListGroup></div>
         {group.count ? <div className="mt-3"><ListGroup title="Guests" count={group.count}>
           {group.guests.map((g) => <Row key={g.stay_id} title={g.name} facts={`${dayText(g.start_date)} to ${dayText(g.end_date)}${g.room ? ` · ${g.room}` : ""}${g.started ? " · here" : ""}`} trailing="›" onClick={() => openPatient(g.patient_id)} />)}
         </ListGroup></div> : null}
       </BottomSheet>
+      <PartSheet open={adding} group={group.name} onClose={() => setAdding(false)} onSaved={onChanged} />
       <HoldSheet open={holding} group={group} today={today} onClose={() => setHolding(false)} onSaved={onChanged} />
       <ResidentsFromSheet open={listing} group={group.holds[0] ? { name: group.name, start_date: group.holds[0].start_date, end_date: group.holds[0].end_date } : undefined} onClose={() => setListing(false)} onAdded={() => onChanged()} />
     </>
+  );
+}
+
+const addPart = (name: string, p: Omit<Part, "id">) => fetch(`${API_BASE}/groups/programme`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, activity_name: p.activity_name, start_time: p.start_time, end_time: p.end_time, is_optional: p.is_optional }) });
+
+/** One part of a group's shared programme (#1196), every day of the group's dates. */
+function PartSheet({ open, group, onClose, onSaved }: { open: boolean; group: string; onClose: () => void; onSaved: () => void }) {
+  const [what, setWhat] = useState("");
+  const [from, setFrom] = useState("07:00");
+  const [to, setTo] = useState("08:00");
+  const [optional, setOptional] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (open) { setWhat(""); setFrom("07:00"); setTo("08:00"); setOptional(false); } }, [open]);
+  const save = async () => {
+    setBusy(true);
+    const res = await addPart(group, { activity_name: what.trim(), start_time: from, end_time: to, is_optional: optional }).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) { toast.error("That was not added. Try again."); return; }
+    toast.success(`${what.trim()} added for ${group}, ${from}–${to} every day`);
+    onSaved();
+    onClose();
+  };
+  return (
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title="Add to the programme" note={`For everyone in ${group}, every day they are here. It prints in each guest's row of the day sheet.`}
+      foot={<Btn kind="primary" disabled={busy || !what.trim() || to <= from} onClick={() => void save()}>{what.trim() ? `Add ${what.trim()} at ${from}` : "Name it first"}</Btn>}>
+      <div className="grid gap-3">
+        <Text label="What" placeholder="Yoga" maxLength={80} value={what} onChange={(e) => setWhat(e.target.value)} />
+        <div className={datePair}>
+          <TimeList label="From" value={from} onChange={(t) => { setFrom(t); if (to <= t) setTo(t.replace(/^(\d\d)/, (h) => String(Math.min(23, Number(h) + 1)).padStart(2, "0"))); }} times={timesBetween("05:00", "22:00", 15)} />
+          <TimeList label="To" value={to} onChange={setTo} times={timesBetween("05:15", "23:00", 15)} />
+        </div>
+        <Switch label="Optional" note="Off: a treatment across it is named on the day check." on={optional} set={setOptional} />
+      </div>
+    </BottomSheet>
   );
 }
 
