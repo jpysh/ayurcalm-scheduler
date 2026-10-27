@@ -1,4 +1,4 @@
-// Trial sign-up (#247): signup.jains.es. A visitor gives a centre name and an
+// Trial sign-up (#247): ruta.jains.es/start. A visitor gives a centre name and an
 // email; the centre is created at <slug>.jains.es and an "Open your centre" link
 // on screen signs them in, where they choose a password. Nothing waits on the
 // email (#727): seeing their centre comes first; the email only says where it is.
@@ -18,7 +18,7 @@ const run = promisify(execFile);
 const ROOT = new URL('..', import.meta.url).pathname;
 const DATA = process.env.RUTA_DATA || `${process.env.HOME}/ruta-data`;
 const DOMAIN = process.env.RUTA_DOMAIN || 'jains.es';
-const SELF = `https://signup.${DOMAIN}`;
+const SELF = `https://ruta.${DOMAIN}/start`;
 const env = process.env;
 const DB = `${DATA}/provisioner.json`;
 

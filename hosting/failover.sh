@@ -12,7 +12,7 @@ start=$(date +%s)
 r2 tunnel /out
 # Each "hostname: <slug>.jains.es" line is followed by its "service: ...:<port>".
 grep -A1 'hostname:' "$DATA/tunnel.yml" | paste - - | sed -E 's/.*hostname: ([a-z0-9-]+)\.jains\.es.*:([0-9]+).*/\1 \2/' | while read -r slug port; do
-  [ "$slug" = signup ] && continue
+  [ "$slug" = ruta ] && continue
   sh hosting/centre.sh up "$slug" "$port"
   until curl -sf "localhost:$port/api/health" >/dev/null; do sleep 3; done
   f=$(r2 restore "$slug" "/out/$slug/restore" | tail -1)

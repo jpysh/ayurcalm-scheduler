@@ -8,9 +8,9 @@
 
 **Your centre's day, printed and ready by 7 am.** Open-source scheduling for Ayurveda centres, therapy studios and wellness retreats.
 
-[Website](https://jains.es/ruta) · [Live demo](https://demo.jains.es) · [Free cloud trial](https://signup.jains.es) · [Self-host guide](docs/self-host.md) · [Admin guide](docs/admin-guide.md)
+[Website](https://ruta.jains.es) · [Live demo](https://ruta-demo.jains.es) · [Free cloud trial](https://ruta.jains.es/start) · [Self-host guide](docs/self-host.md) · [Admin guide](docs/admin-guide.md)
 
-<a href="https://jains.es/ruta/video.mp4"><img src="site/public/ruta/video.gif" width="260" alt="30 seconds on a phone: sign up, the example day, Make it mine, and tomorrow planned"></a>
+<a href="https://ruta.jains.es/video.mp4"><img src="site/public/ruta/video.gif" width="260" alt="30 seconds on a phone: sign up, the example day, Make it mine, and tomorrow planned"></a>
 
 Plan residents and their stays, therapists, rooms, therapies and daily programme in one place. Auto-assign fills the day around room amenities, therapist time off and opening hours, and the day sheet prints every resident's treatments and meals for the notice board. Built for residential Ayurveda centres; nothing in it is Ayurveda-specific.
 
@@ -28,8 +28,8 @@ Every morning it prints these, from the example centre: [day sheet](docs/guide/s
 
 ## Three ways in
 
-1. **Look around:** the [live demo](https://demo.jains.es), a busy example centre. Nothing to install.
-2. **Try it on your centre:** a [free cloud trial](https://signup.jains.es). We host it; you get a web address for every phone.
+1. **Look around:** the [live demo](https://ruta-demo.jains.es), a busy example centre. Nothing to install.
+2. **Try it on your centre:** a [free cloud trial](https://ruta.jains.es/start). We host it; you get a web address for every phone.
 3. **Run it yourself, free:** on a computer that stays on at the centre. Phones reach it over the centre Wi-Fi, or from anywhere with your own web address. [Self-host guide](docs/self-host.md).
 
 ## Cloud or self-host?
@@ -38,7 +38,7 @@ Same app, same features. The difference is who runs it.
 
 | | Self-host | Ruta Cloud |
 |---|---|---|
-| Price | Free | Monthly per centre, [see pricing](https://jains.es/ruta) |
+| Price | Free | Monthly per centre, [see pricing](https://ruta.jains.es) |
 | Hosting, HTTPS, backups, updates | You | Us |
 | Support by WhatsApp, email or phone | Community | Included |
 | Setup help with your therapies, rooms and rota | No | Included |
@@ -47,7 +47,7 @@ You can move between them at any time and always leave with your data.
 
 ## Set it up for centres near you
 
-IT firms and consultants can install, support and resell Ruta for centres in their region. Partners get a margin on Ruta Cloud, a commercial licence where needed, and a listing on the website. [Tell us about your region](https://github.com/jpysh/ayurcalm-scheduler/discussions/1058) or write via [jains.es/ruta](https://jains.es/ruta).
+IT firms and consultants can install, support and resell Ruta for centres in their region. Partners get a margin on Ruta Cloud, a commercial licence where needed, and a listing on the website. [Tell us about your region](https://github.com/jpysh/ayurcalm-scheduler/discussions/1058) or write via [jains.es/ruta](https://ruta.jains.es).
 
 ## Quick start
 
@@ -75,4 +75,4 @@ Issues and pull requests welcome. Have an idea for your centre? [Propose it in I
 
 [AGPL-3.0](LICENSE) © jpysh
 
-Free to run for your own centre, to read and to change. If you run a modified copy as a service for others, you must publish your changes under the same licence. To resell or embed it without that, ask for a commercial licence: open a [Discussion](https://github.com/jpysh/ayurcalm-scheduler/discussions) or write via [jains.es/ruta](https://jains.es/ruta).
+Free to run for your own centre, to read and to change. If you run a modified copy as a service for others, you must publish your changes under the same licence. To resell or embed it without that, ask for a commercial licence: open a [Discussion](https://github.com/jpysh/ayurcalm-scheduler/discussions) or write via [jains.es/ruta](https://ruta.jains.es).

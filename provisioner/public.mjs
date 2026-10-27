@@ -1,4 +1,4 @@
-// The public sign-up site, signup.jains.es (#247), in its own locked-down container (#1091):
+// The public sign-up site, ruta.jains.es/start (#247), in its own locked-down container (#1091):
 // no Docker, no centre's secrets, one shared folder. It answers from what the manager
 // (index.mjs, on the host) last wrote to out/, and leaves a file in inbox/ for anything that
 // needs the host: a sign-up kept, a centre built or switched back on, a sign-in link, an email.
@@ -10,7 +10,7 @@ import { deletesAt, refuse, linkOpen } from './lifecycle.mjs';
 
 const env = process.env;
 const DOMAIN = env.RUTA_DOMAIN || 'jains.es';
-const SELF = `https://signup.${DOMAIN}`;
+const SELF = `https://ruta.${DOMAIN}/start`;
 const BOX = env.SIGNUP_DIR || `${env.RUTA_DATA || `${env.HOME}/ruta-data`}/signup`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -46,19 +46,19 @@ const page = (body) => `<!doctype html><html lang="en"><meta charset="utf-8"><me
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:26rem;margin:2rem auto;padding:0 1rem;color:#1c2b22;background:#f3f6f3}label{display:block;margin:.8rem 0 .2rem}input{width:100%;box-sizing:border-box;padding:.7rem;border:1px solid #8a9a8f;border-radius:.6rem;font:inherit}button{margin-top:1rem;width:100%;padding:.8rem;border:0;border-radius:.6rem;background:#3d6b50;color:#fff;font:inherit;font-weight:600}a{color:#3d6b50}</style>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>${body}</html>`;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const form = (msg = '', ref = '', mail = false) => page(`<h1>Start a free 30-day trial</h1><p>Your own centre at <b>yourname.${DOMAIN}</b>, ready in about two minutes. No card. Want to look first? <a href="https://demo.${DOMAIN}">See the demo</a>.</p>
+const form = (msg = '', ref = '', mail = false) => page(`<h1>Start a free 30-day trial</h1><p>Your own centre at <b>yourname.${DOMAIN}</b>, ready in about two minutes. No card. Want to look first? <a href="https://ruta-demo.${DOMAIN}">See the demo</a>.</p>
 ${msg && `<p role="alert"><b>${esc(msg)}</b></p>`}<form method="post" action="/signup">${/^[a-z0-9-]{1,40}$/.test(ref || '') ? `<input type="hidden" name="ref" value="${esc(ref)}">` : ''}<label for="c">Centre name</label><input id="c" name="centre" required maxlength="80" autocomplete="organization">
 <label for="e">Your email</label><input id="e" name="email" type="email" required maxlength="120" autocomplete="email">
 ${env.TURNSTILE_SITEKEY ? `<div class="cf-turnstile" data-sitekey="${env.TURNSTILE_SITEKEY}" style="margin-top:1rem"></div>` : ''}<button>Create my centre</button></form>
 ${mail ? `<h2 style="font-size:1rem;margin-top:2rem">Already have a centre?</h2><form method="post" action="/again"><label for="a">Your email</label><input id="a" name="email" type="email" required autocomplete="email"><button>Email me a sign-in link</button></form>` : ''}
-<p style="font-size:.85rem;margin-top:2rem">By starting a trial you accept the <a href="https://jains.es/ruta/pilot">pilot notice</a>. Questions: <a href="https://wa.me/420777558262">WhatsApp</a> · <a href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a></p>`);
+<p style="font-size:.85rem;margin-top:2rem">By starting a trial you accept the <a href="https://ruta.${DOMAIN}/pilot">pilot notice</a>. Questions: <a href="https://wa.me/420777558262">WhatsApp</a> · <a href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a></p>`);
 
 const day = (ms) => new Date(ms).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 async function wake(req, res, c) {
   const login = `https://${c.slug}.${DOMAIN}/login`;
   const opening = page(`<meta http-equiv="refresh" content="8;url=${login}"><h1>${esc(c.centre)} is back on</h1><p>Opening it in a few seconds. <a href="${login}">Open it now</a></p>`);
   if (!c.paused_at) return send(res, 200, opening); // switched on a moment ago; the tunnel is catching up
-  if (req.method !== 'POST') return send(res, 200, page(`<h1>${esc(c.centre)} is switched off</h1><p>Nobody used it for three days, so we switched it off to save space. Everything in it is kept until <b>${day(deletesAt(c))}</b>.</p>${c.trial?.started_at ? '' : `<p>Only wanted a look around? <a href="https://demo.${DOMAIN}">The demo</a> is always on.</p>`}
+  if (req.method !== 'POST') return send(res, 200, page(`<h1>${esc(c.centre)} is switched off</h1><p>Nobody used it for three days, so we switched it off to save space. Everything in it is kept until <b>${day(deletesAt(c))}</b>.</p>${c.trial?.started_at ? '' : `<p>Only wanted a look around? <a href="https://ruta-demo.${DOMAIN}">The demo</a> is always on.</p>`}
 <form method="post"><button>Switch it back on</button></form><p style="font-size:.85rem;margin-top:2rem">Questions: <a href="https://wa.me/420777558262">WhatsApp</a></p>`));
   await ask({ do: 'wake', slug: c.slug });
   for (let t = 0; t < 300 && state().centres.find((x) => x.slug === c.slug)?.paused_at; t++) await sleep(1000);

@@ -2,7 +2,7 @@
 export const PRODUCT = 'Ruta';
 
 /** The line on every sheet and link page (#249): always on, unless a paying centre turned it off. */
-export const MADE_WITH = `Made with ${PRODUCT} · try it free for 30 days · jains.es/ruta`;
+export const MADE_WITH = `Made with ${PRODUCT} · try it free for 30 days · ruta.jains.es`;
 export const madeWith = (s: { plan?: string | null; show_footer?: boolean } | null) => (s?.plan && s.show_footer === false ? '' : MADE_WITH);
 
 /** Plans (#250) and where "Choose a plan" goes while billing is manual: the maintainer's WhatsApp. */
