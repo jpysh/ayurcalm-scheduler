@@ -1,8 +1,8 @@
 # Ruta
 
-[![CI](https://github.com/jpysh/ayurcalm-scheduler/actions/workflows/ci.yml/badge.svg)](https://github.com/jpysh/ayurcalm-scheduler/actions/workflows/ci.yml)
+[![CI](https://github.com/jpysh/ruta/actions/workflows/ci.yml/badge.svg)](https://github.com/jpysh/ruta/actions/workflows/ci.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/jpysh/ayurcalm-scheduler/badge)](https://scorecard.dev/viewer/?uri=github.com/jpysh/ayurcalm-scheduler)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/jpysh/ruta/badge)](https://scorecard.dev/viewer/?uri=github.com/jpysh/ruta)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15691/badge)](https://www.bestpractices.dev/projects/15691)
 [![Security](https://img.shields.io/badge/security-policy-blue.svg)](SECURITY.md)
 
@@ -47,15 +47,15 @@ You can move between them at any time and always leave with your data.
 
 ## Set it up for centres near you
 
-IT firms and consultants can install, support and resell Ruta for centres in their region. Partners get a margin on Ruta Cloud, a commercial licence where needed, and a listing on the website. [Tell us about your region](https://github.com/jpysh/ayurcalm-scheduler/discussions/1058) or write via [jains.es/ruta](https://jains.es/ruta).
+IT firms and consultants can install, support and resell Ruta for centres in their region. Partners get a margin on Ruta Cloud, a commercial licence where needed, and a listing on the website. [Tell us about your region](https://github.com/jpysh/ruta/discussions/1058) or write via [jains.es/ruta](https://jains.es/ruta).
 
 ## Quick start
 
 You need [Docker](https://docs.docker.com/get-docker/) on a computer with about 2 GB of free memory. Tested on macOS.
 
 ```bash
-git clone https://github.com/jpysh/ayurcalm-scheduler.git
-cd ayurcalm-scheduler
+git clone https://github.com/jpysh/ruta.git
+cd ruta
 docker compose up -d
 ```
 
@@ -69,10 +69,10 @@ React, Vite and TypeScript front end; Express, Prisma and PostgreSQL 16 API; Pla
 
 ## Contributing
 
-Issues and pull requests welcome. Have an idea for your centre? [Propose it in Ideas](https://github.com/jpysh/ayurcalm-scheduler/discussions/categories/ideas); ideas with a real centre behind them go first. Guide: [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md). Not sure if it's a bug? Ask in [Discussions](https://github.com/jpysh/ayurcalm-scheduler/discussions).
+Issues and pull requests welcome. Have an idea for your centre? [Propose it in Ideas](https://github.com/jpysh/ruta/discussions/categories/ideas); ideas with a real centre behind them go first. Guide: [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md). Not sure if it's a bug? Ask in [Discussions](https://github.com/jpysh/ruta/discussions).
 
 ## License
 
 [AGPL-3.0](LICENSE) © jpysh
 
-Free to run for your own centre, to read and to change. If you run a modified copy as a service for others, you must publish your changes under the same licence. To resell or embed it without that, ask for a commercial licence: open a [Discussion](https://github.com/jpysh/ayurcalm-scheduler/discussions) or write via [jains.es/ruta](https://jains.es/ruta).
+Free to run for your own centre, to read and to change. If you run a modified copy as a service for others, you must publish your changes under the same licence. To resell or embed it without that, ask for a commercial licence: open a [Discussion](https://github.com/jpysh/ruta/discussions) or write via [jains.es/ruta](https://jains.es/ruta).

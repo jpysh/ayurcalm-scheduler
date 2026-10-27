@@ -186,7 +186,7 @@ First public release.
 - The API base URL is resolved once in `src/lib/apiBase.ts` instead of in nine
   separate files, and the Vite dev server proxies `/api`
 
-[0.4.0]: https://github.com/jpysh/ayurcalm-scheduler/releases/tag/v0.4.0
-[0.3.0]: https://github.com/jpysh/ayurcalm-scheduler/releases/tag/v0.3.0
-[0.2.0]: https://github.com/jpysh/ayurcalm-scheduler/releases/tag/v0.2.0
-[0.1.0]: https://github.com/jpysh/ayurcalm-scheduler/releases/tag/v0.1.0
+[0.4.0]: https://github.com/jpysh/ruta/releases/tag/v0.4.0
+[0.3.0]: https://github.com/jpysh/ruta/releases/tag/v0.3.0
+[0.2.0]: https://github.com/jpysh/ruta/releases/tag/v0.2.0
+[0.1.0]: https://github.com/jpysh/ruta/releases/tag/v0.1.0
