@@ -282,9 +282,9 @@ export function PackageSheet({ patient, stay, onClose, onSaved, editList, matchS
 }
 
 /** A guest room for some nights (#456), as `/guest-rooms/free` gives it. */
-export type GuestRoomNight = { id: string; name: string; beds: number; accommodation_id: string; type: string; price_per_day?: number; free: boolean; /** The day it was last made up (#1199). */ ready_on?: string | null; full_on: { date: string; names: string[] } | null; out: { date: string; until: string; reason: string | null } | null };
+export type GuestRoomNight = { id: string; name: string; beds: number; accommodation_id: string; type: string; price_per_day?: number; free: boolean; /** The day it was last made up (#1199). */ ready_on?: string | null; full_on: { date: string; names: string[] } | null; out: { date: string; until: string; reason: string | null } | null; /** Held for a group not yet named in it (#1196). */ held?: { date: string; group: string } | null };
 /** Taken rooms say by whom and from when, so a clash is never picked by accident. */
-export const takenBy = (r: GuestRoomNight) => r.out ? `Out of use${r.out.reason ? `: ${r.out.reason}` : ""} · ${dayText(r.out.date)}` : r.full_on ? `${r.full_on.names.join(" & ")} · taken from ${dayText(r.full_on.date)}` : "";
+export const takenBy = (r: GuestRoomNight) => r.out ? `Out of use${r.out.reason ? `: ${r.out.reason}` : ""} · ${dayText(r.out.date)}` : r.full_on ? `${r.full_on.names.join(" & ")} · taken from ${dayText(r.full_on.date)}` : r.held ? `Held for ${r.held.group} from ${dayText(r.held.date)}` : "";
 
 export function AccommodationSheet({ patient, stay, today, onClose, onSaved, editList }: { patient: Who | null; stay: CardStay | null; today: string; onClose: () => void; onSaved: () => void; editList: () => void }) {
   const [list, setList] = useState<House[] | null>(null);

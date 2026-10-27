@@ -9,7 +9,7 @@ import type { CardAppt } from "@/components/TreatmentCard";
 import DayDietDialog from "./DayDietDialog";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
-import { GroupSheet, fetchGroups, type Group as Booking } from "@/components/GroupSheet";
+import { GroupSheet, HoldSheet, fetchGroups, type Group as Booking } from "@/components/GroupSheet";
 import PageHead from "@/components/PageHead";
 import { PhotoImg, shrinkPhoto } from "@/components/PassportPhoto";
 import { chip, saveError, Area, ChangeLine, TextRow, ChecklistBar, DateRow, datePair, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, money, Btn, LinkBtn, NightChips } from "@/components/kit";
@@ -76,7 +76,9 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
   const [groupsOn, setGroupsOn] = useState(false);
   const [groupList, setGroupList] = useState<Booking[]>([]);
   const [group, setGroup] = useState<Booking | null>(null);
-  const loadGroups = () => fetchGroups().then(setGroupList);
+  const [newHold, setNewHold] = useState(false);
+  // The open group is read again after a change, so its sheet shows the rooms and guests just saved.
+  const loadGroups = (open?: string) => fetchGroups().then((list) => { setGroupList(list); setGroup((g) => list.find((x) => x.name === (open ?? g?.name)) ?? null); });
   useEffect(() => { void loadGroups(); }, [today, patients.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const [inHouse, setInHouse] = useState<InHouse[] | null>(null);
   useEffect(() => {
@@ -137,11 +139,14 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
         <div className="flex gap-1.5 px-1 pb-1">
           <button type="button" className={chip} aria-pressed={!onlyNeeds && !groupsOn} onClick={() => { setOnlyNeeds(false); setGroupsOn(false); }}>In house</button>
           <button type="button" className={chip} aria-pressed={onlyNeeds} onClick={() => { setOnlyNeeds(true); setGroupsOn(false); }}>Need you{needy.length ? ` · ${needy.length}` : ""}</button>
-          {groupList.length ? <button type="button" className={chip} aria-pressed={groupsOn} onClick={() => { setGroupsOn(true); setOnlyNeeds(false); }}>Groups · {groupList.length}</button> : null}
+          <button type="button" className={chip} aria-pressed={groupsOn} onClick={() => { setGroupsOn(true); setOnlyNeeds(false); }}>Groups{groupList.length ? ` · ${groupList.length}` : ""}</button>
           <button type="button" className={`${chip} ml-auto grid w-11 place-items-center !px-0`} aria-label="Search patients" onClick={onSearch}><Search className="h-5 w-5" /></button>
         </div>
         {groupsOn ? (
-          <ListGroup>{groupList.map((g) => <Row key={g.name} title={g.name} facts={`${g.count} guests · ${stayDay(g.start_date)} to ${stayDay(g.end_date)}`} trailing="›" onClick={() => setGroup(g)} />)}</ListGroup>
+          <ListGroup>
+            {groupList.map((g) => <Row key={g.name} title={g.name} facts={`${g.count} guests${g.holds.length ? ` · ${g.holds.reduce((n, h) => n + h.rooms, 0)} rooms held` : ""} · ${stayDay(g.start_date)} to ${stayDay(g.end_date)}`} trailing="›" onClick={() => setGroup(g)} />)}
+            <Row title="Hold rooms for a new group" trailing="›" onClick={() => setNewHold(true)} />
+          </ListGroup>
         ) : onlyNeeds ? (
           <ListGroup>{needy.length ? needy.map((i) => <Row key={i.id} title={i.who} flag={flagOf(i.patient_id!)} trailing="›" onClick={() => onNeed(i)} />) : <Empty text="Nothing needs attention. The rules are in the gear above." />}</ListGroup>
         ) : people.length === 0 && soon.length === 0 ? <Empty text="No one is staying today." action={<Btn kind="primary" inline onClick={onAdd}>Add a patient</Btn>} /> : (<>
@@ -152,6 +157,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
         </>)}
       </>)}
       <GroupSheet group={group} today={today} onClose={() => setGroup(null)} onChanged={() => void loadGroups()} openPatient={(id) => { setGroup(null); onOpen(id); }} />
+      <HoldSheet open={newHold} group={null} today={today} onClose={() => setNewHold(false)} onSaved={(name) => void loadGroups(name)} />
     </div>
   );
 }
