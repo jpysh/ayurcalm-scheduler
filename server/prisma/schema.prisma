@@ -92,12 +92,16 @@ model PatientStay {
   /// A companion (#1195): a spouse or carer who sleeps and eats here but takes no treatments. Counted for beds,
   /// meals and Form C; never asked for a discharge summary, a review or a next week.
   companion        Boolean @default(false)
+  /// A group booking (#1196), by its name ("Rishikesh Yoga, Nov"): found together, moved together.
+  group_name       String?
 
   Patient       Patient            @relation(fields: [patient_id], references: [id])
   GuestRoom     GuestRoom?         @relation(fields: [guest_room_id], references: [id], onDelete: SetNull)
   Package       Package?           @relation(fields: [package_id], references: [id], onDelete: SetNull)
   Accommodation AccommodationType? @relation(fields: [accommodation_id], references: [id], onDelete: SetNull)
   EarlierRooms  EarlierGuestRoom[]
+
+  @@index([group_name])
 }
 
 /// A room a guest slept in before a move mid-stay (#1164): the nights up to, not including,
