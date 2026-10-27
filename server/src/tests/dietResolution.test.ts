@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { kitchenMeals, movesToGeneralPlan, resolveDiet, type MealKey } from '../dietResolution.js';
+import { kitchenMeals, mealsBefore, movesToGeneralPlan, resolveDiet, type MealKey } from '../dietResolution.js';
 
 /**
  * The day sheet tells a patient what they may eat. A wrong precedence here does
@@ -143,6 +143,15 @@ const cases: [string, () => void][] = [
     assert.equal(own.meals.breakfast, 'Peya');
     const counts = kitchenMeals([{ name: 'A', diet: day2 }])[1].counts;
     assert.equal(counts[0].plan, 'Standard sattvic plan · Day 2');
+  }],
+
+  ['a 22:00 arrival is not counted for breakfast, lunch or snacks, but dinner is kept for them (#1255)', () => {
+    const d = resolveDiet({ ...base, template: plan, hasTherapyToday: false });
+    assert.deepEqual(mealsBefore('22:00', () => undefined), ['breakfast', 'lunch', 'snacks']);
+    assert.deepEqual(mealsBefore('12:00', (m) => (m === 'lunch' ? '12:30' : undefined)), ['breakfast'], "the centre's own meal window decides");
+    assert.deepEqual(mealsBefore(null, () => undefined), []);
+    const [breakfast, , dinner] = kitchenMeals([{ name: 'A', diet: d }, { name: 'Late', diet: d, skip: mealsBefore('22:00', () => undefined) }]);
+    assert.deepEqual([breakfast.total, dinner.total], [1, 2]);
   }],
 
   ['after the last step, or once every plan has ended mid-stay, the guest moves to the everyday plan (#1082)', () => {
