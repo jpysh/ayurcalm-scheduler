@@ -15,14 +15,14 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 
 | # | Situation | Best-in-class handling for a phone-only admin | Today in the app | Priority |
 |---|---|---|---|---|
-| 1 | Guest arrives a day early | Move the start date back; app says whether the room is free that night and offers free rooms if not | Unknown | High |
-| 2 | Guest arrives a few hours late; morning treatments missed | One tap "arrived late, from 15:00"; day re-planned around it | Unknown | High |
+| 1 | Guest arrives a day early | Move the start date back; app says whether the room is free that night and offers free rooms if not | Handled (walked 27 Oct: start moved back saves; into a taken night the preview names who has it and the free room to move to) | High |
+| 2 | Guest arrives a few hours late; morning treatments missed | One tap "arrived late, from 15:00"; day re-planned around it | Gap #1240 (late is whole days only) | High |
 | 3 | Guest arrives days late (train cancelled, road closed) | Shift the whole stay or shorten it, treatments move with it; room nights before arrival released | Handled (#1193) | High |
 | 4 | Guest never arrives | "Did not arrive" frees room and treatments, with Undo | Handled (did-not-arrive with undo) | High |
 | 5 | Guest arrives after reception has closed | Room and arrival note visible on the day sheet for the night watchman | Unknown | Med |
 | 6 | Room not ready when guest arrives | Room "being cleaned" state; admin sees which rooms are ready | Gap → #1199 | Med |
-| 7 | Walk-in with no booking | From the vacant-room list, create guest and stay in one go | Unknown | High |
-| 8 | Nadi Pariksha consult must come before any treatment | Arrival consult booked first; treatments cannot start before it | Unknown | High |
+| 7 | Walk-in with no booking | From the vacant-room list, create guest and stay in one go | Handled (walked 27 Oct: New guest takes the room in the same save, #1190) | High |
+| 8 | Nadi Pariksha consult must come before any treatment | Arrival consult booked first; treatments cannot start before it | Gap #1241 (nothing keeps treatments after the consult) | High |
 | 9 | Guest brings an extra person not booked | Add companion to the room; beds checked | Handled (#1195) | Med |
 | 10 | Pickup needed from Kathgodam station | Transfer note on the arrival list | Not for launch: a note on the stay covers it | Low |
 | 11 | Arrival notes (vitals, concerns, tests) taken on arrival | Arrival form on the stay | Handled (arrival PATCH; vitals, concerns, tests) | High |
@@ -35,7 +35,7 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 
 | # | Situation | Best-in-class handling | Today in the app | Priority |
 |---|---|---|---|---|
-| 16 | Early departure (family emergency, did not like it) | Shorten the stay; later treatments and room nights freed | Unknown | High |
+| 16 | Early departure (family emergency, did not like it) | Shorten the stay; later treatments and room nights freed | Handled (walked 27 Oct: shortened mid-stay, later treatment cancelled in one batch) | High |
 | 17 | Extension mid-stay, room free | Lengthen; room check on the new nights | Handled (room check on stay change, ROOM_TAKEN) | High |
 | 18 | Extension mid-stay, room booked by the next guest | Offer a move from that night, or a different room for the newcomer | Handled (#1192) | High |
 | 19 | Late checkout | Leaving time on the stay; clash with the next arrival shown | Gap → #1200 | Med |
@@ -53,14 +53,14 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 
 | # | Situation | Best-in-class handling | Today in the app | Priority |
 |---|---|---|---|---|
-| 29 | Guest moves the whole stay a week later before arriving | Move both dates; treatments and diet move too; room re-checked | Unknown | High |
-| 30 | Stay shortened before arrival (7 days to 5) | Last days' treatments removed, room nights freed | Unknown | High |
-| 31 | Doctor extends the course mid-stay (14 to 21) | Extend; plan for the extra days offered | Unknown | High |
+| 29 | Guest moves the whole stay a week later before arriving | Move both dates; treatments and diet move too; room re-checked | Handled (walked 27 Oct: both dates a week later with shift; 3 treatments moved, clashes listed for the day check) | High |
+| 30 | Stay shortened before arrival (7 days to 5) | Last days' treatments removed, room nights freed | Handled (walked 27 Oct: preview 2 cancels, save cancelled 2, one batch) | High |
+| 31 | Doctor extends the course mid-stay (14 to 21) | Extend; plan for the extra days offered | Handled (walked 27 Oct: extended 7 days, diet follows) | High |
 | 32 | Date typed wrongly (2025 for 2026) | Clear confirmation of nights and dates before saving | Unknown | Med |
 | 33 | Stay end before stay start | Refused with a plain message | Unknown | Med |
 | 34 | Two stays for one guest overlap | Refused or merged | Unknown | Med |
 | 35 | Change preview before saving | Show what moves before the admin saves | Handled (stay preview endpoint) | High |
-| 36 | Undo a date change | Undo restores rooms, treatments, diet | Unknown | High |
+| 36 | Undo a date change | Undo restores rooms, treatments, diet | Handled (walked 27 Oct: undo plus restore_rooms put back 3/3 treatments and the dates) | High |
 | 37 | Day patient becomes resident | Switch off-site to on-site; room chosen | Unknown | Med |
 | 38 | Resident becomes day patient (moves to a hotel) | Switch to off-site; room freed | Handled (#1189) | Med |
 | 39 | One-day stay (start and end same day) | Counts as one night or none, consistently | Handled (nightsEnd rule) | Low |
@@ -111,13 +111,13 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 | 69 | Names arrive a week late | Placeholder guests filled later | Gap → #1196 | Med |
 | 70 | Group shares one timetable | Copy programme to all | Gap → #1196 | Med |
 | 71 | Group shrinks; release rooms | Release from the block | Gap → #1196 | Low |
-| 72 | Group exceeds therapists on a day | Capacity warning at booking | Unknown | High |
+| 72 | Group exceeds therapists on a day | Capacity warning at booking | Gap #1242 | High |
 | 73 | Group import from a spreadsheet | Import check then import | Handled (patients import check) | Med |
 | 74 | Group leader is the only contact | Leader on the block | Gap → #1196 | Low |
 | 75 | Group activities (yoga, satsang) | Programme events on the day | Handled (programme events) | Med |
 | 76 | Group arrives in one bus, late | Shift all arrivals together | Gap → #1196 | Med |
 | 77 | Some group members are foreign | Form C list covers each | Handled (Form C rule per guest) | High |
-| 78 | Group needs one meal count | Kitchen total includes them | Unknown | High |
+| 78 | Group needs one meal count | Kitchen total includes them | Handled (walked 27 Oct: kitchen counts every stay, 'No diet plan' row included) | High |
 | 79 | Group and individual guests want the same room | First booked wins; clear refusal | Handled (ROOM_TAKEN) | Med |
 
 ## Outages and maintenance
@@ -134,7 +134,7 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 | 87 | Repair finishes early | Shorten the out-of-use dates | Unknown | Low |
 | 88 | Room broken but guest stays (minor fault) | Note on the room, no block | Not for launch: a note on the stay covers it | Low |
 | 89 | Whole centre closed (Diwali day) | Centre closed date; no stays or treatments | Unknown | Med |
-| 90 | Internet down; admin's phone offline | Last day sheet printed or cached | Unknown | High |
+| 90 | Internet down; admin's phone offline | Last day sheet printed or cached | Handled (each printed sheet is kept per day; paper is the offline copy) | High |
 | 91 | Generator only: some rooms usable | Out of use for chosen rooms | Handled (per-room out of use) | Low |
 
 ## Medical
@@ -179,8 +179,8 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 
 | # | Situation | Best-in-class handling | Today in the app | Priority |
 |---|---|---|---|---|
-| 120 | Navratri surge: all rooms wanted | Free rooms by date range at a glance | Unknown | High |
-| 121 | Phone enquiry: free room 10–24 Dec? | Answer in under a minute | Unknown | High |
+| 120 | Navratri surge: all rooms wanted | Free rooms by date range at a glance | Handled (walked 27 Oct: free rooms by date range) | High |
+| 121 | Phone enquiry: free room 10–24 Dec? | Answer in under a minute | Handled (walked 27 Oct: 14-night range answered in one call) | High |
 | 122 | Waitlist when full | Simple waitlist | Not for launch: Is a room free? answers the call | Low |
 | 123 | Tentative hold not confirmed | Hold with an end date | Gap → #1203 | Med |
 | 124 | Minimum stay in peak | Rule or note | Not for launch: the admin decides on the call | Low |
@@ -202,7 +202,7 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 | 135 | New therapist joins mid-season | Added; free from start date | Unknown | Med |
 | 136 | Therapist sick this morning | Leave from now; day re-planned | Handled (leave + day check) | High |
 | 137 | Male guest, only female therapists today | Refused with reason | Handled (guard) | High |
-| 138 | Two admins on two phones edit the same stay | Second save refused or merged | Unknown | High |
+| 138 | Two admins on two phones edit the same stay | Second save refused or merged | Handled (walked 27 Oct: stale save refused, CHANGED_SINCE) | High |
 | 139 | Night watchman needs tonight's arrivals | Printed list | Unknown | Med |
 | 140 | Receptionist without full rights | Role limits | Unknown | Low |
 
@@ -248,9 +248,9 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 | 166 | Admin books at 23:55; "today" | Centre's day, not the phone's | Handled (Settings.timezone) | High |
 | 167 | Admin travelling abroad with phone | Centre's zone everywhere | Handled (#1197) | Med |
 | 168 | Night crosses midnight in the guard | Night belongs to the evening's date | Handled (#1197) | Med |
-| 169 | Phone loses signal mid-save | Save either happens or not, clearly | Unknown | High |
-| 170 | Two phones, one shows stale room list | Refresh or refusal on save | Unknown | High |
-| 171 | Double tap on save creates two stays | One stay | Unknown | High |
+| 169 | Phone loses signal mid-save | Save either happens or not, clearly | Handled (stay saves are one transaction; a failed save writes nothing) | High |
+| 170 | Two phones, one shows stale room list | Refresh or refusal on save | Handled (room re-checked under the stays lock on save) | High |
+| 171 | Double tap on save creates two stays | One stay | Handled (walked 27 Oct: second identical save refused, STAY_OVERLAPS) | High |
 | 172 | Small phone: long room names | Wrap, not clipped | Unknown | Low |
 | 173 | Date picker in a foreign phone locale | Dates read the same | Unknown | Med |
 | 174 | Phone clock wrong | Server time decides | Unknown | Med |
@@ -267,7 +267,7 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 | 180 | Same room booked twice | Refused at save | Handled (ROOM_TAKEN) | High |
 | 181 | Room full on one middle night only | That night named | Handled (full_on names night and guests) | High |
 | 182 | Off-site stay given a full room | Refused or room cleared | Handled (#1189) | Med |
-| 183 | Rooms free tonight, at a glance | List | Unknown | High |
+| 183 | Rooms free tonight, at a glance | List | Handled (walked 27 Oct: free-rooms list) | High |
 | 184 | Free rooms of a type (hut) for dates | Filter by type | Handled (free list by type) | Med |
 | 185 | Out-of-use room shown as free | Never | Handled (free needs not out) | High |
 | 186 | Room retired but still offered | Never | Unknown | Med |
