@@ -253,7 +253,9 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       let name = '';
       const who = (await call.get(`/appointments/who?date=${day}`)) as { none: { id: string; name: string }[]; all: { id: string; name: string }[] };
       for (const p of [...who.none, ...who.all].slice(0, 40)) {
-        if (((await call.get(`/appointments/therapies?date=${day}&patient_id=${p.id}`)) as { therapies: { repeat: boolean }[] }).therapies.some((t) => t.repeat)) { name = p.name; break; }
+        const again = ((await call.get(`/appointments/therapies?date=${day}&patient_id=${p.id}`)) as { therapies: { id: string; repeat: boolean }[] }).therapies.find((t) => t.repeat);
+        // And a free time for it that day, or Book stays disabled on "No free time".
+        if (again && ((await call.get(`/appointments/options?date=${day}&patient_id=${p.id}&therapy_id=${again.id}`)) as { times: unknown[] }).times.length) { name = p.name; break; }
       }
       expect(name, 'nobody in house has had a treatment before').not.toBe('');
       await tap(page.getByRole('button', { name: 'Book a treatment', exact: true }));

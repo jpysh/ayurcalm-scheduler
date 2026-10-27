@@ -23,7 +23,7 @@ async function openStay(page: Page, name: string) {
   await page.waitForURL(/\/admin/);
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: /^Search/ }).click();
-  await page.keyboard.type(name);
+  await page.getByPlaceholder('Name, therapy or room').fill(name);
   await page.getByRole('button', { name: new RegExp(`^${name}`) }).first().click();
   await page.getByRole('dialog').last().getByRole('button', { name: /^Dates/ }).click();
   return page.getByRole('dialog').last();
