@@ -26,14 +26,16 @@ export type EventRow = {
 
 export type Busy = { s: number; e: number; label: string };
 
-export type RequiredEventRow = EventRow & { patients_scope: string | null; is_optional: boolean };
+export type RequiredEventRow = EventRow & { patients_scope: string | null; is_optional: boolean; group_name?: string | null };
 /**
  * A required all-guests event a treatment from s to e would cover whole. The day
  * check reports one, so the planner must never move a treatment into one (#1135).
  */
-export const coversRequiredEvent = (events: RequiredEventRow[], day: Date, s: number, e: number) =>
+export const coversRequiredEvent = (events: RequiredEventRow[], day: Date, s: number, e: number, group?: string | null) =>
   events.find((row) => {
-    if ((row.patients_scope || 'all') !== 'all' || row.is_optional) return false;
+    // A group's shared programme (#1196) is required of that group only.
+    const scope = row.patients_scope || 'all';
+    if (!(scope === 'all' || (scope === 'group' && group && row.group_name === group)) || row.is_optional) return false;
     const onDay = (row.date && row.date.toDateString() === day.toDateString())
       || (row.start_date && row.end_date && row.start_date <= day && row.end_date >= day)
       || (row.recurrence === 'weekly' && Array.isArray(row.weekdays) && row.weekdays.length > 0);
