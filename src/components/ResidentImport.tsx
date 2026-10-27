@@ -70,17 +70,21 @@ export function ResidentRows({ rows, set }: { rows: Resident[]; set: Dispatch<Se
 }
 
 /** Residents on the Patients screen: many at once from a spreadsheet, each saved as one added by hand would be. */
-export function ResidentsFromSheet({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: (created: unknown[]) => void }) {
+export function ResidentsFromSheet({ open, onClose, onAdded, group }: { open: boolean; onClose: () => void; onAdded: (created: unknown[]) => void; /** The organiser's list (#1196): a name without dates comes for the group's. */ group?: { name: string; start_date: string; end_date: string } }) {
   const [rows, setRows] = useState<Resident[]>([]);
   const [busy, setBusy] = useState(false);
-  const read = async (text: string) => setRows(text.trim() ? await checkResidents(text) : []);
+  const read = async (text: string) => {
+    const got = text.trim() ? await checkResidents(text) : [];
+    const undated = group && got.some((r) => !r.arriving && !r.leaving);
+    setRows(undated ? await checkResidents(asTable(got.map((r) => (!r.arriving && !r.leaving ? { ...r, arriving: group.start_date, leaving: group.end_date } : r)))) : got);
+  };
   const ready = rows.length > 0 && rows.every((r) => !r.problems.length);
   const save = async () => {
     setBusy(true);
     const created: unknown[] = [];
     for (const r of rows) {
       const res = await fetch(`${API_BASE}/patients`, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: r.name, gender: r.gender, phone: r.phone || undefined, on_site: true, stay: { start_date: r.arriving, end_date: r.leaving } }) });
+        body: JSON.stringify({ name: r.name, gender: r.gender, phone: r.phone || undefined, on_site: true, group_name: group?.name, stay: { start_date: r.arriving, end_date: r.leaving } }) });
       if (res.ok) created.push(await res.json());
     }
     const added = created.length;
@@ -91,8 +95,8 @@ export function ResidentsFromSheet({ open, onClose, onAdded }: { open: boolean; 
     onClose();
   };
   return (
-    <BottomSheet open={open} onOpenChange={(o) => { if (!o) { setRows([]); onClose(); } }} title="Patients from a spreadsheet"
-      note="Name, gender, arriving, leaving and phone. Copy the rows from Excel or Google Sheets and paste them, or choose a CSV."
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) { setRows([]); onClose(); } }} title={group ? `Guests for ${group.name}` : "Patients from a spreadsheet"}
+      note={group ? "Name and gender, one guest a line, from the organiser's list. Dates left out are the group's; each guest takes a held room." : "Name, gender, arriving, leaving and phone. Copy the rows from Excel or Google Sheets and paste them, or choose a CSV."}
       foot={<Btn kind="primary" disabled={!ready || busy} onClick={() => void save()}>{busy ? "Adding…" : rows.length ? `Add ${plural(rows.length, "patient")}` : "Add patients"}</Btn>}>
       <Area label="Rows" rows={4} placeholder="Paste here" onChange={(e) => void read(e.target.value)} />
       <FromFile onText={(t) => void read(t)} />

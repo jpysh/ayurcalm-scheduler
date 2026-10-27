@@ -1,0 +1,21 @@
+// node scripts/uat-1196-hold.mjs — rooms held for a group before the names (#1196 part 2): the hold sheet, the group with its held rooms, and a held room on Guest rooms, 375x812, on a throwaway stack (APP_URL).
+import { chromium } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+const APP = process.env.APP_URL || 'http://localhost:8391';
+const OUT = 'docs/design/uat/2026-10-27-group-hold';
+mkdirSync(OUT, { recursive: true });
+const { token } = await (await fetch(`${APP}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, timezoneId: 'Asia/Kolkata' });
+await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStorage.setItem('authRole', 'Admin'); localStorage.setItem('authUser', 'admin@example.com'); }, token);
+const p = await ctx.newPage();
+await p.goto(`${APP}/admin/patients`); await p.waitForTimeout(2500);
+await p.getByRole('button', { name: /^Groups/ }).click(); await p.waitForTimeout(800);
+await p.getByText('Hold rooms for a new group').click(); await p.waitForTimeout(1500);
+await p.getByLabel('Group name').fill('Pune Retreat');
+await p.locator('input[type=number]').first().fill('3'); await p.waitForTimeout(500);
+await p.screenshot({ path: `${OUT}/hold-sheet-375.png` });
+await p.getByRole('button', { name: /^Hold 3 rooms/ }).click(); await p.waitForTimeout(1500);
+await p.getByText('Pune Retreat').first().click(); await p.waitForTimeout(1200);
+await p.screenshot({ path: `${OUT}/group-held-375.png` });
+await b.close();

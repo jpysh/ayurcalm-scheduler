@@ -84,18 +84,33 @@ export function outNight(rows: OutRow[], roomId: string, from: Date, end: Date) 
  * it, and whether a bed is free on every one of those nights. `except` leaves a stay out,
  * so a stay being changed does not count against itself.
  */
-export async function guestRoomsFor(db: Db, from: Date, to: Date, except?: string) {
+export async function guestRoomsFor(db: Db, from: Date, to: Date, except?: string, group?: string | null) {
   const end = nightsEnd(from, to);
-  const [rooms, stays, off] = await Promise.all([
+  const [rooms, stays, off, holds] = await Promise.all([
     db.guestRoom.findMany({ where: { is_active: true }, include: { Accommodation: { select: { name: true, price_per_day: true } } } }),
     db.patientStay.findMany({
       where: { OR: [{ guest_room_id: { not: null } }, { EarlierRooms: { some: {} } }], on_site: true, start_date: { lt: end }, end_date: { gte: from }, ...(except ? { id: { not: except } } : {}) },
       include: { Patient: { select: { name: true } }, EarlierRooms: true },
     }),
     db.timeOff.findMany({ where: { entity_type: 'guest_room' } }),
+    // The group's own guests may sleep in its held rooms; everyone else sees them taken.
+    db.groupHold.findMany({ where: { start_date: { lt: end }, end_date: { gt: from }, ...(group ? { group_name: { not: group } } : {}) } }),
   ]);
   const names = new Map((await db.guestRoom.findMany({ select: { id: true, name: true } })).map((r) => [r.id, r.name]));
   rooms.sort((a, b) => a.Accommodation.price_per_day - b.Accommodation.price_per_day || a.Accommodation.name.localeCompare(b.Accommodation.name) || a.name.localeCompare(b.name, 'en', { numeric: true }));
+  // Held rooms (#1196): each night, the rooms a group holds and has not yet filled are the first empty ones of the type.
+  const held = new Map<string, { date: string; group: string }>();
+  const typeOf = new Map(rooms.map((r) => [r.id, r.accommodation_id]));
+  const asleep = (d: number) => stays.filter((s) => s.start_date.getTime() <= d && d < nightsEnd(s.start_date, s.end_date).getTime()).map((s) => ({ s, room: roomOn(s, d) }));
+  for (let d = from.getTime(); d < end.getTime(); d += DAY_MS) {
+    const night = asleep(d), day = iso(new Date(d));
+    const heldTonight = new Set<string>();
+    for (const h of holds.filter((h) => h.start_date.getTime() <= d && d < nightsEnd(h.start_date, h.end_date).getTime())) {
+      const filled = new Set(night.filter(({ s, room }) => s.group_name === h.group_name && room && typeOf.get(room) === h.accommodation_id).map(({ room }) => room)).size;
+      const empty = rooms.filter((r) => r.accommodation_id === h.accommodation_id && !heldTonight.has(r.id) && !night.some(({ room }) => room === r.id) && !outNight(off, r.id, new Date(d), new Date(d + DAY_MS)));
+      for (const r of empty.slice(0, Math.max(0, h.rooms - filled))) { heldTonight.add(r.id); if (!held.has(r.id)) held.set(r.id, { date: day, group: h.group_name }); }
+    }
+  }
   return rooms.map((r) => {
     // A guest moved mid-stay is two guests to housekeeping: leaving one room and arriving in the other on the day of the move.
     const guests = stays.flatMap((s) => { const all = spans(s); return all.map((p, i) => ({ p, from_room: all[i - 1]?.room ?? null, to_room: all[i + 1]?.room ?? null })).filter(({ p }) => p.room === r.id && p.start < end && p.end >= from).map(({ p, from_room, to_room }) => ({ ...s, start_date: p.start, end_date: p.end, from_room, to_room })); });
@@ -106,7 +121,9 @@ export async function guestRoomsFor(db: Db, from: Date, to: Date, except?: strin
     const out = outNight(off, r.id, from, end);
     return {
       id: r.id, name: r.name, beds: r.beds, accommodation_id: r.accommodation_id, type: r.Accommodation.name, price_per_day: r.Accommodation.price_per_day,
-      free: full === null && !out,
+      free: full === null && !out && !held.has(r.id),
+      /** The first night it is held for a group not yet named in it (#1196). */
+      held: held.get(r.id) ?? null,
       ready_on: r.ready_on ? iso(r.ready_on) : null,
       out,
       /** The first night with no bed left, and who has them. */
@@ -118,16 +135,16 @@ export async function guestRoomsFor(db: Db, from: Date, to: Date, except?: strin
 }
 
 /** The first room of a type free for every night, or of any type when none is given. */
-export async function firstFreeRoom(db: Db, from: Date, to: Date, typeId?: string | null, except?: string) {
-  return (await guestRoomsFor(db, from, to, except)).find((r) => r.free && (!typeId || r.accommodation_id === typeId)) ?? null;
+export async function firstFreeRoom(db: Db, from: Date, to: Date, typeId?: string | null, except?: string, group?: string | null) {
+  return (await guestRoomsFor(db, from, to, except, group)).find((r) => r.free && (!typeId || r.accommodation_id === typeId)) ?? null;
 }
 
 /**
  * Null when the room has a bed on every night; otherwise a refusal that names who is in it
  * and the rooms free for all those nights, the same type first.
  */
-export async function guestRoomRefusal(db: Db, roomId: string, from: Date, to: Date, except?: string) {
-  const rooms = await guestRoomsFor(db, from, to, except);
+export async function guestRoomRefusal(db: Db, roomId: string, from: Date, to: Date, except?: string, group?: string | null) {
+  const rooms = await guestRoomsFor(db, from, to, except, group);
   const room = rooms.find((r) => r.id === roomId);
   const free = rooms.filter((r) => r.free).sort((a, b) => Number(b.accommodation_id === room?.accommodation_id) - Number(a.accommodation_id === room?.accommodation_id));
   const names = free.slice(0, 4).map((r) => `${r.name} (${r.type})`);
@@ -135,6 +152,7 @@ export async function guestRoomRefusal(db: Db, roomId: string, from: Date, to: D
   if (!room) return { reason: 'ROOM_GONE', message: `That guest room is no longer in use.${then}`, free: free.map(({ id, name, type }) => ({ id, name, type })) };
   if (room.free) return null;
   if (room.out) return { reason: 'ROOM_OUT', message: `${room.name} is out of use on ${dayOf(new Date(`${room.out.date}T00:00:00Z`))}${room.out.reason ? `: ${room.out.reason}` : ''}.${then}`, free: free.map(({ id, name, type }) => ({ id, name, type })) };
+  if (!room.full_on && room.held) return { reason: 'ROOM_HELD', message: `${room.name} is held for ${room.held.group} on ${dayOf(new Date(`${room.held.date}T00:00:00Z`))}.${then}`, free: free.map(({ id, name, type }) => ({ id, name, type })) };
   const full = room.full_on!;
   return { reason: 'ROOM_TAKEN', message: `${room.name} is taken on ${dayOf(new Date(`${full.date}T00:00:00Z`))} by ${full.names.join(' and ')}.${then}`, free: free.map(({ id, name, type }) => ({ id, name, type })) };
 }
