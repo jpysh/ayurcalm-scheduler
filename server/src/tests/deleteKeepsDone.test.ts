@@ -1,5 +1,6 @@
 /**
- * Deleting a room or therapy takes only its treatments from today on (#567); a
+ * Deleting a therapy takes only its treatments from today on (#567); a room with
+ * treatments ahead is refused (#1304); a
  * therapist hands theirs to the others instead (#1080). Done ones stay on the
  * record, and a therapy that was given stays out of use so they keep its name.
  *
@@ -59,9 +60,13 @@ async function main() {
     assert.equal((await prisma.staff.findUniqueOrThrow({ where: { id: asha.id } })).is_active, false);
     await prisma.appointment.delete({ where: { id: after[1].id } });
 
-    await book(AHEAD);
+    const kept = await book(AHEAD);
+    const refused = await fetch(`${API_BASE}/rooms/${room.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(refused.status, 409, 'a room with treatments ahead is not deleted (#1304)');
+    assert.match(((await refused.json()) as { error: string }).error, /^1 treatment is booked in this room/);
+    assert.deepEqual((await left()).sort(), [done.id, kept.id].sort(), 'and its coming treatment is kept');
+    await prisma.appointment.delete({ where: { id: kept.id } });
     await del(`/rooms/${room.id}`);
-    assert.deepEqual(await left(), [done.id], 'the same for a room');
 
     await book(AHEAD);
     await del(`/therapies/${given.id}`);
