@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit';
 import { PrismaClient } from '@prisma/client';
 import { madeWith } from '../product.js';
-import { guestRoomsFor } from '../guestRooms.js';
+import { guestRoomsFor, roomOn } from '../guestRooms.js';
 import { addHeader } from './dailySchedulePdf.js';
 
 type Guest = { name: string; group?: string | null; start_date: string; end_date: string; from_room?: string | null; to_room?: string | null };
@@ -78,6 +78,9 @@ export async function generateGuestRoomsSheetPdf(dateISO: string, prisma: Prisma
   const centreName = settings?.centre_name || process.env.CENTRE_NAME || 'Wellness Centre';
   const rooms = await guestRoomsFor(prisma, day, new Date(day.getTime() + 86400000));
   const sheet = buildGuestRoomsSheet(rooms, dateISO);
+  // Sleeping here tonight with no room given (#1256): housekeeping is told, so a bed is found before evening.
+  const roomless = (await prisma.patientStay.findMany({ where: { on_site: true, start_date: { lte: day }, end_date: { gt: day } }, include: { Patient: { select: { name: true } }, EarlierRooms: true } }))
+    .filter((s) => !roomOn(s, day.getTime())).map((s) => s.Patient.name).sort();
 
   addHeader(doc, dateISO, centreName);
   const x = doc.page.margins.left;
@@ -90,6 +93,7 @@ export async function generateGuestRoomsSheetPdf(dateISO: string, prisma: Prisma
   } else {
     const c = sheet.counts;
     doc.font('Helvetica').fontSize(10.5).text(`To make up ${c.makeUp}  ·  Arriving ${c.arriving}  ·  Staying on ${c.staying}  ·  Free ${c.free}${c.out ? `  ·  Out of use ${c.out}` : ''}`, x, doc.y, { width: w, align: 'center' });
+    if (roomless.length) doc.font('Helvetica-Bold').fontSize(10.5).text(`No room given yet, staying tonight (${roomless.length}): ${roomless.join(', ')}`, x, doc.y + 4, { width: w, align: 'center' });
     if (sheet.first.length) doc.font('Helvetica-Bold').fontSize(10.5).text(`Make up first, someone arrives into: ${sheet.first.join(', ')}`, x, doc.y + 4, { width: w, align: 'center' });
     doc.moveDown(0.5);
   }
