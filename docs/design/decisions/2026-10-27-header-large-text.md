@@ -1,0 +1,3 @@
+# At large text the header's icons wrap to their own line (27 Oct, #1317)
+
+The page header with Back is now a wrapping row: Back, the title, then the icons, with both sides sharing what the title leaves so the title stays centred as before at normal size. When they do not fit (Patients' search and gear at 200% text), the icons move to a line of their own instead of drawing over the title. A long title that does not fit beside Back (Guest rooms at 200%) also takes its own line, whole, rather than breaking mid-word. Capping the title's width was tried and broke "Availability" mid-word, so it was dropped.
