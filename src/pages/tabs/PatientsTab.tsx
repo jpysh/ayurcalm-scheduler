@@ -4,6 +4,7 @@ import { useShareLink, waHref } from "@/components/ShareLink";
 import { inHouseNote } from "@/lib/inHouse";
 import { BottomSheet } from "@/components/BottomBar";
 import { ResidentsFromSheet } from "@/components/ResidentImport";
+import { LimitsSheet, limitsText, type Limits } from "@/components/LimitsSheet";
 import { API_BASE } from "@/lib/apiBase";
 import type { CardAppt } from "@/components/TreatmentCard";
 import DayDietDialog from "./DayDietDialog";
@@ -50,6 +51,7 @@ type ResidentDay = {
   plan_name: string; diet_next: { from: string; name: string } | null; meals: { meal: string; text: string }[];
   week: { date: string; treatments: { id: string; start_time: string; therapy_name: string; consultation: boolean; status: string }[] }[];
   doctor_plan: string | null;
+  treatment_limits: Limits | null;
   /** When the passport photo was kept, or null (#510). */
   passport_photo: string | null;
   /** How the guest said their stay was (#509). */
@@ -178,6 +180,7 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
   const [d, setD] = useState<ResidentDay | null>(null);
   const link = useShareLink();
   const [plan, setPlan] = useState<string | null>(null);
+  const [limitsOpen, setLimitsOpen] = useState(false);
   const [intake, setIntake] = useState<{ vitals: string; concerns: string; tests: string } | null>(null);
   const saveIntake = async () => {
     if (!d?.stay || !intake) return;
@@ -353,6 +356,7 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
             {d.feedback ? <TextRow label="Their stay">{`${({ good: "Very good", fine: "Fine", poor: "Not good" } as Record<string, string>)[d.feedback.rating] ?? d.feedback.rating}${d.feedback.note ? `: “${d.feedback.note}”` : ""}`}</TextRow> : null}
             {d.readings.length ? <TextRow label="Readings">{d.readings.map((r) => `${r.text} · ${dayText(r.date)}`).join("  ·  ")}</TextRow> : null}
             <TextRow label="Plan" faint={!d.doctor_plan} onClick={() => setPlan(d.doctor_plan || '')}>{d.doctor_plan || 'No plan written yet'}</TextRow>
+            <TextRow label="Not for them" faint={!limitsText(d.treatment_limits)} onClick={() => setLimitsOpen(true)}>{limitsText(d.treatment_limits) || 'Nothing ruled out'}</TextRow>
           </ListGroup>
           {/* Story 4: everything a patient may have is a row with an arrow, filled when it is decided; nothing is forced. Grouped by what the admin does with it: the stay they sell and plan, then the records they keep. */}
           <ListGroup title="Stay">
@@ -395,6 +399,7 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
           <Text label="External tests (optional)" placeholder="Blood sugar, thyroid" value={intake.tests} onChange={(e) => setIntake({ ...intake, tests: e.target.value })} />
         </>) : null}
       </BottomSheet>
+      {d ? <LimitsSheet open={limitsOpen} patient={d} limits={d.treatment_limits} from={today} onClose={() => setLimitsOpen(false)} onSaved={(l) => setD({ ...d, treatment_limits: l })} /> : null}
       <BottomSheet open={plan !== null} onOpenChange={(o) => { if (!o) setPlan(null); }} title={`Doctor's plan · ${d?.name.split(' ')[0] ?? ''}`} note="Printed on their discharge summary."
         foot={<Foot label="Save the plan" save={savePlan} />}>
         {plan !== null ? <Area label="Plan (optional)" rows={6} value={plan} onChange={(e) => setPlan(e.target.value)} /> : null}

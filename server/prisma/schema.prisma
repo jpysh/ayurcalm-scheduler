@@ -37,6 +37,8 @@ model Patient {
   medical_notes     String?
   created_at        DateTime  @default(now())
   /// Their own therapist: the first choice everywhere, never the only one (#1043).
+  /// What the doctor ruled out (#1254): { rest_days: [{ date, why }], not_for: [{ therapy_id, why }] }. The guard refuses both.
+  treatment_limits  Json?
   preferred_staff_id String?
   /// The doctor's current plan for this resident, written after a consultation
   /// and read on the resident's card. One note, not a history: each

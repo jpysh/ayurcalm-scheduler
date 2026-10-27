@@ -51,6 +51,7 @@ export async function loadDay(day: Date, prisma: PrismaClient) {
 }
 
 export type DayContext = Awaited<ReturnType<typeof loadDay>>;
+export type TreatmentLimits = { rest_days?: { date: string; why?: string }[]; not_for?: { therapy_id: string; why?: string }[] };
 
 export function findConflict(c: Candidate, ctx: DayContext): Conflict | null {
   const start = toMinutes(c.start_time);
@@ -61,6 +62,18 @@ export function findConflict(c: Candidate, ctx: DayContext): Conflict | null {
 
   const closed = centreClosed(ctx.settings, ctx.timeOff, c.scheduled_date);
   if (closed) return { reason: 'CENTER_HOLIDAY', message: `The centre is ${closed}.` };
+
+  // What the doctor ruled out for this guest (#1254): a day with no treatments (Vamana) and a therapy not for them.
+  // A consultation is never ruled out: the doctor still sees them.
+  const guest = ctx.patients.find((p) => p.id === c.patient_id);
+  const limits = guest?.treatment_limits as TreatmentLimits | null | undefined;
+  if (limits && !ctx.therapies.find((t) => t.id === c.therapy_id)?.is_consultation) {
+    const who = (guest!.name || 'They').split(' ')[0];
+    const rest = limits.rest_days?.find((r) => r.date === c.scheduled_date.toISOString().slice(0, 10));
+    if (rest) return { reason: 'PATIENT_REST_DAY', message: `${who} has no treatments on this day${rest.why ? `: ${rest.why}` : ''}.` };
+    const not = limits.not_for?.find((n) => n.therapy_id === c.therapy_id);
+    if (not) return { reason: 'NOT_FOR_PATIENT', message: `${ctx.therapies.find((t) => t.id === c.therapy_id)?.name ?? 'This therapy'} is not for ${who}${not.why ? `: ${not.why}` : ''}.` };
+  }
 
   // Everyone on the treatment is checked, lead or not: a co-therapist is in the
   // room, and cannot be anywhere else.

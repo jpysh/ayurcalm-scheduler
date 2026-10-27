@@ -537,9 +537,14 @@ app.put('/patients/:id', async (req: Request, res: Response) => {
     after_treatment: z.string().max(2000).nullable().optional(),
     preferred_staff_id: z.string().uuid().nullable().optional(),
     doctor_plan: z.string().max(4000).nullable().optional(),
+    /** What the doctor ruled out (#1254); null clears both. */
+    treatment_limits: z.object({
+      rest_days: z.array(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), why: z.string().trim().max(80).optional() })).max(60).default([]),
+      not_for: z.array(z.object({ therapy_id: z.string().uuid(), name: z.string().max(80).optional(), why: z.string().trim().max(80).optional() })).max(40).default([]),
+    }).nullable().optional(),
   });
   const body = schema.parse(req.body);
-  const data: any = { ...body };
+  const data: any = { ...body, ...(body.treatment_limits === null ? { treatment_limits: Prisma.DbNull } : {}) };
   if (data.visa_valid_until === '') data.visa_valid_until = null;
   if (body.date_of_birth) data.date_of_birth = new Date(body.date_of_birth);
   const prev = await prisma.patient.findUnique({ where: { id } });
