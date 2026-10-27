@@ -563,6 +563,36 @@ async function main() {
     await prisma.patientStay.update({ where: { id: st.id }, data: { guest_room_id: room.id } });
   }
 
+  // A group of twelve due in 25 days (#1196), when the seeded centre has rooms again, in whatever rooms are free, with its yoga at 7 and two more rooms
+  // held for names not yet sent; and a couple arriving then too, one of them a companion (#1195) in the same
+  // two-bed room. All ahead of today, so the seeded day's problems stay as they are.
+  {
+    const freeRoom = (s: number, e: number, beds = 1) => guestRooms.find((r) => r.beds >= beds && placed.filter((x) => x.room === r.id && x.s < e && s < x.e).length === 0);
+    const GROUP = 'Rishikesh Yoga, Nov';
+    const [gs, ge] = [new Date(today.getTime() + 25 * DAY_MS), new Date(today.getTime() + 32 * DAY_MS)];
+    const names = ['Ananya Rao', 'Kabir Sethi', 'Lina Joseph', 'Dev Malhotra', 'Isha Kapoor', 'Rohan Mehta', 'Tara Pillai', 'Neel Bose', 'Zoya Ali', 'Arnav Desai', 'Mira Shah', 'Yash Kulkarni'];
+    const [cs, ce] = [gs, ge];
+    const double = freeRoom(cs.getTime(), ce.getTime(), 2);
+    const couple = [{ name: 'Rahul Kapoor', gender: 'male' as const, companion: false }, { name: 'Priya Kapoor', gender: 'female' as const, companion: true }];
+    for (const [i, c] of couple.entries()) {
+      const p = await prisma.patient.create({ data: { name: c.name, gender: c.gender, phone: '+91-9811204410', id_number: `6120 4410 903${i}` } });
+      await prisma.patientStay.create({ data: { patient_id: p.id, start_date: cs, end_date: ce, duration_days: 8, on_site: true, companion: c.companion, accommodation_id: double?.accommodation_id ?? null, guest_room_id: double?.id ?? null } });
+    }
+    if (double) placed.push({ room: double.id, s: cs.getTime(), e: ce.getTime() });
+    for (const [i, name] of names.entries()) {
+      const p = await prisma.patient.create({ data: { name, gender: isMale(name) ? 'male' : 'female', phone: `+91-98${String(10000000 + i * 7919).slice(0, 8)}`, id_number: `5${100 + i} 2${300 + i} 7${500 + i}` } });
+      const room = freeRoom(gs.getTime(), ge.getTime());
+      if (room) placed.push({ room: room.id, s: gs.getTime(), e: ge.getTime() });
+      await prisma.patientStay.create({ data: { patient_id: p.id, start_date: gs, end_date: ge, duration_days: 8, on_site: true, group_name: GROUP, accommodation_id: room?.accommodation_id ?? houses[0].id, guest_room_id: room?.id ?? null } });
+    }
+    const spare = freeRoom(gs.getTime(), ge.getTime());
+    // A hold counts the type's rooms the group's named guests fill too: theirs plus two still to name.
+    const named = spare ? await prisma.patientStay.count({ where: { group_name: GROUP, accommodation_id: spare.accommodation_id, guest_room_id: { not: null } } }) : 0;
+    if (spare) await prisma.groupHold.create({ data: { group_name: GROUP, start_date: gs, end_date: ge, accommodation_id: spare.accommodation_id, rooms: named + 2 } });
+    await prisma.programEvent.create({ data: { activity_name: 'Group yoga', start_time: '07:00', end_time: '08:00', start_date: gs, end_date: ge, patients_scope: 'group', group_name: GROUP, staff_scope: 'none', required_amenities: [], weekdays: [], patient_ids: [], staff_ids: [] } });
+
+  }
+
   // The rest of an ordinary day's changes, each once, so every row flag and
   // History line in the design has real data behind it (#159). Taken from
   // today's treatments that neither the therapist off nor the resident locked
