@@ -16,7 +16,7 @@ Start with Wi-Fi only; add step 2 later without reinstalling.
 3. In Terminal:
 
    ```bash
-   git clone https://github.com/jpysh/ayurcalm-scheduler.git ~/ayurcalm
+   git clone https://github.com/jpysh/ruta.git ~/ayurcalm
    cd ~/ayurcalm
    cp .env.example .env
    ```
