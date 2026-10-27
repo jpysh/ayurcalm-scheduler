@@ -53,4 +53,4 @@ tests, releases, backups or hosting. How each test runs is in `testing.md`.
 1. ~~Weekly walk and release~~ (done: `provisioner/index.mjs` and `hosting/tuesday-walk.md`).
 2. ~~Automatic app-only rollback when a health check fails after a release~~ (done: `provisioner/index.mjs`; by hand, `touch ~/ruta-data/rollback-now`).
 3. Migration test on a copy of a real backup.
-4. The 2-hour no-backup alarm in MORNING.md.
+4. ~~The 2-hour no-backup alarm in MORNING.md~~ (done: the hourly watch in `provisioner/index.mjs`).

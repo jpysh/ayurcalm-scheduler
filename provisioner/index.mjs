@@ -304,7 +304,11 @@ export async function tidy(now = Date.now()) {
   db.tidy = { at: now, before, after, stopped, removed }; save();
 }
 
-// ---- watch, hourly (#248): the demo and every centre up, a backup in the last 26 h, disk not full.
+// Backups are hourly (#1178), so two hours without one is one missed: alarm then, not after a lost day.
+// A new centre gets the same two hours before its first.
+export const noBackup = (age, created, now) => age > 2 * 3_600_000 && now - (created || 0) > 2 * 3_600_000;
+
+// ---- watch, hourly (#248): the demo and every centre up, a backup in the last 2 h, disk not full.
 // Each problem is told once by email, and once more when it clears. All clear pings HEALTHCHECKS_URL,
 // so a silent host (provisioner or Mac down) raises Healthchecks.io's own alarm.
 const open = new Set();
@@ -316,7 +320,7 @@ export async function watch(now = Date.now()) {
     if (!(await fetch(`http://localhost:${c.port}/api/health`).then((r) => r.ok, () => false))) problems.push(`${c.slug} is down`);
     const newest = await run('sh', ['-c', `ls -1t "${DATA}/${c.slug}/backups"/ayurcalm-*.sql.gz 2>/dev/null | head -1`]).then((r) => r.stdout.trim(), () => '');
     const age = newest ? now - (await import('node:fs')).statSync(newest).mtimeMs : Infinity;
-    if (age > 26 * 3_600_000 && now - (c.created || 0) > 26 * 3_600_000) problems.push(`${c.slug}: no backup in 26 hours`);
+    if (noBackup(age, c.created, now)) problems.push(`${c.slug}: no backup in 2 hours`);
   }
   const box = await run('docker', ['inspect', 'ruta-host-signup-1']).then((r) => JSON.parse(r.stdout)[0], () => null);
   problems.push(...boxProblems(box));
