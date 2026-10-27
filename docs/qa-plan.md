@@ -21,6 +21,8 @@ tests, releases, backups or hosting. How each test runs is in `testing.md`.
   walks it in the browser pane at phone size as an admin would: the day, a booking,
   moving the on-leave therapist's treatments, sign-up to wizard, printing the sheets.
   Findings go to `~/ruta-data/MORNING.md`. A red finding stops Wednesday's release.
+  The task's prompt is `hosting/tuesday-walk.md`; a green walk writes the version to
+  `~/ruta-data/release-ok`, and only that version is released. No approval, no release that week.
 - **Wednesday 20:00 IST:** every centre updates together (Babaji is treated like any
   other centre). Each centre's `/api/health` is checked; if any fails, every centre
   goes back to last week's app version, never the database, and MORNING.md's
@@ -48,7 +50,7 @@ tests, releases, backups or hosting. How each test runs is in `testing.md`.
 
 ## Still to build, one PR at a time
 
-1. Weekly UAT walk (Tuesday) and release (Wednesday 20:00) as scheduled tasks.
+1. ~~Weekly walk and release~~ (done: `provisioner/index.mjs` and `hosting/tuesday-walk.md`).
 2. Automatic app-only rollback when a health check fails after a release.
 3. Migration test on a copy of a real backup.
 4. The 2-hour no-backup alarm in MORNING.md.

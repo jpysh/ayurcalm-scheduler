@@ -55,3 +55,9 @@ export async function rollout(sites, up) {
   }
   return { failed: null };
 }
+
+/** The weekly release hour (#1178): Wednesday 20:00 to 20:59 in India, after the 18:00 end of treatments. */
+export function releaseHour(at) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', weekday: 'short', hour: '2-digit', hourCycle: 'h23' }).formatToParts(at).map((x) => [x.type, x.value]));
+  return p.weekday === 'Wed' && p.hour === '20';
+}
