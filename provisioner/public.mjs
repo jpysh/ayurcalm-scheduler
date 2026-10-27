@@ -42,16 +42,19 @@ async function human(token, ip) {
   }).then((x) => x.json()).catch(() => ({}));
   return r.success === true;
 }
-const page = (body) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ruta: start a free trial</title>
-<style>body{font:16px/1.5 system-ui,sans-serif;max-width:26rem;margin:2rem auto;padding:0 1rem;color:#1c2b22;background:#f3f6f3}label{display:block;margin:.8rem 0 .2rem}input{width:100%;box-sizing:border-box;padding:.7rem;border:1px solid #8a9a8f;border-radius:.6rem;font:inherit}button{margin-top:1rem;width:100%;padding:.8rem;border:0;border-radius:.6rem;background:#3d6b50;color:#fff;font:inherit;font-weight:600}a{color:#3d6b50}</style>
+const page = (body) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ruta: start free</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;max-width:26rem;margin:1.5rem auto;padding:0 1rem;color:#1c2b22;background:#f3f6f3}label{display:block;margin:.8rem 0 .2rem}input{width:100%;box-sizing:border-box;padding:.7rem;border:1px solid #8a9a8f;border-radius:.6rem;font:inherit}button{margin-top:1rem;width:100%;padding:.8rem;border:0;border-radius:.6rem;background:#3d6b50;color:#fff;font:inherit;font-weight:600}a{color:#3d6b50}</style>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>${body}</html>`;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const form = (msg = '', ref = '', mail = false) => page(`<h1>Start a free 30-day trial</h1><p>Your own centre at <b>yourname.${DOMAIN}</b>, ready in about two minutes. No card. Want to look first? <a href="https://ruta-demo.${DOMAIN}">See the demo</a>.</p>
+// One screen, phone first (#1270): who it is for, two fields, the price, and a way to look first.
+const form = (msg = '', ref = '', mail = false) => page(`<header><b style="font-size:1.6rem;color:#3d6b50">Ruta</b><p style="margin:.2rem 0 0">Scheduling for residential wellness centres, including Ayurveda, spas and retreats.</p></header>
 ${msg && `<p role="alert"><b>${esc(msg)}</b></p>`}<form method="post" action="/signup">${/^[a-z0-9-]{1,40}$/.test(ref || '') ? `<input type="hidden" name="ref" value="${esc(ref)}">` : ''}<label for="c">Centre name</label><input id="c" name="centre" required maxlength="80" autocomplete="organization">
 <label for="e">Your email</label><input id="e" name="email" type="email" required maxlength="120" autocomplete="email">
-${env.TURNSTILE_SITEKEY ? `<div class="cf-turnstile" data-sitekey="${env.TURNSTILE_SITEKEY}" style="margin-top:1rem"></div>` : ''}<button>Create my centre</button></form>
+${env.TURNSTILE_SITEKEY ? `<div class="cf-turnstile" data-sitekey="${env.TURNSTILE_SITEKEY}" data-appearance="interaction-only" style="margin-top:1rem"></div>` : ''}<button>Create my centre</button></form>
+<p style="text-align:center;font-size:.9rem;margin:.6rem 0 0">30 days free · no card · ₹999 a month after</p>
+<a href="https://ruta-demo.${DOMAIN}" style="display:block;text-align:center;margin-top:1.2rem;padding:.8rem;border:1px solid #3d6b50;border-radius:.6rem;text-decoration:none;font-weight:600">Look first: open the demo</a>
 ${mail ? `<h2 style="font-size:1rem;margin-top:2rem">Already have a centre?</h2><form method="post" action="/again"><label for="a">Your email</label><input id="a" name="email" type="email" required autocomplete="email"><button>Email me a sign-in link</button></form>` : ''}
-<p style="font-size:.85rem;margin-top:2rem">By starting a trial you accept the <a href="https://ruta.${DOMAIN}/pilot">pilot notice</a>. Questions: <a href="https://wa.me/420777558262">WhatsApp</a> · <a href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a></p>`);
+<p style="font-size:.85rem;margin-top:2rem">Your data is yours, and the code is open (<a href="https://github.com/jpysh/ruta">AGPL-3.0</a>). By starting a trial you accept the <a href="https://ruta.${DOMAIN}/pilot">pilot notice</a>. Questions: <a href="https://wa.me/420777558262">WhatsApp</a> · <a href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a> · <a href="https://ruta.${DOMAIN}">ruta.${DOMAIN}</a></p>`);
 
 const day = (ms) => new Date(ms).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 async function wake(req, res, c) {
@@ -97,7 +100,7 @@ export const server = http.createServer(async (req, res) => {
       const f = await body(req);
       const centre = (f.get('centre') || '').trim().slice(0, 80), to = (f.get('email') || '').trim().toLowerCase();
       if (!centre || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return send(res, 400, form('Please give a centre name and a working email.', '', st.email));
-      if (!(await human(f.get('cf-turnstile-response'), ip))) return send(res, 400, form('Please tick the check box and try again.', '', st.email));
+      if (!(await human(f.get('cf-turnstile-response'), ip))) return send(res, 400, form('The robot check did not pass. Please try again.', '', st.email));
       const no = refuse(st.signups, st.centres, { ip, email: to }, Date.now());
       if (no === 'waitlist') {
         await ask({ do: 'waitlist', centre, email: to });
@@ -117,7 +120,7 @@ export const server = http.createServer(async (req, res) => {
     const s = st.signups.find((x) => x.key && x.key === url.searchParams.get('k'));
     if (url.pathname === '/go' && s) {
       if (!s.state) await ask({ do: 'go', key: s.key });
-      return send(res, 200, page(`<h1>Creating ${esc(s.centre)}…</h1><p id="m">This takes about two minutes. Keep this page open.</p><progress style="width:100%"></progress>
+      return send(res, 200, page(`<h1>Creating ${esc(s.centre)}…</h1><p id="m">This takes about two minutes.${st.email ? ` We will also email the link to ${esc(s.email)}, so you can close this page.` : ' Keep this page open.'}</p><progress style="width:100%"></progress>
 <p id="o" hidden><a id="go" style="display:block;text-align:center;padding:.8rem;border-radius:.6rem;background:#3d6b50;color:#fff;font-weight:600;text-decoration:none">Open your centre</a></p>
 <script>(async function poll(){const r=await fetch('/status?k=${esc(s.key)}').then(r=>r.json()).catch(()=>({}));if(r.go){const h=document.querySelector('h1');h.textContent=h.textContent.replace(/^Creating (.*)…$/,'$1 is ready');document.getElementById('m').textContent='Open it here. It works once: you choose your password first.';document.querySelector('progress').remove();document.getElementById('go').href=r.go;document.getElementById('o').hidden=false;return}if(r.state==='ready'){const h=document.querySelector('h1');h.textContent=h.textContent.replace(/^Creating (.*)…$/,'$1 is ready');document.getElementById('m').textContent='Your centre is ready, but this sign-in link has run out. WhatsApp +420 777 558 262 and we will send a new one.';document.querySelector('progress').remove();return}if(r.failed){document.getElementById('m').textContent='Something went wrong. We have been told; WhatsApp +420 777 558 262 if you want to hear back sooner.';return}setTimeout(poll,3000)})()</script>`));
     }

@@ -34,7 +34,8 @@ export function DemoBanner() {
   const mins = Math.max(1, Math.round((Date.parse(demo.next_reset) - Date.now()) / 60000));
   return (
     <div role="status" className="bg-notice-bg px-4 py-2 text-center text-sm text-notice">
-      Demo centre with made-up patients. Anything you change is put back at {at} (in {mins} min).
+      Demo centre with made-up patients. Anything you change is put back at {at} (in {mins} min).{" "}
+      <a href="https://ruta.jains.es/start" className="-my-3 inline-flex min-h-11 items-center align-middle font-semibold underline">Start free</a>
     </div>
   );
 }
