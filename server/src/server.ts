@@ -14,7 +14,7 @@ import { staffWeek } from './staffWeek.js';
 import { linkLapsed, newLinkToken } from './links.js';
 import { findConflict, HAPPENING, loadDay, nearestFreeTime, oncePerCourse, softWarnings, staffDay, fullFrom, type Action } from './appointmentGuard.js';
 import { moveOffClosedDays, replanRoomDay, replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
-import { applyCourseDiet, courseDiet, dietTimeline, restoreDiet, startDietFrom, extendDiet } from './patientDiet.js';
+import { applyCourseDiet, courseDiet, dietTimeline, restoreDiet, startDietFrom, extendDiet, shiftDiet } from './patientDiet.js';
 import { checkDay, headlineFor, planRange, rowOptions } from './dayCheck.js';
 import { centreClock, eventClashes, gives, outsideHours, type EventRow } from './availability.js';
 import { loadDietsForDay } from './dietResolution.js';
@@ -788,7 +788,9 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
   }).catch((e) => { if (e instanceof RoomRefused) return { refused: e.why }; throw e; });
   if ('refused' in updated) { res.status(409).json(updated.refused); return; }
   const moved_with = mates.map((m) => ({ stay_id: m.id, patient_id: m.patient_id, name: m.Patient.name, rooms_before: { guest_room_id: m.guest_room_id, earlier: m.EarlierRooms.map((e) => ({ guest_room_id: e.guest_room_id, until: e.until.toISOString().slice(0, 10) })) } }));
-  await extendDiet(id, stay.end_date, dates.end_date, prisma);
+  const by = Math.round((dates.start_date.getTime() - stay.start_date.getTime()) / 86400000);
+  if (by && by === Math.round((dates.end_date.getTime() - stay.end_date.getTime()) / 86400000)) await shiftDiet(id, stay.start_date, stay.end_date, by, prisma);
+  else await extendDiet(id, stay.end_date, dates.end_date, prisma);
   const left = await leftOverAfter(id, stay, dates.end_date);
   let batch_id: string | null = null;
   let cancelled = 0;
@@ -858,7 +860,7 @@ app.post('/groups/move', async (req: Request, res: Response) => {
       await tx.patientStay.update({ where: { id: s.id }, data: { start_date: start, end_date: end } });
       for (const e of s.EarlierRooms) await tx.earlierGuestRoom.update({ where: { id: e.id }, data: { until: shift(e.until) } });
     });
-    await prisma.dietPlanSegment.updateMany({ where: { patient_id: s.patient_id, start_date: s.start_date, end_date: s.end_date }, data: { start_date: start, end_date: end } });
+    await shiftDiet(s.patient_id, s.start_date, s.end_date, body.days, prisma);
     for (const a of await prisma.appointment.findMany({ where: { patient_id: s.patient_id, ...HAPPENING, scheduled_date: { gte: s.start_date, lte: s.end_date } } }))
       appts.push({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id, start_time: a.start_time, date: shift(a.scheduled_date).toISOString().slice(0, 10) });
     moved.push(s.Patient.name);
