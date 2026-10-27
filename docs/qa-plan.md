@@ -10,7 +10,7 @@ tests, releases, backups or hosting. How each test runs is in `testing.md`.
 |---|---|---|
 | Wording, docs, look of a screen | builds, `tsc`, the ten `@smoke` tests | one after-shot (`scripts/uat-<issue>.mjs`) |
 | Booking rules, planner, day sheet | the above and `npm run qa` | read the PDF (`pdftotext -layout`) |
-| Database migration | the above | the migration runs on a copy of a real centre's backup (to build) |
+| Database migration | the above | the migration runs on a copy of a real centre's backup (`scripts/migration-test.sh`, every Tuesday walk) |
 | Docker, install, sign-up, updates | the above | a fresh install, and sign-up to wizard in under 3 minutes |
 | Bug a centre reported | one test that fails without the fix | |
 
@@ -52,5 +52,5 @@ tests, releases, backups or hosting. How each test runs is in `testing.md`.
 
 1. ~~Weekly walk and release~~ (done: `provisioner/index.mjs` and `hosting/tuesday-walk.md`).
 2. ~~Automatic app-only rollback when a health check fails after a release~~ (done: `provisioner/index.mjs`; by hand, `touch ~/ruta-data/rollback-now`).
-3. Migration test on a copy of a real backup.
+3. ~~Migration test on a copy of a real backup~~ (done: `scripts/migration-test.sh`, step 3 of the walk).
 4. ~~The 2-hour no-backup alarm in MORNING.md~~ (done: the hourly watch in `provisioner/index.mjs`).

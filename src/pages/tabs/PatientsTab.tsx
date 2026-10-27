@@ -630,7 +630,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         changeStay={(d) => {
           setBack(d.id);
           setCardId(null);
-          setStayFor({ patient: d, target: (d.stay ?? d.coming) ? { id: (d.stay ?? d.coming)!.id, start: (d.stay ?? d.coming)!.start_date, end: (d.stay ?? d.coming)!.end_date, package: (d.stay ?? d.coming)!.package, accommodation: (d.stay ?? d.coming)!.accommodation } : { id: null, start: today, end: addDays(today, (d.last_stay?.package?.days || 14) - 1), package: d.last_stay?.package ?? null, accommodation: null } });
+          setStayFor({ patient: d, target: (d.stay ?? d.coming) ? { id: (d.stay ?? d.coming)!.id, start: (d.stay ?? d.coming)!.start_date, end: (d.stay ?? d.coming)!.end_date, package: (d.stay ?? d.coming)!.package, accommodation: (d.stay ?? d.coming)!.accommodation, leaving_time: (d.stay ?? d.coming)!.leaving_time } : { id: null, start: today, end: addDays(today, (d.last_stay?.package?.days || 14) - 1), package: d.last_stay?.package ?? null, accommodation: null } });
         }}
         book={(p) => { setCardId(null); book(p); }}
         detailsHint={(id) => { const r = patients.find((x) => String(x.id) === id); return r?.phone || r?.emergencyContact ? [r.phone, r.emergencyContact].filter(Boolean).join(' · ') : 'Add phone, emergency contact…'; }}
