@@ -112,7 +112,7 @@ async function main() {
     await prisma.timeOff.deleteMany({ where: { description: TAG } });
     writeFileSync(sheet, await generateGuestRoomsSheetPdf('2030-05-07', prisma));
     const moveDay = execFileSync('pdftotext', ['-raw', sheet, '-']).toString().replace(/\s+/g, ' ');
-    assert.ok(moveDay.includes(`${TAG} Sunil leaves today`) || moveDay.includes(`Make up, then ready for ${TAG} Tara`), `on the day of the move the old room is made up: ${moveDay}`);
+    assert.ok(moveDay.includes(`${TAG} Sunil moves to ${TAG}2`), `on the day of the move the old room is made up: ${moveDay}`);
     assert.ok(moveDay.includes(`${TAG} Sunil until Wed 15 May (arrives today)`) || moveDay.includes(`ready for ${TAG} Sunil`), `and the new one readied: ${moveDay}`);
     for (const [d, n] of [['2030-05-03', '1'], ['2030-05-10', '2']]) {
       writeFileSync(pdf, await generateDailySchedulePdf(d, prisma));
