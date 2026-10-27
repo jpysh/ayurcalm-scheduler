@@ -70,7 +70,7 @@ export async function makeItMine(tx: Prisma.TransactionClient, body: Mine) {
     await tx.therapyRoom.updateMany({ where: { id: { in: fits.map((r) => r.id).filter((id) => id !== opd.id) } }, data: { is_active: false } });
   }
   // A consultation is how every new resident starts, so it is never switched off.
-  // Pasted names the example lacks (#PASTE): an hour in any room until Therapies says otherwise.
+  // Pasted names the example lacks (#1308): an hour in any room until Therapies says otherwise.
   const added = await Promise.all((body.new_therapies ?? []).map((name) => tx.therapy.create({ data: { name, duration_minutes: 60, required_amenities: [] } })));
   await tx.therapy.updateMany({ where: { id: { notIn: [...body.therapy_ids, ...added.map((t) => t.id)] }, is_consultation: false }, data: { is_active: false } });
   const kept = await tx.therapy.findMany({ where: { is_active: true }, select: { id: true, is_consultation: true } });

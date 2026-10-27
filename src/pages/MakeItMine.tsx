@@ -54,6 +54,7 @@ export default function MakeItMine() {
   const [opd, setOpd] = useState("OPD");
   const [therapies, setTherapies] = useState<Item[]>([]);
   const [residentsText, setResidentsText] = useState("");
+  const [otherText, setOtherText] = useState("");
   const [residents, setResidents] = useState<Named[]>([]);
   // Rows pasted from a spreadsheet or read from a CSV carry their own dates (#741); names alone arrive tomorrow.
   const [sheet, setSheet] = useState<Resident[]>([]);
@@ -81,7 +82,12 @@ export default function MakeItMine() {
 
   const team = [...doctors.map((p) => ({ ...p, doctor: true })), ...therapists.map((p) => ({ ...p, doctor: false }))];
   const teamOk = !!centre.trim() && doctors.length > 0 && therapists.length > 0 && team.every((p) => p.gender);
-  const kitOk = !!opd.trim() && rooms.some((r) => r.on && r.name.trim()) && therapies.some((t) => t.on);
+  // Pasted therapies (#1308): a name the example already has is ticked, never made twice.
+  const pasted = names(otherText, []).map((p) => p.name);
+  const known = (n: string) => therapies.find((t) => t.name.toLowerCase() === n.toLowerCase());
+  const fresh = pasted.filter((n) => !known(n));
+  const kept = therapies.filter((t) => t.on || pasted.some((n) => known(n) === t));
+  const kitOk = !!opd.trim() && rooms.some((r) => r.on && r.name.trim()) && kept.length + fresh.length > 0;
   const residentsOk = sheet.length ? sheet.every((p) => !p.problems.length) : residents.every((p) => p.gender);
   const arriving = sheet.length ? sheet.length : residents.length;
 
@@ -94,7 +100,7 @@ export default function MakeItMine() {
           centre_name: centre.trim(), team,
           rooms: rooms.filter((r) => r.on && r.name.trim()).map((r) => ({ id: r.id, name: r.name.trim() })),
           consult_room: opd.trim(),
-          therapy_ids: therapies.filter((t) => t.on).map((t) => t.id),
+          therapy_ids: kept.map((t) => t.id), new_therapies: fresh,
         }),
       });
       if (!res.ok) { toast.error((await res.json().catch(() => ({})))?.error || "Your centre was not saved. Try again."); return; }
@@ -167,6 +173,8 @@ export default function MakeItMine() {
           <Group label="Therapies you give" note={`${therapies.filter((t) => t.on).length} of ${therapies.length}. Untick any you do not give; lengths and prices are in Settings.`}>
             {therapies.map((t, i) => <Tick key={t.id} label={t.name} on={t.on} set={(on) => setTherapies((all) => all.map((x, j) => (j === i ? { ...x, on } : x)))} />)}
           </Group>
+          <Area label="Other therapies you give" rows={4} value={otherText} placeholder={"One per line, or paste a list"} onChange={(e) => setOtherText(e.target.value)}
+            note={fresh.length ? `Adds ${fresh.join(", ")}: an hour each, in any room. Change either in Therapies.` : "Copied from WhatsApp or a spreadsheet."} />
           {foot(kitOk, "Continue", 1, "Name the consultation room, and keep at least one treatment room and one therapy.")}
         </form>
       )}
