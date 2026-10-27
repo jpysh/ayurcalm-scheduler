@@ -50,9 +50,12 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
   const [to, setTo] = useState("");
   const [range, setRange] = useState<Room[] | null>(null);
   // The week at a glance (#1213): who sleeps where for seven nights from the chosen day.
-  const [view, setView] = useState<"night" | "week">("night");
+  const [view, setView] = useState<"night" | "week" | "month">("night");
   const [week, setWeek] = useState<Room[] | null>(null);
   useEffect(() => { if (view !== "week") return; setWeek(null); fetchRooms(day, addDays(day, 7)).then(setWeek); }, [view, day, version]);
+  // A month of nights at a glance (#1257): rooms taken each night, from the server's count.
+  const [month, setMonth] = useState<{ date: string; rooms: number; taken: number; free: number; out: number }[] | null>(null);
+  useEffect(() => { if (view !== "month") return; setMonth(null); fetchJsonWithTimeout<typeof month>(`${API_BASE}/guest-rooms/nights?from=${day}&days=31`).then((r) => setMonth(Array.isArray(r) ? r : [])).catch(() => setMonth([])); }, [view, day, version]);
   useEffect(() => { setNight(null); fetchRooms(day, addDays(day, 1)).then(setNight); }, [day, version]);
   useEffect(() => { setRange(null); if (from && to > from) fetchRooms(from, to).then(setRange); }, [from, to, version]);
 
@@ -102,8 +105,12 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
         </div>
       ) : (<>
         <div className="mt-3"><WeekStrip day={day} today={today} setDay={setDay} /></div>
-        <div className="mt-2"><Seg<"night" | "week"> value={view} onChange={setView} options={[["night", "This night"], ["week", "Seven nights"]]} /></div>
-        {view === "week" ? (week === null ? <Loading rows={6} /> : byType(week).map(([type, rooms]) => (
+        <div className="mt-2"><Seg<"night" | "week" | "month"> value={view} onChange={setView} options={[["night", "This night"], ["week", "Seven nights"], ["month", "Month"]]} /></div>
+        {view === "month" ? (month === null ? <Loading rows={8} /> : (
+          <ListGroup title="Rooms taken each night" count={`${month[0]?.rooms ?? 0} rooms`}>
+            {month.map((m) => <Row key={m.date} title={dayText(m.date)} facts={`${m.taken} taken${m.out ? ` · ${m.out} out of use` : ""}`} trailing={m.free ? `${m.free} free` : "Full"} flag={m.free ? undefined : "Full"} onClick={() => { setDay(m.date); setView("night"); }} />)}
+          </ListGroup>
+        )) : view === "week" ? (week === null ? <Loading rows={6} /> : byType(week).map(([type, rooms]) => (
           <div key={type} className="mt-3">
             <SectionHead>{type}</SectionHead>
             <WeekBars days={[0, 1, 2, 3, 4, 5, 6].map((n) => ({ label: new Date(`${addDays(day, n)}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "narrow", day: "numeric", timeZone: "UTC" }), today: addDays(day, n) === today }))}
