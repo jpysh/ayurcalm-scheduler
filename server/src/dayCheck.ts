@@ -383,6 +383,24 @@ export async function checkDay(day: Date, prisma: PrismaClient, opts: CheckOptio
     });
   }
 
+  // A treatment before the stay's first consultation (#1241): a note, never a refusal.
+  const firsts = await prisma.appointment.findMany({ where: { patient_id: { in: stays.map((s) => s.patient_id) }, Therapy: { is_consultation: true }, status: { notIn: ['cancelled', 'no_show'] } }, orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }] });
+  for (const stay of stays) {
+    const first = firsts.find((c) => c.patient_id === stay.patient_id && c.scheduled_date >= stay.start_date && c.scheduled_date <= stay.end_date);
+    const at = first && `${first.scheduled_date.toISOString().slice(0, 10)} ${first.start_time}`;
+    const early = at ? appointments.filter((a) => a.patient_id === stay.patient_id && a.status !== 'cancelled' && !ctx.therapies.find((t) => t.id === a.therapy_id)?.is_consultation && `${day.toISOString().slice(0, 10)} ${a.start_time}` < at) : [];
+    if (!early.length || !first) continue;
+    const when = first.scheduled_date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+    raw.push({
+      id: `BEFORE_CONSULTATION:${stay.patient_id}`, kind: 'BEFORE_CONSULTATION', problem_class: 'worth_knowing',
+      who: nameOfPatient(stay.patient_id), start_time: early[0].start_time,
+      what: `${early.length === 1 ? 'A treatment is' : `${early.length} treatments are`} before their first consultation (${when} at ${first.start_time}).`,
+      group_key: 'BEFORE_CONSULTATION', group_label: 'Treated before their first consultation',
+      appointment_id: early[0].id, patient_id: stay.patient_id, patient_name: nameOfPatient(stay.patient_id), staff_id: null,
+      fix: null, choices: [], no_fix_reason: null, cost: COST.IDLE_RESIDENT,
+    });
+  }
+
   // Over the daily limit (#330): a note, since the admin may have chosen it with Book anyway.
   const max = ctx.settings?.max_treatments_per_day ?? DEFAULT_MAX_PER_DAY;
   for (const stay of stays) {

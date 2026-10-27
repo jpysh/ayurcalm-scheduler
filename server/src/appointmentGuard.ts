@@ -232,7 +232,7 @@ export type Action = {
   count?: number;
 };
 
-export type Soft = { reason: 'DAY_FULL' | 'SAME_THERAPY' | 'ONCE_PER_COURSE' | 'AFTER_PURIFICATION'; message: string; actions: Action[] };
+export type Soft = { reason: 'DAY_FULL' | 'SAME_THERAPY' | 'ONCE_PER_COURSE' | 'AFTER_PURIFICATION' | 'BEFORE_CONSULTATION'; message: string; actions: Action[] };
 
 export const DEFAULT_MAX_PER_DAY = 4;
 
@@ -264,6 +264,22 @@ export function softWarnings(c: { id?: string; patient_id: string; therapy_id?: 
  * asked, never refused, as the other soft rules are. A day visitor has no stay
  * and is never asked.
  */
+/**
+ * A treatment before the stay's first consultation (#1241): a note, never a refusal and never asked about.
+ * Routine treatments often need no consultation, and a guest may ask while the doctor is away.
+ */
+export async function beforeConsultation(c: { patient_id: string; therapy_id?: string; scheduled_date: Date; start_time?: string }, prisma: PrismaClient): Promise<Soft | null> {
+  const therapy = c.therapy_id ? await prisma.therapy.findUnique({ where: { id: c.therapy_id } }) : null;
+  if (!therapy || therapy.is_consultation) return null;
+  const stay = await prisma.patientStay.findFirst({ where: { patient_id: c.patient_id, start_date: { lte: c.scheduled_date }, end_date: { gte: c.scheduled_date } } });
+  if (!stay) return null;
+  const first = await prisma.appointment.findFirst({ where: { patient_id: c.patient_id, Therapy: { is_consultation: true }, scheduled_date: { gte: stay.start_date, lte: stay.end_date }, ...HAPPENING }, orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }] });
+  const when = (d: Date, t: string) => `${d.toISOString().slice(0, 10)} ${t}`;
+  if (!first || when(first.scheduled_date, first.start_time) <= when(c.scheduled_date, c.start_time ?? '23:59')) return null;
+  const day = first.scheduled_date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  return { reason: 'BEFORE_CONSULTATION', message: `This is before their first consultation (${day} at ${first.start_time}).`, actions: [] };
+}
+
 export async function oncePerCourse(c: { id?: string; patient_id: string; therapy_id?: string; scheduled_date: Date }, prisma: PrismaClient): Promise<Soft | null> {
   if (!c.therapy_id) return null;
   const therapy = await prisma.therapy.findUnique({ where: { id: c.therapy_id } });

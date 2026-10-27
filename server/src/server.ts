@@ -12,7 +12,7 @@ import { renderDischarge } from './pdf/dischargePdf.js';
 import { dischargeOf, saveDischarge } from './discharge.js';
 import { staffWeek } from './staffWeek.js';
 import { linkLapsed, newLinkToken } from './links.js';
-import { findConflict, HAPPENING, loadDay, nearestFreeTime, oncePerCourse, softWarnings, staffDay, fullFrom, type Action } from './appointmentGuard.js';
+import { beforeConsultation, findConflict, HAPPENING, loadDay, nearestFreeTime, oncePerCourse, softWarnings, staffDay, fullFrom, type Action } from './appointmentGuard.js';
 import { moveOffClosedDays, replanRoomDay, replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
 import { applyCourseDiet, courseDiet, dietTimeline, restoreDiet, startDietFrom, extendDiet, shiftDiet } from './patientDiet.js';
 import { checkDay, headlineFor, planRange, rowOptions } from './dayCheck.js';
@@ -2037,7 +2037,8 @@ app.post('/appointments/one', async (req: Request, res: Response) => {
   }
   const appt = await prisma.appointment.create({ data: { ...candidate, session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
   // The booked panel says how full their day is now.
-  res.status(201).json({ ...appt, day_count: ctx.appointments.filter((a) => a.patient_id === b.patient_id).length + 1 });
+  const note = await beforeConsultation(candidate, prisma);
+  res.status(201).json({ ...appt, day_count: ctx.appointments.filter((a) => a.patient_id === b.patient_id).length + 1, ...(note ? { note: note.message } : {}) });
 });
 
 app.get('/appointments/:id/history', async (req: Request, res: Response) => {
