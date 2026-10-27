@@ -637,6 +637,13 @@ app.post('/patients/:id/stays', async (req: Request, res: Response) => {
   // A returning guest's New stay starts on their last package (#437) and, like a new patient, in a first consultation (#575).
   const { package_id, guest_room_id, consultation } = z.object({ package_id: z.string().uuid().nullish(), guest_room_id: z.string().uuid().nullish(), consultation: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), start_time: z.string().regex(/^\d\d:\d\d$/), staff_id: z.string().uuid(), room_id: z.string().uuid() }).optional() }).parse(req.body);
   const dates = staySchema.parse(req.body);
+  // A stay that has already ended is more often a year typed wrong than a stay being recorded late (#1252): asked once.
+  const tz = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
+  if (dates.end_date < centreClock(tz).date && req.body?.confirm !== true) {
+    const said = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+    res.status(409).json({ soft: true, reason: 'STAY_IN_PAST', message: `This stay is in the past: ${said(dates.start_date)} to ${said(dates.end_date)}. Save anyway?`, actions: [{ kind: 'book_anyway', label: 'Save anyway' }] });
+    return;
+  }
   const stay = stayData(dates);
   const consult = consultation ? await prisma.therapy.findFirst({ where: { is_consultation: true } }) : null;
   if (consultation && consult) {

@@ -435,13 +435,19 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     changed && target.package && target.package.days !== days ? `Package: ${target.package.days} days; the stay is now ${days}.` : "",
     room ? `${room.taken} ${room.move_to ? `They stay in ${room.move_to.name}${room.move_to.type !== target.accommodation?.name ? ` (${room.move_to.type})` : ""} from ${room.move_from ? dayText(room.move_from) : "tonight"}; the nights before keep their room.` : "No guest room is free for those nights, so saving leaves them without one from then."}` : "",
   ].filter(Boolean);
-  const save = async () => {
+  const save = async (anyway = false) => {
     setBusy(true);
     const res = target.id
       ? await saveStay(patient.id, target.id, { start_date: start, end_date: end, cancel_after: cancels > 0, ...(timeChanged ? { leaving_time: leaveAt, arriving_time: arriveAt } : {}), ...(missed ? { late } : {}), ...(room ? { guest_room_id: room.move_to?.id ?? null, ...(room.move_from ? { move_from: room.move_from } : {}) } : {}) })
-      : await fetch(`${API_BASE}/patients/${patient.id}/stays`, { method: "POST", headers: json, body: JSON.stringify({ start_date: start, end_date: end, package_id: target.package?.id ?? null, guest_room_id: guestRoom || null, ...(visit ? { consultation: { date: visit.date, start_time: visit.start_time, staff_id: visit.staff_id, room_id: visit.room_id } } : {}) }) });
+      : await fetch(`${API_BASE}/patients/${patient.id}/stays`, { method: "POST", headers: json, body: JSON.stringify({ start_date: start, end_date: end, package_id: target.package?.id ?? null, guest_room_id: guestRoom || null, ...(visit ? { consultation: { date: visit.date, start_time: visit.start_time, staff_id: visit.staff_id, room_id: visit.room_id } } : {}), confirm: anyway }) });
     setBusy(false);
-    if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The stay was not saved. Try again."); return; }
+    if (!res.ok) {
+      const why = await res.json().catch(() => ({}));
+      // In the past (#1252): asked once, saved on the second tap.
+      if (why.soft) { toast.warning(why.message, { duration: 10000, action: { label: why.actions?.[0]?.label ?? "Save anyway", onClick: () => void save(true) } }); return; }
+      toast.error(why.message || "The stay was not saved. Try again.");
+      return;
+    }
     const out = await res.json().catch(() => ({}));
     const undo = target.id ? () => undoWrite(async (anyway) => {
       const back = await saveStay(patient.id, target.id!, { start_date: target.start, end_date: target.end, ...(out.rooms_before ? { restore_rooms: out.rooms_before } : {}), ...(anyway ? {} : { if_still: { start_date: start, end_date: end } }) });
@@ -506,7 +512,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
   return (
     <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} title={target.id ? `Stay for ${first(patient.name)}` : "New stay"}
       note={target.id ? `Now ${dayText(target.start)} to ${dayText(target.end)} · ${plural(oldDays, "day")}` : "Arriving, leaving, and the rest follows."}
-      foot={<Foot label={label} ok={end >= start && (changed || !target.id)} busy={busy} save={save} />}>
+      foot={<Foot label={label} ok={end >= start && (changed || !target.id)} busy={busy} save={() => void save()} />}>
       <div className="border-t border-border">
         <ChangeLine label={start > today || !target.id ? "Arriving" : "Arrived"} value={dayText(start)} select={<LineDate label={start > today || !target.id ? "Arriving" : "Arrived"} value={start} onChange={(v) => { setStart(v); if (end < v) setEnd(v); }} />} />
         <ChangeLine label="Leaving" value={dayText(end)} select={<LineDate label="Leaving" value={end} min={start} onChange={setEnd} />} />
