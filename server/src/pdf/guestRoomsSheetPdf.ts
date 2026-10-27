@@ -5,8 +5,8 @@ import { guestRoomsFor, roomOn } from '../guestRooms.js';
 import { addHeader } from './dailySchedulePdf.js';
 
 type Guest = { name: string; group?: string | null; start_date: string; end_date: string; from_room?: string | null; to_room?: string | null };
-type SheetRoom = { name: string; beds: number; type: string; guests: Guest[]; /** Out of use for this day (#563). */ out?: { reason: string | null } | null };
-export type RoomRow = { room: string; kind: 'turnover' | 'leaving' | 'arriving' | 'staying' | 'free' | 'out'; line: string };
+type SheetRoom = { name: string; beds: number; type: string; guests: Guest[]; /** Out of use for this day (#563). */ out?: { reason: string | null } | null; /** Held for a group not yet named in it (#1196). */ held?: { group: string } | null };
+export type RoomRow = { room: string; kind: 'turnover' | 'leaving' | 'arriving' | 'staying' | 'free' | 'held' | 'out'; line: string };
 
 const dayText = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
 const list = (names: string[]) => names.join(', ');
@@ -50,7 +50,7 @@ export function buildGuestRoomsSheet(rooms: SheetRoom[], day: string) {
       if (arriving.length) sharedArriving++;
       if (leaving.length && arriving.length) handover.push(r.name);
       row = { room: r.name, kind: 'staying', line: `${until(staying)}${leaving.length ? ` · ${gone(leaving)} today` : ''}${arriving.length ? ` · ready a bed for ${until(arriving, ' (arrives today)')}` : ''}${spare > 0 && r.beds > 1 && !r.out ? ` · ${spare} bed free` : ''}` };
-    } else row = { room: r.name, kind: 'free', line: 'Free' };
+    } else row = r.held ? { room: r.name, kind: 'held', line: `Held for ${r.held.group}` } : { room: r.name, kind: 'free', line: 'Free' };
     // A guest still in a room taken out of use must move: the sheet says so as the inbox does (#624).
     if (r.out && row.kind !== 'out') row.line += ` · out of use${r.out.reason ? `: ${r.out.reason}` : ''}${row.kind === 'staying' ? ', needs another room' : ''}`;
     const last = groups[groups.length - 1];
@@ -60,7 +60,7 @@ export function buildGuestRoomsSheet(rooms: SheetRoom[], day: string) {
   const n = (k: RoomRow['kind'][]) => all.filter((r) => k.includes(r.kind)).length;
   return {
     groups,
-    counts: { rooms: all.length, makeUp: n(['turnover', 'leaving']) + sharedMakeUp, arriving: n(['turnover', 'arriving']) + sharedArriving, staying: n(['staying']), free: n(['free']), out: n(['out']) },
+    counts: { rooms: all.length, makeUp: n(['turnover', 'leaving']) + sharedMakeUp, arriving: n(['turnover', 'arriving']) + sharedArriving, staying: n(['staying']), free: n(['free']), held: n(['held']), out: n(['out']) },
     first: all.filter((r) => r.kind === 'turnover' || handover.includes(r.room)).map((r) => r.room),
   };
 }
@@ -92,7 +92,7 @@ export async function generateGuestRoomsSheetPdf(dateISO: string, prisma: Prisma
     doc.font('Helvetica').fontSize(11).text('No guest rooms are set up.', x);
   } else {
     const c = sheet.counts;
-    doc.font('Helvetica').fontSize(10.5).text(`To make up ${c.makeUp}  ·  Arriving ${c.arriving}  ·  Staying on ${c.staying}  ·  Free ${c.free}${c.out ? `  ·  Out of use ${c.out}` : ''}`, x, doc.y, { width: w, align: 'center' });
+    doc.font('Helvetica').fontSize(10.5).text(`To make up ${c.makeUp}  ·  Arriving ${c.arriving}  ·  Staying on ${c.staying}  ·  Free ${c.free}${c.held ? `  ·  Held ${c.held}` : ''}${c.out ? `  ·  Out of use ${c.out}` : ''}`, x, doc.y, { width: w, align: 'center' });
     if (roomless.length) doc.font('Helvetica-Bold').fontSize(10.5).text(`No room given yet, staying tonight (${roomless.length}): ${roomless.join(', ')}`, x, doc.y + 4, { width: w, align: 'center' });
     if (sheet.first.length) doc.font('Helvetica-Bold').fontSize(10.5).text(`Make up first, someone arrives into: ${sheet.first.join(', ')}`, x, doc.y + 4, { width: w, align: 'center' });
     doc.moveDown(0.5);
@@ -109,7 +109,7 @@ export async function generateGuestRoomsSheetPdf(dateISO: string, prisma: Prisma
     head(g.type, false);
     for (const r of g.rows) {
       const lineW = w - 20 - ROOM_W;
-      const lineFont = r.kind === 'free' || r.kind === 'staying' || r.kind === 'out' ? 'Helvetica' : 'Helvetica-Bold';
+      const lineFont = r.kind === 'free' || r.kind === 'held' || r.kind === 'staying' || r.kind === 'out' ? 'Helvetica' : 'Helvetica-Bold';
       // A shared room's guests can outrun one line; the row grows rather than lose a name (#847).
       const rowH = Math.max(ROW, doc.font(lineFont).fontSize(10.5).heightOfString(r.line, { width: lineW }) + 4);
       // PDFKit would carry text to a new page but leave the box behind: break before the row.

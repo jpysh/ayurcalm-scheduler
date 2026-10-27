@@ -135,7 +135,7 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
           return <>
             {into.length ? <p className={`px-1 pt-2 ${noteText}`}>Arriving: {into.join(", ")}</p> : null}
             {out.length ? <ListGroup title={`To make up${day === today ? " today" : ""}`} count={`${out.filter((r) => r.ready_on === day).length} of ${out.length} ready`}>
-              {out.map((r) => <Row key={r.id} title={r.name} facts={arriving(r).length ? `${arriving(r).map((g) => g.name).join(", ")} arrives` : undefined}
+              {out.map((r) => <Row key={r.id} title={r.name} facts={[...leaving(r).filter((g) => g.leaving_time).map((g) => `${g.name} leaves at ${g.leaving_time}`), ...arriving(r).map((g) => `${g.name} arrives`)].join(" · ") || undefined}
                 trailing={r.ready_on === day ? "Ready ✓" : "Mark ready"} onClick={() => markReady(r, r.ready_on !== day)} />)}
             </ListGroup> : null}
           </>;

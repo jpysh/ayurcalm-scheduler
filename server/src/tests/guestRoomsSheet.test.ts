@@ -44,7 +44,7 @@ assert.equal(by.N2.kind, 'out');
 assert.equal(by.N2.line, 'Out of use: No electricity');
 assert.equal(by.N3.line, 'Rohan Das · until Wed 14 Oct · out of use: Leak, needs another room');
 assert.equal(by.N4.line, 'Tara Bose · until Wed 14 Oct · out of use, needs another room'); // no spare bed in a room nobody may sleep in (#624)
-assert.deepEqual(s.counts, { rooms: 14, makeUp: 4, arriving: 4, staying: 8, free: 2, out: 1 });
+assert.deepEqual(s.counts, { rooms: 14, makeUp: 4, arriving: 4, staying: 8, free: 2, held: 0, out: 1 });
 assert.deepEqual(s.first, ['T4', 'A4'], 'a bed that changes hands today is made up first too');
 assert.deepEqual(s.groups.map((x) => x.type), ['Trishul House', 'Nanda House']);
 
@@ -66,6 +66,9 @@ assert.equal(outNight([offRow('2026-10-09', '2026-10-10', null)], 'r1', d('2026-
 assert.equal(outNight([offRow('2026-10-09', '2026-10-10', null)], 'r2', d('2026-10-09'), d('2026-10-10')), null); // another room
 // A group's guests carry its name (#1196).
 assert.equal(by_(buildGuestRoomsSheet([{ name: 'G1', beds: 1, type: 'Trishul House', guests: [{ ...g('Hari Rao', '2026-10-08', '2026-10-15'), group: 'Pune Yoga' }] }], day)).G1.line, 'Ready for Hari Rao [Pune Yoga] · until Thu 15 Oct');
+// A room held for a group not yet named (#1196) is held, never free.
+const held = buildGuestRoomsSheet([{ name: 'H1', beds: 1, type: 'Huts', guests: [], held: { group: 'Pune Yoga' } }], day);
+assert.deepEqual([by_(held).H1.line, held.counts.free, held.counts.held], ['Held for Pune Yoga', 0, 1]);
 // A centre with none.
 assert.equal(buildGuestRoomsSheet([], day).counts.rooms, 0);
 console.log('guest rooms sheet ok');

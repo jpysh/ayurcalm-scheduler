@@ -138,7 +138,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
           <Btn kind="quiet" inline className="-ml-1 mt-3" onClick={() => everything(found.q)}>Search everything for “{found.q}” ›</Btn>
         </>)
       ) : inHouse === null ? <Loading /> : (<>
-        <div className="flex gap-1.5 px-1 pb-1">
+        <div className="flex flex-wrap gap-1.5 px-1 pb-1">
           <button type="button" className={chip} aria-pressed={!onlyNeeds && !groupsOn} onClick={() => { setOnlyNeeds(false); setGroupsOn(false); }}>In house</button>
           <button type="button" className={chip} aria-pressed={onlyNeeds} onClick={() => { setOnlyNeeds(true); setGroupsOn(false); }}>Need you{needy.length ? ` · ${needy.length}` : ""}</button>
           <button type="button" className={chip} aria-pressed={groupsOn} onClick={() => { setGroupsOn(true); setOnlyNeeds(false); }}>Groups{groupList.length ? ` · ${groupList.length}` : ""}</button>
