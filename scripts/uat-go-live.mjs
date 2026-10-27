@@ -17,7 +17,7 @@ async function check(name, url, test) {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${url} -> ${page.url()}${res?.err ? ' ' + res.err : ''}`);
 }
 await check('landing', 'https://ruta.jains.es/', (u, b) => /Ruta/.test(b) && /Run a calmer centre/.test(b));
-await check('old-path-redirect', 'https://jains.es/ruta', (u) => u.startsWith('https://ruta.jains.es'));
+await check('old-path-redirect', 'https://jains.es/ruta', (u) => new URL(u).host === 'ruta.jains.es');
 await check('start', 'https://ruta.jains.es/start', (u, b) => /Centre name/.test(b) && /Look first/.test(b));
 await check('demo', 'https://ruta-demo.jains.es/', (u, b) => /Start free/.test(b));
 await check('old-signup', 'https://signup.jains.es/', () => true);
