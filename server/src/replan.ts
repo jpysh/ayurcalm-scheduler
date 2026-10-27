@@ -303,7 +303,8 @@ export async function planDay(
 
     const canTake = (sid: string, s: number, e: number) => free(staffBusy[sid], s, e);
     // The guard refuses these hours (#670), so no tier may offer them.
-    const shut = (d: Date, s: number, e: number) =>
+    // Outside the centre's hours too (#1297): "same time" is no answer for a treatment after closing.
+    const shut = (d: Date, s: number, e: number) => s < open || e > close ||
       [...(appt.therapy_id ? offOnDay(timeOff, 'therapy', appt.therapy_id, d) : []), ...offOnDay(timeOff, 'patient', appt.patient_id, d)].some((b) => overlaps(b.s, b.e, s, e));
     // A new time never covers a whole required event such as Lunch: the day check would report it (#1135).
     const meal = (d: Date, s: number, e: number) => !!coversRequiredEvent(events as RequiredEventRow[], d, s, e);

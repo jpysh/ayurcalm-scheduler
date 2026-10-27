@@ -87,3 +87,13 @@ console.log('offHours change: ok');
   assert.equal(findConflict(at('10:00'), open(all, [off({ entity_type: 'center', description: 'Holi' })]))?.message, 'The centre is closed for Holi.');
   assert.equal(findConflict(at('10:00'), ctx([])), null, 'no settings yet: open');
 }
+
+// Centre hours shortened with treatments already after the new closing (#1297): refused, so the day check flags them.
+{
+  const hours = { ...ctx([]), settings: { opening_time: '09:00', closing_time: '17:00' } } as unknown as DayContext;
+  assert.equal(findConflict(at('16:00'), hours), null, 'ends at closing');
+  assert.equal(findConflict(at('16:30'), hours)?.reason, 'CENTRE_HOURS');
+  assert.equal(findConflict(at('16:30'), hours)?.message, 'The centre is open 09:00 to 17:00.');
+  assert.equal(findConflict(at('08:30'), hours)?.reason, 'CENTRE_HOURS', 'before opening too');
+}
+console.log('offHours centre hours: ok');

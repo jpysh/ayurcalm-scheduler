@@ -10,7 +10,7 @@ import { API_BASE } from "@/lib/apiBase";
 const SHORT: Record<string, string> = {
   STAFF_OFF: "Therapist on leave", ROOM_OFF: "Room out of use", THERAPY_OFF: "Therapy not given that day", PATIENT_OFF: "Patient has no treatments then", STAFF_BUSY: "Therapist booked twice", STAFF_IN_EVENT: "Therapist in an event",
   GENDER_MISMATCH: "Therapist must match", STAFF_SHORT: "Needs 2 therapists", PATIENT_BUSY: "Patient booked twice",
-  ROOM_BUSY: "Room booked twice", AMENITIES_MISSING: "Room lacks what it needs", NO_THERAPIST: "Needs a therapist", EVENT_OVERLAP: "Runs through an event",
+  ROOM_BUSY: "Room booked twice", AMENITIES_MISSING: "Room lacks what it needs", NO_THERAPIST: "Needs a therapist", EVENT_OVERLAP: "Runs through an event", CENTRE_HOURS: "Outside the centre's hours",
 };
 const flagsFor = (problems: { appointment_id: string | null; kind: string; problem_class: string; what?: string; start_time?: string | null }[], history: Record<string, string> = {}) =>
   Object.fromEntries([...Object.entries(history).map(([id, text]) => [id, { text, blocking: false, info: true }]), ...problems.filter((p) => p.appointment_id && p.kind !== "CONSULTED").map((p) => [p.appointment_id!, { text: partDay(p) || SHORT[p.kind] || "Needs a look", blocking: p.problem_class === "blocking" }])]);
