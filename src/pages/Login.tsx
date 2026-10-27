@@ -32,6 +32,12 @@ const Login = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The demo opens straight on its example day (#1270): nobody should have to sign in to look.
+  useEffect(() => {
+    if (demo && !signedOut && !window.location.hash) signIn("login", { email: demo.email, password: demo.password });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demo]);
+
   const signIn = async (path: "login" | "link", body: object) => {
     setIsLoading(true);
     setError("");
