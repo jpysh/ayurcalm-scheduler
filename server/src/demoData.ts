@@ -29,6 +29,7 @@ export async function wipeDemo(tx: Prisma.TransactionClient, keep: Keep[] = []) 
   if (!kept('rooms')) await tx.timeOff.deleteMany({ where: { entity_type: 'room' } });
   await tx.timeOff.deleteMany({ where: { entity_type: 'therapy' } });
   if (kept('events')) await tx.programEvent.updateMany({ data: { patient_ids: [] } });
+  await tx.groupHold.deleteMany({});
   await tx.patientStay.deleteMany({});
   // The demo's guest rooms are its own numbering, not the centre's (#456).
   await tx.guestRoom.deleteMany({});
