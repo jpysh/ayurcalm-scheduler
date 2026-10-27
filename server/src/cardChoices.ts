@@ -6,7 +6,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { centreClosed, eventHitsDay, gives, hoursOn, overlaps, staffAwayOnDay, type EventRow } from './availability.js';
-import { HAPPENING, findConflict, loadDay, oncePerCourse, softWarnings, type Action, type Candidate, type Soft } from './appointmentGuard.js';
+import { HAPPENING, beforeConsultation, findConflict, loadDay, oncePerCourse, softWarnings, type Action, type Candidate, type Soft } from './appointmentGuard.js';
 
 export type Kind = 'time' | 'staff' | 'room' | 'therapy';
 /** `now` marks the treatment as it stands, listed first so the admin sees what they change from (#201). */
@@ -313,7 +313,8 @@ export async function bookingOptions(dayISO: string, nowMinutes: number | null, 
   const early = anyone.find((a) => a.staff_id !== lead);
   const sooner = first_choice && early && (first_choice.date > dayISO || early.start_time < first_choice.start_time) ? { ...early, date: dayISO } : null;
   const once = await oncePerCourse({ patient_id: patient.id, therapy_id: therapy.id, scheduled_date: day }, prisma);
-  const warnings = [...softWarnings({ patient_id: patient.id, therapy_id: therapy.id }, ctx), ...(once ? [once] : [])];
+  const early_consult = await beforeConsultation({ patient_id: patient.id, therapy_id: therapy.id, scheduled_date: day, start_time: at }, prisma);
+  const warnings = [...softWarnings({ patient_id: patient.id, therapy_id: therapy.id }, ctx), ...(once ? [once] : []), ...(early_consult ? [early_consult] : [])];
   if (!times.length) return { times, staff: [], rooms: [], ...(await noTimeWhy(ctx, day, nowMinutes, therapy, patient, stay, prisma)), warnings, their_therapist_id: patient.preferred_staff_id, first_choice, sooner };
   const chosen = times.find((x) => x.start_time === at) || times[0];
   const base: Candidate = { scheduled_date: day, start_time: chosen.start_time, duration_minutes: chosen.duration_minutes, staff_id: chosen.staff_id, co_staff_ids: chosen.co_staff_ids, room_id: chosen.room_id, patient_id: patient.id, therapy_id: therapy.id };
