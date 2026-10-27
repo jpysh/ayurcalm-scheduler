@@ -49,11 +49,13 @@ export function took(ms) {
 export const linkOpen = (s, now) => s.state === 'ready' && now - (s.ready_at ?? s.at) < 30 * 60_000;
 
 // A merge to main goes out in order (#904): demo, then live centres, then trials; the first failure stops it.
+// `done` and the failed site are what a rollback puts back (#1178); later sites were never touched.
 export async function rollout(sites, up) {
+  const done = [];
   for (const s of sites) {
-    try { await up(s); } catch (e) { return { failed: s.slug, why: String(e.message || e).split('\n')[0].slice(0, 200) }; }
+    try { await up(s); done.push(s); } catch (e) { return { failed: s.slug, why: String(e.message || e).split('\n')[0].slice(0, 200), touched: [...done, s] }; }
   }
-  return { failed: null };
+  return { failed: null, touched: done };
 }
 
 /** The weekly release hour (#1178): Wednesday 20:00 to 20:59 in India, after the 18:00 end of treatments. */

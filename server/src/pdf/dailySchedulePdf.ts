@@ -332,7 +332,9 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
       const stay = staysToday.find((s) => s.patient_id === id && s.on_site);
       // Moved mid-stay (#1164): a day before the move prints the room they slept in then.
       const room = stay && (roomOn(stay, day.getTime()) === stay.guest_room_id ? stay.GuestRoom?.name : stay.EarlierRooms.find((e) => e.guest_room_id === roomOn(stay, day.getTime()))?.GuestRoom.name);
-      items.push({ kind: 'row', name: `${patientById[id] || id}${room ? `\n${room}` : ''}`, cells, group });
+      // A group's name with the room (#1196): therapists see who came together and share the programme.
+      const under = [room, stay?.group_name].filter(Boolean).join(' · ');
+      items.push({ kind: 'row', name: `${patientById[id] || id}${under ? `\n${under}` : ''}`, cells, group });
     }
   }
 

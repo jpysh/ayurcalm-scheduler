@@ -111,7 +111,7 @@ export async function guestRoomsFor(db: Db, from: Date, to: Date, except?: strin
       /** The first night with no bed left, and who has them. */
       full_on: full === null ? null : { date: iso(new Date(full)), names: sleeping(full).map((s) => s.Patient.name) },
       /** A guest moved mid-stay (#1210) names the room they came from and the one they go to, so a move never reads as an arrival or a leaving. */
-      guests: guests.map((s) => ({ stay_id: s.id, patient_id: s.patient_id, name: s.Patient.name, start_date: iso(s.start_date), end_date: iso(s.end_date), from_room: s.from_room && names.get(s.from_room), to_room: s.to_room && names.get(s.to_room), leaving_time: s.to_room ? null : s.leaving_time })),
+      guests: guests.map((s) => ({ stay_id: s.id, patient_id: s.patient_id, name: s.Patient.name, group: s.group_name, start_date: iso(s.start_date), end_date: iso(s.end_date), from_room: s.from_room && names.get(s.from_room), to_room: s.to_room && names.get(s.to_room), leaving_time: s.to_room ? null : s.leaving_time })),
     };
   });
 }
