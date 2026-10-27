@@ -15,7 +15,6 @@ import PageHead from "@/components/PageHead";
 import { PhotoImg, shrinkPhoto } from "@/components/PassportPhoto";
 import { chip, saveError, Area, ChangeLine, TextRow, ChecklistBar, DateRow, datePair, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, money, Btn, LinkBtn, NightChips } from "@/components/kit";
 import { AccommodationSheet, DietSheet, DischargeSheet, NextWeekSheet, PackageSheet, StaySheet, takenBy, type CardStay, type GuestRoomNight, type StayTarget } from "@/components/CardSheets";
-import { Search } from "lucide-react";
 import { marked } from "@/components/SearchScreen";
 import type { AttentionItem } from "@/lib/attention";
 
@@ -122,7 +121,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
   const leavesIn = (end: string) => Math.round((Date.parse(end) - Date.parse(`${today}T00:00:00Z`)) / DAY_MS);
   return (
     <div>
-      <PageHead title="Patients" note={inHouse === null ? '' : inHouseNote(people.map((x) => x.s!))} gear={{ label: 'What needs you: patient rules', run: openRules }} />
+      <PageHead title="Patients" note={inHouse === null ? '' : inHouseNote(people.map((x) => x.s!))} gear={{ label: 'What needs you: patient rules', run: openRules }} search={{ label: 'Search patients', run: onSearch }} />
       {ql ? (
         found === null ? <Loading rows={3} /> : (<>
           <ListGroup title={`Patients matching “${found.q}”`} count={found.list.length}>
@@ -142,7 +141,6 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
           <button type="button" className={chip} aria-pressed={!onlyNeeds && !groupsOn} onClick={() => { setOnlyNeeds(false); setGroupsOn(false); }}>In house</button>
           <button type="button" className={chip} aria-pressed={onlyNeeds} onClick={() => { setOnlyNeeds(true); setGroupsOn(false); }}>Need you{needy.length ? ` · ${needy.length}` : ""}</button>
           <button type="button" className={chip} aria-pressed={groupsOn} onClick={() => { setGroupsOn(true); setOnlyNeeds(false); }}>Groups{groupList.length ? ` · ${groupList.length}` : ""}</button>
-          <button type="button" className={`${chip} ml-auto grid w-11 place-items-center !px-0`} aria-label="Search patients" onClick={onSearch}><Search className="h-5 w-5" /></button>
         </div>
         {groupsOn ? (
           <ListGroup>
