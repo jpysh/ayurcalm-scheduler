@@ -62,6 +62,9 @@ export function findConflict(c: Candidate, ctx: DayContext): Conflict | null {
 
   const closed = centreClosed(ctx.settings, ctx.timeOff, c.scheduled_date);
   if (closed) return { reason: 'CENTER_HOLIDAY', message: `The centre is ${closed}.` };
+  // Shortened hours left treatments after closing and nothing said so (#1297): the centre's hours are a rule, like a therapist's.
+  const [open, close] = [ctx.settings?.opening_time, ctx.settings?.closing_time];
+  if (open && close && (start < toMinutes(open) || end > toMinutes(close))) return { reason: 'CENTRE_HOURS', message: `The centre is open ${open} to ${close}.` };
 
   // What the doctor ruled out for this guest (#1254): a day with no treatments (Vamana) and a therapy not for them.
   // A consultation is never ruled out: the doctor still sees them.
