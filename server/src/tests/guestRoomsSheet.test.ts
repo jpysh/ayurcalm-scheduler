@@ -22,6 +22,7 @@ const rooms = [
   { name: 'N4', beds: 2, type: 'Nanda House', guests: [g('Tara Bose', '2026-10-01', '2026-10-14')], out: { reason: null } },
 ];
 const s = buildGuestRoomsSheet(rooms, day);
+const by_ = (x: ReturnType<typeof buildGuestRoomsSheet>) => Object.fromEntries(x.groups.flatMap((y) => y.rows).map((r) => [r.room, r]));
 const by = Object.fromEntries(s.groups.flatMap((x) => x.rows).map((r) => [r.room, r]));
 
 assert.equal(by.T1.kind, 'staying');
@@ -63,6 +64,8 @@ assert.deepEqual(outNight([offRow('2026-10-09', '2026-10-10', 'No electricity')]
 assert.equal(outNight([offRow('2026-10-09', '2026-10-10', null)], 'r1', d('2026-10-10'), d('2026-10-11'))?.date, '2026-10-10'); // the last day is still out
 assert.equal(outNight([offRow('2026-10-09', '2026-10-10', null)], 'r1', d('2026-10-11'), d('2026-10-14')), null); // free again from the next day
 assert.equal(outNight([offRow('2026-10-09', '2026-10-10', null)], 'r2', d('2026-10-09'), d('2026-10-10')), null); // another room
+// A group's guests carry its name (#1196).
+assert.equal(by_(buildGuestRoomsSheet([{ name: 'G1', beds: 1, type: 'Trishul House', guests: [{ ...g('Hari Rao', '2026-10-08', '2026-10-15'), group: 'Pune Yoga' }] }], day)).G1.line, 'Ready for Hari Rao [Pune Yoga] · until Thu 15 Oct');
 // A centre with none.
 assert.equal(buildGuestRoomsSheet([], day).counts.rooms, 0);
 console.log('guest rooms sheet ok');
