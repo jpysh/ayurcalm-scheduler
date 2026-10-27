@@ -668,10 +668,13 @@ export const Callout = ({ tone = "plain", title, children, actions }: { tone?: "
 );
 
 /** One line across the top of every screen for something only the admin can fix; it has no close, it goes when the fix is made (#1173). */
-export const Strip = ({ children, action, onAction }: { children: ReactNode; action: string; onAction: () => void }) => (
-  <div role="status" className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-destructive/10 px-3 text-sm">
+export const Strip = ({ children, action, onAction, onLater }: { children: ReactNode; action: string; onAction: () => void; /** "Later": hidden until tomorrow, so a reminder does not crowd large text all day (#1290). */ onLater?: () => void }) => (
+  <div role="status" className="mt-2 flex flex-wrap items-center justify-between gap-x-3 rounded-xl bg-destructive/10 px-3 text-sm">
     <span className="py-2">{children}</span>
-    <button type="button" className="min-h-11 shrink-0 font-semibold text-destructive underline" onClick={onAction}>{action}</button>
+    <span className="flex shrink-0 gap-3">
+      {onLater ? <button type="button" className="min-h-11 font-semibold text-muted-foreground" onClick={onLater}>Later</button> : null}
+      <button type="button" className="min-h-11 font-semibold text-destructive underline" onClick={onAction}>{action}</button>
+    </span>
   </div>
 );
 
