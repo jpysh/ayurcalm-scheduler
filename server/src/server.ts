@@ -712,6 +712,8 @@ const stayExtras = z.object({
   accommodation_id: z.string().uuid().nullable().optional(),
   /** A companion takes no treatments (#1195). */
   companion: z.boolean().optional(),
+  /** Every bed of the room for this guest (#1253). */
+  whole_room: z.boolean().optional(),
   /** The group the stay belongs to (#1196); empty takes it out. */
   group_name: z.string().trim().max(60).nullable().optional(),
   /** Late checkout (#1200); null clears it. */
@@ -779,11 +781,17 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
     if (roomId && stay.on_site) {
       const refused = await guestRoomRefusal(tx, roomId, checkFrom, dates.end_date, stay.id, extras.group_name === undefined ? stay.group_name : extras.group_name);
       if (refused) return { refused };
+      // The whole room (#1253) cannot be taken while someone else sleeps in it on one of those nights.
+      if (extras.whole_room ?? stay.whole_room) {
+        // The list holds whoever overlaps those days; one leaving on the first of them shares no night.
+        const other = (await guestRoomsFor(tx, checkFrom, dates.end_date, stay.id)).find((r) => r.id === roomId)?.guests.find((g) => g.end_date > checkFrom.toISOString().slice(0, 10));
+        if (other) return { refused: { reason: 'ROOM_SHARED', message: `${room?.name} already has ${other.name} in it on some of those nights, so it cannot be theirs alone.` } };
+      }
     }
     await tx.earlierGuestRoom.deleteMany({ where: { stay_id: stay.id } });
     if (rooms.length) await tx.earlierGuestRoom.createMany({ data: rooms.map((r) => ({ ...r, stay_id: stay.id })) });
     const saved = await tx.patientStay.update({ where: { id: stay.id }, data: {
-      ...dates, package_id: extras.package_id, guest_room_id: roomId, companion: extras.companion, group_name: extras.group_name === undefined ? undefined : extras.group_name || null, leaving_time: extras.leaving_time, arriving_time: extras.arriving_time,
+      ...dates, package_id: extras.package_id, guest_room_id: roomId, companion: extras.companion, whole_room: extras.whole_room, group_name: extras.group_name === undefined ? undefined : extras.group_name || null, leaving_time: extras.leaving_time, arriving_time: extras.arriving_time,
       accommodation_id: roomId !== stay.guest_room_id || extras.guest_room_id ? room?.accommodation_id ?? extras.accommodation_id : extras.accommodation_id,
     } });
     for (const m of mates) {

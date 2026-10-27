@@ -92,6 +92,8 @@ model PatientStay {
   /// A companion (#1195): a spouse or carer who sleeps and eats here but takes no treatments. Counted for beds,
   /// meals and Form C; never asked for a discharge summary, a review or a next week.
   companion        Boolean @default(false)
+  /// A double let as a single (#1253): the guest takes every bed, so nobody is put in with them.
+  whole_room       Boolean @default(false)
   /// A group booking (#1196), by its name ("Rishikesh Yoga, Nov"): found together, moved together.
   group_name       String?
   /// Late checkout (#1200): "15:00" on the leaving day, so the room is not made up, or given, before then.

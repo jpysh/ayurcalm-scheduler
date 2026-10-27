@@ -116,7 +116,9 @@ export async function guestRoomsFor(db: Db, from: Date, to: Date, except?: strin
     const guests = stays.flatMap((s) => { const all = spans(s); return all.map((p, i) => ({ p, from_room: all[i - 1]?.room ?? null, to_room: all[i + 1]?.room ?? null })).filter(({ p }) => p.room === r.id && p.start < end && p.end >= from).map(({ p, from_room, to_room }) => ({ ...s, start_date: p.start, end_date: p.end, from_room, to_room })); });
     const sleeping = (d: number) => guests.filter((s) => s.start_date.getTime() <= d && d < nightsEnd(s.start_date, s.end_date).getTime());
     let full: number | null = null;
-    for (let d = from.getTime(); d < end.getTime() && full === null; d += DAY_MS) if (sleeping(d).length >= r.beds) full = d;
+    // A guest who took the whole room (#1253) fills every bed in it.
+    const beds = (d: number) => sleeping(d).reduce((n, s) => n + (s.whole_room ? r.beds : 1), 0);
+    for (let d = from.getTime(); d < end.getTime() && full === null; d += DAY_MS) if (beds(d) >= r.beds) full = d;
     // Out of use (#563): the admin took the room out, say for no electricity, so no night of it can be given.
     const out = outNight(off, r.id, from, end);
     return {
