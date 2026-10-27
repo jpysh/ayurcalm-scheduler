@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import {
-  Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, LineSelect, Picker, QuickDates, Row, Seg, SwitchRow, Text, TextRow, Timeline, TimeList, timesBetween,
+  Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, LineSelect, Picker, QuickDates, Row, Seg, Switch, SwitchRow, Text, TextRow, Timeline, TimeList, timesBetween,
   dayText, datePair, DateRow, noteText, money, NightChips, toastUndo, Btn, saveError, deleteAll, undoWrite, EXAMPLE_PRICE, ownNote } from "@/components/kit";
 
 const DAY_MS = 86400000;
@@ -22,7 +22,7 @@ const json = { "Content-Type": "application/json" };
 
 /** What the card holds about the stay it is showing (residentDay). */
 export type CardStay = {
-  id: string; start_date: string; end_date: string; day: number; days: number; on_site?: boolean; leaving_time?: string | null; arriving_time?: string | null;
+  id: string; start_date: string; end_date: string; day: number; days: number; on_site?: boolean; whole_room?: boolean; leaving_time?: string | null; arriving_time?: string | null;
   package: { id: string; name: string; days: number; price: number } | null;
   accommodation: { id: string; name: string; price_per_day: number; room: { id: string; name: string } | null } | null;
   discharge: { total: number; done: number; missing: { key: string; label: string; where: "details" | "summary" }[] } | null;
@@ -291,6 +291,9 @@ export function AccommodationSheet({ patient, stay, today, onClose, onSaved, edi
   const [rooms, setRooms] = useState<GuestRoomNight[]>([]);
   const [pick, setPick] = useState("");
   const [room, setRoom] = useState("");
+  // A double let as a single (#1253): nobody is put in with them.
+  const [whole, setWhole] = useState(false);
+  useEffect(() => setWhole(!!stay?.whole_room), [stay?.id, stay?.whole_room]);
   const [busy, setBusy] = useState(false);
   // A stay under way moves from tonight, so only the nights from today on are asked (#1207), as the server checks them.
   const from = stay && stay.start_date < today && today < stay.end_date ? today : stay?.start_date;
@@ -319,7 +322,7 @@ export function AccommodationSheet({ patient, stay, today, onClose, onSaved, edi
   const save = async () => {
     setBusy(true);
     const before = { accommodation_id: stay.accommodation?.id ?? null, guest_room_id: stay.accommodation?.room?.id ?? null };
-    const res = await saveStay(patient.id, stay.id, chosen ? { accommodation_id: chosen.id, guest_room_id: room || null } : { accommodation_id: null, guest_room_id: null });
+    const res = await saveStay(patient.id, stay.id, chosen ? { accommodation_id: chosen.id, guest_room_id: room || null, whole_room: !!room && whole && (chosenRoom?.beds ?? 1) > 1 } : { accommodation_id: null, guest_room_id: null, whole_room: false });
     setBusy(false);
     if (!res.ok) { const why = await res.json().catch(() => ({})); toast.error(why.message || "The accommodation was not saved. Try again."); return; }
     const answer = await res.json().catch(() => ({}));
@@ -343,6 +346,7 @@ export function AccommodationSheet({ patient, stay, today, onClose, onSaved, edi
               select={<LineSelect label="Guest room" busyLabel="Taken" value={room} onChange={setRoom}
                 free={[...freeOf(pick).map((r) => ({ id: r.id, name: r.name, tag: [r.beds > 1 ? plural(r.beds, "bed") : "", ...(r.tags ?? [])].filter(Boolean).join(" · ") || undefined })), { id: "", name: "Not chosen yet" }]}
                 busy={ofType.filter((r) => !r.free).map((r) => ({ id: r.id, name: r.name, why: takenBy(r) }))} />} />
+            {chosenRoom && chosenRoom.beds > 1 ? <div className="mt-2"><Switch label="The whole room for them" note={`${plural(chosenRoom.beds, "bed")}; nobody else is put in ${chosenRoom.name} while they are here.`} on={whole} set={setWhole} /></div> : null}
             {!freeOf(pick).length ? <p className={`mt-1 ${noteText}`}>{`No ${chosen.name} guest room is free for all ${plural(nights, "night")}.${elsewhere.length ? ` Free: ${elsewhere.slice(0, 4).map((r) => `${r.name} (${r.type})`).join(", ")}.` : ""}`}</p> : null}
           </div>
         ) : null}
