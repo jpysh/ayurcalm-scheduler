@@ -86,6 +86,20 @@ guestRoomsRouter.get('/free', async (req: Request, res: Response) => {
   const q = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), stay: z.string().uuid().optional(), group: z.string().max(60).optional() }).parse(req.query);
   res.json(await guestRoomsFor(prisma, new Date(`${q.from}T00:00:00Z`), new Date(`${q.to}T00:00:00Z`), q.stay, q.group));
 });
+/** Rooms taken each night for a month ahead (#1257), for planning a busy season: taken, free and out of use. */
+guestRoomsRouter.get('/nights', async (req: Request, res: Response) => {
+  const q = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), days: z.coerce.number().int().min(1).max(62).default(31) }).parse(req.query);
+  const out: { date: string; rooms: number; taken: number; free: number; out: number }[] = [];
+  // ponytail: one free-rooms pass a night; one pass over the whole range if a 62-night view gets slow.
+  for (let i = 0; i < q.days; i++) {
+    const d = new Date(Date.parse(`${q.from}T00:00:00Z`) + i * 86400000);
+    const rooms = await guestRoomsFor(prisma, d, new Date(d.getTime() + 86400000));
+    const gone = rooms.filter((r) => r.out).length;
+    const free = rooms.filter((r) => r.free).length;
+    out.push({ date: d.toISOString().slice(0, 10), rooms: rooms.length, taken: rooms.length - free - gone, free, out: gone });
+  }
+  res.json(out);
+});
 guestRoomsRouter.post('/', requireAdmin, async (req: Request, res: Response) => {
   const body = roomBody.parse(req.body);
   const names = expandRoomNames(body.name).filter((n) => n.length <= 20);
