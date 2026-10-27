@@ -273,15 +273,16 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     // started by the afternoon, and then there is nothing left to fix.
     await job(page, rows, 'Warning → fixed day', async (tap) => {
       const booked = (await rowsOf(day)).find((a) => a.room_id && a.status === 'pending');
-      await call.post('/timeoff', { entity_type: 'room', entity_id: booked!.room_id, date: day, description: 'Tap count: out of use' });
+      await call.post('/timeoff', { entity_type: 'room', entity_id: booked!.room_id, date: day, description: 'Tap count: out of use', plan: false });
+      // plan: false keeps the room's treatments where they are, so the day has a warning to fix; saving with a plan moves them at once (#659).
       // Arrive at the day afresh, so the app checks it after the room went out.
       await showDay(page, today);
       await showDay(page, day);
       await tap(page.getByRole('button', { name: 'Menu', exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: /need you/ }));
       const sheet = page.getByRole('dialog');
-      // The first action row's own button: the one that does the thing (#164).
-      await tap(sheet.locator('[data-main]').first());
+      // The one bulk action under the thumb makes every listed change (#1074).
+      await tap(sheet.getByRole('button', { name: /^Make (this change|these \d+ changes)$/ }));
       await expect(sheet).toContainText('✓', { timeout: 20000 });
       await sheet.getByRole('button', { name: 'Undo', exact: true }).first().click();
       await expect(sheet).toContainText('Put back as it was.', { timeout: 20000 });
@@ -394,7 +395,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       });
       await job(page, rows, "Change a patient's stay", async (tap) => {
         await openStory();
-        await tap(card().getByRole('button', { name: /^Stay/ }));
+        await tap(card().getByRole('button', { name: /^Dates/ }));
         const leaving = card().locator('input[type=date]').nth(1);
         // The phone's own calendar opens on this tap; choosing a day in it is not a second one.
         await tap(leaving);
@@ -430,7 +431,7 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
     await job(page, rows, 'Edit a diet plan', async (tap) => {
       await tap(page.getByRole('button', { name: 'Menu', exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Diet plans/ }));
-      await tap(activePanel(page).getByRole('button', { name: /patients?$|Not used$/ }).first());
+      await tap(activePanel(page).getByRole('button', { name: /now or coming$|Not used$/ }).first());
       await tap(page.getByRole('dialog').getByRole('button', { name: 'Save the plan' }));
       await expect(page.locator('[data-sonner-toast]').filter({ hasText: /saved$/ })).toBeVisible({ timeout: 20000 });
     });
