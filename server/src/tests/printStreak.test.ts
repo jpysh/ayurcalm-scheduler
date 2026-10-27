@@ -1,4 +1,4 @@
-// "Printed 5 mornings in a row" counts back from the centre's today (#STREAK).
+// "Printed 5 mornings in a row" counts back from the centre's today (#1305).
 import assert from 'node:assert/strict';
 import { printStreak } from '../printStreak.js';
 

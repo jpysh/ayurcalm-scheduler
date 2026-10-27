@@ -1,5 +1,5 @@
 /**
- * Days in a row with a printed sheet, ending today (#STREAK). A morning not yet
+ * Days in a row with a printed sheet, ending today (#1305). A morning not yet
  * printed does not break it, so the line still reads true before the first print.
  */
 export function printStreak(dates: Iterable<string>, today: string): number {
