@@ -83,8 +83,8 @@ guestRoomsRouter.get('/', async (_req: Request, res: Response) => {
 });
 // Who is in each room for some nights, and which are free for all of them: the pickers and "Is a room free?".
 guestRoomsRouter.get('/free', async (req: Request, res: Response) => {
-  const q = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), stay: z.string().uuid().optional() }).parse(req.query);
-  res.json(await guestRoomsFor(prisma, new Date(`${q.from}T00:00:00Z`), new Date(`${q.to}T00:00:00Z`), q.stay));
+  const q = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), stay: z.string().uuid().optional(), group: z.string().max(60).optional() }).parse(req.query);
+  res.json(await guestRoomsFor(prisma, new Date(`${q.from}T00:00:00Z`), new Date(`${q.to}T00:00:00Z`), q.stay, q.group));
 });
 guestRoomsRouter.post('/', requireAdmin, async (req: Request, res: Response) => {
   const body = roomBody.parse(req.body);

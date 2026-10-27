@@ -145,6 +145,22 @@ model AccommodationType {
 
   Stays      PatientStay[]
   GuestRooms GuestRoom[]
+  GroupHolds GroupHold[]
+}
+
+/// Rooms held for a group (#1196) before the names arrive: this many rooms of one type for these nights.
+/// Each guest of the group given a room of the type fills one; the rest show as taken to everyone else.
+model GroupHold {
+  id               String   @id @default(uuid())
+  group_name       String
+  start_date       DateTime
+  end_date         DateTime
+  accommodation_id String
+  rooms            Int
+
+  Accommodation AccommodationType @relation(fields: [accommodation_id], references: [id], onDelete: Cascade)
+
+  @@unique([group_name, accommodation_id])
 }
 
 /// A room a patient sleeps in (#456), "T3". Called a guest room on screen: "room" means a

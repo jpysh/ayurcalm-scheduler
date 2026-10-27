@@ -20,7 +20,9 @@ async function tidy(prisma: PrismaClient) {
   await prisma.dietPlanSegment.deleteMany({ where: { patient_id: { in: ids } } });
   await prisma.patientStay.deleteMany({ where: { patient_id: { in: ids } } });
   await prisma.patient.deleteMany({ where: { id: { in: ids } } });
+  await prisma.groupHold.deleteMany({ where: { group_name: { startsWith: TAG } } });
   await prisma.guestRoom.deleteMany({ where: { name: { startsWith: TAG } } });
+  await prisma.accommodationType.deleteMany({ where: { name: { startsWith: TAG } } });
 }
 
 async function main() {
@@ -58,6 +60,29 @@ async function main() {
     await call('POST', '/groups/move', { name: GROUP, days: -3 });
     assert.equal((await prisma.patientStay.findFirstOrThrow({ where: { patient_id: a.id } })).start_date.toISOString().slice(0, 10), '2030-09-01');
     console.log('groups: listed with their dates, moved together, whoever cannot move is named, and moved back');
+
+    // Held rooms (#1196 part 2): two of three rooms of a type held for a group before the names arrive.
+    const hut = await prisma.accommodationType.create({ data: { name: `${TAG} Hut`, price_per_day: 1 } });
+    for (const n of ['H1', 'H2', 'H3']) await call('POST', '/guest-rooms', { name: `${TAG}${n}`, accommodation_id: hut.id });
+    const HELD = `${TAG} Retreat`;
+    const free = async () => (await call('GET', `/guest-rooms/free?from=2030-10-01&to=2030-10-06`)).filter((r: { type: string; free: boolean }) => r.type === hut.name && r.free).length;
+    const tooMany = await raw('PUT', '/groups/hold', { name: HELD, start_date: '2030-10-01', end_date: '2030-10-06', rooms: [{ accommodation_id: hut.id, rooms: 4 }] });
+    assert.equal(tooMany.status, 409, 'four of three rooms cannot be held');
+    await call('PUT', '/groups/hold', { name: HELD, start_date: '2030-10-01', end_date: '2030-10-06', rooms: [{ accommodation_id: hut.id, rooms: 2 }] });
+    assert.equal(await free(), 1, 'two of the three huts show as taken to everyone else');
+    const held = (await call('GET', '/groups')).find((x: { name: string }) => x.name === HELD);
+    assert.deepEqual([held.count, held.holds[0].rooms, held.holds[0].filled], [0, 2, 0], 'the group is listed before any name');
+    const outsider = await raw('POST', '/patients', { name: `${TAG} Outsider`, gender: 'male', guest_room_id: (await prisma.guestRoom.findUniqueOrThrow({ where: { name: `${TAG}H1` } })).id, stay: { start_date: '2030-10-02', end_date: '2030-10-04' } });
+    assert.equal((await outsider.json()).reason, 'ROOM_HELD', 'a guest outside the group cannot take a held hut');
+    // The organiser's list: each name takes a held hut, and the hold shrinks as it fills.
+    const c = await call('POST', '/patients', { name: `${TAG} Chitra`, gender: 'female', group_name: HELD, stay: { start_date: '2030-10-01', end_date: '2030-10-06' } });
+    const cRoom = (await prisma.patientStay.findFirstOrThrow({ where: { patient_id: c.id }, include: { GuestRoom: true } })).GuestRoom;
+    assert.equal(cRoom?.accommodation_id, hut.id, 'a guest from the list is given a held hut');
+    assert.equal(await free(), 1, 'one held and one filled: still one hut free');
+    assert.equal((await call('GET', '/groups')).find((x: { name: string }) => x.name === HELD).holds[0].filled, 1);
+    await call('PUT', '/groups/hold', { name: HELD, start_date: '2030-10-01', end_date: '2030-10-06', rooms: [{ accommodation_id: hut.id, rooms: 0 }] });
+    assert.equal(await free(), 2, 'letting the hold go frees the hut nobody was named for');
+    console.log('groups: rooms held before the names, taken to others, filled from the list, and let go');
   } finally {
     await tidy(prisma).catch(() => {});
     await prisma.$disconnect();

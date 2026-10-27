@@ -480,7 +480,15 @@ app.post('/patients', async (req: Request, res: Response) => {
     const conflict = findConflict({ scheduled_date: day, start_time: visit.start_time, duration_minutes: consult.duration_minutes, staff_id: visit.staff_id, co_staff_ids: [], room_id: visit.room_id, patient_id: '', therapy_id: consult.id }, await loadDay(day, prisma));
     if (conflict) { res.status(409).json(conflict); return; }
   }
-  const room = body.guest_room_id && body.stay && body.on_site ? await prisma.guestRoom.findUnique({ where: { id: body.guest_room_id } }) : null;
+  let room = body.guest_room_id && body.stay && body.on_site ? await prisma.guestRoom.findUnique({ where: { id: body.guest_room_id } }) : null;
+  // A guest of a group with held rooms (#1196), from the organiser's list, takes the next held room of the type.
+  if (!room && body.group_name && body.stay && body.on_site && body.guest_room_id === undefined) {
+    const { start_date, end_date } = stayData(body.stay);
+    const mine = await prisma.groupHold.findMany({ where: { group_name: body.group_name, start_date: { lte: start_date }, end_date: { gte: end_date } } });
+    const others = mine.length ? await guestRoomsFor(prisma, start_date, end_date) : [];
+    const id = others.find((r) => r.held?.group === body.group_name && mine.some((h) => h.accommodation_id === r.accommodation_id))?.id;
+    room = id ? await prisma.guestRoom.findUnique({ where: { id } }) : null;
+  }
   // One save: the resident, their stay, their diet plan and their consultation, or none of them.
   const p = await prisma.$transaction(async (tx) => {
     await lockStays(tx);
@@ -489,7 +497,7 @@ app.post('/patients', async (req: Request, res: Response) => {
     if (twin) return twin;
     if (room && body.stay) {
       const { start_date, end_date } = stayData(body.stay);
-      const refused = await guestRoomRefusal(tx, room.id, start_date, end_date);
+      const refused = await guestRoomRefusal(tx, room.id, start_date, end_date, undefined, body.group_name);
       if (refused) return { refused };
     }
     const created = await tx.patient.create({ data });
@@ -767,7 +775,7 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
     // A day patient sleeps at home (#1189): no guest room, so no bed taken without a check.
     if (roomId && !stay.on_site && extras.guest_room_id) return { refused: { reason: 'NOT_ON_SITE', message: 'A day patient has no guest room. Mark them as staying here first.' } };
     if (roomId && stay.on_site) {
-      const refused = await guestRoomRefusal(tx, roomId, checkFrom, dates.end_date, stay.id);
+      const refused = await guestRoomRefusal(tx, roomId, checkFrom, dates.end_date, stay.id, extras.group_name === undefined ? stay.group_name : extras.group_name);
       if (refused) return { refused };
     }
     await tx.earlierGuestRoom.deleteMany({ where: { stay_id: stay.id } });
@@ -826,13 +834,47 @@ app.get('/groups', async (_req: Request, res: Response) => {
   const tz = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
   const today = new Date(`${centreClock(tz).date}T00:00:00.000Z`);
   const stays = await prisma.patientStay.findMany({ where: { group_name: { not: null }, end_date: { gte: today } }, include: { Patient: { select: { id: true, name: true } }, GuestRoom: { select: { name: true } } }, orderBy: { start_date: 'asc' } });
+  const holds = await prisma.groupHold.findMany({ where: { end_date: { gte: today } }, include: { Accommodation: { select: { name: true } } }, orderBy: { start_date: 'asc' } });
   const by = new Map<string, typeof stays>();
+  for (const h of holds) by.set(h.group_name, by.get(h.group_name) ?? []);
   for (const s of stays) by.set(s.group_name!, [...(by.get(s.group_name!) ?? []), s]);
   const ymd = (d: Date) => d.toISOString().slice(0, 10);
-  res.json([...by].map(([name, ss]) => ({
-    name, count: ss.length, start_date: ymd(ss[0].start_date), end_date: ymd(ss.reduce((m, s) => (s.end_date > m ? s.end_date : m), ss[0].end_date)),
-    guests: ss.map((s) => ({ stay_id: s.id, patient_id: s.Patient.id, name: s.Patient.name, start_date: ymd(s.start_date), end_date: ymd(s.end_date), room: s.GuestRoom?.name ?? null, started: s.start_date <= today })),
-  })));
+  res.json([...by].map(([name, ss]) => {
+    const hs = holds.filter((h) => h.group_name === name);
+    const dates = [...ss, ...hs];
+    return {
+      name, count: ss.length, start_date: ymd(dates.reduce((m, s) => (s.start_date < m ? s.start_date : m), dates[0].start_date)), end_date: ymd(dates.reduce((m, s) => (s.end_date > m ? s.end_date : m), dates[0].end_date)),
+      guests: ss.map((s) => ({ stay_id: s.id, patient_id: s.Patient.id, name: s.Patient.name, start_date: ymd(s.start_date), end_date: ymd(s.end_date), room: s.GuestRoom?.name ?? null, started: s.start_date <= today })),
+      /** Rooms held before the names arrive; `filled` counts the group's guests already given a room of the type. */
+      holds: hs.map((h) => ({ accommodation_id: h.accommodation_id, type: h.Accommodation.name, rooms: h.rooms, start_date: ymd(h.start_date), end_date: ymd(h.end_date), filled: new Set(ss.filter((s) => s.accommodation_id === h.accommodation_id && s.guest_room_id).map((s) => s.guest_room_id)).size })),
+    };
+  }));
+});
+
+/**
+ * Hold rooms for a group (#1196): the dates and how many rooms of each type, before the names arrive. Replaces the
+ * group's holds; 0 rooms of a type lets them go. A type without that many rooms free on every night is refused, named.
+ */
+app.put('/groups/hold', async (req: Request, res: Response) => {
+  const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+  const body = z.object({ name: z.string().trim().min(1).max(60), start_date: ymd, end_date: ymd, rooms: z.array(z.object({ accommodation_id: z.string().uuid(), rooms: z.number().int().min(0).max(100) })).max(20) }).refine((b) => b.end_date > b.start_date, 'Leaving must be after arriving').parse(req.body);
+  const [start, end] = [new Date(`${body.start_date}T00:00:00.000Z`), new Date(`${body.end_date}T00:00:00.000Z`)];
+  const out = await prisma.$transaction(async (tx) => {
+    await lockStays(tx);
+    const rooms = await guestRoomsFor(tx, start, end, undefined, body.name);
+    const guests = await tx.patientStay.findMany({ where: { group_name: body.name, guest_room_id: { not: null } }, select: { guest_room_id: true, accommodation_id: true } });
+    for (const want of body.rooms.filter((r) => r.rooms > 0)) {
+      const ofType = rooms.filter((r) => r.accommodation_id === want.accommodation_id);
+      const mine = new Set(guests.filter((g) => g.accommodation_id === want.accommodation_id).map((g) => g.guest_room_id)).size;
+      const free = ofType.filter((r) => r.free).length;
+      if (free + mine < want.rooms) return { refused: { reason: 'NOT_ENOUGH_ROOMS', message: `Only ${free + mine} ${ofType[0]?.type ?? 'rooms'} ${free + mine === 1 ? 'is' : 'are'} free for all those nights, not ${want.rooms}.` } };
+    }
+    await tx.groupHold.deleteMany({ where: { group_name: body.name } });
+    await tx.groupHold.createMany({ data: body.rooms.filter((r) => r.rooms > 0).map((r) => ({ group_name: body.name, start_date: start, end_date: end, accommodation_id: r.accommodation_id, rooms: r.rooms })) });
+    return { ok: true };
+  });
+  if ('refused' in out) { res.status(409).json(out.refused); return; }
+  res.json(out);
 });
 
 /**
@@ -853,7 +895,7 @@ app.post('/groups/move', async (req: Request, res: Response) => {
     if (s.start_date <= today || shift(s.start_date) <= today) { not_moved.push({ name: s.Patient.name, why: s.start_date <= today ? 'already here' : 'would arrive today or before' }); continue; }
     const [start, end] = [shift(s.start_date), shift(s.end_date)];
     // ponytail: a stay with a planned room move is moved unchecked; check each span if groups with moves appear.
-    const refused = s.guest_room_id && s.on_site && !s.EarlierRooms.length ? await guestRoomRefusal(prisma, s.guest_room_id, start, end, s.id) : null;
+    const refused = s.guest_room_id && s.on_site && !s.EarlierRooms.length ? await guestRoomRefusal(prisma, s.guest_room_id, start, end, s.id, body.name) : null;
     if (refused) { not_moved.push({ name: s.Patient.name, why: refused.message.slice(0, refused.message.indexOf('.') + 1) }); continue; }
     await prisma.$transaction(async (tx) => {
       await lockStays(tx);
@@ -865,6 +907,10 @@ app.post('/groups/move', async (req: Request, res: Response) => {
       appts.push({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id, start_time: a.start_time, date: shift(a.scheduled_date).toISOString().slice(0, 10) });
     moved.push(s.Patient.name);
   }
+  // The held rooms move with the group, unless the group is already here.
+  // ponytail: moved unchecked; the hold then shows taken only where rooms are empty. Check it if a moved hold ever overbooks.
+  const holds = await prisma.groupHold.findMany({ where: { group_name: body.name, start_date: { gt: today } } });
+  for (const h of holds) if (shift(h.start_date) > today) await prisma.groupHold.update({ where: { id: h.id }, data: { start_date: shift(h.start_date), end_date: shift(h.end_date) } });
   const batch = appts.length ? await applyPlan(appts, prisma) : null;
   res.json({ moved, not_moved, batch_id: batch?.batch_id ?? null });
 });
