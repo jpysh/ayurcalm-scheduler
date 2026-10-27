@@ -15,6 +15,36 @@ export function next(c, now) {
   return now >= deletesAt(c) ? { do: 'delete', why: 'trial ended 60 days ago' } : null;
 }
 
+// Centres that never get a trial-ending email or notice (#1301): Babaji is free for life.
+const FREE = new Set(['babajiayurveda']);
+
+/**
+ * The three behaviour emails (#1301), each sent once: no sheet by day 2, silent for 3 days, 7 days left.
+ * c.sheets: when each day's sheet was last printed, one per day; c.sent: the keys already sent.
+ * Payment is arranged by hand for now, so the last one asks for a reply, never a checkout.
+ */
+export function nudge(c, now) {
+  if (c.paused_at || c.trial?.plan || FREE.has(c.slug) || !c.trial?.started_at) return null;
+  const sent = c.sent || {}, start = Date.parse(c.trial.started_at), end = Date.parse(c.trial.ends_at);
+  const last = Math.max(0, ...(c.sheets || []));
+  if (!sent.ending && end > now && end - now <= 7 * D) return 'ending';
+  if (!sent.nosheet && !c.sheet_at && now - start >= 2 * D) return 'nosheet';
+  if (!sent.silent && c.sheet_at && now - last >= 3 * D && end > now) return 'silent';
+  return null;
+}
+
+export function nudgeEmail(key, c, domain) {
+  const at = `https://${c.slug}.${domain}`;
+  return {
+    nosheet: [`Tomorrow's sheet in 3 steps`, `1. Open Make it mine: ${at}/setup/mine\n2. Add your therapists, rooms and tomorrow's guests.\n3. Print tomorrow's sheet from the menu.\n\nStuck? Reply to this email.`],
+    silent: [`${c.centre}: no day sheet for 3 days`, `Nothing has been printed at ${at} for 3 days. If something got in the way, reply and tell us what.`],
+    ending: [`${c.centre}: 7 days left`, `7 days left. Reply or WhatsApp +420777558262 to keep going.\n\nYour data is never at risk: after the trial the centre is read-only and you can download everything.`],
+  }[key];
+}
+
+/** Activated (#1301): its own sheet printed on 3 different days within the trial's first 7. */
+export const activated = (c) => c.trial?.started_at && (c.sheets || []).filter((t) => t - Date.parse(c.trial.started_at) < 7 * D).length >= 3;
+
 /** When a paused centre, or an ended trial, is deleted: never within 30 days of signing up (#920). */
 export const deletesAt = (c) => Math.max((c.signed_up ?? c.created) + 30 * D, c.paused_at ? c.paused_at + 14 * D : Date.parse(c.trial.ends_at) + 60 * D);
 

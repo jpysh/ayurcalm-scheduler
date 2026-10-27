@@ -33,6 +33,6 @@ case $cmd in
   reset-password) docker compose -p "ruta-$slug" exec -T app npx tsx server/src/scripts/resetPassword.ts "${ADMIN_EMAIL:?no ADMIN_EMAIL in $dir/env}" ;;
   backup) f="$dir/backups/ayurcalm-$(date -u +%Y%m%d-%H%M).sql.gz"; docker compose -p "ruta-$slug" exec -T db pg_dump -U ayurcalm ayurcalm > "$f.sql" && gzip -c "$f.sql" > "$f" && rm "$f.sql" ;;
   paid)   docker compose -p "ruta-$slug" exec -T app npx tsx server/src/scripts/markPaid.ts "$3" "${4:-}" ;;
-  timings) docker compose -p "ruta-$slug" exec -T db psql -U ayurcalm -d ayurcalm -Atc "select coalesce(extract(epoch from first_signin_at)::bigint::text, ''), coalesce(extract(epoch from first_sheet_at)::bigint::text, '') from \"Settings\"" ;;
+  timings) docker compose -p "ruta-$slug" exec -T db psql -U ayurcalm -d ayurcalm -Atc "select coalesce(extract(epoch from first_signin_at)::bigint::text, ''), coalesce(extract(epoch from first_sheet_at)::bigint::text, ''), coalesce((select string_agg(t::text, ',') from (select max(extract(epoch from p.printed_at))::bigint t from \"PrintedSheet\" p, \"Settings\" s where p.printed_at >= s.first_sheet_at group by (p.printed_at at time zone s.timezone)::date) d), '') from \"Settings\"" ;;
   *)    echo "up|down|stop|start|delete|backup|reset-password|paid|timings" >&2; exit 1 ;;
 esac
