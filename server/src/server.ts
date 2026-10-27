@@ -16,6 +16,7 @@ import { beforeConsultation, findConflict, HAPPENING, loadDay, nearestFreeTime, 
 import { moveOffClosedDays, replanRoomDay, replanStaffDay, acceptPlan, applyPlan, undoReplan, type Pin } from './replan.js';
 import { applyCourseDiet, courseDiet, dietTimeline, restoreDiet, startDietFrom, extendDiet, shiftDiet } from './patientDiet.js';
 import { checkDay, headlineFor, planRange, rowOptions } from './dayCheck.js';
+import { printStreak } from './printStreak.js';
 import { centreClock, eventClashes, gives, outsideHours, type EventRow } from './availability.js';
 import { loadDietsForDay } from './dietResolution.js';
 import { bookingOptions, bookingSuggestions, bookingWho, cardChoices, nextConsultations, notStaying, planNextWeek, therapyFacts, whyNoConsultation, whyNoTime } from './cardChoices.js';
@@ -1833,6 +1834,11 @@ app.get('/records-pdf', async (req: Request, res: Response) => {
 // Printed sheets (#145): the copies kept above, newest day first.
 app.get('/printed-sheets', async (_req: Request, res: Response) => {
   res.json(await prisma.printedSheet.findMany({ select: { date: true, kind: true, printed_at: true }, orderBy: [{ date: 'desc' }, { kind: 'asc' }] }));
+});
+app.get('/printed-sheets/streak', async (_req: Request, res: Response) => {
+  const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
+  const rows = await prisma.printedSheet.findMany({ select: { date: true } });
+  res.json({ days: printStreak(rows.map((r) => r.date), centreClock(settings?.timezone || 'Asia/Kolkata').date) });
 });
 app.get('/printed-sheets/:date/:kind', async (req: Request, res: Response) => {
   const row = await prisma.printedSheet.findUnique({ where: { date_kind: { date: String(req.params.date), kind: String(req.params.kind) } } });
