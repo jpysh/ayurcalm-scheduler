@@ -1,6 +1,6 @@
 // node scripts/uat-first-therapies.mjs <before|after> — a new centre's first therapies, at 375x812: Get started, the empty
 // Therapies screen, Add from library, and a first guest's week. Clears the demo centre first. Throwaway stack only,
-// started with ALLOW_DEMO_PASSWORD=true (#1005). E2E_BASE_URL picks the stack.
+// started (#1005). E2E_BASE_URL picks the stack.
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';

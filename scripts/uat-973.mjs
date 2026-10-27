@@ -1,4 +1,4 @@
-// node scripts/uat-973.mjs — several rooms and therapists added in one step (#973), 375x812, on a throwaway stack (E2E_BASE_URL) with ALLOW_DEMO_PASSWORD=true.
+// node scripts/uat-973.mjs — several rooms and therapists added in one step (#973), 375x812, on a throwaway stack (E2E_BASE_URL).
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 const APP = process.env.E2E_BASE_URL || 'http://localhost:8120';

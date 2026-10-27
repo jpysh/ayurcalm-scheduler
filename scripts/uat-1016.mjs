@@ -1,4 +1,4 @@
-// node scripts/uat-1016.mjs — a starter in use offers Update with its name, at 375x812 (#1016). Needs ALLOW_DEMO_PASSWORD=true on the stack (#1005). E2E_BASE_URL picks the stack.
+// node scripts/uat-1016.mjs — a starter in use offers Update with its name, at 375x812 (#1016). E2E_BASE_URL picks the stack.
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';

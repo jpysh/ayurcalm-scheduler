@@ -1,4 +1,4 @@
-// node scripts/uat-1082.mjs — editing a diet plan's day-by-day steps (#1082), 375x812, on a throwaway stack (APP_URL) with ALLOW_DEMO_PASSWORD=true.
+// node scripts/uat-1082.mjs — editing a diet plan's day-by-day steps (#1082), 375x812, on a throwaway stack (APP_URL).
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 const APP = process.env.APP_URL || 'http://localhost:8120';
