@@ -176,6 +176,8 @@ model GuestRoom {
   is_active        Boolean @default(true)
   /// The day housekeeping marked it made up (#1199): a room someone left that day is not ready until then.
   ready_on         DateTime?
+  /// What a guest may need of it (#1201): "ground floor", "quiet". Shown wherever a room is chosen.
+  tags             String[] @default([])
 
   Accommodation AccommodationType @relation(fields: [accommodation_id], references: [id], onDelete: Cascade)
   Stays         PatientStay[]

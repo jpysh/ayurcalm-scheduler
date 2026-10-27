@@ -668,7 +668,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
             <div className="mt-1 border-t border-border">
               <ChangeLine label="Guest room" value={r ? `${r.name} · ${r.type}` : freeRooms.some((x) => x.free) ? "Not yet" : "None free for these nights"} faint={!r}
                 select={<LineSelect label="Guest room" busyLabel="Taken" value={guestRoom} onChange={setGuestRoom}
-                  free={[{ id: "", name: "Not chosen yet" }, ...freeRooms.filter((x) => x.free).map((x) => ({ id: x.id, name: x.name, tag: x.type }))]}
+                  free={[{ id: "", name: "Not chosen yet" }, ...freeRooms.filter((x) => x.free).map((x) => ({ id: x.id, name: x.name, tag: [x.type, ...(x.tags ?? [])].join(" · ") }))]}
                   busy={freeRooms.filter((x) => !x.free).map((x) => ({ id: x.id, name: x.name, why: takenBy(x) }))} />} />
             </div>
           );

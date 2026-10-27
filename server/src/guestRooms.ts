@@ -120,7 +120,7 @@ export async function guestRoomsFor(db: Db, from: Date, to: Date, except?: strin
     // Out of use (#563): the admin took the room out, say for no electricity, so no night of it can be given.
     const out = outNight(off, r.id, from, end);
     return {
-      id: r.id, name: r.name, beds: r.beds, accommodation_id: r.accommodation_id, type: r.Accommodation.name, price_per_day: r.Accommodation.price_per_day,
+      id: r.id, name: r.name, beds: r.beds, tags: r.tags, accommodation_id: r.accommodation_id, type: r.Accommodation.name, price_per_day: r.Accommodation.price_per_day,
       free: full === null && !out && !held.has(r.id),
       /** The first night it is held for a group not yet named in it (#1196). */
       held: held.get(r.id) ?? null,

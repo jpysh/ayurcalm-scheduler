@@ -146,6 +146,7 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
               ];
               // Out of use (#563) first: it is why the room is not offered.
               if (r.held && !inIt.length) facts.push(`Held for ${r.held.group}`);
+              if (r.tags?.length) facts.push(r.tags.join(", "));
               if (r.out) facts.unshift(`Out of use${r.out.reason ? `: ${r.out.reason}` : ""} · until ${dayText(r.out.until)}`);
               const spare = r.beds - inIt.length;
               return <Row key={r.id} title={r.name} facts={facts.join(" · ") || undefined}
