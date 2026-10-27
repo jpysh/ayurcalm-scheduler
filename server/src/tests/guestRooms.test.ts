@@ -34,6 +34,11 @@ async function main() {
     assert.equal((await call('POST', '/guest-rooms', { name: 'QA6', accommodation_id: house.id })).status, 409, 'a name already taken is refused');
 
     const room = await prisma.guestRoom.findUniqueOrThrow({ where: { name: 'QA1' } });
+    // Made up after a guest left (#1199), and undone by a second tap.
+    assert.equal((await (await call('PUT', `/guest-rooms/${room.id}/ready`, { date: '2030-05-01', ready: true })).json()).ready_on, '2030-05-01');
+    const marked = (await (await call('GET', '/guest-rooms/free?from=2030-05-01&to=2030-05-02')).json()).find((r: { id: string }) => r.id === room.id);
+    assert.equal(marked.ready_on, '2030-05-01', 'the room says it is ready');
+    assert.equal((await (await call('PUT', `/guest-rooms/${room.id}/ready`, { date: '2030-05-01', ready: false })).json()).ready_on, null);
     // A past stay: guests from today on are moved before a retire (#1187), past ones keep the room.
     const someone = await prisma.patient.findFirstOrThrow();
     const stay = await prisma.patientStay.create({ data: { patient_id: someone.id, start_date: new Date('2020-03-01T00:00:00Z'), end_date: new Date('2020-03-05T00:00:00Z'), duration_days: 4 } });

@@ -5,6 +5,7 @@
  * it, the night chosen on the week strip, room by room. Never "Rooms": those are treatment rooms.
  */
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import PageHead from "@/components/PageHead";
@@ -13,7 +14,7 @@ import { Btn, DateRow, datePair, Empty, LinkRow, ListGroup, Loading, Row, Sectio
 import { AddGuestRooms, ManageGuestRooms } from "@/components/GuestRoomManage";
 import type { GuestRoomNight } from "@/components/CardSheets";
 
-type Guest = { stay_id: string; patient_id: string; name: string; start_date: string; end_date: string; from_room?: string | null; to_room?: string | null };
+type Guest = { stay_id: string; patient_id: string; name: string; start_date: string; end_date: string; from_room?: string | null; to_room?: string | null; leaving_time?: string | null };
 type Room = GuestRoomNight & { guests: Guest[] };
 
 const DAY_MS = 86400000;
@@ -60,6 +61,10 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
   const sleeping = (r: Room) => r.guests.filter((g) => g.start_date <= day && day < g.end_date);
   const leaving = (r: Room) => r.guests.filter((g) => g.end_date === day);
   const arriving = (r: Room) => sleeping(r).filter((g) => g.start_date === day);
+  const markReady = async (r: Room, ready: boolean) => {
+    const res = await fetch(`${API_BASE}/guest-rooms/${r.id}/ready`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: day, ready }) });
+    if (res.ok) setNight((n) => n && n.map((x) => (x.id === r.id ? { ...x, ready_on: ready ? day : null } : x))); else toast.error("Not saved. Try again.");
+  };
   const tonight = day === today ? "tonight" : `on ${dayText(day)}`;
 
   const sheets = <>
@@ -115,12 +120,18 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
               })} />
           </div>
         ))) : null}
-        {/* The morning's housekeeping in one line (#456 part 4): the rooms to make up, and the rooms someone comes into. */}
+        {/* The morning's housekeeping (#456 part 4): the rooms to make up, each marked ready when done (#1199), and the rooms someone comes into. */}
         {night ? (() => {
           // A shared room where one guest stays on is not empty, but a bed left and taken the same day still needs making up (#1209).
-          const out = night.filter((r) => leaving(r).length && (arriving(r).length || !sleeping(r).some((g) => g.start_date !== day))).map((r) => r.name);
+          const out = night.filter((r) => leaving(r).length && (arriving(r).length || !sleeping(r).some((g) => g.start_date !== day)));
           const into = night.filter((r) => arriving(r).length).map((r) => r.name);
-          return out.length || into.length ? <p className={`px-1 pt-2 ${noteText}`}>{[out.length ? `Leaving${day === today ? " today" : ""}: ${out.join(", ")} to make up` : "", into.length ? `Arriving: ${into.join(", ")}` : ""].filter(Boolean).join(" · ")}</p> : null;
+          return <>
+            {into.length ? <p className={`px-1 pt-2 ${noteText}`}>Arriving: {into.join(", ")}</p> : null}
+            {out.length ? <ListGroup title={`To make up${day === today ? " today" : ""}`} count={`${out.filter((r) => r.ready_on === day).length} of ${out.length} ready`}>
+              {out.map((r) => <Row key={r.id} title={r.name} facts={arriving(r).length ? `${arriving(r).map((g) => g.name).join(", ")} arrives` : undefined}
+                trailing={r.ready_on === day ? "Ready ✓" : "Mark ready"} onClick={() => markReady(r, r.ready_on !== day)} />)}
+            </ListGroup> : null}
+          </>;
         })() : null}
         {view === "week" ? null : night === null ? <Loading rows={6} /> : byType(night).map(([type, rooms]) => (
           <ListGroup key={type} title={type} count={`${rooms.filter((r) => r.free).length} free`}>
@@ -131,13 +142,13 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
               const facts: string[] = [
                 ...arriving(r).map((g) => `${g.name} ${g.from_room ? `moves in from ${g.from_room}` : "arrives"} · until ${dayText(g.end_date)}`),
                 ...inIt.filter((g) => g.start_date !== day).map((g) => `${g.name} · until ${dayText(g.end_date)}`),
-                ...out.map((g) => `${g.name} ${g.to_room ? `moves to ${g.to_room}` : "leaves"}${day === today ? " today" : ""}`),
+                ...out.map((g) => `${g.name} ${g.to_room ? `moves to ${g.to_room}` : "leaves"}${day === today ? " today" : ""}${g.leaving_time ? ` at ${g.leaving_time}` : ""}`),
               ];
               // Out of use (#563) first: it is why the room is not offered.
               if (r.out) facts.unshift(`Out of use${r.out.reason ? `: ${r.out.reason}` : ""} · until ${dayText(r.out.until)}`);
               const spare = r.beds - inIt.length;
               return <Row key={r.id} title={r.name} facts={facts.join(" · ") || undefined}
-                trailing={r.out && !inIt.length ? "Out" : !inIt.length ? "Free" : spare > 0 ? `${spare} bed free` : undefined}
+                trailing={r.out && !inIt.length ? "Out" : !inIt.length ? (out.find((g) => g.leaving_time) ? `Free from ${out.find((g) => g.leaving_time)!.leaving_time}` : "Free") : spare > 0 ? `${spare} bed free` : undefined}
                 onClick={r.out && !inIt.length ? undefined : () => (inIt[0] ? openPatient(inIt[0].patient_id) : newPatient({ arriving: day, leaving: addDays(day, 13), room: r.id }))} />;
             })}
           </ListGroup>

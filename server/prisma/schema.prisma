@@ -94,6 +94,8 @@ model PatientStay {
   companion        Boolean @default(false)
   /// A group booking (#1196), by its name ("Rishikesh Yoga, Nov"): found together, moved together.
   group_name       String?
+  /// Late checkout (#1200): "15:00" on the leaving day, so the room is not made up, or given, before then.
+  leaving_time     String?
 
   Patient       Patient            @relation(fields: [patient_id], references: [id])
   GuestRoom     GuestRoom?         @relation(fields: [guest_room_id], references: [id], onDelete: SetNull)
@@ -154,6 +156,8 @@ model GuestRoom {
   /// How many patients may share it; a couple is two patients in one room.
   beds             Int     @default(1)
   is_active        Boolean @default(true)
+  /// The day housekeeping marked it made up (#1199): a room someone left that day is not ready until then.
+  ready_on         DateTime?
 
   Accommodation AccommodationType @relation(fields: [accommodation_id], references: [id], onDelete: Cascade)
   Stays         PatientStay[]

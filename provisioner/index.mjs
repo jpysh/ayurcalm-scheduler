@@ -202,6 +202,31 @@ const git = (...a) => run('git', ['-C', ROOT, ...a]).then((r) => r.stdout.trim()
 let updating = false;
 const indiaHour = (now = new Date()) => Number(now.toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false }));
 const OK = `${DATA}/release-ok`;
+const bringUp = async (c) => { await centreSh({}, 'up', c.slug, String(c.port)); await up(c.port); if (!(await fetch(`http://localhost:${c.port}/api/health`).then((x) => x.ok, () => false))) throw new Error('did not come up'); };
+const allSites = () => [{ slug: 'demo', port: 8201 }, ...LIVE, ...db.centres.filter((c) => !c.paused_at)];
+// Centres are built from this checkout, so moving it back to `sha` and rebuilding is the whole rollback. `reset --keep`
+// moves main without discarding a hand edit in the clone (it refuses instead). Returns the words for the alert.
+async function rollBack(sites, sha) {
+  try {
+    await git('reset', '-q', '--keep', sha);
+    const r = await rollout(sites, bringUp);
+    return r.failed ? `; putting back ${sha.slice(0, 7)} also failed at ${r.failed} (${r.why}): restore its backup` : `; all centres put back on ${sha.slice(0, 7)}`;
+  } catch (e) { return `; could not put back ${sha.slice(0, 7)}: ${String(e.message).split('\n')[0]}`; }
+}
+// `touch ~/ruta-data/rollback-now` (#1178): a release that came up but is wrong in use goes back to the one before it.
+async function rollBackNow() {
+  const prev = db.update?.previous;
+  if (updating || !prev) return notify(`ALERT: rollback-now ignored: ${updating ? 'an update is running' : 'no earlier version is known'}`);
+  updating = true;
+  try {
+    const was = db.update.deployed, words = await rollBack(allSites(), prev);
+    if (!words.startsWith('; all')) return notify(`ALERT: rollback${words}`);
+    // The bad version is remembered as failed, so next Wednesday does not ship it again unless the walk approves a newer one.
+    db.update = { ...db.update, deployed: prev, previous: null, failed_sha: was }; save();
+    await notify(`Rolled back to ${prev.slice(0, 7)}${words}`);
+    process.exit(0); // the manager itself restarts on the old code too
+  } finally { updating = false; }
+}
 export async function update(now = false) {
   if (updating || (!now && !releaseHour(new Date()))) return;
   updating = true;
@@ -233,11 +258,14 @@ export async function update(now = false) {
     let r = { failed: qa ? 'tests' : null, why: qa };
     if (!qa) {
       if (sha !== (await git('rev-parse', 'HEAD'))) await git('merge', '-q', '--ff-only', sha);
-      const sites = [{ slug: 'demo', port: 8201 }, ...LIVE, ...db.centres.filter((c) => !c.paused_at)];
-      r = await rollout(sites, async (c) => { await centreSh({}, 'backup', c.slug); await centreSh({}, 'up', c.slug, String(c.port)); await up(c.port); if (!(await fetch(`http://localhost:${c.port}/api/health`).then((x) => x.ok, () => false))) throw new Error('did not come up'); });
+      r = await rollout(allSites(), async (c) => { await centreSh({}, 'backup', c.slug); await bringUp(c); });
     }
-    db.update = { sha: short, at: Date.now(), failed: r.failed, why: r.why, failed_sha: r.failed ? sha : null, deployed: r.failed ? db.update?.deployed : sha }; save();
-    await notify(r.failed ? `ALERT: update ${short} stopped at ${r.failed}: ${r.why}` : `Updated to ${short}: demo, live centres and trials`);
+    // App-only rollback (#1178): a centre that did not come up puts every centre it touched back on the
+    // version they ran before. Their data stays as it is; the backup taken just before is there if not.
+    let back = '';
+    if (r.failed && r.touched?.length && db.update?.deployed) back = await rollBack(r.touched, db.update.deployed);
+    db.update = { sha: short, at: Date.now(), failed: r.failed, why: r.why, failed_sha: r.failed ? sha : null, deployed: r.failed ? db.update?.deployed : sha, previous: r.failed ? db.update?.previous : db.update?.deployed }; save();
+    await notify(r.failed ? `ALERT: update ${short} stopped at ${r.failed}: ${r.why}${back}` : `Updated to ${short}: demo, live centres and trials`);
     if (!r.failed) { if (!now) rmSync(OK, { force: true }); process.exit(0); } // launchd starts the service again on the new code
   } catch (e) { console.error('update', e); }
   finally { await run('git', ['-C', ROOT, 'worktree', 'remove', '-f', gate]).catch(() => {}); updating = false; }
@@ -283,7 +311,7 @@ const open = new Set();
 let latest = [];
 export async function watch(now = Date.now()) {
   const problems = [];
-  const sites = [{ slug: 'demo', port: 8201 }, ...LIVE, ...db.centres.filter((c) => !c.paused_at)];
+  const sites = allSites();
   for (const c of sites) {
     if (!(await fetch(`http://localhost:${c.port}/api/health`).then((r) => r.ok, () => false))) problems.push(`${c.slug} is down`);
     const newest = await run('sh', ['-c', `ls -1t "${DATA}/${c.slug}/backups"/ayurcalm-*.sql.gz 2>/dev/null | head -1`]).then((r) => r.stdout.trim(), () => '');
@@ -333,5 +361,5 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
   setInterval(() => update(), 600_000);
   built.then(() => watch()).catch(console.error);
   // `touch ~/ruta-data/update-now` asks for one update now, outside the weekly release, and ships main without the walk: only for a centre that cannot work (#924, #1178).
-  setInterval(() => { if (existsSync(`${DATA}/update-now`)) { rmSync(`${DATA}/update-now`); update(true); } }, 60_000);
+  setInterval(() => { if (existsSync(`${DATA}/update-now`)) { rmSync(`${DATA}/update-now`); update(true); } if (existsSync(`${DATA}/rollback-now`)) { rmSync(`${DATA}/rollback-now`); rollBackNow(); } }, 60_000);
 }

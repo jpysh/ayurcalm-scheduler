@@ -4,14 +4,15 @@ import { madeWith } from '../product.js';
 import { guestRoomsFor } from '../guestRooms.js';
 import { addHeader } from './dailySchedulePdf.js';
 
-type Guest = { name: string; start_date: string; end_date: string; from_room?: string | null; to_room?: string | null };
+type Guest = { name: string; group?: string | null; start_date: string; end_date: string; from_room?: string | null; to_room?: string | null };
 type SheetRoom = { name: string; beds: number; type: string; guests: Guest[]; /** Out of use for this day (#563). */ out?: { reason: string | null } | null };
 export type RoomRow = { room: string; kind: 'turnover' | 'leaving' | 'arriving' | 'staying' | 'free' | 'out'; line: string };
 
 const dayText = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
 const list = (names: string[]) => names.join(', ');
 // A move mid-stay (#1210) is said as a move, so housekeeping does not expect a new face or a departure.
-const who = (g: Guest) => `${g.name}${g.from_room ? ` (moves in from ${g.from_room})` : ''}`;
+// A group's guests carry its name (#1196), so housekeeping readies the block together.
+const who = (g: Guest) => `${g.name}${g.group ? ` [${g.group}]` : ''}${g.from_room ? ` (moves in from ${g.from_room})` : ''}`;
 const gone = (gs: Guest[]) => gs.map((g) => `${g.name}${g.to_room ? ` moves to ${g.to_room}` : ' leaves'}`).join(', ');
 // Guests sharing a room often leave on different days; housekeeping needs each one's (#660).
 const until = (gs: Guest[], note = '') => new Set(gs.map((g) => g.end_date)).size === 1

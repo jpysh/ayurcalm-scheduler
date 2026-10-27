@@ -119,6 +119,9 @@ assert.equal(r.failed, 'demo');
 const all = [];
 assert.equal((await rollout([{ slug: 'demo' }, { slug: 'babaji' }], async (x) => { all.push(x.slug); })).failed, null);
 assert.deepEqual(all, ['demo', 'babaji']);
+// A rollback puts back the sites already updated and the one that failed, never those not reached (#1178).
+const mid = await rollout([{ slug: 'demo' }, { slug: 'babaji' }, { slug: 't1' }], async (x) => { if (x.slug === 'babaji') throw new Error('did not come up'); });
+assert.deepEqual(mid.touched.map((x) => x.slug), ['demo', 'babaji']);
 
 // Nothing is deleted within 30 days of signing up (#920), even a centre paused on day 3.
 assert.equal(deletesAt({ created: t0, signed_up: t0, paused_at: t0 + 3 * D }), t0 + 30 * D);
