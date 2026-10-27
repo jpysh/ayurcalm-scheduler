@@ -18,6 +18,7 @@ async function tidy(prisma: PrismaClient) {
   const ids = (await prisma.patient.findMany({ where: { name: { startsWith: TAG } }, select: { id: true } })).map((p) => p.id);
   await prisma.appointment.deleteMany({ where: { patient_id: { in: ids } } });
   await prisma.timeOff.deleteMany({ where: { entity_type: 'patient', entity_id: { in: ids } } });
+  await prisma.dietPlanSegment.deleteMany({ where: { patient_id: { in: ids } } });
   await prisma.patientStay.deleteMany({ where: { patient_id: { in: ids } } });
   await prisma.patient.deleteMany({ where: { id: { in: ids } } });
 }
@@ -55,7 +56,11 @@ async function main() {
 
     // Push the stay later: every treatment moves three days, same time and therapist.
     const s = await guest('Shift');
+    // A staged diet moves with the stay (#1255), not stretched from the old arrival.
+    await prisma.dietPlanSegment.createMany({ data: [['2030-05-06', '2030-05-08'], ['2030-05-09', '2030-05-12']].map(([f, t]) => ({ patient_id: s.p.id, start_date: day(f), end_date: day(t), therapy_ids: [] })) });
     const pushed = await call('PUT', `/patients/${s.p.id}/stays/${s.stay.id}`, { start_date: '2030-05-09', end_date: '2030-05-15', late: 'shift' });
+    const diet = await prisma.dietPlanSegment.findMany({ where: { patient_id: s.p.id }, orderBy: { start_date: 'asc' } });
+    assert.deepEqual(diet.map((g) => [g.start_date.toISOString().slice(0, 10), g.end_date.toISOString().slice(0, 10)]), [['2030-05-09', '2030-05-11'], ['2030-05-12', '2030-05-15']], 'the diet moves three days with the stay');
     assert.equal(pushed.shifted, 3);
     const moved = await prisma.appointment.findMany({ where: { id: { in: s.appts.map((a) => a.id) } }, orderBy: { scheduled_date: 'asc' } });
     assert.deepEqual(moved.map((a) => [a.scheduled_date.toISOString().slice(0, 10), a.start_time, a.staff_id]), [['2030-05-09', '08:00', staff.id], ['2030-05-10', '08:00', staff.id], ['2030-05-13', '08:00', staff.id]]);

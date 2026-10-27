@@ -79,6 +79,13 @@ export async function extendDiet(patientId: string, oldEnd: Date, newEnd: Date, 
   await prisma.dietPlanSegment.updateMany({ where: { patient_id: patientId, end_date: oldEnd }, data: { end_date: newEnd } });
 }
 
+/** A whole stay moved by `days` (#1255): its diet moves with it, so a staged course still starts on the arrival day. */
+export async function shiftDiet(patientId: string, start: Date, end: Date, days: number, prisma: PrismaClient) {
+  const segs = await prisma.dietPlanSegment.findMany({ where: { patient_id: patientId, start_date: { gte: start }, end_date: { lte: end } } });
+  const by = (d: Date) => new Date(d.getTime() + days * DAY_MS);
+  await prisma.$transaction(segs.map((g) => prisma.dietPlanSegment.update({ where: { id: g.id }, data: { start_date: by(g.start_date), end_date: by(g.end_date) } })));
+}
+
 const PURIFICATION = ['Before purification', 'Internal oleation', 'After purification'];
 const shiftISO = (iso: string, n: number) => ymd(new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY_MS));
 
