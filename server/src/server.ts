@@ -715,6 +715,7 @@ const stayExtras = z.object({
   group_name: z.string().trim().max(60).nullable().optional(),
   /** Late checkout (#1200); null clears it. */
   leaving_time: z.string().regex(/^\d\d:\d\d$/).nullable().optional(),
+  arriving_time: z.string().regex(/^\d\d:\d\d$/).nullable().optional(),
   /** The guest room (#456); it sets the accommodation to the room's type. */
   guest_room_id: z.string().uuid().nullable().optional(),
   /** The first night in the new room (#1164); a stay already under way moves from the centre's today, a stay not yet begun for every night. */
@@ -781,7 +782,7 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
     await tx.earlierGuestRoom.deleteMany({ where: { stay_id: stay.id } });
     if (rooms.length) await tx.earlierGuestRoom.createMany({ data: rooms.map((r) => ({ ...r, stay_id: stay.id })) });
     const saved = await tx.patientStay.update({ where: { id: stay.id }, data: {
-      ...dates, package_id: extras.package_id, guest_room_id: roomId, companion: extras.companion, group_name: extras.group_name === undefined ? undefined : extras.group_name || null, leaving_time: extras.leaving_time,
+      ...dates, package_id: extras.package_id, guest_room_id: roomId, companion: extras.companion, group_name: extras.group_name === undefined ? undefined : extras.group_name || null, leaving_time: extras.leaving_time, arriving_time: extras.arriving_time,
       accommodation_id: roomId !== stay.guest_room_id || extras.guest_room_id ? room?.accommodation_id ?? extras.accommodation_id : extras.accommodation_id,
     } });
     for (const m of mates) {

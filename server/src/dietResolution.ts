@@ -200,11 +200,22 @@ export type KitchenMeal = {
  * eats something of their own, by name. A plan serves different food on a
  * treatment day and a rest day, so each side is its own count line.
  */
-export function kitchenMeals(people: { name: string; diet: ResolvedDiet }[]): KitchenMeal[] {
+const SERVED: Record<MealKey, string> = { breakfast: '08:00', lunch: '13:00', snacks: '16:00', dinner: '19:00' };
+/**
+ * The meals a late arrival misses (#1255): those served before they arrive, by the centre's meal window when it
+ * has one, else the usual hour. Dinner is always kept: it can be prepared and kept for them. Away (#695) is not this.
+ */
+export function mealsBefore(arriving: string | null | undefined, served: (meal: MealKey) => string | undefined): MealKey[] {
+  if (!arriving) return [];
+  return mealOrder.filter((m) => m !== 'dinner' && (served(m) ?? SERVED[m]) < arriving);
+}
+
+export function kitchenMeals(people: { name: string; diet: ResolvedDiet; skip?: MealKey[] }[]): KitchenMeal[] {
   return mealOrder.map((meal) => {
+    const eating = people.filter((p) => !p.skip?.includes(meal));
     const counts = new Map<string, { plan: string; food: string; n: number; treatmentDay: boolean }>();
     const exceptions: KitchenMeal['exceptions'] = [];
-    for (const { name, diet } of people) {
+    for (const { name, diet } of eating) {
       const plan = (diet.planName || 'No diet plan') + (diet.step ? ` · Day ${diet.step}` : '');
       const food = diet.meals[meal] || '';
       if (diet.personal.includes(meal)) { exceptions.push({ name, plan, food }); continue; }
@@ -219,7 +230,7 @@ export function kitchenMeals(people: { name: string; diet: ResolvedDiet }[]): Ki
       meal,
       counts: lines.map(({ plan, food, n, treatmentDay }) => ({ plan: split(plan) ? `${plan} · ${treatmentDay ? 'treatment' : 'rest'} day` : plan, food, n })).sort((a, b) => b.n - a.n || a.plan.localeCompare(b.plan)),
       exceptions: exceptions.sort((a, b) => a.name.localeCompare(b.name)),
-      total: people.length,
+      total: eating.length,
     };
   });
 }

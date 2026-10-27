@@ -96,6 +96,8 @@ model PatientStay {
   group_name       String?
   /// Late checkout (#1200): "15:00" on the leaving day, so the room is not made up, or given, before then.
   leaving_time     String?
+  /// A late arrival (#1255): "22:00" on the arriving day, so the kitchen leaves out the meals served before it (dinner is kept).
+  arriving_time    String?
 
   Patient       Patient            @relation(fields: [patient_id], references: [id])
   GuestRoom     GuestRoom?         @relation(fields: [guest_room_id], references: [id], onDelete: SetNull)
