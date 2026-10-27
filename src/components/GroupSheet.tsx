@@ -9,7 +9,7 @@ import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import { BottomSheet } from "@/components/BottomBar";
 import { ResidentsFromSheet } from "@/components/ResidentImport";
-import { Btn, ChangeLine, Consequence, DateRow, LineDate, ListGroup, Row, Switch, Text, TimeList, datePair, dayText, plural, timesBetween, toastUndo, undoWrite } from "@/components/kit";
+import { Btn, Callout, ChangeLine, Consequence, DateRow, LineDate, ListGroup, Row, Switch, Text, TimeList, datePair, dayText, plural, timesBetween, toastUndo, undoWrite } from "@/components/kit";
 
 type Hold = { accommodation_id: string; type: string; rooms: number; filled: number; start_date: string; end_date: string; keep_until: string | null; lapsed: boolean };
 type Part = { id: string; activity_name: string; start_time: string; end_time: string; is_optional: boolean };
@@ -64,7 +64,7 @@ export function GroupSheet({ group, today, onClose, onChanged, openPatient }: { 
           <ChangeLine label="Group arrives" value={dayText(arrive)} select={<LineDate label="Group arrives" value={arrive} min={today} onChange={setArrive} />} />
         </div> : null}
         {days && (waiting || group.holds.length) ? <Consequence>{`Everyone not yet here moves ${plural(Math.abs(days), "day")} ${days > 0 ? "later" : "earlier"}, with their treatments, meals and held rooms; each room is checked first. Anyone who cannot move is named.`}</Consequence> : null}
-        {short.length ? <Consequence>{`Short of therapists on ${short.slice(0, 3).map((d) => `${dayText(d.date)} (${d.guests} guests need about ${Math.round(d.needed / 60)} h, ${Math.round(d.free / 60)} h free)`).join(", ")}${short.length > 3 ? ` and ${short.length - 3} more days` : ""}. Ask a therapist in, or spread the treatments.`}</Consequence> : null}
+        {short.length ? <div className="mt-2"><Callout tone="notice" title={`Short of therapists on ${plural(short.length, "day")}`}>{`${short.slice(0, 3).map((d) => `${dayText(d.date)}: about ${Math.round(d.needed / 60)} h needed, ${Math.round(d.free / 60)} h free`).join(" · ")}${short.length > 3 ? ` · and ${short.length - 3} more` : ""}. Ask a therapist in, or spread the treatments.`}</Callout></div> : null}
         <div className="mt-3"><ListGroup title="Held rooms" count={group.holds.reduce((n, h) => n + h.rooms, 0) || undefined}>
           {group.holds.map((h) => <Row key={h.accommodation_id} title={`${plural(h.rooms, "room")} · ${h.type}`} facts={`${dayText(h.start_date)} to ${dayText(h.end_date)} · ${h.filled} named${h.keep_until ? (h.lapsed ? ` · lapsed ${dayText(h.keep_until)}, free again` : ` · kept until ${dayText(h.keep_until)}`) : ""}`} flag={h.lapsed ? "Lapsed" : undefined} />)}
           <Row title={group.holds.length ? "Change the held rooms" : "Hold rooms before the names arrive"} trailing="›" onClick={() => setHolding(true)} />
