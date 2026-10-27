@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { findConflict, staffDay, type DayContext } from '../appointmentGuard.js';
-import { outsideHours } from '../availability.js';
+import { outsideCentreHours, outsideHours } from '../availability.js';
 
 // A fixed day far from the seed, as every dated test here does.
 const day = new Date('2030-03-13T00:00:00.000Z');
@@ -97,3 +97,7 @@ console.log('offHours change: ok');
   assert.equal(findConflict(at('08:30'), hours)?.reason, 'CENTRE_HOURS', 'before opening too');
 }
 console.log('offHours centre hours: ok');
+
+// Closing moved from 20:00 to 17:00 (#1326): the Settings save counts what now runs past it, and nothing inside.
+assert.deepEqual(outsideCentreHours('09:00', '17:00', [at('08:30'), at('09:00'), at('16:00'), at('16:30'), at('18:00')]).map((a) => a.start_time), ['08:30', '16:30', '18:00']);
+console.log('offHours settings count: ok');

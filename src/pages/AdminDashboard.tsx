@@ -197,6 +197,8 @@ const AdminDashboard = () => {
   // A day named in the address (?date=YYYY-MM-DD) opens on that day, e.g. tomorrow after Make it mine (#755).
   const dateParam = new URLSearchParams(window.location.search).get('date');
   useEffect(() => { if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) setCurrentDate(dayDate(dateParam)); }, [ADMIN_TZ]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ?check=1 opens What needs you on that day, e.g. after Settings shortened the hours (#1326).
+  useEffect(() => { if (new URLSearchParams(window.location.search).get('check')) setShowAttention(true); }, []);
   // After the centre closes, Day opens on the day Staff, link pages and Print use (#951); once, and never over a day named in the address.
   useEffect(() => { if (hoursLoaded && !dateParam) setCurrentDate(dayDate(planningDay(ymdInTZ(new Date()), centreHours.closing_time, ADMIN_TZ))); }, [hoursLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
   const shiftDay = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
