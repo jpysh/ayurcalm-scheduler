@@ -288,7 +288,7 @@ export default function LinkView() {
         </div>
         <Btn kind={kind === "sos" ? "destructive" : "primary"} className="mt-3" disabled={!kind || (kind === "note" && !issueNote.trim())} onClick={sendIssue}>{kind === "sos" ? "Send SOS now" : kind === "note" && !issueNote.trim() ? "Type your note first" : "Send to the centre"}</Btn>
       </BottomSheet>
-      {made && <p className="mt-6 text-center"><QuietLink href="https://jains.es/ruta">{made}</QuietLink></p>}
+      {made && <p className="mt-6 text-center"><QuietLink href="https://ruta.jains.es">{made}</QuietLink></p>}
     </FullPage>
   );
 }

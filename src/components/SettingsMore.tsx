@@ -184,7 +184,7 @@ export function HelpSheet({ open, onOpenChange, centre, supportWhatsapp, trial, 
         {admin && trial ? <Row title="Plan" facts={planHint(trial)} trailing="›" onClick={() => setPlan(true)} /> : null}
         {admin && demo ? <Row title="Demo data" facts="Clear it, or reset it from today" trailing="›" onClick={() => setDemoOpen(true)} /> : null}
         {admin ? <Row title="Invite a centre" facts="On WhatsApp · you both get 3 months free" trailing="›"
-          onClick={() => wa("", `We run ${centre} on ${PRODUCT}: patients, therapists and the day sheet on one phone. Free for 30 days: https://jains.es/ruta?ref=${encodeURIComponent(window.location.host.split(".")[0])}`)} /> : null}
+          onClick={() => wa("", `We run ${centre} on ${PRODUCT}: patients, therapists and the day sheet on one phone. Free for 30 days: https://ruta.jains.es?ref=${encodeURIComponent(window.location.host.split(".")[0])}`)} /> : null}
       </ListGroup>
 
       <BottomSheet open={words !== null} onOpenChange={(o) => { if (!o) setWords(null); }} title="Report a problem or an idea" foot={<Foot label="Send" save={report} ok={!!words?.trim()} />}>

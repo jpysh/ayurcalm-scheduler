@@ -122,7 +122,7 @@ const Login = () => {
       {trial ? (
         // Pilot notice and contacts (#251): who runs a cloud centre and how to reach them.
         <p className="mt-4 text-center text-sm text-muted-foreground">
-          <a className="underline" href="https://jains.es/ruta/pilot">Pilot notice: your data</a> · <a className="underline" href="https://wa.me/420777558262">WhatsApp</a> · <a className="underline" href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a>
+          <a className="underline" href="https://ruta.jains.es/pilot">Pilot notice: your data</a> · <a className="underline" href="https://wa.me/420777558262">WhatsApp</a> · <a className="underline" href="mailto:helloayursen@gmail.com">helloayursen@gmail.com</a>
         </p>
       ) : null}
       <div className="mt-4 text-center"><QuietLink href="https://github.com/jpysh/ruta#readme" target="_blank" rel="noopener noreferrer">Help</QuietLink></div>
