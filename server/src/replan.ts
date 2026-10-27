@@ -608,7 +608,7 @@ export const replanStaffDay = (
 ) => planDay(staffId, date, prisma, opts);
 
 /**
- * A room's day while it is out of use (#659): the treatments in the hours it is
+ * A room's day while it is out of use (#659), or a guest's while they are away for some hours (#1240): the treatments in the hours it is
  * out, rehoused in one pass and recorded against the absence so deleting it or
  * Undo puts them back.
  */
@@ -618,8 +618,9 @@ export async function replanRoomDay(
   prisma: PrismaClient,
   opts: { now?: Clock } = {},
 ) {
-  const hours = offOnDay([off], 'room', off.entity_id ?? '', date);
-  const ids = (await prisma.appointment.findMany({ where: { ...HAPPENING, scheduled_date: date, ...(off.entity_type === 'center' ? {} : { room_id: off.entity_id }) }, select: { id: true, start_time: true, duration_minutes: true } }))
+  const guest = off.entity_type === 'patient';
+  const hours = offOnDay([off], guest ? 'patient' : 'room', off.entity_id ?? '', date);
+  const ids = (await prisma.appointment.findMany({ where: { ...HAPPENING, scheduled_date: date, ...(off.entity_type === 'center' ? {} : guest ? { patient_id: off.entity_id! } : { room_id: off.entity_id }) }, select: { id: true, start_time: true, duration_minutes: true } }))
     .filter((a) => hours.some((b) => overlaps(b.s, b.e, toMinutes(a.start_time), toMinutes(a.start_time) + a.duration_minutes)))
     .map((a) => a.id);
   return planDay(null, date, prisma, { ...opts, apply: true, timeOffId: off.id, appointmentIds: ids });

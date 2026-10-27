@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import {
-  Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, LineSelect, Picker, QuickDates, Row, Seg, SwitchRow, Text, TextRow, Timeline,
+  Area, BottomSheet, ChangeLine, Consequence, Empty, Foot, Group, ListGroup, Loading, LineDate, LineSelect, Picker, QuickDates, Row, Seg, SwitchRow, Text, TextRow, Timeline, TimeList, timesBetween,
   dayText, datePair, DateRow, noteText, money, NightChips, toastUndo, Btn, saveError, deleteAll, undoWrite, EXAMPLE_PRICE, ownNote } from "@/components/kit";
 
 const DAY_MS = 86400000;
@@ -411,6 +411,9 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
   // A pause in treatments (#1194): those days dropped, or the rest of the programme pushed later with the stay.
   const [pause, setPause] = useState<{ from: string; to: string; mode: "drop" | "push"; reason: string } | null>(null);
   useEffect(() => setPause(null), [target?.id]);
+  // Arrived some hours late (#1240): away until then today, and the server moves the earlier treatments later that day in one pass.
+  const [arrivedAt, setArrivedAt] = useState<string | null>(null);
+  useEffect(() => setArrivedAt(null), [target?.id]);
   if (!patient || !target) return null;
   const oldDays = between(target.start, target.end) + 1;
   const days = between(start, end) + 1;
@@ -476,6 +479,20 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     onSaved();
     onClose();
   };
+  const arrivedLate = async () => {
+    if (!arrivedAt) return;
+    setBusy(true);
+    const res = await fetch(`${API_BASE}/timeoff`, { method: "POST", headers: json, body: JSON.stringify({ entity_type: "patient", entity_id: patient.id, date: today, start_date: today, end_date: today, start_time: "00:00", end_time: arrivedAt, description: "arrived late" }) }).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) { toast.error("That was not saved. Try again."); return; }
+    const out = await res.json();
+    const r = out.replan?.[0];
+    const waiting = (r?.proposed.length ?? 0) + (r?.unplaced.length ?? 0);
+    toastUndo(`${first(patient.name)} arrived at ${arrivedAt}${r?.moved.length ? `: ${plural(r.moved.length, "treatment")} moved later` : ""}${waiting ? `; ${waiting} wait${waiting === 1 ? "s" : ""} under "need you"` : ""}`,
+      () => undoWrite(() => fetch(`${API_BASE}/timeoff/${out.id}`, { method: "DELETE", headers: json }), onSaved));
+    onSaved();
+    onClose();
+  };
   const label = !target.id ? "Add the stay" : !changed ? "Change a date to save" : missed && late === "shift" ? `Push to ${dayText(start)}–${dayText(end)}` : start !== target.start && end === target.end ? `Arrive on ${dayText(start)}` : delta < 0 ? `Leave on ${dayText(end)}` : delta > 0 ? `Stay until ${dayText(end)}${room?.move_to ? ` in ${room.move_to.name}` : ""}` : "Save the stay";
   return (
     <BottomSheet open onOpenChange={(o) => { if (!o) onClose(); }} title={target.id ? `Stay for ${first(patient.name)}` : "New stay"}
@@ -493,6 +510,12 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
       </div>
       {target.id && start <= today && end > today ? <Btn kind="quiet" inline className="-ml-2 mt-1" onClick={() => setEnd(today)}>Leaves today</Btn> : null}
       {target.id && target.start <= today && target.end >= today && noShow === null ? <Btn kind="quiet" inline className="-ml-2 mt-1" disabled={busy} onClick={askNoShow}>Did not arrive</Btn> : null}
+      {target.id && target.start === today && arrivedAt === null && noShow === null ? <Btn kind="quiet" inline className="-ml-2 mt-1" disabled={busy} onClick={() => setArrivedAt("14:00")}>Arrived late today…</Btn> : null}
+      {arrivedAt !== null ? <div className="mt-3 rounded-xl border p-3">
+        <TimeList label="Arrived at" value={arrivedAt} onChange={setArrivedAt} times={timesBetween("07:00", "20:00", 30)} />
+        <Consequence>{`Today's treatments before ${arrivedAt} move later today, in one pass. Undo puts them back.`}</Consequence>
+        <div className="mt-2 flex gap-2"><Btn inline disabled={busy} onClick={arrivedLate}>Move them</Btn><Btn kind="quiet" inline onClick={() => setArrivedAt(null)}>Not now</Btn></div>
+      </div> : null}
       {target.id && target.end > today && !pause && noShow === null ? <Btn kind="quiet" inline className="-ml-2 mt-1" disabled={busy} onClick={() => { const f = target.start > today ? target.start : today; setPause({ from: f, to: addDays(f, 2) > target.end ? target.end : addDays(f, 2), mode: "drop", reason: "" }); }}>Pause treatments…</Btn> : null}
       {pause ? <div className="mt-3 rounded-xl border p-3">
         <b className="block">Pause treatments</b>
