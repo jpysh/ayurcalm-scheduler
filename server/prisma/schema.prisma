@@ -350,8 +350,10 @@ model ProgramEvent {
   /// Residents are expected at a required event, so a treatment across one is a
   /// treatment they will not attend. An optional class raises no such question.
   is_optional        Boolean   @default(false)
+  /// "all", "none", "custom" (patient_ids) or "group" (#1196): everyone whose stay is in `group_name`, named or not yet.
   patients_scope     String?
   patient_ids        String[]
+  group_name         String?
   staff_scope        String?
   staff_ids          String[]
 }

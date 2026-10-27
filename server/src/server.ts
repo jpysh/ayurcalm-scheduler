@@ -836,7 +836,10 @@ app.get('/groups', async (_req: Request, res: Response) => {
   const tz = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
   const today = new Date(`${centreClock(tz).date}T00:00:00.000Z`);
   const stays = await prisma.patientStay.findMany({ where: { group_name: { not: null }, end_date: { gte: today } }, include: { Patient: { select: { id: true, name: true } }, GuestRoom: { select: { name: true } } }, orderBy: { start_date: 'asc' } });
-  const holds = await prisma.groupHold.findMany({ where: { end_date: { gte: today } }, include: { Accommodation: { select: { name: true } } }, orderBy: { start_date: 'asc' } });
+  const [holds, programme] = await Promise.all([
+    prisma.groupHold.findMany({ where: { end_date: { gte: today } }, include: { Accommodation: { select: { name: true } } }, orderBy: { start_date: 'asc' } }),
+    prisma.programEvent.findMany({ where: { patients_scope: 'group', end_date: { gte: today } }, orderBy: { start_time: 'asc' } }),
+  ]);
   const by = new Map<string, typeof stays>();
   for (const h of holds) by.set(h.group_name, by.get(h.group_name) ?? []);
   for (const s of stays) by.set(s.group_name!, [...(by.get(s.group_name!) ?? []), s]);
@@ -848,9 +851,31 @@ app.get('/groups', async (_req: Request, res: Response) => {
       name, count: ss.length, start_date: ymd(dates.reduce((m, s) => (s.start_date < m ? s.start_date : m), dates[0].start_date)), end_date: ymd(dates.reduce((m, s) => (s.end_date > m ? s.end_date : m), dates[0].end_date)),
       guests: ss.map((s) => ({ stay_id: s.id, patient_id: s.Patient.id, name: s.Patient.name, start_date: ymd(s.start_date), end_date: ymd(s.end_date), room: s.GuestRoom?.name ?? null, started: s.start_date <= today })),
       /** Rooms held before the names arrive; `filled` counts the group's guests already given a room of the type. */
+      /** The shared programme (#1196): what the whole group does each day; each guest's own treatments go on top. */
+      programme: programme.filter((e) => e.group_name === name).map((e) => ({ id: e.id, activity_name: e.activity_name, start_time: e.start_time, end_time: e.end_time, is_optional: e.is_optional })),
       holds: hs.map((h) => ({ accommodation_id: h.accommodation_id, type: h.Accommodation.name, rooms: h.rooms, start_date: ymd(h.start_date), end_date: ymd(h.end_date), filled: new Set(ss.filter((s) => s.accommodation_id === h.accommodation_id && s.guest_room_id).map((s) => s.guest_room_id)).size })),
     };
   }));
+});
+
+/**
+ * The group's shared programme (#1196): yoga at 7 for everyone in it, every day of the group's dates. It prints in each
+ * guest's row of the day sheet, and the day check names a treatment that covers a required part of it.
+ */
+app.post('/groups/programme', async (req: Request, res: Response) => {
+  const hhmm = z.string().regex(/^\d\d:\d\d$/);
+  const body = z.object({ name: z.string().trim().min(1).max(60), activity_name: z.string().trim().min(1).max(80), start_time: hhmm, end_time: hhmm, is_optional: z.boolean().default(false) }).refine((b) => b.end_time > b.start_time, 'It must end after it starts').parse(req.body);
+  const [stays, holds] = await Promise.all([prisma.patientStay.findMany({ where: { group_name: body.name } }), prisma.groupHold.findMany({ where: { group_name: body.name } })]);
+  const dates = [...stays, ...holds];
+  if (!dates.length) { res.status(404).json({ error: 'Group not found' }); return; }
+  const start_date = dates.reduce((m, s) => (s.start_date < m ? s.start_date : m), dates[0].start_date);
+  const end_date = dates.reduce((m, s) => (s.end_date > m ? s.end_date : m), dates[0].end_date);
+  const e = await prisma.programEvent.create({ data: { activity_name: body.activity_name, start_time: body.start_time, end_time: body.end_time, start_date, end_date, is_optional: body.is_optional, patients_scope: 'group', group_name: body.name, staff_scope: 'none', required_amenities: [], weekdays: [], patient_ids: [], staff_ids: [] } });
+  res.status(201).json(e);
+});
+app.delete('/groups/programme/:id', async (req: Request, res: Response) => {
+  await prisma.programEvent.deleteMany({ where: { id: String(req.params.id), patients_scope: 'group' } });
+  res.status(204).end();
 });
 
 /**
@@ -913,6 +938,8 @@ app.post('/groups/move', async (req: Request, res: Response) => {
   // ponytail: moved unchecked; the hold then shows taken only where rooms are empty. Check it if a moved hold ever overbooks.
   const holds = await prisma.groupHold.findMany({ where: { group_name: body.name, start_date: { gt: today } } });
   for (const h of holds) if (shift(h.start_date) > today) await prisma.groupHold.update({ where: { id: h.id }, data: { start_date: shift(h.start_date), end_date: shift(h.end_date) } });
+  // So does its programme, unless it has begun.
+  for (const e of await prisma.programEvent.findMany({ where: { patients_scope: 'group', group_name: body.name, start_date: { gt: today } } })) if (shift(e.start_date!) > today) await prisma.programEvent.update({ where: { id: e.id }, data: { start_date: shift(e.start_date!), end_date: shift(e.end_date!) } });
   const batch = appts.length ? await applyPlan(appts, prisma) : null;
   res.json({ moved, not_moved, batch_id: batch?.batch_id ?? null });
 });
@@ -1577,7 +1604,7 @@ app.post('/program-events', async (req: Request, res: Response) => {
     recurrence: z.string().optional().nullable(),
     weekdays: z.array(z.string()).optional().nullable(),
     audience: z.string().optional().nullable(),
-    patients_scope: z.enum(['all','none','custom']).optional().nullable(),
+    patients_scope: z.enum(['all','none','custom','group']).optional().nullable(),
     patient_ids: z.array(z.string()).optional(),
     staff_scope: z.enum(['all','none','custom']).optional().nullable(),
     staff_ids: z.array(z.string()).optional(),
@@ -1632,7 +1659,7 @@ app.put('/program-events/:id', async (req: Request, res: Response) => {
     recurrence: z.string().optional().nullable(),
     weekdays: z.array(z.string()).optional().nullable(),
     audience: z.string().optional().nullable(),
-    patients_scope: z.enum(['all','none','custom']).optional().nullable(),
+    patients_scope: z.enum(['all','none','custom','group']).optional().nullable(),
     patient_ids: z.array(z.string()).optional(),
     staff_scope: z.enum(['all','none','custom']).optional().nullable(),
     staff_ids: z.array(z.string()).optional(),

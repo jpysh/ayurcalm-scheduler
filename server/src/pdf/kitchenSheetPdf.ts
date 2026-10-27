@@ -24,7 +24,7 @@ export async function generateKitchenSheetPdf(dateISO: string, prisma: PrismaCli
     prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: day }, on_site: true }, include: { Patient: true } }),
     loadDietsForDay(day, prisma),
     prisma.appointment.findMany({ where: { scheduled_date: day, status: { notIn: ['cancelled', 'no_show'] } }, select: { patient_id: true } }),
-    prisma.programEvent.findMany({ where: { patients_scope: { not: 'custom' } } }),
+    prisma.programEvent.findMany({ where: { patients_scope: { notIn: ['custom', 'group'] } } }),
     prisma.timeOff.findMany({ where: { entity_type: 'patient' } }),
   ]);
   // Only the patients staying eat the centre's meals; an outpatient goes home.
