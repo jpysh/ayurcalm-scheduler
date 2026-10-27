@@ -277,7 +277,8 @@ test('search finds a resident on other days and opens the card with Show this da
   await page.getByRole('dialog').getByRole('button', { name: /^Search/ }).click();
   await expect(page.getByText('Patients', { exact: true }).first()).toBeVisible({ timeout: 15000 });
   // A resident chip is a full name; therapist chips are first names.
-  await page.getByRole('button', { name: /^\S+ \S+/ }).first().click();
+  // Scoped to the search page: the demo-password banner's "Change it" is two words too.
+  await page.getByRole('tabpanel').getByRole('button', { name: /^\S+ \S+/ }).first().click();
   await page.getByRole('button', { name: 'All', exact: true }).click();
   // A result row reads name, therapy, room, then its start and end times.
   const result = page.getByRole('button', { name: /\d\d:\d\d \d\d:\d\d$/ }).first();
