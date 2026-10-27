@@ -11,7 +11,7 @@ import { BottomSheet } from "@/components/BottomBar";
 import { ResidentsFromSheet } from "@/components/ResidentImport";
 import { Btn, ChangeLine, Consequence, DateRow, LineDate, ListGroup, Row, Switch, Text, TimeList, datePair, dayText, plural, timesBetween, toastUndo, undoWrite } from "@/components/kit";
 
-type Hold = { accommodation_id: string; type: string; rooms: number; filled: number; start_date: string; end_date: string };
+type Hold = { accommodation_id: string; type: string; rooms: number; filled: number; start_date: string; end_date: string; keep_until: string | null; lapsed: boolean };
 type Part = { id: string; activity_name: string; start_time: string; end_time: string; is_optional: boolean };
 export type Group = { name: string; count: number; start_date: string; end_date: string; holds: Hold[]; programme: Part[]; guests: { stay_id: string; patient_id: string; name: string; start_date: string; end_date: string; room: string | null; started: boolean }[] };
 export const fetchGroups = () => fetchJsonWithTimeout<Group[]>(`${API_BASE}/groups`).then((r) => (Array.isArray(r) ? r : []));
@@ -66,7 +66,7 @@ export function GroupSheet({ group, today, onClose, onChanged, openPatient }: { 
         {days && (waiting || group.holds.length) ? <Consequence>{`Everyone not yet here moves ${plural(Math.abs(days), "day")} ${days > 0 ? "later" : "earlier"}, with their treatments, meals and held rooms; each room is checked first. Anyone who cannot move is named.`}</Consequence> : null}
         {short.length ? <Consequence>{`Short of therapists on ${short.slice(0, 3).map((d) => `${dayText(d.date)} (${d.guests} guests need about ${Math.round(d.needed / 60)} h, ${Math.round(d.free / 60)} h free)`).join(", ")}${short.length > 3 ? ` and ${short.length - 3} more days` : ""}. Ask a therapist in, or spread the treatments.`}</Consequence> : null}
         <div className="mt-3"><ListGroup title="Held rooms" count={group.holds.reduce((n, h) => n + h.rooms, 0) || undefined}>
-          {group.holds.map((h) => <Row key={h.accommodation_id} title={`${plural(h.rooms, "room")} · ${h.type}`} facts={`${dayText(h.start_date)} to ${dayText(h.end_date)} · ${h.filled} named`} />)}
+          {group.holds.map((h) => <Row key={h.accommodation_id} title={`${plural(h.rooms, "room")} · ${h.type}`} facts={`${dayText(h.start_date)} to ${dayText(h.end_date)} · ${h.filled} named${h.keep_until ? (h.lapsed ? ` · lapsed ${dayText(h.keep_until)}, free again` : ` · kept until ${dayText(h.keep_until)}`) : ""}`} flag={h.lapsed ? "Lapsed" : undefined} />)}
           <Row title={group.holds.length ? "Change the held rooms" : "Hold rooms before the names arrive"} trailing="›" onClick={() => setHolding(true)} />
           {group.holds.length ? <Row title="Add guests from the organiser's list" trailing="›" onClick={() => setListing(true)} /> : null}
         </ListGroup></div>
@@ -127,6 +127,8 @@ export function HoldSheet({ open, group, today, onClose, onSaved }: { open: bool
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [want, setWant] = useState<Record<string, string>>({});
+  // Tentative (#1203): a phone enquiry's rooms are kept until a day, then free again unless confirmed.
+  const [keep, setKeep] = useState<string | null>(null);
   const [types, setTypes] = useState<{ id: string; type: string; free: number }[]>([]);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -136,6 +138,7 @@ export function HoldSheet({ open, group, today, onClose, onSaved }: { open: bool
     setFrom(h?.start_date ?? group?.start_date ?? addDays(today, 30));
     setTo(h?.end_date ?? group?.end_date ?? addDays(today, 37));
     setWant(Object.fromEntries((group?.holds ?? []).map((x) => [x.accommodation_id, String(x.rooms)])));
+    setKeep(h?.keep_until ?? null);
   }, [open, group, today]);
   useEffect(() => {
     if (!open || !from || to <= from) return;
@@ -153,7 +156,7 @@ export function HoldSheet({ open, group, today, onClose, onSaved }: { open: bool
   const save = async () => {
     setBusy(true);
     const res = await fetch(`${API_BASE}/groups/hold`, { method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), start_date: from, end_date: to, rooms: types.map((t) => ({ accommodation_id: t.id, rooms: Number(want[t.id]) || 0 })) }) }).catch(() => null);
+      body: JSON.stringify({ name: name.trim(), start_date: from, end_date: to, rooms: types.map((t) => ({ accommodation_id: t.id, rooms: Number(want[t.id]) || 0 })), keep_until: keep }) }).catch(() => null);
     setBusy(false);
     if (!res?.ok) { toast.error(res?.status === 409 ? (await res.json()).message : "The rooms were not held. Try again."); return; }
     toast.success(total ? `${plural(total, "room")} held for ${name.trim()}` : `The held rooms for ${name.trim()} were let go`);
@@ -161,15 +164,17 @@ export function HoldSheet({ open, group, today, onClose, onSaved }: { open: bool
     onClose();
   };
   return (
-    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={group ? `Rooms for ${group.name}` : "Hold rooms for a group"}
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={group ? `Rooms for ${group.name}` : "Hold rooms"}
       note="How many rooms of each type, held before the names arrive. Others see them as taken."
       foot={<Btn kind="primary" disabled={busy || !name.trim() || to <= from || (!total && !group?.holds.length)} onClick={() => void save()}>{total ? `Hold ${plural(total, "room")}` : group?.holds.length ? "Let the held rooms go" : "Choose how many rooms"}</Btn>}>
       <div className="grid gap-3">
-        {group ? null : <Text label="Group name" placeholder="Rishikesh Yoga, Nov" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />}
+        {group ? null : <Text label="Group or enquiry" placeholder="Rishikesh Yoga, Nov" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />}
         <div className={datePair}>
           <DateRow label="Arriving" value={from} min={today} onChange={(d) => { setFrom(d); if (to <= d) setTo(addDays(d, 7)); }} />
           <DateRow label="Leaving" value={to} min={addDays(from || today, 1)} onChange={setTo} />
         </div>
+        <Switch label="Tentative" note="For an enquiry not yet confirmed: the rooms are free again after the day you choose." on={keep !== null} set={(on) => setKeep(on ? addDays(today, 3) : null)} />
+        {keep !== null ? <DateRow label="Keep until" value={keep} min={today} max={from} onChange={setKeep} /> : null}
         {types.map((t) => <Text key={t.id} label={t.type} note={`${plural(t.free, "room")} free for all those nights`} type="number" inputMode="numeric" min={0} placeholder="0" value={want[t.id] ?? ""} onChange={(e) => setWant({ ...want, [t.id]: e.target.value })} />)}
       </div>
     </BottomSheet>
