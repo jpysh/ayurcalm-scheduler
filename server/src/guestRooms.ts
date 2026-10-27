@@ -1,5 +1,6 @@
 /** Guest rooms (#456): the rooms patients sleep in, and who sleeps in each on a night. */
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { centreClock } from './availability.js';
 
 /** "T1–T6" is six rooms, "101-104" four, "T1, T2, Hut A" three; anything else is one room by that name. */
 export function expandRoomNames(text: string): string[] {
@@ -86,6 +87,8 @@ export function outNight(rows: OutRow[], roomId: string, from: Date, end: Date) 
  */
 export async function guestRoomsFor(db: Db, from: Date, to: Date, except?: string, group?: string | null) {
   const end = nightsEnd(from, to);
+  const tz = (await db.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
+  const today = new Date(`${centreClock(tz).date}T00:00:00.000Z`);
   const [rooms, stays, off, holds] = await Promise.all([
     db.guestRoom.findMany({ where: { is_active: true }, include: { Accommodation: { select: { name: true, price_per_day: true } } } }),
     db.patientStay.findMany({
@@ -94,7 +97,8 @@ export async function guestRoomsFor(db: Db, from: Date, to: Date, except?: strin
     }),
     db.timeOff.findMany({ where: { entity_type: 'guest_room' } }),
     // The group's own guests may sleep in its held rooms; everyone else sees them taken.
-    db.groupHold.findMany({ where: { start_date: { lt: end }, end_date: { gt: from }, ...(group ? { group_name: { not: group } } : {}) } }),
+    // A tentative hold past its last day (#1203) holds nothing.
+    db.groupHold.findMany({ where: { start_date: { lt: end }, end_date: { gt: from }, OR: [{ keep_until: null }, { keep_until: { gte: today } }], ...(group ? { group_name: { not: group } } : {}) } }),
   ]);
   const names = new Map((await db.guestRoom.findMany({ select: { id: true, name: true } })).map((r) => [r.id, r.name]));
   rooms.sort((a, b) => a.Accommodation.price_per_day - b.Accommodation.price_per_day || a.Accommodation.name.localeCompare(b.Accommodation.name) || a.name.localeCompare(b.name, 'en', { numeric: true }));

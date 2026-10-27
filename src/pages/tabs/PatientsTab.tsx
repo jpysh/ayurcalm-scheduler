@@ -147,7 +147,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
         {groupsOn ? (
           <ListGroup>
             {groupList.map((g) => <Row key={g.name} title={g.name} facts={`${g.count} guests${g.holds.length ? ` · ${g.holds.reduce((n, h) => n + h.rooms, 0)} rooms held` : ""} · ${stayDay(g.start_date)} to ${stayDay(g.end_date)}`} trailing="›" onClick={() => setGroup(g)} />)}
-            <Row title="Hold rooms for a new group" trailing="›" onClick={() => setNewHold(true)} />
+            <Row title="Hold rooms for a group or enquiry" trailing="›" onClick={() => setNewHold(true)} />
           </ListGroup>
         ) : onlyNeeds ? (
           <ListGroup>{needy.length ? needy.map((i) => <Row key={i.id} title={i.who} flag={flagOf(i.patient_id!)} trailing="›" onClick={() => onNeed(i)} />) : <Empty text="Nothing needs attention. The rules are in the gear above." />}</ListGroup>
