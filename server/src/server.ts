@@ -28,7 +28,7 @@ import { COMMON, therapyLibrary } from './therapyLibrary.js';
 import { requireAdmin } from './settings.js';
 import { attentionFor, changesSchema } from './attention.js';
 import { indiaHolidays } from './indiaHolidays.js';
-import { firstFreeRoom, guestRoomRefusal, guestRoomsFor, lockStays, moveRooms, nightsEnd, ownStayOverlap, roomOn } from './guestRooms.js';
+import { firstFreeRoom, guestRoomRefusal, guestRoomsFor, lockStays, moveRooms, nightsEnd, ownStayOverlap, roomOn, strangerRoommates } from './guestRooms.js';
 import { checkResidentRows, patientSchema, staySchema } from './residentImport.js';
 
 if (!process.env.DATABASE_URL) {
@@ -510,7 +510,8 @@ app.post('/patients', async (req: Request, res: Response) => {
     return tx.patient.findUnique({ where: { id: created.id }, include: { Stays: true } });
   });
   if (p && 'refused' in p) { res.status(409).json(p.refused); return; }
-  res.status(201).json(p);
+  const warning = p?.Stays[0]?.guest_room_id ? await strangerRoommates(prisma, p.Stays[0].id) : null;
+  res.status(201).json({ ...p, ...(warning ? { warning } : {}) });
 });
 
 app.put('/patients/:id', async (req: Request, res: Response) => {
@@ -829,7 +830,8 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
     const out = await applyPlan(left.map((a) => ({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: [], room_id: a.room_id, start_time: a.start_time, date: a.scheduled_date.toISOString().slice(0, 10), cancel: true, reason: 'stay shortened' })), prisma);
     batch_id = out.batch_id; cancelled = out.applied;
   }
-  res.json({ stay: updated, rooms_before: { guest_room_id: stay.guest_room_id, earlier: earlier.map((e) => ({ guest_room_id: e.guest_room_id, until: e.until.toISOString().slice(0, 10) })) }, left_over: extras.cancel_after ? [] : left.map(({ Therapy, ...a }) => a), cancelled, shifted, clashes, batch_id, moved_with });
+  const warning = extras.guest_room_id ? await strangerRoommates(prisma, stay.id) : null;
+  res.json({ stay: updated, warning, rooms_before: { guest_room_id: stay.guest_room_id, earlier: earlier.map((e) => ({ guest_room_id: e.guest_room_id, until: e.until.toISOString().slice(0, 10) })) }, left_over: extras.cancel_after ? [] : left.map(({ Therapy, ...a }) => a), cancelled, shifted, clashes, batch_id, moved_with });
 });
 
 /** Groups with a stay not yet over (#1196): each name, how many, and the dates they span. */
