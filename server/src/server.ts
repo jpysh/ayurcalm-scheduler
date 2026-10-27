@@ -849,7 +849,7 @@ app.get('/groups', async (_req: Request, res: Response) => {
       name, count: ss.length, start_date: ymd(dates.reduce((m, s) => (s.start_date < m ? s.start_date : m), dates[0].start_date)), end_date: ymd(dates.reduce((m, s) => (s.end_date > m ? s.end_date : m), dates[0].end_date)),
       guests: ss.map((s) => ({ stay_id: s.id, patient_id: s.Patient.id, name: s.Patient.name, start_date: ymd(s.start_date), end_date: ymd(s.end_date), room: s.GuestRoom?.name ?? null, started: s.start_date <= today })),
       /** Rooms held before the names arrive; `filled` counts the group's guests already given a room of the type. */
-      holds: hs.map((h) => ({ accommodation_id: h.accommodation_id, type: h.Accommodation.name, rooms: h.rooms, start_date: ymd(h.start_date), end_date: ymd(h.end_date), filled: new Set(ss.filter((s) => s.accommodation_id === h.accommodation_id && s.guest_room_id).map((s) => s.guest_room_id)).size })),
+      holds: hs.map((h) => ({ accommodation_id: h.accommodation_id, type: h.Accommodation.name, rooms: h.rooms, start_date: ymd(h.start_date), end_date: ymd(h.end_date), keep_until: h.keep_until ? ymd(h.keep_until) : null, lapsed: !!h.keep_until && h.keep_until < today, filled: new Set(ss.filter((s) => s.accommodation_id === h.accommodation_id && s.guest_room_id).map((s) => s.guest_room_id)).size })),
     };
   }));
 });
@@ -860,7 +860,7 @@ app.get('/groups', async (_req: Request, res: Response) => {
  */
 app.put('/groups/hold', async (req: Request, res: Response) => {
   const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-  const body = z.object({ name: z.string().trim().min(1).max(60), start_date: ymd, end_date: ymd, rooms: z.array(z.object({ accommodation_id: z.string().uuid(), rooms: z.number().int().min(0).max(100) })).max(20) }).refine((b) => b.end_date > b.start_date, 'Leaving must be after arriving').parse(req.body);
+  const body = z.object({ name: z.string().trim().min(1).max(60), start_date: ymd, end_date: ymd, rooms: z.array(z.object({ accommodation_id: z.string().uuid(), rooms: z.number().int().min(0).max(100) })).max(20), keep_until: ymd.nullable().optional() }).refine((b) => b.end_date > b.start_date, 'Leaving must be after arriving').parse(req.body);
   const [start, end] = [new Date(`${body.start_date}T00:00:00.000Z`), new Date(`${body.end_date}T00:00:00.000Z`)];
   const out = await prisma.$transaction(async (tx) => {
     await lockStays(tx);
@@ -873,7 +873,7 @@ app.put('/groups/hold', async (req: Request, res: Response) => {
       if (free + mine < want.rooms) return { refused: { reason: 'NOT_ENOUGH_ROOMS', message: `Only ${free + mine} ${ofType[0]?.type ?? 'rooms'} ${free + mine === 1 ? 'is' : 'are'} free for all those nights, not ${want.rooms}.` } };
     }
     await tx.groupHold.deleteMany({ where: { group_name: body.name } });
-    await tx.groupHold.createMany({ data: body.rooms.filter((r) => r.rooms > 0).map((r) => ({ group_name: body.name, start_date: start, end_date: end, accommodation_id: r.accommodation_id, rooms: r.rooms })) });
+    await tx.groupHold.createMany({ data: body.rooms.filter((r) => r.rooms > 0).map((r) => ({ group_name: body.name, start_date: start, end_date: end, accommodation_id: r.accommodation_id, rooms: r.rooms, keep_until: body.keep_until ? new Date(`${body.keep_until}T00:00:00.000Z`) : null })) });
     return { ok: true };
   });
   if ('refused' in out) { res.status(409).json(out.refused); return; }

@@ -159,6 +159,8 @@ model GroupHold {
   end_date         DateTime
   accommodation_id String
   rooms            Int
+  /// A tentative hold (#1203), say for a phone enquiry: after this day the rooms are free again unless it was confirmed.
+  keep_until       DateTime?
 
   Accommodation AccommodationType @relation(fields: [accommodation_id], references: [id], onDelete: Cascade)
 
