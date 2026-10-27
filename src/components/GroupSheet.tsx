@@ -25,6 +25,15 @@ export function GroupSheet({ group, today, onClose, onChanged, openPatient }: { 
   const [listing, setListing] = useState(false);
   const [adding, setAdding] = useState(false);
   useEffect(() => setArrive(group?.start_date ?? ""), [group?.name, group?.start_date]);
+  // Days the group needs more therapist time than is free (#1242), as the server counts it.
+  const [short, setShort] = useState<{ date: string; guests: number; needed: number; free: number }[]>([]);
+  useEffect(() => {
+    setShort([]);
+    if (!group) return;
+    let stale = false;
+    fetchJsonWithTimeout<typeof short>(`${API_BASE}/groups/capacity?name=${encodeURIComponent(group.name)}`).then((r) => { if (!stale && Array.isArray(r)) setShort(r); }).catch(() => {});
+    return () => { stale = true; };
+  }, [group]);
   if (!group) return null;
   const days = Math.round((Date.parse(arrive) - Date.parse(group.start_date)) / DAY_MS);
   const waiting = group.guests.filter((g) => !g.started).length;
@@ -55,6 +64,7 @@ export function GroupSheet({ group, today, onClose, onChanged, openPatient }: { 
           <ChangeLine label="Group arrives" value={dayText(arrive)} select={<LineDate label="Group arrives" value={arrive} min={today} onChange={setArrive} />} />
         </div> : null}
         {days && (waiting || group.holds.length) ? <Consequence>{`Everyone not yet here moves ${plural(Math.abs(days), "day")} ${days > 0 ? "later" : "earlier"}, with their treatments, meals and held rooms; each room is checked first. Anyone who cannot move is named.`}</Consequence> : null}
+        {short.length ? <Consequence>{`Short of therapists on ${short.slice(0, 3).map((d) => `${dayText(d.date)} (${d.guests} guests need about ${Math.round(d.needed / 60)} h, ${Math.round(d.free / 60)} h free)`).join(", ")}${short.length > 3 ? ` and ${short.length - 3} more days` : ""}. Ask a therapist in, or spread the treatments.`}</Consequence> : null}
         <div className="mt-3"><ListGroup title="Held rooms" count={group.holds.reduce((n, h) => n + h.rooms, 0) || undefined}>
           {group.holds.map((h) => <Row key={h.accommodation_id} title={`${plural(h.rooms, "room")} · ${h.type}`} facts={`${dayText(h.start_date)} to ${dayText(h.end_date)} · ${h.filled} named`} />)}
           <Row title={group.holds.length ? "Change the held rooms" : "Hold rooms before the names arrive"} trailing="›" onClick={() => setHolding(true)} />
