@@ -73,7 +73,7 @@ accommodationsRouter.delete('/:id', requireAdmin, async (req: Request, res: Resp
  */
 export const guestRoomsRouter = Router();
 
-const roomBody = z.object({ name: z.string().trim().min(1).max(80), accommodation_id: z.string().uuid(), beds: z.number().int().min(1).max(20).optional(), is_active: z.boolean().optional() });
+const roomBody = z.object({ name: z.string().trim().min(1).max(80), accommodation_id: z.string().uuid(), beds: z.number().int().min(1).max(20).optional(), is_active: z.boolean().optional(), tags: z.array(z.string().trim().min(1).max(30)).max(8).optional() });
 
 guestRoomsRouter.get('/', async (_req: Request, res: Response) => {
   const rows = await prisma.guestRoom.findMany({ orderBy: { name: 'asc' }, include: { _count: { select: { Stays: true } } } });

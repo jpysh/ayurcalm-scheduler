@@ -7,10 +7,11 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
-import { BottomSheet, Btn, ChangeLine, Empty, Foot, Group, ItemRow, ListGroup, LinkRow, Loading, Row, Seg, Text, dayText, noteText } from "@/components/kit";
+import { BottomSheet, Btn, ChangeLine, Chips, Empty, Foot, Group, ItemRow, ListGroup, LinkRow, Loading, Row, Seg, Text, dayText, noteText } from "@/components/kit";
 
 type Type = { id: string; name: string; is_active: boolean; price_per_day?: number };
-type Room = { id: string; name: string; accommodation_id: string; beds: number; is_active: boolean };
+type Room = { id: string; name: string; accommodation_id: string; beds: number; is_active: boolean; tags: string[] };
+const TAGS = ["ground floor", "quiet", "step-free", "near the treatment rooms"];
 /** A guest with nights in the room from today on (#1187), and the room the server suggests. */
 type Ahead = { stay_id: string; patient_id: string; name: string; from: string; to: string; move_from: string; move_to: { id: string; name: string; type: string } | null };
 const BEDS: [number, string][] = [[1, "1"], [2, "2"], [3, "3"], [4, "4"]];
@@ -115,7 +116,7 @@ export function ManageGuestRooms({ open, onOpenChange, typeId, onChanged, openTy
   const save = async () => {
     if (!edit) return;
     setBusy(true);
-    const out = await send("PUT", `/${edit.id}`, { name: edit.name.trim(), beds: edit.beds });
+    const out = await send("PUT", `/${edit.id}`, { name: edit.name.trim(), beds: edit.beds, tags: edit.tags });
     setBusy(false);
     if (out) { toast.success(`${edit.name.trim()} saved`); setEdit(null); changed(); }
   };
@@ -132,7 +133,7 @@ export function ManageGuestRooms({ open, onOpenChange, typeId, onChanged, openTy
         <ListGroup><LinkRow label="Add guest rooms" value="T1–T6 adds six" onClick={() => setAdding(true)} /></ListGroup>
         {rooms === null ? <Loading rows={4} /> : groups.length ? groups.map((g) => (
           <ListGroup key={g.id} title={typeName(g.id)} count={g.rooms.length}>
-            {g.rooms.map((r) => <Row key={r.id} title={r.name} facts={bedsText(r.beds)} trailing="›" onClick={() => setEdit({ ...r })} />)}
+            {g.rooms.map((r) => <Row key={r.id} title={r.name} facts={[bedsText(r.beds), ...(r.tags ?? [])].join(" · ")} trailing="›" onClick={() => setEdit({ ...r })} />)}
           </ListGroup>
         )) : <Empty text="No guest rooms yet. Add the first." />}
       </BottomSheet>
@@ -142,6 +143,7 @@ export function ManageGuestRooms({ open, onOpenChange, typeId, onChanged, openTy
         {edit ? <div className="grid gap-3">
           <Text label="Name" autoComplete="off" maxLength={20} value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
           <Group label="Beds"><Seg<number> options={BEDS} value={edit.beds} onChange={(n) => setEdit({ ...edit, beds: n })} /></Group>
+          <Group label="For guests who need" note="Shown wherever a room is chosen."><Chips options={[...new Set([...TAGS, ...(rooms ?? []).flatMap((r) => r.tags ?? [])])]} value={edit.tags ?? []} onChange={(tags) => setEdit({ ...edit, tags })} addLabel="Another" /></Group>
           {out ? out(edit.id) : null}
           <GuestsToMove roomId={edit.id} title="Move these guests to remove it" onList={setAhead} onChanged={onChanged} />
         </div> : null}

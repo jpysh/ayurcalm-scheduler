@@ -282,7 +282,7 @@ export function PackageSheet({ patient, stay, onClose, onSaved, editList, matchS
 }
 
 /** A guest room for some nights (#456), as `/guest-rooms/free` gives it. */
-export type GuestRoomNight = { id: string; name: string; beds: number; accommodation_id: string; type: string; price_per_day?: number; free: boolean; /** The day it was last made up (#1199). */ ready_on?: string | null; full_on: { date: string; names: string[] } | null; out: { date: string; until: string; reason: string | null } | null; /** Held for a group not yet named in it (#1196). */ held?: { date: string; group: string } | null };
+export type GuestRoomNight = { id: string; name: string; beds: number; /** Ground floor, quiet (#1201). */ tags?: string[]; accommodation_id: string; type: string; price_per_day?: number; free: boolean; /** The day it was last made up (#1199). */ ready_on?: string | null; full_on: { date: string; names: string[] } | null; out: { date: string; until: string; reason: string | null } | null; /** Held for a group not yet named in it (#1196). */ held?: { date: string; group: string } | null };
 /** Taken rooms say by whom and from when, so a clash is never picked by accident. */
 export const takenBy = (r: GuestRoomNight) => r.out ? `Out of use${r.out.reason ? `: ${r.out.reason}` : ""} · ${dayText(r.out.date)}` : r.full_on ? `${r.full_on.names.join(" & ")} · taken from ${dayText(r.full_on.date)}` : r.held ? `Held for ${r.held.group} from ${dayText(r.held.date)}` : "";
 
@@ -341,7 +341,7 @@ export function AccommodationSheet({ patient, stay, today, onClose, onSaved, edi
           <div className="mt-3 border-t border-border">
             <ChangeLine label="Guest room" value={chosenRoom ? chosenRoom.name : "Not chosen"} faint={!chosenRoom}
               select={<LineSelect label="Guest room" busyLabel="Taken" value={room} onChange={setRoom}
-                free={[...freeOf(pick).map((r) => ({ id: r.id, name: r.name, tag: r.beds > 1 ? plural(r.beds, "bed") : undefined })), { id: "", name: "Not chosen yet" }]}
+                free={[...freeOf(pick).map((r) => ({ id: r.id, name: r.name, tag: [r.beds > 1 ? plural(r.beds, "bed") : "", ...(r.tags ?? [])].filter(Boolean).join(" · ") || undefined })), { id: "", name: "Not chosen yet" }]}
                 busy={ofType.filter((r) => !r.free).map((r) => ({ id: r.id, name: r.name, why: takenBy(r) }))} />} />
             {!freeOf(pick).length ? <p className={`mt-1 ${noteText}`}>{`No ${chosen.name} guest room is free for all ${plural(nights, "night")}.${elsewhere.length ? ` Free: ${elsewhere.slice(0, 4).map((r) => `${r.name} (${r.type})`).join(", ")}.` : ""}`}</p> : null}
           </div>
@@ -565,7 +565,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
           <div className="border-t border-border">
             <ChangeLine label="Guest room" value={r ? `${r.name} · ${r.type}` : freeRooms.some((x) => x.free) ? "Not yet" : "None free for these nights"} faint={!r}
               select={<LineSelect label="Guest room" busyLabel="Taken" value={guestRoom} onChange={setGuestRoom}
-                free={[{ id: "", name: "Not chosen yet" }, ...freeRooms.filter((x) => x.free).map((x) => ({ id: x.id, name: x.name, tag: x.type }))]}
+                free={[{ id: "", name: "Not chosen yet" }, ...freeRooms.filter((x) => x.free).map((x) => ({ id: x.id, name: x.name, tag: [x.type, ...(x.tags ?? [])].join(" · ") }))]}
                 busy={freeRooms.filter((x) => !x.free).map((x) => ({ id: x.id, name: x.name, why: takenBy(x) }))} />} />
           </div>
         );
