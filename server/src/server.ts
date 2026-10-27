@@ -862,6 +862,43 @@ app.get('/groups', async (_req: Request, res: Response) => {
 });
 
 /**
+ * The days a group needs more therapist time than is free (#1242): each guest's day is counted at two hours of
+ * treatment, less what is booked already, against the minutes the therapists in that day have left. A warning, never a refusal.
+ */
+// ponytail: two hours a guest is the seed's usual day; read it from the guests' packages if centres differ.
+const GUEST_MINUTES = 120;
+app.get('/groups/capacity', async (req: Request, res: Response) => {
+  const name = z.string().trim().min(1).max(60).parse(req.query.name);
+  const tz = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
+  const today = centreClock(tz).date;
+  const stays = await prisma.patientStay.findMany({ where: { group_name: name, companion: false } });
+  const holds = await prisma.groupHold.findMany({ where: { group_name: name } });
+  const ymd = (d: Date) => d.toISOString().slice(0, 10);
+  const spanOf = [...stays, ...holds];
+  if (!spanOf.length) { res.json([]); return; }
+  const first = [today, ymd(spanOf.reduce((m, s) => (s.start_date < m ? s.start_date : m), spanOf[0].start_date))].sort()[1];
+  const last = ymd(spanOf.reduce((m, s) => (s.end_date > m ? s.end_date : m), spanOf[0].end_date));
+  const booked = await prisma.appointment.findMany({ where: { patient_id: { in: stays.map((s) => s.patient_id) }, ...HAPPENING, scheduled_date: { gte: new Date(`${first}T00:00:00.000Z`), lte: new Date(`${last}T00:00:00.000Z`) } }, select: { patient_id: true, scheduled_date: true, duration_minutes: true } });
+  const out: { date: string; guests: number; needed: number; free: number }[] = [];
+  for (let week = first; week <= last; week = new Date(Date.parse(`${week}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10)) {
+    const w = await staffWeek(week, prisma);
+    w.days.forEach((date, i) => {
+      if (date > last) return;
+      const day = new Date(`${date}T00:00:00.000Z`);
+      const here = stays.filter((s) => s.start_date <= day && s.end_date >= day);
+      // Held rooms not yet named are guests too.
+      const unnamed = holds.filter((h) => h.start_date <= day && h.end_date >= day).reduce((n, h) => n + Math.max(0, h.rooms - new Set(stays.filter((s) => s.accommodation_id === h.accommodation_id && s.guest_room_id).map((s) => s.guest_room_id)).size), 0);
+      const free = w.rows.filter((r) => r.role !== 'doctor').reduce((n, r) => n + Math.max(0, r.days[i].capacity - r.days[i].booked), 0);
+      // What is booked already is out of the free minutes, so only the rest of each guest's day is still needed.
+      const mine = (id: string) => booked.filter((a) => a.patient_id === id && ymd(a.scheduled_date) === date).reduce((n, a) => n + a.duration_minutes, 0);
+      const needed = here.reduce((n, s) => n + Math.max(0, GUEST_MINUTES - mine(s.patient_id)), 0) + unnamed * GUEST_MINUTES;
+      if (needed > free) out.push({ date, guests: here.length + unnamed, needed, free });
+    });
+  }
+  res.json(out);
+});
+
+/**
  * The group's shared programme (#1196): yoga at 7 for everyone in it, every day of the group's dates. It prints in each
  * guest's row of the day sheet, and the day check names a treatment that covers a required part of it.
  */
