@@ -603,7 +603,7 @@ app.patch('/patients/:id/stays/:stayId/form-c', async (req: Request, res: Respon
   const { filed } = z.object({ filed: z.boolean() }).parse(req.body);
   const stay = await prisma.patientStay.findFirst({ where: { id: String(req.params.stayId), patient_id: String(req.params.id) } });
   if (!stay) { res.status(404).json({ error: 'Stay not found' }); return; }
-  res.json(await prisma.patientStay.update({ where: { id: stay.id }, data: { form_c_filed: filed ? new Date() : null } }));
+  res.json(await prisma.patientStay.update({ where: { id: stay.id }, data: { form_c_filed: filed ? new Date() : null, form_c_end: filed ? stay.end_date : null } }));
 });
 
 // Departure: the discharge summary (#194). The doctor writes it from their link
