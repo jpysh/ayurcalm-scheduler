@@ -74,6 +74,9 @@ async function main() {
     await call('PUT', `/patients/${asha.id}/stays/${asha.Stays[0].id}`, { start_date: '2030-03-01', end_date: '2030-03-12', guest_room_id: preview.room.move_to.id });
     assert.equal((await prisma.patientStay.findUniqueOrThrow({ where: { id: asha.Stays[0].id } })).guest_room_id, await room('2'));
     assert.equal((await call('GET', `/patients/${binaStay.patient_id}/day?date=2030-03-11`)).stay.accommodation.room.name, `${TAG}1`, 'the card names the guest room');
+    // Late checkout (#1200): the leaving time is on the card and on Guest rooms for the leaving day.
+    await call('PUT', `/patients/${asha.id}/stays/${asha.Stays[0].id}`, { leaving_time: '15:00' });
+    assert.equal((await call('GET', `/guest-rooms/free?from=2030-03-12&to=2030-03-13`)).flatMap((r: { guests: { stay_id: string; leaving_time: string | null }[] }) => r.guests).find((g: { stay_id: string }) => g.stay_id === asha.Stays[0].id)?.leaving_time, '15:00', 'Guest rooms says when they leave');
 
     // The room prints beside the name.
     const pdf = join(dir, 'day.pdf');
