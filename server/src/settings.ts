@@ -1,5 +1,5 @@
 import express, { Router, type Request, type Response, type NextFunction } from 'express';
-import { centreClock } from './availability.js';
+import { centreClock, outsideCentreHours } from './availability.js';
 import { exportCentre, importCentre, ImportRefused } from './transfer.js';
 import { z } from 'zod';
 import { firstRefusal } from './plainErrors.js';
@@ -131,7 +131,15 @@ settingsRouter.put('/', requireAdmin, async (req: Request, res: Response) => {
     else data[key] = parsed.data[key] || null;
   }
   const saved = await prisma.settings.update({ where: { id: SINGLETON_ID }, data });
-  res.json(saved);
+  // Shorter hours leave bookings outside them; say how many, and the first day, so the admin can fix them in the day check.
+  const clock = centreClock(saved.timezone || 'Asia/Kolkata');
+  const ahead = await prisma.appointment.findMany({
+    where: { status: { in: ['pending', 'confirmed'] }, scheduled_date: { gte: new Date(`${clock.date}T00:00:00.000Z`) } },
+    orderBy: [{ scheduled_date: 'asc' }, { start_time: 'asc' }],
+    select: { scheduled_date: true, start_time: true, duration_minutes: true },
+  });
+  const outside = outsideCentreHours(saved.opening_time, saved.closing_time, ahead.filter((a) => a.scheduled_date.toISOString().slice(0, 10) > clock.date || a.start_time >= clock.time));
+  res.json({ ...saved, outside_hours: { count: outside.length, first_date: outside[0]?.scheduled_date.toISOString().slice(0, 10) ?? null } });
 });
 
 // The setup card (#288): an item is reviewed once the admin has opened it; nothing here blocks anything.

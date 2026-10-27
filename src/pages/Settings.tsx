@@ -126,9 +126,17 @@ const Settings = ({ signOut, openLog, openScreen, initialSheet, sheetOpened, att
       if (!res.ok) { setRefused(data?.field ? { field: data.field, error: data.error } : null); toast.error(data?.error || "Could not save settings"); return; }
       setRefused(null);
       setSettings(data);
-      toast.success("Settings saved");
       // The schedule grid is built from opening hours, so reload to apply them.
-      setTimeout(() => window.location.reload(), 600);
+      const apply = () => window.location.reload();
+      const out = data.outside_hours as { count: number; first_date: string | null } | undefined;
+      // Shorter hours leave bookings outside them (#1326): say how many and open the day check on the first such day.
+      if (out?.count && out.first_date) {
+        const first = out.first_date;
+        toast.warning(`Settings saved. ${out.count} booked treatment${out.count === 1 ? " falls" : "s fall"} outside the new hours.`, { duration: 15000, action: { label: "Fix them", onClick: (e) => { e.preventDefault(); window.location.assign(`/admin/schedule?date=${first}&check=1`); } }, onDismiss: apply, onAutoClose: apply });
+        return;
+      }
+      toast.success("Settings saved");
+      setTimeout(apply, 600);
     } finally { setSaving(false); }
   };
 
