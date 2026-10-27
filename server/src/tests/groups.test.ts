@@ -89,11 +89,13 @@ async function main() {
     const part = await call('POST', '/groups/programme', { name: GROUP, activity_name: `${TAG} Yoga class`, start_time: '11:00', end_time: '11:30' });
     assert.equal((await call('GET', '/groups')).find((x: { name: string }) => x.name === GROUP).programme[0].id, part.id, 'the programme is on the group');
     const solo = await prisma.therapy.findFirstOrThrow({ where: { is_consultation: false, staff_required: 1, once_per_course: false, before_purification: false } });
-    const [her, her2] = await prisma.staff.findMany({ where: { is_active: true, gender: 'female', role: 'therapist' }, take: 2 });
-    const across = await prisma.appointment.create({ data: { patient_id: a.id, therapy_id: solo.id, staff_id: her.id, room_id: troom.id, scheduled_date: day('2030-09-03'), start_time: '10:45', duration_minutes: 60, co_staff_ids: [], session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
+    // The guard picks a therapist and room that fit at 10:45, so a day off or a missing skill never hides the note.
+    const fit = async (patient: string) => { const o = await call('GET', `/appointments/options?date=2030-09-03&patient_id=${patient}&therapy_id=${solo.id}&at=10:45`); const t = o.times.find((x: { start_time: string }) => x.start_time === '10:45'); assert.ok(t, `10:45 is offered: ${JSON.stringify(o.times.map((x: { start_time: string }) => x.start_time))}`); return { staff_id: t.staff_id as string, room_id: (t.room_id ?? o.rooms[0].id) as string }; };
+    const mine = await fit(a.id);
+    const across = await prisma.appointment.create({ data: { patient_id: a.id, therapy_id: solo.id, ...mine, scheduled_date: day('2030-09-03'), start_time: '10:45', duration_minutes: 60, co_staff_ids: [], session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
     const outsiderStay = await call('POST', '/patients', { name: `${TAG} Solo`, gender: 'female', stay: { start_date: '2030-09-01', end_date: '2030-09-08' } });
-    const troom2 = await prisma.therapyRoom.findFirstOrThrow({ where: { id: { not: troom.id } } });
-    await prisma.appointment.create({ data: { patient_id: outsiderStay.id, therapy_id: solo.id, staff_id: her2.id, room_id: troom2.id, scheduled_date: day('2030-09-03'), start_time: '10:45', duration_minutes: 60, co_staff_ids: [], session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
+    const theirs = await fit(outsiderStay.id);
+    await prisma.appointment.create({ data: { patient_id: outsiderStay.id, therapy_id: solo.id, ...theirs, scheduled_date: day('2030-09-03'), start_time: '10:45', duration_minutes: 60, co_staff_ids: [], session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
     const all = (await call('GET', '/day-check?date=2030-09-03')).problems;
     const checked = all.filter((p: { kind: string; what: string }) => p.kind === 'EVENT_OVERLAP' && p.what.includes(`${TAG} Yoga class`));
     assert.deepEqual(checked.map((p: { appointment_id: string }) => p.appointment_id), [across.id], "only the group's guest is told the treatment runs through their yoga");
