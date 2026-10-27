@@ -12,8 +12,8 @@ usually decide whether a bug is reproducible. For security issues, see
 ## Getting set up
 
 ```bash
-git clone https://github.com/jpysh/ayurcalm-scheduler.git
-cd ayurcalm-scheduler
+git clone https://github.com/jpysh/ruta.git
+cd ruta
 docker compose up -d db     # Postgres on :5432
 
 cd server && npm install
