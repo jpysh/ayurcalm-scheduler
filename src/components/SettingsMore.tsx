@@ -114,7 +114,7 @@ export function PrintedSheet({ open, onOpenChange }: { open: boolean; onOpenChan
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} title="Printed sheets" note="The last copy printed for each day, as it was on the notice board. Printing a day again replaces its copy; copies older than 90 days go.">
       <div className="mb-3"><ChangeLine label="Records for a month" value="Choose a month" select={<LineSelect label="Records for a month" value="" onChange={(m) => { if (m) records(m); }} free={[{ id: "", name: "Choose a month" }, ...months]} />} /></div>
-      {printed === null ? null : days.length === 0 ? <Empty text="Nothing printed yet. Print the day from the day screen." /> : (
+      {printed === null ? null : days.length === 0 ? <Empty text="Nothing printed yet. Print the day from the day screen." help="s3-print-the-day-sheet" /> : (
         <ListGroup>
           {days.map((date) => (
             <div key={date} className="flex min-h-14 flex-wrap items-center gap-2 border-b border-border px-3 py-2 last:border-b-0">

@@ -2,7 +2,7 @@
 // email; the centre is created at <slug>.jains.es and an "Open your centre" link
 // on screen signs them in, where they choose a password. Nothing waits on the
 // email (#727): seeing their centre comes first; the email only says where it is.
-// Hourly, each centre moves through lifecycle.mjs; nothing about that is emailed.
+// Hourly, each centre moves through lifecycle.mjs, and gets at most three behaviour emails (#1301).
 // Runs on the trial host next to Docker (hosting/centre.sh). No dependencies.
 // The public pages run in their own container (public.mjs, #1091); this manager has no
 // network port and answers them through ~/ruta-data/signup.
@@ -11,7 +11,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHmac, randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync, renameSync, existsSync, rmSync, statSync, mkdirSync, readdirSync, lstatSync } from 'node:fs';
-import { next, deletesAt, refuse, slugFor, linkOpen, took, rollout, releaseHour } from './lifecycle.mjs';
+import { next, nudge, nudgeEmail, deletesAt, refuse, slugFor, linkOpen, took, rollout, releaseHour } from './lifecycle.mjs';
 import { morning, security, nodeLine } from './morning.mjs';
 
 const run = promisify(execFile);
@@ -103,7 +103,9 @@ function provision(s) {
 
 // How long each trial took to come in and to print its own day sheet (#730), told once each.
 async function timings(c) {
-  const [signin, sheet] = await centreSh({}, 'timings', c.slug).then((r) => r.stdout.trim().split('|').map((x) => (x ? Number(x) * 1000 : null)), () => []);
+  let [signin, sheet, days] = await centreSh({}, 'timings', c.slug).then((r) => r.stdout.trim().split('|'), () => []);
+  if (days) c.sheets = days.split(',').map((x) => Number(x) * 1000);
+  [signin, sheet] = [signin, sheet].map((x) => (x ? Number(x) * 1000 : null));
   const from = db.signups.find((s) => s.slug === c.slug)?.at ?? c.created;
   if (signin && !c.signin_at) { c.signin_at = signin; await notify(`${c.centre}: came in ${took(signin - from)} after signing up`); }
   if (sheet && !c.sheet_at) { c.sheet_at = sheet; await notify(`${c.centre}: printed its own day sheet ${took(sheet - from)} after signing up`); }
@@ -114,7 +116,12 @@ async function timings(c) {
 export async function tick(now = Date.now()) {
   for (const c of [...db.centres]) {
     if (!c.paused_at) c.trial = await fetch(`http://localhost:${c.port}/api/public/support`).then((r) => r.json()).then((d) => d.trial, () => c.trial);
-    if (!c.paused_at && !c.sheet_at) await timings(c);
+    if (!c.paused_at) await timings(c);
+    const say = nudge(c, now);
+    if (say && env.CF_EMAIL_TOKEN) {
+      const [subject, text] = nudgeEmail(say, c, DOMAIN);
+      await email(c.email, subject, text).then(() => { (c.sent ??= {})[say] = now; save(); }, (e) => console.error(`nudge ${c.slug}`, e));
+    }
     const a = next(c, now);
     if (!a) continue;
     try {

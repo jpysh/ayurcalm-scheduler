@@ -143,6 +143,9 @@ const AdminDashboard = () => {
   // The server says whether this admin is still on demo1234; the public demo always answers no (#1173).
   const [demoPassword, setDemoPassword] = useState(false);
   const checkAccount = useCallback(() => { fetch(`${API_BASE}/account`).then((r) => (r.ok ? r.json() : null)).then((a) => setDemoPassword(!!a?.demo_password)).catch(() => {}); }, []);
+  // "Later" hides the reminder for the rest of the day on this phone (#1290); it comes back tomorrow.
+  const laterKey = 'demoPasswordLater';
+  const [passwordLater, setPasswordLater] = useState(() => { try { return localStorage.getItem(laterKey) === new Date().toDateString(); } catch { return false; } });
   useEffect(checkAccount, [checkAccount]);
   const [patients, setPatients] = useState<Patient[]>([]);
   // Until the first load lands, an empty list means "not yet", not "a new centre" (#220).
@@ -575,7 +578,7 @@ const AdminDashboard = () => {
       {/* The phone design widened on a desktop, never a second layout (#67): one centred column. */}
       {/* No top padding: each screen's own header carries the design's 12–14px (#193). */}
       <div className="mx-auto w-full max-w-xl px-3 pb-3">
-        {demoPassword ? <Strip action="Change it" onAction={() => { setSettingsSheet('account'); go('settings'); }}>You're still using the demo password.</Strip> : null}
+        {demoPassword && !passwordLater ? <Strip action="Change it" onLater={() => { try { localStorage.setItem(laterKey, new Date().toDateString()); } catch { /* still hidden for now */ } setPasswordLater(true); }} onAction={() => { setSettingsSheet('account'); go('settings'); }}>Still on the demo password.</Strip> : null}
         <Tabs value={activeTab} onValueChange={go} className="space-y-6 [&>[role=tabpanel]]:mt-0">
           {/* Swipe the day left and right, as the date sheet says (#67). */}
           <TabsContent value="schedule" className="space-y-6"

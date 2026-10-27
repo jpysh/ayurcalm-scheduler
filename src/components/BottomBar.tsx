@@ -77,7 +77,8 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
       fetch(`${API_BASE}/rooms`).then((r) => (r.ok ? r.json() : [])),
       fetch(`${API_BASE}/timeoff?from=${today}&to=${today}`).then((r) => (r.ok ? r.json() : [])),
       fetch(`${API_BASE}/guest-rooms/free?from=${today}&to=${shift(today, 1)}`).then((r) => (r.ok ? r.json() : [])),
-    ]).then(([residents, days, staff, settings, rooms, off, guestRooms]: [unknown[], { staff_id: string; off: string | null }[], { id: string; name: string }[], { support_whatsapp?: string | null }, { id: string }[], ({ entity_type: string; entity_id: string } & Parameters<typeof outNow>[0])[], { free: boolean }[]]) => {
+      fetch(`${API_BASE}/printed-sheets/streak`).then((r) => (r.ok ? r.json() : {})),
+    ]).then(([residents, days, staff, settings, rooms, off, guestRooms, streak]: [unknown[], { staff_id: string; off: string | null }[], { id: string; name: string }[], { support_whatsapp?: string | null }, { id: string }[], ({ entity_type: string; entity_id: string } & Parameters<typeof outNow>[0])[], { free: boolean }[], { days?: number }]) => {
       const roomsOut = new Set(off.filter((x) => x.entity_type === "room" && outNow(x, today, now)).map((x) => x.entity_id)).size;
       setHelpWa(settings.support_whatsapp || null);
       const out = days.filter((d) => d.off).map((d) => staff.find((s) => s.id === d.staff_id)?.name.split(" ")[0]).filter(Boolean);
@@ -86,6 +87,8 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
         rooms: `${plural(rooms.length, "room")}${roomsOut ? ` · ${roomsOut} out` : ""}`,
         team: !staff.length ? "No staff yet" : out.length === 0 ? "Everyone in" : out.length === 1 ? `${out[0]} on leave` : `${out.length} on leave`,
         schedule: dayText(day),
+        // The habit, said back (#1305): two mornings is the first that is a run.
+        ...((streak.days ?? 0) >= 2 ? { streak: `Printed ${streak.days} mornings in a row` } : {}),
         ...(guestRooms.length ? { guestrooms: `${guestRooms.filter((r) => r.free).length} free tonight` } : {}),
       });
     }).catch(() => setHints({}));
@@ -126,7 +129,7 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
             {inbox && !inbox.need ? <Row key="inbox" title={`${inbox.info} to know`} trailing="›" onClick={close(attention!.open)} /> : null}
             <Row key="search" title={search.label} facts={search.hint} trailing="›" onClick={close(search.start)} />
             {onDay ? <Row key="day" title="Change day" facts={`${dayText(day)} · ${when}`} trailing="›" onClick={() => setSheet("day")} /> : null}
-            {onDay ? <Row key="print" title={printDay === day ? "Print the day's sheets" : "Print tomorrow's sheets"} facts={printing ? "Making the PDF…" : printDay === day ? undefined : dayText(printDay)} trailing="›" onClick={() => setSheet("print")} /> : null}
+            {onDay ? <Row key="print" title={printDay === day ? "Print the day's sheets" : "Print tomorrow's sheets"} facts={printing ? "Making the PDF…" : printDay === day ? hints.streak : dayText(printDay)} trailing="›" onClick={() => setSheet("print")} /> : null}
           </ListGroup>
         </div>
         <div className="mt-3 pb-3">

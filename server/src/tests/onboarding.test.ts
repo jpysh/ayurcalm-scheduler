@@ -116,17 +116,17 @@ async function main() {
         centre_name: 'Mine Test Centre',
         team: [{ name: 'Dr Asha', gender: 'female', doctor: true }, { name: 'Ravi', gender: 'male', doctor: false }, { name: 'Lata', gender: 'female', doctor: false }],
         rooms: [{ id: rooms[0].id, name: 'Lotus' }, { id: rooms[1].id, name: rooms[1].name }], consult_room: 'OPD',
-        therapy_ids: therapies.slice(0, 3).map((t) => t.id),
+        therapy_ids: therapies.slice(0, 3).map((t) => t.id), new_therapies: ['Kati Basti'],
       });
       assert.equal(await tx.patient.count(), 0, 'Make it mine kept the example residents');
       assert.deepEqual((await tx.staff.findMany({ orderBy: { name: 'asc' } })).map((s) => `${s.name} ${s.role}`), ['Dr Asha doctor', 'Lata therapist', 'Ravi therapist']);
       assert.deepEqual((await tx.therapyRoom.findMany({ where: { is_active: true, NOT: { name: 'OPD' } } })).map((r) => r.id).sort(), [rooms[0].id, rooms[1].id].sort(), 'An unticked room is still in use');
       assert.equal((await tx.therapyRoom.findUnique({ where: { id: rooms[0].id } }))?.name, 'Lotus', 'A renamed room kept its old name');
       const active = await tx.therapy.findMany({ where: { is_active: true } });
-      assert.equal(active.filter((t) => !t.is_consultation).length, 3, 'An unticked therapy is still offered');
+      assert.equal(active.filter((t) => !t.is_consultation).length, 4, 'An unticked therapy is still offered, or a pasted one is missing');
       assert.ok(active.some((t) => t.is_consultation), 'The consultation was switched off; no resident could be seen');
       const ravi = await tx.staff.findFirst({ where: { name: 'Ravi' } });
-      assert.deepEqual([...(ravi?.specializations ?? [])].sort(), therapies.slice(0, 3).map((t) => t.id).sort(), 'A new therapist cannot give the ticked therapies');
+      assert.deepEqual([...(ravi?.specializations ?? [])].sort(), active.filter((t) => !t.is_consultation).map((t) => t.id).sort(), 'A new therapist cannot give the ticked and pasted therapies');
       const s = await tx.settings.findUnique({ where: { id: 'singleton' } });
       assert.equal(s?.demo_data, false); assert.equal(s?.setup_complete, true); assert.equal(s?.centre_name, 'Mine Test Centre');
       throw ROLLBACK;

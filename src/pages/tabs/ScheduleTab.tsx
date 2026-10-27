@@ -36,6 +36,17 @@ const nowInTZ = (timeZone: string) => {
 /** The Schedule screen, and the day sheets the bottom bar prints for the day it is on. */
 export type PrintKind = 'all' | 'patient' | 'therapist' | 'doctor' | 'kitchen' | 'rooms';
 
+// Once, after the first sheet on a phone (#1310): tomorrow's morning starts from the home screen.
+// Stays until dismissed, since the sheet opens in another tab. Per device, so browser storage is right.
+function offerHomeScreen() {
+  try {
+    if (localStorage.getItem('homeScreenOffered') || matchMedia('(display-mode: standalone)').matches || !matchMedia('(pointer: coarse)').matches) return;
+    localStorage.setItem('homeScreenOffered', '1');
+  } catch { return; }
+  const how = /iPhone|iPad/.test(navigator.userAgent) ? 'In Safari tap Share, then Add to Home Screen.' : 'In Chrome tap ⋮, then Add to Home screen.';
+  toast('Open Ruta in one tap tomorrow', { description: how, duration: Infinity, action: { label: 'OK', onClick: () => {} } });
+}
+
 export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKeyMemo, patients, roomsList, staff, therapyNameById, closingTime, refreshDay, movedFrom, problems, history, closed, openClosedDays, showDay, openResident, openOut, staffCount, addTherapist, addRoom, addPatient }: Record<string, any>) {
   const [view, setView] = useState<DayView>("time");
   const [query, setQuery] = useState("");
@@ -68,6 +79,7 @@ export function useScheduleScreen({ ADMIN_TZ, ymdInTZ, appointmentsByDate, dayKe
       a.remove();
       // Not revoked: the new tab is still reading this URL. The browser frees it
       // when the page goes.
+      offerHomeScreen();
       return true;
     } catch {
       tab?.close();
