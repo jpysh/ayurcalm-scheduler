@@ -1,3 +1,4 @@
+import { activated } from './lifecycle.mjs';
 // The maintainer's morning (#818): the business on one screen, and the one thing to do first.
 const D = 86_400_000;
 const n = (list, from, key = 'at') => list.filter((x) => x[key] && x[key] >= from).length;
@@ -31,6 +32,8 @@ export function morning(db, problems, now, feedback = [], host = []) {
     `Sign-ups: ${n(db.signups, day)} yesterday, ${n(db.signups, week)} this week`,
     `Came in: ${n(db.centres, week, 'signin_at')} · printed their own sheet: ${n(db.centres, week, 'sheet_at')} (this week)`,
     `Trials live: ${live.length} · paused: ${db.centres.length - live.length} · paying: ${db.centres.filter((c) => c.trial?.plan).length} · waiting list: ${db.waitlist.length}`,
+    // Activation (#1301): own sheet on 3 days in the first 7; silent: a sheet once, none for 3 days.
+    `Activated: ${live.filter(activated).map((c) => c.centre).join(', ') || 'none yet'} · silent 3+ days: ${live.filter((c) => c.sheet_at && now - Math.max(0, ...(c.sheets || [])) >= 3 * D).map((c) => c.centre).join(', ') || 'none'}`,
     ending.length ? `Ending within 7 days: ${ending.map((c) => `${c.centre} (${left(c)} d${c.sheet_at ? '' : ', no sheet yet'})`).join(', ')}` : 'No trial ends this week',
     db.update?.failed ? `Update ${db.update.sha} stopped at ${db.update.failed}: ${db.update.why}` : db.update ? `Update: ${db.update.sha} everywhere` : null,
     ...((db.events || []).some((e) => e.at >= day) ? [`Since yesterday: ${db.events.filter((e) => e.at >= day).map((e) => e.text).join('; ')}`] : []),
