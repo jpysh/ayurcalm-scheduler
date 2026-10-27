@@ -156,3 +156,17 @@ export async function guestRoomRefusal(db: Db, roomId: string, from: Date, to: D
   const full = room.full_on!;
   return { reason: 'ROOM_TAKEN', message: `${room.name} is taken on ${dayOf(new Date(`${full.date}T00:00:00Z`))} by ${full.names.join(' and ')}.${then}`, free: free.map(({ id, name, type }) => ({ id, name, type })) };
 }
+
+/**
+ * A man and a woman put in one room who are not in the same booking (#1202): a warning, never a refusal, since a
+ * couple may book apart. Same booking is the same group, or both stays made as one couple. Null when nobody differs.
+ */
+export async function strangerRoommates(db: Db, stayId: string) {
+  const stay = await db.patientStay.findUnique({ where: { id: stayId }, include: { Patient: { select: { gender: true } }, EarlierRooms: true } });
+  if (!stay?.on_site || stay.Patient.gender === 'other') return null;
+  const mine = spans(stay).filter((p) => p.room);
+  const others = await db.patientStay.findMany({ where: { id: { not: stay.id }, on_site: true, start_date: { lt: nightsEnd(stay.start_date, stay.end_date) }, end_date: { gt: stay.start_date }, OR: [{ guest_room_id: { in: mine.map((p) => p.room!) } }, { EarlierRooms: { some: { guest_room_id: { in: mine.map((p) => p.room!) } } } }] }, include: { Patient: { select: { name: true, gender: true } }, EarlierRooms: true, GuestRoom: { select: { name: true } } } });
+  const hit = others.find((o) => o.Patient.gender !== 'other' && o.Patient.gender !== stay.Patient.gender && !(stay.group_name && o.group_name === stay.group_name)
+    && spans(o).some((q) => mine.some((p) => p.room === q.room && p.start < nightsEnd(q.start, q.end) && q.start < nightsEnd(p.start, p.end))));
+  return hit ? `They share a room with ${hit.Patient.name}, a ${hit.Patient.gender === 'male' ? 'man' : 'woman'} not in the same booking. Check that is what both asked for.` : null;
+}
