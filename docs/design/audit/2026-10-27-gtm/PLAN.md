@@ -16,12 +16,12 @@ Sources and day-by-day map: `RESEARCH.md`.
 ## Product changes, ranked (impact ÷ effort)
 1. **Email the centre's link at sign-up** so closing the page loses nothing (S, already in #1270).
 2. **Behaviour-triggered emails:** no sheet by day 2, silent for 3 days, 7 days left. Three messages, nothing more (S–M, `provisioner/lifecycle.mjs`).
-3. **Pay without the maintainer:** a UPI/payment link from "Choose a plan" that unlocks the centre when paid, with the receipt done by hand at first. Selling the subscription is fine; patient payments stay out of scope (M).
+3. **Pay without the maintainer:** a UPI/payment link from "Choose a plan" that unlocks the centre when paid, with the receipt done by hand at first. (M).
 4. **Paste a list in Make it mine** for therapists, therapies and residents, copied from WhatsApp or Excel. Typing on a phone is where the first session stalls (M).
-5. **A streak line on the morning screen:** "Printed 5 mornings in a row". It praises the habit without nagging (S).
+5. **A streak line on the morning screen:** "Printed 5 mornings in a row". (S).
 6. **Home-screen shortcut prompt** after the first sheet (S, benchmarks steal #7).
 7. **A one-page help article per story** (s1–s10), linked from each screen's refusals and empty states. A future help bot reads these (M; bot later, only once there are 20+ articles).
-8. **Activation and silent-trial lines** in the morning report, so the maintainer sees who to look at without being asked (S).
+8. **Activation and silent-trial lines** in the morning report (S).
 
 ## Landing and sign-up should say
 - "Ruta: scheduling for residential wellness centres, including Ayurveda, spas and retreats."
@@ -34,7 +34,7 @@ Sources and day-by-day map: `RESEARCH.md`.
 - Self-booking, payments, marketplace, marketing and loyalty, multi-location, payroll and GST (#53).
 - Product tours, a separate onboarding checklist, gamification beyond the streak line.
 - Patient SMS or WhatsApp reminders: residents are on site.
-- An AI help bot before written help exists. Free setup calls by default (they turn the maintainer into an onboarding team). Card at sign-up. A freemium tier (trials convert 2–3× better).
+- An AI help bot before written help exists. Free setup calls by default. Card at sign-up. A freemium tier (trials convert 2–3× better).
 - Spa or physio example days until one of those centres signs up.
 
 ## Maintainer's call
