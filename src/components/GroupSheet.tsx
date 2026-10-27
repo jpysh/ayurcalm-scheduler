@@ -154,11 +154,11 @@ export function HoldSheet({ open, group, today, onClose, onSaved }: { open: bool
     onClose();
   };
   return (
-    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={group ? `Rooms for ${group.name}` : "Hold rooms for a group"}
+    <BottomSheet open={open} onOpenChange={(o) => { if (!o) onClose(); }} title={group ? `Rooms for ${group.name}` : "Hold rooms"}
       note="How many rooms of each type, held before the names arrive. Others see them as taken."
       foot={<Btn kind="primary" disabled={busy || !name.trim() || to <= from || (!total && !group?.holds.length)} onClick={() => void save()}>{total ? `Hold ${plural(total, "room")}` : group?.holds.length ? "Let the held rooms go" : "Choose how many rooms"}</Btn>}>
       <div className="grid gap-3">
-        {group ? null : <Text label="Group name" placeholder="Rishikesh Yoga, Nov" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />}
+        {group ? null : <Text label="Group or enquiry" placeholder="Rishikesh Yoga, Nov" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />}
         <div className={datePair}>
           <DateRow label="Arriving" value={from} min={today} onChange={(d) => { setFrom(d); if (to <= d) setTo(addDays(d, 7)); }} />
           <DateRow label="Leaving" value={to} min={addDays(from || today, 1)} onChange={setTo} />

@@ -11,8 +11,8 @@ await ctx.addInitScript((t) => { localStorage.setItem('authToken', t); localStor
 const p = await ctx.newPage();
 await p.goto(`${APP}/admin/patients`); await p.waitForTimeout(2500);
 await p.getByRole('button', { name: /^Groups/ }).click(); await p.waitForTimeout(800);
-await p.getByText('Hold rooms for a new group').click(); await p.waitForTimeout(1500);
-await p.getByLabel('Group name').fill('Pune Retreat');
+await p.getByText('Hold rooms for a group or enquiry').click(); await p.waitForTimeout(1500);
+await p.getByLabel('Group or enquiry').fill('Pune Retreat');
 await p.locator('input[type=number]').first().fill('3'); await p.waitForTimeout(500);
 await p.screenshot({ path: `${OUT}/hold-sheet-375.png` });
 await p.getByRole('button', { name: /^Hold 3 rooms/ }).click(); await p.waitForTimeout(1500);
