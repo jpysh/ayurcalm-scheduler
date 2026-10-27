@@ -258,8 +258,9 @@ async function main() {
       people.push({ name, stays: [{ s: new Date(d), e: new Date(d.getTime() + (days - 1) * DAY), kind, full }] });
     }
   }
-  const createdPatients = await Promise.all(people.map(({ name }) => prisma.patient.create({
-    data: { name, gender: isMale(name) ? 'male' : 'female', phone: `+91-9${Math.floor(100000000 + random()*899999999)}` },
+  // An ID number for nearly everyone (#1251): one in twenty has none yet, so "Papers" in What needs you has a line or two.
+  const createdPatients = await Promise.all(people.map(({ name }, i) => prisma.patient.create({
+    data: { name, gender: isMale(name) ? 'male' : 'female', phone: `+91-9${Math.floor(100000000 + random()*899999999)}`, id_number: i % 20 === 7 ? null : `${4000 + i} ${String(1000 + ((i * 7919) % 9000)).padStart(4, '0')} ${String(2000 + i * 31).slice(-4)}` },
   })));
   const staysOf = new Map<string, Stay[]>(createdPatients.map((p, i) => [p.id, people[i].stays]));
   // A few leave every day in a real centre, so today always has departures to
