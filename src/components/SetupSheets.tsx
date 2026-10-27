@@ -266,7 +266,7 @@ export function TherapySheet({ therapy, open, onClose, amenityOptions, onSaved, 
       foot={ask ? <TwoFoot busy={busy} main={`Also change the ${plural(ask, "booked treatment")}`} onMain={() => save("change")} alt="Only new bookings" onAlt={() => save("keep")} />
         : <SheetFoot busy={busy} ok={!!name.trim() && mins > 0} save={() => save()} label={therapy ? "Save the therapy" : "Add the therapy"} remove={therapy ? () => { onClose(); remove(therapy); } : undefined} removeLabel="Delete this therapy" />}>
       <Text label="Name" id="therapy-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Abhyanga" />
-      <Dropdown label="How long" value={String(mins)} onChange={(e) => setMins(Number(e.target.value))}>
+      <Dropdown label="How long, with cleaning the room" value={String(mins)} onChange={(e) => setMins(Number(e.target.value))}>
         {[...new Set([15, 20, 30, 45, 60, 75, 90, 105, 120, mins])].sort((a, b) => a - b).map((m) => <option key={m} value={m}>{m} minutes</option>)}
       </Dropdown>
       <Group label="Therapists needed"><Seg<number> options={[[1, "1"], [2, "2"], [3, "3"]]} value={staff} onChange={setStaff} /></Group>
