@@ -327,6 +327,7 @@ export function AccommodationSheet({ patient, stay, today, onClose, onSaved, edi
     const still = saved ? { if_still: { accommodation_id: saved.accommodation_id, guest_room_id: saved.guest_room_id } } : {};
     // Roommates moved too (#1191): the toast names them, and Undo (moving this guest back) brings them back with them.
     const mates: string[] = (answer.moved_with ?? []).map((m: { name: string }) => first(m.name));
+    if (answer.warning) toast.warning(answer.warning);
     toastUndo(chosen ? `${[first(patient.name), ...mates].join(" and ")}: ${chosen.name}${chosenRoom ? ` · ${chosenRoom.name}` : ""}` : `${first(patient.name)}: no accommodation`, () => undoWrite((anyway) => saveStay(patient.id, stay.id, { ...before, ...(anyway ? {} : still) }), onSaved));
     onSaved();
     onClose();
@@ -452,6 +453,7 @@ export function StaySheet({ patient, target, today, now, cover, onClose, onSaved
     if (undo) toastUndo(text, undo); else toast.success(text);
     // Pushed treatments that now clash wait for the day's check, which plans them in one pass.
     if (out.clashes?.length) toast.warning(`${plural(out.clashes.length, "moved treatment")} now clash${out.clashes.length === 1 ? "es" : ""}: the day's check offers the fix.`, { description: out.clashes.slice(0, 3).join(" · ") });
+    if (out.warning) toast.warning(out.warning);
     onSaved();
     onClose();
   };

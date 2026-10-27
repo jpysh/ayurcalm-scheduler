@@ -42,6 +42,7 @@ export const RULES: Rule[] = [
   { id: 'no_diet', section: 'Patients', kind: 'action', on: true, hours: 24, from: 'of arriving', name: 'No diet plan' },
   { id: 'room_out', section: 'Patients', kind: 'action', on: true, name: "A guest's room is out of use" },
   { id: 'form_c', section: 'Patients', kind: 'action', on: true, name: 'Form C for a foreign guest, due a day after arriving' },
+  { id: 'papers', section: 'Patients', kind: 'action', on: true, name: 'Papers: no ID number, a visa ending before the stay, or a stay extended after Form C' },
   { id: 'follow_up', section: 'Patients', kind: 'action', on: true, name: 'Follow-up due after discharge' },
   { id: 'review_due', section: 'Patients', kind: 'action', on: true, name: "A doctor's review is due and not booked" },
   { id: 'next_week', section: 'Patients', kind: 'action', on: true, name: 'Reviewed, and the week after the review is not booked' },
@@ -108,7 +109,7 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
   const rules = rulesWith(settings?.attention_rules);
   const rule = (id: string) => rules.find((r) => r.id === id)!;
 
-  const stays = await prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: new Date(day.getTime()) } }, include: { Patient: { select: { id: true, name: true, country: true } } } });
+  const stays = await prisma.patientStay.findMany({ where: { start_date: { lte: day }, end_date: { gte: new Date(day.getTime()) } }, include: { Patient: { select: { id: true, name: true, country: true, id_number: true, visa_valid_until: true } } } });
   const upcoming = await prisma.patientStay.findMany({ where: { end_date: new Date(`${tomorrow}T00:00:00.000Z`), start_date: { lte: day } }, include: { Patient: { select: { id: true, name: true } } } });
   const diets = await loadDietsForDay(day, prisma);
   const hoursIn = (s: { start_date: Date }) => Math.round((day.getTime() - s.start_date.getTime()) / DAY_MS) * 24 + hourNow;
@@ -130,6 +131,13 @@ export async function attentionFor(prisma: PrismaClient, date?: string) {
     // A guest leaving today is past needing arrival notes.
     if (ymd(s.end_date) !== today && hoursIn(s) >= (rule('arrival_open').hours ?? 24) && !s.vitals && !s.concerns && !s.tests) add(rule('arrival_open'), s, 'Arrival notes not written', 'card');
     if (owesFormC(s.Patient.country, s) && !s.form_c_filed) add(rule('form_c'), s, formC(s), 'card');
+    // Guest papers (#1251): one line a guest, the first thing missing.
+    const visa = s.Patient.visa_valid_until;
+    const paper = !s.Patient.id_number?.trim() ? 'No ID number'
+      : isForeign(s.Patient.country) && visa && visa < ymd(s.end_date) ? `Visa ends ${dayName(visa).replace(',', '')}, before they leave`
+      : s.form_c_filed && s.form_c_end && ymd(s.form_c_end) !== ymd(s.end_date) ? `Stay changed to leave ${dayName(ymd(s.end_date)).replace(',', '')} after Form C was filed: tell the FRRO`
+      : null;
+    if (paper) add(rule('papers'), s, paper, 'card');
     if (hoursIn(s) >= (rule('no_diet').hours ?? 24) && !diets.dietFor(s.Patient, true).planName) add(rule('no_diet'), s, 'No diet plan', 'diet');
   }
   // Reviewed and the week after not booked (#805): the one tap opens Plan next week.

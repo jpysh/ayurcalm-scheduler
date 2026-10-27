@@ -28,7 +28,7 @@ import { COMMON, therapyLibrary } from './therapyLibrary.js';
 import { requireAdmin } from './settings.js';
 import { attentionFor, changesSchema } from './attention.js';
 import { indiaHolidays } from './indiaHolidays.js';
-import { firstFreeRoom, guestRoomRefusal, guestRoomsFor, lockStays, moveRooms, nightsEnd, ownStayOverlap, roomOn } from './guestRooms.js';
+import { firstFreeRoom, guestRoomRefusal, guestRoomsFor, lockStays, moveRooms, nightsEnd, ownStayOverlap, roomOn, strangerRoommates } from './guestRooms.js';
 import { checkResidentRows, patientSchema, staySchema } from './residentImport.js';
 
 if (!process.env.DATABASE_URL) {
@@ -510,7 +510,8 @@ app.post('/patients', async (req: Request, res: Response) => {
     return tx.patient.findUnique({ where: { id: created.id }, include: { Stays: true } });
   });
   if (p && 'refused' in p) { res.status(409).json(p.refused); return; }
-  res.status(201).json(p);
+  const warning = p?.Stays[0]?.guest_room_id ? await strangerRoommates(prisma, p.Stays[0].id) : null;
+  res.status(201).json({ ...p, ...(warning ? { warning } : {}) });
 });
 
 app.put('/patients/:id', async (req: Request, res: Response) => {
@@ -602,7 +603,7 @@ app.patch('/patients/:id/stays/:stayId/form-c', async (req: Request, res: Respon
   const { filed } = z.object({ filed: z.boolean() }).parse(req.body);
   const stay = await prisma.patientStay.findFirst({ where: { id: String(req.params.stayId), patient_id: String(req.params.id) } });
   if (!stay) { res.status(404).json({ error: 'Stay not found' }); return; }
-  res.json(await prisma.patientStay.update({ where: { id: stay.id }, data: { form_c_filed: filed ? new Date() : null } }));
+  res.json(await prisma.patientStay.update({ where: { id: stay.id }, data: { form_c_filed: filed ? new Date() : null, form_c_end: filed ? stay.end_date : null } }));
 });
 
 // Departure: the discharge summary (#194). The doctor writes it from their link
@@ -829,7 +830,8 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
     const out = await applyPlan(left.map((a) => ({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: [], room_id: a.room_id, start_time: a.start_time, date: a.scheduled_date.toISOString().slice(0, 10), cancel: true, reason: 'stay shortened' })), prisma);
     batch_id = out.batch_id; cancelled = out.applied;
   }
-  res.json({ stay: updated, rooms_before: { guest_room_id: stay.guest_room_id, earlier: earlier.map((e) => ({ guest_room_id: e.guest_room_id, until: e.until.toISOString().slice(0, 10) })) }, left_over: extras.cancel_after ? [] : left.map(({ Therapy, ...a }) => a), cancelled, shifted, clashes, batch_id, moved_with });
+  const warning = extras.guest_room_id ? await strangerRoommates(prisma, stay.id) : null;
+  res.json({ stay: updated, warning, rooms_before: { guest_room_id: stay.guest_room_id, earlier: earlier.map((e) => ({ guest_room_id: e.guest_room_id, until: e.until.toISOString().slice(0, 10) })) }, left_over: extras.cancel_after ? [] : left.map(({ Therapy, ...a }) => a), cancelled, shifted, clashes, batch_id, moved_with });
 });
 
 /** Groups with a stay not yet over (#1196): each name, how many, and the dates they span. */
@@ -854,9 +856,46 @@ app.get('/groups', async (_req: Request, res: Response) => {
       /** Rooms held before the names arrive; `filled` counts the group's guests already given a room of the type. */
       /** The shared programme (#1196): what the whole group does each day; each guest's own treatments go on top. */
       programme: programme.filter((e) => e.group_name === name).map((e) => ({ id: e.id, activity_name: e.activity_name, start_time: e.start_time, end_time: e.end_time, is_optional: e.is_optional })),
-      holds: hs.map((h) => ({ accommodation_id: h.accommodation_id, type: h.Accommodation.name, rooms: h.rooms, start_date: ymd(h.start_date), end_date: ymd(h.end_date), filled: new Set(ss.filter((s) => s.accommodation_id === h.accommodation_id && s.guest_room_id).map((s) => s.guest_room_id)).size })),
+      holds: hs.map((h) => ({ accommodation_id: h.accommodation_id, type: h.Accommodation.name, rooms: h.rooms, start_date: ymd(h.start_date), end_date: ymd(h.end_date), keep_until: h.keep_until ? ymd(h.keep_until) : null, lapsed: !!h.keep_until && h.keep_until < today, filled: new Set(ss.filter((s) => s.accommodation_id === h.accommodation_id && s.guest_room_id).map((s) => s.guest_room_id)).size })),
     };
   }));
+});
+
+/**
+ * The days a group needs more therapist time than is free (#1242): each guest's day is counted at two hours of
+ * treatment, less what is booked already, against the minutes the therapists in that day have left. A warning, never a refusal.
+ */
+// ponytail: two hours a guest is the seed's usual day; read it from the guests' packages if centres differ.
+const GUEST_MINUTES = 120;
+app.get('/groups/capacity', async (req: Request, res: Response) => {
+  const name = z.string().trim().min(1).max(60).parse(req.query.name);
+  const tz = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
+  const today = centreClock(tz).date;
+  const stays = await prisma.patientStay.findMany({ where: { group_name: name, companion: false } });
+  const holds = await prisma.groupHold.findMany({ where: { group_name: name } });
+  const ymd = (d: Date) => d.toISOString().slice(0, 10);
+  const spanOf = [...stays, ...holds];
+  if (!spanOf.length) { res.json([]); return; }
+  const first = [today, ymd(spanOf.reduce((m, s) => (s.start_date < m ? s.start_date : m), spanOf[0].start_date))].sort()[1];
+  const last = ymd(spanOf.reduce((m, s) => (s.end_date > m ? s.end_date : m), spanOf[0].end_date));
+  const booked = await prisma.appointment.findMany({ where: { patient_id: { in: stays.map((s) => s.patient_id) }, ...HAPPENING, scheduled_date: { gte: new Date(`${first}T00:00:00.000Z`), lte: new Date(`${last}T00:00:00.000Z`) } }, select: { patient_id: true, scheduled_date: true, duration_minutes: true } });
+  const out: { date: string; guests: number; needed: number; free: number }[] = [];
+  for (let week = first; week <= last; week = new Date(Date.parse(`${week}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10)) {
+    const w = await staffWeek(week, prisma);
+    w.days.forEach((date, i) => {
+      if (date > last) return;
+      const day = new Date(`${date}T00:00:00.000Z`);
+      const here = stays.filter((s) => s.start_date <= day && s.end_date >= day);
+      // Held rooms not yet named are guests too.
+      const unnamed = holds.filter((h) => h.start_date <= day && h.end_date >= day).reduce((n, h) => n + Math.max(0, h.rooms - new Set(stays.filter((s) => s.accommodation_id === h.accommodation_id && s.guest_room_id).map((s) => s.guest_room_id)).size), 0);
+      const free = w.rows.filter((r) => r.role !== 'doctor').reduce((n, r) => n + Math.max(0, r.days[i].capacity - r.days[i].booked), 0);
+      // What is booked already is out of the free minutes, so only the rest of each guest's day is still needed.
+      const mine = (id: string) => booked.filter((a) => a.patient_id === id && ymd(a.scheduled_date) === date).reduce((n, a) => n + a.duration_minutes, 0);
+      const needed = here.reduce((n, s) => n + Math.max(0, GUEST_MINUTES - mine(s.patient_id)), 0) + unnamed * GUEST_MINUTES;
+      if (needed > free) out.push({ date, guests: here.length + unnamed, needed, free });
+    });
+  }
+  res.json(out);
 });
 
 /**
@@ -885,7 +924,7 @@ app.delete('/groups/programme/:id', async (req: Request, res: Response) => {
  */
 app.put('/groups/hold', async (req: Request, res: Response) => {
   const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-  const body = z.object({ name: z.string().trim().min(1).max(60), start_date: ymd, end_date: ymd, rooms: z.array(z.object({ accommodation_id: z.string().uuid(), rooms: z.number().int().min(0).max(100) })).max(20) }).refine((b) => b.end_date > b.start_date, 'Leaving must be after arriving').parse(req.body);
+  const body = z.object({ name: z.string().trim().min(1).max(60), start_date: ymd, end_date: ymd, rooms: z.array(z.object({ accommodation_id: z.string().uuid(), rooms: z.number().int().min(0).max(100) })).max(20), keep_until: ymd.nullable().optional() }).refine((b) => b.end_date > b.start_date, 'Leaving must be after arriving').parse(req.body);
   const [start, end] = [new Date(`${body.start_date}T00:00:00.000Z`), new Date(`${body.end_date}T00:00:00.000Z`)];
   const out = await prisma.$transaction(async (tx) => {
     await lockStays(tx);
@@ -898,7 +937,7 @@ app.put('/groups/hold', async (req: Request, res: Response) => {
       if (free + mine < want.rooms) return { refused: { reason: 'NOT_ENOUGH_ROOMS', message: `Only ${free + mine} ${ofType[0]?.type ?? 'rooms'} ${free + mine === 1 ? 'is' : 'are'} free for all those nights, not ${want.rooms}.` } };
     }
     await tx.groupHold.deleteMany({ where: { group_name: body.name } });
-    await tx.groupHold.createMany({ data: body.rooms.filter((r) => r.rooms > 0).map((r) => ({ group_name: body.name, start_date: start, end_date: end, accommodation_id: r.accommodation_id, rooms: r.rooms })) });
+    await tx.groupHold.createMany({ data: body.rooms.filter((r) => r.rooms > 0).map((r) => ({ group_name: body.name, start_date: start, end_date: end, accommodation_id: r.accommodation_id, rooms: r.rooms, keep_until: body.keep_until ? new Date(`${body.keep_until}T00:00:00.000Z`) : null })) });
     return { ok: true };
   });
   if ('refused' in out) { res.status(409).json(out.refused); return; }
