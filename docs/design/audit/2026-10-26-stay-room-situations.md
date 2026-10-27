@@ -1,8 +1,8 @@
 # Stays and guest rooms: real-life situations (26 Oct 2026)
 
-**190 situations, refreshed 27 Oct (third walk): 136 handled, 28 gaps (on open issues), 26 not for launch (rare; reason given), 0 unknown.** Out-of-scope items are listed at the end, not counted.
+**190 situations, refreshed 27 Oct (fourth pass, every gap issue closed): 164 handled, 0 gaps, 26 not for launch (rare; reason given), 0 unknown.** Out-of-scope items are listed at the end, not counted.
 The strong parts: double booking, rooms out of use, moving rooms from a date, Form C, leave and re-planning, diet and discharge.
-The weak parts: anything that pauses or shifts a stay (#1193, #1194), companions and meal counts (#1195), and groups (#1196).
+The former weak parts, pausing or shifting a stay (#1193, #1194), companions (#1195) and groups (#1196), were all built by 27 Oct.
 **How an unknown is closed (27 Oct):** walk it in the running app, the first-month (High) ones first. Works: mark it `Handled (walked 28 Oct: what was checked)`. Broken: file an issue, mark it `Gap → #N`, fix it the same night. Rare and Low: `Not for launch: why`.
 Each unknown that turns out broken gets its own issue; one that works becomes Handled here.
 
@@ -19,16 +19,16 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 | 3 | Guest arrives days late (train cancelled, road closed) | Shift the whole stay or shorten it, treatments move with it; room nights before arrival released | Handled (#1193) | High |
 | 4 | Guest never arrives | "Did not arrive" frees room and treatments, with Undo | Handled (did-not-arrive with undo) | High |
 | 5 | Guest arrives after reception has closed | Room and arrival note visible on the day sheet for the night watchman | Handled (walked 27 Oct: guest rooms sheet lists who arrives today and their room, "ready for X (arrives today)") | Med |
-| 6 | Room not ready when guest arrives | Room "being cleaned" state; admin sees which rooms are ready | Gap → #1199 | Med |
+| 6 | Room not ready when guest arrives | Room "being cleaned" state; admin sees which rooms are ready | Handled (#1259: rooms to make up, each marked ready) | Med |
 | 7 | Walk-in with no booking | From the vacant-room list, create guest and stay in one go | Handled (walked 27 Oct: New guest takes the room in the same save, #1190) | High |
-| 8 | Nadi Pariksha consult must come before any treatment | Arrival consult booked first; treatments cannot start before it | Gap #1241 (nothing keeps treatments after the consult) | High |
+| 8 | Nadi Pariksha consult must come before any treatment | Arrival consult booked first; treatments cannot start before it | Handled (#1265: a treatment before the first consultation shows a note, never a refusal) | High |
 | 9 | Guest brings an extra person not booked | Add companion to the room; beds checked | Handled (#1195) | Med |
 | 10 | Pickup needed from Kathgodam station | Transfer note on the arrival list | Not for launch: a note on the stay covers it | Low |
 | 11 | Arrival notes (vitals, concerns, tests) taken on arrival | Arrival form on the stay | Handled (arrival PATCH; vitals, concerns, tests) | High |
 | 12 | Returning guest books again | Find by name or phone; new stay on the same record, room chosen | Handled (#1190) | High |
 | 13 | Two guests with the same name | Phone or date of birth shown to tell them apart | Handled (walked 27 Oct: patient search lists both with their phone and date of birth) | Med |
-| 14 | Guest arrives with no ID or passport copy | Stay starts; missing ID flagged until added | Gap #1251 (no ID is not flagged) | Med |
-| 15 | Arrival day is already full for therapists | Warning when booking the stay, not on the day | Gap → #1242 (no warning for one guest either) | Med |
+| 14 | Guest arrives with no ID or passport copy | Stay starts; missing ID flagged until added | Handled (#1279: guest papers in What needs you) | Med |
+| 15 | Arrival day is already full for therapists | Warning when booking the stay, not on the day | Handled (#1273: days short of therapists) | Med |
 
 ## Departures
 
@@ -37,7 +37,7 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 | 16 | Early departure (family emergency, did not like it) | Shorten the stay; later treatments and room nights freed | Handled (walked 27 Oct: shortened mid-stay, later treatment cancelled in one batch) | High |
 | 17 | Extension mid-stay, room free | Lengthen; room check on the new nights | Handled (room check on stay change, ROOM_TAKEN) | High |
 | 18 | Extension mid-stay, room booked by the next guest | Offer a move from that night, or a different room for the newcomer | Handled (#1192) | High |
-| 19 | Late checkout | Leaving time on the stay; clash with the next arrival shown | Gap → #1200 | Med |
+| 19 | Late checkout | Leaving time on the stay; clash with the next arrival shown | Handled (#1261: a leaving time on Guest rooms) | Med |
 | 20 | Treatments booked after the guest leaves | Warn when the stay end cuts off treatments | Handled (walked 27 Oct: a treatment after the stay is refused, STAY_TOO_SHORT; shortening previews and cancels later ones) | Med |
 | 21 | Guest leaves for a weekend and comes back | Pause the stay, keep or release the room | Handled (#1194) | Low |
 | 22 | Discharge summary at departure | Summary written and printed as PDF | Handled (discharge and discharge PDF) | High |
@@ -55,7 +55,7 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 | 29 | Guest moves the whole stay a week later before arriving | Move both dates; treatments and diet move too; room re-checked | Handled (walked 27 Oct: both dates a week later with shift; 3 treatments moved, clashes listed for the day check) | High |
 | 30 | Stay shortened before arrival (7 days to 5) | Last days' treatments removed, room nights freed | Handled (walked 27 Oct: preview 2 cancels, save cancelled 2, one batch) | High |
 | 31 | Doctor extends the course mid-stay (14 to 21) | Extend; plan for the extra days offered | Handled (walked 27 Oct: extended 7 days, diet follows) | High |
-| 32 | Date typed wrongly (2025 for 2026) | Clear confirmation of nights and dates before saving | Gap #1252 (a stay a year back saves without a word) | Med |
+| 32 | Date typed wrongly (2025 for 2026) | Clear confirmation of nights and dates before saving | Handled (#1274: a stay in a past year is asked about once) | Med |
 | 33 | Stay end before stay start | Refused with a plain message | Handled (walked 27 Oct: POST stay ending before it starts refused, "Leaving must be on or after arriving") | Med |
 | 34 | Two stays for one guest overlap | Refused or merged | Handled (walked 27 Oct: second overlapping stay refused STAY_OVERLAPS, names the existing one) | Med |
 | 35 | Change preview before saving | Show what moves before the admin saves | Handled (stay preview endpoint) | High |
@@ -72,9 +72,9 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 | 41 | Move mid-stay from a date (noise, upgrade) | Earlier nights keep their room | Handled (#1164/#1171, earlier rooms) | High |
 | 42 | Move back to the room just left the same day | No leftover record | Handled (moveRooms) | Low |
 | 43 | Room out of use forces a move | Affected guests listed; move each | Handled (#1188) | High |
-| 44 | Ground floor needed (knees, wheelchair) | Room notes or tags; filter | Gap → #1201 | Med |
+| 44 | Ground floor needed (knees, wheelchair) | Room notes or tags; filter | Handled (#1269: room tags, ground floor and quiet) | Med |
 | 45 | Swap two guests' rooms | One swap action | Not for launch: rare; two moves do it | Low |
-| 46 | Double room let as single | Beds versus people per night | Gap #1253 (the second bed is still offered) | Med |
+| 46 | Double room let as single | Beds versus people per night | Handled (#1280: the whole room for one guest) | Med |
 | 47 | Attached versus shared bathroom wish | Room type shows it | Handled (accommodation type name) | Med |
 | 48 | Room's beds lowered below what is booked | Refused or guests named | Handled (#1186) | Med |
 | 49 | Room retired with guests in it | Guests named; move first | Handled (#1187) | Med |
@@ -93,28 +93,28 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 | 57 | Couple wants treatments at the same time | Parallel bookings, gender-matched therapists | Handled (walked 27 Oct: two guests booked the same therapy at 14:00 the same day; gender is matched where the therapy needs it) | Med |
 | 58 | Companion stays, no treatments | Occupant on the room and meal count, not a patient | Handled (#1195) | High |
 | 59 | Child with a parent | Companion with age | Handled (#1195) | Low |
-| 60 | Two strangers share a double, same gender | Gender rule on shared rooms | Gap → #1202 | Med |
+| 60 | Two strangers share a double, same gender | Gender rule on shared rooms | Handled (#1268: warns on a man and a woman from different bookings) | Med |
 | 61 | One of a couple leaves early | Room stays for the other | Handled (walked 27 Oct: one shortened to 4 Dec; the other keeps the room to 10 Dec, one bed shows free) | Med |
 | 62 | Roommates move rooms together | One move for both | Handled (#1191) | Med |
 | 63 | Gender-matched therapist | Enforced on assignment | Handled (guard) | High |
 | 64 | Couple's surnames differ; must be found together | Link guests | Not for launch: search by either name finds both | Low |
 | 65 | Companion later decides to take treatments | Becomes a patient, stay kept | Handled (#1195) | Med |
 | 66 | Carer must be in the room during treatment | Note on the appointment | Not for launch: rare; appointment note covers it | Low |
-| 67 | Family of four across two rooms | Booked together | Gap → #1196 | Low |
+| 67 | Family of four across two rooms | Booked together | Handled (#1267 and earlier parts: group block, rooming list, shared programme) | Low |
 
 ## Groups
 
 | # | Situation | Best-in-class handling | Today in the app | Priority |
 |---|---|---|---|---|
-| 68 | Group of 20 block-books 12 rooms | Block with a rooming list | Gap → #1196 | Med |
-| 69 | Names arrive a week late | Placeholder guests filled later | Gap → #1196 | Med |
-| 70 | Group shares one timetable | Copy programme to all | Gap → #1196 | Med |
-| 71 | Group shrinks; release rooms | Release from the block | Gap → #1196 | Low |
-| 72 | Group exceeds therapists on a day | Capacity warning at booking | Gap #1242 | High |
+| 68 | Group of 20 block-books 12 rooms | Block with a rooming list | Handled (#1267 and earlier parts: group block, rooming list, shared programme) | Med |
+| 69 | Names arrive a week late | Placeholder guests filled later | Handled (#1267 and earlier parts: group block, rooming list, shared programme) | Med |
+| 70 | Group shares one timetable | Copy programme to all | Handled (#1267 and earlier parts: group block, rooming list, shared programme) | Med |
+| 71 | Group shrinks; release rooms | Release from the block | Handled (#1267 and earlier parts: group block, rooming list, shared programme) | Low |
+| 72 | Group exceeds therapists on a day | Capacity warning at booking | Handled (#1273: days short of therapists) | High |
 | 73 | Group import from a spreadsheet | Import check then import | Handled (patients import check) | Med |
-| 74 | Group leader is the only contact | Leader on the block | Gap → #1196 | Low |
+| 74 | Group leader is the only contact | Leader on the block | Handled (#1267 and earlier parts: group block, rooming list, shared programme) | Low |
 | 75 | Group activities (yoga, satsang) | Programme events on the day | Handled (programme events) | Med |
-| 76 | Group arrives in one bus, late | Shift all arrivals together | Gap → #1196 | Med |
+| 76 | Group arrives in one bus, late | Shift all arrivals together | Handled (#1267 and earlier parts: group block, rooming list, shared programme) | Med |
 | 77 | Some group members are foreign | Form C list covers each | Handled (Form C rule per guest) | High |
 | 78 | Group needs one meal count | Kitchen total includes them | Handled (walked 27 Oct: kitchen counts every stay, 'No diet plan' row included) | High |
 | 79 | Group and individual guests want the same room | First booked wins; clear refusal | Handled (ROOM_TAKEN) | Med |
@@ -143,9 +143,9 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 | 92 | Fever or diarrhoea: treatments paused, room kept | Pause from date to date | Handled (#1194) | High |
 | 93 | Hospitalised in Haldwani | Pause; room held or released | Handled (#1194) | Med |
 | 94 | Menstruation: oil treatments paused 3–5 days | Pause chosen treatments; offer extension | Handled (#1194) | High |
-| 95 | Vamana / Virechana day: stays in room | Day with no other treatments | Gap #1254 (nothing keeps the day free of treatments) | Med |
+| 95 | Vamana / Virechana day: stays in room | Day with no other treatments | Handled (#1281: Not for them, a rest day or a ruled-out therapy refused by the guard) | Med |
 | 96 | Doctor changes the plan mid-stay | Future treatments re-planned | Handled (checked 27 Oct in code: Plan next week swaps a therapy for another from a date and re-books it; one batch) | High |
-| 97 | Contraindication found at consult (pregnancy, BP) | Note; blocked treatments | Gap #1254 (contraindication is a note only) | Med |
+| 97 | Contraindication found at consult (pregnancy, BP) | Note; blocked treatments | Handled (#1281: Not for them, a rest day or a ruled-out therapy refused by the guard) | Med |
 | 98 | Doctor's review due | Reminder until booked | Handled (review_due rule) | High |
 | 99 | Next week not booked after review | Reminder | Handled (next_week rule) | High |
 | 100 | Vitals not recorded | Reminder to therapists | Handled (vitals rule) | Med |
@@ -165,10 +165,10 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 | 109 | Form C still unfiled after departure | Still asked for | Handled (fortnight after end) | High |
 | 110 | Country left blank | Not assumed foreign; admin asked | Handled (empty is not foreign) | Med |
 | 111 | Passport and visa numbers | On the card | Handled (id, visa fields, passport photo) | High |
-| 112 | Visa ends before the stay | Warning at booking | Gap #1251 (visa date stored, not checked against the stay) | Med |
+| 112 | Visa ends before the stay | Warning at booking | Handled (#1279: guest papers in What needs you) | Med |
 | 113 | Day patient who is foreign | No Form C | Handled (#719) | Low |
 | 114 | Foreigner moves room | Form C details may need updating | Not for launch: rare; Form C is re-filed by hand | Low |
-| 115 | Foreigner extends stay | New end date on the Form C | Gap #1251 (extension asks for nothing on Form C) | Med |
+| 115 | Foreigner extends stay | New end date on the Form C | Handled (#1279: guest papers in What needs you) | Med |
 | 116 | NRI with Indian passport but foreign address | Country decides; admin can correct | Not for launch: rare; country is editable | Low |
 | 117 | Medical visa letter | Letter from the stay | Not for launch: written outside the app | Low |
 | 118 | Form C marked filed by mistake | Un-mark | Handled (filed false) | Low |
@@ -181,13 +181,13 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 | 120 | Navratri surge: all rooms wanted | Free rooms by date range at a glance | Handled (walked 27 Oct: free rooms by date range) | High |
 | 121 | Phone enquiry: free room 10–24 Dec? | Answer in under a minute | Handled (walked 27 Oct: 14-night range answered in one call) | High |
 | 122 | Waitlist when full | Simple waitlist | Not for launch: Is a room free? answers the call | Low |
-| 123 | Tentative hold not confirmed | Hold with an end date | Gap → #1203 | Med |
+| 123 | Tentative hold not confirmed | Hold with an end date | Handled (#1272: rooms kept for an enquiry until a day) | Med |
 | 124 | Minimum stay in peak | Rule or note | Not for launch: the admin decides on the call | Low |
 | 125 | Staff on festival leave | Leave reduces capacity | Handled (time off, on_leave) | High |
-| 126 | Women's Conference fills Nanda House | Block as a group | Gap → #1196 | Med |
-| 127 | Occupancy for the week or month | Count of nights per day | Gap #1257 (one day at a time only) | Med |
+| 126 | Women's Conference fills Nanda House | Block as a group | Handled (#1267 and earlier parts: group block, rooming list, shared programme) | Med |
+| 127 | Occupancy for the week or month | Count of nights per day | Handled (#1282: a month of nights taken) | Med |
 | 128 | Gurudev's birthday: treatments stop for the day | Centre event blocks treatments | Handled (centre closed day stops treatments; a programme event marks the occasion) | Med |
-| 129 | Peak day needs extra therapists | Capacity shown per day | Gap → #1242 (no per-day capacity warning) | Med |
+| 129 | Peak day needs extra therapists | Capacity shown per day | Handled (#1273: days short of therapists) | Med |
 
 ## Staff
 
@@ -214,9 +214,9 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 | 143 | Meal count includes companions | Headcount per meal | Handled (#1195) | High |
 | 144 | Guest has no diet plan after arriving | Reminder | Handled (no_diet rule) | High |
 | 145 | Guest away for lunch (trip) | Skip that meal | Not for launch: rare; meal edit for the day covers it | Low |
-| 146 | Late arrival misses dinner | Count from arrival time | Gap #1255 (counted for every meal that day) | Med |
+| 146 | Late arrival misses dinner | Count from arrival time | Handled (#1266: meals before the arrival time left out, dinner kept) | Med |
 | 147 | Diet when stay is paused for illness | Diet follows the pause | Handled (#1194) | Med |
-| 148 | Diet course moved when dates move | Moves with the stay | Gap #1255 (walked: a stay moved a week later stretched its diet 1–17 Dec instead of moving it) | Med |
+| 148 | Diet course moved when dates move | Moves with the stay | Handled (#1262: the diet course moves with the stay) | Med |
 | 149 | Kitchen sheet for a group | Totals | Handled (walked 27 Oct: kitchen sheet totals every staying guest by plan; groups print by name, #1249) | Med |
 | 150 | Diet change undone | Undo | Handled (course undo) | Low |
 | 151 | Day patients eat lunch | Counted if on-site meal | Not for launch: rare at Babaji | Low |
@@ -238,7 +238,7 @@ What this is: the situations a residential centre like Babaji Ayurveda (Ranikhet
 | 162 | Who slept in T-3 on 4 Nov (police query) | Room history by date | Handled (walked 27 Oct: guest rooms sheet for a past date, 20 Oct, names each room's guest) | Med |
 | 163 | Delete a stay | Room and treatments freed | Handled (walked 27 Oct in code: "Did not arrive" removes a stay not yet over with its treatments and diet, one Undo; a past stay stays on the record) | Med |
 | 164 | Package linked to stay | Shown on the stay | Handled (package_id) | Med |
-| 165 | Stay with no room at all for weeks | Flagged | Gap #1256 (walked: a resident with no room is on no sheet and no rule) | Med |
+| 165 | Stay with no room at all for weeks | Flagged | Handled (#1277: staying tonight with no room is flagged) | Med |
 
 ## Phone and clock edge cases
 
