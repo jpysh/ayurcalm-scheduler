@@ -539,6 +539,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         setPatients((prev) => prev.filter((x) => x.id !== created.id)); setCardId(null);
       } },
     });
+    if (created.warning) toast.warning(created.warning);
     setShowAddPatient(false);
     setNewPatient(blankNew());
     if (inline) { inline({ id: created.id, name: created.name }); setInline(null); return; }
