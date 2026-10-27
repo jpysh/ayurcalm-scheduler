@@ -22,7 +22,7 @@ const lbl = "mt-3 mb-1 block text-sm font-semibold text-muted-foreground";
 export const noteText = "text-sm text-muted-foreground";
 /** Two short fields side by side (From and Until), one above the other when large text would clip them. */
 export const pair = "grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-3";
-export const chip = "min-h-11 rounded-full border border-[hsl(var(--input)/0.45)] px-3.5 text-sm font-semibold aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground";
+export const chip = "min-h-11 max-w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-[hsl(var(--input)/0.45)] px-3.5 text-sm font-semibold aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground";
 export const wide = "min-h-11 w-full rounded-full font-semibold";
 // Seeded names are stored as massage_table; the admin reads "massage table".
 export const say = (s: string) => s.replace(/_/g, " ");
