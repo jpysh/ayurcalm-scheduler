@@ -11,7 +11,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHmac, randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync, renameSync, existsSync, rmSync, statSync, mkdirSync, readdirSync, lstatSync } from 'node:fs';
-import { next, deletesAt, refuse, slugFor, linkOpen, took, rollout } from './lifecycle.mjs';
+import { next, deletesAt, refuse, slugFor, linkOpen, took, rollout, releaseHour } from './lifecycle.mjs';
 import { morning, security, nodeLine } from './morning.mjs';
 
 const run = promisify(execFile);
@@ -194,20 +194,28 @@ export function boxProblems(c) {
 }
 const compose = (...a) => run('docker', ['compose', '-f', `${ROOT}hosting/compose.yml`, '-p', 'ruta-host', ...a], { env: { ...env, RUTA_DATA: DATA }, maxBuffer: 1 << 26 });
 
-// ---- update (#904): a new main is tested on a throwaway centre, then rolled out. Once a day, in the
-// 21:00 hour in India, after treatments (#920): one restart a night, not one per merge.
+// ---- update (#904): a version is tested on a throwaway centre, then rolled out. Once a week, in the
+// Wednesday 20:00 hour in India (#1178), and only the version Tuesday's walk wrote to release-ok: an unwalked week is skipped.
 // LIVE_CENTRES in provisioner.env lists the centres with real use, e.g. "babaji:8202".
 const LIVE = (env.LIVE_CENTRES || '').split(/\s+/).filter(Boolean).map((x) => ({ slug: x.split(':')[0], port: Number(x.split(':')[1]) }));
 const git = (...a) => run('git', ['-C', ROOT, ...a]).then((r) => r.stdout.trim());
 let updating = false;
 const indiaHour = (now = new Date()) => Number(now.toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false }));
+const OK = `${DATA}/release-ok`;
 export async function update(now = false) {
-  if (updating || (!now && indiaHour() !== 21)) return;
+  if (updating || (!now && !releaseHour(new Date()))) return;
   updating = true;
   const gate = `${DATA}/gate`;
   try {
     await git('fetch', '-q', 'origin', 'main');
-    const sha = await git('rev-parse', 'origin/main');
+    const approved = existsSync(OK) ? readFileSync(OK, 'utf8').trim() : '';
+    if (!now && !approved) {
+      const day = new Date().toISOString().slice(0, 10);
+      if (db.update?.skipped !== day) { db.update = { ...db.update, skipped: day }; save(); await notify('Update skipped this week: the Tuesday walk did not approve a version'); }
+      return;
+    }
+    // "touch update-now" is the same-day fix for a centre that cannot work; it ships main as it is.
+    const sha = await git('rev-parse', now ? 'origin/main' : `${approved}^{commit}`);
     // What the centres run, not what the clone says: a hand-moved clone must not skip a rollout (#924).
     if (sha === db.update?.deployed || sha === db.update?.failed_sha) return;
     const short = sha.slice(0, 7);
@@ -230,7 +238,7 @@ export async function update(now = false) {
     }
     db.update = { sha: short, at: Date.now(), failed: r.failed, why: r.why, failed_sha: r.failed ? sha : null, deployed: r.failed ? db.update?.deployed : sha }; save();
     await notify(r.failed ? `ALERT: update ${short} stopped at ${r.failed}: ${r.why}` : `Updated to ${short}: demo, live centres and trials`);
-    if (!r.failed) process.exit(0); // launchd starts the service again on the new code
+    if (!r.failed) { if (!now) rmSync(OK, { force: true }); process.exit(0); } // launchd starts the service again on the new code
   } catch (e) { console.error('update', e); }
   finally { await run('git', ['-C', ROOT, 'worktree', 'remove', '-f', gate]).catch(() => {}); updating = false; }
 }
@@ -324,6 +332,6 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
   }, 3_600_000);
   setInterval(() => update(), 600_000);
   built.then(() => watch()).catch(console.error);
-  // `touch ~/ruta-data/update-now` asks for one update now, outside the 21:00 hour (#924).
+  // `touch ~/ruta-data/update-now` asks for one update now, outside the weekly release, and ships main without the walk: only for a centre that cannot work (#924, #1178).
   setInterval(() => { if (existsSync(`${DATA}/update-now`)) { rmSync(`${DATA}/update-now`); update(true); } }, 60_000);
 }
