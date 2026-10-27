@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 
 /**
  * The public demo (#84): one install anyone can sign into, put back to the
- * seeded centre every six hours, or every DEMO_RESET_MINUTES (demo.jains.es
+ * seeded centre every six hours, or every DEMO_RESET_MINUTES (ruta-demo.jains.es
  * uses 60, #246). Off unless DEMO_MODE=true.
  */
 export const DEMO = process.env.DEMO_MODE === 'true';
