@@ -39,7 +39,7 @@ export function buildGuestRoomsSheet(rooms: SheetRoom[], day: string) {
     const outText = r.out ? `Out of use${r.out.reason ? `: ${r.out.reason}` : ''}` : '';
     // A shared room where one guest leaves and another stays is not empty to make up.
     const emptied = !staying.length;
-    if (emptied && leaving.length && arriving.length) row = { room: r.name, kind: 'turnover', line: `Make up, then ready for ${until(arriving, ' (arrives today)')}` };
+    if (emptied && leaving.length && arriving.length) row = { room: r.name, kind: 'turnover', line: `Make up after ${gone(leaving)}, then ready for ${until(arriving, ' (arrives today)')}` };
     else if (emptied && leaving.length) row = { room: r.name, kind: 'leaving', line: `Make up · ${gone(leaving)} today` };
     else if (emptied && r.out) row = { room: r.name, kind: 'out', line: outText };
     else if (emptied && arriving.length) row = { room: r.name, kind: 'arriving', line: `Ready for ${until(arriving)}` };

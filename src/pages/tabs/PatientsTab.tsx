@@ -12,7 +12,7 @@ import { API_TOKEN, fetchJsonWithTimeout, type ApiAppointment, type ApiStay, typ
 import { GroupSheet, fetchGroups, type Group as Booking } from "@/components/GroupSheet";
 import PageHead from "@/components/PageHead";
 import { PhotoImg, shrinkPhoto } from "@/components/PassportPhoto";
-import { chip, saveError, Area, ChangeLine, TextRow, ChecklistBar, DateRow, datePair, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, money, Btn, LinkBtn } from "@/components/kit";
+import { chip, saveError, Area, ChangeLine, TextRow, ChecklistBar, DateRow, datePair, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, money, Btn, LinkBtn, NightChips } from "@/components/kit";
 import { AccommodationSheet, DietSheet, DischargeSheet, NextWeekSheet, PackageSheet, StaySheet, takenBy, type CardStay, type GuestRoomNight, type StayTarget } from "@/components/CardSheets";
 import { Search } from "lucide-react";
 import { marked } from "@/components/SearchScreen";
@@ -83,13 +83,13 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
     fetchJsonWithTimeout<InHouse[]>(`${API_BASE}/patients?resident_on=${today}&arriving_within=7`).then((r) => setInHouse(Array.isArray(r) ? r : [])).catch(() => setInHouse([]));
   }, [today, patients.length, patients.map((p) => `${p.actualStart}${p.actualEnd}`).join()]);
   const stayOf = (p: InHouse) => p.Stays.find((s) => s.start_date.slice(0, 10) <= today && s.end_date.slice(0, 10) >= today);
-  const dayOf = (s: { start_date: string; end_date: string; on_site?: boolean; companion?: boolean }) => {
+  const dayOf = (s: { start_date: string; end_date: string; on_site?: boolean; companion?: boolean; GuestRoom?: { name: string } | null }) => {
     if (s.on_site === false && s.start_date.slice(0, 10) === s.end_date.slice(0, 10)) return 'Day patient';
     const n = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(s.start_date)) / DAY_MS) + 1;
     const of = Math.round((Date.parse(s.end_date) - Date.parse(s.start_date)) / DAY_MS) + 1;
     // Under Leaving today a date is a puzzle; today and tomorrow are said in words (#836).
     const left = of - n;
-    return `${s.companion ? "Companion · " : ""}Day ${n} of ${of} · leaves ${left === 0 ? "today" : left === 1 ? "tomorrow" : stayDay(s.end_date)}`;
+    return `${s.companion ? "Companion · " : ""}Day ${n} of ${of}${s.GuestRoom ? ` · ${s.GuestRoom.name}` : ""} · leaves ${left === 0 ? "today" : left === 1 ? "tomorrow" : stayDay(s.end_date)}`;
   };
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
   // Guests whose stay starts in the next week, nearest first.
@@ -290,7 +290,7 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
       {d ? (
         <div className="-mt-2">
           <div className="text-sm text-muted-foreground">
-            {d.stay ? `${d.stay.on_site === false ? 'Day patient ·' : 'Staying'} ${stayRange(d.stay)}${d.stay.days > 1 ? ` · day ${d.stay.day} of ${d.stay.days}` : ''}` : d.coming ? `Arrives ${soon(d.coming.start_date)} · leaves ${stayDay(d.coming.end_date)}` : d.last_stay ? `Stayed until ${stayDay(d.last_stay.end_date)}` : 'Not staying today'}
+            {d.stay ? `${d.stay.on_site === false ? 'Day patient ·' : 'Staying'} ${stayRange(d.stay)}${d.stay.days > 1 ? ` · day ${d.stay.day} of ${d.stay.days}` : ''}${d.stay.accommodation?.room ? ` · ${d.stay.accommodation.room.name}` : ''}` : d.coming ? `Arrives ${soon(d.coming.start_date)} · leaves ${stayDay(d.coming.end_date)}` : d.last_stay ? `Stayed until ${stayDay(d.last_stay.end_date)}` : 'Not staying today'}
           </div>
           {leavingSoon ? bar : null}
           {steps && !leavingSoon ? <div className="mt-3"><ChecklistBar label="Arrival" done={steps.filter((x) => x[1]).length} total={steps.length} missing={steps.filter((x) => !x[1]).map((x) => x[0])} onClick={() => setArrival(true)} /></div> : null}
@@ -650,6 +650,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
           <DateRow label="Arriving" value={newPatient.arriving} onChange={(v) => setNewPatient({ ...newPatient, arriving: v, leaving: newPatient.leaving < v ? v : newPatient.leaving })} />
           <DateRow label="Leaving" value={newPatient.leaving} min={newPatient.arriving} onChange={(v) => setNewPatient({ ...newPatient, leaving: v })} />
         </div>
+        {newPatient.arriving ? <NightChips from={newPatient.arriving} value={newPatient.leaving} steps={[7, 14, 21]} onChange={(leaving) => setNewPatient({ ...newPatient, leaving })} /> : null}
         <Switch label="Stays on site" note="Off for a day patient" on={newPatient.onSite} set={(onSite) => setNewPatient({ ...newPatient, onSite })} />
         {newPatient.onSite ? <Switch label="Companion" note="Stays and eats here, no treatments" on={newPatient.companion} set={(companion) => setNewPatient({ ...newPatient, companion })} /> : null}
         {/* A group booking (#1196): an existing name is offered as they type, so ten guests share one spelling. */}
@@ -661,7 +662,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
             <div className="mt-1 border-t border-border">
               <ChangeLine label="Guest room" value={r ? `${r.name} · ${r.type}` : freeRooms.some((x) => x.free) ? "Not yet" : "None free for these nights"} faint={!r}
                 select={<LineSelect label="Guest room" busyLabel="Taken" value={guestRoom} onChange={setGuestRoom}
-                  free={[...freeRooms.filter((x) => x.free).map((x) => ({ id: x.id, name: x.name, tag: x.type })), { id: "", name: "Not yet" }]}
+                  free={[{ id: "", name: "Not chosen yet" }, ...freeRooms.filter((x) => x.free).map((x) => ({ id: x.id, name: x.name, tag: x.type }))]}
                   busy={freeRooms.filter((x) => !x.free).map((x) => ({ id: x.id, name: x.name, why: takenBy(x) }))} />} />
             </div>
           );

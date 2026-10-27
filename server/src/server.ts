@@ -432,7 +432,8 @@ app.get('/patients', async (req: Request, res: Response) => {
   }
   // Stays come with each resident, newest first: the list, the card and booking
   // all ask when someone is here, and a stay is the only record of that.
-  const data = await prisma.patient.findMany({ where, include: { Stays: { orderBy: { start_date: 'desc' } } } });
+  // Each stay names its guest room, so the list can say where a guest sleeps (#1212).
+  const data = await prisma.patient.findMany({ where, include: { Stays: { orderBy: { start_date: 'desc' }, include: { GuestRoom: { select: { name: true } } } } } });
   res.json(data);
 });
 
