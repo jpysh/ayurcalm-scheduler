@@ -48,7 +48,7 @@ export async function wipeDemo(tx: Prisma.TransactionClient, keep: Keep[] = []) 
   return { appointments: appointments.count, patients: patients.count, staff: staff.count, rooms: rooms.count, therapies: therapies.count };
 }
 
-export type Mine = { centre_name: string; team: { name: string; gender: 'male' | 'female'; doctor: boolean }[]; rooms: { id: string; name: string }[]; consult_room: string; therapy_ids: string[] };
+export type Mine = { centre_name: string; team: { name: string; gender: 'male' | 'female'; doctor: boolean }[]; rooms: { id: string; name: string }[]; consult_room: string; therapy_ids: string[]; new_therapies?: string[] };
 
 /**
  * Make it mine (#729): the example's residents, bookings and team go; the
@@ -70,7 +70,9 @@ export async function makeItMine(tx: Prisma.TransactionClient, body: Mine) {
     await tx.therapyRoom.updateMany({ where: { id: { in: fits.map((r) => r.id).filter((id) => id !== opd.id) } }, data: { is_active: false } });
   }
   // A consultation is how every new resident starts, so it is never switched off.
-  await tx.therapy.updateMany({ where: { id: { notIn: body.therapy_ids }, is_consultation: false }, data: { is_active: false } });
+  // Pasted names the example lacks (#PASTE): an hour in any room until Therapies says otherwise.
+  const added = await Promise.all((body.new_therapies ?? []).map((name) => tx.therapy.create({ data: { name, duration_minutes: 60, required_amenities: [] } })));
+  await tx.therapy.updateMany({ where: { id: { notIn: [...body.therapy_ids, ...added.map((t) => t.id)] }, is_consultation: false }, data: { is_active: false } });
   const kept = await tx.therapy.findMany({ where: { is_active: true }, select: { id: true, is_consultation: true } });
   const skills = (doctor: boolean) => kept.filter((t) => t.is_consultation === doctor).map((t) => t.id);
   await tx.staff.createMany({ data: body.team.map((p) => ({ name: p.name, gender: p.gender, role: p.doctor ? 'doctor' : 'therapist', specializations: skills(p.doctor), weekly_schedule: {}, is_active: true })) });
