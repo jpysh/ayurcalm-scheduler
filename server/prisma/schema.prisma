@@ -154,6 +154,8 @@ model GuestRoom {
   /// How many patients may share it; a couple is two patients in one room.
   beds             Int     @default(1)
   is_active        Boolean @default(true)
+  /// The day housekeeping marked it made up (#1199): a room someone left that day is not ready until then.
+  ready_on         DateTime?
 
   Accommodation AccommodationType @relation(fields: [accommodation_id], references: [id], onDelete: Cascade)
   Stays         PatientStay[]

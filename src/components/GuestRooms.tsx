@@ -5,6 +5,7 @@
  * it, the night chosen on the week strip, room by room. Never "Rooms": those are treatment rooms.
  */
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { API_BASE } from "@/lib/apiBase";
 import { fetchJsonWithTimeout } from "@/pages/tabs/shared";
 import PageHead from "@/components/PageHead";
@@ -60,6 +61,10 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
   const sleeping = (r: Room) => r.guests.filter((g) => g.start_date <= day && day < g.end_date);
   const leaving = (r: Room) => r.guests.filter((g) => g.end_date === day);
   const arriving = (r: Room) => sleeping(r).filter((g) => g.start_date === day);
+  const markReady = async (r: Room, ready: boolean) => {
+    const res = await fetch(`${API_BASE}/guest-rooms/${r.id}/ready`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: day, ready }) });
+    if (res.ok) setNight((n) => n && n.map((x) => (x.id === r.id ? { ...x, ready_on: ready ? day : null } : x))); else toast.error("Not saved. Try again.");
+  };
   const tonight = day === today ? "tonight" : `on ${dayText(day)}`;
 
   const sheets = <>
@@ -115,12 +120,18 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
               })} />
           </div>
         ))) : null}
-        {/* The morning's housekeeping in one line (#456 part 4): the rooms to make up, and the rooms someone comes into. */}
+        {/* The morning's housekeeping (#456 part 4): the rooms to make up, each marked ready when done (#1199), and the rooms someone comes into. */}
         {night ? (() => {
           // A shared room where one guest stays on is not empty, but a bed left and taken the same day still needs making up (#1209).
-          const out = night.filter((r) => leaving(r).length && (arriving(r).length || !sleeping(r).some((g) => g.start_date !== day))).map((r) => r.name);
+          const out = night.filter((r) => leaving(r).length && (arriving(r).length || !sleeping(r).some((g) => g.start_date !== day)));
           const into = night.filter((r) => arriving(r).length).map((r) => r.name);
-          return out.length || into.length ? <p className={`px-1 pt-2 ${noteText}`}>{[out.length ? `Leaving${day === today ? " today" : ""}: ${out.join(", ")} to make up` : "", into.length ? `Arriving: ${into.join(", ")}` : ""].filter(Boolean).join(" · ")}</p> : null;
+          return <>
+            {into.length ? <p className={`px-1 pt-2 ${noteText}`}>Arriving: {into.join(", ")}</p> : null}
+            {out.length ? <ListGroup title={`To make up${day === today ? " today" : ""}`} count={`${out.filter((r) => r.ready_on === day).length} of ${out.length} ready`}>
+              {out.map((r) => <Row key={r.id} title={r.name} facts={arriving(r).length ? `${arriving(r).map((g) => g.name).join(", ")} arrives` : undefined}
+                trailing={r.ready_on === day ? "Ready ✓" : "Mark ready"} onClick={() => markReady(r, r.ready_on !== day)} />)}
+            </ListGroup> : null}
+          </>;
         })() : null}
         {view === "week" ? null : night === null ? <Loading rows={6} /> : byType(night).map(([type, rooms]) => (
           <ListGroup key={type} title={type} count={`${rooms.filter((r) => r.free).length} free`}>

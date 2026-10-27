@@ -107,6 +107,7 @@ export async function guestRoomsFor(db: Db, from: Date, to: Date, except?: strin
     return {
       id: r.id, name: r.name, beds: r.beds, accommodation_id: r.accommodation_id, type: r.Accommodation.name, price_per_day: r.Accommodation.price_per_day,
       free: full === null && !out,
+      ready_on: r.ready_on ? iso(r.ready_on) : null,
       out,
       /** The first night with no bed left, and who has them. */
       full_on: full === null ? null : { date: iso(new Date(full)), names: sleeping(full).map((s) => s.Patient.name) },

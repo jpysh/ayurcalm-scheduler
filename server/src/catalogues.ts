@@ -144,6 +144,12 @@ async function guestsAhead(id: string, since?: string, until?: string) {
   }
   return out;
 }
+// Made up after a guest left (#1199), or not after all: a second tap undoes a mistaken one.
+guestRoomsRouter.put('/:id/ready', requireAdmin, async (req: Request, res: Response) => {
+  const body = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), ready: z.boolean() }).parse(req.body);
+  const room = await prisma.guestRoom.update({ where: { id: String(req.params.id) }, data: { ready_on: body.ready ? new Date(`${body.date}T00:00:00Z`) : null } });
+  res.json({ id: room.id, ready_on: body.ready ? body.date : null });
+});
 guestRoomsRouter.get('/:id/ahead', async (req: Request, res: Response) => {
   const q = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).parse(req.query);
   res.json(await guestsAhead(String(req.params.id), q.from, q.to));
