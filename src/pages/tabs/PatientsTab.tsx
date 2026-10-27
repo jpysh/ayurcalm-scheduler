@@ -9,6 +9,7 @@ import type { CardAppt } from "@/components/TreatmentCard";
 import DayDietDialog from "./DayDietDialog";
 import DischargeForm, { type DischargeView } from "@/components/DischargeForm";
 import { API_TOKEN, fetchJsonWithTimeout, type ApiAppointment, type ApiStay, type Patient as PatientRow, type UiStaff } from "./shared";
+import { GroupSheet, fetchGroups, type Group as Booking } from "@/components/GroupSheet";
 import PageHead from "@/components/PageHead";
 import { PhotoImg, shrinkPhoto } from "@/components/PassportPhoto";
 import { chip, saveError, Area, ChangeLine, TextRow, ChecklistBar, DateRow, datePair, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, money, Btn, LinkBtn, NightChips } from "@/components/kit";
@@ -29,7 +30,7 @@ const byNearest = (today: string) => (a: { scheduled_date: string; start_time: s
 const stayDay = (iso?: string) => (iso ? dayText(iso) : '');
 /** One day reads once: a day patient's visit is not 'Fri 9 Oct to Fri 9 Oct' (#720). */
 const stayRange = (s: { start_date: string; end_date: string }) => s.start_date.slice(0, 10) === s.end_date.slice(0, 10) ? stayDay(s.start_date) : `${stayDay(s.start_date)} to ${stayDay(s.end_date)}`;
-const blankNew = () => ({ name: '', gender: '' as '' | 'Female' | 'Male' | 'Other', arriving: '', leaving: '', onSite: true, companion: false, phone: '', emergencyContact: '', emergencyPhone: '', address: '', country: '', idNumber: '', registrationNumber: '', foodLimits: '' });
+const blankNew = () => ({ name: '', gender: '' as '' | 'Female' | 'Male' | 'Other', arriving: '', leaving: '', onSite: true, companion: false, group: '', phone: '', emergencyContact: '', emergencyPhone: '', address: '', country: '', idNumber: '', registrationNumber: '', foodLimits: '' });
 type Slot = { date: string; start_time: string; staff_id: string; staff_name: string; room_id: string; room_name: string };
 const clock = (timeZone: string) => new Date().toLocaleTimeString('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
 
@@ -71,6 +72,12 @@ const DAY_MS = 86400000;
  */
 function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything, openRules, needs, onNeed, away }: { patients: Patient[]; today: string; onOpen: (id: string) => void; onAdd: () => void; q: string; /** Opens the bar's search (#934): one tap from the list. */ onSearch: () => void; everything: (q: string) => void; openRules: () => void; /** What the rules in Settings say needs doing for a patient (#288), and what tapping one opens. */ needs: AttentionItem[]; onNeed: (i: AttentionItem) => void; away: (id: string) => string | undefined }) {
   const [onlyNeeds, setOnlyNeeds] = useState(false);
+  // Group bookings (#1196): a chip only when a group is booked, its list, and the group's sheet.
+  const [groupsOn, setGroupsOn] = useState(false);
+  const [groupList, setGroupList] = useState<Booking[]>([]);
+  const [group, setGroup] = useState<Booking | null>(null);
+  const loadGroups = () => fetchGroups().then(setGroupList);
+  useEffect(() => { void loadGroups(); }, [today, patients.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const [inHouse, setInHouse] = useState<InHouse[] | null>(null);
   useEffect(() => {
     fetchJsonWithTimeout<InHouse[]>(`${API_BASE}/patients?resident_on=${today}&arriving_within=7`).then((r) => setInHouse(Array.isArray(r) ? r : [])).catch(() => setInHouse([]));
@@ -128,11 +135,14 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
         </>)
       ) : inHouse === null ? <Loading /> : (<>
         <div className="flex gap-1.5 px-1 pb-1">
-          <button type="button" className={chip} aria-pressed={!onlyNeeds} onClick={() => setOnlyNeeds(false)}>In house</button>
-          <button type="button" className={chip} aria-pressed={onlyNeeds} onClick={() => setOnlyNeeds(true)}>Need you{needy.length ? ` · ${needy.length}` : ""}</button>
+          <button type="button" className={chip} aria-pressed={!onlyNeeds && !groupsOn} onClick={() => { setOnlyNeeds(false); setGroupsOn(false); }}>In house</button>
+          <button type="button" className={chip} aria-pressed={onlyNeeds} onClick={() => { setOnlyNeeds(true); setGroupsOn(false); }}>Need you{needy.length ? ` · ${needy.length}` : ""}</button>
+          {groupList.length ? <button type="button" className={chip} aria-pressed={groupsOn} onClick={() => { setGroupsOn(true); setOnlyNeeds(false); }}>Groups · {groupList.length}</button> : null}
           <button type="button" className={`${chip} ml-auto grid w-11 place-items-center !px-0`} aria-label="Search patients" onClick={onSearch}><Search className="h-5 w-5" /></button>
         </div>
-        {onlyNeeds ? (
+        {groupsOn ? (
+          <ListGroup>{groupList.map((g) => <Row key={g.name} title={g.name} facts={`${g.count} guests · ${stayDay(g.start_date)} to ${stayDay(g.end_date)}`} trailing="›" onClick={() => setGroup(g)} />)}</ListGroup>
+        ) : onlyNeeds ? (
           <ListGroup>{needy.length ? needy.map((i) => <Row key={i.id} title={i.who} flag={flagOf(i.patient_id!)} trailing="›" onClick={() => onNeed(i)} />) : <Empty text="Nothing needs attention. The rules are in the gear above." />}</ListGroup>
         ) : people.length === 0 && soon.length === 0 ? <Empty text="No one is staying today." action={<Btn kind="primary" inline onClick={onAdd}>Add a patient</Btn>} /> : (<>
           {groups.filter(([, list]) => list.length).map(([title, list]) => (
@@ -141,6 +151,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
           {soon.length ? <ListGroup title="Arriving soon" count={soon.length}>{soon.map(({ p, s }) => row(p.id, p.name, s.start_date.slice(0, 10) === s.end_date.slice(0, 10) ? `Day visit ${stayDay(s.start_date)}` : `Arrives ${stayDay(s.start_date)} · leaves ${stayDay(s.end_date)}`))}</ListGroup> : null}
         </>)}
       </>)}
+      <GroupSheet group={group} today={today} onClose={() => setGroup(null)} onChanged={() => void loadGroups()} openPatient={(id) => { setGroup(null); onOpen(id); }} />
     </div>
   );
 }
@@ -459,6 +470,8 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     setNewPatient((p) => ({ ...p, arriving: p.arriving || today, leaving: p.leaving || addDays(today, 13) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAddPatient]);
+  const [groupNames, setGroupNames] = useState<string[]>([]);
+  useEffect(() => { if (showAddPatient) void fetchGroups().then((g) => setGroupNames(g.map((x) => x.name))); }, [showAddPatient]);
   // Their guest room (#456): the first free for every night, cheapest type first, unless the admin chose one still free.
   const [freeRooms, setFreeRooms] = useState<GuestRoomNight[]>([]);
   const [guestRoom, setGuestRoom] = useState("");
@@ -495,7 +508,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     const res = await fetch(`${API_BASE}/patients`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: n.name.trim(), gender: n.gender.toLowerCase(), on_site: n.onSite, companion: n.onSite && n.companion,
+        name: n.name.trim(), gender: n.gender.toLowerCase(), on_site: n.onSite, companion: n.onSite && n.companion, group_name: n.group.trim() || undefined,
         phone: blank(n.phone), emergency_contact: blank(n.emergencyContact), emergency_phone: blank(n.emergencyPhone),
         address: blank(n.address), country: blank(n.country), id_number: blank(n.idNumber), registration_number: blank(n.registrationNumber), food_limits: blank(n.foodLimits),
         stay: { start_date: n.arriving, end_date: n.leaving }, guest_room_id: n.onSite && guestRoom ? guestRoom : undefined,
@@ -640,6 +653,9 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
         {newPatient.arriving ? <NightChips from={newPatient.arriving} value={newPatient.leaving} steps={[7, 14, 21]} onChange={(leaving) => setNewPatient({ ...newPatient, leaving })} /> : null}
         <Switch label="Stays on site" note="Off for a day patient" on={newPatient.onSite} set={(onSite) => setNewPatient({ ...newPatient, onSite })} />
         {newPatient.onSite ? <Switch label="Companion" note="Stays and eats here, no treatments" on={newPatient.companion} set={(companion) => setNewPatient({ ...newPatient, companion })} /> : null}
+        {/* A group booking (#1196): an existing name is offered as they type, so ten guests share one spelling. */}
+        <Text label="Group (optional)" list="group-names" value={newPatient.group} onChange={(e) => setNewPatient({ ...newPatient, group: e.target.value })} maxLength={60} autoComplete="off" />
+        <datalist id="group-names">{groupNames.map((g) => <option key={g} value={g} />)}</datalist>
         {newPatient.onSite && freeRooms.length ? (() => {
           const r = freeRooms.find((x) => x.id === guestRoom);
           return (

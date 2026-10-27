@@ -495,7 +495,7 @@ app.post('/patients', async (req: Request, res: Response) => {
     const created = await tx.patient.create({ data });
     if (body.stay) {
       const stay = stayData(body.stay);
-      await tx.patientStay.create({ data: { patient_id: created.id, ...stay, on_site: body.on_site, companion: body.companion ?? false, ...(room ? { guest_room_id: room.id, accommodation_id: room.accommodation_id } : {}) } });
+      await tx.patientStay.create({ data: { patient_id: created.id, ...stay, on_site: body.on_site, companion: body.companion ?? false, group_name: body.group_name || null, ...(room ? { guest_room_id: room.id, accommodation_id: room.accommodation_id } : {}) } });
       if (visit && consult) await tx.appointment.create({ data: { patient_id: created.id, therapy_id: consult.id, staff_id: visit.staff_id, room_id: visit.room_id, scheduled_date: new Date(`${visit.date}T00:00:00.000Z`), start_time: visit.start_time, duration_minutes: consult.duration_minutes, co_staff_ids: [], session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
       if (body.template_id) await tx.dietPlanSegment.create({ data: { patient_id: created.id, start_date: stay.start_date, end_date: stay.end_date, template_id: body.template_id } });
     }
@@ -703,6 +703,8 @@ const stayExtras = z.object({
   accommodation_id: z.string().uuid().nullable().optional(),
   /** A companion takes no treatments (#1195). */
   companion: z.boolean().optional(),
+  /** The group the stay belongs to (#1196); empty takes it out. */
+  group_name: z.string().trim().max(60).nullable().optional(),
   /** The guest room (#456); it sets the accommodation to the room's type. */
   guest_room_id: z.string().uuid().nullable().optional(),
   /** The first night in the new room (#1164); a stay already under way moves from the centre's today, a stay not yet begun for every night. */
@@ -769,7 +771,7 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
     await tx.earlierGuestRoom.deleteMany({ where: { stay_id: stay.id } });
     if (rooms.length) await tx.earlierGuestRoom.createMany({ data: rooms.map((r) => ({ ...r, stay_id: stay.id })) });
     const saved = await tx.patientStay.update({ where: { id: stay.id }, data: {
-      ...dates, package_id: extras.package_id, guest_room_id: roomId, companion: extras.companion,
+      ...dates, package_id: extras.package_id, guest_room_id: roomId, companion: extras.companion, group_name: extras.group_name === undefined ? undefined : extras.group_name || null,
       accommodation_id: roomId !== stay.guest_room_id || extras.guest_room_id ? room?.accommodation_id ?? extras.accommodation_id : extras.accommodation_id,
     } });
     for (const m of mates) {
@@ -815,6 +817,54 @@ app.put('/patients/:id/stays/:stayId', async (req: Request, res: Response) => {
     batch_id = out.batch_id; cancelled = out.applied;
   }
   res.json({ stay: updated, rooms_before: { guest_room_id: stay.guest_room_id, earlier: earlier.map((e) => ({ guest_room_id: e.guest_room_id, until: e.until.toISOString().slice(0, 10) })) }, left_over: extras.cancel_after ? [] : left.map(({ Therapy, ...a }) => a), cancelled, shifted, clashes, batch_id, moved_with });
+});
+
+/** Groups with a stay not yet over (#1196): each name, how many, and the dates they span. */
+app.get('/groups', async (_req: Request, res: Response) => {
+  const tz = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
+  const today = new Date(`${centreClock(tz).date}T00:00:00.000Z`);
+  const stays = await prisma.patientStay.findMany({ where: { group_name: { not: null }, end_date: { gte: today } }, include: { Patient: { select: { id: true, name: true } }, GuestRoom: { select: { name: true } } }, orderBy: { start_date: 'asc' } });
+  const by = new Map<string, typeof stays>();
+  for (const s of stays) by.set(s.group_name!, [...(by.get(s.group_name!) ?? []), s]);
+  const ymd = (d: Date) => d.toISOString().slice(0, 10);
+  res.json([...by].map(([name, ss]) => ({
+    name, count: ss.length, start_date: ymd(ss[0].start_date), end_date: ymd(ss.reduce((m, s) => (s.end_date > m ? s.end_date : m), ss[0].end_date)),
+    guests: ss.map((s) => ({ stay_id: s.id, patient_id: s.Patient.id, name: s.Patient.name, start_date: ymd(s.start_date), end_date: ymd(s.end_date), room: s.GuestRoom?.name ?? null, started: s.start_date <= today })),
+  })));
+});
+
+/**
+ * The organiser moves the dates (#1196): every stay of the group not yet begun moves by the same days, with its
+ * treatments and any planned room move, its room re-checked. One that cannot move (already here, or its room
+ * taken) is listed, never left silently. Moving back by the same days is the Undo.
+ */
+app.post('/groups/move', async (req: Request, res: Response) => {
+  const body = z.object({ name: z.string().trim().min(1).max(60), days: z.number().int().min(-60).max(60).refine((n) => n !== 0) }).parse(req.body);
+  const tz = (await prisma.settings.findUnique({ where: { id: 'singleton' } }))?.timezone || 'Asia/Kolkata';
+  const today = new Date(`${centreClock(tz).date}T00:00:00.000Z`);
+  const stays = await prisma.patientStay.findMany({ where: { group_name: body.name, end_date: { gte: today } }, include: { Patient: { select: { name: true } }, EarlierRooms: true } });
+  const shift = (d: Date) => new Date(d.getTime() + body.days * 86400000);
+  const moved: string[] = [];
+  const not_moved: { name: string; why: string }[] = [];
+  const appts: { appointment_id: string; staff_id: string | null; co_staff_ids: string[]; room_id: string | null; start_time: string; date: string }[] = [];
+  for (const s of stays) {
+    if (s.start_date <= today || shift(s.start_date) <= today) { not_moved.push({ name: s.Patient.name, why: s.start_date <= today ? 'already here' : 'would arrive today or before' }); continue; }
+    const [start, end] = [shift(s.start_date), shift(s.end_date)];
+    // ponytail: a stay with a planned room move is moved unchecked; check each span if groups with moves appear.
+    const refused = s.guest_room_id && s.on_site && !s.EarlierRooms.length ? await guestRoomRefusal(prisma, s.guest_room_id, start, end, s.id) : null;
+    if (refused) { not_moved.push({ name: s.Patient.name, why: refused.message.slice(0, refused.message.indexOf('.') + 1) }); continue; }
+    await prisma.$transaction(async (tx) => {
+      await lockStays(tx);
+      await tx.patientStay.update({ where: { id: s.id }, data: { start_date: start, end_date: end } });
+      for (const e of s.EarlierRooms) await tx.earlierGuestRoom.update({ where: { id: e.id }, data: { until: shift(e.until) } });
+    });
+    await prisma.dietPlanSegment.updateMany({ where: { patient_id: s.patient_id, start_date: s.start_date, end_date: s.end_date }, data: { start_date: start, end_date: end } });
+    for (const a of await prisma.appointment.findMany({ where: { patient_id: s.patient_id, ...HAPPENING, scheduled_date: { gte: s.start_date, lte: s.end_date } } }))
+      appts.push({ appointment_id: a.id, staff_id: a.staff_id, co_staff_ids: a.co_staff_ids, room_id: a.room_id, start_time: a.start_time, date: shift(a.scheduled_date).toISOString().slice(0, 10) });
+    moved.push(s.Patient.name);
+  }
+  const batch = appts.length ? await applyPlan(appts, prisma) : null;
+  res.json({ moved, not_moved, batch_id: batch?.batch_id ?? null });
 });
 
 /**
