@@ -1044,7 +1044,8 @@ const createTimeOffHandler = async (req: Request, res: Response) => {
     // A room out of use is the same moment (#659): each day it covers is planned
     // once, so its treatments cannot be sent to the same other room at the same minute.
     // The centre shut for some hours (#985) moves what falls in them the same way, all rooms at once.
-    if (((h.entity_type === 'room' && h.entity_id) || (h.entity_type === 'center' && h.start_time && move)) && plan !== false) {
+    // A guest who arrived hours late, or is out for some hours (#1240): their treatments then move later that day the same way.
+    if (((h.entity_type === 'room' && h.entity_id) || (h.entity_type === 'patient' && h.entity_id && h.start_time) || (h.entity_type === 'center' && h.start_time && move)) && plan !== false) {
       const results = [];
       for (const d of datesCovered(h)) results.push(await replanRoomDay(h, d, prisma));
       replan = results.filter((r) => r.moved.length || r.proposed.length || r.unplaced.length);

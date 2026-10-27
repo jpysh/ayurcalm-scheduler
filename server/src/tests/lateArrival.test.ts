@@ -1,7 +1,7 @@
 /**
  * Arriving days later (#1193): the admin chooses. 'cancel' cancels what was booked before the
  * new arrival and keeps the leaving day; 'shift' moves every treatment later by the same days.
- * Either way one Undo puts it back. The preview counts what is booked before the new arrival.
+ * Either way one Undo puts it back. Arriving hours late is the guest away until then: that day's earlier treatments move later (#1240). The preview counts what is booked before the new arrival.
  *
  * Its own days in 2030, tidied afterwards. Needs a running server: API_BASE.
  */
@@ -17,6 +17,7 @@ const day = (d: string) => new Date(`${d}T00:00:00.000Z`);
 async function tidy(prisma: PrismaClient) {
   const ids = (await prisma.patient.findMany({ where: { name: { startsWith: TAG } }, select: { id: true } })).map((p) => p.id);
   await prisma.appointment.deleteMany({ where: { patient_id: { in: ids } } });
+  await prisma.timeOff.deleteMany({ where: { entity_type: 'patient', entity_id: { in: ids } } });
   await prisma.patientStay.deleteMany({ where: { patient_id: { in: ids } } });
   await prisma.patient.deleteMany({ where: { id: { in: ids } } });
 }
@@ -27,7 +28,7 @@ async function main() {
     await requireDemoData(prisma);
     await tidy(prisma);
     const { token } = await (await fetch(`${API_BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
-    const call = async (method: string, path: string, body?: unknown) => { const r = await fetch(`${API_BASE}${path}`, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: body ? JSON.stringify(body) : undefined }); assert.ok(r.ok, `${method} ${path}: ${r.status} ${await r.clone().text()}`); return r.json(); };
+    const call = async (method: string, path: string, body?: unknown) => { const r = await fetch(`${API_BASE}${path}`, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: body ? JSON.stringify(body) : undefined }); assert.ok(r.ok, `${method} ${path}: ${r.status} ${await r.clone().text()}`); return r.status === 204 ? null : r.json(); };
     const [therapy, staff, room] = await Promise.all([
       prisma.therapy.findFirstOrThrow({ where: { is_consultation: false } }),
       prisma.staff.findFirstOrThrow({ where: { is_active: true } }),
@@ -71,6 +72,15 @@ async function main() {
     assert.deepEqual(pushedK.map((a) => a.scheduled_date.toISOString().slice(0, 10)), ['2030-05-06', '2030-05-09', '2030-05-12'], 'Monday stays; the rest move two days');
     const outside = await fetch(`${API_BASE}/patients/${k.p.id}/stays/${k.stay.id}/pause`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ from: '2030-06-01', to: '2030-06-02', mode: 'drop' }) });
     assert.equal(outside.status, 409, 'a pause outside the stay is refused');
+    // Arrived hours late (#1240): away until 11:00 that day, so the 07:00 treatment moves later the same day, one pass; deleting it puts it back.
+    const h = await guest('Hours');
+    const away = await call('POST', '/timeoff', { entity_type: 'patient', entity_id: h.p.id, date: '2030-05-07', start_date: '2030-05-07', end_date: '2030-05-07', start_time: '00:00', end_time: '11:00', description: 'arrived late' });
+    const tue = await prisma.appointment.findUniqueOrThrow({ where: { id: h.appts[1].id } });
+    assert.equal(tue.scheduled_date.toISOString().slice(0, 10), '2030-05-07', 'it stays on the day');
+    assert.ok(tue.start_time >= '11:00', `it moves after the arrival, not ${tue.start_time}`);
+    assert.equal((await prisma.appointment.findUniqueOrThrow({ where: { id: h.appts[0].id } })).start_time, '07:00', 'other days are left alone');
+    await call('DELETE', `/timeoff/${away.id}`);
+    assert.equal((await prisma.appointment.findUniqueOrThrow({ where: { id: h.appts[1].id } })).start_time, '07:00', 'deleting the absence puts it back');
     console.log('late arrival and pause: cancel the missed days, or push the stay later, each undone in one tap');
   } finally {
     await tidy(prisma).catch(() => {});
