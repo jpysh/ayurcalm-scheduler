@@ -9,16 +9,17 @@ export default function PageHead({ title, note, gear, search }: { title: string;
   const find = search ? <button type="button" aria-label={search.label} onClick={search.run} className="-my-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground active:bg-secondary"><Search className="h-5 w-5" /></button> : null;
   const back = useContext(BackContext);
   // With Back the title is centred between Back and the gear; Back keeps its own width and a long title wraps beside it at large text (#1150); and the count sits centred under it on the full width so it wraps cleanly (#989).
+  // Below about 18rem of width (large text on a phone) the icons drop to their own line under the title, since beside it they cover it (#1317, index.css).
   if (back) return (
-    <div className="grid grid-cols-[minmax(max-content,1fr)_auto_minmax(0,1fr)] items-center gap-x-2 px-1 pb-2 pt-1.5">
+    <div className="pagehead-wrap"><div className="pagehead-back grid grid-cols-[minmax(max-content,1fr)_auto_minmax(0,1fr)] items-center gap-x-2 px-1 pb-2 pt-1.5">
       <button type="button" aria-label={`Back to ${back.label}`} onClick={back.run} className="-ml-2 min-h-11 justify-self-start whitespace-nowrap rounded-full px-2 text-base font-semibold text-primary active:bg-secondary">‹ {back.label}</button>
       <h1 className="m-0 break-words text-center text-lg font-semibold">{title}</h1>
-      <span className="flex min-w-0 items-center justify-end">
+      <span data-pagehead="icons" className="flex min-w-0 items-center justify-end">
         {find}
         {gear ? <button type="button" aria-label={gear.label} onClick={gear.run} className="-my-2 -mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground active:bg-secondary"><Settings2 className="h-5 w-5" /></button> : null}
       </span>
       {note ? <p className="col-span-3 m-0 text-center text-sm text-muted-foreground">{note}</p> : null}
-    </div>
+    </div></div>
   );
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-2 px-1 pb-2 pt-1.5">
