@@ -94,6 +94,8 @@ model PatientStay {
   companion        Boolean @default(false)
   /// A group booking (#1196), by its name ("Rishikesh Yoga, Nov"): found together, moved together.
   group_name       String?
+  /// Late checkout (#1200): "15:00" on the leaving day, so the room is not made up, or given, before then.
+  leaving_time     String?
 
   Patient       Patient            @relation(fields: [patient_id], references: [id])
   GuestRoom     GuestRoom?         @relation(fields: [guest_room_id], references: [id], onDelete: SetNull)

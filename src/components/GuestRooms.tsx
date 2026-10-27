@@ -14,7 +14,7 @@ import { Btn, DateRow, datePair, Empty, LinkRow, ListGroup, Loading, Row, Sectio
 import { AddGuestRooms, ManageGuestRooms } from "@/components/GuestRoomManage";
 import type { GuestRoomNight } from "@/components/CardSheets";
 
-type Guest = { stay_id: string; patient_id: string; name: string; start_date: string; end_date: string; from_room?: string | null; to_room?: string | null };
+type Guest = { stay_id: string; patient_id: string; name: string; start_date: string; end_date: string; from_room?: string | null; to_room?: string | null; leaving_time?: string | null };
 type Room = GuestRoomNight & { guests: Guest[] };
 
 const DAY_MS = 86400000;
@@ -142,13 +142,13 @@ export function GuestRooms({ today, openPatient, newPatient, openSettings, addin
               const facts: string[] = [
                 ...arriving(r).map((g) => `${g.name} ${g.from_room ? `moves in from ${g.from_room}` : "arrives"} · until ${dayText(g.end_date)}`),
                 ...inIt.filter((g) => g.start_date !== day).map((g) => `${g.name} · until ${dayText(g.end_date)}`),
-                ...out.map((g) => `${g.name} ${g.to_room ? `moves to ${g.to_room}` : "leaves"}${day === today ? " today" : ""}`),
+                ...out.map((g) => `${g.name} ${g.to_room ? `moves to ${g.to_room}` : "leaves"}${day === today ? " today" : ""}${g.leaving_time ? ` at ${g.leaving_time}` : ""}`),
               ];
               // Out of use (#563) first: it is why the room is not offered.
               if (r.out) facts.unshift(`Out of use${r.out.reason ? `: ${r.out.reason}` : ""} · until ${dayText(r.out.until)}`);
               const spare = r.beds - inIt.length;
               return <Row key={r.id} title={r.name} facts={facts.join(" · ") || undefined}
-                trailing={r.out && !inIt.length ? "Out" : !inIt.length ? "Free" : spare > 0 ? `${spare} bed free` : undefined}
+                trailing={r.out && !inIt.length ? "Out" : !inIt.length ? (out.find((g) => g.leaving_time) ? `Free from ${out.find((g) => g.leaving_time)!.leaving_time}` : "Free") : spare > 0 ? `${spare} bed free` : undefined}
                 onClick={r.out && !inIt.length ? undefined : () => (inIt[0] ? openPatient(inIt[0].patient_id) : newPatient({ arriving: day, leaving: addDays(day, 13), room: r.id }))} />;
             })}
           </ListGroup>

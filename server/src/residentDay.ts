@@ -102,7 +102,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
     end_date: s.end_date.toISOString().slice(0, 10),
     day: Math.round((day.getTime() - s.start_date.getTime()) / DAY_MS) + 1,
     days: Math.round((s.end_date.getTime() - s.start_date.getTime()) / DAY_MS) + 1,
-    vitals: s.vitals, concerns: s.concerns, tests: s.tests, on_site: s.on_site,
+    vitals: s.vitals, concerns: s.concerns, tests: s.tests, on_site: s.on_site, leaving_time: s.leaving_time,
     package: pack && { id: pack.id, name: pack.name, days: pack.days, price: pack.price },
     accommodation: house && { id: house.id, name: house.name, price_per_day: house.price_per_day, room },
     discharge: discharge?.ready ?? null,
