@@ -1,4 +1,4 @@
-// node scripts/uat-1022.mjs — a starter the centre cannot give is greyed out with why, at 375x812 (#1022). Needs ALLOW_DEMO_PASSWORD=true on the stack (#1005). E2E_BASE_URL picks the stack.
+// node scripts/uat-1022.mjs — a starter the centre cannot give is greyed out with why, at 375x812 (#1022). E2E_BASE_URL picks the stack.
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 const APP = process.env.E2E_BASE_URL || 'http://localhost:8080';

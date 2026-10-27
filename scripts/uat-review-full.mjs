@@ -1,6 +1,6 @@
 // node scripts/uat-review-full.mjs — the full admin review of 21 Oct at 375x812: a new centre set up from nothing,
 // then every daily job on the demo centre, and the four printed sheets as PDFs beside the shots.
-// Two throwaway stacks, both with ALLOW_DEMO_PASSWORD=true (#1005): DEMO_URL (seeded) and NEW_URL (cleared here).
+// Two throwaway stacks, both (#1005): DEMO_URL (seeded) and NEW_URL (cleared here).
 // Each step's taps are counted and printed; a step that breaks is shot as it broke and the walk goes on.
 import { chromium } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';

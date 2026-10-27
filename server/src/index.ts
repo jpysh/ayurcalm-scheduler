@@ -14,7 +14,7 @@ import { settingsRouter, publicSettingsRouter, resetDemo } from './settings.js';
 import { DEMO, demoGuard, scheduleDemoResets } from './demo.js';
 import { linkRouter } from './links.js';
 import { trialGuard } from './trial.js';
-import { usersRouter, accountRouter, demoPasswordGuard } from './users.js';
+import { usersRouter, accountRouter } from './users.js';
 import { dietTemplatesRouter } from './dietTemplates.js';
 import { packagesRouter, accommodationsRouter, guestRoomsRouter } from './catalogues.js';
 import { mcpRouter, mcpKeyRouter } from './mcp.js';
@@ -165,7 +165,6 @@ expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
   if (p === '/health' || p.startsWith('/public/')) return next();
   return requireAuth(req, res, next);
 });
-expressApp.use('/api', demoPasswordGuard);
 expressApp.use('/api', logWrites(prisma));
 expressApp.use('/api', (req: Request, res: Response, next: NextFunction) => {
   // The day check is a POST only to carry a body; it writes nothing, and
