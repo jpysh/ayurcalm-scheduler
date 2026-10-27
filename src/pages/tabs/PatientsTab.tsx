@@ -303,6 +303,8 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
           </div>
           {leavingSoon ? bar : null}
           {steps && !leavingSoon ? <div className="mt-3"><ChecklistBar label="Arrival" done={steps.filter((x) => x[1]).length} total={steps.length} missing={steps.filter((x) => !x[1]).map((x) => x[0])} onClick={() => setArrival(true)} /></div> : null}
+          {/* The stay's dates first, above the days (decision 2026-10-28-card-dates-first): changing a stay is the card's most common job and needs no scroll. */}
+          <div className="mt-3"><ListGroup>{up ? <ChangeLine label="Dates" value={stayRange(up)} onClick={() => changeStay(d)} /> : <ChangeLine label={d.last_stay ? 'New stay' : 'Stay'} value={d.last_stay?.package ? `From today · ${d.last_stay.package.name}` : 'Not staying · add a stay'} faint={!d.last_stay} onClick={() => changeStay(d)} />}</ListGroup></div>
           {/* Today first, then the coming days, so the week reads in order (#801). Not here (yet, or any more) there is no day to rest: the group is only for a guest who is staying or has something booked (#514). */}
           {d.stay || d.treatments.length ? (
             <ListGroup title="Treatments today">
@@ -360,7 +362,6 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
           </ListGroup>
           {/* Story 4: everything a patient may have is a row with an arrow, filled when it is decided; nothing is forced. Grouped by what the admin does with it: the stay they sell and plan, then the records they keep. */}
           <ListGroup title="Stay">
-            {up ? <ChangeLine label="Dates" value={stayRange(up)} onClick={() => changeStay(d)} /> : <ChangeLine label={d.last_stay ? 'New stay' : 'Stay'} value={d.last_stay?.package ? `From today · ${d.last_stay.package.name}` : 'Not staying · add a stay'} faint={!d.last_stay} onClick={() => changeStay(d)} />}
             {up ? <ChangeLine label="Package" value={up.package ? `${up.package.days} days · ${money(up.package.price)}${up.package.days !== up.days ? ` · stay is ${up.days} days` : ''}` : "Not decided yet"} faint={!up.package} onClick={() => changePackage(d)} /> : null}
             {up && up.on_site !== false ? <ChangeLine label="Accommodation" value={up.accommodation ? `${up.accommodation.name}${up.accommodation.room ? ` · ${up.accommodation.room.name}` : ""} · ${nights} nights · ${money(nights * up.accommodation.price_per_day)}` : "Not decided yet"} faint={!up.accommodation} onClick={() => changeHouse(d)} /> : null}
             <ChangeLine label="Diet" value={d.plan_name ? (d.diet_next ? `${d.plan_name}, then ${d.diet_next.name} from ${dayText(d.diet_next.from)}` : d.plan_name) : "Not decided yet"} faint={!d.plan_name} onClick={() => changeMeals(d)} />
