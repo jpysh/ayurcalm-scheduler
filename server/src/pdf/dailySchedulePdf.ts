@@ -119,6 +119,7 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
     const scope = e.patients_scope || 'all';
     if (scope === 'none') return false;
     if (scope === 'custom') return Array.isArray(e.patient_ids) && e.patient_ids.includes(patientId);
+    if (scope === 'group') return !!e.group_name && staysToday.some((s) => s.patient_id === patientId && s.group_name === e.group_name);
     return true;
   };
 
@@ -143,8 +144,9 @@ export async function generateDailySchedulePdf(dateISO: string, prisma: PrismaCl
   // on, so a centre working 09:00-16:30 does not print columns for 08:00 or
   // 20:00. A band wider than an hour says so in its header, and every entry
   // states its own start time.
-  const sharedEvents = eventsWindow.filter((e) => (e.patients_scope || 'all') !== 'custom');
-  const ownEvents = eventsWindow.filter((e) => e.patients_scope === 'custom');
+  // A group's programme (#1196) prints in each of its guests' rows, like an event for named guests.
+  const sharedEvents = eventsWindow.filter((e) => !['custom', 'group'].includes(e.patients_scope || 'all'));
+  const ownEvents = eventsWindow.filter((e) => ['custom', 'group'].includes(e.patients_scope || ''));
   const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
   const startTimes = [...apptsDay.map((a) => a.start_time), ...ownEvents.map((e) => e.start_time)];
   const bucketsFor = (size: number) => new Set(startTimes.map((t) => Math.floor(toMinutes(t) / size) * size));

@@ -20,6 +20,7 @@ async function tidy(prisma: PrismaClient) {
   await prisma.dietPlanSegment.deleteMany({ where: { patient_id: { in: ids } } });
   await prisma.patientStay.deleteMany({ where: { patient_id: { in: ids } } });
   await prisma.patient.deleteMany({ where: { id: { in: ids } } });
+  await prisma.programEvent.deleteMany({ where: { group_name: { startsWith: TAG } } });
   await prisma.groupHold.deleteMany({ where: { group_name: { startsWith: TAG } } });
   await prisma.guestRoom.deleteMany({ where: { name: { startsWith: TAG } } });
   await prisma.accommodationType.deleteMany({ where: { name: { startsWith: TAG } } });
@@ -83,6 +84,24 @@ async function main() {
     await call('PUT', '/groups/hold', { name: HELD, start_date: '2030-10-01', end_date: '2030-10-06', rooms: [{ accommodation_id: hut.id, rooms: 0 }] });
     assert.equal(await free(), 2, 'letting the hold go frees the hut nobody was named for');
     console.log('groups: rooms held before the names, taken to others, filled from the list, and let go');
+
+    // The shared programme (#1196 part 3): a class at 11 for the group, each guest's own treatment on top.
+    const part = await call('POST', '/groups/programme', { name: GROUP, activity_name: `${TAG} Yoga class`, start_time: '11:00', end_time: '11:30' });
+    assert.equal((await call('GET', '/groups')).find((x: { name: string }) => x.name === GROUP).programme[0].id, part.id, 'the programme is on the group');
+    const solo = await prisma.therapy.findFirstOrThrow({ where: { is_consultation: false, staff_required: 1, once_per_course: false, before_purification: false } });
+    const [her, her2] = await prisma.staff.findMany({ where: { is_active: true, gender: 'female', role: 'therapist' }, take: 2 });
+    const across = await prisma.appointment.create({ data: { patient_id: a.id, therapy_id: solo.id, staff_id: her.id, room_id: troom.id, scheduled_date: day('2030-09-03'), start_time: '10:45', duration_minutes: 60, co_staff_ids: [], session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
+    const outsiderStay = await call('POST', '/patients', { name: `${TAG} Solo`, gender: 'female', stay: { start_date: '2030-09-01', end_date: '2030-09-08' } });
+    const troom2 = await prisma.therapyRoom.findFirstOrThrow({ where: { id: { not: troom.id } } });
+    await prisma.appointment.create({ data: { patient_id: outsiderStay.id, therapy_id: solo.id, staff_id: her2.id, room_id: troom2.id, scheduled_date: day('2030-09-03'), start_time: '10:45', duration_minutes: 60, co_staff_ids: [], session_number: 1, total_sessions: 1, status: 'confirmed', assignment_type: 'manual' } });
+    const all = (await call('GET', '/day-check?date=2030-09-03')).problems;
+    const checked = all.filter((p: { kind: string; what: string }) => p.kind === 'EVENT_OVERLAP' && p.what.includes(`${TAG} Yoga class`));
+    assert.deepEqual(checked.map((p: { appointment_id: string }) => p.appointment_id), [across.id], "only the group's guest is told the treatment runs through their yoga");
+    const sheet = await raw('GET', '/daily-schedule-pdf?date=2030-09-03');
+    assert.equal(sheet.status, 200);
+    await raw('DELETE', `/groups/programme/${part.id}`);
+    assert.equal((await call('GET', '/groups')).find((x: { name: string }) => x.name === GROUP).programme.length, 0);
+    console.log('groups: a shared programme for the group only, with own treatments on top');
   } finally {
     await tidy(prisma).catch(() => {});
     await prisma.$disconnect();
