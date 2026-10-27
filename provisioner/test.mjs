@@ -81,6 +81,15 @@ console.log('provisioner lifecycle ok');
   console.log('sign-up through the shared folder ok');
 }
 
+// Backups are hourly, so two hours without one raises the alarm; a new centre gets two hours for its first (#1178).
+{
+  const { noBackup } = await import('./index.mjs');
+  assert.equal(noBackup(2 * H - 1, t0 - D, t0), false);
+  assert.equal(noBackup(2 * H + 1, t0 - D, t0), true);
+  assert.equal(noBackup(Infinity, t0 - H, t0), false, 'a centre an hour old has no backup yet');
+  assert.equal(noBackup(Infinity, t0 - 3 * H, t0), true);
+}
+
 // The sign-up box is flagged hourly if it could ever reach Docker or the Mac (#1091).
 {
   const { boxProblems } = await import('./index.mjs');
