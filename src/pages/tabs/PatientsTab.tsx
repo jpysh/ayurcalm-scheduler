@@ -151,7 +151,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
           </ListGroup>
         ) : onlyNeeds ? (
           <ListGroup>{needy.length ? needy.map((i) => <Row key={i.id} title={i.who} flag={flagOf(i.patient_id!)} trailing="›" onClick={() => onNeed(i)} />) : <Empty text="Nothing needs attention. The rules are in the gear above." />}</ListGroup>
-        ) : people.length === 0 && soon.length === 0 ? <Empty text="No one is staying today." action={<Btn kind="primary" inline onClick={onAdd}>Add a patient</Btn>} /> : (<>
+        ) : people.length === 0 && soon.length === 0 ? <Empty text="No one is staying today." action={<Btn kind="primary" inline onClick={onAdd}>Add a patient</Btn>} help="s7-add-a-patient" /> : (<>
           {groups.filter(([, list]) => list.length).map(([title, list]) => (
             <ListGroup key={title} title={title} count={list.length}>{list.map(({ p, s }) => row(p.id, p.name, dayOf(s!)))}</ListGroup>
           ))}

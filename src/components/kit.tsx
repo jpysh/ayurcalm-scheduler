@@ -443,9 +443,10 @@ export const undoBatch = (batchId: string, after?: () => unknown) =>
 
 export const toastUndo = (text: string, undo: () => unknown) => toast(text, { duration: 5000, action: { label: "Undo", onClick: () => { void undo(); } } });
 
-/** Empty: one line saying why, and the action if there is one. */
-export const Empty = ({ text, action }: { text: string; action?: ReactNode }) => (
-  <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-base text-muted-foreground"><span>{text}</span>{action}</div>
+/** Empty: one line saying why, the action if there is one, and the job's help page (docs/help) if it has one. */
+export const Empty = ({ text, action, help }: { text: string; action?: ReactNode; help?: string }) => (
+  <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-base text-muted-foreground"><span>{text}</span>{action}
+    {help ? <QuietLink href={`https://github.com/jpysh/ruta/blob/main/docs/help/${help}.md`} target="_blank" rel="noopener noreferrer">How this works</QuietLink> : null}</div>
 );
 
 /** Loading: rows the height of real ones, and nothing at all for the first 300ms. */
