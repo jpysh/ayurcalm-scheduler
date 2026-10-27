@@ -146,7 +146,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
         </div>
         {groupsOn ? (
           <ListGroup>
-            {groupList.map((g) => <Row key={g.name} title={g.name} facts={`${g.count} guests${g.holds.length ? ` · ${g.holds.reduce((n, h) => n + h.rooms, 0)} rooms held` : ""} · ${stayDay(g.start_date)} to ${stayDay(g.end_date)}`} trailing="›" onClick={() => setGroup(g)} />)}
+            {groupList.map((g) => <Row key={g.name} title={g.name} facts={`${g.count ? `${g.count} guest${g.count === 1 ? '' : 's'}` : 'No names yet'}${g.holds.length ? ` · ${g.holds.reduce((n, h) => n + h.rooms, 0)} rooms held` : ""} · ${stayDay(g.start_date)} to ${stayDay(g.end_date)}`} trailing="›" onClick={() => setGroup(g)} />)}
             <Row title="Hold rooms for a group or enquiry" trailing="›" onClick={() => setNewHold(true)} />
           </ListGroup>
         ) : onlyNeeds ? (
