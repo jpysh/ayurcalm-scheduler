@@ -289,9 +289,10 @@ app.put('/rooms/:id', async (req: Request, res: Response) => {
 app.delete('/rooms/:id', async (req: Request, res: Response) => {
   const id = req.params.id;
   try {
-    const ahead = await fromToday();
+    // A deleted room used to take its coming treatments with it (#1304). Taking it out of use moves them first.
+    const coming = await prisma.appointment.count({ where: { room_id: id, scheduled_date: await fromToday(), status: { in: ['pending', 'confirmed'] } } });
+    if (coming) return res.status(409).json({ error: `${coming} treatment${coming === 1 ? ' is' : 's are'} booked in this room from today. Take the room out of use for those days first, which moves them, then delete it.` });
     await prisma.$transaction(async (tx) => {
-      await tx.appointment.deleteMany({ where: { room_id: id, scheduled_date: ahead } });
       await tx.timeOff.deleteMany({ where: { entity_type: 'room', entity_id: id } });
       await tx.therapyRoom.update({ where: { id }, data: { is_active: false } });
     });
