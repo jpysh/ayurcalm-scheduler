@@ -521,7 +521,8 @@ test('a resident arriving today has the arrival steps still to do (#219)', async
   test.skip(!(await arriving.count()), 'nobody arrives today');
   await arriving.first().click();
   const card = page.getByRole('dialog').last();
-  await expect(card.getByRole('button', { name: /^Arrival \d+ of \d+ ready/ })).toBeVisible({ timeout: 15000 });
+  // The first arrival may already have every step done: then the bar reads '✓ All 4 ready' (#1337).
+  await expect(card.getByRole('button', { name: /^Arrival (\d+ of \d+|✓ All \d+) ready/ })).toBeVisible({ timeout: 15000 });
   await expect(card.getByRole('button', { name: /Vitals and what they came about/ })).toBeVisible();
 });
 

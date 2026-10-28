@@ -233,7 +233,8 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await tap(treatments.nth(onScreen));
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Patient/ }));
       await tap(page.getByRole('dialog').last().getByRole('button', { name: /^Diet/ }));
-      await expect(page.getByRole('dialog').last()).toContainText('Meals today');
+      // The Diet sheet, not 'Meals today': early in the day the reachable row can be someone with no plan yet, who has no meals to list (#1337).
+      await expect(page.getByRole('dialog').last()).toContainText('Change meals for some days');
     });
 
     await job(page, rows, "Print today's sheets", async (tap) => {
