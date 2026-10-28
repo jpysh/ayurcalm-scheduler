@@ -31,9 +31,10 @@ async function main() {
     const { token } = await (await fetch(`${API_BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'demo1234' }) })).json();
     const call = async (method: string, path: string, body?: unknown) => { const r = await fetch(`${API_BASE}${path}`, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: body ? JSON.stringify(body) : undefined }); assert.ok(r.ok, `${method} ${path}: ${r.status} ${await r.clone().text()}`); return r.status === 204 ? null : r.json(); };
     const [therapy, staff, room] = await Promise.all([
-      prisma.therapy.findFirstOrThrow({ where: { is_consultation: false } }),
-      prisma.staff.findFirstOrThrow({ where: { is_active: true } }),
-      prisma.therapyRoom.findFirstOrThrow(),
+      // Picked by name, not whatever row comes first: a doctor or a man for these women guests left the hours-late move nowhere to go some runs (#1341).
+      prisma.therapy.findFirstOrThrow({ where: { is_consultation: false }, orderBy: { name: 'asc' } }),
+      prisma.staff.findFirstOrThrow({ where: { is_active: true, role: 'therapist', gender: 'female' }, orderBy: { name: 'asc' } }),
+      prisma.therapyRoom.findFirstOrThrow({ orderBy: { name: 'asc' } }),
     ]);
     const guest = async (name: string) => {
       const p = await prisma.patient.create({ data: { name: `${TAG} ${name}`, gender: 'female' } });
