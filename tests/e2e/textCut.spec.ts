@@ -82,3 +82,28 @@ test('At 200% text the Log shows every word whole', async ({ page }) => {
     expect(await page.evaluate(cutText), `log, scrolled to ${y}`).toEqual([]);
   }
 });
+
+// Found by the 27 Oct walk, not by this file (#1335): Change day's choices ran together (#1331), the therapist link's
+// week strip overlapped (#1332), Settings > Therapies lost its title's end (#1333), and the rules read a word a line (#1334).
+test('At 200% text Change day, a therapist link and Settings screens show every word whole', async ({ page, request }) => {
+  await signIn(page);
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Change day/ }).click();
+  await big(page);
+  await page.waitForTimeout(800);
+  expect(await page.evaluate(cutText), 'change day').toEqual([]);
+  for (const row of ['Therapies', 'What needs you']) {
+    await page.goto('/admin/settings');
+    await page.getByRole('button', { name: new RegExp(`^${row}`) }).first().click();
+    await big(page);
+    await page.waitForTimeout(800);
+    expect(await page.evaluate(cutText), row).toEqual([]);
+  }
+  const auth = { Authorization: `Bearer ${await page.evaluate(() => localStorage.getItem('authToken'))}` };
+  const staff = await (await request.get('/api/staff', { headers: auth })).json();
+  const { token } = await (await request.post(`/api/staff/${staff.find((s: { role: string; is_active: boolean }) => s.role === 'therapist' && s.is_active).id}/link`, { headers: auth })).json();
+  await page.goto(`/l/${token}`);
+  await big(page);
+  await page.waitForTimeout(800);
+  expect(await page.evaluate(cutText), 'therapist link').toEqual([]);
+});

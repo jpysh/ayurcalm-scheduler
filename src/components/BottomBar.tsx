@@ -155,7 +155,8 @@ export function BottomBar({ activeTab, go, day, today, now, setDay, print, print
       </BottomSheet>
 
       <BottomSheet open={sheet === "day"} onOpenChange={(o) => setSheet(o ? "day" : null)} title={dayText(day)}>
-        <div className="grid grid-cols-[1.25fr_1fr_1.25fr] gap-2 [&>button]:whitespace-nowrap [&>button]:px-2">
+        {/* Three across while they fit; at large text each takes a line of its own (#1331). */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(6rem,1fr))] gap-2 [&>button]:whitespace-nowrap [&>button]:px-2">
           <Btn kind="secondary" inline onClick={() => pick(shift(day, -1))}>Day before</Btn>
           <Btn kind="primary" inline onClick={() => pick(today)}>Today</Btn>
           <Btn kind="secondary" inline onClick={() => pick(shift(day, 1))}>Next day</Btn>

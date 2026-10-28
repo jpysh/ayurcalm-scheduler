@@ -157,7 +157,7 @@ export default function LinkView() {
       <div className="mt-2 grid grid-cols-7 gap-1 print:hidden" role="group" aria-label="Week">
         {week.map((d) => (
           <Btn key={d} inline kind={d === day.date ? "primary" : "secondary"} className="min-h-11 flex-col px-0 text-sm leading-tight" aria-current={d === day.date ? "date" : undefined} aria-label={dayText(d)} onClick={() => setDate(d)}>
-            <span>{new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" })}</span>
+            <span>{new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "narrow", timeZone: "UTC" })}</span>
             <span className={d === day.today ? "underline" : ""}>{Number(d.slice(8))}</span>
           </Btn>
         ))}
