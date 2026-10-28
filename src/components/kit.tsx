@@ -584,14 +584,17 @@ export const LinkRow = ({ label, value, onClick }: { label: string; value?: Reac
 /** A row whose trailing control is a switch: the name, one line of state, and the switch at the right (#288). `locked` shows a lock and cannot be switched. */
 export const SwitchRow = ({ title, facts, on, set, locked, flag, children }: { title: ReactNode; facts?: ReactNode; on: boolean; set: (v: boolean) => void; locked?: boolean; flag?: ReactNode; children?: ReactNode }) => (
   <div className="border-b border-border px-3 py-2 last:border-b-0">
-    <label className="flex min-h-[48px] items-center gap-3">
-      <span className="min-w-0 flex-1">
+    {/* At large text the switch drops under the words rather than squeeze them to a word a line (#1334). */}
+    <label className="flex min-h-[48px] flex-wrap items-center gap-3">
+      <span className="min-w-0 flex-1 basis-48">
         <span className="block text-base font-semibold">{title}</span>
         {facts ? <span className="block text-sm text-muted-foreground">{facts}</span> : null}
         {flag ? <span className="block text-sm font-semibold text-notice">{flag}</span> : null}
       </span>
-      {locked ? <Lock aria-label="Always on" className="h-4 w-4 flex-none text-muted-foreground" /> : null}
-      <input type="checkbox" role="switch" aria-label={typeof title === "string" ? title : undefined} checked={on} disabled={locked} onChange={(e) => set(e.target.checked)} />
+      <span className="ml-auto flex items-center gap-3">
+        {locked ? <Lock aria-label="Always on" className="h-4 w-4 flex-none text-muted-foreground" /> : null}
+        <input type="checkbox" role="switch" aria-label={typeof title === "string" ? title : undefined} checked={on} disabled={locked} onChange={(e) => set(e.target.checked)} />
+      </span>
     </label>
     {children}
   </div>
