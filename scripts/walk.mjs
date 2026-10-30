@@ -26,7 +26,8 @@ const shot = async (name, act) => {
     await home(); await act(); await p.waitForTimeout(500);
     const m = await p.evaluate(() => {
       const root = document.querySelector('[role=dialog]:last-of-type') || document.body;
-      const small = [...document.querySelectorAll('button,a,[role=button],select,input')].filter((e) => { const r = e.getBoundingClientRect(); return r.width && r.height && (r.height < 44) && getComputedStyle(e).visibility !== 'hidden'; }).length;
+      // A switch's tap target is its label row (Switch, SwitchRow in kit.tsx), so that is what is measured (#1353).
+      const small = [...document.querySelectorAll('button,a,[role=button],select,input')].filter((e) => { const r = (e.closest('label') || e).getBoundingClientRect(); return r.width && r.height && (r.height < 44) && getComputedStyle(e).visibility !== 'hidden'; }).length;
       return { overflowX: document.documentElement.scrollWidth - innerWidth, small };
     });
     m.clipped = (await p.evaluate(cutText)).slice(0, 8);
@@ -40,22 +41,22 @@ await shot('day', async () => {});
 await shot('pill-sheet', () => menuTo(/to know|to fix|need you/));
 await shot('treatment-card', () => tap(p.getByRole('button', { name: /^\d\d:\d\d/ }).nth(2)));
 await shot('menu', () => tap(btn(/^Menu$/)));
-await shot('day-by-therapist', async () => { await tap(btn(/^By time/)); await tap(dlg().getByRole('button', { name: /^Therapist/ })); });
+await shot('day-by-therapist', async () => { await tap(btn(/^Show the day by/)); await tap(dlg().getByRole('button', { name: /^Therapist/ })); });
 await shot('patients', () => menuTo(/^Patients/));
-await shot('needs-attention', async () => { await menuTo(/^Patients/); await tap(btn(/^Needs attention/)); });
+await shot('needs-attention', async () => { await menuTo(/^Patients/); await tap(btn(/^Need you/)); });
 const card = async () => { await menuTo(/^Patients/); await tap(p.getByRole('button', { name: /^[A-Z][a-z]+ [A-Z][a-z]+\s*Day \d/ }).first()); };
 await shot('patient-card', card);
 await shot('patient-package', async () => { await card(); await tap(dlg().getByRole('button', { name: /^Package/ })); });
 await shot('patient-accommodation', async () => { await card(); await tap(dlg().getByRole('button', { name: /^Accommodation/ })); });
 await shot('patient-diet', async () => { await card(); await tap(dlg().getByRole('button', { name: /^Diet/ })); });
-await shot('patient-stay', async () => { await card(); await tap(dlg().getByRole('button', { name: /^Stay/ })); });
+await shot('patient-stay', async () => { await card(); await tap(dlg().getByRole('button', { name: /^Dates/ })); });
 await shot('patient-details', async () => { await card(); await tap(dlg().getByRole('button', { name: /^Details/ })); });
 await shot('patient-discharge', async () => { await card(); await tap(dlg().getByRole('button', { name: /Discharge summary/ })); });
 await shot('patient-links', async () => { await card(); await tap(dlg().getByRole('button', { name: /link|Link/ })); });
 await shot('new-patient', async () => { await menuTo(/^Patients/); await tap(btn(/^Add|New patient|^\+/)); });
-await shot('team', () => menuTo(/^Team/));
-await shot('leave', () => menuTo(/^Leave/));
-await shot('leave-new', async () => { await menuTo(/^Leave/); await tap(btn(/^Add|^New|^\+/)); await p.waitForTimeout(1500); });
+await shot('team', () => menuTo(/^Staff/));
+await shot('leave', () => menuTo(/^Availability/));
+await shot('leave-new', async () => { await menuTo(/^Availability/); await tap(btn(/^Mark not available/)); await p.waitForTimeout(1500); });
 await shot('diet-plans', () => menuTo(/^Diet/));
 await shot('settings', () => menuTo(/^Settings/));
 for (const [k, re] of [['centre', /^Centre and letterhead/], ['hours', /^Opening hours/], ['catalogues', /^Packages and accommodation/], ['people', /^People with access/], ['printed', /^Printed sheets/], ['rules', /^What needs you/], ['backups', /^Backups/], ['log', /^Log/], ['account', /^Your account/], ['help', /^Help and plan/]])
@@ -67,3 +68,6 @@ await shot('not-found', async () => { await p.goto(APP + '/nope'); });
 await b.close();
 writeFileSync(`${OUT}/report.json`, JSON.stringify(report, null, 1));
 for (const r of report) console.log(JSON.stringify(r));
+// A selector gone stale must not pass as a clean walk (#1353).
+const missed = report.filter((r) => r.error);
+if (missed.length) { console.error(`${missed.length} screen(s) not reached: ${missed.map((r) => r.id).join(', ')}`); process.exit(1); }
