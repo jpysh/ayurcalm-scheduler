@@ -226,7 +226,7 @@ export const Days = ({ value, onChange }: { value: string[]; onChange: (v: strin
   <div className="grid grid-cols-7 justify-items-center gap-1.5">
     {WEEK.map((d) => (
       <button key={d} type="button" aria-label={d[0].toUpperCase() + d.slice(1)} aria-pressed={value.includes(d)} onClick={() => onChange(value.includes(d) ? value.filter((x) => x !== d) : [...value, d])}
-        className="aspect-square min-h-0 w-full min-w-0 max-w-11 rounded-full border border-[hsl(var(--input)/0.45)] text-sm font-semibold capitalize text-foreground/75 transition-colors aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground">{d.slice(0, 2)}</button>
+        className="aspect-square min-h-11 w-full min-w-0 max-w-11 rounded-full border border-[hsl(var(--input)/0.45)] text-sm font-semibold capitalize text-foreground/75 transition-colors aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground">{d.slice(0, 2)}</button>
     ))}
   </div>
 );
