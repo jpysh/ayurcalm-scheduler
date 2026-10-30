@@ -32,7 +32,6 @@ test('a refused Undo on saved leave says so', async ({ page, request }) => {
   await page.getByRole('dialog').getByRole('button', { name: /^Availability/ }).click();
   await page.getByRole('button', { name: 'Mark not available', exact: true }).click();
   const picker = page.getByRole('dialog').last();
-  await picker.getByRole('button', { name: 'Show staff' }).click();
   await picker.getByRole('checkbox').first().check();
   await picker.getByRole('button', { name: /^Next/ }).click();
   const sheet = page.getByRole('dialog').last();
