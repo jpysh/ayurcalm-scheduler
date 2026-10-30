@@ -13,7 +13,7 @@ import { API_TOKEN, fetchJsonWithTimeout, type ApiAppointment, type ApiStay, typ
 import { GroupSheet, HoldSheet, fetchGroups, type Group as Booking } from "@/components/GroupSheet";
 import PageHead from "@/components/PageHead";
 import { PhotoImg, shrinkPhoto } from "@/components/PassportPhoto";
-import { chip, saveError, Area, ChangeLine, TextRow, ChecklistBar, DateRow, datePair, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, money, Btn, LinkBtn, NightChips } from "@/components/kit";
+import { chip, saveError, Area, ChangeLine, TextRow, ChecklistBar, DateRow, datePair, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, money, Btn, LinkBtn, NightChips, refusalHelp } from "@/components/kit";
 import { AccommodationSheet, DietSheet, DischargeSheet, NextWeekSheet, PackageSheet, StaySheet, takenBy, type CardStay, type GuestRoomNight, type StayTarget } from "@/components/CardSheets";
 import { marked } from "@/components/SearchScreen";
 import type { AttentionItem } from "@/lib/attention";
@@ -410,7 +410,7 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
         {d?.follow_up ? <LinkBtn href={waHref(d.follow_up.phone, `Namaste ${d.name.split(' ')[0]}, this is ${d.follow_up.centre || 'the centre'}. The doctor asked us to see how you are since your stay. How are you feeling?`)}>Send on WhatsApp to {d.name.split(' ')[0]}</LinkBtn> : null}
       </BottomSheet>
       {/* Form C (#415): tap a line to copy it into indianfrro.gov.in, then mark it filed. */}
-      <BottomSheet open={formC && !!d?.form_c} onOpenChange={setFormC} title={`Form C · ${d?.name ?? ''}`}
+      <BottomSheet open={formC && !!d?.form_c} onOpenChange={setFormC} title={`Form C · ${d?.name ?? ''}`} help="s9-form-c"
         note={d?.form_c?.filed ? `Filed ${dayText(d.form_c.filed)}.` : `Due by ${d?.form_c ? dayText(d.form_c.due) : ''}, a day after arriving. Tap a line to copy it into indianfrro.gov.in.`}
         foot={d?.form_c?.filed ? <Btn onClick={() => fileFormC(false)}>Not filed yet</Btn> : <Btn kind="primary" onClick={() => fileFormC(true)}>Mark Form C filed</Btn>}>
         {d?.passport_photo ? <PhotoImg id={d.id} kept={d.passport_photo} small onOpen={() => setPhotoOpen(true)} /> : null}
@@ -527,7 +527,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
     });
     if (!res.ok) {
       const why = await res.json().catch(() => ({}));
-      toast.error(why.reason === 'ROOM_TAKEN' || res.status === 429 ? why.message : why.message ? `${why.message} Choose another consultation time.` : 'Could not save the patient');
+      toast.error(why.reason === 'ROOM_TAKEN' || res.status === 429 ? why.message : why.message ? `${why.message} Choose another consultation time.` : 'Could not save the patient', refusalHelp(why.reason));
       return;
     }
     const created = await res.json();

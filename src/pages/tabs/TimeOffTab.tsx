@@ -362,7 +362,7 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
           {f.kind === 'GuestRoom' ? f.ids.map((id) => { const s = stored(f); return <GuestsToMove key={id} roomId={id} from={s.date} to={nextDay(s.endDate)} title="Move them to another room" onChanged={() => {}} />; }) : null}
         </> : null}
       </BottomSheet>
-      <BottomSheet open={!!plan} onOpenChange={(o) => { if (!o) closePlan(); }} title="The plan"
+      <BottomSheet open={!!plan} onOpenChange={(o) => { if (!o) closePlan(); }} title="The plan" help="s2-fix-the-day"
         note={plan ? `${plural(plan.rows.length, 'treatment')} to move${plan.left ? `; ${plan.left} more wait${plan.left === 1 ? 's' : ''} for you under "need you"` : ''}. Nothing moves until you accept.` : undefined}
         foot={<TwoFoot main="Accept the plan" onMain={acceptPlan} alt="Not now" onAlt={closePlan} />}>
         {plan ? Object.entries(plan.rows.reduce<Record<string, RangeRow[]>>((by, r) => { (by[r.date] ??= []).push(r); return by; }, {})).map(([date, rows]) => (

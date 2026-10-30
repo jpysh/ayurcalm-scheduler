@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { BottomSheet, saveError, deleteAll, Btn, Callout, ChangeLine, Consequence, EntryRow, Area, Empty, Group, LineDate, LineSelect, ListGroup, Loading, Picker, Row, SearchField, SheetFoot, Seg, Tag, TwoFoot, WhoPicker, dayText, say, undoBatch } from "@/components/kit";
+import { BottomSheet, saveError, deleteAll, Btn, Callout, ChangeLine, Consequence, EntryRow, Area, Empty, Group, LineDate, LineSelect, ListGroup, Loading, Picker, Row, SearchField, SheetFoot, Seg, Tag, TwoFoot, WhoPicker, dayText, say, undoBatch, refusalHelp, HelpLink } from "@/components/kit";
 import { API_BASE } from "@/lib/apiBase";
 import { StaySheet, type StayTarget } from "@/components/CardSheets";
 import { VITALS } from "@/components/SetupSheets";
@@ -106,7 +106,7 @@ export function TreatmentCard({ appt, onClose, isToday, nowMinutes, tz, patients
       if (!res.ok) {
         const refusal = await res.json().catch(() => ({}));
         // The server's refusal names the clash and, when there is one, the nearest time that works: one tap takes it.
-        toast.error(refusal.message || "That could not be saved.", refusal.alternative_start_time ? { duration: 8000, action: { label: `Move to ${refusal.alternative_start_time}`, onClick: () => { void apply({ ...change, start_time: refusal.alternative_start_time }, message); } } } : undefined);
+        toast.error(refusal.message || "That could not be saved.", { ...refusalHelp(refusal.reason), ...(refusal.alternative_start_time ? { duration: 8000, action: { label: `Move to ${refusal.alternative_start_time}`, onClick: () => { void apply({ ...change, start_time: refusal.alternative_start_time }, message); } } } : {}) });
         return;
       }
       const saved = await res.json().catch(() => ({}));
@@ -428,7 +428,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       const next = (body.actions as BookAction[] | undefined)?.find((a) => a.kind !== "book_anyway");
-      toast.error(body.message || "That time has just gone. Choose another.", next ? { duration: 8000, action: { label: next.label, onClick: () => carry(next) } } : undefined);
+      toast.error(body.message || "That time has just gone. Choose another.", { ...refusalHelp(body.reason), ...(next ? { duration: 8000, action: { label: next.label, onClick: () => carry(next) } } : {}) });
       load(time);
       return;
     }
@@ -458,7 +458,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
     if (!res.ok) {
       await deleteAll(made.map((id) => `${API_BASE}/appointments/${id}`));
       const closed = body.conflicts?.reason === "CENTER_HOLIDAY" && body.conflicts.details?.closed_day;
-      toast.error(`${closed ? `The centre is ${body.conflicts.details.closed_why || "closed"} on ${dayText(closed)}` : COURSE_WHY[body.conflicts?.reason] || "That course could not be placed"}. Nothing was booked: try fewer days, another time or another therapist.`);
+      toast.error(`${closed ? `The centre is ${body.conflicts.details.closed_why || "closed"} on ${dayText(closed)}` : COURSE_WHY[body.conflicts?.reason] || "That course could not be placed"}. Nothing was booked: try fewer days, another time or another therapist.`, refusalHelp(body.conflicts?.reason));
       return;
     }
     // Days the resident or a room was not free are skipped, so the course can start later than asked (#789).
@@ -553,7 +553,7 @@ export function BookSheet({ open, onClose, day, today, isToday, nowMinutes, refr
           ) : null}
           {!therapyId ? null : opts === null ? <Loading rows={3} /> : opts.times.length === 0 ? (
             <Callout tone="notice" title={opts.why || `No free time for ${first}.`}
-              actions={opts.actions.filter((a) => a.kind !== "other_therapy").map((a, i) => <Btn key={a.label} kind={i === 0 ? "primary" : "secondary"} inline onClick={() => carry(a)}>{a.label}</Btn>)} />
+              actions={opts.actions.filter((a) => a.kind !== "other_therapy").map((a, i) => <Btn key={a.label} kind={i === 0 ? "primary" : "secondary"} inline onClick={() => carry(a)}>{a.label}</Btn>)}><HelpLink help="s4-book-or-move" /></Callout>
           ) : (<>
             {warnings.length ? <div className="mb-2 mt-2"><Callout tone="notice" title={warnings.map((w) => w.message).join(" ")} actions={warnings.flatMap((w) => (w.actions || []).filter((a) => a.kind !== "book_anyway" && (a.kind !== "open_existing" || onOpenCard))).map((a) => <Btn key={a.label} kind={a.kind === "open_existing" ? "primary" : "quiet"} inline onClick={() => carry(a)}>{a.label}</Btn>)}>Booking it is still possible.</Callout></div> : null}
             {opts.first_choice ? <ChangeLine label={opts.first_choice.their_therapist ? "Their therapist" : giver} value={`${opts.first_choice.staff_name.split(" ")[0]} · ${opts.first_choice.date === date ? "" : `${dayText(opts.first_choice.date)} `}${opts.first_choice.start_time}`}

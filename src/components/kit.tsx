@@ -258,7 +258,7 @@ if (typeof window !== "undefined") window.addEventListener("popstate", () => { p
  * A sheet: grab handle, title, one line saying what it is for, body, and a foot
  * that stays in view however long the body. Scrolls inside itself.
  */
-export function BottomSheet({ open, onOpenChange, title, label, note, children, foot, onBack }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; /** The name a screen reader hears when the sheet shows no title. */ label?: string; note?: ReactNode; children: ReactNode; foot?: ReactNode; /** A sheet's second page: Back above the title. */ onBack?: () => void }) {
+export function BottomSheet({ open, onOpenChange, title, label, note, help, children, foot, onBack }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; /** The job's help page (docs/help), under the title. */ help?: string; /** The name a screen reader hears when the sheet shows no title. */ label?: string; note?: ReactNode; children: ReactNode; foot?: ReactNode; /** A sheet's second page: Back above the title. */ onBack?: () => void }) {
   const opener = useRef<HTMLElement | null>(null);
   const close = useRef(onOpenChange); close.current = onOpenChange;
   // Back is how a thumb dismisses a sheet on Android: an open sheet owns one history entry, and Back pops it and closes the sheet (#936).
@@ -295,6 +295,7 @@ export function BottomSheet({ open, onOpenChange, title, label, note, children, 
           {/* A sheet with no title in the design still names itself to a screen reader (#590). */}
           <SheetTitle className={title ? "mb-3 hyphens-auto break-words text-xl font-bold" : "sr-only"}>{title ? breakable(title) : label || "Dialog"}</SheetTitle>
           {note ? <p className={`-mt-2 mb-3 ${noteText}`}>{note}</p> : null}
+          {help ? <div className="-mt-3 mb-1"><HelpLink help={help} /></div> : null}
           {children}
         </div>
         {foot ? <div className="flex-none border-t bg-card px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">{foot}</div> : <div className="h-[env(safe-area-inset-bottom)] flex-none" />}
@@ -352,10 +353,10 @@ export const ListGroup = ({ title, count, children }: { title?: string; /** A ba
 );
 
 /** The inbox behind the pill: sections, each a list of rows; empty sections do not show. */
-export function InboxSheet({ open, onOpenChange, title, sections, empty = "Nothing needs you.", children, foot }: { foot?: ReactNode; open: boolean; onOpenChange: (o: boolean) => void; title: string; sections: { name: string; /** What needs action; information rows are not counted. */ count: number; body: ReactNode }[]; empty?: string; children?: ReactNode }) {
+export function InboxSheet({ open, onOpenChange, title, sections, empty = "Nothing needs you.", children, foot, help }: { foot?: ReactNode; help?: string; open: boolean; onOpenChange: (o: boolean) => void; title: string; sections: { name: string; /** What needs action; information rows are not counted. */ count: number; body: ReactNode }[]; empty?: string; children?: ReactNode }) {
   const shown = sections.filter((x) => x.body);
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange} title={title} foot={foot}>
+    <BottomSheet open={open} onOpenChange={onOpenChange} title={title} foot={foot} help={help}>
       {children}
       {shown.length ? shown.map((x) => <div key={x.name}><div className="pb-1 pt-3 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{x.name}{x.count > 0 ? ` · ${x.count}` : ""}</div>{x.body}</div>) : <Empty text={empty} />}
     </BottomSheet>
@@ -443,10 +444,23 @@ export const undoBatch = (batchId: string, after?: () => unknown) =>
 
 export const toastUndo = (text: string, undo: () => unknown) => toast(text, { duration: 5000, action: { label: "Undo", onClick: () => { void undo(); } } });
 
+/** A job's help page under docs/help, by its story slug. */
+export const HelpLink = ({ help }: { help: string }) => <QuietLink href={`https://github.com/jpysh/ruta/blob/main/docs/help/${help}.md`} target="_blank" rel="noopener noreferrer">How this works</QuietLink>;
+
+/** Each refusal reason the server sends, with the story page that explains it (#1338). One list, so a new reason is added here once. */
+const REFUSAL_HELP: Record<string, string> = Object.fromEntries([
+  ["s4-book-or-move", "STAFF_BUSY ROOM_BUSY PATIENT_BUSY STAFF_SHORT GENDER_MISMATCH AMENITIES_MISSING CENTRE_HOURS CENTER_HOLIDAY THERAPY_OFF NOT_FOR_PATIENT PATIENT_REST_DAY NO_MATCHING_TIME_SLOTS NO_ROOM_AVAILABLE NO_STAFF_AVAILABLE WINDOW_TOO_NARROW OUT_OF_RANGE STAY_TOO_SHORT"],
+  ["s2-fix-the-day", "STAFF_OFF ROOM_OFF STAFF_IN_EVENT PATIENT_OFF"],
+  ["s8-consultation-and-round", "NOT_STAYING ROOM_TAKEN"],
+].flatMap(([slug, reasons]) => reasons.split(" ").map((r) => [r, slug])));
+
+/** Toast options for a refusal: its help page under the message, when the reason has one. */
+export const refusalHelp = (reason?: string) => (reason && REFUSAL_HELP[reason] ? { description: <HelpLink help={REFUSAL_HELP[reason]} /> } : {});
+
 /** Empty: one line saying why, the action if there is one, and the job's help page (docs/help) if it has one. */
 export const Empty = ({ text, action, help }: { text: string; action?: ReactNode; help?: string }) => (
   <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-base text-muted-foreground"><span>{text}</span>{action}
-    {help ? <QuietLink href={`https://github.com/jpysh/ruta/blob/main/docs/help/${help}.md`} target="_blank" rel="noopener noreferrer">How this works</QuietLink> : null}</div>
+    {help ? <HelpLink help={help} /> : null}</div>
 );
 
 /** Loading: rows the height of real ones, and nothing at all for the first 300ms. */
