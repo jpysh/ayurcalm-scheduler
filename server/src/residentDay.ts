@@ -117,6 +117,7 @@ export async function residentDay(patientId: string, date: string, prisma: Prism
     away: awayLabel(await prisma.timeOff.findMany({ where: { entity_type: 'patient', entity_id: patientId } }), patientId, day),
     id: patient.id,
     name: patient.name,
+    archived: !!patient.archived_at,
     stay: stay && shape(stay),
     coming: comingStay && shape(comingStay),
     treatments: appts.map(({ Therapy, Room, ...a }) => ({

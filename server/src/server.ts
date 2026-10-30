@@ -423,7 +423,7 @@ const stayData = (s: z.infer<typeof staySchema>) => {
 // Patients
 app.get('/patients', async (req: Request, res: Response) => {
   const residentOn = req.query.resident_on as string | undefined;
-  const where: Prisma.PatientWhereInput = {};
+  const where: Prisma.PatientWhereInput = { archived_at: null };
   if (residentOn) {
     // Who is actually staying at the centre on that date. The diet tab wants
     // these and not the whole history of everyone who has ever visited.
@@ -454,7 +454,7 @@ app.get('/patients/find', async (req: Request, res: Response) => {
     const next = p.Stays.filter((s) => s.start_date > day).pop();
     const last = p.Stays.find((s) => s.end_date < day);
     return {
-    id: p.id, name: p.name, plan,
+    id: p.id, name: p.name, plan, archived: !!p.archived_at,
     stay: stay ? { start: iso(stay.start_date), end: iso(stay.end_date) } : null,
     // A booked visit ahead is not their last stay (#677): name it as an arrival.
     next_start: stay ? null : next ? iso(next.start_date) : null,
@@ -571,6 +571,50 @@ app.delete('/patients/:id', async (req: Request, res: Response) => {
       await tx.auditLog.create({ data: { admin_id: 'admin', action: 'delete', entity_type: 'patient', entity_id: id, old_value: prev as any, new_value: Prisma.JsonNull } });
     } catch {}
   });
+  res.status(204).end();
+});
+
+// Remove from the card (#1362): someone with nothing on record is deleted; anyone
+// with a given treatment or a discharge summary is archived, keeping the record.
+// Archiving takes their coming treatments and cuts their stay at yesterday, so the
+// day, the sheets and the rooms stop counting them; Restore brings back only the name.
+app.post('/patients/:id/remove', requireAdmin, async (req: Request, res: Response) => {
+  const { check } = z.object({ check: z.boolean().optional() }).parse(req.body ?? {});
+  const id = String(req.params.id);
+  const patient = await prisma.patient.findUnique({ where: { id } });
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
+  const today = await fromToday();
+  const [given, discharged, ahead] = await Promise.all([
+    prisma.appointment.count({ where: { patient_id: id, OR: [{ status: 'completed' }, { scheduled_date: { lt: today.gte } }] } }),
+    prisma.patientStay.count({ where: { patient_id: id, discharge: { not: Prisma.DbNull } } }),
+    prisma.appointment.count({ where: { patient_id: id, scheduled_date: today, status: { not: 'completed' } } }),
+  ]);
+  const will = given || discharged ? 'archive' : 'delete';
+  if (check) return res.json({ will, ahead });
+  const yesterday = new Date(today.gte.getTime() - 86400000);
+  await prisma.$transaction(async (tx) => {
+    if (will === 'delete') {
+      await tx.appointment.deleteMany({ where: { patient_id: id } });
+      await tx.dietPlan.deleteMany({ where: { patient_id: id } });
+      await tx.dietPlanSegment.deleteMany({ where: { patient_id: id } });
+      await tx.patientStay.deleteMany({ where: { patient_id: id } });
+      await tx.timeOff.deleteMany({ where: { entity_type: 'patient', entity_id: id } });
+      await tx.patient.delete({ where: { id } });
+    } else {
+      await tx.appointment.deleteMany({ where: { patient_id: id, scheduled_date: today, status: { not: 'completed' } } });
+      await tx.patientStay.deleteMany({ where: { patient_id: id, start_date: today, discharge: { equals: Prisma.DbNull } } });
+      await tx.patientStay.updateMany({ where: { patient_id: id, start_date: { lt: today.gte }, end_date: today }, data: { end_date: yesterday } });
+      await tx.patient.update({ where: { id }, data: { archived_at: new Date() } });
+    }
+    await tx.auditLog.create({ data: { admin_id: 'admin', action: will, entity_type: 'patient', entity_id: id, old_value: patient as any, new_value: Prisma.JsonNull } });
+  });
+  res.json({ done: will });
+});
+
+app.post('/patients/:id/restore', requireAdmin, async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const { count } = await prisma.patient.updateMany({ where: { id, archived_at: { not: null } }, data: { archived_at: null } });
+  if (!count) return res.status(404).json({ error: 'No removed patient by that id' });
   res.status(204).end();
 });
 

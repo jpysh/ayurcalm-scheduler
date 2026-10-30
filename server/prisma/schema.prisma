@@ -46,6 +46,8 @@ model Patient {
   doctor_plan String?
   /// The private link to their own schedule (#219): no sign-in, reissued to revoke.
   link_token String? @unique
+  /// Removed with a record kept (#1362): off every list, the day and the sheets; found and restored from search.
+  archived_at DateTime?
 
   DietPlans        DietPlan[]
   DietPlanSegments DietPlanSegment[]

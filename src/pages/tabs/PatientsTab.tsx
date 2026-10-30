@@ -16,6 +16,7 @@ import { PhotoImg, shrinkPhoto } from "@/components/PassportPhoto";
 import { chip, saveError, Area, ChangeLine, TextRow, ChecklistBar, DateRow, datePair, Empty, Foot, Group, ListGroup, LineSelect, Loading, More, Picker, Row, Seg, Switch, Text, dayText, dayYear, noteText, money, Btn, LinkBtn, NightChips, refusalHelp } from "@/components/kit";
 import { AccommodationSheet, DietSheet, DischargeSheet, NextWeekSheet, PackageSheet, StaySheet, takenBy, type CardStay, type GuestRoomNight, type StayTarget } from "@/components/CardSheets";
 import { marked } from "@/components/SearchScreen";
+import { confirmSheet } from "@/components/ConfirmSheet";
 import type { AttentionItem } from "@/lib/attention";
 
 type Patient = { id: string | number; name: string; phone?: string; gender: string; actualStart?: string; actualEnd?: string; preferredStaffId?: string | null };
@@ -37,6 +38,8 @@ const clock = (timeZone: string) => new Date().toLocaleTimeString('en-GB', { tim
 type InHouse = { id: string; name: string; Stays: { id: string; start_date: string; end_date: string; on_site?: boolean }[] };
 type ResidentDay = {
   id: string; name: string;
+  /** Removed with a record kept (#1362): read only, with Restore. */
+  archived: boolean;
   stay: (CardStay & { vitals: string | null; concerns: string | null; tests: string | null }) | null;
   /** A stay that starts later: its card shows before they arrive (#495). */
   coming: (CardStay & { vitals: string | null; concerns: string | null; tests: string | null }) | null;
@@ -63,7 +66,7 @@ type ResidentDay = {
   /** Who has given most of this stay's treatments, offered while there is no preference (#1077). */
   suggested_staff_id?: string | null;
 };
-type Found = { id: string; name: string; plan: string; stay: { start: string; end: string } | null; next_start: string | null; last_end: string | null };
+type Found = { id: string; name: string; plan: string; archived: boolean; stay: { start: string; end: string } | null; next_start: string | null; last_end: string | null };
 type Visit = { id: string; date: string; start_time: string; doctor: string | null; note: string | null };
 const DAY_MS = 86400000;
 
@@ -130,7 +133,7 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
               const day = f.stay ? Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(f.stay.start)) / DAY_MS) + 1 : 0;
               const of = f.stay ? Math.round((Date.parse(f.stay.end) - Date.parse(f.stay.start)) / DAY_MS) + 1 : 0;
               return <Row key={f.id} onClick={() => onOpen(f.id)} title={marked(f.name, found.q)}
-                facts={f.stay ? <>Day {day} of {of} · Diet: {f.plan ? marked(f.plan, found.q) : 'not chosen'}</> : f.next_start ? `Not in house · arrives ${stayDay(f.next_start)}` : f.last_end ? `Not in house · last stay to ${stayDay(f.last_end)}` : 'Not in house'}
+                facts={f.archived ? 'Removed · record kept' : f.stay ? <>Day {day} of {of} · Diet: {f.plan ? marked(f.plan, found.q) : 'not chosen'}</> : f.next_start ? `Not in house · arrives ${stayDay(f.next_start)}` : f.last_end ? `Not in house · last stay to ${stayDay(f.last_end)}` : 'Not in house'}
                 flag={f.stay && n <= 3 ? (n <= 0 ? 'Leaves today' : n === 1 ? 'Leaves tomorrow' : `Leaves in ${n} days`) : undefined} />;
             }) : <Empty text={`No patient or diet plan matches “${found.q}”.`} />}
           </ListGroup>
@@ -163,10 +166,12 @@ function ResidentsList({ patients, today, onOpen, onAdd, q, onSearch, everything
 }
 
 /** One resident: the stay, today's treatments, today's meals, and what to change. */
-function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, changeMeals, changePackage, changeHouse, changeStay, book, details, detailsHint, out, therapists }: {
+function ResidentCard({ id, today, startOn, onStarted, onClose, onRemoved, openTreatment, changeMeals, changePackage, changeHouse, changeStay, book, details, detailsHint, out, therapists }: {
   out: (id: string) => React.ReactNode;
   therapists: { id: string; name: string }[];
   id: string | null; today: string; onClose: () => void;
+  /** After Remove (deleted or archived) or Restore, so the lists follow. */
+  onRemoved: (id: string, restored?: boolean) => void;
   /** The inbox opens the card already on its follow-up message (#603); asked once the card has loaded. */
   startOn?: 'followup' | 'week' | null; onStarted?: () => void;
   openTreatment: (a: CardAppt) => void; changeMeals: (p: { id: string; name: string }) => void;
@@ -176,6 +181,26 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
   detailsHint: (id: string) => string;
 }) {
   const [d, setD] = useState<ResidentDay | null>(null);
+  // The server says which (#1362): nothing on record is deleted, anything else archived.
+  const remove = async () => {
+    if (!d) return;
+    const post = (check?: boolean) => fetch(`${API_BASE}/patients/${d.id}/remove`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(check ? { check } : {}) });
+    const r = await post(true);
+    if (!r.ok) { toast.error(r.status === 403 ? 'Only an admin can remove a patient.' : 'Could not remove. Try again.'); return; }
+    const { will, ahead } = await r.json() as { will: 'delete' | 'archive'; ahead: number };
+    const coming = ahead ? ` Their ${ahead === 1 ? 'treatment' : `${ahead} treatments`} from today on will be cancelled.` : '';
+    const ask = will === 'delete' ? `Delete ${d.name} for good?\n\nNothing is recorded for them yet, so nothing is kept.` : `Remove ${d.name}?\n\nTheir treatments and summaries are kept. They leave every list, the day and the sheets; search finds them to restore.${coming}`;
+    if (!(await confirmSheet(ask, will === 'delete' ? 'Delete' : 'Remove'))) return;
+    if (!(await post()).ok) { toast.error('Could not remove. Try again.'); return; }
+    toast.success(will === 'delete' ? `${d.name} deleted` : `${d.name} removed; search finds them`);
+    onRemoved(d.id);
+  };
+  const restore = async () => {
+    if (!d) return;
+    if (!(await fetch(`${API_BASE}/patients/${d.id}/restore`, { method: 'POST' })).ok) { toast.error('Could not restore. Try again.'); return; }
+    toast.success(`${d.name} restored`);
+    onRemoved(d.id, true);
+  };
   const link = useShareLink();
   const [plan, setPlan] = useState<string | null>(null);
   const [limitsOpen, setLimitsOpen] = useState(false);
@@ -388,6 +413,7 @@ function ResidentCard({ id, today, startOn, onStarted, onClose, openTreatment, c
           </ListGroup>
           <input ref={photoInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { void keepPhoto(e.target.files?.[0]); e.target.value = ""; }} />
           {d.stay ? <div className="mt-3">{out(d.id)}</div> : null}
+          {d.archived ? <Btn className="mt-6" onClick={restore}>Restore {d.name}</Btn> : <Btn kind="destructive" className="mt-6" onClick={remove}>Remove {d.name}</Btn>}
         </div>
       ) : <div className="py-6 text-center text-muted-foreground"><Loading rows={4} /></div>}
       <BottomSheet open={intake !== null} onOpenChange={(o) => { if (!o) setIntake(null); }} title={`Arrival · ${d?.name.split(' ')[0] ?? ''}`} note="Written once, from the first days. Nothing here is required."
@@ -539,7 +565,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
       cancel: inline ? undefined : { label: 'Open card', onClick: () => setCardId(created.id) },
       action: { label: 'Undo', onClick: async () => {
         const r = await fetch(`${API_BASE}/patients/${created.id}`, { method: 'DELETE' });
-        if (!r.ok) { toast.error('Could not undo. Open the patient to remove them.'); return; }
+        if (!r.ok) { toast.error('Could not undo: they have a record now. Open their card and tap Remove.'); return; }
         setPatients((prev) => prev.filter((x) => x.id !== created.id)); setCardId(null);
       } },
     });
@@ -634,6 +660,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
       <StaySheet patient={stayFor?.patient ?? null} target={stayFor ? { ...stayFor.target, end: stayEnd ?? stayFor.target.end } : null} today={today}
         now={clock(timezone)} onClose={backToCard(() => { setStayFor(null); setStayEnd(null); })} onSaved={() => { if (stayFor) void refreshStays(stayFor.patient.id); }} />
       <ResidentCard therapists={staff.filter((s) => s.role !== "doctor" && s.status === "Active").map((s) => ({ id: String(s.id), name: s.name }))} out={out} id={cardId} today={today} startOn={startOn} onStarted={() => setStartOn(null)} onClose={() => { setCardId(null); setStartOn(null); }}
+        onRemoved={(pid, restored) => { setCardId(null); if (restored) void fetchJsonWithTimeout<object[]>(`${API_BASE}/patients`).then((all) => setPatients(all.map(toRow))); else setPatients((prev) => prev.filter((x) => String(x.id) !== pid)); }}
         openTreatment={(a) => { setCardId(null); openTreatment(a); }}
         changeMeals={(p) => { setBack(p.id); setCardId(null); setDietFor(p); }}
         changePackage={(p) => { const st = p.stay ?? p.coming; if (st) { setBack(p.id); setCardId(null); setPackFor({ patient: p, stay: st }); } }}
