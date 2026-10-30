@@ -38,7 +38,6 @@ test('At 200% text Availability and its picker show every word whole', async ({ 
   await page.waitForTimeout(800);
   expect(await page.evaluate(cutText), 'availability').toEqual([]);
   await page.getByRole('navigation', { name: 'Main' }).getByRole('button').first().click();
-  await page.getByRole('dialog').last().getByText('Show staff').click();
   await page.getByRole('dialog').last().getByRole('checkbox').first().click();
   expect(await page.evaluate(cutText), 'picker').toEqual([]);
 });

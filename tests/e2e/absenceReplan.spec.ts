@@ -112,7 +112,6 @@ test('@smoke a therapist off: the pill names it, its fix clears the day, and Und
   // What is not available first, then the one form (#695).
   await page.getByRole('button', { name: 'Mark not available', exact: true }).click();
   const picker = page.getByRole('dialog').last();
-  await picker.getByRole('button', { name: 'Show staff' }).click();
   await picker.getByRole('checkbox', { name: THERAPIST, exact: true }).check();
   await picker.getByRole('button', { name: /^Next/ }).click();
   const form = page.getByRole('dialog').last();
