@@ -1,6 +1,5 @@
 import PDFDocument from 'pdfkit';
 import { PrismaClient } from '@prisma/client';
-import { madeWith } from '../product.js';
 import { centreClock } from '../availability.js';
 
 const DAY_MS = 86400000;
@@ -64,8 +63,6 @@ export async function generateRecordsPdf(month: string, prisma: PrismaClient): P
     doc.moveDown(0.6);
   }
 
-  const made = madeWith(settings);
-  if (made) doc.font('Helvetica').fontSize(8).fillColor('#666').text(made, x, doc.page.height - margin - 10, { width: w, align: 'right', lineBreak: false });
   doc.end();
   return await done;
 }

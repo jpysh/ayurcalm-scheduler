@@ -1,5 +1,4 @@
 import PDFDocument from 'pdfkit';
-import { madeWith } from '../product.js';
 import { fileURLToPath } from 'node:url';
 import type { PrismaClient } from '@prisma/client';
 import { dischargeOf, letterheadOf, type DischargeView, type Letterhead, type Med } from '../discharge.js';
@@ -28,7 +27,7 @@ const face = (t: string) => (/[\u0900-\u097F]/.test(t) ? 'Local' : 'Helvetica');
 // The name prints whole in the grid; the footer keeps 31 letters so its line stays on the page (#1137).
 export const pageLine = (name: string, no: string, page: number, pages: number) => [name.length > 31 ? `${name.slice(0, 30)}…` : name, no, `page ${page} of ${pages}`].filter(Boolean).join(' · ');
 
-export async function generateDischargePdf(v: DischargeView, centre: { name: string; address: string | null; logo: string | null; made?: string }, lh: Letterhead): Promise<Buffer> {
+export async function generateDischargePdf(v: DischargeView, centre: { name: string; address: string | null; logo: string | null }, lh: Letterhead): Promise<Buffer> {
   const doc = new PDFDocument({ size: 'A4', margin: M, bufferPages: true });
   doc.registerFont('Local', DEVANAGARI);
   const chunks: Buffer[] = [];
@@ -176,7 +175,7 @@ export async function generateDischargePdf(v: DischargeView, centre: { name: str
     doc.page.margins.bottom = 0; // or writing in the margin starts a new page
     // The footer line may be Hindi and the rest is not: each part in its own font, centred together (#1136).
     doc.fontSize(7).fillColor('#666');
-    const parts = [lh.footer_line, pageLine(v.name, d.no, i + 1, range.count), centre.made].filter((t): t is string => !!t).map((t, j) => (j ? `    ${t}` : t));
+    const parts = [lh.footer_line, pageLine(v.name, d.no, i + 1, range.count)].filter((t): t is string => !!t).map((t, j) => (j ? `    ${t}` : t));
     let x = M + (W - parts.reduce((w, t) => w + doc.font(face(t)).widthOfString(t), 0)) / 2;
     for (const t of parts) { doc.font(face(t)).text(t, x, 841.89 - M - 8, { lineBreak: false }); x += doc.widthOfString(t); }
   }
@@ -189,6 +188,6 @@ export async function renderDischarge(stayId: string, prisma: PrismaClient) {
   const v = await dischargeOf(stayId, prisma);
   if (!v) return null;
   const s = await prisma.settings.findUnique({ where: { id: 'singleton' } });
-  const pdf = await generateDischargePdf(v, { name: s?.centre_name || 'Wellness Centre', address: s?.address ?? null, logo: s?.logo ?? null, made: madeWith(s) }, letterheadOf(s?.letterhead));
+  const pdf = await generateDischargePdf(v, { name: s?.centre_name || 'Wellness Centre', address: s?.address ?? null, logo: s?.logo ?? null }, letterheadOf(s?.letterhead));
   return { pdf, filename: `${v.name} - discharge summary.pdf` };
 }
