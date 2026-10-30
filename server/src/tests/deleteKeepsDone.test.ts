@@ -77,6 +77,15 @@ async function main() {
 
     await del(`/therapies/${unused.id}`);
     assert.equal(await prisma.therapy.findUnique({ where: { id: unused.id } }), null, 'a therapy never given is deleted');
+
+    // #1355: only a patient just added, with nothing on their record, can be taken away.
+    const pdel = (pid: string) => fetch(`${API_BASE}/patients/${pid}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    assert.equal((await pdel(rekha.id)).status, 409, 'a patient with a done treatment is not erased');
+    assert.ok(await prisma.patient.findUnique({ where: { id: rekha.id } }), 'and is still there');
+    const old = await prisma.patient.create({ data: { name: `${TAG} Old`, gender: 'female', created_at: new Date(Date.now() - 3600_000) } });
+    assert.equal((await pdel(old.id)).status, 409, 'nor one added an hour ago');
+    const fresh = await prisma.patient.create({ data: { name: `${TAG} Fresh`, gender: 'female' } });
+    assert.equal((await pdel(fresh.id)).status, 204, 'one just added can be undone');
     console.log('PASS deleteKeepsDone');
   } finally {
     await tidy(prisma);

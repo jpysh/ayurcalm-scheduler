@@ -557,8 +557,20 @@ app.put('/patients/:id', async (req: Request, res: Response) => {
   res.json(p);
 });
 
+// Only Undo just after adding someone calls this (#1355): a patient with a record
+// is never erased, since the audit log keeps only the patient row.
 app.delete('/patients/:id', async (req: Request, res: Response) => {
   const id = req.params.id;
+  const patient = await prisma.patient.findUnique({ where: { id }, select: { created_at: true } });
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
+  const today = await fromToday();
+  const [given, discharged] = await Promise.all([
+    prisma.appointment.count({ where: { patient_id: id, OR: [{ status: 'completed' }, { scheduled_date: { lt: today.gte } }] } }),
+    prisma.patientStay.count({ where: { patient_id: id, discharge: { not: Prisma.DbNull } } }),
+  ]);
+  if (Date.now() - patient.created_at.getTime() > 10 * 60_000 || given || discharged) {
+    return res.status(409).json({ error: 'This patient has a record now and cannot be removed.' });
+  }
   await prisma.$transaction(async (tx) => {
     const prev = await tx.patient.findUnique({ where: { id } });
     await tx.appointment.deleteMany({ where: { patient_id: id } });

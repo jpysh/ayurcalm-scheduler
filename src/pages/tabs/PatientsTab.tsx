@@ -539,7 +539,7 @@ export function usePatientsScreen({ patients, setPatients, staff, therapyNameByI
       cancel: inline ? undefined : { label: 'Open card', onClick: () => setCardId(created.id) },
       action: { label: 'Undo', onClick: async () => {
         const r = await fetch(`${API_BASE}/patients/${created.id}`, { method: 'DELETE' });
-        if (!r.ok) { toast.error('Could not undo. Open the patient to remove them.'); return; }
+        if (!r.ok) { toast.error('Could not undo: this patient already has a record.'); return; }
         setPatients((prev) => prev.filter((x) => x.id !== created.id)); setCardId(null);
       } },
     });

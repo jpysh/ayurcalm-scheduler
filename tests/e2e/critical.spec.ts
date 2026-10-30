@@ -516,9 +516,11 @@ test('a resident arriving today has the arrival steps still to do (#219)', async
   await signIn(page);
   await passSetupIfShown(page);
   await openTab(page, 'Patients');
-  const arriving = activePanel(page).locator('section').filter({ hasText: 'Arriving today' }).getByRole('button');
+  // A day patient, a companion or a stay under four days shows the discharge bar instead, so pick by state, not seed order (#1354).
+  const arriving = activePanel(page).locator('section').filter({ hasText: 'Arriving today' }).getByRole('button')
+    .filter({ hasText: /Day 1 of ([4-9]|\d{2,})\b/ }).filter({ hasNotText: 'Companion' });
   await expect(activePanel(page).getByText(/Staying/).first()).toBeVisible({ timeout: 15000 });
-  test.skip(!(await arriving.count()), 'nobody arrives today');
+  test.skip(!(await arriving.count()), 'no resident arrives today for four days or more');
   await arriving.first().click();
   const card = page.getByRole('dialog').last();
   // The first arrival may already have every step done: then the bar reads '✓ All 4 ready' (#1337).
