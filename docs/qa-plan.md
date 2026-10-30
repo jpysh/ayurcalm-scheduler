@@ -23,6 +23,9 @@ tests, releases, backups or hosting. How each test runs is in `testing.md`.
   Findings go to `~/ruta-data/MORNING.md`. A red finding stops Wednesday's release.
   The task's prompt is `hosting/tuesday-walk.md`; a green walk writes the version to
   `~/ruta-data/release-ok`, and only that version is released. No approval, no release that week.
+  Before tagging `vX.Y.Z`, set `"version": "X.Y.Z"` in both `package.json` files
+  (lockfiles inside `node:24-slim`) and merge that first; `scripts/check-version.mjs`
+  fails CI on main once a tag is newer than the files (#1352).
 - **Wednesday 20:00 IST:** every centre updates together (Babaji is treated like any
   other centre). Each centre's `/api/health` is checked; if any fails, every centre
   goes back to last week's app version, never the database, and MORNING.md's
