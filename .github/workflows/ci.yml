@@ -48,6 +48,8 @@ jobs:
         working-directory: server
       # Trial sign-up limits and lifecycle on a fake clock (#247).
       - run: node provisioner/test.mjs
+      # A release tag newer than package.json makes every install say an update is ready (#1352).
+      - run: node scripts/check-version.mjs
 
   # Does this change reach the server? Merges to main always count.
   scope:
