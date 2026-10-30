@@ -103,7 +103,8 @@ export function useTimeOffScreen({ timeOffs, setTimeOffs, staff, staffNameById, 
 
   const openAdd = (preset?: MarkOut | { type: 'Center'; entity: string }) => {
     if (preset && preset.type !== 'Center') { startForm(preset.type, [preset.entity], preset); return; }
-    setChosen(null); setQ(''); setOpen(null); setPicking(true);
+    // Staff leave is the common case, so its names are already open: one tap fewer (#1349).
+    setChosen(null); setQ(''); setOpen('Staff'); setPicking(true);
   };
   const startForm = (kind: Kind, ids: string[], p: Partial<MarkOut> = {}) => {
     setPicking(false);

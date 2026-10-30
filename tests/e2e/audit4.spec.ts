@@ -186,7 +186,6 @@ test('#283: Not available, New resident and Opening hours show no native date or
   };
   await open(/^Availability/, 'Mark not available');
   const picker = page.getByRole('dialog').last();
-  await picker.getByRole('button', { name: 'Show staff' }).click();
   await picker.getByRole('checkbox').first().check();
   await picker.getByRole('button', { name: /^Next/ }).click();
   const leave = page.getByRole('dialog').last();

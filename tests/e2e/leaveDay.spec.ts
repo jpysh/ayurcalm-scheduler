@@ -24,7 +24,6 @@ for (const zone of ['America/New_York', 'Pacific/Auckland', 'Asia/Kolkata']) {
       // Availability's one form (#695): who, then Some days, then the dates.
       await page.getByRole('button', { name: 'Mark not available' }).click();
       const sheet = page.getByRole('dialog').last();
-      await sheet.getByText('Show staff').click();
       await sheet.getByRole('checkbox').first().click();
       await sheet.getByRole('button', { name: /^Next/ }).click();
       await sheet.getByRole('button', { name: 'Some days' }).click();

@@ -41,7 +41,7 @@ const JOBS: [string, number][] = [
   ["Choose a patient's accommodation", 3],
   ["Change a patient's stay", 3],
   ["Print a patient's discharge summary", 3],
-  // From the day: Menu, Leave, +, Who, a name on the searchable list (150 names do not fit a phone's wheel), Save, plan later (#313: + is on the bar, was 7).
+  // From the day: Menu, Availability, Mark not available, a name (staff open by default, #1349) on the searchable list (150 names do not fit a phone's wheel), Save, plan later (#313: + is on the bar, was 7).
   ["Record a therapist's leave", 6],
   // Menu, Diet plans, the plan, Save (#285 session 6).
   ['Edit a diet plan', 4],
@@ -421,7 +421,6 @@ test('tap count for the daily jobs, against the phone design', async ({ page, re
       await tap(page.getByRole('button', { name: 'Menu', exact: true }));
       await tap(page.getByRole('dialog').getByRole('button', { name: /^Availability/ }));
       await tap(page.getByRole('button', { name: 'Mark not available', exact: true }));
-      await tap(page.getByRole('dialog').last().getByRole('button', { name: 'Show staff' }));
       await tap(page.getByRole('dialog').last().getByRole('checkbox', { name: staff.find((x) => x.is_active)!.name, exact: true }));
       await tap(page.getByRole('dialog').last().getByRole('button', { name: /^Next/ }));
       await tap(page.getByRole('dialog').last().getByRole('button', { name: 'Save, fix later' }));
