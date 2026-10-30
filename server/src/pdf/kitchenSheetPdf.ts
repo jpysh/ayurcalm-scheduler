@@ -1,6 +1,5 @@
 import PDFDocument from 'pdfkit';
 import { PrismaClient } from '@prisma/client';
-import { madeWith } from '../product.js';
 import { kitchenMeals, loadDietsForDay, mealLabel, mealsBefore } from '../dietResolution.js';
 import { addHeader } from './dailySchedulePdf.js';
 import { awayLabel } from '../availability.js';
@@ -90,9 +89,6 @@ export async function generateKitchenSheetPdf(dateISO: string, prisma: PrismaCli
     doc.moveDown(0.6);
   }
 
-  const made = madeWith(settings);
-  if (made) doc.font('Helvetica').fontSize(8).fillColor('#666')
-    .text(made, x, doc.page.height - doc.page.margins.bottom - 10, { width: w, align: 'right', lineBreak: false });
   doc.end();
   return await done;
 }

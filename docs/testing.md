@@ -6,7 +6,7 @@ Moved out of CLAUDE.md (6 Oct). The summary and the rules that always apply are 
 Tests exist to protect the printed day sheet and the planner, not to pin every pixel while the screens
 still change weekly. Before launch:
 - **Blocks a merge:** builds, `tsc` at or under its count, `npm run qa` (the server rule tests: planner,
-  availability, printed sheets, import/export and restore, auth, diet) and a *smoke* set of about six
+  availability, printed sheets, import/export and restore, auth, diet) and a *smoke* set of ten
   browser tests tagged `@smoke` (sign in, the day shows, book a treatment, print downloads a PDF,
   therapist off then fix then Undo, a new trial's wizard reaches the day). Nothing else blocks.
 - **Advisory, run nightly and before a release, never fixed inside a feature PR:** every other browser

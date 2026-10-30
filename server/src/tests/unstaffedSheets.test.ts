@@ -61,6 +61,9 @@ async function main() {
 
     const rota = pdfText(dir, 'rota.pdf', await generateTherapistRotaPdf(DAY, prisma));
     assert.ok(rota.includes('Needs a therapist'), 'The rota has no "Needs a therapist" group');
+    // The count is patients, not treatments or therapists (#1356), and no sheet carries an advert.
+    assert.ok(rota.includes('who is off — 1 patient'), 'The rota does not say how many patients need a therapist');
+    assert.ok(!/Made with/.test(rota + patientSheet), 'A printed sheet still carries the "Made with" footer');
     // Under the title, what was still wrong when it was printed (#1030).
     assert.ok(patientSheet.includes(`NOT FIXED WHEN PRINTED: ${TAG} Kriti is off`), `The patient sheet does not say what was not fixed: ${patientSheet.slice(0, 400)}`);
     assert.ok(rota.includes(`NOT FIXED WHEN PRINTED: ${TAG} Kriti is off`), 'The rota does not say what was not fixed');

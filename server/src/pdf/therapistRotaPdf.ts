@@ -1,7 +1,6 @@
 declare module 'pdfkit';
 import { hoursOn, teamOf, offOnDay, overlaps } from '../availability.js';
 import PDFDocument from 'pdfkit';
-import { madeWith } from '../product.js';
 import { PrismaClient } from '@prisma/client';
 import { addHeader, notFixedLine, shortenWords, toMinutes, eventWindow } from './dailySchedulePdf.js';
 
@@ -252,7 +251,6 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
   const weekday = weekdayNames[day.getDay()];
 
   const settings = await prisma.settings.findUnique({ where: { id: 'singleton' } });
-  const made = madeWith(settings);
   const centreName = settings?.centre_name || process.env.CENTRE_NAME || 'Wellness Centre';
 
   const [rooms, patients, therapies, staff, appts, eventsByDate, weeklyEvents, timeOff] = await Promise.all([
@@ -320,17 +318,17 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
     // empty row scattered among busy ones was read as a gap in the day rather
     // than as someone free to take work, and there are usually several.
     const busy = (r: RotaRow) => r.cells.some((c) => c.length > 0);
-    const groups: [string, (r: RotaRow) => boolean][] = [
-      [`Needs a ${Person.toLowerCase()}: booked with someone who is off`, (r) => !!r.unstaffed],
+    const groups: [string, (r: RotaRow) => boolean, string?][] = [
+      [`Needs a ${Person.toLowerCase()}: booked with someone who is off`, (r) => !!r.unstaffed, 'patient'],
       ['Working today', (r) => r.available && busy(r)],
       ['Working today, nothing booked', (r) => r.available && !busy(r)],
       ['Not available today', (r) => !r.available && !r.unstaffed],
     ];
-    for (const [title, match] of groups) {
+    for (const [title, match, noun] of groups) {
       const group = rota.rows.filter(match);
       if (group.length === 0) continue;
       const at = items.length;
-      items.push({ kind: 'heading', group: at, title: `${title} — ${group.length}` });
+      items.push({ kind: 'heading', group: at, title: `${title} — ${group.length}${noun ? ` ${noun}${group.length === 1 ? '' : 's'}` : ''}` });
       for (const r of group) items.push({ kind: 'row', group: at, ...r });
     }
   }
@@ -464,8 +462,6 @@ export async function generateTherapistRotaPdf(dateISO: string, prisma: PrismaCl
     pageNo++;
     doc.font('Helvetica').fontSize(8)
       .text(`Page ${pageNo} of ${totalPages}`, x, pageBottom + 4, { width: w, align: 'center', lineBreak: false });
-    // Same line as the page number, so it never costs a page (#249).
-    if (made) doc.fillColor('#666').text(made, x, pageBottom + 4, { width: w, align: 'right', lineBreak: false }).fillColor('black');
     drawHeaderRow();
   };
 

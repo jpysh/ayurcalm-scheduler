@@ -1,6 +1,5 @@
 import PDFDocument from 'pdfkit';
 import { PrismaClient } from '@prisma/client';
-import { madeWith } from '../product.js';
 import { guestRoomsFor, roomOn } from '../guestRooms.js';
 import { addHeader } from './dailySchedulePdf.js';
 
@@ -124,9 +123,6 @@ export async function generateGuestRoomsSheetPdf(dateISO: string, prisma: Prisma
     }
   }
 
-  const made = madeWith(settings);
-  if (made) doc.font('Helvetica').fontSize(8).fillColor('#666')
-    .text(made, x, doc.page.height - doc.page.margins.bottom - 10, { width: w, align: 'right', lineBreak: false });
   doc.end();
   return await done;
 }
