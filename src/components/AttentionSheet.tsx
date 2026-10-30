@@ -254,7 +254,7 @@ export function AttentionSheet({ open, onOpenChange, apiBase, day, today, proble
   // The sheet opens on whatever day is on screen, so it names that day (#193).
   const dayName = day === today ? "Today" : dayText(day);
   return (
-    <InboxSheet open={open} onOpenChange={onOpenChange} title={dayName} empty="Nothing else needs you."
+    <InboxSheet open={open} onOpenChange={onOpenChange} title={dayName} empty="Nothing else needs you." help="s1-morning-glance"
       // The one bulk action sits under the thumb (#1074); the rules link is the quiet line below it.
       foot={<div className="space-y-1">
         {fixable.length ? <Btn kind="primary" disabled={busy !== null} onClick={() => apply(null, ...fixable.map((p) => suggested(p)!))}>{busy === "all" ? "Fixing…" : fixable.length === 1 ? "Make this change" : `Make these ${fixable.length} changes`}</Btn> : null}
